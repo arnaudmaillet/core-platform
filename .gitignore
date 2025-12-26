@@ -1,0 +1,15 @@
+# Bazel symlinks / output
+/bazel-*
+
+# JetBrains / Xcode / VSCode
+.idea/
+*.xcodeproj/
+*.xcworkspace/
+.vscode/
+
+# Languages
+target/          # Rust
+bin/             # Go
+*.class          # Android/Kotlin
+.externalNativeBuild/
+DerivedData/     # iOS

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package identity.v1;
+
+option go_package = "core-platform/proto/identity";
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  string username = 1;
+  string bio = 2;
+  string avatar_url = 3;
+}

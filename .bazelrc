@@ -1,0 +1,9 @@
+# Utiliser les protocoles modernes pour le build
+build --announce_rc
+build --color=yes
+
+# Optimisation pour le C++/Rust
+build --copt=-O3
+
+# Sortie de build plus propre
+common --ui_event_filters=-INFO,-DEBUG
