@@ -8,6 +8,7 @@ module(
 bazel_dep(name = "rules_rust", version = "0.54.1")
 bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
+bazel_dep(name = "platforms", version = "0.0.11")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(edition = "2021")
@@ -36,7 +37,7 @@ crate.spec(
     version = "1.38",
 )
 
-# --- LES OUTILS (On les apporte nous-mêmes) ---
+# --- LES OUTILS ---
 crate.spec(
     package = "protoc-gen-prost",
     version = "0.4.0",

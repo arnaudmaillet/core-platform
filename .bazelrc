@@ -1,9 +1,58 @@
-# Utiliser les protocoles modernes pour le build
+# .bazelrc
+
+# ------------------------------------------------------------------
+# Configuration générale
+# ------------------------------------------------------------------
+
+# Couleurs et annonces
 build --announce_rc
 build --color=yes
 
-# Optimisation pour le C++/Rust
+# Optimisations de compilation
 build --copt=-O3
 
-# Sortie de build plus propre
+# Logs plus propres : on cache les messages INFO et DEBUG verbeux
 common --ui_event_filters=-INFO,-DEBUG
+
+# Cache local sur disque (très utile en dev local)
+build --disk_cache=$HOME/.cache/bazel-disk-cache
+
+# ------------------------------------------------------------------
+# Plateformes : on laisse Bazel choisir automatiquement (auto-détection)
+# ------------------------------------------------------------------
+# Pas de --platforms forcé ici → fonctionne sur macOS, Linux, etc.
+# On peut override manuellement quand on veut (ex: pour CI ou Docker)
+# Exemple : bazel build --platforms=//platforms:linux_x86_64 //...
+
+# ------------------------------------------------------------------
+# Configurations spécifiques (utilisables avec --config=xxx)
+# ------------------------------------------------------------------
+
+# Pour la CI (plus de jobs, etc.)
+build:ci --jobs=100
+build:ci --keep_going
+build:ci --show_progress_rate_limit=30
+
+# Build optimisé release
+build:release --compilation_mode=opt
+build:release --strip=always
+
+# Build debug rapide
+build:debug --compilation_mode=dbg
+build:debug --strip=never
+
+# ------------------------------------------------------------------
+# À activer plus tard pour le remote cache
+# ------------------------------------------------------------------
+# build --remote_cache=https://remote.buildbuddy.io
+# build --remote_executor=https://remote.buildbuddy.io
+# build --bes_backend=grpcs://remote.buildbuddy.io
+# build --bes_results_url=https://app.buildbuddy.io/invocation/
+# build --remote_timeout=3600
+
+# ------------------------------------------------------------------
+# Divers utiles
+# ------------------------------------------------------------------
+common --experimental_repo_remote_exec
+query --keep_going
+query --loading_phase_threads=1

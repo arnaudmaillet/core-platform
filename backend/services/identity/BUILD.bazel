@@ -1,6 +1,6 @@
 # backend/services/identity/BUILD.bazel
 
-load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 
 rust_binary(
     name = "identity_service",
@@ -11,5 +11,18 @@ rust_binary(
         "@crates//:tonic",
         "@crates//:tokio",
         "@crates//:prost",
+    ],
+)
+
+# Test d'intégration
+rust_test(
+    name = "integration_test",
+    srcs = ["tests/integration.rs"],
+    edition = "2021",
+    deps = [
+        ":identity_service",
+        "//proto/identity/v1:identity_rust_proto",
+        "@crates//:tonic",
+        "@crates//:tokio",
     ],
 )
