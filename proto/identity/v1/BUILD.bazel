@@ -1,0 +1,16 @@
+# proto/identity/v1/BUILD.bazel
+
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_rust//proto/prost:defs.bzl", "rust_prost_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "identity_proto",
+    srcs = ["user.proto"],
+)
+
+rust_prost_library(
+    name = "identity_rust_proto",
+    proto = ":identity_proto",
+)

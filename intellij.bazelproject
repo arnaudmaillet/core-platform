@@ -1,0 +1,25 @@
+# intellij.bazelproject
+
+directories:
+  .
+  backend/services/identity
+  proto/identity
+
+# On ajoute explicitement la cible de build pour que l'IDE la surveille
+targets:
+  //backend/services/identity:identity_service
+  //proto/identity/v1:identity_rust_proto
+
+exclude_directories:
+  bazel-out
+  bazel-bin
+  bazel-testlogs
+
+languages:
+  rust
+
+# Optionnel mais recommandé pour les gros projets
+import_run_configurations: false
+
+# Force l'IDE à indexer les fichiers sources Rust
+derive_targets_from_directories: true

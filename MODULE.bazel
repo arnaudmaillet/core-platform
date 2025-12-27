@@ -1,6 +1,62 @@
-###############################################################################
-# Bazel now uses Bzlmod by default to manage external dependencies.
-# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
-#
-# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
-###############################################################################
+# // MODULE.bazel
+
+module(
+    name = "core_platform",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_rust", version = "0.54.1")
+bazel_dep(name = "rules_proto", version = "7.0.2")
+bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(edition = "2021")
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
+
+# --- Les bibliothèques ---
+crate.spec(
+    package = "tonic",
+    version = "0.12",
+)
+crate.spec(
+    package = "prost",
+    version = "0.13",
+)
+crate.spec(
+    package = "prost-types",
+    version = "0.13",
+)
+crate.spec(
+    features = ["full"],
+    package = "tokio",
+    version = "1.38",
+)
+
+# --- LES OUTILS (On les apporte nous-mêmes) ---
+crate.spec(
+    package = "protoc-gen-prost",
+    version = "0.4.0",
+)
+crate.spec(
+    package = "protoc-gen-tonic",
+    version = "0.4.1",
+)
+
+crate.annotation(
+    crate = "protoc-gen-prost",
+    gen_binaries = ["protoc-gen-prost"],
+)
+crate.annotation(
+    crate = "protoc-gen-tonic",
+    gen_binaries = ["protoc-gen-tonic"],
+)
+
+crate.from_specs()
+use_repo(crate, "crates")
+
+# On enregistre notre toolchain explicite (Etape 2)
+register_toolchains("//infrastructure/bazel:my_prost_toolchain")

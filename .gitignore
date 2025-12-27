@@ -1,15 +1,14 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
 # Bazel symlinks / output
 /bazel-*
 
-# JetBrains / Xcode / VSCode
-.idea/
-*.xcodeproj/
-*.xcworkspace/
-.vscode/
+# MODULE lock (Optionnel : voir point 2)
+# MODULE.bazel.lock
 
-# Languages
-target/          # Rust
-bin/             # Go
-*.class          # Android/Kotlin
-.externalNativeBuild/
-DerivedData/     # iOS
+# IDEs
+.idea/
+.vscode/
+intellij.bazelproject

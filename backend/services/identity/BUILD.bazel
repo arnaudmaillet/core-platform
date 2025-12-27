@@ -1,0 +1,15 @@
+# backend/services/identity/BUILD.bazel
+
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+rust_binary(
+    name = "identity_service",
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    deps = [
+        "//proto/identity/v1:identity_rust_proto",
+        "@crates//:tonic",
+        "@crates//:tokio",
+        "@crates//:prost",
+    ],
+)
