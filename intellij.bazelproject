@@ -14,6 +14,7 @@ exclude_directories:
   bazel-out
   bazel-bin
   bazel-testlogs
+  target
 
 languages:
   rust

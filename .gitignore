@@ -1,6 +1,7 @@
 # macOS
 .DS_Store
 **/.DS_Store
+/$HOME/
 
 # Bazel symlinks / output
 /bazel-*

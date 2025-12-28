@@ -1,0 +1,41 @@
+# Cargo.toml
+
+[workspace]
+members = [
+    "backend/services/identity",
+    "crates/identity",
+    "proto/identity/v1",
+    # "backend/services/engagement",  # à ajouter plus tard
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Wynn <wynn.cn666@gmail.com>"]
+repository = "https://github.com/ton-repo/projet"
+description = "core-platform repo"
+
+# Centralisation des versions des dépendances communes
+[workspace.dependencies]
+tonic = "0.14.2"
+prost = "0.14.1"
+tonic-prost = "0.14.2"
+prost-types = "0.13"
+tokio = { version = "1.38", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+argon2 = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0.17"
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1.89"
+
+# Outils pour le proto
+tonic-prost-build = "0.14.2"
+protoc-gen-prost = "0.4.0"
+protoc-gen-tonic = "0.4.1"

@@ -5,27 +5,35 @@ module(
     version = "0.1.0",
 )
 
-bazel_dep(name = "rules_rust", version = "0.54.1")
-bazel_dep(name = "rules_proto", version = "7.0.2")
-bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
-bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "rules_rust", version = "0.68.1")
+bazel_dep(name = "rules_rust_prost", version = "0.68.1")
+bazel_dep(name = "rules_proto", version = "7.1.0")
+bazel_dep(name = "protobuf", version = "33.2", repo_name = "com_google_protobuf")
+bazel_dep(name = "platforms", version = "1.0.0")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
-rust.toolchain(edition = "2021")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.85.0"],
+)
 use_repo(rust, "rust_toolchains")
 
 register_toolchains("@rust_toolchains//:all")
 
 crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
 
-# --- Les bibliothèques ---
+# Versions centralisées dans Cargo.toml workspace
 crate.spec(
     package = "tonic",
-    version = "0.12",
+    version = "0.14.2",
 )
 crate.spec(
     package = "prost",
-    version = "0.13",
+    version = "0.14.1",
+)
+crate.spec(
+    package = "tonic-prost",
+    version = "0.14.2",
 )
 crate.spec(
     package = "prost-types",
@@ -36,28 +44,67 @@ crate.spec(
     package = "tokio",
     version = "1.38",
 )
-
-# --- LES OUTILS ---
 crate.spec(
-    package = "protoc-gen-prost",
-    version = "0.4.0",
+    package = "tracing",
+    version = "0.1",
 )
 crate.spec(
-    package = "protoc-gen-tonic",
-    version = "0.4.1",
+    features = [
+        "fmt",
+        "env-filter",
+    ],
+    package = "tracing-subscriber",
+    version = "0.3",
 )
 
-crate.annotation(
-    crate = "protoc-gen-prost",
-    gen_binaries = ["protoc-gen-prost"],
+# Ajout des dépendances de persistance et utilitaires
+crate.spec(
+    features = [
+        "runtime-tokio-rustls",
+        "postgres",
+        "uuid",
+        "chrono",
+    ],
+    package = "sqlx",
+    version = "0.8.6",
 )
-crate.annotation(
-    crate = "protoc-gen-tonic",
-    gen_binaries = ["protoc-gen-tonic"],
+crate.spec(
+    features = [
+        "v4",
+        "serde",
+    ],
+    package = "uuid",
+    version = "1.8",
 )
+crate.spec(
+    package = "argon2",
+    version = "0.5",
+)
+crate.spec(
+    features = ["serde"],
+    package = "chrono",
+    version = "0.4",
+)
+crate.spec(
+    package = "thiserror",
+    version = "2.0.17",
+)
+crate.spec(
+    features = ["derive"],
+    package = "serde",
+    version = "1.0",
+)
+
+crate.spec(
+    package = "async-trait",
+    version = "0.1.89",
+)
+
+# Futures (décommenter quand tu les ajoutes dans Cargo.toml)
+# crate.spec(package = "sqlx", version = "0.8.6")
+# crate.spec(package = "uuid", version = "1.8")
+# crate.spec(package = "argon2", version = "0.5")
+# crate.spec(package = "chrono", version = "0.4")
 
 crate.from_specs()
 use_repo(crate, "crates")
-
-# On enregistre notre toolchain explicite (Etape 2)
-register_toolchains("//infrastructure/bazel:my_prost_toolchain")
