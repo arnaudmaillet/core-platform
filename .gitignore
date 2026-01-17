@@ -1,18 +1,19 @@
+# Environnement
 .env
-/target
 
-# macOS
+# Rust / Build
+target/
+bazel-*
+
+# Fichiers système
 .DS_Store
 **/.DS_Store
-/$HOME/
 
-# Bazel symlinks / output
-/bazel-*
-
-# MODULE lock (Optionnel : voir point 2)
-# MODULE.bazel.lock
+# Dépendances & Locks
+MODULE.bazel.lock
 
 # IDEs
 .idea/
 .vscode/
+*.swp
 intellij.bazelproject
