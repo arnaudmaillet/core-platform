@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+// Options standards reconnues par protoc
+option go_package = "github.com/core-platform/proto/account/v1";
+option java_multiple_files = true;
+option java_package = "com.coreplatform.proto.account.v1";
+
+// ==========================================
+// ÉTATS ET ENUMS
+// ==========================================
+
+enum AccountState {
+  ACCOUNT_STATE_UNSPECIFIED = 0;
+  ACCOUNT_STATE_PENDING = 1;
+  ACCOUNT_STATE_ACTIVE = 2;
+  ACCOUNT_STATE_DEACTIVATED = 3;
+  ACCOUNT_STATE_SUSPENDED = 4;
+  ACCOUNT_STATE_BANNED = 5;
+}
+
+// ==========================================
+// MODÈLE DE DONNÉES (AGRÉGAT)
+// ==========================================
+
+message Account {
+  string id = 1;
+  string region_code = 2;
+  string external_id = 3;
+  string username = 4;
+  string email = 5;
+  bool email_verified = 6;
+  google.protobuf.StringValue phone_number = 7;
+  bool phone_verified = 8;
+  AccountState state = 9;
+  string locale = 10;
+  google.protobuf.Timestamp birth_date = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  google.protobuf.Timestamp last_active_at = 14;
+  int64 version = 15;
+}
+
+// ==========================================
+// SERVICES ET OPÉRATIONS
+// ==========================================
+
+service AccountService {
+  rpc GetAccount(GetAccountRequest) returns (Account);
+  rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (Account);
+  rpc ChangeEmail(ChangeEmailRequest) returns (Account);
+  rpc VerifyEmail(VerifyEmailRequest) returns (Account);
+  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (Account);
+  rpc VerifyPhoneNumber(VerifyPhoneNumberRequest) returns (Account);
+  rpc UpdateProfile(UpdateProfileRequest) returns (Account);
+  rpc ChangeRegion(ChangeRegionRequest) returns (Account);
+  rpc DeactivateAccount(DeactivateAccountRequest) returns (Account);
+  rpc ReactivateAccount(ReactivateAccountRequest) returns (Account);
+  rpc SuspendAccount(SuspendAccountRequest) returns (Account);
+  rpc BanAccount(BanAccountRequest) returns (Account);
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES
+// ==========================================
+
+message GetAccountRequest { string id = 1; }
+message LinkExternalIdentityRequest { string id = 1; string external_id = 2; }
+message ChangeEmailRequest { string id = 1; string new_email = 2; }
+message VerifyEmailRequest { string id = 1; }
+message ChangePhoneNumberRequest { string id = 1; string new_phone_number = 2; }
+message VerifyPhoneNumberRequest { string id = 1; }
+message UpdateProfileRequest {
+  string id = 1;
+  google.protobuf.StringValue username = 2;
+  google.protobuf.Timestamp birth_date = 3;
+  google.protobuf.StringValue locale = 4;
+}
+message ChangeRegionRequest { string id = 1; string new_region_code = 2; }
+message DeactivateAccountRequest { string id = 1; }
+message ReactivateAccountRequest { string id = 1; }
+message SuspendAccountRequest { string id = 1; string reason = 2; }
+message BanAccountRequest { string id = 1; string reason = 2; }

@@ -1,0 +1,14 @@
+load("//:defs.bzl", "core_rust_binary")
+
+core_rust_binary(
+    name = "account_outbox_processor",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        # Dépendance interne : le Kernel (fournit Kafka + Postgres)
+        "//crates/shared-kernel:shared_kernel",
+
+        # Dépendance externe
+        "@crates//:tokio",
+    ],
+)

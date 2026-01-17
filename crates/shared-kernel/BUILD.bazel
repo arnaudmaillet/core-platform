@@ -1,0 +1,50 @@
+# crates/shared-kernel/BUILD.bazel
+
+# On utilise notre wrapper pour avoir l'édition 2024 par défaut
+load("//:defs.bzl", "core_rust_library")
+
+core_rust_library(
+    name = "shared_kernel",
+    srcs = glob(["src/**/*.rs"]),
+    crate_features = [
+        "postgres",
+        "redis",
+        "kafka",
+        "grpc",
+        "concurrency",
+        "runtime",
+    ],
+    visibility = ["//visibility:public"],
+    # 1. Les bibliothèques normales (Runtime)
+    deps = [
+        "@crates//:uuid",
+        "@crates//:chrono",
+        "@crates//:chrono-tz",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:tracing",
+        "@crates//:url",
+        "@crates//:rand",
+        "@crates//:futures-util",
+        "@crates//:log",
+        "@crates//:regex",
+        "@crates//:seahash",
+        "@crates//:unicode-normalization",
+        "@crates//:sqlx",
+        "@crates//:fred",
+        "@crates//:rdkafka",
+        "@crates//:dashmap",
+        "@crates//:futures",
+        "@crates//:tonic",
+        "@crates//:prost",
+        "@crates//:tokio",
+        "@crates//:tokio-util",
+        "@crates//:tracing-subscriber",
+        "@crates//:thiserror",
+    ],
+    # 2. Les macros de compilation (Compile-time)
+    # C'est ici que tu mets ce qui génère du code
+    proc_macro_deps = [
+        "@crates//:async-trait",
+    ],
+)

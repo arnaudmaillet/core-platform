@@ -1,0 +1,14 @@
+# crates/gamification/BUILD.bazel
+
+load("//:defs.bzl", "core_rust_library")
+
+core_rust_library(
+    name = "gamification",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        # Pour l'instant, aucune dépendance externe n'est listée.
+        # Si tu en ajoutes dans Cargo.toml, il faudra les ajouter ici
+        # sous la forme "@crates//:nom_du_package"
+    ],
+)

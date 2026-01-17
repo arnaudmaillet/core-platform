@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1";
+
+// ==========================================
+// ÉTATS ET ENUMS
+// ==========================================
+
+// Rôles utilisateurs avec hiérarchie de permissions
+enum AccountRole {
+  ACCOUNT_ROLE_UNSPECIFIED = 0;
+  ACCOUNT_ROLE_USER = 1;
+  ACCOUNT_ROLE_STAFF = 2;
+  ACCOUNT_ROLE_MODERATOR = 3;
+  ACCOUNT_ROLE_ADMIN = 4;
+}
+
+// ==========================================
+// MODÈLE DE DONNÉES (AGRÉGAT METADATA)
+// ==========================================
+
+message AccountMetadata {
+  // Identifiants et routage
+  string account_id = 1;
+  string region_code = 2;
+
+  // Permissions et privilèges
+  AccountRole role = 3;
+  bool is_beta_tester = 4;
+
+  // Sécurité et Modération
+  bool is_shadowbanned = 5;
+  int32 trust_score = 6;
+  google.protobuf.Timestamp last_moderation_at = 7;
+  google.protobuf.StringValue moderation_notes = 8; // Utilisation de Wrapper pour gérer Option<String>
+
+  // Tracking technique
+  google.protobuf.StringValue estimated_ip = 9;
+  google.protobuf.Timestamp updated_at = 10;
+
+  // Versioning (OCC - Optimistic Concurrency Control)
+  int64 version = 11;
+}
+
+// ==========================================
+// SERVICES DE MODÉRATION ET MÉTADONNÉES
+// ==========================================
+
+service AccountMetadataService {
+  // Lecture des métadonnées internes
+  rpc GetAccountMetadata(GetAccountMetadataRequest) returns (AccountMetadata);
+
+  // Actions de Modération
+  rpc SetBetaStatus(SetBetaStatusRequest) returns (AccountMetadata);
+  rpc AdjustTrustScore(AdjustTrustScoreRequest) returns (AccountMetadata);
+  rpc SetShadowbanStatus(SetShadowbanStatusRequest) returns (AccountMetadata);
+  rpc UpdateAccountRole(UpdateAccountRoleRequest) returns (AccountMetadata);
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES
+// ==========================================
+
+message GetAccountMetadataRequest {
+  string account_id = 1;
+}
+
+message SetBetaStatusRequest {
+  string account_id = 1;
+  bool is_beta_tester = 2;
+  string reason = 3;
+}
+
+message AdjustTrustScoreRequest {
+  string account_id = 1;
+  string action_id = 2; // UUID de l'action déclenchante
+  int32 delta = 3;      // Peut être positif ou négatif
+  string reason = 4;
+}
+
+message SetShadowbanStatusRequest {
+  string account_id = 1;
+  bool is_shadowbanned = 2;
+  string reason = 3;
+}
+
+message UpdateAccountRoleRequest {
+  string account_id = 1;
+  AccountRole new_role = 2;
+  string reason = 3;
+}

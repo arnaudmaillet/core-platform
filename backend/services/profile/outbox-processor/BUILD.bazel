@@ -1,0 +1,15 @@
+load("//:defs.bzl", "core_rust_binary")
+
+core_rust_binary(
+    name = "profile_outbox_processor",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        # Dépendance interne vers le Kernel
+        # Le kernel doit avoir les features kafka/postgres/runtime activées dans son propre BUILD
+        "//crates/shared-kernel:shared_kernel",
+
+        # Dépendances externes issues du workspace
+        "@crates//:tokio",
+    ],
+)

@@ -1,0 +1,73 @@
+# crates/shared-kernel/Cargo.toml
+
+[package]
+name = "shared-kernel"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+
+# Features granulaires
+
+# --- 1. Drivers Techniques (Privés ou internes) ---
+# On les garde pour le mapping vers les dépendances optionnelles
+postgres = ["dep:sqlx"]
+redis = ["dep:fred"]
+kafka = ["dep:rdkafka"]
+grpc = ["dep:tonic", "dep:prost"]
+concurrency = ["dep:dashmap", "dep:futures"]
+
+# --- 2. Capacités Techniques ---
+# "runtime" regroupe tout ce qui touche à l'asynchronisme et l'observabilité de base
+runtime = [
+    "tokio/rt",
+    "tokio/time",
+    "tokio/sync",
+    "dep:tokio-util",
+    "dep:tracing-subscriber",
+    "dep:futures"
+]
+
+# --- 3. Rôles Fonctionnels (Les seuls à utiliser dans les services) ---
+service-api         = ["postgres", "redis", "grpc", "runtime"]
+service-outbox      = ["postgres", "kafka", "runtime"]
+service-worker      = ["kafka", "runtime", "dep:dashmap"]
+service-invalidator = ["redis", "kafka", "runtime", "dep:dashmap"]
+
+
+
+[dependencies]
+# Toujours inclus (Core)
+uuid = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+rand = { workspace = true}
+
+# Optionnels (activés par features)
+sqlx = { workspace = true, optional = true }
+fred = { workspace = true, optional = true }
+rdkafka = { workspace = true, optional = true }
+dashmap = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+tonic = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true, features = ["rt"] }
+tracing-subscriber = { workspace = true, optional = true, features = ["fmt", "env-filter"] }
+
+# Utils (Core)
+futures-util = { workspace = true }
+log = { workspace = true }
+regex = { workspace = true }
+seahash = { workspace = true }
+unicode-normalization = { workspace = true }
+
+
+

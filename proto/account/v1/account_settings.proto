@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1";
+
+// ==========================================
+// ÉTATS ET ENUMS
+// ==========================================
+
+enum ThemeMode {
+  THEME_MODE_SYSTEM = 0; // @default en Rust
+  THEME_MODE_LIGHT = 1;
+  THEME_MODE_DARK = 2;
+}
+
+// ==========================================
+// STRUCTURES DE PRÉFÉRENCES
+// ==========================================
+
+message PrivacySettings {
+  bool profile_visible_to_public = 1;
+  bool show_last_active = 2;
+  bool allow_indexing = 3;
+}
+
+message NotificationSettings {
+  bool email_enabled = 1;
+  bool push_enabled = 2;
+  bool marketing_opt_in = 3;
+  bool security_alerts_only = 4;
+}
+
+message AppearanceSettings {
+  ThemeMode theme = 1;
+  bool high_contrast = 2;
+}
+
+// ==========================================
+// MODÈLE DE DONNÉES (AGRÉGAT SETTINGS)
+// ==========================================
+
+message AccountSettings {
+  string account_id = 1;
+  string region_code = 2;
+
+  PrivacySettings privacy = 3;
+  NotificationSettings notifications = 4;
+  AppearanceSettings appearance = 5;
+
+  string timezone = 6;
+  repeated string push_tokens = 7; // Vec<PushToken> -> repeated
+
+  google.protobuf.Timestamp updated_at = 8;
+  int64 version = 9; // OCC
+}
+
+// ==========================================
+// SERVICES DE PRÉFÉRENCES
+// ==========================================
+
+service AccountSettingsService {
+  rpc GetSettings(GetSettingsRequest) returns (AccountSettings);
+
+  // Mise à jour de la Timezone (avec validation régionale)
+  rpc UpdateTimezone(UpdateTimezoneRequest) returns (AccountSettings);
+
+  // Gestion des Push Tokens
+  rpc AddPushToken(AddPushTokenRequest) returns (AccountSettings);
+  rpc RemovePushToken(RemovePushTokenRequest) returns (AccountSettings);
+
+  // Mise à jour granulaire des préférences
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (AccountSettings);
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES
+// ==========================================
+
+message GetSettingsRequest {
+  string account_id = 1;
+}
+
+message UpdateTimezoneRequest {
+  string account_id = 1;
+  string timezone = 2;
+}
+
+message AddPushTokenRequest {
+  string account_id = 1;
+  string token = 2;
+}
+
+message RemovePushTokenRequest {
+  string account_id = 1;
+  string token = 2;
+}
+
+message UpdatePreferencesRequest {
+  string account_id = 1;
+  // Utilisation de messages optionnels pour permettre l'update partiel (Option<T>)
+  PrivacySettings privacy = 2;
+  NotificationSettings notifications = 3;
+  AppearanceSettings appearance = 4;
+}

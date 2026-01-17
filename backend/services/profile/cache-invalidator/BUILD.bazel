@@ -1,0 +1,14 @@
+load("//:defs.bzl", "core_rust_binary")
+
+core_rust_binary(
+    name = "profile_cache_invalidator",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        # Dépendance vers le Kernel (fournit Redis, Kafka et Dashmap via 'service-invalidator')
+        "//crates/shared-kernel:shared_kernel",
+
+        # Dépendance runtime
+        "@crates//:tokio",
+    ],
+)

@@ -1,0 +1,21 @@
+// crates/account/src/application/change_email/change_phone_number_dto.rs
+
+use shared_kernel::errors::{DomainError, Result};
+use crate::application::change_phone_number::change_phone_number_command::ChangePhoneNumberCommand;
+use crate::domain::value_objects::PhoneNumber;
+
+#[derive(serde::Deserialize)]
+pub struct ChangePhoneNumberDto {
+    pub account_id: String,
+    pub new_phone: String,
+}
+
+impl TryFrom<ChangePhoneNumberDto> for ChangePhoneNumberCommand {
+    type Error = DomainError;
+    fn try_from(dto: ChangePhoneNumberDto) -> Result<Self> {
+        Ok(Self {
+            account_id: dto.account_id.parse()?,
+            new_phone: PhoneNumber::try_new(dto.new_phone)?,
+        })
+    }
+}

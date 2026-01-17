@@ -1,0 +1,8 @@
+[package]
+name = "profile-cache-invalidator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared-kernel = { workspace = true, features = ["service-invalidator"] }
+tokio = { workspace = true }

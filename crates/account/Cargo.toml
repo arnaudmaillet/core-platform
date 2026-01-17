@@ -1,0 +1,19 @@
+# crates/account/Cargo.toml
+
+[package]
+name = "account"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared-kernel = { workspace = true, features = ["postgres", "runtime"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+sqlx = { workspace = true }
+async-trait = { workspace = true }
+regex = { workspace = true }
+unicode-normalization = { workspace = true }
+seahash = { workspace = true }

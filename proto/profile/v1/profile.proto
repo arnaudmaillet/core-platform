@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package profile.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/core-platform/proto/profile/v1";
+
+// ==========================================
+// STRUCTURES DE DONNÉES IMBRIQUÉES
+// ==========================================
+
+message SocialLinks {
+  google.protobuf.StringValue twitter_url = 1;
+  google.protobuf.StringValue github_url = 2;
+  google.protobuf.StringValue linkedin_url = 3;
+  google.protobuf.StringValue website_url = 4;
+  map<string, string> custom_links = 5; // Pour l'extensibilité hyperscale
+}
+
+message ProfileStats {
+  int64 follower_count = 1;
+  int64 following_count = 2;
+  int64 engagement_score = 3;
+}
+
+// ==========================================
+// MODÈLE DE DONNÉES (AGRÉGAT PROFILE)
+// ==========================================
+
+message Profile {
+  // Identifiants
+  string account_id = 1;      // UUID
+  string region_code = 2;     // ex: "EU"
+  string username = 3;        // Le slug/handle
+  string display_name = 4;    // Le nom affiché
+
+  // Médias et Bio
+  google.protobuf.StringValue bio = 5;
+  google.protobuf.StringValue avatar_url = 6;
+  google.protobuf.StringValue banner_url = 7;
+  google.protobuf.StringValue location_label = 8;
+
+  // Objets complexes
+  SocialLinks social_links = 9;
+  ProfileStats stats = 10;
+  int64 post_count = 11;
+
+  // Paramètres
+  bool is_private = 12;
+
+  // Audit & OCC
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  int64 version = 15;
+}
+
+// ==========================================
+// SERVICE DE PROFIL
+// ==========================================
+
+service ProfileService {
+  // Lecture
+  rpc GetProfile(GetProfileRequest) returns (Profile);
+
+  // Mise à jour de l'identité
+  rpc UpdateUsername(UpdateUsernameRequest) returns (Profile);
+
+  // Mise à jour des métadonnées (Bio, Name, Location)
+  rpc UpdateMetadata(UpdateMetadataRequest) returns (Profile);
+
+  // Gestion des médias
+  rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
+  rpc UpdateBanner(UpdateBannerRequest) returns (Profile);
+
+  // Social et Confidentialité
+  rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
+  rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
+
+  // Actions automatiques / Inter-services
+  rpc IncrementPostCount(IncrementPostCountRequest) returns (Profile);
+  rpc DecrementPostCount(DecrementPostCountRequest) returns (Profile);
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES
+// ==========================================
+
+message GetProfileRequest {
+  string account_id = 1;
+}
+
+message UpdateUsernameRequest {
+  string account_id = 1;
+  string new_username = 2;
+}
+
+message UpdateMetadataRequest {
+  string account_id = 1;
+  string display_name = 2;
+  google.protobuf.StringValue bio = 3;
+  google.protobuf.StringValue location_label = 4;
+}
+
+message UpdateAvatarRequest {
+  string account_id = 1;
+  google.protobuf.StringValue url = 2;
+}
+
+message UpdateBannerRequest {
+  string account_id = 1;
+  google.protobuf.StringValue url = 2;
+}
+
+message UpdateSocialLinksRequest {
+  string account_id = 1;
+  SocialLinks links = 2;
+}
+
+message UpdatePrivacyRequest {
+  string account_id = 1;
+  bool is_private = 2;
+}
+
+message IncrementPostCountRequest {
+  string account_id = 1;
+  string post_id = 2; // UUID pour l'idempotence
+}
+
+message DecrementPostCountRequest {
+  string account_id = 1;
+  string post_id = 2; // UUID pour l'idempotence
+}

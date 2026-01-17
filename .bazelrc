@@ -53,6 +53,11 @@ build:debug --strip=never
 # ------------------------------------------------------------------
 # Divers utiles
 # ------------------------------------------------------------------
-common --experimental_repo_remote_exec
-query --keep_going
-query --loading_phase_threads=1
+# --- SECTION ENVIRONNEMENT FORCEE POUR IDE ---
+# On utilise 'common' pour que cela s'applique à 'build', 'test' et 'run' sans erreur
+# On force le chemin absolu vers ton Cargo système pour l'IDE
+common --action_env=CARGO=/Users/arnaud/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo
+common --repo_env=CARGO=/Users/arnaud/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo
+
+# On s'assure que le PATH contient bien les outils Rust
+common --action_env=PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin:/Users/arnaud/.cargo/bin

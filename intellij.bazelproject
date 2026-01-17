@@ -2,12 +2,10 @@
 
 directories:
   .
-  backend/services/identity
   proto/identity
 
 # On ajoute explicitement la cible de build pour que l'IDE la surveille
 targets:
-  //backend/services/identity:identity_service
   //proto/identity/v1:identity_rust_proto
 
 exclude_directories:

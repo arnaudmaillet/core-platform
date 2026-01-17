@@ -1,0 +1,11 @@
+load("//:defs.bzl", "core_rust_binary")
+
+core_rust_binary(
+    name = "account_cache_invalidator",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crates/shared-kernel:shared_kernel",
+        "@crates//:tokio",
+    ],
+)

@@ -1,0 +1,5 @@
+mod increment_post_count_command;
+mod increment_post_count_use_case;
+
+pub use increment_post_count_use_case::IncrementPostCountUseCase;
+pub use increment_post_count_command::IncrementPostCountCommand;

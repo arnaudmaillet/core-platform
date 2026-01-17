@@ -1,0 +1,74 @@
+// crates/account/src/application/ban_account/ban_account_use_case.rs
+
+use std::sync::Arc;
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::entities::EntityOptionExt;
+use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::errors::Result;
+use shared_kernel::infrastructure::{with_retry, RetryConfig, TransactionManagerExt};
+
+use crate::domain::repositories::AccountRepository;
+use crate::application::ban_account::BanAccountCommand;
+
+pub struct BanAccountUseCase {
+    account_repo: Arc<dyn AccountRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
+    tx_manager: Arc<dyn TransactionManager>,
+}
+
+impl BanAccountUseCase {
+    pub fn new(
+        account_repo: Arc<dyn AccountRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
+        tx_manager: Arc<dyn TransactionManager>,
+    ) -> Self {
+        Self { account_repo, outbox_repo, tx_manager }
+    }
+
+    pub async fn execute(&self, command: BanAccountCommand) -> Result<()> {
+        with_retry(RetryConfig::default(), || async {
+            self.try_execute_once(&command).await
+        }).await
+    }
+
+    async fn try_execute_once(&self, cmd: &BanAccountCommand) -> Result<()> {
+        // 1. Récupération (Identity-only suffit généralement pour la modération)
+        let mut account = self.account_repo
+            .find_account_by_id(&cmd.account_id, None)
+            .await?
+            .ok_or_not_found(cmd.account_id)?;
+
+        // 2. Application du changement d'état
+        account.ban(cmd.reason.clone())?;
+
+        // 3. Extraction des événements
+        let events = account.pull_events();
+
+        // 4. Idempotence Applicative
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        let account_to_save = account.clone();
+
+        // 5. Persistance Transactionnelle Atomique (Standard Hyperscale)
+        self.tx_manager.run_in_transaction(move |mut tx| {
+            let repo = self.account_repo.clone();
+            let outbox = self.outbox_repo.clone();
+            let u = account_to_save.clone();
+            let events_to_process = events;
+
+            Box::pin(async move {
+                repo.save(&u, Some(&mut *tx)).await?;
+                for event in events_to_process {
+                    outbox.save(event.as_ref(), Some(&mut *tx)).await?;
+                }
+
+                Ok(())
+            })
+        }).await?;
+
+        Ok(())
+    }
+}

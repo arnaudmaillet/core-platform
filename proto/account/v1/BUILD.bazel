@@ -1,0 +1,11 @@
+load("//:defs.bzl", "core_rust_proto_library")
+
+core_rust_proto_library(
+    name = "account",
+    srcs = [
+        "account.proto",
+        "account_metadata.proto",
+        "account_settings.proto",
+    ],
+    visibility = ["//visibility:public"],
+)

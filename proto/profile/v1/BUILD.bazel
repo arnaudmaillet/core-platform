@@ -1,0 +1,10 @@
+load("//:defs.bzl", "core_rust_proto_library")
+
+core_rust_proto_library(
+    name = "profile",
+    srcs = [
+        "profile.proto",
+        "user_location.proto",
+        ],
+    visibility = ["//visibility:public"],
+)

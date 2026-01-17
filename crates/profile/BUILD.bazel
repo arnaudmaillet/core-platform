@@ -1,0 +1,33 @@
+load("//:defs.bzl", "core_rust_library")
+
+core_rust_library(
+    name = "profile",
+    srcs = glob(["src/**/*.rs"]),
+    # On aligne les features sur le Cargo.toml pour débloquer le code conditionnel
+    crate_features = [
+        "postgres",
+        "concurrency",
+        "runtime",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        # Dépendance interne vers notre Kernel
+        "//crates/shared-kernel:shared_kernel",
+
+        # Dépendances externes issues du workspace Cargo
+        "@crates//:tokio",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:chrono",
+        "@crates//:uuid",
+        "@crates//:sqlx",
+        "@crates//:rand",
+
+        # Dépendance spécifique à ce crate
+        "@crates//:scylla",
+    ],
+
+    proc_macro_deps = [
+        "@crates//:async-trait",
+    ],
+)

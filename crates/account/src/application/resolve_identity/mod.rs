@@ -1,0 +1,7 @@
+mod resolve_identity_command;
+mod resolve_identity_use_case;
+mod resolve_identity_response;
+
+pub use resolve_identity_use_case::ResolveIdentityUseCase;
+pub use resolve_identity_command::ResolveIdentityCommand;
+pub use resolve_identity_response::ResolvedIdentityResponse;

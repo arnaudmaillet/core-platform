@@ -1,17 +1,28 @@
-// proto/identity/v1/user.proto
-
 syntax = "proto3";
 
 package identity.v1;
 
-option go_package = "core-platform/proto/identity";
+option go_package = "shared-kernel-platform/proto/identity";
 
-service UserService {
+// Service dédié aux commandes (write side)
+// Lectures dans un futur read-api avec un service séparé si besoin
+service UserCommandService {
+  // Appelé après confirmation Cognito (via Lambda trigger ou front)
+  rpc OnboardUser(OnboardUserRequest) returns (OnboardUserResponse);
+
+  // Mise à jour du profil
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+
+  // Futurs commands : DeleteUser, VerifyContact, ChangeUsername, etc.
+}
+
+service UserQueryService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
   rpc GetUserByUsername(GetUserByUsernameRequest) returns (GetUserResponse);
-  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
-  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+  // rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse); // plus tard
 }
+
+// --- Messages ---
 
 message GetUserRequest {
   string user_id = 1;
@@ -24,24 +35,34 @@ message GetUserByUsernameRequest {
 message User {
   string user_id = 1;
   string username = 2;
-  string display_name = 3;
-  string bio = 4;
-  string avatar_url = 5;
-  int64 created_at = 6;
+  string cognito_sub = 3;
+  optional string email = 4;
+  optional string phone_number = 5;
+  bool email_verified = 6;
+  bool phone_verified = 7;
+  optional string display_name = 8;
+  optional string bio = 9;
+  optional string avatar_url = 10;
+  optional string birth_date = 11;
+  int64 created_at = 12;
+  int64 updated_at = 13;
 }
 
 message GetUserResponse {
   User user = 1;
 }
 
-message CreateUserRequest {
-  string username = 1;
-  string email = 2;
-  string password = 3; // en clair, on hash côté serveur
-  optional string display_name = 4;
+// Command : appelé après confirmation Cognito
+message OnboardUserRequest {
+  string cognito_sub = 1;
+  string username = 2;
+  optional string email = 3;
+  optional string phone_number = 4;
+  optional string display_name = 5;
+  optional string birth_date = 6;
 }
 
-message CreateUserResponse {
+message OnboardUserResponse {
   User user = 1;
 }
 
@@ -50,6 +71,7 @@ message UpdateProfileRequest {
   optional string display_name = 2;
   optional string bio = 3;
   optional string avatar_url = 4;
+  optional string birth_date = 5;
 }
 
 message UpdateProfileResponse {

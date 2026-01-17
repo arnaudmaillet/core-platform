@@ -1,0 +1,30 @@
+load("//:defs.bzl", "core_rust_library")
+
+core_rust_library(
+    name = "account",
+    srcs = glob(["src/**/*.rs"]),
+    crate_features = [
+        "postgres",
+        "runtime",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        # Dépendance interne vers le Kernel
+        "//crates/shared-kernel:shared_kernel",
+
+        # Dépendances externes (Workspace)
+        "@crates//:tokio",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:chrono",
+        "@crates//:uuid",
+        "@crates//:sqlx",
+        "@crates//:regex",
+        "@crates//:unicode-normalization",
+        "@crates//:seahash",
+    ],
+
+    proc_macro_deps = [
+        "@crates//:async-trait",
+    ],
+)
