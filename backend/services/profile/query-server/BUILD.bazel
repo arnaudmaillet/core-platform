@@ -1,0 +1,30 @@
+# backend/services/profile/query-server/BUILD.bazel
+
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+rust_binary(
+    name = "profile_query_server",
+    srcs = glob(["src/**/*.rs"]),
+    edition = "2024",
+    deps = [
+        "//crates/profile:profile",
+        "//crates/shared-kernel:shared_kernel",
+        "//proto/profile/v1:profile_v1",
+        "@crates//:tonic",
+        "@crates//:tracing-subscriber",
+        "@crates//:tokio",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:anyhow",
+        "@crates//:tracing",
+        "@crates//:elasticsearch",
+        "@crates//:prost",
+         "@crates//:prost-types",
+    ],
+
+    proc_macro_deps = [
+        "@crates//:async-trait",
+    ],
+
+    visibility = ["//visibility:public"],
+)

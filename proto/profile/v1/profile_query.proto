@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package profile.v1;
+
+option go_package = "github.com/core-platform/proto/profile/v1";
+
+// Service dédié aux lectures haute performance (Elasticsearch)
+service ProfileQueryService {
+  // Recherche pour l'auto-complétion (Edge N-Grams)
+  rpc AutocompleteProfiles(AutocompleteRequest) returns (AutocompleteResponse);
+
+  // Recherche avancée (Filtres, Pagination, Scores)
+  rpc SearchProfiles(SearchProfilesRequest) returns (SearchProfilesResponse);
+}
+
+message AutocompleteRequest {
+  string query = 1;
+  int32 limit = 2;
+}
+
+// Version allégée du profil pour les résultats de recherche (DTO)
+message ProfileSummary {
+  string account_id = 1;
+  string username = 2;
+  string display_name = 3;
+  string avatar_url = 4;
+}
+
+message AutocompleteResponse {
+  repeated ProfileSummary results = 1;
+}
+
+message SearchProfilesRequest {
+  string query = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message SearchProfilesResponse {
+  repeated ProfileSummary results = 1;
+  string next_page_token = 2;
+  int64 total_hits = 3;
+}

@@ -1,0 +1,29 @@
+# backend/services/profile/query-server/Cargo.toml
+
+[package]
+name = "profile-query-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+# On active spécifiquement les capacités de recherche (ES + gRPC)
+shared-kernel = { workspace = true, features = ["service-search"] }
+profile = { workspace = true }
+
+# Dépendances externes nécessaires au binaire
+tokio = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+elasticsearch = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+prost-types = { workspace = true }
+
+[build-dependencies]
+tonic-build = "0.10"

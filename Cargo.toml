@@ -10,7 +10,7 @@ members = [
     "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
-    "proto/identity/v1",
+    "backend/services/profile/query-server"
 ]
 resolver = "2"
 
@@ -54,7 +54,8 @@ log = "0.4"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
 fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool"] }
 rdkafka = "0.38.0"
-dashmap = "6.0"
+dashmap = "7.0.0-rc2"
+elasticsearch = "9.1.0-alpha.1"
 
 # Utils
 regex = "1.12"
@@ -63,7 +64,8 @@ seahash = "4.1"
 unicode-normalization = "0.1.25"
 
 # Proto / gRPC
-tonic = "0.14"
-prost = "0.14"
-tonic-prost = "0.14"
-tonic-prost-build = "0.14"
+tonic = { version = "0.12.3", features = ["codegen", "prost"] }
+prost = "0.13.5"
+prost-types = "0.13.5"
+#tonic-prost = "0.14"
+#tonic-prost-build = "0.14"

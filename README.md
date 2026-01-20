@@ -1,19 +1,24 @@
 # Core Platform
 
-Monorepo centralisant les services et applications de notre réseau social.
+Monorepo for the core backend services of our social network.
 
-## Stack Technique
+## Tech Stack
 - **Build System:** Bazel
-- **Mobile:** iOS (Swift/UIKit), Android (Kotlin/Compose)
-- **Backend:** Rust (Core), Go (Services), Python (ML)
-- **Communication:** gRPC / Protocol Buffers
+- **Language:** Rust
+- **API:** gRPC / Protocol Buffers
+- **Local Infrastructure:** Docker
 
-## Structure du Repo
-- `/apps`: Clients mobiles et web.
-- `/backend`: Microservices.
-- `/proto`: Définitions des contrats d'API (Source of Truth).
-- `/infra`: Déploiement et CI/CD.
+## Repository Structure
 
-## Pré-requis
-- Bazel >= 7.0.0
-- Docker (pour l'infra locale)
+- `backend/services/`: Contains the binary applications for our microservices (e.g., `account/outbox-processor`).
+- `crates/`: Contains the shared Rust libraries (crates) that make up the business logic of our services.
+    - `shared-kernel`: Common libraries for all services.
+    - `account`: Crate for account management.
+    - `profile`: Crate for user profiles.
+    - `gamification`: Crate for gamification logic.
+- `proto/`: API contract definitions (Protobuf). The single source of truth for our APIs.
+- `docker-compose.yml`: Defines the local development environment (databases, etc.).
+
+## Prerequisites
+- Bazel >= 7.0.0 (see `.bazelversion`)
+- Docker & Docker Compose

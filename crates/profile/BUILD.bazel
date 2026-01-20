@@ -3,6 +3,7 @@ load("//:defs.bzl", "core_rust_library")
 core_rust_library(
     name = "profile",
     srcs = glob(["src/**/*.rs"]),
+    edition = "2024",
     # On aligne les features sur le Cargo.toml pour débloquer le code conditionnel
     crate_features = [
         "postgres",
@@ -22,8 +23,9 @@ core_rust_library(
         "@crates//:uuid",
         "@crates//:sqlx",
         "@crates//:rand",
-
-        # Dépendance spécifique à ce crate
+        "@crates//:anyhow",
+        "@crates//:tracing",
+        "@crates//:elasticsearch",
         "@crates//:scylla",
     ],
 

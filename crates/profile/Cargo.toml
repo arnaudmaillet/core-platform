@@ -1,16 +1,21 @@
+# crates/profile/Cargo.toml
+
 [package]
 name = "profile"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = ["postgres", "concurrency", "runtime"] }
+shared-kernel = { workspace = true, features = ["postgres", "elasticsearch", "concurrency", "runtime"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 sqlx = { workspace = true }
+elasticsearch = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
 scylla = "1.4" # Spécifique au stockage haute fréquence des profils

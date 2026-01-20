@@ -1,10 +1,14 @@
+# proto/profile/v1/BUILD.bazel
 load("//:defs.bzl", "core_rust_proto_library")
 
+package(default_visibility = ["//visibility:public"])
+
 core_rust_proto_library(
-    name = "profile",
+    name = "profile_v1",
     srcs = [
         "profile.proto",
+        "profile_query.proto",
         "user_location.proto",
-        ],
+    ],
     visibility = ["//visibility:public"],
 )

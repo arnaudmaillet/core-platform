@@ -37,6 +37,7 @@ core_rust_library(
         "@crates//:futures",
         "@crates//:tonic",
         "@crates//:prost",
+        "@crates//:prost-types",
         "@crates//:tokio",
         "@crates//:tokio-util",
         "@crates//:tracing-subscriber",

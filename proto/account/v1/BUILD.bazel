@@ -1,7 +1,7 @@
 load("//:defs.bzl", "core_rust_proto_library")
 
 core_rust_proto_library(
-    name = "account",
+    name = "account_v1",
     srcs = [
         "account.proto",
         "account_metadata.proto",

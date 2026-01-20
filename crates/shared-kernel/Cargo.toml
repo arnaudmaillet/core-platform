@@ -8,18 +8,15 @@ edition.workspace = true
 [features]
 default = []
 
-# Features granulaires
-
-# --- 1. Drivers Techniques (Privés ou internes) ---
-# On les garde pour le mapping vers les dépendances optionnelles
+# --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
 redis = ["dep:fred"]
 kafka = ["dep:rdkafka"]
-grpc = ["dep:tonic", "dep:prost"]
+elasticsearch = ["dep:elasticsearch"]
+grpc = []
 concurrency = ["dep:dashmap", "dep:futures"]
 
 # --- 2. Capacités Techniques ---
-# "runtime" regroupe tout ce qui touche à l'asynchronisme et l'observabilité de base
 runtime = [
     "tokio/rt",
     "tokio/time",
@@ -29,16 +26,16 @@ runtime = [
     "dep:futures"
 ]
 
-# --- 3. Rôles Fonctionnels (Les seuls à utiliser dans les services) ---
+# --- 3. Rôles Fonctionnels ---
 service-api         = ["postgres", "redis", "grpc", "runtime"]
 service-outbox      = ["postgres", "kafka", "runtime"]
 service-worker      = ["kafka", "runtime", "dep:dashmap"]
 service-invalidator = ["redis", "kafka", "runtime", "dep:dashmap"]
-
-
+service-search = ["elasticsearch", "grpc", "runtime"]
+service-projection = ["elasticsearch", "kafka", "runtime"]
 
 [dependencies]
-# Toujours inclus (Core)
+# --- Toujours inclus (Core) ---
 uuid = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -48,26 +45,27 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-rand = { workspace = true}
+rand = { workspace = true }
 
-# Optionnels (activés par features)
+# OBLIGATOIRES (Pour que Bazel génère les cibles @crates//:tonic)
+#tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+
+# --- Optionnels (activés par dep: dans les features) ---
 sqlx = { workspace = true, optional = true }
 fred = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
+elasticsearch = { workspace = true, optional = true }
 dashmap = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-tonic = { workspace = true, optional = true }
-prost = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true, features = ["rt"] }
 tracing-subscriber = { workspace = true, optional = true, features = ["fmt", "env-filter"] }
 
-# Utils (Core)
+# --- Utils (Core) ---
 futures-util = { workspace = true }
 log = { workspace = true }
 regex = { workspace = true }
 seahash = { workspace = true }
 unicode-normalization = { workspace = true }
-
-
-
