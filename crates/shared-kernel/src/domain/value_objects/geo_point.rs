@@ -17,10 +17,10 @@ impl GeoPoint {
         })
     }
 
-    pub fn new_unchecked(lat: f64, lon: f64) -> Self {
+    pub fn from_raw(lat: f64, lon: f64) -> Self {
         Self {
-            latitude: Latitude::new_unchecked(lat),
-            longitude: Longitude::new_unchecked(lon),
+            latitude: Latitude::from_raw(lat),
+            longitude: Longitude::from_raw(lon),
         }
     }
 

@@ -22,7 +22,7 @@ impl AccountType {
     }
 
     /// Reconstruction rapide (Infrastructure/DB)
-    pub fn new_unchecked(user_type: AccountType) -> Self {
+    pub fn from_raw(user_type: AccountType) -> Self {
         user_type
     }
 

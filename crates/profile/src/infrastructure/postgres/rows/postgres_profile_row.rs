@@ -1,7 +1,10 @@
+// crates/profile/src/infrastructure/postgres/rows/postgres_profile_row.rs
+
 use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{Counter, LocationLabel, RegionCode, Url, AccountId, Username};
 use shared_kernel::errors::{Result, DomainError};
 use crate::domain::builders::ProfileBuilder;
@@ -39,14 +42,14 @@ impl TryFrom<PostgresProfileRow> for Profile {
 
         // Reconstruction de l'agrégat via la méthode de restauration
         let profile = ProfileBuilder::restore(
-            AccountId::new_unchecked(row.account_id),
-            RegionCode::new_unchecked(row.region_code),
-            DisplayName::new_unchecked(row.display_name),
-            Username::new_unchecked(row.username),
-            row.bio.map(Bio::new_unchecked),
-            row.avatar_url.map(Url::new_unchecked),
-            row.banner_url.map(Url::new_unchecked),
-            row.location_label.map(LocationLabel::new_unchecked),
+            AccountId::from_uuid(row.account_id),
+            RegionCode::from_raw(row.region_code),
+            DisplayName::from_raw(row.display_name),
+            Username::from_raw(row.username),
+            row.bio.map(Bio::from_raw),
+            row.avatar_url.map(Url::from_raw),
+            row.banner_url.map(Url::from_raw),
+            row.location_label.map(LocationLabel::from_raw),
             social_links,
             Counter::try_from(row.post_count)?,
             row.is_private,
@@ -56,5 +59,26 @@ impl TryFrom<PostgresProfileRow> for Profile {
         );
 
         Ok(profile)
+    }
+}
+
+impl From<&Profile> for PostgresProfileRow {
+    fn from(p: &Profile) -> Self {
+        Self {
+            account_id: p.account_id.as_uuid(),
+            region_code: p.region_code.to_string(),
+            display_name: p.display_name.as_str().to_string(),
+            username: p.username.as_str().to_string(),
+            bio: p.bio.as_ref().map(|b| b.as_str().to_string()),
+            avatar_url: p.avatar_url.as_ref().map(|u| u.as_str().to_string()),
+            banner_url: p.banner_url.as_ref().map(|u| u.as_str().to_string()),
+            location_label: p.location_label.as_ref().map(|l| l.as_str().to_string()),
+            social_links: serde_json::to_value(&p.social_links).unwrap_or(JsonValue::Null),
+            post_count: p.post_count.value() as i64,
+            is_private: p.is_private,
+            version: p.metadata.version,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+        }
     }
 }

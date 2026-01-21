@@ -49,7 +49,7 @@ impl CompositeProfileRepository {
 #[async_trait]
 impl ProfileRepository for CompositeProfileRepository {
     /// Méthode de fusion : Récupère l'identité et les stats en parallèle.
-    async fn get_full_profile(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<Profile>> {
+    async fn get_profile_by_account_id(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<Profile>> {
         // Exécution parallèle des deux requêtes IO pour minimiser la latence
         let (id_res, stats_res) = tokio::join!(
             self.identity.find_by_id(account_id, region),
@@ -83,67 +83,19 @@ impl ProfileRepository for CompositeProfileRepository {
         }
     }
 
-    async fn get_profile_identity(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<Profile>> {
+    async fn get_profile_without_stats(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<Profile>> {
         self.identity.find_by_id(account_id, region).await
     }
 
     async fn get_profile_stats(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<ProfileStats>> {
         self.stats.find_by_id(account_id, region).await
     }
-}
 
-#[async_trait]
-impl ProfileIdentityRepository for CompositeProfileRepository {
     async fn save(&self, profile: &Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
         self.identity.save(profile, tx).await
     }
 
-    async fn find_by_id(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<Profile>> {
-        self.identity.find_by_id(account_id, region).await
-    }
-
-    async fn find_by_username(&self, slug: &Username, region: &RegionCode) -> Result<Option<Profile>> {
-        // Pour un find_by_slug, on veut souvent le profil complet
-        let profile_opt = self.identity.find_by_username(slug, region).await?;
-
-        match profile_opt {
-            Some(mut profile) => {
-                if let Ok(Some(s)) = self.stats.find_by_id(&profile.account_id, region).await {
-                    profile.stats = s;
-                }
-                Ok(Some(profile))
-            },
-            None => Ok(None)
-        }
-    }
-
-    async fn exists_by_username(&self, slug: &Username, region: &RegionCode) -> Result<bool> {
-        self.identity.exists_by_username(slug, region).await
-    }
-
-    async fn delete_identity(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
-        self.identity.delete_identity(account_id, region).await
-    }
-}
-
-#[async_trait]
-impl ProfileStatsRepository for CompositeProfileRepository {
-    async fn find_by_id(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<ProfileStats>> {
-        self.stats.find_by_id(account_id, region).await
-    }
-
-    async fn update_stats(
-        &self,
-        account_id: &AccountId,
-        region: &RegionCode,
-        follower_delta: i64,
-        following_delta: i64,
-        post_delta: i64
-    ) -> Result<()> {
-        self.stats.update_stats(account_id, region, follower_delta, following_delta, post_delta).await
-    }
-
-    async fn delete_stats(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
-        self.stats.delete_stats(account_id, region).await
+    async fn exists_by_username(&self, username: &Username, region: &RegionCode) -> Result<bool> {
+        self.identity.exists_by_username(username, region).await
     }
 }

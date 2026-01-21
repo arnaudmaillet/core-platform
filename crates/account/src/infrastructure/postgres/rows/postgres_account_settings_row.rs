@@ -1,6 +1,7 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
 
 use serde::{Deserialize, Serialize};
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{PushToken, RegionCode, Timezone, AccountId};
 use shared_kernel::errors::{DomainError, Result};
 use crate::domain::entities::{AccountSettings, SettingsBlob};
@@ -28,17 +29,17 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
         // 2. Transformer les types simples en Value Objects
         let push_tokens = row.push_tokens
             .into_iter()
-            .map(PushToken::new_unchecked)
+            .map(PushToken::from_raw)
             .collect();
 
         // 3. Utiliser le Builder Restore pour injecter la version et les métadonnées
         Ok(AccountSettingsBuilder::restore(
-            AccountId::new_unchecked(row.account_id),
-            RegionCode::new_unchecked(row.region_code),
+            AccountId::from_uuid(row.account_id),
+            RegionCode::from_raw(row.region_code),
             blob.privacy,
             blob.notifications,
             blob.appearance,
-            Timezone::new_unchecked(row.timezone),
+            Timezone::from_raw(row.timezone),
             push_tokens,
             row.updated_at,
             row.version,

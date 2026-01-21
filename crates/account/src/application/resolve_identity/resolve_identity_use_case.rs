@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::infrastructure::{with_retry, RetryConfig};
+use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use crate::application::resolve_identity::{ResolveIdentityCommand, ResolvedIdentityResponse};
 use crate::domain::repositories::{AccountRepository, AccountMetadataRepository};
 use crate::domain::value_objects::AccountState;

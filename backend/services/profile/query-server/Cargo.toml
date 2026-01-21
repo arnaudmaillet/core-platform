@@ -11,7 +11,7 @@ description.workspace = true
 
 [dependencies]
 # On active spécifiquement les capacités de recherche (ES + gRPC)
-shared-kernel = { workspace = true, features = ["service-search"] }
+shared-kernel = { workspace = true, features = ["service-search", "scylla"] }
 profile = { workspace = true }
 
 # Dépendances externes nécessaires au binaire
@@ -24,6 +24,3 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 prost-types = { workspace = true }
-
-[build-dependencies]
-tonic-build = "0.10"

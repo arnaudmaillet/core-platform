@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use scylla::client::session::Session;
 use scylla::value::Row;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{Counter, RegionCode, AccountId};
 use shared_kernel::errors::{Result, DomainError};
 

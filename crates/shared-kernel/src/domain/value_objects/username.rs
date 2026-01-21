@@ -35,7 +35,7 @@ impl Username {
             .collect::<String>()
             .to_lowercase();
 
-        let username = Self::new_unchecked(normalized);
+        let username = Self::from_raw(normalized);
 
         // 2. Validation
         username.validate()?;
@@ -45,7 +45,7 @@ impl Username {
 
     /// Reconstruction ultra-rapide (Infrastructure / DB)
     /// Calcule le hash sans re-valider la regex ou la longueur
-    pub fn new_unchecked(value: impl Into<String>) -> Self {
+    pub fn from_raw(value: impl Into<String>) -> Self {
         let inner = value.into();
         let mut hasher = SeaHasher::new();
         inner.hash(&mut hasher);

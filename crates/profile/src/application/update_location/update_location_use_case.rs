@@ -4,7 +4,8 @@ use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::{TransactionManagerExt, with_retry, RetryConfig};
+use shared_kernel::domain::utils::{with_retry, RetryConfig};
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::update_location::update_location_command::UpdateLocationCommand;
 use crate::domain::repositories::LocationRepository;
 
@@ -74,7 +75,7 @@ impl UpdateLocationUseCase {
 
                 // Enregistrement des événements dans la table Outbox
                 for event in evs {
-                    outbox.save(event.as_ref(), Some(&mut *tx)).await?;
+                    outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 
                 Ok(())

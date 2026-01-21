@@ -22,7 +22,7 @@ impl AccountState {
     }
 
     /// Reconstruction rapide (Infrastructure/DB)
-    pub fn new_unchecked(state: AccountState) -> Self {
+    pub fn from_raw(state: AccountState) -> Self {
         state
     }
 

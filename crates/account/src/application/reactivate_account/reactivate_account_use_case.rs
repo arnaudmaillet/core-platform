@@ -6,7 +6,8 @@ use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::{with_retry, RetryConfig, TransactionManagerExt};
+use shared_kernel::domain::utils::{with_retry, RetryConfig};
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 
 use crate::domain::repositories::AccountRepository;
 use crate::application::reactivate_account::ReactivateAccountCommand;
@@ -67,7 +68,7 @@ impl ReactivateAccountUseCase {
                 // Enregistrement des événements pour informer les services
                 // de session et de notification
                 for event in events_to_process {
-                    outbox.save(event.as_ref(), Some(&mut *tx)).await?;
+                    outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 
                 Ok(())

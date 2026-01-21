@@ -19,3 +19,10 @@ rand = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 scylla = "1.4" # Spécifique au stockage haute fréquence des profils
+
+prost = { workspace = true }
+tonic = { workspace = true }
+prost-types = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true}

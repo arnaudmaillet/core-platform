@@ -3,10 +3,11 @@
 use async_trait::async_trait;
 use sqlx::{PgPool, Row};
 use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{RegionCode, AccountId, Username};
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::postgres::SqlxErrorExt;
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileIdentityRepository;
 use crate::infrastructure::postgres::rows::PostgresProfileRow;
@@ -26,61 +27,80 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
 
     async fn save(&self, profile: &Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
         let pool = self.pool.clone();
-        let p = profile.clone();
-        let current_version = p.version();
+        // On prépare la Row en amont (conversion infaillible From)
+        let row = PostgresProfileRow::from(profile);
 
         <dyn Transaction>::execute_on(&pool, tx, |conn| Box::pin(async move {
-            // 1. Tenter l'UPDATE avec Optimistic Locking
+            // 1. Tentative d'UPDATE (Optimistic Locking)
             let update_sql = r#"
-                UPDATE user_profiles SET
-                    display_name = $1, username = $2, bio = $3,
-                    avatar_url = $4, banner_url = $5, location_label = $6,
-                    social_links = $7, post_count = $8, is_private = $9,
-                    updated_at = $10, version = version + 1
-                WHERE account_id = $11 AND region_code = $12 AND version = $13
-            "#;
+            UPDATE user_profiles SET
+                display_name = $1, username = $2, bio = $3,
+                avatar_url = $4, banner_url = $5, location_label = $6,
+                social_links = $7, post_count = $8, is_private = $9,
+                updated_at = $10, version = version + 1
+            WHERE account_id = $11 AND region_code = $12 AND version = $13
+        "#;
 
             let result = sqlx::query(update_sql)
-                .bind(p.display_name.as_str())
-                .bind(p.username.as_str())
-                .bind(p.bio.as_ref().map(|b| b.as_str()))
-                .bind(p.avatar_url.as_ref().map(|u| u.as_str()))
-                .bind(p.banner_url.as_ref().map(|u| u.as_str()))
-                .bind(p.location_label.as_ref().map(|l| l.as_str()))
-                .bind(serde_json::to_value(&p.social_links).unwrap_or_default())
-                .bind(p.post_count.value() as i64)
-                .bind(p.is_private)
-                .bind(p.updated_at)
-                .bind(p.account_id.as_uuid())
-                .bind(p.region_code.as_str())
-                .bind(current_version)
+                .bind(&row.display_name)
+                .bind(&row.username)
+                .bind(&row.bio)
+                .bind(&row.avatar_url)
+                .bind(&row.banner_url)
+                .bind(&row.location_label)
+                .bind(&row.social_links)
+                .bind(row.post_count)
+                .bind(row.is_private)
+                .bind(row.updated_at)
+                .bind(row.account_id)
+                .bind(&row.region_code)
+                .bind(row.version) // On cherche la version actuelle en DB
                 .execute(&mut *conn)
                 .await
                 .map_domain::<Profile>()?;
 
             if result.rows_affected() == 0 {
-                // 2. Si l'UPDATE a échoué, est-ce parce que le profil n'existe pas encore ?
-                // On vérifie l'existence pour savoir s'il faut INSERT ou lever un ConcurrencyConflict
-                let exists: (bool,) = sqlx::query_as("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE account_id = $1 AND region_code = $2)")
-                    .bind(p.account_id.as_uuid())
-                    .bind(p.region_code.as_str())
+                // 2. Si l'UPDATE échoue, on vérifie si le profil existe
+                let (exists,): (bool,) = sqlx::query_as("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE account_id = $1 AND region_code = $2)")
+                    .bind(row.account_id)
+                    .bind(&row.region_code)
                     .fetch_one(&mut *conn)
                     .await
                     .map_domain::<Profile>()?;
 
-                if !exists.0 {
-                    // INSERT initial
+                if !exists {
+                    // 3. INSERT initial (Version commence à 1)
                     let insert_sql = r#"
-                        INSERT INTO user_profiles (
-                            account_id, region_code, display_name, username, version, updated_at, ...
-                        ) VALUES ($1, $2, $3, $4, 1, NOW(), ...)
-                    "#;
-                    // ... exécuter l'insert ...
+                    INSERT INTO user_profiles (
+                        account_id, region_code, display_name, username,
+                        bio, avatar_url, banner_url, location_label,
+                        social_links, post_count, is_private, version,
+                        created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, $12, $12)
+                "#;
+
+                    sqlx::query(insert_sql)
+                        .bind(row.account_id)
+                        .bind(&row.region_code)
+                        .bind(&row.display_name)
+                        .bind(&row.username)
+                        .bind(&row.bio)
+                        .bind(&row.avatar_url)
+                        .bind(&row.banner_url)
+                        .bind(&row.location_label)
+                        .bind(&row.social_links)
+                        .bind(row.post_count)
+                        .bind(row.is_private)
+                        .bind(row.created_at) // Utilise la date de création de la Row
+                        .execute(&mut *conn)
+                        .await
+                        .map_domain::<Profile>()?;
+
                     Ok(())
                 } else {
-                    // C'est un vrai conflit de version !
+                    // 4. Conflit de concurrence : le profil existe mais la version a changé entre-temps
                     Err(shared_kernel::errors::DomainError::ConcurrencyConflict {
-                        reason: format!("Profile version mismatch for user {}", p.account_id)
+                        reason: format!("Profile version mismatch for account {}", row.account_id)
                     })
                 }
             } else {

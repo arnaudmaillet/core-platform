@@ -24,7 +24,7 @@ impl BirthDate {
     /// Reconstruction rapide (Infrastructure / DB)
     /// On ne valide pas l'âge lors de la lecture DB pour éviter les bugs si un utilisateur
     /// a fêté son anniversaire entre l'écriture et la lecture.
-    pub fn new_unchecked(date: NaiveDate) -> Self {
+    pub fn from_raw(date: NaiveDate) -> Self {
         Self(date)
     }
 

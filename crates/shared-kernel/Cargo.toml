@@ -10,6 +10,7 @@ default = []
 
 # --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
+scylla = ["dep:scylla"]
 redis = ["dep:fred"]
 kafka = ["dep:rdkafka"]
 elasticsearch = ["dep:elasticsearch"]
@@ -48,13 +49,14 @@ url = { workspace = true }
 rand = { workspace = true }
 
 # OBLIGATOIRES (Pour que Bazel génère les cibles @crates//:tonic)
-#tonic = { workspace = true }
+tonic = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 
 # --- Optionnels (activés par dep: dans les features) ---
 sqlx = { workspace = true, optional = true }
 fred = { workspace = true, optional = true }
+scylla = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 elasticsearch = { workspace = true, optional = true }
 dashmap = { workspace = true, optional = true }

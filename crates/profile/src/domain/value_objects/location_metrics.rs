@@ -17,7 +17,7 @@ impl LocationMetrics {
     }
 
     /// Pour l'infrastructure (Reconstruction DB sans validation)
-    pub fn new_unchecked(accuracy: LocationAccuracy, altitude: Option<Altitude>) -> Self {
+    pub fn from_raw(accuracy: LocationAccuracy, altitude: Option<Altitude>) -> Self {
         Self { accuracy, altitude }
     }
 

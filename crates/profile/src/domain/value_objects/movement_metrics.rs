@@ -18,7 +18,7 @@ impl MovementMetrics {
     }
 
     /// Pour l'infrastructure (Reconstruction DB)
-    pub fn new_unchecked(speed: Speed, heading: Heading) -> Self {
+    pub fn from_raw(speed: Speed, heading: Heading) -> Self {
         Self { speed, heading }
     }
 

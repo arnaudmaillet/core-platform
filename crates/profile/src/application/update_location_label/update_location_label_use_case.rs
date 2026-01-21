@@ -6,7 +6,8 @@ use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::{TransactionManagerExt, with_retry, RetryConfig};
+use shared_kernel::domain::utils::{with_retry, RetryConfig};
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::update_location_label::UpdateLocationLabelCommand;
 use crate::domain::repositories::ProfileRepository;
 
@@ -33,7 +34,7 @@ impl UpdateLocationLabelUseCase {
 
     async fn try_execute_once(&self, cmd: &UpdateLocationLabelCommand) -> Result<()> {
         // 1. Récupération (Identity-only suffit pour valider la mutation)
-        let mut profile = self.repo.get_profile_identity(&cmd.account_id, &cmd.region)
+        let mut profile = self.repo.get_profile_without_stats(&cmd.account_id, &cmd.region)
             .await?
             .ok_or_not_found(cmd.account_id)?;
 
@@ -66,7 +67,7 @@ impl UpdateLocationLabelUseCase {
             Box::pin(async move {
                 repo.save(&p, Some(&mut *tx)).await?;
                 for event in events_to_process {
-                    outbox.save(event.as_ref(), Some(&mut *tx)).await?;
+                    outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 
                 Ok(())

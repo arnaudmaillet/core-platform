@@ -1,0 +1,54 @@
+syntax = "proto3";
+package profile.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/core-platform/proto/profile/v1";
+
+message SocialLinks {
+  google.protobuf.StringValue website_url = 1;
+  google.protobuf.StringValue linkedin_url = 2;
+  google.protobuf.StringValue github_url = 3;
+  google.protobuf.StringValue x_url = 4;
+  google.protobuf.StringValue instagram_url = 5;
+  google.protobuf.StringValue facebook_url = 6;
+  google.protobuf.StringValue tiktok_url = 7;
+  google.protobuf.StringValue youtube_url = 8;
+  google.protobuf.StringValue twitch_url = 9;
+  google.protobuf.StringValue discord_url = 10;
+  google.protobuf.StringValue onlyfans_url = 11;
+  map<string, string> others = 12;
+}
+
+message ProfileStats {
+  int64 follower_count = 1;
+  int64 following_count = 2;
+}
+
+message Profile {
+  string account_id = 1;
+  string region_code = 2;
+  string username = 3;
+  string display_name = 4;
+  google.protobuf.StringValue bio = 5;
+  google.protobuf.StringValue avatar_url = 6;
+  google.protobuf.StringValue banner_url = 7;
+  google.protobuf.StringValue location_label = 8;
+
+  SocialLinks social_links = 9;
+  ProfileStats stats = 10;
+  int64 post_count = 11;
+
+  bool is_private = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  int64 version = 15;
+}
+
+message ProfileSummary {
+  string account_id = 1;
+  string username = 2;
+  string display_name = 3;
+  string avatar_url = 4;
+}

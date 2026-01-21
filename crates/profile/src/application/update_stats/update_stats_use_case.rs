@@ -2,16 +2,16 @@
 
 use std::sync::Arc;
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::{with_retry, RetryConfig};
+use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use crate::application::update_stats::UpdateStatsCommand;
-use crate::domain::repositories::ProfileRepository;
+use crate::domain::repositories::ProfileStatsRepository;
 
 pub struct UpdateStatsUseCase {
-    profile_repo: Arc<dyn ProfileRepository>,
+    profile_repo: Arc<dyn ProfileStatsRepository>,
 }
 
 impl UpdateStatsUseCase {
-    pub fn new(profile_repo: Arc<dyn ProfileRepository>) -> Self {
+    pub fn new(profile_repo: Arc<dyn ProfileStatsRepository>) -> Self {
         Self { profile_repo }
     }
 

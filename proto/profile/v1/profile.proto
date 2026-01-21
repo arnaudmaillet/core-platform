@@ -2,83 +2,38 @@ syntax = "proto3";
 
 package profile.v1;
 
-import "google/protobuf/timestamp.proto";
+// Importation des types partagés et des wrappers Google
+import "profile/v1/types.proto";
 import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/core-platform/proto/profile/v1";
 
 // ==========================================
-// STRUCTURES DE DONNÉES IMBRIQUÉES
+// SERVICES DE MODIFICATION (COMMANDES)
 // ==========================================
 
-message SocialLinks {
-  google.protobuf.StringValue twitter_url = 1;
-  google.protobuf.StringValue github_url = 2;
-  google.protobuf.StringValue linkedin_url = 3;
-  google.protobuf.StringValue website_url = 4;
-  map<string, string> custom_links = 5; // Pour l'extensibilité hyperscale
-}
-
-message ProfileStats {
-  int64 follower_count = 1;
-  int64 following_count = 2;
-  int64 engagement_score = 3;
-}
-
-// ==========================================
-// MODÈLE DE DONNÉES (AGRÉGAT PROFILE)
-// ==========================================
-
-message Profile {
-  // Identifiants
-  string account_id = 1;      // UUID
-  string region_code = 2;     // ex: "EU"
-  string username = 3;        // Le slug/handle
-  string display_name = 4;    // Le nom affiché
-
-  // Médias et Bio
-  google.protobuf.StringValue bio = 5;
-  google.protobuf.StringValue avatar_url = 6;
-  google.protobuf.StringValue banner_url = 7;
-  google.protobuf.StringValue location_label = 8;
-
-  // Objets complexes
-  SocialLinks social_links = 9;
-  ProfileStats stats = 10;
-  int64 post_count = 11;
-
-  // Paramètres
-  bool is_private = 12;
-
-  // Audit & OCC
-  google.protobuf.Timestamp created_at = 13;
-  google.protobuf.Timestamp updated_at = 14;
-  int64 version = 15;
-}
-
-// ==========================================
-// SERVICE DE PROFIL
-// ==========================================
-
-service ProfileService {
-  // Lecture
-  rpc GetProfile(GetProfileRequest) returns (Profile);
-
-  // Mise à jour de l'identité
+// Gère l'identité unique et critique de l'utilisateur
+service ProfileIdentityService {
+  // Mise à jour du slug/handle (opération à forte cohérence)
   rpc UpdateUsername(UpdateUsernameRequest) returns (Profile);
+}
 
-  // Mise à jour des métadonnées (Bio, Name, Location)
+// Gère l'apparence, les médias et les liens sociaux
+service ProfileSettingsService {
+  // Mise à jour des métadonnées textuelles (Bio, Nom affiché)
   rpc UpdateMetadata(UpdateMetadataRequest) returns (Profile);
 
-  // Gestion des médias
+  // Gestion des images de profil
   rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
   rpc UpdateBanner(UpdateBannerRequest) returns (Profile);
 
-  // Social et Confidentialité
+  // Gestion des réseaux sociaux et de la confidentialité
   rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
   rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
+}
 
-  // Actions automatiques / Inter-services
+// Gère les interactions automatiques et les compteurs (souvent appelé par d'autres services)
+service ProfileInternalService {
   rpc IncrementPostCount(IncrementPostCountRequest) returns (Profile);
   rpc DecrementPostCount(DecrementPostCountRequest) returns (Profile);
 }
@@ -87,14 +42,14 @@ service ProfileService {
 // MESSAGES DE REQUÊTES
 // ==========================================
 
-message GetProfileRequest {
-  string account_id = 1;
-}
+// --- Identity ---
 
 message UpdateUsernameRequest {
-  string account_id = 1;
-  string new_username = 2;
+  string account_id = 1;      // UUID
+  string new_username = 2;    // Nouveau slug
 }
+
+// --- Settings & Metadata ---
 
 message UpdateMetadataRequest {
   string account_id = 1;
@@ -115,7 +70,7 @@ message UpdateBannerRequest {
 
 message UpdateSocialLinksRequest {
   string account_id = 1;
-  SocialLinks links = 2;
+  SocialLinks links = 2;      // Utilise le message défini dans types.proto
 }
 
 message UpdatePrivacyRequest {
@@ -123,12 +78,14 @@ message UpdatePrivacyRequest {
   bool is_private = 2;
 }
 
+// --- Internal / Automation ---
+
 message IncrementPostCountRequest {
   string account_id = 1;
-  string post_id = 2; // UUID pour l'idempotence
+  string post_id = 2;         // Pour l'idempotence côté serveur
 }
 
 message DecrementPostCountRequest {
   string account_id = 1;
-  string post_id = 2; // UUID pour l'idempotence
+  string post_id = 2;
 }

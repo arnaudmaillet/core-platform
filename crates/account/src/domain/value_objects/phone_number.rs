@@ -29,7 +29,7 @@ impl PhoneNumber {
             .filter(|c| c.is_ascii_digit() || *c == '+')
             .collect();
 
-        let phone = Self::new_unchecked(cleaned);
+        let phone = Self::from_raw(cleaned);
 
         // 2. Validation stricte
         phone.validate()?;
@@ -38,7 +38,7 @@ impl PhoneNumber {
     }
 
     /// Reconstruction ultra-rapide (Infrastructure / DB)
-    pub fn new_unchecked(value: impl Into<String>) -> Self {
+    pub fn from_raw(value: impl Into<String>) -> Self {
         let inner = value.into();
         let mut hasher = SeaHasher::new();
         inner.hash(&mut hasher);

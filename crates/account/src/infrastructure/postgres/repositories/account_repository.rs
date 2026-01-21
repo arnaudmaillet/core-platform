@@ -2,10 +2,11 @@
 
 use async_trait::async_trait;
 use sqlx::{Postgres, Pool, query, query_as, query_scalar, QueryBuilder};
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, Username};
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::postgres::SqlxErrorExt;
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
 use crate::domain::entities::Account;
 use crate::domain::params::PatchUserParams;
@@ -40,7 +41,7 @@ impl AccountRepository for PostgresAccountRepository {
         }))
             .await?;
 
-        Ok(id.map(AccountId::new_unchecked))
+        Ok(id.map(AccountId::from_uuid))
     }
 
     async fn find_account_id_by_username(&self, username: &Username) -> Result<Option<AccountId>> {
@@ -55,7 +56,7 @@ impl AccountRepository for PostgresAccountRepository {
         }))
             .await?;
 
-        Ok(id.map(AccountId::new_unchecked))
+        Ok(id.map(AccountId::from_uuid))
     }
 
     async fn find_account_id_by_external_id(
@@ -75,7 +76,7 @@ impl AccountRepository for PostgresAccountRepository {
         }))
             .await?;
 
-        Ok(id.map(AccountId::new_unchecked))
+        Ok(id.map(AccountId::from_uuid))
     }
 
     async fn find_account_by_id(
@@ -148,33 +149,23 @@ impl AccountRepository for PostgresAccountRepository {
     // --- ÉCRITURES ---
 
     async fn create_account(&self, user: &Account, tx: &mut dyn Transaction) -> Result<()> {
-        let uid = user.id.as_uuid();
-        let region = user.region_code.as_str().to_string();
-        let ext_id = user.external_id.as_str().to_string();
-        let username = user.username.as_str().to_string();
-        let email = user.email.as_str().to_string();
-        let phone = user.phone_number.as_ref().map(|p| p.as_str().to_string());
-        let state = user.account_state.as_str().to_string();
-        let birth = user.birth_date.as_ref().map(|d| d.value());
-        let locale = user.locale.as_str().to_string();
-        let created = user.created_at;
-        let updated = user.updated_at;
-        let active = user.last_active_at;
+        let row = PostgresAccountRow::from(user);
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| Box::pin(async move {
             query(
                 r#"
-                INSERT INTO users (
-                    id, region_code, external_id, username, email,
-                    phone_number, account_state, birth_date, locale,
-                    created_at, updated_at, last_active_at
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                "#
+            INSERT INTO users (
+                id, region_code, external_id, username, email,
+                phone_number, account_state, birth_date, locale,
+                created_at, updated_at, last_active_at
             )
-                .bind(uid).bind(region).bind(ext_id).bind(username).bind(email)
-                .bind(phone).bind(state).bind(birth).bind(locale)
-                .bind(created).bind(updated).bind(active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            "#
+            )
+                .bind(row.id).bind(&row.region_code).bind(&row.external_id)
+                .bind(&row.username).bind(&row.email).bind(&row.phone_number)
+                .bind(&row.account_state).bind(row.birth_date).bind(&row.locale)
+                .bind(row.created_at).bind(row.updated_at).bind(row.last_active_at)
                 .execute(conn)
                 .await
                 .map_domain::<Account>()
@@ -260,41 +251,40 @@ impl AccountRepository for PostgresAccountRepository {
 
 impl PostgresAccountRepository {
     async fn execute_upsert(&self, user: &Account, tx: Option<&mut dyn Transaction>) -> Result<()> {
-        let uid = user.id.as_uuid();
-        let region = user.region_code.as_str().to_string();
-        let ext_id = user.external_id.as_str().to_string();
-        let username = user.username.as_str().to_string();
-        let email = user.email.as_str().to_string();
-        let email_v = user.email_verified;
-        let phone = user.phone_number.as_ref().map(|p| p.as_str().to_string());
-        let phone_v = user.phone_verified;
-        let state = user.account_state.as_str().to_string();
-        let birth = user.birth_date.as_ref().map(|d| d.value());
-        let locale = user.locale.as_str().to_string();
-        let updated = user.updated_at;
+        let row = PostgresAccountRow::from(user);
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let sql = r#"
-                INSERT INTO users (
-                    id, region_code, external_id, username, email, email_verified,
-                    phone_number, phone_verified, account_state, birth_date,
-                    locale, updated_at
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                ON CONFLICT (id) DO UPDATE SET
-                    email = EXCLUDED.email,
-                    email_verified = EXCLUDED.email_verified,
-                    phone_number = EXCLUDED.phone_number,
-                    phone_verified = EXCLUDED.phone_verified,
-                    account_state = EXCLUDED.account_state,
-                    locale = EXCLUDED.locale,
-                    updated_at = EXCLUDED.updated_at
-            "#;
+            INSERT INTO users (
+                id, region_code, external_id, username, email, email_verified,
+                phone_number, phone_verified, account_state, birth_date,
+                locale, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (id) DO UPDATE SET
+                email = EXCLUDED.email,
+                email_verified = EXCLUDED.email_verified,
+                phone_number = EXCLUDED.phone_number,
+                phone_verified = EXCLUDED.phone_verified,
+                account_state = EXCLUDED.account_state,
+                locale = EXCLUDED.locale,
+                updated_at = EXCLUDED.updated_at
+        "#;
 
+            // 2. On bind directement les champs de la row
             query(sql)
-                .bind(uid).bind(region).bind(ext_id).bind(username).bind(email)
-                .bind(email_v).bind(phone).bind(phone_v).bind(state).bind(birth)
-                .bind(locale).bind(updated)
+                .bind(row.id)
+                .bind(&row.region_code)
+                .bind(&row.external_id)
+                .bind(&row.username)
+                .bind(&row.email)
+                .bind(row.email_verified)
+                .bind(&row.phone_number)
+                .bind(row.phone_verified)
+                .bind(&row.account_state) // Utilise le type PostgresAccountState de la row
+                .bind(row.birth_date)
+                .bind(&row.locale)
+                .bind(row.updated_at)
                 .execute(conn)
                 .await
                 .map_domain::<Account>()

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
 use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{GeoPoint, RegionCode, AccountId};
 use shared_kernel::errors::{DomainError, Result};
 use crate::domain::events::LocationEvent;
@@ -111,7 +112,7 @@ impl EntityMetadata for UserLocation {
 }
 
 impl AggregateRoot for UserLocation {
-    fn id(&self) -> String { self.account_id.to_string() }
+    fn id(&self) -> String { self.account_id.as_string() }
     fn metadata(&self) -> &AggregateMetadata { &self.metadata }
     fn metadata_mut(&mut self) -> &mut AggregateMetadata { &mut self.metadata }
 }

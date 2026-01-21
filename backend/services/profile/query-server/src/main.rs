@@ -1,96 +1,82 @@
-use tonic::{transport::Server, Request, Response, Status};
-
-// Import correct suite à la génération Bazel
-// backend/services/profile/query-server/src/main.rs
 // backend/services/profile/query-server/src/main.rs
 
-// On teste l'accès direct via la crate
-// use profile_v1_raw_proto::location::v1::GeoPoint;
-// 1. On dit à Rust : "La crate que Bazel appelle 'profile' (les protos),
-//    je veux qu'elle s'appelle 'profile_v1' dans ce fichier"
+use std::sync::Arc;
+use tonic::transport::Server;
 
-// 2. On fait la même chose pour ta lib métier si nécessaire,
-//    ou on laisse Bazel gérer le conflit.
-// extern crate profile_logic;
+// Application
+use profile::application::update_username::UpdateUsernameUseCase;
 
-// Le compilateur nous a dit qu'il voyait cette crate :
-#[cfg(not(bazel))]
-pub mod profile_v1_raw_proto {
-    pub mod location {
-        pub mod v1 {
-            include!("location.v1.rs");
-        }
-    }
-    pub mod profile {
-        pub mod v1 {
-            include!("profile.v1.rs");
-        }
-    }
+// Infrastructure - API
+use profile::infrastructure::api::grpc::handlers::IdentityHandler;
+use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_server::ProfileIdentityServiceServer;
+
+// Infrastructure - Repositories (Spécifiques au Profile)
+use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
+use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
+use profile::infrastructure::repositories::CompositeProfileRepository;
+
+// Shared Kernel
+use shared_kernel::infrastructure::grpc::region_interceptor;
+use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
+use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
+use shared_kernel::infrastructure::postgres::factories::{create_postgres_pool, DbConfig};
+use shared_kernel::infrastructure::scylla::factories::{create_scylla_session, ScyllaConfig};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = "[::1]:50051".parse()?;
+
+    // --- 1. INITIALISATION DES CLIENTS DB ---
+
+    // Configuration et création de la pool Postgres (Shared Kernel)
+    let mut db_config = DbConfig::from_env()?;
+    db_config.max_connections = 5;
+    let pool = create_postgres_pool(&db_config).await?;
+
+    // Configuration et création de la session ScyllaDB (Shared Kernel)
+    let scylla_config = ScyllaConfig::from_env()?;
+    let scylla_session = create_scylla_session(&scylla_config).await?;
+
+    // --- 2. INITIALISATION DES REPOSITORIES (Infrastructure) ---
+
+    // Implémentations techniques (On clone les pools car elles sont conçues pour ça)
+    let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
+    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session.clone()));
+
+    // L'orchestrateur (Façade Composite) qui masque la dualité DB au Domaine
+    let profile_repo = Arc::new(CompositeProfileRepository::new(
+        identity_postgres.clone(),
+        stats_scylla.clone()
+    ));
+
+    // Outils techniques partagés pour la cohérence des données (Transaction + Outbox)
+    let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+
+    // --- 3. INITIALISATION DES USE CASES (Application) ---
+
+    let update_username_usecase = Arc::new(UpdateUsernameUseCase::new(
+        profile_repo,   // Injection du Composite (Abstrait pour l'UseCase)
+        outbox_repo,    // Injection de l'Outbox
+        tx_manager,     // Injection du gestionnaire de transactions
+    ));
+
+    // --- 4. INITIALISATION DES HANDLERS (API) ---
+
+    let identity_handler = IdentityHandler::new(update_username_usecase);
+
+    // --- 5. DÉMARRAGE DU SERVEUR TONIC ---
+
+    println!("🚀 Profile Query-Server listening on {}", addr);
+
+    Server::builder()
+        // Utilisation de l'intercepteur de région partagé pour extraire les headers gRPC
+        .add_service(ProfileIdentityServiceServer::with_interceptor(
+            identity_handler,
+            region_interceptor
+        ))
+        .serve(addr)
+        .await?;
+
+    Ok(())
 }
-
-use profile_v1_raw_proto::location::v1::GeoPoint;
-
-fn main() {
-    let point = GeoPoint::default();
-    println!("L'IDE est vert ! Point : {:?}", point);
-}
-
-// use profile::application::queries::SearchProfilesUseCase;
-// use elasticsearch::Elasticsearch;
-//
-// pub struct ProfileQueryHandler {
-//     search_use_case: SearchProfilesUseCase,
-// }
-//
-// #[tonic::async_trait]
-// impl ProfileQueryService for ProfileQueryHandler {
-//     async fn autocomplete_profiles(
-//         &self,
-//         request: Request<AutocompleteRequest>,
-//     ) -> Result<Response<AutocompleteResponse>, Status> {
-//         let req = request.into_inner();
-//
-//         // On appelle le Use Case (Logique de recherche ES)
-//         let docs = self.search_use_case
-//             .execute(&req.query, req.limit)
-//             .await
-//             .map_err(|e| {
-//                 tracing::error!("Search error: {:?}", e);
-//                 Status::internal("Search failed")
-//             })?;
-//
-//         // Transformation DTO Infrastructure -> Message gRPC
-//         let results = docs.into_iter().map(|d| ProfileSummary {
-//             account_id: d.account_id,
-//             username: d.username,
-//             display_name: d.display_name,
-//             avatar_url: d.avatar_url.unwrap_or_default(),
-//         }).collect();
-//
-//         Ok(Response::new(AutocompleteResponse { results }))
-//     }
-// }
-//
-// #[tokio::main]
-// async fn main() -> anyhow::Result<()> {
-//     // Initialisation du traçage pour voir les requêtes gRPC
-//     tracing_subscriber::fmt::init();
-//
-//     // Configuration du client Elasticsearch (Default pointe sur http://localhost:9200)
-//     let es_client = Elasticsearch::default();
-//
-//     // Injection de dépendances
-//     let search_use_case = SearchProfilesUseCase::new(es_client);
-//     let handler = ProfileQueryHandler { search_use_case };
-//
-//     let addr = "[::1]:50052".parse()?;
-//     tracing::info!("🔍 Profile Query Server listening on {}", addr);
-//
-//     // Démarrage du serveur
-//     Server::builder()
-//         .add_service(ProfileQueryServiceServer::new(handler))
-//         .serve(addr)
-//         .await?;
-//
-//     Ok(())
-// }

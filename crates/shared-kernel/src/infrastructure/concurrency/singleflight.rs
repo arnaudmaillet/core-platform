@@ -1,5 +1,23 @@
 // crates/shared-kernel/src/infrastructure/concurrency/singleflight.rs
 
+//! # Singleflight - Déduplication de requêtes concurrentes
+//!
+//! Ce module implémente le pattern **Singleflight**, dont le but est de garantir qu'une seule
+//! instance d'une opération asynchrone est en cours d'exécution pour une clé donnée.
+//!
+//! ### Cas d'usage principal : Le "Thundering Herd"
+//! Lorsqu'un cache expire ou qu'une ressource coûteuse est demandée par 1000 utilisateurs
+//! simultanément, au lieu de lancer 1000 appels à la base de données ou au microservice distant,
+//! `Singleflight` va :
+//! 1. Exécuter l'appel pour le premier utilisateur.
+//! 2. Faire attendre les 999 autres sur le même résultat.
+//! 3. Distribuer le résultat final à tout le monde une fois l'appel terminé.
+//!
+//! ### Avantages
+//! - Réduit drastiquement la charge sur l'infrastructure (DB, API externes).
+//! - Prévient les pics de latence lors de l'expiration de caches.
+//! - Utilise `DashMap` pour une gestion thread-safe et performante des requêtes en cours.
+
 use std::sync::Arc;
 use dashmap::DashMap;
 use futures::future::{Shared, FutureExt};

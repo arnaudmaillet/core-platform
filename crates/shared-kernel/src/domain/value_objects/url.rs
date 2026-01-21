@@ -30,7 +30,7 @@ impl Url {
     }
 
     /// Reconstruction rapide (Infrastructure / DB)
-    pub fn new_unchecked(value: impl Into<String>) -> Self {
+    pub fn from_raw(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 

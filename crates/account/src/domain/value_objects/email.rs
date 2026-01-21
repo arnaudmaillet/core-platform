@@ -35,7 +35,7 @@ impl Email {
             .collect::<String>()
             .to_lowercase();
 
-        let email = Self::new_unchecked(normalized);
+        let email = Self::from_raw(normalized);
 
         // 2. Validation
         email.validate()?;
@@ -44,7 +44,7 @@ impl Email {
     }
 
     /// Reconstruction ultra-rapide (Infrastructure / DB)
-    pub fn new_unchecked(value: impl Into<String>) -> Self {
+    pub fn from_raw(value: impl Into<String>) -> Self {
         let address = value.into();
         let mut hasher = SeaHasher::new();
         address.hash(&mut hasher);

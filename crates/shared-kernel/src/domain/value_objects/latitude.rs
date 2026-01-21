@@ -15,7 +15,7 @@ impl Latitude {
         Ok(lat)
     }
 
-    pub fn new_unchecked(val: f64) -> Self {
+    pub fn from_raw(val: f64) -> Self {
         Self(val)
     }
 

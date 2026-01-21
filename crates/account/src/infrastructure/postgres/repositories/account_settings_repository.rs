@@ -2,10 +2,11 @@
 
 use async_trait::async_trait;
 use sqlx::PgPool;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{PushToken, Timezone, AccountId};
 use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::infrastructure::postgres::SqlxErrorExt;
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::domain::entities::{AccountSettings, SettingsBlob};
 use crate::domain::repositories::AccountSettingsRepository;
 use crate::infrastructure::postgres::rows::PostgresAccountSettingsRow;

@@ -3,6 +3,7 @@ syntax = "proto3";
 package location.v1;
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/core-platform/proto/location/v1";
 
@@ -13,19 +14,16 @@ option go_package = "github.com/core-platform/proto/location/v1";
 message GeoPoint {
   double latitude = 1;
   double longitude = 2;
-  double altitude = 3;
 }
 
 message LocationMetrics {
-  float horizontal_accuracy = 1; // Précision en mètres
-  float vertical_accuracy = 2;
-  float speed = 3;               // Vitesse en m/s
-  float bearing = 4;             // Direction en degrés (0-360)
+  float accuracy = 1;
+  google.protobuf.FloatValue altitude = 2;
 }
 
 message MovementMetrics {
-  string activity_type = 1;      // ex: "walking", "driving", "stationary"
-  float confidence = 2;          // 0.0 à 1.0
+  float speed = 1;
+  float heading = 2;
 }
 
 // ==========================================
@@ -36,12 +34,10 @@ message UserLocation {
   string account_id = 1;
   string region_code = 2;
 
-  // Position et Métriques
   GeoPoint coordinates = 3;
-  LocationMetrics metrics = 4;   // Optionnel
-  MovementMetrics movement = 5;  // Optionnel
+  LocationMetrics metrics = 4;
+  MovementMetrics movement = 5;
 
-  // Privacy
   bool is_ghost_mode = 6;
   int32 privacy_radius_meters = 7;
 
@@ -54,13 +50,8 @@ message UserLocation {
 // ==========================================
 
 service LocationService {
-  // Lecture de la position (respecte le Ghost Mode pour les tiers)
   rpc GetUserLocation(GetUserLocationRequest) returns (UserLocation);
-
-  // Mise à jour massive de la position (Ingestion temps réel)
   rpc UpdatePosition(UpdatePositionRequest) returns (UserLocation);
-
-  // Configuration Privacy
   rpc SetGhostMode(SetGhostModeRequest) returns (UserLocation);
   rpc UpdatePrivacyRadius(UpdatePrivacyRadiusRequest) returns (UserLocation);
 }
@@ -76,8 +67,8 @@ message GetUserLocationRequest {
 message UpdatePositionRequest {
   string account_id = 1;
   GeoPoint coordinates = 2;
-  LocationMetrics metrics = 3;
-  MovementMetrics movement = 4;
+  optional LocationMetrics metrics = 3;
+  optional MovementMetrics movement = 4;
 }
 
 message SetGhostModeRequest {

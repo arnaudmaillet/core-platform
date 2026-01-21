@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
 use shared_kernel::domain::value_objects::{PushToken, RegionCode, Timezone, AccountId};
 use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::Identifier;
 use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::AccountSettingsBuilder;
 use crate::domain::events::AccountEvent;
@@ -187,7 +188,7 @@ impl EntityMetadata for AccountSettings {
 
 impl AggregateRoot for AccountSettings {
     fn id(&self) -> String {
-        self.account_id.to_string()
+        self.account_id.as_string()
     }
     fn metadata(&self) -> &AggregateMetadata {
         &self.metadata

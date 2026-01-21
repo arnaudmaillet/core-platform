@@ -1,8 +1,9 @@
-// crates/profile/src/infrastructure/repositories/rows/postgres_location_row.rs
+// crates/profile/src/infrastructure/postgres/rows/postgres_location_row.rs
 
 use sqlx::FromRow;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{Altitude, GeoPoint, Heading, LocationAccuracy, RegionCode, Speed, AccountId};
 use shared_kernel::errors::{Result, DomainError};
 use crate::domain::entities::UserLocation;
@@ -33,17 +34,17 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
     fn try_from(row: PostgresLocationRow) -> Result<Self> {
         // 1. Reconstruction des Metrics (Zéro validation, mapping direct)
         let metrics = row.accuracy_meters.map(|acc| {
-            LocationMetrics::new_unchecked(
-                LocationAccuracy::new_unchecked(acc),
-                row.altitude.map(Altitude::new_unchecked)
+            LocationMetrics::from_raw(
+                LocationAccuracy::from_raw(acc),
+                row.altitude.map(Altitude::from_raw)
             )
         });
 
         // 2. Reconstruction du Mouvement
         let movement = match (row.speed, row.heading) {
-            (Some(s), Some(h)) => Some(MovementMetrics::new_unchecked(
-                Speed::new_unchecked(s),
-                Heading::new_unchecked(h)
+            (Some(s), Some(h)) => Some(MovementMetrics::from_raw(
+                Speed::from_raw(s),
+                Heading::from_raw(h)
             )),
             _ => None,
         };
@@ -51,9 +52,9 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
         // 3. Utilisation du tunnel RESTORE (Chemin Elite)
         // On ne passe plus par .build() qui est réservé à la création de nouveaux points GPS.
         Ok(UserLocationBuilder::restore(
-            AccountId::new_unchecked(row.account_id),
-            RegionCode::new_unchecked(row.region_code),
-            GeoPoint::new_unchecked(row.lat, row.lon),
+            AccountId::from_uuid(row.account_id),
+            RegionCode::from_raw(row.region_code),
+            GeoPoint::from_raw(row.lat, row.lon),
             metrics,
             movement,
             row.is_ghost_mode,
@@ -61,5 +62,25 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
             row.updated_at,
             row.version,
         ))
+    }
+}
+
+impl From<&UserLocation> for PostgresLocationRow {
+    fn from(l: &UserLocation) -> Self {
+        Self {
+            account_id: l.account_id.as_uuid(),
+            region_code: l.region_code.to_string(),
+            lat: l.coordinates.lat(),
+            lon: l.coordinates.lon(),
+            accuracy_meters: l.metrics.as_ref().map(|m| m.accuracy().value()),
+            altitude: l.metrics.as_ref().and_then(|m| m.altitude().map(|a| a.value())),
+            heading: l.movement.as_ref().map(|m| m.heading().value()),
+            speed: l.movement.as_ref().map(|m| m.speed().value()),
+            is_ghost_mode: l.is_ghost_mode,
+            privacy_radius_meters: l.privacy_radius_meters,
+            updated_at: l.updated_at,
+            version: l.metadata.version,
+            distance: None, // Non utilisé lors d'un save
+        }
     }
 }

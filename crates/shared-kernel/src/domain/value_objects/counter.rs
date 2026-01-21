@@ -15,7 +15,7 @@ impl Counter {
     }
 
     /// Pour la reconstruction depuis la DB
-    pub fn new_unchecked(val: u64) -> Self {
+    pub fn from_raw(val: u64) -> Self {
         Self(val)
     }
 

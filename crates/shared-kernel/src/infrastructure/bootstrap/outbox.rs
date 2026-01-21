@@ -5,10 +5,10 @@
 use std::time::Duration;
 use std::env;
 use sqlx::PgPool;
+use crate::application::workers::OutboxProcessor;
 use crate::errors::AppResult;
 use crate::infrastructure::kafka::KafkaMessageProducer;
-use crate::infrastructure::OutboxProcessor;
-use crate::infrastructure::postgres::PostgresOutboxStore;
+use crate::infrastructure::postgres::storages::PostgresOutboxStore;
 
 pub async fn run_outbox_relay(
     domain_name: &str,
@@ -48,13 +48,34 @@ pub async fn run_outbox_relay(
         Duration::from_millis(interval_ms)
     );
 
+    // 5. Préparation du signal d'arrêt (Graceful Shutdown)
+    // On crée un canal "watch" pour notifier le processeur
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    // 6. Gestionnaire de signaux système (Ctrl+C, SIGTERM)
+    // On lance une tâche qui attend un signal et change la valeur du watch
+    tokio::spawn(async move {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                tracing::info!("🛑 Shutdown signal received, stopping relay...");
+                let _ = shutdown_tx.send(true);
+            }
+            Err(err) => {
+                tracing::error!("❌ Unable to listen for shutdown signal: {}", err);
+            }
+        }
+    });
+
     tracing::info!(
         "✅ Processor configured: batch_size={}, interval={}ms",
         batch_size,
         interval_ms
     );
 
-    // 5. Exécution
-    processor.run().await;
+    // 7. Exécution
+    // On passe le shutdown_rx au processeur
+    processor.run(shutdown_rx).await;
+
+    tracing::info!("👋 Outbox relay for {} exited clean", domain_name);
     Ok(())
 }

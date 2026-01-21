@@ -24,7 +24,7 @@ impl PushToken {
     }
 
     /// Reconstruction rapide (Infrastructure / DB)
-    pub fn new_unchecked(token: impl Into<String>) -> Self {
+    pub fn from_raw(token: impl Into<String>) -> Self {
         Self(token.into())
     }
 

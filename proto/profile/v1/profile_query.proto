@@ -2,42 +2,56 @@ syntax = "proto3";
 
 package profile.v1;
 
+import "profile/v1/types.proto";
+
 option go_package = "github.com/core-platform/proto/profile/v1";
 
 // Service dédié aux lectures haute performance (Elasticsearch)
 service ProfileQueryService {
-  // Recherche pour l'auto-complétion (Edge N-Grams)
+  // Recherche ultra-rapide pour l'auto-complétion (Edge N-Grams)
   rpc AutocompleteProfiles(AutocompleteRequest) returns (AutocompleteResponse);
 
-  // Recherche avancée (Filtres, Pagination, Scores)
+  // Recherche complexe avec filtres et scoring
   rpc SearchProfiles(SearchProfilesRequest) returns (SearchProfilesResponse);
 }
+
+// ==========================================
+// MESSAGES DE REQUÊTES
+// ==========================================
 
 message AutocompleteRequest {
   string query = 1;
   int32 limit = 2;
-}
-
-// Version allégée du profil pour les résultats de recherche (DTO)
-message ProfileSummary {
-  string account_id = 1;
-  string username = 2;
-  string display_name = 3;
-  string avatar_url = 4;
-}
-
-message AutocompleteResponse {
-  repeated ProfileSummary results = 1;
+  // Hyperscale: Filtrer par région pour réduire la latence Elasticsearch
+  optional string region_filter = 3;
 }
 
 message SearchProfilesRequest {
   string query = 1;
+
+  // Pagination par curseur (indispensable pour Elasticsearch)
   int32 page_size = 2;
   string page_token = 3;
+
+  // Filtres avancés (Hyperscale ready)
+  repeated string tags = 4;
+  optional bool include_private = 5;
+  optional string region_code = 6;
+}
+
+// ==========================================
+// MESSAGES DE RÉPONSES
+// ==========================================
+
+message AutocompleteResponse {
+  repeated ProfileSummary results = 1;
+  // On peut ajouter le temps d'exécution pour le monitoring
+  int64 execution_ms = 2;
 }
 
 message SearchProfilesResponse {
   repeated ProfileSummary results = 1;
   string next_page_token = 2;
   int64 total_hits = 3;
+  bool has_more = 4;
 }

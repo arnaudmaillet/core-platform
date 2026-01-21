@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
 use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{RegionCode, AccountId, Username};
 use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::AccountBuilder;
@@ -416,7 +417,7 @@ impl EntityMetadata for Account {
 }
 
 impl AggregateRoot for Account {
-    fn id(&self) -> String { self.id.to_string() }
+    fn id(&self) -> String { self.id.as_string() }
     fn metadata(&self) -> &AggregateMetadata { &self.metadata }
     fn metadata_mut(&mut self) -> &mut AggregateMetadata { &mut self.metadata }
 }

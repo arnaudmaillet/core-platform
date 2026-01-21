@@ -19,7 +19,7 @@ impl Timezone {
     }
 
     /// Reconstruction rapide (Infrastructure/DB)
-    pub fn new_unchecked(tz: impl Into<String>) -> Self {
+    pub fn from_raw(tz: impl Into<String>) -> Self {
         Self(tz.into())
     }
 

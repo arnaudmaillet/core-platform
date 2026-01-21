@@ -95,7 +95,7 @@ impl AccountSettingsBuilder {
             account_id: self.account_id,
             region_code: self.region_code,
             timezone: self.timezone.unwrap_or_else(|| {
-                Timezone::new_unchecked("UTC")
+                Timezone::from_raw("UTC")
             }),
             privacy: self.privacy.unwrap_or_default(),
             notifications: self.notifications.unwrap_or_default(),

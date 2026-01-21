@@ -5,6 +5,7 @@ use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
 use crate::domain::entities::EntityMetadata;
+use crate::domain::Identifier;
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
 
@@ -12,25 +13,29 @@ use crate::errors::{DomainError, Result};
 pub struct PostId(Uuid);
 
 impl PostId {
-    /// Génère un nouvel UUID v7 (Temporellement ordonné)
-    /// Idéal pour les ressources à haut débit comme les Posts.
+    /// Génère un nouvel UUID v7.
     pub fn new() -> Self {
         Self(Uuid::now_v7())
     }
 
-    /// Reconstruction sans validation (usage interne/mapping DB)
-    pub fn new_unchecked(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
-
-    /// Validation et création depuis une String (Entrée API)
+    /// Validation et création depuis une String (Entrée API).
     pub fn try_new(id: impl Into<String>) -> Result<Self> {
-        let s = id.into();
-        Self::from_str(&s)
+        Self::from_str(&id.into())
+    }
+}
+
+// Implémentation du trait Identifier pour la généricité
+impl Identifier for PostId {
+    fn as_uuid(&self) -> Uuid {
+        self.0
     }
 
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
+    fn as_string(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
     }
 }
 
@@ -54,6 +59,12 @@ impl Default for PostId {
 
 // --- CONVERSIONS ---
 
+impl From<Uuid> for PostId {
+    fn from(uuid: Uuid) -> Self {
+        Self::from_uuid(uuid)
+    }
+}
+
 impl FromStr for PostId {
     type Err = DomainError;
     fn from_str(s: &str) -> Result<Self> {
@@ -74,6 +85,6 @@ impl fmt::Display for PostId {
 
 impl EntityMetadata for PostId {
     fn entity_name() -> &'static str {
-        "PostId"
+        "Post" // Souvent raccourci pour les messages d'erreur
     }
 }

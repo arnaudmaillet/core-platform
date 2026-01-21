@@ -4,10 +4,11 @@ use async_trait::async_trait;
 use sqlx::{Pool, Postgres, query, query_as};
 
 use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::errors::{Result, DomainError};
 use shared_kernel::domain::value_objects::AccountId;
-use shared_kernel::infrastructure::postgres::SqlxErrorExt;
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
 use crate::domain::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
@@ -91,7 +92,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
     /// Ne met à jour que si la version en base correspond à la version chargée par l'application.
     async fn save(&self, metadata: &AccountMetadata, tx: Option<&mut dyn Transaction>) -> Result<()> {
         let uid = metadata.account_id.as_uuid();
-        let current_version = metadata.version(); // Version lue au début de la requête
+        let current_version = metadata.version();
 
         // Données provenant de l'entité (Backend)
         let role = PostgresAccountRole::from(metadata.role);

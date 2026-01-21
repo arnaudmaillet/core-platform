@@ -23,7 +23,7 @@ impl RegionCode {
     }
 
     /// Reconstruction ultra-rapide pour l'infrastructure (DB/Cache)
-    pub fn new_unchecked(code: impl Into<String>) -> Self {
+    pub fn from_raw(code: impl Into<String>) -> Self {
         Self(code.into())
     }
 

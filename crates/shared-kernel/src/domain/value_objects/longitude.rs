@@ -16,7 +16,7 @@ impl Longitude {
         Ok(lon)
     }
 
-    pub fn new_unchecked(val: f64) -> Self {
+    pub fn from_raw(val: f64) -> Self {
         Self(val)
     }
 

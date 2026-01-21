@@ -42,6 +42,7 @@ core_rust_library(
         "@crates//:tokio-util",
         "@crates//:tracing-subscriber",
         "@crates//:thiserror",
+        "@crates//:scylla"
     ],
     # 2. Les macros de compilation (Compile-time)
     # C'est ici que tu mets ce qui génère du code

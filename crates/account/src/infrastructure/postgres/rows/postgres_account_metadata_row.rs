@@ -1,6 +1,7 @@
 use sqlx::FromRow;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::AccountMetadataBuilder;
@@ -28,9 +29,9 @@ impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
 
     fn try_from(row: PostgresAccountMetadataRow) -> Result<Self> {
         Ok(AccountMetadataBuilder::restore(
-            AccountId::new_unchecked(row.account_id),
-            RegionCode::new_unchecked(row.region_code),
-            AccountRole::new_unchecked(row.role.into()),
+            AccountId::from_uuid(row.account_id),
+            RegionCode::from_raw(row.region_code),
+            AccountRole::from_raw(row.role.into()),
             row.is_beta_tester,
             row.is_shadowbanned,
             row.trust_score,

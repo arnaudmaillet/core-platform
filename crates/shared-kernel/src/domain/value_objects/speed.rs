@@ -12,7 +12,7 @@ impl Speed {
         Ok(speed)
     }
 
-    pub fn new_unchecked(value: f32) -> Self {
+    pub fn from_raw(value: f32) -> Self {
         Self(value)
     }
 

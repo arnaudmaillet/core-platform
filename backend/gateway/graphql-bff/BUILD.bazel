@@ -1,0 +1,10 @@
+load("//:defs.bzl", "core_rust_binary")
+
+core_rust_binary(
+    name = "graphql_bff",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crates/shared-kernel:shared_kernel",
+    ],
+)

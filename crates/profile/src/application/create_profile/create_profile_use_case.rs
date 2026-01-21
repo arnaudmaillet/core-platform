@@ -5,7 +5,8 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::infrastructure::{with_retry, RetryConfig, TransactionManagerExt};
+use shared_kernel::domain::utils::{with_retry, RetryConfig};
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::create_profile::CreateProfileCommand;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
@@ -66,7 +67,7 @@ impl CreateProfileUseCase {
 
                 // Sauvegarde des événements (ProfileCreated, etc.)
                 for event in events_to_save {
-                    outbox.save(event.as_ref(), Some(&mut *tx)).await?;
+                    outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 
                 Ok(())

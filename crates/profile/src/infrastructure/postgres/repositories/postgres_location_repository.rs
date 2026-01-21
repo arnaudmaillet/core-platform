@@ -1,11 +1,12 @@
-// crates/profile/src/infrastructure/repositories/postgres_location_repository/mod.rs
+// crates/profile/src/infrastructure/postgres/repositories/postgres_location_repository.rs
 
 use async_trait::async_trait;
 use sqlx::PgPool;
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{GeoPoint, RegionCode, AccountId};
 use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::postgres::SqlxErrorExt;
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::domain::entities::UserLocation;
 use crate::domain::repositories::LocationRepository;
 use crate::infrastructure::postgres::rows::PostgresLocationRow;
@@ -18,43 +19,46 @@ pub struct PostgresLocationRepository {
 impl LocationRepository for PostgresLocationRepository {
     async fn save(&self, loc: &UserLocation, tx: Option<&mut dyn Transaction>) -> Result<()> {
         let pool = self.pool.clone();
-        let l = loc.clone();
+        // On prépare la donnée technique
+        let row = PostgresLocationRow::from(loc);
 
         <dyn Transaction>::execute_on(&pool, tx, |conn| Box::pin(async move {
             let sql = r#"
-                INSERT INTO user_locations (
-                    account_id, region_code, coordinates, accuracy_meters,
-                    altitude, heading, speed, is_ghost_mode,
-                    privacy_radius_meters, updated_at
-                )
-                VALUES (
-                    $1, $2,
-                    ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
-                    $5, $6, $7, $8, $9, $10, $11
-                )
-                ON CONFLICT (account_id, region_code) DO UPDATE SET
-                    coordinates = EXCLUDED.coordinates,
-                    accuracy_meters = EXCLUDED.accuracy_meters,
-                    altitude = EXCLUDED.altitude,
-                    heading = EXCLUDED.heading,
-                    speed = EXCLUDED.speed,
-                    is_ghost_mode = EXCLUDED.is_ghost_mode,
-                    privacy_radius_meters = EXCLUDED.privacy_radius_meters,
-                    updated_at = EXCLUDED.updated_at
-            "#;
+            INSERT INTO user_locations (
+                account_id, region_code, coordinates, accuracy_meters,
+                altitude, heading, speed, is_ghost_mode,
+                privacy_radius_meters, updated_at, version
+            )
+            VALUES (
+                $1, $2,
+                ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+                $5, $6, $7, $8, $9, $10, $11, $12
+            )
+            ON CONFLICT (account_id, region_code) DO UPDATE SET
+                coordinates = EXCLUDED.coordinates,
+                accuracy_meters = EXCLUDED.accuracy_meters,
+                altitude = EXCLUDED.altitude,
+                heading = EXCLUDED.heading,
+                speed = EXCLUDED.speed,
+                is_ghost_mode = EXCLUDED.is_ghost_mode,
+                privacy_radius_meters = EXCLUDED.privacy_radius_meters,
+                updated_at = EXCLUDED.updated_at,
+                version = user_locations.version + 1
+        "#;
 
             sqlx::query(sql)
-                .bind(l.account_id.as_uuid())
-                .bind(l.region_code.as_str())
-                .bind(l.coordinates.lon())
-                .bind(l.coordinates.lat())
-                .bind(l.metrics.as_ref().map(|m| m.accuracy().value()))
-                .bind(l.metrics.as_ref().and_then(|m| m.altitude().map(|a| a.value())))
-                .bind(l.movement.as_ref().map(|m| m.heading().value()))
-                .bind(l.movement.as_ref().map(|m| m.speed().value()))
-                .bind(l.is_ghost_mode)
-                .bind(l.privacy_radius_meters)
-                .bind(l.updated_at)
+                .bind(row.account_id)
+                .bind(&row.region_code)
+                .bind(row.lon)
+                .bind(row.lat)
+                .bind(row.accuracy_meters)
+                .bind(row.altitude)
+                .bind(row.heading)
+                .bind(row.speed)
+                .bind(row.is_ghost_mode)
+                .bind(row.privacy_radius_meters)
+                .bind(row.updated_at)
+                .bind(row.version)
                 .execute(conn)
                 .await
                 .map_domain_infra("UserLocationSave")?;
@@ -114,14 +118,12 @@ impl LocationRepository for PostgresLocationRepository {
             .await
             .map_domain_infra("UserLocationNearby")?;
 
-        let mut results = Vec::new();
-        for r in rows {
-            let distance = r.distance.unwrap_or(0.0);
-            let loc: UserLocation = r.try_into()?;
-            results.push((loc, distance));
-        }
-
-        Ok(results)
+        rows.into_iter()
+            .map(|r| {
+                let dist = r.distance.unwrap_or(0.0);
+                Ok((r.try_into()?, dist))
+            })
+            .collect()
     }
 
     async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {

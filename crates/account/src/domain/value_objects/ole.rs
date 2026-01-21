@@ -22,8 +22,8 @@ impl AccountRole {
     }
 
     /// Reconstruction rapide (Infrastructure/DB)
-    /// Ici, comme c'est un Enum Copy, new_unchecked est souvent identique à un mapping direct
-    pub fn new_unchecked(role: AccountRole) -> Self {
+    /// Ici, comme c'est un Enum Copy, from_raw est souvent identique à un mapping direct
+    pub fn from_raw(role: AccountRole) -> Self {
         role
     }
 

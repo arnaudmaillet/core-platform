@@ -1,5 +1,5 @@
-mod update_username_slug_command;
-mod update_username_slug_use_case;
+mod update_username_command;
+mod update_username_use_case;
 
-pub use update_username_slug_command::UpdateUsernameCommand;
-pub use update_username_slug_use_case::UpdateSlugUseCase;
+pub use update_username_command::UpdateUsernameCommand;
+pub use update_username_use_case::UpdateUsernameUseCase;

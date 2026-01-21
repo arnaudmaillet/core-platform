@@ -8,5 +8,5 @@ use crate::errors::Result;
 #[async_trait]
 pub trait OutboxRepository: Send + Sync {
     /// Sauvegarde un événement dans la table outbox au sein d'une transaction existante.
-    async fn save(&self, event: &dyn DomainEvent, tx: Option<&mut dyn Transaction>) -> Result<()>;
+    async fn save(&self, tx: &mut dyn Transaction, event: &dyn DomainEvent) -> Result<()>;
 }
