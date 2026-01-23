@@ -3,8 +3,8 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
-use shared_kernel::errors::Result;
 use shared_kernel::domain::utils::{with_retry, RetryConfig};
+use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::update_location::update_location_command::UpdateLocationCommand;
 use crate::domain::repositories::LocationRepository;
@@ -34,7 +34,7 @@ impl UpdateLocationUseCase {
         // 1. Récupération
         let mut location = self.repo.find_by_id(&cmd.account_id, &cmd.region)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Throttling Métier (Optimisation de la charge DB)
         // On ne fait rien si le mouvement est insignifiant.

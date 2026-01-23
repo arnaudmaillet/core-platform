@@ -9,6 +9,7 @@ use shared_kernel::errors::Result;
 use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::decrement_post_count::DecrementPostCountCommand;
+use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 
 pub struct DecrementPostCountUseCase {
@@ -26,41 +27,46 @@ impl DecrementPostCountUseCase {
         Self { repo, outbox_repo, tx_manager }
     }
 
-    pub async fn execute(&self, command: DecrementPostCountCommand) -> Result<()> {
+    pub async fn execute(&self, command: DecrementPostCountCommand) -> Result<Profile> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         }).await
     }
 
-    async fn try_execute_once(&self, cmd: &DecrementPostCountCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &DecrementPostCountCommand) -> Result<Profile> {
         // 1. Fetch
         let mut profile = self.repo.get_profile_without_stats(&cmd.account_id, &cmd.region)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Business Logic
-        profile.decrement_post_count(cmd.post_id)?;
+        profile.decrement_post_count(cmd.post_id);
 
         // 3. Extraction & Clonage
         let events = profile.pull_events();
-        let p_cloned = profile.clone();
+
+        if events.is_empty() {
+            return Ok(profile);
+        }
+
+        let updated_profile = profile.clone();
 
         // 5. Transaction
         self.tx_manager.run_in_transaction(move |mut tx| {
             let repo = self.repo.clone();
             let outbox = self.outbox_repo.clone();
-            let p = p_cloned.clone();
-            let events_to_save = events;
+            let profile = profile.clone();
+            let events = events.clone();
 
             Box::pin(async move {
-                repo.save(&p, Some(&mut *tx)).await?;
-                for event in events_to_save {
+                repo.save(&profile, Some(&mut *tx)).await?;
+                for event in events {
                     outbox.save(&mut *tx, event.as_ref()).await?;
                 }
                 Ok(())
             })
         }).await?;
 
-        Ok(())
+        Ok(updated_profile)
     }
 }

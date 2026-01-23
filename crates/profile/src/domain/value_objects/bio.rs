@@ -31,6 +31,7 @@ impl Bio {
         bio.validate()?;
         Ok(bio)
     }
+    
 
     /// Reconstruction rapide (Infrastructure / DB)
     pub fn from_raw(value: impl Into<String>) -> Self {
@@ -53,7 +54,7 @@ impl Bio {
                 result.push(c);
             }
         }
-        result
+        result.trim().to_string()
     }
 
     pub fn as_str(&self) -> &str {

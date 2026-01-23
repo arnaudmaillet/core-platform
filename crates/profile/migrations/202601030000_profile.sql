@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     social_links JSONB DEFAULT '{}'::jsonb NOT NULL,
     is_private BOOLEAN DEFAULT FALSE NOT NULL,
     post_count BIGINT DEFAULT 0 NOT NULL,
-    version INT NOT NULL DEFAULT 1, -- Crucial pour l'idempotence du post_count
+    version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     PRIMARY KEY (account_id, region_code)

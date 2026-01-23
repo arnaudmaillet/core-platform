@@ -42,7 +42,7 @@ impl DecreaseTrustScoreUseCase {
         let mut metadata = self.metadata_repo
             .find_by_account_id(&cmd.account_id)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
         metadata.decrease_trust_score(cmd.action_id, cmd.amount, cmd.reason.clone());

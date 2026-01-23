@@ -38,7 +38,7 @@ impl ChangeUsernameUseCase {
         let mut user = self.account_repo
             .find_account_by_id(&cmd.account_id, None)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
         // L'entité vérifie si le username change et appelle apply_change()

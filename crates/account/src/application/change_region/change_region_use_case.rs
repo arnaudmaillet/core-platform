@@ -49,17 +49,17 @@ impl ChangeRegionUseCase {
         let mut account = self.account_repo
             .find_account_by_id(&cmd.account_id, None)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         let mut metadata = self.metadata_repo
             .find_by_account_id(&cmd.account_id)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         let mut settings = self.settings_repo
             .find_by_account_id(&cmd.account_id, None)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DES AGRÉGATS
         // Chaque entité gère son idempotence et son increment_version()

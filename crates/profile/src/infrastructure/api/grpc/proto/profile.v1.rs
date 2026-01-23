@@ -87,49 +87,18 @@ pub struct ProfileSummary {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpdateUsernameRequest {
-    /// UUID
     #[prost(string, tag = "1")]
     pub account_id: ::prost::alloc::string::String,
-    /// Nouveau slug
     #[prost(string, tag = "2")]
     pub new_username: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateMetadataRequest {
+pub struct UpdateDisplayNameRequest {
     #[prost(string, tag = "1")]
     pub account_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub display_name: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "3")]
-    pub bio: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "4")]
-    pub location_label: ::core::option::Option<::prost::alloc::string::String>,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateAvatarRequest {
-    #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "2")]
-    pub url: ::core::option::Option<::prost::alloc::string::String>,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateBannerRequest {
-    #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "2")]
-    pub url: ::core::option::Option<::prost::alloc::string::String>,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateSocialLinksRequest {
-    #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-    /// Utilise le message défini dans types.proto
-    #[prost(message, optional, tag = "2")]
-    pub links: ::core::option::Option<SocialLinks>,
+    pub new_display_name: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -141,10 +110,61 @@ pub struct UpdatePrivacyRequest {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateAvatarRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub new_avatar_url: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateBannerRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub new_banner_url: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveAvatarRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveBannerRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateBioRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub new_bio: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateLocationLabelRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub new_location_label: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateSocialLinksRequest {
+    #[prost(string, tag = "1")]
+    pub account_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub new_links: ::core::option::Option<SocialLinks>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct IncrementPostCountRequest {
     #[prost(string, tag = "1")]
     pub account_id: ::prost::alloc::string::String,
-    /// Pour l'idempotence côté serveur
     #[prost(string, tag = "2")]
     pub post_id: ::prost::alloc::string::String,
 }
@@ -161,7 +181,7 @@ pub mod profile_identity_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
-    /// Gère l'identité unique et critique de l'utilisateur
+    /// 1. SERVICE D'IDENTITÉ
     #[derive(Debug, Clone)]
     pub struct ProfileIdentityServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -244,7 +264,6 @@ pub mod profile_identity_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// Mise à jour du slug/handle (opération à forte cohérence)
         pub async fn update_username(
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateUsernameRequest>,
@@ -272,19 +291,70 @@ pub mod profile_identity_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn update_display_name(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateDisplayNameRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileIdentityService/UpdateDisplayName",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "profile.v1.ProfileIdentityService",
+                        "UpdateDisplayName",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn update_privacy(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdatePrivacyRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileIdentityService/UpdatePrivacy",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileIdentityService", "UpdatePrivacy"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated client implementations.
-pub mod profile_settings_service_client {
+pub mod profile_media_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
-    /// Gère l'apparence, les médias et les liens sociaux
+    /// 2. SERVICE DE MÉDIAS (ASSETS)
     #[derive(Debug, Clone)]
-    pub struct ProfileSettingsServiceClient<T> {
+    pub struct ProfileMediaServiceClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl ProfileSettingsServiceClient<tonic::transport::Channel> {
+    impl ProfileMediaServiceClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -295,7 +365,7 @@ pub mod profile_settings_service_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> ProfileSettingsServiceClient<T>
+    impl<T> ProfileMediaServiceClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -313,7 +383,7 @@ pub mod profile_settings_service_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> ProfileSettingsServiceClient<InterceptedService<T, F>>
+        ) -> ProfileMediaServiceClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -327,7 +397,191 @@ pub mod profile_settings_service_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + Send + Sync,
         {
-            ProfileSettingsServiceClient::new(
+            ProfileMediaServiceClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        pub async fn update_avatar(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateAvatarRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileMediaService/UpdateAvatar",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileMediaService", "UpdateAvatar"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn remove_avatar(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RemoveAvatarRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileMediaService/RemoveAvatar",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileMediaService", "RemoveAvatar"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn update_banner(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateBannerRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileMediaService/UpdateBanner",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileMediaService", "UpdateBanner"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn remove_banner(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RemoveBannerRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileMediaService/RemoveBanner",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileMediaService", "RemoveBanner"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+    }
+}
+/// Generated client implementations.
+pub mod profile_metadata_service_client {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    /// 3. SERVICE DE MÉTADONNÉES (INFOS ÉDITORIALES)
+    #[derive(Debug, Clone)]
+    pub struct ProfileMetadataServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl ProfileMetadataServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> ProfileMetadataServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> ProfileMetadataServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + Send + Sync,
+        {
+            ProfileMetadataServiceClient::new(
                 InterceptedService::new(inner, interceptor),
             )
         }
@@ -362,10 +616,9 @@ pub mod profile_settings_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// Mise à jour des métadonnées textuelles (Bio, Nom affiché)
-        pub async fn update_metadata(
+        pub async fn update_bio(
             &mut self,
-            request: impl tonic::IntoRequest<super::UpdateMetadataRequest>,
+            request: impl tonic::IntoRequest<super::UpdateBioRequest>,
         ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
             self.inner
                 .ready()
@@ -378,68 +631,42 @@ pub mod profile_settings_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileSettingsService/UpdateMetadata",
+                "/profile.v1.ProfileMetadataService/UpdateBio",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileMetadataService", "UpdateBio"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn update_location_label(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateLocationLabelRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileMetadataService/UpdateLocationLabel",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "profile.v1.ProfileSettingsService",
-                        "UpdateMetadata",
+                        "profile.v1.ProfileMetadataService",
+                        "UpdateLocationLabel",
                     ),
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// Gestion des images de profil
-        pub async fn update_avatar(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UpdateAvatarRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileSettingsService/UpdateAvatar",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("profile.v1.ProfileSettingsService", "UpdateAvatar"),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn update_banner(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UpdateBannerRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileSettingsService/UpdateBanner",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("profile.v1.ProfileSettingsService", "UpdateBanner"),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        /// Gestion des réseaux sociaux et de la confidentialité
         pub async fn update_social_links(
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateSocialLinksRequest>,
@@ -455,55 +682,31 @@ pub mod profile_settings_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileSettingsService/UpdateSocialLinks",
+                "/profile.v1.ProfileMetadataService/UpdateSocialLinks",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "profile.v1.ProfileSettingsService",
+                        "profile.v1.ProfileMetadataService",
                         "UpdateSocialLinks",
                     ),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn update_privacy(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UpdatePrivacyRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileSettingsService/UpdatePrivacy",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("profile.v1.ProfileSettingsService", "UpdatePrivacy"),
                 );
             self.inner.unary(req, path, codec).await
         }
     }
 }
 /// Generated client implementations.
-pub mod profile_internal_service_client {
+pub mod profile_counter_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
-    /// Gère les interactions automatiques et les compteurs (souvent appelé par d'autres services)
+    /// 4. SERVICE INTERNE (AUTOMATISATION)
     #[derive(Debug, Clone)]
-    pub struct ProfileInternalServiceClient<T> {
+    pub struct ProfileCounterServiceClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl ProfileInternalServiceClient<tonic::transport::Channel> {
+    impl ProfileCounterServiceClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -514,7 +717,7 @@ pub mod profile_internal_service_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> ProfileInternalServiceClient<T>
+    impl<T> ProfileCounterServiceClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -532,7 +735,7 @@ pub mod profile_internal_service_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> ProfileInternalServiceClient<InterceptedService<T, F>>
+        ) -> ProfileCounterServiceClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -546,9 +749,7 @@ pub mod profile_internal_service_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + Send + Sync,
         {
-            ProfileInternalServiceClient::new(
-                InterceptedService::new(inner, interceptor),
-            )
+            ProfileCounterServiceClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -596,13 +797,13 @@ pub mod profile_internal_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileInternalService/IncrementPostCount",
+                "/profile.v1.ProfileCounterService/IncrementPostCount",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "profile.v1.ProfileInternalService",
+                        "profile.v1.ProfileCounterService",
                         "IncrementPostCount",
                     ),
                 );
@@ -623,13 +824,13 @@ pub mod profile_internal_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileInternalService/DecrementPostCount",
+                "/profile.v1.ProfileCounterService/DecrementPostCount",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "profile.v1.ProfileInternalService",
+                        "profile.v1.ProfileCounterService",
                         "DecrementPostCount",
                     ),
                 );
@@ -644,13 +845,20 @@ pub mod profile_identity_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with ProfileIdentityServiceServer.
     #[async_trait]
     pub trait ProfileIdentityService: Send + Sync + 'static {
-        /// Mise à jour du slug/handle (opération à forte cohérence)
         async fn update_username(
             &self,
             request: tonic::Request<super::UpdateUsernameRequest>,
         ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn update_display_name(
+            &self,
+            request: tonic::Request<super::UpdateDisplayNameRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn update_privacy(
+            &self,
+            request: tonic::Request<super::UpdatePrivacyRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
     }
-    /// Gère l'identité unique et critique de l'utilisateur
+    /// 1. SERVICE D'IDENTITÉ
     #[derive(Debug)]
     pub struct ProfileIdentityServiceServer<T: ProfileIdentityService> {
         inner: _Inner<T>,
@@ -781,167 +989,13 @@ pub mod profile_identity_service_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        Ok(
-                            http::Response::builder()
-                                .status(200)
-                                .header("grpc-status", "12")
-                                .header("content-type", "application/grpc")
-                                .body(empty_body())
-                                .unwrap(),
-                        )
-                    })
-                }
-            }
-        }
-    }
-    impl<T: ProfileIdentityService> Clone for ProfileIdentityServiceServer<T> {
-        fn clone(&self) -> Self {
-            let inner = self.inner.clone();
-            Self {
-                inner,
-                accept_compression_encodings: self.accept_compression_encodings,
-                send_compression_encodings: self.send_compression_encodings,
-                max_decoding_message_size: self.max_decoding_message_size,
-                max_encoding_message_size: self.max_encoding_message_size,
-            }
-        }
-    }
-    impl<T: ProfileIdentityService> Clone for _Inner<T> {
-        fn clone(&self) -> Self {
-            Self(Arc::clone(&self.0))
-        }
-    }
-    impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{:?}", self.0)
-        }
-    }
-    impl<T: ProfileIdentityService> tonic::server::NamedService
-    for ProfileIdentityServiceServer<T> {
-        const NAME: &'static str = "profile.v1.ProfileIdentityService";
-    }
-}
-/// Generated server implementations.
-pub mod profile_settings_service_server {
-    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with ProfileSettingsServiceServer.
-    #[async_trait]
-    pub trait ProfileSettingsService: Send + Sync + 'static {
-        /// Mise à jour des métadonnées textuelles (Bio, Nom affiché)
-        async fn update_metadata(
-            &self,
-            request: tonic::Request<super::UpdateMetadataRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
-        /// Gestion des images de profil
-        async fn update_avatar(
-            &self,
-            request: tonic::Request<super::UpdateAvatarRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
-        async fn update_banner(
-            &self,
-            request: tonic::Request<super::UpdateBannerRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
-        /// Gestion des réseaux sociaux et de la confidentialité
-        async fn update_social_links(
-            &self,
-            request: tonic::Request<super::UpdateSocialLinksRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
-        async fn update_privacy(
-            &self,
-            request: tonic::Request<super::UpdatePrivacyRequest>,
-        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
-    }
-    /// Gère l'apparence, les médias et les liens sociaux
-    #[derive(Debug)]
-    pub struct ProfileSettingsServiceServer<T: ProfileSettingsService> {
-        inner: _Inner<T>,
-        accept_compression_encodings: EnabledCompressionEncodings,
-        send_compression_encodings: EnabledCompressionEncodings,
-        max_decoding_message_size: Option<usize>,
-        max_encoding_message_size: Option<usize>,
-    }
-    struct _Inner<T>(Arc<T>);
-    impl<T: ProfileSettingsService> ProfileSettingsServiceServer<T> {
-        pub fn new(inner: T) -> Self {
-            Self::from_arc(Arc::new(inner))
-        }
-        pub fn from_arc(inner: Arc<T>) -> Self {
-            let inner = _Inner(inner);
-            Self {
-                inner,
-                accept_compression_encodings: Default::default(),
-                send_compression_encodings: Default::default(),
-                max_decoding_message_size: None,
-                max_encoding_message_size: None,
-            }
-        }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
-        where
-            F: tonic::service::Interceptor,
-        {
-            InterceptedService::new(Self::new(inner), interceptor)
-        }
-        /// Enable decompressing requests with the given encoding.
-        #[must_use]
-        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
-            self.accept_compression_encodings.enable(encoding);
-            self
-        }
-        /// Compress responses with the given encoding, if the client supports it.
-        #[must_use]
-        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
-            self.send_compression_encodings.enable(encoding);
-            self
-        }
-        /// Limits the maximum size of a decoded message.
-        ///
-        /// Default: `4MB`
-        #[must_use]
-        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
-            self.max_decoding_message_size = Some(limit);
-            self
-        }
-        /// Limits the maximum size of an encoded message.
-        ///
-        /// Default: `usize::MAX`
-        #[must_use]
-        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
-            self.max_encoding_message_size = Some(limit);
-            self
-        }
-    }
-    impl<T, B> tonic::codegen::Service<http::Request<B>>
-    for ProfileSettingsServiceServer<T>
-    where
-        T: ProfileSettingsService,
-        B: Body + Send + 'static,
-        B::Error: Into<StdError> + Send + 'static,
-    {
-        type Response = http::Response<tonic::body::BoxBody>;
-        type Error = std::convert::Infallible;
-        type Future = BoxFuture<Self::Response, Self::Error>;
-        fn poll_ready(
-            &mut self,
-            _cx: &mut Context<'_>,
-        ) -> Poll<std::result::Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-        fn call(&mut self, req: http::Request<B>) -> Self::Future {
-            let inner = self.inner.clone();
-            match req.uri().path() {
-                "/profile.v1.ProfileSettingsService/UpdateMetadata" => {
+                "/profile.v1.ProfileIdentityService/UpdateDisplayName" => {
                     #[allow(non_camel_case_types)]
-                    struct UpdateMetadataSvc<T: ProfileSettingsService>(pub Arc<T>);
+                    struct UpdateDisplayNameSvc<T: ProfileIdentityService>(pub Arc<T>);
                     impl<
-                        T: ProfileSettingsService,
-                    > tonic::server::UnaryService<super::UpdateMetadataRequest>
-                    for UpdateMetadataSvc<T> {
+                        T: ProfileIdentityService,
+                    > tonic::server::UnaryService<super::UpdateDisplayNameRequest>
+                    for UpdateDisplayNameSvc<T> {
                         type Response = super::Profile;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -949,11 +1003,11 @@ pub mod profile_settings_service_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::UpdateMetadataRequest>,
+                            request: tonic::Request<super::UpdateDisplayNameRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as ProfileSettingsService>::update_metadata(
+                                <T as ProfileIdentityService>::update_display_name(
                                         &inner,
                                         request,
                                     )
@@ -969,7 +1023,7 @@ pub mod profile_settings_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = UpdateMetadataSvc(inner);
+                        let method = UpdateDisplayNameSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -985,161 +1039,11 @@ pub mod profile_settings_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/profile.v1.ProfileSettingsService/UpdateAvatar" => {
+                "/profile.v1.ProfileIdentityService/UpdatePrivacy" => {
                     #[allow(non_camel_case_types)]
-                    struct UpdateAvatarSvc<T: ProfileSettingsService>(pub Arc<T>);
+                    struct UpdatePrivacySvc<T: ProfileIdentityService>(pub Arc<T>);
                     impl<
-                        T: ProfileSettingsService,
-                    > tonic::server::UnaryService<super::UpdateAvatarRequest>
-                    for UpdateAvatarSvc<T> {
-                        type Response = super::Profile;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::UpdateAvatarRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as ProfileSettingsService>::update_avatar(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UpdateAvatarSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/profile.v1.ProfileSettingsService/UpdateBanner" => {
-                    #[allow(non_camel_case_types)]
-                    struct UpdateBannerSvc<T: ProfileSettingsService>(pub Arc<T>);
-                    impl<
-                        T: ProfileSettingsService,
-                    > tonic::server::UnaryService<super::UpdateBannerRequest>
-                    for UpdateBannerSvc<T> {
-                        type Response = super::Profile;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::UpdateBannerRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as ProfileSettingsService>::update_banner(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UpdateBannerSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/profile.v1.ProfileSettingsService/UpdateSocialLinks" => {
-                    #[allow(non_camel_case_types)]
-                    struct UpdateSocialLinksSvc<T: ProfileSettingsService>(pub Arc<T>);
-                    impl<
-                        T: ProfileSettingsService,
-                    > tonic::server::UnaryService<super::UpdateSocialLinksRequest>
-                    for UpdateSocialLinksSvc<T> {
-                        type Response = super::Profile;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::UpdateSocialLinksRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as ProfileSettingsService>::update_social_links(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UpdateSocialLinksSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/profile.v1.ProfileSettingsService/UpdatePrivacy" => {
-                    #[allow(non_camel_case_types)]
-                    struct UpdatePrivacySvc<T: ProfileSettingsService>(pub Arc<T>);
-                    impl<
-                        T: ProfileSettingsService,
+                        T: ProfileIdentityService,
                     > tonic::server::UnaryService<super::UpdatePrivacyRequest>
                     for UpdatePrivacySvc<T> {
                         type Response = super::Profile;
@@ -1153,7 +1057,7 @@ pub mod profile_settings_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as ProfileSettingsService>::update_privacy(
+                                <T as ProfileIdentityService>::update_privacy(
                                         &inner,
                                         request,
                                     )
@@ -1200,7 +1104,7 @@ pub mod profile_settings_service_server {
             }
         }
     }
-    impl<T: ProfileSettingsService> Clone for ProfileSettingsServiceServer<T> {
+    impl<T: ProfileIdentityService> Clone for ProfileIdentityServiceServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -1212,7 +1116,7 @@ pub mod profile_settings_service_server {
             }
         }
     }
-    impl<T: ProfileSettingsService> Clone for _Inner<T> {
+    impl<T: ProfileIdentityService> Clone for _Inner<T> {
         fn clone(&self) -> Self {
             Self(Arc::clone(&self.0))
         }
@@ -1222,30 +1126,38 @@ pub mod profile_settings_service_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: ProfileSettingsService> tonic::server::NamedService
-    for ProfileSettingsServiceServer<T> {
-        const NAME: &'static str = "profile.v1.ProfileSettingsService";
+    impl<T: ProfileIdentityService> tonic::server::NamedService
+    for ProfileIdentityServiceServer<T> {
+        const NAME: &'static str = "profile.v1.ProfileIdentityService";
     }
 }
 /// Generated server implementations.
-pub mod profile_internal_service_server {
+pub mod profile_media_service_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with ProfileInternalServiceServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with ProfileMediaServiceServer.
     #[async_trait]
-    pub trait ProfileInternalService: Send + Sync + 'static {
-        async fn increment_post_count(
+    pub trait ProfileMediaService: Send + Sync + 'static {
+        async fn update_avatar(
             &self,
-            request: tonic::Request<super::IncrementPostCountRequest>,
+            request: tonic::Request<super::UpdateAvatarRequest>,
         ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
-        async fn decrement_post_count(
+        async fn remove_avatar(
             &self,
-            request: tonic::Request<super::DecrementPostCountRequest>,
+            request: tonic::Request<super::RemoveAvatarRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn update_banner(
+            &self,
+            request: tonic::Request<super::UpdateBannerRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn remove_banner(
+            &self,
+            request: tonic::Request<super::RemoveBannerRequest>,
         ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
     }
-    /// Gère les interactions automatiques et les compteurs (souvent appelé par d'autres services)
+    /// 2. SERVICE DE MÉDIAS (ASSETS)
     #[derive(Debug)]
-    pub struct ProfileInternalServiceServer<T: ProfileInternalService> {
+    pub struct ProfileMediaServiceServer<T: ProfileMediaService> {
         inner: _Inner<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
@@ -1253,7 +1165,337 @@ pub mod profile_internal_service_server {
         max_encoding_message_size: Option<usize>,
     }
     struct _Inner<T>(Arc<T>);
-    impl<T: ProfileInternalService> ProfileInternalServiceServer<T> {
+    impl<T: ProfileMediaService> ProfileMediaServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            let inner = _Inner(inner);
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for ProfileMediaServiceServer<T>
+    where
+        T: ProfileMediaService,
+        B: Body + Send + 'static,
+        B::Error: Into<StdError> + Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            let inner = self.inner.clone();
+            match req.uri().path() {
+                "/profile.v1.ProfileMediaService/UpdateAvatar" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdateAvatarSvc<T: ProfileMediaService>(pub Arc<T>);
+                    impl<
+                        T: ProfileMediaService,
+                    > tonic::server::UnaryService<super::UpdateAvatarRequest>
+                    for UpdateAvatarSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdateAvatarRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMediaService>::update_avatar(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateAvatarSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/profile.v1.ProfileMediaService/RemoveAvatar" => {
+                    #[allow(non_camel_case_types)]
+                    struct RemoveAvatarSvc<T: ProfileMediaService>(pub Arc<T>);
+                    impl<
+                        T: ProfileMediaService,
+                    > tonic::server::UnaryService<super::RemoveAvatarRequest>
+                    for RemoveAvatarSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RemoveAvatarRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMediaService>::remove_avatar(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RemoveAvatarSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/profile.v1.ProfileMediaService/UpdateBanner" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdateBannerSvc<T: ProfileMediaService>(pub Arc<T>);
+                    impl<
+                        T: ProfileMediaService,
+                    > tonic::server::UnaryService<super::UpdateBannerRequest>
+                    for UpdateBannerSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdateBannerRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMediaService>::update_banner(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateBannerSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/profile.v1.ProfileMediaService/RemoveBanner" => {
+                    #[allow(non_camel_case_types)]
+                    struct RemoveBannerSvc<T: ProfileMediaService>(pub Arc<T>);
+                    impl<
+                        T: ProfileMediaService,
+                    > tonic::server::UnaryService<super::RemoveBannerRequest>
+                    for RemoveBannerSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RemoveBannerRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMediaService>::remove_banner(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RemoveBannerSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
+            }
+        }
+    }
+    impl<T: ProfileMediaService> Clone for ProfileMediaServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    impl<T: ProfileMediaService> Clone for _Inner<T> {
+        fn clone(&self) -> Self {
+            Self(Arc::clone(&self.0))
+        }
+    }
+    impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self.0)
+        }
+    }
+    impl<T: ProfileMediaService> tonic::server::NamedService
+    for ProfileMediaServiceServer<T> {
+        const NAME: &'static str = "profile.v1.ProfileMediaService";
+    }
+}
+/// Generated server implementations.
+pub mod profile_metadata_service_server {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with ProfileMetadataServiceServer.
+    #[async_trait]
+    pub trait ProfileMetadataService: Send + Sync + 'static {
+        async fn update_bio(
+            &self,
+            request: tonic::Request<super::UpdateBioRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn update_location_label(
+            &self,
+            request: tonic::Request<super::UpdateLocationLabelRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn update_social_links(
+            &self,
+            request: tonic::Request<super::UpdateSocialLinksRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+    }
+    /// 3. SERVICE DE MÉTADONNÉES (INFOS ÉDITORIALES)
+    #[derive(Debug)]
+    pub struct ProfileMetadataServiceServer<T: ProfileMetadataService> {
+        inner: _Inner<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    struct _Inner<T>(Arc<T>);
+    impl<T: ProfileMetadataService> ProfileMetadataServiceServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -1306,9 +1548,9 @@ pub mod profile_internal_service_server {
         }
     }
     impl<T, B> tonic::codegen::Service<http::Request<B>>
-    for ProfileInternalServiceServer<T>
+    for ProfileMetadataServiceServer<T>
     where
-        T: ProfileInternalService,
+        T: ProfileMetadataService,
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
@@ -1324,11 +1566,297 @@ pub mod profile_internal_service_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/profile.v1.ProfileInternalService/IncrementPostCount" => {
+                "/profile.v1.ProfileMetadataService/UpdateBio" => {
                     #[allow(non_camel_case_types)]
-                    struct IncrementPostCountSvc<T: ProfileInternalService>(pub Arc<T>);
+                    struct UpdateBioSvc<T: ProfileMetadataService>(pub Arc<T>);
                     impl<
-                        T: ProfileInternalService,
+                        T: ProfileMetadataService,
+                    > tonic::server::UnaryService<super::UpdateBioRequest>
+                    for UpdateBioSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdateBioRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMetadataService>::update_bio(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateBioSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/profile.v1.ProfileMetadataService/UpdateLocationLabel" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdateLocationLabelSvc<T: ProfileMetadataService>(pub Arc<T>);
+                    impl<
+                        T: ProfileMetadataService,
+                    > tonic::server::UnaryService<super::UpdateLocationLabelRequest>
+                    for UpdateLocationLabelSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdateLocationLabelRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMetadataService>::update_location_label(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateLocationLabelSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/profile.v1.ProfileMetadataService/UpdateSocialLinks" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdateSocialLinksSvc<T: ProfileMetadataService>(pub Arc<T>);
+                    impl<
+                        T: ProfileMetadataService,
+                    > tonic::server::UnaryService<super::UpdateSocialLinksRequest>
+                    for UpdateSocialLinksSvc<T> {
+                        type Response = super::Profile;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdateSocialLinksRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileMetadataService>::update_social_links(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateSocialLinksSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
+            }
+        }
+    }
+    impl<T: ProfileMetadataService> Clone for ProfileMetadataServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    impl<T: ProfileMetadataService> Clone for _Inner<T> {
+        fn clone(&self) -> Self {
+            Self(Arc::clone(&self.0))
+        }
+    }
+    impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self.0)
+        }
+    }
+    impl<T: ProfileMetadataService> tonic::server::NamedService
+    for ProfileMetadataServiceServer<T> {
+        const NAME: &'static str = "profile.v1.ProfileMetadataService";
+    }
+}
+/// Generated server implementations.
+pub mod profile_counter_service_server {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with ProfileCounterServiceServer.
+    #[async_trait]
+    pub trait ProfileCounterService: Send + Sync + 'static {
+        async fn increment_post_count(
+            &self,
+            request: tonic::Request<super::IncrementPostCountRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+        async fn decrement_post_count(
+            &self,
+            request: tonic::Request<super::DecrementPostCountRequest>,
+        ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
+    }
+    /// 4. SERVICE INTERNE (AUTOMATISATION)
+    #[derive(Debug)]
+    pub struct ProfileCounterServiceServer<T: ProfileCounterService> {
+        inner: _Inner<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    struct _Inner<T>(Arc<T>);
+    impl<T: ProfileCounterService> ProfileCounterServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            let inner = _Inner(inner);
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>>
+    for ProfileCounterServiceServer<T>
+    where
+        T: ProfileCounterService,
+        B: Body + Send + 'static,
+        B::Error: Into<StdError> + Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            let inner = self.inner.clone();
+            match req.uri().path() {
+                "/profile.v1.ProfileCounterService/IncrementPostCount" => {
+                    #[allow(non_camel_case_types)]
+                    struct IncrementPostCountSvc<T: ProfileCounterService>(pub Arc<T>);
+                    impl<
+                        T: ProfileCounterService,
                     > tonic::server::UnaryService<super::IncrementPostCountRequest>
                     for IncrementPostCountSvc<T> {
                         type Response = super::Profile;
@@ -1342,7 +1870,7 @@ pub mod profile_internal_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as ProfileInternalService>::increment_post_count(
+                                <T as ProfileCounterService>::increment_post_count(
                                         &inner,
                                         request,
                                     )
@@ -1374,11 +1902,11 @@ pub mod profile_internal_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/profile.v1.ProfileInternalService/DecrementPostCount" => {
+                "/profile.v1.ProfileCounterService/DecrementPostCount" => {
                     #[allow(non_camel_case_types)]
-                    struct DecrementPostCountSvc<T: ProfileInternalService>(pub Arc<T>);
+                    struct DecrementPostCountSvc<T: ProfileCounterService>(pub Arc<T>);
                     impl<
-                        T: ProfileInternalService,
+                        T: ProfileCounterService,
                     > tonic::server::UnaryService<super::DecrementPostCountRequest>
                     for DecrementPostCountSvc<T> {
                         type Response = super::Profile;
@@ -1392,7 +1920,7 @@ pub mod profile_internal_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as ProfileInternalService>::decrement_post_count(
+                                <T as ProfileCounterService>::decrement_post_count(
                                         &inner,
                                         request,
                                     )
@@ -1439,7 +1967,7 @@ pub mod profile_internal_service_server {
             }
         }
     }
-    impl<T: ProfileInternalService> Clone for ProfileInternalServiceServer<T> {
+    impl<T: ProfileCounterService> Clone for ProfileCounterServiceServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -1451,7 +1979,7 @@ pub mod profile_internal_service_server {
             }
         }
     }
-    impl<T: ProfileInternalService> Clone for _Inner<T> {
+    impl<T: ProfileCounterService> Clone for _Inner<T> {
         fn clone(&self) -> Self {
             Self(Arc::clone(&self.0))
         }
@@ -1461,9 +1989,9 @@ pub mod profile_internal_service_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: ProfileInternalService> tonic::server::NamedService
-    for ProfileInternalServiceServer<T> {
-        const NAME: &'static str = "profile.v1.ProfileInternalService";
+    impl<T: ProfileCounterService> tonic::server::NamedService
+    for ProfileCounterServiceServer<T> {
+        const NAME: &'static str = "profile.v1.ProfileCounterService";
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

@@ -2830,6 +2830,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "dashmap 7.0.0-rc2",
+ "dyn-clone",
  "elasticsearch",
  "fred",
  "futures",

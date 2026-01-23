@@ -71,3 +71,4 @@ log = { workspace = true }
 regex = { workspace = true }
 seahash = { workspace = true }
 unicode-normalization = { workspace = true }
+dyn-clone = { workspace = true}

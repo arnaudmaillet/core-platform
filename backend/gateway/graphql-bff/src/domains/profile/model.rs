@@ -27,7 +27,6 @@ impl From<proto::Profile> for Profile {
             account_id: ID(p.account_id),
             username: p.username,
             display_name: p.display_name,
-            // .into_ref() ou .map(|v| v.value) pour extraire les StringValue de gRPC
             bio: p.bio.map(|v| v.to_string()),
             avatar_url: p.avatar_url.map(|v| v.to_string()),
             banner_url: p.banner_url.map(|v| v.to_string()),

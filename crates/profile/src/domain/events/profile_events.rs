@@ -6,55 +6,99 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{LocationLabel, RegionCode, Url, AccountId};
-use crate::domain::value_objects::SocialLinks;
+use shared_kernel::domain::value_objects::{LocationLabel, RegionCode, Url, AccountId, Username};
+use crate::domain::value_objects::{Bio, DisplayName, SocialLinks};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ProfileEvent {
     /// Création initiale
     ProfileCreated {
+        id: Uuid,
         account_id: AccountId,
         region: RegionCode,
-        display_name: String,
-        username: String,
+        display_name: DisplayName,
+        username: Username,
         occurred_at: DateTime<Utc>,
     },
 
     /// Changement de pseudonyme (Action critique : nécessite redirection d'URL)
     UsernameChanged {
+        id: Uuid,
         account_id: AccountId,
-        old_username: String,
-        new_username: String,
+        old_username: Username,
+        new_username: Username,
+        occurred_at: DateTime<Utc>,
+    },
+
+    DisplayNameChanged {
+        id: Uuid,
+        account_id: AccountId,
+        old_display_name: DisplayName,
+        new_display_name: DisplayName,
         occurred_at: DateTime<Utc>,
     },
 
     /// Mise à jour des médias (Utile pour le nettoyage de l'ancien cache CDN)
-    MediaUpdated {
+    AvatarUpdated {
+        id: Uuid,
         account_id: AccountId,
-        avatar_url: Option<Url>,
-        banner_url: Option<Url>,
+        old_avatar_url: Option<Url>,
+        new_avatar_url: Url,
         occurred_at: DateTime<Utc>,
     },
 
-    /// Changement de localisation ou bio
-    MetadataUpdated {
+    AvatarRemoved {
+        id: Uuid,
         account_id: AccountId,
-        display_name: String,
-        bio: Option<String>,
-        location: Option<LocationLabel>,
+        old_avatar_url: Option<Url>,
+        occurred_at: DateTime<Utc>,
+    },
+
+    BannerUpdated {
+        id: Uuid,
+        account_id: AccountId,
+        old_banner_url: Option<Url>,
+        new_banner_url: Url,
+        occurred_at: DateTime<Utc>,
+    },
+
+    BannerRemoved {
+        id: Uuid,
+        account_id: AccountId,
+        old_banner_url: Option<Url>,
+        occurred_at: DateTime<Utc>,
+    },
+
+    BioUpdated {
+        id: Uuid,
+        account_id: AccountId,
+        old_bio: Option<Bio>,
+        new_bio: Option<Bio>,
+        occurred_at: DateTime<Utc>,
+    },
+
+
+    LocationLabelUpdated {
+        id: Uuid,
+        account_id: AccountId,
+        old_location: Option<LocationLabel>,
+        new_location: Option<LocationLabel>,
         occurred_at: DateTime<Utc>,
     },
 
     /// Mise à jour des réseaux sociaux
     SocialLinksUpdated {
+        id: Uuid,
         account_id: AccountId,
-        links: SocialLinks,
+        old_links: Option<SocialLinks>,
+        new_links: Option<SocialLinks>,
         occurred_at: DateTime<Utc>,
     },
 
     /// Changement de confidentialité (Critique pour le moteur de recherche et le Feed)
     PrivacySettingsChanged {
+        id: Uuid,
         account_id: AccountId,
         region: RegionCode,
         is_private: bool,
@@ -62,6 +106,7 @@ pub enum ProfileEvent {
     },
 
     PostCountIncremented {
+        id: Uuid,
         account_id: AccountId,
         post_id: Uuid,
         new_count: u64,
@@ -69,6 +114,7 @@ pub enum ProfileEvent {
     },
 
     PostCountDecremented {
+        id: Uuid,
         account_id: AccountId,
         post_id: Uuid,
         new_count: u64,
@@ -77,6 +123,7 @@ pub enum ProfileEvent {
 
     /// Synchronisation des compteurs (Snapshot)
     StatsSnapshotUpdated {
+        id: Uuid,
         account_id: AccountId,
         follower_count: u64,
         following_count: u64,
@@ -86,6 +133,7 @@ pub enum ProfileEvent {
 
     /// Suppression définitive
     ProfileDeleted {
+        id: Uuid,
         account_id: AccountId,
         region: RegionCode,
         occurred_at: DateTime<Utc>,
@@ -95,17 +143,34 @@ pub enum ProfileEvent {
 impl DomainEvent for ProfileEvent {
     fn event_id(&self) -> Uuid {
         match self {
-            Self::PostCountIncremented { post_id, .. } => *post_id,
-            Self::PostCountDecremented { post_id, .. } => *post_id,
-            _ => Uuid::now_v7(),
+            Self::PostCountIncremented { id, .. } |
+            Self::PostCountDecremented { id, .. } |
+            Self::ProfileCreated { id, .. } |
+            Self::UsernameChanged { id, .. } |
+            Self::DisplayNameChanged { id, .. } |
+            Self::AvatarUpdated { id, .. } |
+            Self::AvatarRemoved { id, .. } |
+            Self::BannerUpdated { id, .. } |
+            Self::BannerRemoved { id, .. } |
+            Self::BioUpdated { id, .. } |
+            Self::LocationLabelUpdated { id, .. } |
+            Self::SocialLinksUpdated { id, .. } |
+            Self::PrivacySettingsChanged { id, .. } |
+            Self::StatsSnapshotUpdated { id, .. } |
+            Self::ProfileDeleted { id, .. } => *id,
         }
     }
     fn event_type(&self) -> Cow<'_, str> {
         match self {
             Self::ProfileCreated { .. } => Cow::Borrowed("profile.created"),
             Self::UsernameChanged { .. } => Cow::Borrowed("profile.username.changed"),
-            Self::MediaUpdated { .. } => Cow::Borrowed("profile.media.updated"),
-            Self::MetadataUpdated { .. } => Cow::Borrowed("profile.metadata.updated"),
+            Self::DisplayNameChanged { .. } => Cow::Borrowed("profile.displayname.changed"),
+            Self::AvatarUpdated { .. } => Cow::Borrowed("profile.avatar.changed"),
+            Self::AvatarRemoved { .. } => Cow::Borrowed("profile.avatar.removed"),
+            Self::BannerUpdated { .. } => Cow::Borrowed("profile.banner.changed"),
+            Self::BannerRemoved { .. } => Cow::Borrowed("profile.banner.removed"),
+            Self::BioUpdated { .. } => Cow::Borrowed("profile.bio.updated"),
+            Self::LocationLabelUpdated { .. } => Cow::Borrowed("profile.location_label.updated"),
             Self::SocialLinksUpdated { .. } => Cow::Borrowed("profile.social_links.updated"),
             Self::PrivacySettingsChanged { .. } => Cow::Borrowed("profile.privacy.changed"),
             Self::PostCountIncremented { .. } => Cow::Borrowed("profile.post_count.incremented"),
@@ -121,15 +186,20 @@ impl DomainEvent for ProfileEvent {
 
     fn aggregate_id(&self) -> String {
         match self {
-            Self::ProfileCreated { account_id: account_id, .. } |
-            Self::UsernameChanged { account_id: account_id, .. } |
-            Self::MediaUpdated { account_id: account_id, .. } |
-            Self::MetadataUpdated { account_id: account_id, .. } |
-            Self::SocialLinksUpdated { account_id: account_id, .. } |
-            Self::PrivacySettingsChanged { account_id: account_id, .. } |
-            Self::StatsSnapshotUpdated { account_id: account_id, .. } |
-            Self::PostCountIncremented { account_id: account_id, .. } |
-            Self::PostCountDecremented { account_id: account_id, .. } |
+            Self::ProfileCreated { account_id, .. } |
+            Self::UsernameChanged { account_id, .. } |
+            Self::DisplayNameChanged { account_id, .. } |
+            Self::AvatarUpdated { account_id, .. } |
+            Self::AvatarRemoved { account_id, .. } |
+            Self::BannerUpdated { account_id, .. } |
+            Self::BannerRemoved { account_id, .. } |
+            Self::BioUpdated { account_id, .. } |
+            Self::LocationLabelUpdated { account_id, .. } |
+            Self::SocialLinksUpdated { account_id, .. } |
+            Self::PrivacySettingsChanged { account_id, .. } |
+            Self::StatsSnapshotUpdated { account_id, .. } |
+            Self::PostCountIncremented { account_id, .. } |
+            Self::PostCountDecremented { account_id, .. } |
             Self::ProfileDeleted { account_id, .. } => account_id.to_string(),
         }
     }
@@ -138,8 +208,13 @@ impl DomainEvent for ProfileEvent {
         match self {
             Self::ProfileCreated { occurred_at, .. } |
             Self::UsernameChanged { occurred_at, .. } |
-            Self::MediaUpdated { occurred_at, .. } |
-            Self::MetadataUpdated { occurred_at, .. } |
+            Self::DisplayNameChanged { occurred_at, .. } |
+            Self::AvatarUpdated { occurred_at, .. } |
+            Self::AvatarRemoved { occurred_at, .. } |
+            Self::BannerUpdated { occurred_at, .. } |
+            Self::BannerRemoved { occurred_at, .. } |
+            Self::BioUpdated { occurred_at, .. } |
+            Self::LocationLabelUpdated { occurred_at, .. } |
             Self::SocialLinksUpdated { occurred_at, .. } |
             Self::PrivacySettingsChanged { occurred_at, .. } |
             Self::StatsSnapshotUpdated { occurred_at, .. } |

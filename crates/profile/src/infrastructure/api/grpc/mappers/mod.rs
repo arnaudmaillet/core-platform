@@ -1,7 +1,6 @@
-mod grpc_profile_mapper;
-mod grpc_common_mapper;
-mod grpc_user_location_mapper;
+mod common_grpc_mapper;
+mod social_links_grpc_mapper;
+mod profile_grpc_mapper;
+mod profile_stats_grpc_mapper;
 
-pub use grpc_common_mapper::{from_timestamp, to_timestamp};
-pub use grpc_profile_mapper::*;
-pub use grpc_user_location_mapper::*;
+pub use common_grpc_mapper::{from_timestamp, to_timestamp};

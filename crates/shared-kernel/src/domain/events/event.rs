@@ -1,3 +1,7 @@
+// crates/shared-kernel/src/domain/events/event.rs
+
+use dyn_clone::DynClone;
+
 use std::borrow::Cow;
 use std::fmt::Debug;
 use async_trait::async_trait;
@@ -6,7 +10,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 #[async_trait]
-pub trait DomainEvent: Debug + Send + Sync {
+pub trait DomainEvent: DynClone + Debug + Send + Sync {
     /// Identifiant unique de l'événement (pour l'idempotence)
     fn event_id(&self) -> Uuid {
         Uuid::now_v7()
@@ -32,3 +36,5 @@ pub trait DomainEvent: Debug + Send + Sync {
         None
     }
 }
+
+dyn_clone::clone_trait_object!(DomainEvent);

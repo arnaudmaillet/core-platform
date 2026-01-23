@@ -47,33 +47,38 @@ impl UpdateUsernameUseCase {
 
         // 5. Extraction des faits (événements) et préparation de la persistence
         let events = profile.pull_events();
+        
+        if events.is_empty() {
+            return Ok(profile);
+        }
+        
         let updated_profile = profile.clone();
 
         // 6. Phase de commit transactionnel (Garantie Hyperscale)
-        self.tx_manager.run_in_transaction(|mut tx| {
+        self.tx_manager.run_in_transaction(move | mut tx| {
             let repo = self.repo.clone();
             let outbox = self.outbox_repo.clone();
-            let p = updated_profile.clone();
-            let events_to_process = events;
+            let profile = profile.clone();
+            let events = events.clone();
 
             Box::pin(async move {
                 // PROTECTION CRITIQUE : Double vérification d'unicité à l'intérieur de la transaction
                 // Empêche deux utilisateurs de prendre le même slug simultanément
-                if repo.exists_by_username(&p.username, &p.region_code).await? {
+                if repo.exists_by_username(&profile.username, &profile.region_code).await? {
                     return Err(DomainError::AlreadyExists {
                         entity: "Profile",
-                        field: "username_slug",
-                        value: p.username.as_str().to_string(),
+                        field: "username",
+                        value: profile.username.as_str().to_string(),
                     });
                 }
 
                 // Persistence de l'entité (Postgres)
                 // Le repo doit injecter le WHERE version = current_version
-                repo.save(&p, Some(&mut *tx)).await?;
+                repo.save(&profile, Some(&mut *tx)).await?;
 
                 // Persistence des événements (Outbox)
                 // Permet au service de redirection et au moteur de recherche de réagir
-                for event in events_to_process {
+                for event in events {
                     outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 

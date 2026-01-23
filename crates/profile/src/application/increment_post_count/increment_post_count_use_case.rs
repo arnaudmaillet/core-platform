@@ -9,6 +9,7 @@ use shared_kernel::errors::Result;
 use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::increment_post_count::IncrementPostCountCommand;
+use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 
 pub struct IncrementPostCountUseCase {
@@ -26,44 +27,49 @@ impl IncrementPostCountUseCase {
         Self { repo, outbox_repo, tx_manager }
     }
 
-    pub async fn execute(&self, command: IncrementPostCountCommand) -> Result<()> {
+    pub async fn execute(&self, command: IncrementPostCountCommand) -> Result<Profile> {
         // RetryConfig court ici car les conflits sur les compteurs sont fréquents
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         }).await
     }
 
-    async fn try_execute_once(&self, cmd: &IncrementPostCountCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &IncrementPostCountCommand) -> Result<Profile> {
         // 1. Récupération (Identity-only pour la performance)
-        let mut profile = self.repo.get_profile_without_stats(&cmd.account_id, &cmd.region)
+        let mut profile = self.repo.get_profile_by_account_id(&cmd.account_id, &cmd.region)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Logique Métier
         profile.increment_post_count(cmd.post_id);
 
         // 3. Préparation pour la transaction
         let events = profile.pull_events();
-        let p_cloned = profile.clone();
+
+        if events.is_empty() {
+            return Ok(profile);
+        }
+
+        let updated_profile = profile.clone();
 
         // 4. Persistence Transactionnelle (Atomique)
         self.tx_manager.run_in_transaction(move |mut tx| {
             let repo = self.repo.clone();
             let outbox = self.outbox_repo.clone();
-            let p = p_cloned.clone();
-            let events_to_process = events;
+            let profile = profile.clone();
+            let events = events.clone();
 
             Box::pin(async move {
-                repo.save(&p, Some(&mut *tx)).await?;
+                repo.save(&profile, Some(&mut *tx)).await?;
 
                 // Enregistre les événements dans la table Outbox
-                for event in events_to_process {
+                for event in events {
                     outbox.save(&mut *tx, event.as_ref()).await?;
                 }
                 Ok(())
             })
         }).await?;
 
-        Ok(())
+        Ok(updated_profile)
     }
 }

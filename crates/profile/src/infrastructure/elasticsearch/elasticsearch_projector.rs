@@ -67,17 +67,75 @@ impl ProfileElasticProjector {
                 })).await
             },
 
-            ProfileEvent::MetadataUpdated {
+            ProfileEvent::DisplayNameChanged {
                 account_id,
-                display_name,
+                new_display_name,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(&account_id.to_string(), json!({
-                    "display_name": display_name.as_str(),
+                    "display_name": new_display_name.as_str(),
                     "updated_at": occurred_at.to_rfc3339()
                 })).await
             },
+
+            ProfileEvent::BioUpdated {
+                account_id,
+                new_bio,
+                occurred_at,
+                ..
+            } => {
+                self.update_partial(&account_id.to_string(), json!({
+                    "bio": new_bio.as_ref().map(|b| b.as_str()),
+                    "updated_at": occurred_at.to_rfc3339()
+                })).await
+            },
+
+            ProfileEvent::AvatarUpdated {
+                account_id,
+                new_avatar_url,
+                occurred_at,
+                ..
+            } => {
+                self.update_partial(&account_id.to_string(), json!({
+                    "avatar_url": new_avatar_url.as_str(),
+                    "updated_at": occurred_at.to_rfc3339()
+                })).await
+            }
+
+            ProfileEvent::AvatarRemoved {
+                account_id,
+                occurred_at,
+                ..
+            } => {
+                self.update_partial(&account_id.to_string(), json!({
+                    "avatar_url": serde_json::Value::Null,
+                    "updated_at": occurred_at.to_rfc3339()
+                })).await
+            }
+
+            ProfileEvent::BannerUpdated {
+                account_id,
+                new_banner_url,
+                occurred_at,
+                ..
+            } => {
+                self.update_partial(&account_id.to_string(), json!({
+                    "banner_url": new_banner_url.as_str(),
+                    "updated_at": occurred_at.to_rfc3339()
+                })).await
+            }
+
+            ProfileEvent::BannerRemoved {
+                account_id,
+                occurred_at,
+                ..
+            } => {
+                self.update_partial(&account_id.to_string(), json!({
+                    "banner_url": serde_json::Value::Null,
+                    "updated_at": occurred_at.to_rfc3339()
+                })).await
+            }
 
             _ => Ok(()),
         }

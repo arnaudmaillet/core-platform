@@ -15,7 +15,7 @@ pub struct ProfileBuilder {
     avatar_url: Option<Url>,
     banner_url: Option<Url>,
     location_label: Option<LocationLabel>,
-    social_links: SocialLinks,
+    social_links: Option<SocialLinks>,
     stats: ProfileStats,
     post_count: Counter,
     is_private: bool,
@@ -40,7 +40,7 @@ impl ProfileBuilder {
             avatar_url: None,
             banner_url: None,
             location_label: None,
-            social_links: SocialLinks::default(),
+            social_links: None,
             stats: ProfileStats::default(),
             post_count: Counter::default(),
             is_private: false,
@@ -60,7 +60,7 @@ impl ProfileBuilder {
         avatar_url: Option<Url>,
         banner_url: Option<Url>,
         location_label: Option<LocationLabel>,
-        social_links: SocialLinks,
+        social_links: Option<SocialLinks>,
         post_count: Counter,
         is_private: bool,
         version: i32,
@@ -96,7 +96,7 @@ impl ProfileBuilder {
     pub fn maybe_banner_url(mut self, url: Option<Url>) -> Self { self.banner_url = url; self }
     pub fn location(mut self, label: LocationLabel) -> Self { self.location_label = Some(label); self }
     pub fn maybe_location(mut self, label: Option<LocationLabel>) -> Self { self.location_label = label; self }
-    pub fn social_links(mut self, links: SocialLinks) -> Self { self.social_links = links; self }
+    pub fn maybe_social_links(mut self, links: Option<SocialLinks>) -> Self { self.social_links = links; self }
     pub fn stats(mut self, stats: ProfileStats) -> Self { self.stats = stats; self }
     pub fn post_count(mut self, count: Counter) -> Self { self.post_count = count; self }
     pub fn is_private(mut self, private: bool) -> Self { self.is_private = private; self }

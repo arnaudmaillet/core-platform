@@ -9,6 +9,7 @@ use shared_kernel::errors::Result;
 use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::update_location_label::UpdateLocationLabelCommand;
+use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 
 pub struct UpdateLocationLabelUseCase {
@@ -26,25 +27,21 @@ impl UpdateLocationLabelUseCase {
         Self { repo, outbox_repo, tx_manager }
     }
 
-    pub async fn execute(&self, command: UpdateLocationLabelCommand) -> Result<()> {
+    pub async fn execute(&self, command: UpdateLocationLabelCommand) -> Result<Profile> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         }).await
     }
 
-    async fn try_execute_once(&self, cmd: &UpdateLocationLabelCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &UpdateLocationLabelCommand) -> Result<Profile> {
         // 1. Récupération (Identity-only suffit pour valider la mutation)
-        let mut profile = self.repo.get_profile_without_stats(&cmd.account_id, &cmd.region)
+        let mut profile = self.repo.get_profile_by_account_id(&cmd.account_id, &cmd.region)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application du changement
         // update_metadata encapsule l'idempotence et l'appel à apply_change()
-        profile.update_metadata(
-            profile.display_name.clone(),
-            profile.bio.clone(),
-            cmd.new_location.clone()
-        );
+        profile.update_location_label(cmd.new_location.clone());
 
         // 3. Extraction des événements
         let events = profile.pull_events();
@@ -52,21 +49,22 @@ impl UpdateLocationLabelUseCase {
         // 4. Idempotence Applicative
         // Si aucun événement n'est produit (car le label était identique), on court-circuite.
         if events.is_empty() {
-            return Ok(());
+            return Ok(profile);
         }
 
-        let p_cloned = profile.clone();
+        let updated_profile = profile.clone();
 
         // 5. Persistence Transactionnelle Hyperscale
         self.tx_manager.run_in_transaction(move |mut tx| {
             let repo = self.repo.clone();
             let outbox = self.outbox_repo.clone();
-            let p = p_cloned.clone();
-            let events_to_process = events;
+
+            let profile = profile.clone();
+            let events = events.clone();
 
             Box::pin(async move {
-                repo.save(&p, Some(&mut *tx)).await?;
-                for event in events_to_process {
+                repo.save(&profile, Some(&mut *tx)).await?;
+                for event in events {
                     outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 
@@ -74,6 +72,6 @@ impl UpdateLocationLabelUseCase {
             })
         }).await?;
 
-        Ok(())
+        Ok(updated_profile)
     }
 }

@@ -7,11 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = "src/infrastructure/api/grpc/proto";
     let proto_root = "../../proto";
 
-    // On s'assure que le dossier existe pour éviter une erreur de build
-    if !Path::new(out_dir).exists() {
-        fs::create_dir_all(out_dir)?;
-    }
-
+    
     tonic_build::configure()
         .out_dir(out_dir) // On cible le dossier spécifique
         .compile(

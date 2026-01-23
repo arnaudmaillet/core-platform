@@ -8,5 +8,5 @@ use crate::domain::value_objects::SocialLinks;
 pub struct UpdateSocialLinksCommand {
     pub account_id: AccountId,
     pub region: RegionCode,
-    pub links: SocialLinks,
+    pub new_links: Option<SocialLinks>,
 }

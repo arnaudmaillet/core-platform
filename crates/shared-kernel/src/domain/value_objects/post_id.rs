@@ -77,6 +77,23 @@ impl FromStr for PostId {
     }
 }
 
+impl TryFrom<String> for PostId {
+    type Error = DomainError;
+
+    fn try_from(s: String) -> Result<Self> {
+        Self::from_str(&s)
+    }
+}
+
+// Optionnel mais pratique : TryFrom<&str>
+impl TryFrom<&str> for PostId {
+    type Error = DomainError;
+
+    fn try_from(s: &str) -> Result<Self> {
+        Self::from_str(s)
+    }
+}
+
 impl fmt::Display for PostId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)

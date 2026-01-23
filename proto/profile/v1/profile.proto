@@ -12,32 +12,33 @@ option go_package = "github.com/core-platform/proto/profile/v1";
 // SERVICES DE MODIFICATION (COMMANDES)
 // ==========================================
 
-// Gère l'identité unique et critique de l'utilisateur
+// 1. SERVICE D'IDENTITÉ
 service ProfileIdentityService {
-  // Mise à jour du slug/handle (opération à forte cohérence)
   rpc UpdateUsername(UpdateUsernameRequest) returns (Profile);
-}
-
-// Gère l'apparence, les médias et les liens sociaux
-service ProfileSettingsService {
-  // Mise à jour des métadonnées textuelles (Bio, Nom affiché)
-  rpc UpdateMetadata(UpdateMetadataRequest) returns (Profile);
-
-  // Gestion des images de profil
-  rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
-  rpc UpdateBanner(UpdateBannerRequest) returns (Profile);
-
-  // Gestion des réseaux sociaux et de la confidentialité
-  rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
+  rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (Profile);
   rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
 }
 
-// Gère les interactions automatiques et les compteurs (souvent appelé par d'autres services)
-service ProfileInternalService {
+// 2. SERVICE DE MÉDIAS (ASSETS)
+service ProfileMediaService {
+  rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
+  rpc RemoveAvatar(RemoveAvatarRequest) returns (Profile);
+  rpc UpdateBanner(UpdateBannerRequest) returns (Profile);
+  rpc RemoveBanner(RemoveBannerRequest) returns (Profile);
+}
+
+// 3. SERVICE DE MÉTADONNÉES (INFOS ÉDITORIALES)
+service ProfileMetadataService {
+  rpc UpdateBio(UpdateBioRequest) returns (Profile);
+  rpc UpdateLocationLabel(UpdateLocationLabelRequest) returns (Profile);
+  rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
+}
+
+// 4. SERVICE INTERNE (AUTOMATISATION)
+service ProfileCounterService {
   rpc IncrementPostCount(IncrementPostCountRequest) returns (Profile);
   rpc DecrementPostCount(DecrementPostCountRequest) returns (Profile);
 }
-
 // ==========================================
 // MESSAGES DE REQUÊTES
 // ==========================================
@@ -45,44 +46,63 @@ service ProfileInternalService {
 // --- Identity ---
 
 message UpdateUsernameRequest {
-  string account_id = 1;      // UUID
-  string new_username = 2;    // Nouveau slug
-}
-
-// --- Settings & Metadata ---
-
-message UpdateMetadataRequest {
   string account_id = 1;
-  string display_name = 2;
-  google.protobuf.StringValue bio = 3;
-  google.protobuf.StringValue location_label = 4;
+  string new_username = 2;
 }
 
-message UpdateAvatarRequest {
+message UpdateDisplayNameRequest {
   string account_id = 1;
-  google.protobuf.StringValue url = 2;
+  string new_display_name = 2;
 }
 
-message UpdateBannerRequest {
-  string account_id = 1;
-  google.protobuf.StringValue url = 2;
-}
-
-message UpdateSocialLinksRequest {
-  string account_id = 1;
-  SocialLinks links = 2;      // Utilise le message défini dans types.proto
-}
 
 message UpdatePrivacyRequest {
   string account_id = 1;
   bool is_private = 2;
 }
 
-// --- Internal / Automation ---
+// --- Medias ---
+
+message UpdateAvatarRequest {
+  string account_id = 1;
+  string new_avatar_url = 2;
+}
+
+message UpdateBannerRequest {
+  string account_id = 1;
+  string new_banner_url = 2;
+}
+
+message RemoveAvatarRequest {
+  string account_id = 1;
+}
+
+message RemoveBannerRequest {
+  string account_id = 1;
+}
+
+// --- Metadata ---
+
+message UpdateBioRequest {
+  string account_id = 1;
+  google.protobuf.StringValue new_bio = 2;
+}
+
+message UpdateLocationLabelRequest {
+  string account_id = 1;
+  google.protobuf.StringValue new_location_label = 2;
+}
+
+message UpdateSocialLinksRequest {
+  string account_id = 1;
+  optional SocialLinks new_links = 2;
+}
+
+// --- Compteurs / Automation ---
 
 message IncrementPostCountRequest {
   string account_id = 1;
-  string post_id = 2;         // Pour l'idempotence côté serveur
+  string post_id = 2;
 }
 
 message DecrementPostCountRequest {

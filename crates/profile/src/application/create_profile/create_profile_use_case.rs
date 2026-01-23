@@ -26,13 +26,13 @@ impl CreateProfileUseCase {
         Self { repo, outbox_repo, tx_manager }
     }
 
-    pub async fn execute(&self, command: CreateProfileCommand) -> Result<()> {
+    pub async fn execute(&self, command: CreateProfileCommand) -> Result<Profile> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         }).await
     }
 
-    async fn try_execute_once(&self, cmd: &CreateProfileCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &CreateProfileCommand) -> Result<Profile> {
         // 1. Instanciation via le domaine
         let mut profile = Profile::new_initial(
             cmd.account_id.clone(),
@@ -43,30 +43,30 @@ impl CreateProfileUseCase {
 
         // 2. Extraction des événements et préparation de la donnée
         let events = profile.pull_events();
-        let p_cloned = profile.clone();
+        let updated_profile = profile.clone();
 
         // 3. Exécution de la transaction atomique
         self.tx_manager.run_in_transaction(move |mut tx| {
             let repo = self.repo.clone();
             let outbox = self.outbox_repo.clone();
-            let p = p_cloned.clone();
-            let events_to_save = events;
+            let profile = profile.clone();
+            let events = events.clone();
 
             Box::pin(async move {
                 // Check d'unicité métier (avant insertion)
-                if repo.exists_by_username(&p.username, &p.region_code).await? {
+                if repo.exists_by_username(&profile.username, &profile.region_code).await? {
                     return Err(DomainError::AlreadyExists {
                         entity: "Profile",
                         field: "username",
-                        value: p.username.as_str().to_string(),
+                        value: profile.username.as_str().to_string(),
                     });
                 }
 
                 // Sauvegarde de l'agrégat (Version 1)
-                repo.save(&p, Some(&mut *tx)).await?;
+                repo.save(&profile, Some(&mut *tx)).await?;
 
                 // Sauvegarde des événements (ProfileCreated, etc.)
-                for event in events_to_save {
+                for event in events {
                     outbox.save(&mut *tx, event.as_ref()).await?;
                 }
 
@@ -74,6 +74,6 @@ impl CreateProfileUseCase {
             })
         }).await?;
 
-        Ok(())
+        Ok(updated_profile)
     }
 }

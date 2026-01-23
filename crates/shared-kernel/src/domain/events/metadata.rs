@@ -90,7 +90,7 @@ impl Clone for AggregateMetadata {
     fn clone(&self) -> Self {
         Self {
             version: self.version,
-            events: Vec::new(),
+            events: self.events.clone(),
         }
     }
 }

@@ -41,7 +41,7 @@ impl RemovePushTokenUseCase {
         let mut settings = self.settings_repo
             .find_by_account_id(&cmd.account_id, None)
             .await?
-            .ok_or_not_found(cmd.account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
         settings.remove_push_token(&cmd.token)?;
