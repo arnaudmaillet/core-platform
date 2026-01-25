@@ -1,63 +1,60 @@
-# .bazelrc
+# ==================================================================
+# CONFIGURATION GÉNÉRALE
+# ==================================================================
 
-# ------------------------------------------------------------------
-# Configuration générale
-# ------------------------------------------------------------------
-
-# Couleurs et annonces
+# Affiche les options actives au démarrage pour faciliter le débug
 build --announce_rc
 build --color=yes
 
-# Optimisations de compilation
+# Optimisation du build (Release mode par défaut)
 build --copt=-O3
+build --compilation_mode=opt
 
-# Logs plus propres : on cache les messages INFO et DEBUG verbeux
+# Logs propres : évite de polluer la console avec des milliers de lignes INFO
 common --ui_event_filters=-INFO,-DEBUG
+build --show_progress_rate_limit=30
 
-# Cache local sur disque (très utile en dev local)
-build --disk_cache=$HOME/.cache/bazel-disk-cache
+# ==================================================================
+# CACHE & PERFORMANCE
+# ==================================================================
 
-# ------------------------------------------------------------------
-# Plateformes : on laisse Bazel choisir automatiquement (auto-détection)
-# ------------------------------------------------------------------
-# Pas de --platforms forcé ici → fonctionne sur macOS, Linux, etc.
-# On peut override manuellement quand on veut (ex: pour CI ou Docker)
-# Exemple : bazel build --platforms=//platforms:linux_x86_64 //...
+# Cache local : Bazel réutilisera les objets déjà compilés
+# Sur GitHub Actions, ce dossier pourra être mis en cache entre les runs
+build --disk_cache=~/.cache/bazel-disk-cache
 
-# ------------------------------------------------------------------
-# Configurations spécifiques (utilisables avec --config=xxx)
-# ------------------------------------------------------------------
+# ==================================================================
+# TOOLCHAINS & PLATEFORMES
+# ==================================================================
 
-# Pour la CI (plus de jobs, etc.)
+# On laisse Bazel détecter automatiquement l'OS hôte (Linux sur CI, macOS en local)
+# La toolchain LLVM définie dans MODULE.bazel s'occupera de l'herméticité.
+
+# On force l'utilisation des toolchains enregistrées pour Rust et LLVM
+build --incompatible_enable_cc_toolchain_resolution
+
+# ==================================================================
+# CONFIGURATION SPÉCIFIQUE POUR LA CI (GitHub Actions)
+# ==================================================================
+
+# Utilisé via --config=ci
 build:ci --jobs=100
 build:ci --keep_going
-build:ci --show_progress_rate_limit=30
+build:ci --remote_download_toplevel  # Télécharge uniquement les outputs finaux
 
-# Build optimisé release
-build:release --compilation_mode=opt
-build:release --strip=always
+# ==================================================================
+# CONFIGURATION RUST
+# ==================================================================
 
-# Build debug rapide
-build:debug --compilation_mode=dbg
-build:debug --strip=never
+# On s'assure que Bazel propage les variables d'environnement nécessaires
+build --action_env=PATH
+build --action_env=LD_LIBRARY_PATH
 
-# ------------------------------------------------------------------
-# À activer plus tard pour le remote cache
-# ------------------------------------------------------------------
-# build --remote_cache=https://remote.buildbuddy.io
-# build --remote_executor=https://remote.buildbuddy.io
-# build --bes_backend=grpcs://remote.buildbuddy.io
-# build --bes_results_url=https://app.buildbuddy.io/invocation/
-# build --remote_timeout=3600
+# ==================================================================
+# OPTIONS DE DÉPLOIEMENT (OCI / DOCKER)
+# ==================================================================
 
-# ------------------------------------------------------------------
-# Divers utiles
-# ------------------------------------------------------------------
-# --- SECTION ENVIRONNEMENT FORCEE POUR IDE ---
-# On utilise 'common' pour que cela s'applique à 'build', 'test' et 'run' sans erreur
-# On force le chemin absolu vers ton Cargo système pour l'IDE
-common --action_env=CARGO=/Users/arnaud/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo
-common --repo_env=CARGO=/Users/arnaud/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo
-
-# On s'assure que le PATH contient bien les outils Rust
-common --action_env=PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin:/Users/arnaud/.cargo/bin
+# Permet de construire des images OCI sans avoir besoin d'un démon Docker local
+# (Très important pour la rapidité sur GitHub Actions)
+build --define=oci_go_binary=true
+build:ci --extra_toolchains=@llvm_toolchain//:all
+build:ci --incompatible_enable_cc_toolchain_resolution

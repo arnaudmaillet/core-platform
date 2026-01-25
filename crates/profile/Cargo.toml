@@ -18,11 +18,13 @@ async-trait = { workspace = true }
 rand = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-scylla = "1.4" # Spécifique au stockage haute fréquence des profils
+scylla = { workspace = true }
 
 prost = { workspace = true }
 tonic = { workspace = true }
 prost-types = { workspace = true }
+tonic-prost = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true}
+tonic-prost-build = { workspace = true }

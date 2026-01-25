@@ -6,6 +6,8 @@ target/
 bazel-*
 
 # Fichiers système
+$HOME
+Thumbs.db
 .DS_Store
 **/.DS_Store
 
@@ -17,3 +19,24 @@ MODULE.bazel.lock
 .vscode/
 *.swp
 intellij.bazelproject
+
+
+# Fichiers et dossiers générés par Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
+# Terragrunt
+.terragrunt-cache/
+**/.terragrunt-cache/
+
+# Fichiers de variables locaux - NE PAS COMMIT S'ILS CONTIENNENT DES SECRETS
+*.tfvars
+*.tfvars.json
+
+# Fichiers de logs
+*.log
+
+# Fichiers de crash
+crash.log

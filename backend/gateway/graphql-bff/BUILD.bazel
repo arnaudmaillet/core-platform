@@ -1,3 +1,5 @@
+# backend/gateway/graphql-bff/BUILD.bazel
+
 load("//:defs.bzl", "core_rust_binary")
 
 core_rust_binary(
@@ -5,6 +7,21 @@ core_rust_binary(
     srcs = glob(["src/**/*.rs"]),
     visibility = ["//visibility:public"],
     deps = [
+        # --- Modules Internes ---
         "//crates/shared-kernel:shared_kernel",
+         "//proto/profile/v1:profile_v1",
+
+        # --- Dépendances Cargo (via @crates) ---
+        "@crates//:axum",
+        "@crates//:tokio",
+        "@crates//:tonic",
+        "@crates//:tonic-prost",
+        "@crates//:prost",
+        "@crates//:prost-types",
+        "@crates//:async-graphql",
+        "@crates//:async-graphql-axum",
+        "@crates//:tower-http",
+        "@crates//:tracing-subscriber",
+        "@crates//:serde",
     ],
 )

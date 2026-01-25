@@ -1,3 +1,5 @@
+//proto/profile/v1/profile.proto
+
 syntax = "proto3";
 
 package profile.v1;

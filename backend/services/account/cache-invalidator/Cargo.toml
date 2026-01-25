@@ -1,3 +1,5 @@
+#backend/services/account/cache-invalidator/Cargo.toml
+
 [package]
 name = "account-cache-invalidator"
 version.workspace = true

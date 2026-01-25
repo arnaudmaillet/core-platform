@@ -1,9 +1,9 @@
 // backend/gateway/graphql-bff/src/clients/mod.rs
 
 pub mod profile {
-    tonic::include_proto!("profile.v1");
+    include!("../infrastructure/api/grpc/proto/profile.v1.rs");
 }
 
 pub mod location {
-    tonic::include_proto!("location.v1");
+    include!("../infrastructure/api/grpc/proto/location.v1.rs");
 }

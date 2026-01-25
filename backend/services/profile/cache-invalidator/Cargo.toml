@@ -1,3 +1,5 @@
+#backend/services/profile/cache-invalidator/Cargo.toml
+
 [package]
 name = "profile-cache-invalidator"
 version.workspace = true

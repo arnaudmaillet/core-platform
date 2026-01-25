@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
-use axum::Router;
 use axum::routing::post;
 use crate::context::ApiContext;
 use crate::schema::build_schema;
 use async_graphql_axum::GraphQL;
+use axum::Router;
 
 mod clients;
 mod context;
@@ -26,7 +26,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Setup du serveur
     let app = Router::new()
-        .route("/graphql", post(GraphQL::new(schema)));
+        .route(
+            "/graphql",
+            axum::routing::post_service(GraphQL::new(schema.clone()))
+                .get_service(GraphQL::new(schema))
+        );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 4000));
     println!("🚀 BFF GraphQL Hyperscale sur http://localhost:4000/graphql");

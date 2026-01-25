@@ -1,2 +1,11 @@
-# shared-kernel-platform/BUILD.bazel
+# BUILD.bazel
 # Fichier vide ou avec un commentaire, juste pour marquer la racine comme package
+
+platform(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+        "@bazel_tools//tools/cpp:clang",
+    ],
+)

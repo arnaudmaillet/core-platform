@@ -17,10 +17,3 @@ profile = { workspace = true }
 # Dépendances externes nécessaires au binaire
 tokio = { workspace = true }
 tonic = { workspace = true }
-prost = { workspace = true }
-elasticsearch = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-anyhow = { workspace = true }
-tracing = { workspace = true }
-prost-types = { workspace = true }

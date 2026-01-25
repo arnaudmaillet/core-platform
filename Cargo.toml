@@ -66,13 +66,15 @@ seahash = "4.1"
 unicode-normalization = "0.1.25"
 
 # Proto / gRPC
-tonic = { version = "0.12.3", features = ["codegen", "prost"] }
-prost = "0.13.5"
-prost-types = "0.13.5"
-tonic-build = "0.10.2"
+tonic = { version = "0.14.2", features = ["codegen", "transport", "tls-webpki-roots"] }
+tonic-prost = "0.14.2"
+tonic-build = "0.14.2"
+tonic-prost-build = "0.14.2"
+prost = "0.14.3"
+prost-types = "0.14.3"
 
 # Graphql
-tower-http = { version = "0.5.2", features = ["cors", "trace"] }
-axum = "=0.7.9"
-async-graphql = "=7.0.11"
-async-graphql-axum = "=7.0.11"
+tower-http = { version = "=0.5.2", features = ["cors", "trace"] }
+async-graphql = { version = "8.0.0-rc.1", features = ["dataloader", "dynamic-schema", "tracing", "uuid", "chrono"] }
+async-graphql-axum = "8.0.0-rc.1"
+axum = "0.8.8"

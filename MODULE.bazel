@@ -15,10 +15,12 @@ bazel_dep(name = "platforms", version = "1.0.0")
 # --- 2. TOOLCHAIN RUST ---
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
-    versions = ["1.92.0"],
     edition = "2024",
+    versions = ["1.92.0"],
+    extra_target_triples = ["x86_64-unknown-linux-gnu"],
 )
 use_repo(rust, "rust_toolchains")
+
 register_toolchains("@rust_toolchains//:all")
 
 # --- 3. CONFIGURATION PROST & TONIC (gRPC) ---
@@ -42,7 +44,54 @@ crate.from_cargo(
         "//backend/services/profile/outbox-processor:Cargo.toml",
         "//backend/services/profile/cache-invalidator:Cargo.toml",
         "//backend/services/profile/query-server:Cargo.toml",
-        "//backend/gateway/graphql-bff:Cargo.toml"
+        "//backend/gateway/graphql-bff:Cargo.toml",
     ],
 )
+
+# 4b. On ajoute les annotations comme des tags SEPARÉS
+crate.annotation(
+    crate = "async-graphql",
+    crate_features = [
+        "federation",
+        "dynamic-schema",
+        "dataloader",
+    ],
+)
+crate.annotation(
+    crate = "async-graphql-derive",
+    crate_features = ["federation"],
+)
 use_repo(crate, "crates")
+
+# --- 5. CONTAINERS (OCI) & DÉPLOIEMENT ---
+bazel_dep(name = "rules_oci", version = "2.2.0")
+bazel_dep(name = "aspect_bazel_lib", version = "2.10.0")
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "distroless_rust",
+    # Digest exact du manifeste index (multi-arch)
+    digest = "sha256:66d87e170bc2c5e2b8cf853501141c3c55b4e502b8677595c57534df54a68cc5",
+    image = "gcr.io/distroless/cc-debian12",
+    platforms = [
+        "linux/amd64",
+        "linux/arm64/v8",
+    ],
+)
+use_repo(
+    oci,
+    "distroless_rust",
+    "distroless_rust_linux_amd64",
+    "distroless_rust_linux_arm64_v8",
+)
+
+# --- 6. TOOLCHAIN LLVM ---
+bazel_dep(name = "toolchains_llvm", version = "1.2.0")
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    llvm_version = "16.0.0",
+)
+
+use_repo(llvm, "llvm_toolchain")
+# register_toolchains("@llvm_toolchain//:all")

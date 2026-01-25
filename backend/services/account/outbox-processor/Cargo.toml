@@ -1,8 +1,10 @@
+#backend/services/account/outbox-processor/Cargo.toml
+
 [package]
 name = "account-outbox-processor"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = ["service-outbox"] }
+shared-kernel = { workspace = true, features = ["service-outbox", "grpc"] }
 tokio = { workspace = true }

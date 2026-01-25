@@ -8,6 +8,7 @@ core_rust_proto_library(
     srcs = [
         "profile.proto",
         "profile_query.proto",
+        "types.proto",
         "user_location.proto",
     ],
     visibility = ["//visibility:public"],
