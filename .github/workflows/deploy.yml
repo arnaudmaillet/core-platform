@@ -8,15 +8,17 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ÉTAPE CRUCIALE : Installer libtinfo5
-      - name: Install system dependencies
+      # Correction pour Ubuntu 24.04 : Installation de libtinfo5 depuis les dépôts officiels de sécurité
+      - name: Install libtinfo5
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libtinfo5
+          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          sudo apt-get install -y ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -32,6 +34,7 @@ jobs:
       - name: Setup Bazel
         uses: bazelbuild/setup-bazelisk@v3
 
+      # Exécution du build et du push vers AWS
       - name: Bazel Build and Push
         run: |
           bazel run --config=ci //backend/gateway/graphql-bff:graphql_bff_push
