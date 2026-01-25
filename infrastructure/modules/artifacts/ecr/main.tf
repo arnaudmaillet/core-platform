@@ -1,20 +1,43 @@
-terraform {
-  required_version = ">= 1.0.0" # Ensure that the Terraform version is 1.0.0 or higher
+resource "aws_ecr_repository" "main" {
+  name                 = "${var.project_name}-backend"
+  image_tag_mutability = "MUTABLE"
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws" # Specify the source of the AWS provider
-      version = "~> 4.0"        # Use a version of the AWS provider that is compatible with version
-    }
+  # Hyperscale : Scan automatique des vulnérabilités CVE à chaque push
+  image_scanning_configuration {
+    scan_on_push = true
   }
-}
 
-provider "aws" {
-  region = "us-east-1" # Set the AWS region to US East (N. Virginia)
-}
+  # Chiffrement au repos via KMS (Best practice sécurité)
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
 
-resource "aws_instance" "aws_example" {
   tags = {
-    Name = "ExampleInstance" # Tag the instance with a Name tag for easier identification
+    Name        = "${var.project_name}-ecr"
+    Environment = var.env
   }
+}
+
+# --- LIFECYCLE POLICY ---
+# Évite de payer pour des milliers d'images inutiles.
+# On garde les 30 dernières images de build.
+resource "aws_ecr_lifecycle_policy" "cleanup" {
+  repository = aws_ecr_repository.main.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 30 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
 }

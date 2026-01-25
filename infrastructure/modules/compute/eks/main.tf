@@ -1,36 +1,49 @@
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 19.0"
+  version = "~> 20.0"
 
-  cluster_name    = "${var.project_name}-${var.env}"
-  cluster_version = "1.28" # Version stable de Kubernetes
-
-  vpc_id     = var.vpc_id
-  subnet_ids = var.private_subnets
-
-  # Accès public à l'API (sécurisé par IP plus tard) et accès privé interne
+  cluster_name    = var.cluster_name
+  cluster_version = "1.31"
   cluster_endpoint_public_access = true
 
-  # EKS Managed Node Groups : AWS gère le cycle de vie des serveurs (patching, etc.)
+  vpc_id     = var.vpc_id
+  subnet_ids = var.private_subnet_ids
+
+  # Hyperscale : Permettre au cluster de communiquer avec l'API AWS pour le scaling
+  enable_cluster_creator_admin_permissions = true
+
+  # --- Node Groups de Gestion (System) ---
+  # Ces nœuds sont fixes et font tourner les composants vitaux du cluster
   eks_managed_node_groups = {
-    # Pool de base pour les services critiques (CoreDNS, Metrics Server)
     system = {
-      min_size     = 2
-      max_size     = 5
-      desired_size = 2
       instance_types = ["t3.medium"]
-    }
-    # Pool "Spot" pour le Backend : 70% moins cher, idéal pour l'hyperscale
-    apps = {
-      min_size     = 2
-      max_size     = 100 # Scalabilité massive
-      desired_size = 5
-      instance_types = ["t3.large", "c5.large"]
-      capacity_type  = "SPOT"
+      min_size       = 2
+      max_size       = 4
+      desired_size   = 2
+
+      labels = {
+        "intent" = "control-plane"
+      }
     }
   }
 
-  tags = {
-    "k8s.io/cluster-autoscaler/enabled" = "true"
+  # --- Configuration Sécurité pour Karpenter ---
+  # Karpenter a besoin de taguer les ressources qu'il crée dynamiquement
+  node_security_group_tags = {
+    "karpenter.sh/discovery" = var.cluster_name
   }
+}
+
+# --- Module Karpenter ---
+# Autoscaling
+module "karpenter" {
+  source  = "terraform-aws-modules/eks/aws//modules/karpenter"
+  version = "~> 20.0"
+
+  cluster_name = module.eks.cluster_name
+
+  # On utilise le rôle créé par le module EKS spécifiquement pour les nodes
+  node_iam_role_name = module.eks.node_iam_role_name
+
+  enable_v1_permissions = true
 }
