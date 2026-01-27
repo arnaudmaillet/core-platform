@@ -1,28 +1,32 @@
-resource "aws_ecr_repository" "main" {
-  name                 = "${var.project_name}-backend"
+# infrastructure/modules/artifacts/ecr/main.tf
+
+resource "aws_ecr_repository" "services" {
+  # On boucle sur la liste des services pour créer un repo par microservice
+  for_each             = toset(var.service_names)
+
+  name                 = "${var.project_name}-${each.value}"
   image_tag_mutability = "MUTABLE"
 
-  # Hyperscale : Scan automatique des vulnérabilités CVE à chaque push
   image_scanning_configuration {
     scan_on_push = true
   }
 
-  # Chiffrement au repos via KMS (Best practice sécurité)
   encryption_configuration {
     encryption_type = "AES256"
   }
 
   tags = {
-    Name        = "${var.project_name}-ecr"
+    Name        = "${var.project_name}-${each.value}-ecr"
     Environment = var.env
+    Service     = each.value
   }
 }
 
 # --- LIFECYCLE POLICY ---
-# Évite de payer pour des milliers d'images inutiles.
-# On garde les 30 dernières images de build.
+# Appliquée à chaque repository créé
 resource "aws_ecr_lifecycle_policy" "cleanup" {
-  repository = aws_ecr_repository.main.name
+  for_each   = aws_ecr_repository.services
+  repository = each.value.name
 
   policy = jsonencode({
     rules = [

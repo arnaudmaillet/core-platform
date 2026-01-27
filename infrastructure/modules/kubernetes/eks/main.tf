@@ -1,3 +1,5 @@
+# infrastructure/modules/kubernetes/eks/main.tf
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
@@ -11,6 +13,8 @@ module "eks" {
 
   # Hyperscale : Permettre au cluster de communiquer avec l'API AWS pour le scaling
   enable_cluster_creator_admin_permissions = true
+
+  enable_irsa = true
 
   # --- Node Groups de Gestion (System) ---
   # Ces nœuds sont fixes et font tourner les composants vitaux du cluster

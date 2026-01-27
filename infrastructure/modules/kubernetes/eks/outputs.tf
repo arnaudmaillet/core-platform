@@ -1,3 +1,5 @@
+# infrastructure/modules/kubernetes/eks/outputs.tf
+
 output "cluster_endpoint" {
   value = module.eks.cluster_endpoint
 }
@@ -12,4 +14,9 @@ output "cluster_certificate_authority_data" {
 
 output "karpenter_node_role_name" {
   value = module.karpenter.node_iam_role_name
+}
+
+output "oidc_provider_arn" {
+  description = "L'ARN du provider OIDC pour les rôles IAM des Service Accounts (IRSA)"
+  value       = module.eks.oidc_provider_arn
 }

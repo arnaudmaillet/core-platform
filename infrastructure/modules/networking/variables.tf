@@ -1,3 +1,5 @@
+# infrastructure/modules/networking/variables.tf
+
 variable "project_name" {
   type        = string
   description = "Nom du projet"

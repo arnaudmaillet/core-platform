@@ -38,7 +38,9 @@ def core_rust_binary(name, **kwargs):
     oci_image(
         name = name + "_image",
         base = "@distroless_rust",
-        entrypoint = ["/backend/gateway/graphql-bff/graphql_bff"],
+        # ATTENTION : Bazel place souvent le binaire à la racine ou dans un chemin relatif au package
+        # Si ton binaire s'appelle 'account-service', l'entrypoint sera /account-service
+        entrypoint = ["/" + name],
         tars = [":" + name + "_layer"],
         visibility = vis,
     )
@@ -48,7 +50,7 @@ def core_rust_binary(name, **kwargs):
         name = name + "_push",
         image = ":" + name + "_image",
         repository = ECR_URL,
-        remote_tags = ["latest"],
+        remote_tags = [name, "latest"], # On tag avec le nom du service pour les différencier
     )
 
 def core_rust_test(name, **kwargs):

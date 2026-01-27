@@ -1,5 +1,6 @@
 # Environnement
 .env
+infra.env
 
 # Rust / Build
 target/

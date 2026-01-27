@@ -1,8 +1,8 @@
 # backend/services/profile/query-server/BUILD.bazel
 
-load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("//:defs.bzl", "core_rust_binary")
 
-rust_binary(
+core_rust_binary(
     name = "profile_query_server",
     srcs = glob(["src/**/*.rs"]),
     edition = "2024",

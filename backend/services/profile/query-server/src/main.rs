@@ -33,7 +33,8 @@ use shared_kernel::infrastructure::scylla::factories::{create_scylla_session, Sc
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse()?;
+    let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
+    let addr = format!("0.0.0.0:{}", port).parse()?;
 
     // --- 1. INITIALISATION DES CLIENTS DB ---
 

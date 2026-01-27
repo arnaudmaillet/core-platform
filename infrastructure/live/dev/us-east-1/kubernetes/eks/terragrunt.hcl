@@ -1,13 +1,15 @@
+# infrastructure/live/dev/us-east-1/kubernetes/eks/terragrunt.hcl
+
 include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
 terraform {
-  source = "../../../../modules/compute/eks"
+  source = "../../../../../modules/kubernetes/eks"
 }
 
 dependency "networking" {
-  config_path = "../networking"
+  config_path = "../../networking"
 }
 
 inputs = {

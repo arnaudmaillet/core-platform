@@ -1,9 +1,11 @@
-output "repository_url" {
-  description = "URL du repository ECR"
-  value       = aws_ecr_repository.main.repository_url
+# infrastructure/modules/artifacts/ecr/outputs.tf
+
+output "repository_urls" {
+  description = "Map des URLs des repositories ECR"
+  value       = { for k, v in aws_ecr_repository.services : k => v.repository_url }
 }
 
-output "repository_arn" {
-  description = "ARN du repository pour les politiques IAM"
-  value       = aws_ecr_repository.main.arn
+output "repository_arns" {
+  description = "Map des ARNs des repositories ECR"
+  value       = { for k, v in aws_ecr_repository.services : k => v.arn }
 }
