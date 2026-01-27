@@ -1,0 +1,36 @@
+#  .github/workflows/profile-service-deploy.yml
+
+name: Deploy Profile Service
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'backend/services/profile-service/**'
+      - 'infrastructure/live/dev/us-east-1/services/microservices/profile-service/**'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Bazel
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Bazel Build and Push
+        run: |
+          # On cible uniquement le profile-service
+          bazel run --config=ci //backend/services/profile-service:profile_service_push

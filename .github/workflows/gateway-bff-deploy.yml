@@ -1,9 +1,11 @@
-name: Build and Push to ECR
+#  .github/workflows/gateway-bff-deploy.yml
+
+name: Deploy Gateway BFF
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    paths:
+      - 'backend/gateway/**'
 
 jobs:
   build-and-push:
