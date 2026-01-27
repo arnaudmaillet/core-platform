@@ -8,6 +8,7 @@ on:
     paths:
       - 'backend/services/profile-service/**'
       - 'infrastructure/live/dev/us-east-1/services/microservices/profile-service/**'
+  workflow_dispatch:
 
 jobs:
   build-and-push:
