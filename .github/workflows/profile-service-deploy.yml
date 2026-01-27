@@ -6,8 +6,8 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'backend/services/profile-service/**'
-      - 'infrastructure/live/dev/us-east-1/services/microservices/profile-service/query-server**'
+      - 'backend/services/profile/**'
+      - 'infrastructure/live/dev/us-east-1/services/microservices/profile-service/**'
   workflow_dispatch:
 
 jobs:
@@ -39,5 +39,5 @@ jobs:
 
       - name: Bazel Build and Push
         run: |
-          # On cible uniquement le profile-service
-          bazel run --config=ci //backend/services/profile-service/query-server:query_server_push
+          # ON CORRIGE LE CHEMIN ICI AUSSI
+          bazel run --config=ci //backend/services/profile/query-server:query_server_push
