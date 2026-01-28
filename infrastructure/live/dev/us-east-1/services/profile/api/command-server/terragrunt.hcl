@@ -43,7 +43,7 @@ inputs = {
   oidc_provider_arn  = dependency.eks.outputs.oidc_provider_arn
   db_secret_arn      = dependency.db.outputs.db_secret_arn
 
-  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-backend:profile_command_server"
+  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:latest"
   port     = 50051
   replicas = 1
 

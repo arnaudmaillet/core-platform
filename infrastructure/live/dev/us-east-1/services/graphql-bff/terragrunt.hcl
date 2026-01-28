@@ -33,7 +33,7 @@ EOF
 # 3. Paramètres de l'application
 inputs = {
   name     = "graphql-bff"
-  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-backend:graphql_bff"
+  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-graphql-bff:latest"
   port     = 50051
   replicas = 2
 

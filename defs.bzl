@@ -7,7 +7,7 @@ load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push")
 load("@aspect_bazel_lib//lib:tar.bzl", "tar")
 
 DEFAULT_EDITION = "2024"
-ECR_URL = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-backend"
+ECR_REGISTRY = "724772065879.dkr.ecr.us-east-1.amazonaws.com"
 
 def core_rust_library(name, **kwargs):
     rust_library(
@@ -19,6 +19,7 @@ def core_rust_library(name, **kwargs):
 def core_rust_binary(name, **kwargs):
     # 1. On récupère la visibilité pour la transmettre aux cibles OCI
     vis = kwargs.get("visibility", ["//visibility:public"])
+    custom_tags = kwargs.pop("remote_tags", ["latest"])
 
     # 2. On garde la compilation Rust d'origine
     rust_binary(
@@ -49,8 +50,8 @@ def core_rust_binary(name, **kwargs):
     oci_push(
         name = name + "_push",
         image = ":" + name + "_image",
-        repository = ECR_URL,
-        remote_tags = [name, "latest"], # On tag avec le nom du service pour les différencier
+        repository = ECR_REGISTRY + "/core-platform-" + name.replace("_", "-"),
+        remote_tags = custom_tags,
     )
 
 def core_rust_test(name, **kwargs):
