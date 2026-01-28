@@ -39,4 +39,4 @@ jobs:
 
       - name: Bazel Build and Push
         run: |
-          bazel run --config=ci//backend/services/profile/api/command-server:profile_command_server_push
+          bazel run --config=ci //backend/services/profile/api/command-server:profile_command_server_push
