@@ -1,4 +1,4 @@
-// backend/services/profile/query-server/src/main.rs
+// backend/services/profile/api/command-server/src/main.rs
 
 use std::sync::Arc;
 use tonic::transport::Server;

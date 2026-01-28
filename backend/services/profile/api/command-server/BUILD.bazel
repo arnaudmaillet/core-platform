@@ -1,4 +1,4 @@
-# backend/services/profile/query-server/BUILD.bazel
+# backend/services/profile/api/command-server/BUILD.bazel
 
 load("//:defs.bzl", "core_rust_binary")
 

@@ -1,4 +1,4 @@
-# backend/services/profile/query-server/Cargo.toml
+#backend/services/profile/api/command-server/Cargo.toml
 
 [package]
 name = "profile-command-server"
