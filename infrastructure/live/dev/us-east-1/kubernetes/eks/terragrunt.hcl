@@ -5,7 +5,7 @@ include "root" {
 }
 
 terraform {
-  source = "../../../../../modules/kubernetes/eks"
+  source = "${get_repo_root()}//infrastructure/modules/kubernetes/eks"
 }
 
 dependency "networking" {

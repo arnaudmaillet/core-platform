@@ -5,16 +5,16 @@ include "root" {
 }
 
 terraform {
-  source = "../../../../../../modules/services/microservices"
+  source = "${get_repo_root()}//infrastructure/modules/services/api"
 }
 
 # 1. On récupère les données du cluster
 dependency "eks" {
-  config_path = "../../../kubernetes/eks"
+  config_path = "../../../../kubernetes/eks"
 }
 
 dependency "db" {
-  config_path = "../../../data/postgres"
+  config_path = "../../../../data/postgres"
 }
 
 # 2. ON INJECTE LE CODE DU PROVIDER (Crucial pour éviter l'erreur localhost)
@@ -43,7 +43,7 @@ inputs = {
   oidc_provider_arn  = dependency.eks.outputs.oidc_provider_arn
   db_secret_arn      = dependency.db.outputs.db_secret_arn
 
-  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-service:latest"
+  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-backend:profile_command_server"
   port     = 50051
   replicas = 1
 

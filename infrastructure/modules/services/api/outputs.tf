@@ -1,4 +1,4 @@
-# infrastructure/modules/services/microservices/outputs.tf
+# infrastructure/modules/services/microservices/api/outputs.tf
 
 output "service_name" {
   value = kubernetes_service.this.metadata[0].name

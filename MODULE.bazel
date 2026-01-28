@@ -41,9 +41,9 @@ crate.from_cargo(
         "//crates/gamification:Cargo.toml",
         "//backend/services/account/outbox-processor:Cargo.toml",
         "//backend/services/account/cache-invalidator:Cargo.toml",
-        "//backend/services/profile/outbox-processor:Cargo.toml",
-        "//backend/services/profile/cache-invalidator:Cargo.toml",
-        "//backend/services/profile/query-server:Cargo.toml",
+        "//backend/services/profile/workers/outbox-processor:Cargo.toml",
+        "//backend/services/profile/workers/cache-invalidator:Cargo.toml",
+        "//backend/services/profile/api/command-server:Cargo.toml",
         "//backend/gateway/graphql-bff:Cargo.toml",
     ],
 )

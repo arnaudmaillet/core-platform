@@ -8,7 +8,7 @@ include "root" {
 
 # Indique où se trouve le code source du module (le blueprint)
 terraform {
-  source = "../../../../modules/networking"
+  source = "${get_repo_root()}//infrastructure/modules/networking"
 }
 
 # On passe les variables spécifiques à ce déploiement "dev"

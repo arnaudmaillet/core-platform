@@ -2165,21 +2165,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "profile-outbox-processor"
-version = "0.1.0"
-dependencies = [
- "shared-kernel",
- "tokio",
-]
-
-[[package]]
-name = "profile-query-server"
+name = "profile-command-server"
 version = "0.1.0"
 dependencies = [
  "profile",
  "shared-kernel",
  "tokio",
  "tonic",
+]
+
+[[package]]
+name = "profile-outbox-processor"
+version = "0.1.0"
+dependencies = [
+ "shared-kernel",
+ "tokio",
 ]
 
 [[package]]

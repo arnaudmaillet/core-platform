@@ -1,4 +1,4 @@
-# infrastructure/modules/services/microservices/variables.tf
+# infrastructure/modules/services/microservices/api/variables.tf
 
 variable "name" {
   description = "Nom du microservice"

@@ -5,7 +5,7 @@ include "root" {
 }
 
 terraform {
-  source = "../../../../../../modules/services/microservices"
+  source = "${get_repo_root()}//infrastructure/modules/services/microservices"
 }
 
 # 1. Dépendance vers le cluster EKS pour récupérer les accès
@@ -33,7 +33,7 @@ EOF
 # 3. Paramètres de l'application
 inputs = {
   name     = "graphql-bff"
-  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-graphql-bff:latest"
+  image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-backend:graphql_bff"
   port     = 50051
   replicas = 2
 

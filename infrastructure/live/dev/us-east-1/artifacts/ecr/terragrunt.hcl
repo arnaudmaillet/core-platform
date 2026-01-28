@@ -5,7 +5,7 @@ include "root" {
 }
 
 terraform {
-  source = "../../../../../modules/artifacts/ecr"
+  source = "${get_repo_root()}//infrastructure/modules/artifacts/ecr"
 }
 
 inputs = {

@@ -4,14 +4,14 @@
 members = [
     "backend/services/account/outbox-processor",
     "backend/services/account/cache-invalidator",
-    "backend/services/profile/outbox-processor",
-    "backend/services/profile/cache-invalidator",
+    "backend/services/profile/workers/outbox-processor",
+    "backend/services/profile/workers/cache-invalidator",
+    "backend/services/profile/api/command-server",
     "crates/account",
     "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
-    "backend/services/profile/query-server"
-, "backend/gateway/graphql-bff"]
+    "backend/gateway/graphql-bff"]
 resolver = "2"
 
 [workspace.package]

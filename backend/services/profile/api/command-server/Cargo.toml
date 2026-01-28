@@ -1,7 +1,7 @@
 # backend/services/profile/query-server/Cargo.toml
 
 [package]
-name = "profile-query-server"
+name = "profile-command-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

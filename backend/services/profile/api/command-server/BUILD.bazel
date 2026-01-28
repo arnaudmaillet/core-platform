@@ -3,7 +3,7 @@
 load("//:defs.bzl", "core_rust_binary")
 
 core_rust_binary(
-    name = "profile_query_server",
+    name = "profile_command",
     srcs = glob(["src/**/*.rs"]),
     edition = "2024",
     deps = [
