@@ -19,7 +19,6 @@ def core_rust_library(name, **kwargs):
 def core_rust_binary(name, **kwargs):
     # 1. On récupère la visibilité pour la transmettre aux cibles OCI
     vis = kwargs.get("visibility", ["//visibility:public"])
-    custom_tags = kwargs.pop("remote_tags", ["latest"])
 
     # 2. On garde la compilation Rust d'origine
     rust_binary(
@@ -51,7 +50,7 @@ def core_rust_binary(name, **kwargs):
         name = name + "_push",
         image = ":" + name + "_image",
         repository = ECR_REGISTRY + "/core-platform-" + name.replace("_", "-"),
-        remote_tags = custom_tags,
+        remote_tags = ["latest", "{STABLE_GIT_SHA}"],
     )
 
 def core_rust_test(name, **kwargs):

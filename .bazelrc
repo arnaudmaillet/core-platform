@@ -56,5 +56,6 @@ build --action_env=LD_LIBRARY_PATH
 # Permet de construire des images OCI sans avoir besoin d'un démon Docker local
 # (Très important pour la rapidité sur GitHub Actions)
 build --define=oci_go_binary=true
+build --workspace_status_command=tools/workspace_status.sh
 build:ci --extra_toolchains=@llvm_toolchain//:all
 build:ci --incompatible_enable_cc_toolchain_resolution

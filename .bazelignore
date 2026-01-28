@@ -1,2 +1,7 @@
-infrastructure/.terragrunt-cache
-infrastructure/.terraform
+# .bazelignore
+
+.terragrunt-cache
+.terraform
+node_modules
+target
+bazel-*
