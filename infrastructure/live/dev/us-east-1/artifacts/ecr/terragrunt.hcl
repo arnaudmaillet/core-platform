@@ -11,4 +11,9 @@ terraform {
 inputs = {
   project_name = "core-platform"
   env          = "dev"
+
+  service_names = [
+    "graphql-bff",
+    "profile-command-server",
+  ]
 }

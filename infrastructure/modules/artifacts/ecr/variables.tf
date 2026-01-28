@@ -12,6 +12,5 @@ variable "env" {
 
 variable "service_names" {
   type        = list(string)
-  description = "Liste des noms des microservices à créer"
-  default     = ["graphql-bff", "profile-command-server"]
+  description = "Liste des noms des services à créer en tant que dépôts ECR"
 }
