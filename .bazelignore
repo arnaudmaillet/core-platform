@@ -1,6 +1,7 @@
 # .bazelignore
 
 .terragrunt-cache
+**/ .terragrunt-cache
 .terraform
 node_modules
 target
