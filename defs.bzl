@@ -43,7 +43,6 @@ def core_rust_binary(name, **kwargs):
         entrypoint = ["/" + name],
         tars = [":" + name + "_layer"],
         visibility = vis,
-        stamp = 1,
     )
 
     # 5. Push : Commande pour envoyer vers ton ECR
