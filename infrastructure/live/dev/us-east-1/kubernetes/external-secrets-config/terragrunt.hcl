@@ -4,32 +4,26 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-# On définit EKS avec des mocks pour que le plan ne plante pas
+# On ne définit PAS de bloc terraform { source = ... }
+# car on génère tout nous-mêmes ci-dessous.
+# Terragrunt utilisera un dossier local vide par défaut.
+
 dependency "eks" {
   config_path = "../eks"
-
-  mock_outputs = {
-    cluster_endpoint              = "https://mock-endpoint.eks.amazonaws.com"
-    cluster_certificate_authority_data = "bW9jay1jYQ==" # 'mock-ca' en base64
-    cluster_name                  = "mock-cluster"
-  }
 }
 
-# L'opérateur n'a pas d'outputs obligatoires, on l'utilise surtout pour l'ordre
 dependency "operator" {
   config_path = "../external-secrets"
-
-  skip_outputs = true # Comme on n'utilise pas ses outputs, on évite les erreurs
+  skip_outputs = true
 }
 
-# 1. Manifeste du Store
+# 1. Manifeste du Store (garde ton code actuel)
 generate "manifests" {
   path      = "manifests.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
 resource "kubernetes_manifest" "cluster_secret_store" {
   manifest = {
-    # CHANGEMENT ICI : v1 au lieu de v1beta1
     apiVersion = "external-secrets.io/v1"
     kind       = "ClusterSecretStore"
     metadata = {
@@ -40,14 +34,6 @@ resource "kubernetes_manifest" "cluster_secret_store" {
         aws = {
           service = "SecretsManager"
           region  = "us-east-1"
-          auth = {
-            jwt = {
-              serviceAccountRef = {
-                name      = "external-secrets"
-                namespace = "external-secrets"
-              }
-            }
-          }
         }
       }
     }
@@ -56,7 +42,7 @@ resource "kubernetes_manifest" "cluster_secret_store" {
 EOF
 }
 
-# 2. Provider Kubernetes avec les variables de dépendance
+# 2. Provider Kubernetes (garde ton code actuel)
 generate "provider_kubernetes_config" {
   path      = "provider_k8s.tf"
   if_exists = "overwrite_terragrunt"

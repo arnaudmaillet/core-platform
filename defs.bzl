@@ -31,6 +31,8 @@ def core_rust_binary(name, **kwargs):
     tar(
         name = name + "_layer",
         srcs = [":" + name],
+        # mappe le chemin du binaire vers la racine /
+        mtree = ["{} mode=0755 time=0 type=file content=$(location :{})".format(name, name)],
         visibility = ["//visibility:private"],
     )
 

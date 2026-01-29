@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: profile-command-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: profile-command-server
+  template:
+    metadata:
+      labels:
+        app: profile-command-server
+    spec:
+      containers:
+        - name: profile-service
+          image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:a49fd24
+          ports:
+            - containerPort: 8080 # À ajuster selon le port de ton app Rust
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials # Le nom du secret K8s créé par ExternalSecret
+                  key: DB_URL               # La clé à l'intérieur du secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: profile-command-server
+  namespace: default
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: profile-command-server

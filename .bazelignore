@@ -1,6 +1,7 @@
-terragrunt-cache
-**/ .terragrunt-cache
 .terraform
+.terragrunt-cache
+terragrunt-cache
+
 node_modules
 target
 bazel-*

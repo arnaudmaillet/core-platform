@@ -5,7 +5,7 @@ include "root" {
 }
 
 terraform {
-  source = "${get_repo_root()}//infrastructure/modules/data/postgres"
+  source = "../../../../../modules/data/postgres"
 }
 
 dependency "vpc" {
