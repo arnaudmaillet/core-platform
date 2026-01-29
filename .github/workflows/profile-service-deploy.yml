@@ -39,6 +39,4 @@ jobs:
 
       - name: Bazel Build and Push
         run: |
-          SHA_TAG=$(echo ${{ github.sha }} | cut -c1-7)
-          bazel run --config=ci //backend/services/profile/api/command-server:profile_command_server_push \
-            --@rules_oci//oci:remote_tag=$SHA_TAG
+          bazel run --config=ci //backend/services/profile/api/command-server:profile_command_server_push

@@ -40,6 +40,4 @@ jobs:
       # Exécution du build et du push vers AWS
       - name: Bazel Build and Push
         run: |
-          SHA_TAG=$(echo ${{ github.sha }} | cut -c1-7)
-          bazel run --config=ci //backend/gateway/graphql-bff:graphql_bff_push \
-          --@rules_oci//oci:remote_tag=$SHA_TAG
+          bazel run --config=ci //backend/gateway/graphql-bff:graphql_bff_push
