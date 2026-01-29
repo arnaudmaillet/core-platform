@@ -43,21 +43,22 @@ def core_rust_binary(name, **kwargs):
         entrypoint = ["/" + name],
         tars = [":" + name + "_layer"],
         visibility = vis,
+        stamp = 1,
     )
 
     # 5. Push : Commande pour envoyer vers ton ECR
     native.genrule(
         name = name + "_tags",
         outs = [name + "_tags.txt"],
-        cmd = "echo 'latest' > $@ && echo '{STABLE_GIT_SHA}' >> $@",
-        stamp = 1, # TRÈS IMPORTANT : active le remplacement des variables
+        cmd = "echo 'latest' > $@ && grep 'STABLE_GIT_SHA' bazel-out/stable-status.txt | cut -d ' ' -f 2 >> $@",
+        stamp = 1,
     )
 
     oci_push(
         name = name + "_push",
         image = ":" + name + "_image",
         repository = ECR_REGISTRY + "/core-platform-" + name.replace("_", "-"),
-        remote_tags = ":" + name + "_tags", # On pointe vers le fichier généré
+        remote_tags = ":" + name + "_tags",
     )
 
 def core_rust_test(name, **kwargs):
