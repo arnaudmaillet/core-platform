@@ -8,6 +8,11 @@ output "cluster_name" {
   value = module.eks.cluster_name
 }
 
+output "node_security_group_id" {
+  description = "ID du Security Group des workers EKS"
+  value       = module.eks.node_security_group_id
+}
+
 output "cluster_certificate_authority_data" {
   value = module.eks.cluster_certificate_authority_data
 }

@@ -1,3 +1,5 @@
+// crates/shared-kernel/src/infrastructure/scylla/factories/scylla_factory.rs
+
 use std::sync::Arc;
 use std::time::Duration;
 use scylla::client::session::Session;

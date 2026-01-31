@@ -1,3 +1,5 @@
+# infrastructure/root.hcl
+
 # ---------------------------------------------------------------------------------------------------------------------
 # CONFIGURATION GLOBALE TERRAGRUNT
 # Centralise la gestion du State S3, du verrouillage DynamoDB et des Providers.

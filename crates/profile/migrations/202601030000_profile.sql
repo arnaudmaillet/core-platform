@@ -1,3 +1,5 @@
+-- crates/profile/migrations/202601030000_profile.sql
+
 -- 1. USER PROFILES (Social View)
 CREATE TABLE IF NOT EXISTS user_profiles (
                                              account_id UUID NOT NULL,

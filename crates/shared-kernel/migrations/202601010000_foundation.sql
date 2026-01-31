@@ -1,3 +1,5 @@
+-- crates/shared-kernel/migrations/202601010000_foundation.sql
+
 -- 0. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS postgis;
 

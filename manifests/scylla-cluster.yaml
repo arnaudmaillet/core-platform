@@ -1,0 +1,24 @@
+apiVersion: scylla.scylladb.com/v1
+kind: ScyllaCluster
+metadata:
+  name: scylla-dev
+  namespace: default
+spec:
+  agentVersion: 3.0.0
+  version: 5.4.0
+  developerMode: true # Crucial pour le dev sur t3.medium
+  datacenter:
+    name: dc1
+    racks:
+      - name: rack1
+        members: 1
+        storage:
+          capacity: 10Gi
+          storageClassName: gp3 # Utilise la StorageClass qu'on a créée via Terraform
+        resources:
+          limits:
+            cpu: 1
+            memory: 2Gi
+          requests:
+            cpu: 1
+            memory: 2Gi
