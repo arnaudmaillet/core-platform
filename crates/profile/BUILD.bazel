@@ -6,6 +6,7 @@ core_rust_library(
     name = "profile",
     srcs = glob(["src/**/*.rs"]),
     edition = "2024",
+    compile_data = glob(["migrations/**"]),
     crate_features = [
         "postgres",
         "concurrency",
@@ -33,9 +34,15 @@ core_rust_library(
         "@crates//:tracing",
         "@crates//:elasticsearch",
         "@crates//:scylla",
-        "@crates//:futures-util",
+        "@crates//:futures-util"
     ],
     proc_macro_deps = [
         "@crates//:async-trait",
     ],
+)
+
+filegroup(
+    name = "migration_files",
+    srcs = glob(["migrations/**/*"]),
+    visibility = ["//visibility:public"],
 )

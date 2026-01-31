@@ -20,6 +20,8 @@ use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_ser
 use profile::infrastructure::api::grpc::profile_v1::profile_media_service_server::ProfileMediaServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_server::ProfileMetadataServiceServer;
 // Infrastructure - Repositories (Spécifiques au Profile)
+use profile::infrastructure::postgres::utils::run_postgres_migrations;
+use profile::infrastructure::scylla::utils::run_scylla_migrations;
 use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
 use profile::infrastructure::repositories::CompositeProfileRepository;
@@ -43,9 +45,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db_config.max_connections = 5;
     let pool = create_postgres_pool(&db_config).await?;
 
+    run_postgres_migrations(&pool).await?;
+
     // Configuration et création de la session ScyllaDB (Shared Kernel)
     let scylla_config = ScyllaConfig::from_env()?;
     let scylla_session = create_scylla_session(&scylla_config).await?;
+
+    run_scylla_migrations(&scylla_session).await?;
 
     // --- 2. INITIALISATION DES REPOSITORIES (Infrastructure) ---
 

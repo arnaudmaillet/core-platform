@@ -10,20 +10,25 @@ DEFAULT_EDITION = "2024"
 ECR_REGISTRY = "724772065879.dkr.ecr.us-east-1.amazonaws.com"
 
 def core_rust_library(name, **kwargs):
+    compile_data = kwargs.pop("compile_data", [])
+
     rust_library(
         name = name,
         edition = kwargs.pop("edition", DEFAULT_EDITION),
+        compile_data = compile_data,
         **kwargs
     )
 
 def core_rust_binary(name, **kwargs):
     # 1. On récupère la visibilité pour la transmettre aux cibles OCI
     vis = kwargs.get("visibility", ["//visibility:public"])
+    compile_data = kwargs.pop("compile_data", [])
 
     # 2. On garde la compilation Rust d'origine
     rust_binary(
         name = name,
         edition = kwargs.pop("edition", DEFAULT_EDITION),
+        compile_data = compile_data,
         **kwargs
     )
 
