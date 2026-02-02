@@ -37,7 +37,7 @@ impl CompositeProfileRepository {
         match profile_opt {
             Some(mut profile) => {
                 if let Ok(Some(scylla_stats)) = stats_res {
-                    profile.stats = scylla_stats;
+                    profile.restore_stats(scylla_stats)
                 }
                 Ok(Some(profile))
             },
@@ -61,7 +61,7 @@ impl ProfileRepository for CompositeProfileRepository {
                 // Si Scylla répond, on injecte les compteurs réels.
                 // Sinon (ex: Scylla temporairement down), on garde les stats par défaut (0).
                 if let Ok(Some(scylla_stats)) = stats_res {
-                    profile.stats = scylla_stats;
+                    profile.restore_stats(scylla_stats)
                 }
                 Ok(Some(profile))
             },
@@ -76,7 +76,7 @@ impl ProfileRepository for CompositeProfileRepository {
         match id_opt {
             Some(profile) => {
                 // 2. Si trouvé, on récupère les stats par ID dans Scylla
-                let stats_res = self.stats.find_by_id(&profile.account_id, reg).await;
+                let stats_res = self.stats.find_by_id(&profile.account_id(), reg).await;
                 self.merge_identity_and_stats(Some(profile), stats_res)
             },
             None => Ok(None)

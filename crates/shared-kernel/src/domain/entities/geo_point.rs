@@ -10,14 +10,14 @@ pub struct GeoPoint {
 }
 
 impl GeoPoint {
-    pub fn try_new(lat: f64, lon: f64) -> Result<Self> {
+    pub fn try_new(lon: f64, lat: f64) -> Result<Self> {
         Ok(Self {
             latitude: Latitude::try_new(lat)?,
             longitude: Longitude::try_new(lon)?,
         })
     }
 
-    pub fn from_raw(lat: f64, lon: f64) -> Self {
+    pub fn from_raw(lon: f64, lat: f64) -> Self {
         Self {
             latitude: Latitude::from_raw(lat),
             longitude: Longitude::from_raw(lon),
@@ -61,11 +61,15 @@ impl std::str::FromStr for GeoPoint {
     fn from_str(s: &str) -> Result<Self> {
         let parts: Vec<&str> = s.split(',').collect();
         if parts.len() != 2 {
-            return Err(DomainError::Validation { field: "geopoint", reason: "Format 'lat,lon' expected".to_string() });
+            return Err(DomainError::Validation {
+                field: "geopoint",
+                reason: "Format 'lon,lat' expected".to_string()
+            });
         }
 
-        let lat = Latitude::from_str(parts[0])?;
-        let lon = Longitude::from_str(parts[1])?;
+        // On inverse ici pour être cohérent avec le reste du struct
+        let lon = Longitude::from_str(parts[0])?;
+        let lat = Latitude::from_str(parts[1])?;
 
         Ok(Self { latitude: lat, longitude: lon })
     }

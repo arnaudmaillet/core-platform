@@ -1,9 +1,11 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::AggregateMetadata;
+use uuid::Uuid;
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
 use shared_kernel::domain::value_objects::{Counter, LocationLabel, RegionCode, Url, AccountId, Username};
 use crate::domain::entities::Profile;
+use crate::domain::events::ProfileEvent;
 use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
 
 pub struct ProfileBuilder {
@@ -44,7 +46,7 @@ impl ProfileBuilder {
             stats: ProfileStats::default(),
             post_count: Counter::default(),
             is_private: false,
-            version: 1, // Par défaut pour un nouveau
+            version: 1,
             created_at: None,
         }
     }
@@ -67,8 +69,8 @@ impl ProfileBuilder {
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Profile {
-        Profile {
-            account_id: account_id,
+        Profile::restore(
+            account_id,
             region_code,
             display_name,
             username,
@@ -77,15 +79,13 @@ impl ProfileBuilder {
             banner_url,
             location_label,
             social_links,
-            stats: ProfileStats::default(),
             post_count,
             is_private,
+            version,
             created_at,
             updated_at,
-            metadata: AggregateMetadata::restore(version),
-        }
+        )
     }
-
     // --- SETTERS (Uniquement utiles pour le chemin Création) ---
 
     pub fn bio(mut self, bio: Bio) -> Self { self.bio = Some(bio); self }
@@ -104,22 +104,38 @@ impl ProfileBuilder {
     /// Finalisation pour la CREATION
     pub fn build(self) -> Profile {
         let now = Utc::now();
-        Profile {
-            account_id: self.account_id,
-            region_code: self.region_code,
-            display_name: self.display_name,
-            username: self.username,
-            bio: self.bio,
-            avatar_url: self.avatar_url,
-            banner_url: self.banner_url,
-            location_label: self.location_label,
-            social_links: self.social_links,
-            stats: self.stats,
-            post_count: self.post_count,
-            is_private: self.is_private,
-            created_at: self.created_at.unwrap_or(now),
-            updated_at: now,
-            metadata: AggregateMetadata::new(self.version),
-        }
+        Profile::new_from_builder(
+            self.account_id,
+            self.region_code,
+            self.display_name,
+            self.username,
+            self.bio,
+            self.avatar_url,
+            self.banner_url,
+            self.location_label,
+            self.social_links,
+            self.stats,
+            self.post_count,
+            self.is_private,
+            self.created_at.unwrap_or(now),
+            now,
+            self.version,
+        )
+    }
+
+    pub fn build_new(self) -> Profile {
+        let mut profile = self.build(); // Utilise ton build() actuel
+
+        // On enregistre l'événement de création dans l'agrégat
+        profile.add_event(Box::new(ProfileEvent::ProfileCreated {
+            id: Uuid::now_v7(),
+            account_id: profile.account_id().clone(),
+            region: profile.region_code().clone(),
+            display_name: profile.display_name().clone(),
+            username: profile.username().clone(),
+            occurred_at: profile.created_at(),
+        }));
+
+        profile
     }
 }

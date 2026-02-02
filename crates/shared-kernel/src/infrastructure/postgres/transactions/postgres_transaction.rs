@@ -7,15 +7,21 @@ use crate::errors::{Result, DomainError};
 
 /// 1. La Structure (Le Conteneur)
 pub struct PostgresTransaction {
-    inner: PostgresTx<'static, Postgres>,
+    inner: Option<PostgresTx<'static, Postgres>>,
 }
 
 impl PostgresTransaction {
     pub fn new(tx: PostgresTx<'static, Postgres>) -> Self {
-        Self { inner: tx }
+        Self { inner: Some(tx) }
     }
     pub fn get_mut(&mut self) -> &mut PostgresTx<'static, Postgres> {
-        &mut self.inner
+        // .as_mut() permet d'emprunter le contenu de l'Option sans le prendre
+        self.inner.as_mut().expect("Transaction already consumed")
+    }
+
+    pub fn into_inner(mut self) -> PostgresTx<'static, Postgres> {
+        // .take() prend la valeur et laisse None à la place
+        self.inner.take().expect("Transaction already consumed")
     }
 }
 

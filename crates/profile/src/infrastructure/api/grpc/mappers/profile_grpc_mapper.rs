@@ -1,5 +1,6 @@
 // crates/profile/src/infrastructure/api/grpc/mappers/profile_grpc_mapper.rs
 
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
 use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
@@ -12,21 +13,21 @@ use super::super::profile_v1::{
 impl From<Profile> for ProtoProfile {
     fn from(domain: Profile) -> Self {
         Self {
-            account_id: domain.account_id.to_string(),
-            region_code: domain.region_code.to_string(),
-            username: domain.username.to_string(),
-            display_name: domain.display_name.to_string(),
-            bio: domain.bio.map(|b| b.to_string().into()),
-            avatar_url: domain.avatar_url.map(|u| u.to_string().into()),
-            banner_url: domain.banner_url.map(|u| u.to_string().into()),
-            location_label: domain.location_label.map(|l| l.to_string().into()),
-            social_links: domain.social_links.map(|s| s.into()),
-            stats: Some(domain.stats.into()),
-            post_count: domain.post_count.value() as i64,
-            is_private: domain.is_private,
-            created_at: Some(to_timestamp(domain.created_at)),
-            updated_at: Some(to_timestamp(domain.updated_at)),
-            version: domain.metadata.version as i64,
+            account_id: domain.account_id().to_string(),
+            region_code: domain.region_code().to_string(),
+            username: domain.username().to_string(),
+            display_name: domain.display_name().to_string(),
+            bio: domain.bio().map(|b| b.to_string().into()),
+            avatar_url: domain.avatar_url().map(|u| u.to_string().into()),
+            banner_url: domain.banner_url().map(|u| u.to_string().into()),
+            location_label: domain.location_label().map(|l| l.to_string().into()),
+            social_links: domain.social_links().map(|s| s.clone().into()),
+            stats: Some(domain.stats().clone().into()),
+            post_count: domain.post_count() as i64,
+            is_private: domain.is_private(),
+            created_at: Some(to_timestamp(domain.created_at())),
+            updated_at: Some(to_timestamp(domain.updated_at())),
+            version: domain.metadata().version() as i64,
         }
     }
 }

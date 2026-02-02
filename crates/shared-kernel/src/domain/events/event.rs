@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use uuid::Uuid;
+use crate::domain::value_objects::RegionCode;
 
 #[async_trait]
 pub trait DomainEvent: DynClone + Debug + Send + Sync {
@@ -15,6 +16,9 @@ pub trait DomainEvent: DynClone + Debug + Send + Sync {
     fn event_id(&self) -> Uuid {
         Uuid::now_v7()
     }
+
+    /// La région d'origine de l'événement (Crucial pour le routage et la souveraineté)
+    fn region_code(&self) -> RegionCode;
 
     /// Nom de l'événement (ex: "user.profile.updated")
     fn event_type(&self) -> Cow<'_, str>;

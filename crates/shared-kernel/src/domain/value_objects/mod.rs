@@ -1,5 +1,4 @@
 mod value_object;
-mod geo_point;
 mod longitude;
 mod latitude;
 mod counter;
@@ -17,7 +16,6 @@ mod username;
 mod post_id;
 
 pub use value_object::ValueObject;
-pub use geo_point::GeoPoint;
 pub use latitude::Latitude;
 pub use longitude::Longitude;
 pub use counter::Counter;

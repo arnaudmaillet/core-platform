@@ -1,5 +1,6 @@
 mod decrement_post_count_command;
 mod decrement_post_count_use_case;
+mod decrement_post_count_use_case_test;
 
 pub use decrement_post_count_use_case::DecrementPostCountUseCase;
 pub use decrement_post_count_command::DecrementPostCountCommand;

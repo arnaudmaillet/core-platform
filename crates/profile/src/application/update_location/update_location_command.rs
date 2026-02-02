@@ -1,5 +1,5 @@
-
-use shared_kernel::domain::value_objects::{GeoPoint, RegionCode, AccountId};
+use shared_kernel::domain::entities::GeoPoint;
+use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
 
 pub struct UpdateLocationCommand {

@@ -46,12 +46,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = create_postgres_pool(&db_config).await?;
 
     run_postgres_migrations(&pool).await?;
+    println!("✅ Postgres migrations completed.");
 
     // Configuration et création de la session ScyllaDB (Shared Kernel)
     let scylla_config = ScyllaConfig::from_env()?;
     let scylla_session = create_scylla_session(&scylla_config).await?;
 
     run_scylla_migrations(&scylla_session).await?;
+    println!("✅ ScyllaDB migrations completed.");
 
     // --- 2. INITIALISATION DES REPOSITORIES (Infrastructure) ---
 

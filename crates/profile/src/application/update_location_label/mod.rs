@@ -1,5 +1,6 @@
 mod update_location_label_command;
 mod update_location_label_use_case;
+mod update_location_label_use_case_test;
 
 pub use update_location_label_command::UpdateLocationLabelCommand;
 pub use update_location_label_use_case::UpdateLocationLabelUseCase;

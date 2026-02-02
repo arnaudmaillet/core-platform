@@ -64,10 +64,10 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
             let (followers, following) = row_result
                 .map_err(|e| DomainError::Infrastructure(format!("Row parsing error: {}", e)))?;
 
-            let stats = ProfileStats {
-                follower_count: Counter::try_from(followers)?,
-                following_count: Counter::try_from(following)?,
-            };
+            let stats = ProfileStats::new(
+                followers.max(0) as u64,
+                following.max(0) as u64
+            );
 
             return Ok(Some(stats));
         }

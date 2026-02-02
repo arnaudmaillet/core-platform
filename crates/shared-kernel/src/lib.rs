@@ -5,3 +5,4 @@ pub mod application;
 pub mod errors;
 pub mod clock;
 pub mod infrastructure;
+pub mod utils;

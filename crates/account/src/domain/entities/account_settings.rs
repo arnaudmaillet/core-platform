@@ -84,6 +84,7 @@ impl AccountSettings {
 
         self.add_event(Box::new(AccountEvent::TimezoneChanged {
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             new_timezone: new_tz,
             occurred_at: self.updated_at,
         }));
@@ -107,6 +108,7 @@ impl AccountSettings {
 
         self.add_event(Box::new(AccountEvent::PushTokenAdded {
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             token,
             occurred_at: self.updated_at,
         }));
@@ -127,6 +129,7 @@ impl AccountSettings {
 
         self.add_event(Box::new(AccountEvent::PushTokenRemoved {
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             token: token.clone(),
             occurred_at: self.updated_at,
         }));
@@ -166,6 +169,7 @@ impl AccountSettings {
             self.updated_at = Utc::now();
             self.add_event(Box::new(AccountEvent::AccountSettingsUpdated {
                 account_id: self.account_id.clone(),
+                region: self.region_code.clone(),
                 occurred_at: self.updated_at,
             }));
         }

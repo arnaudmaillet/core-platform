@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use rand::Rng;
-use shared_kernel::domain::value_objects::GeoPoint;
+use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::errors::Result;
 use crate::application::get_nearby_users::{GetNearbyUsersCommand, NearbyUserDto};
 use crate::domain::repositories::LocationRepository;
@@ -30,23 +30,23 @@ impl GetNearbyUsersUseCase {
 
         for (loc, distance) in raw_results {
             // Ne pas s'inclure soi-même dans les résultats
-            if loc.account_id == cmd.account_id {
+            if loc.account_id().clone() == cmd.account_id {
                 continue;
             }
 
             // 2. Application de la logique de Privacy (Obfuscation)
-            let (final_coords, is_obfuscated) = if loc.privacy_radius_meters > 0 {
+            let (final_coords, is_obfuscated) = if loc.privacy_radius_meters() > 0 {
                 // Si l'utilisateur a un rayon de 500m, on déplace ses coordonnées
                 (
-                    self.obfuscate_location(&loc.coordinates, loc.privacy_radius_meters, &mut rng),
+                    self.obfuscate_location(&loc.coordinates(), loc.privacy_radius_meters(), &mut rng),
                     true
                 )
             } else {
-                (loc.coordinates, false)
+                (loc.coordinates().clone(), false)
             };
 
             dtos.push(NearbyUserDto {
-                account_id: loc.account_id,
+                account_id: loc.account_id().clone(),
                 coordinates: final_coords,
                 distance_meters: distance,
                 is_obfuscated,
@@ -57,7 +57,7 @@ impl GetNearbyUsersUseCase {
     }
 
     /// Algorithme de floutage : déplace un point de manière aléatoire dans un rayon donné
-    fn obfuscate_location(&self, point: &GeoPoint, radius_meters: i32, rng: &mut impl Rng) -> GeoPoint {
+    pub(crate) fn obfuscate_location(&self, point: &GeoPoint, radius_meters: i32, rng: &mut impl Rng) -> GeoPoint {
         let radius_in_degrees = (radius_meters as f64) / 111320.0;
 
         let u: f64 = rng.random();

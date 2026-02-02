@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::AggregateMetadata;
-use shared_kernel::domain::value_objects::{GeoPoint, RegionCode, AccountId};
+use shared_kernel::domain::entities::GeoPoint;
+use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use crate::domain::entities::UserLocation;
 use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
 
@@ -18,7 +18,6 @@ pub struct UserLocationBuilder {
 
 impl UserLocationBuilder {
     /// CHEMIN 1 : CRÉATION (Nouveau signal GPS reçu)
-    /// Utilisé par les services/use cases. Initialise avec version 1 et NOW.
     pub fn new(account_id: AccountId, region_code: RegionCode, coordinates: GeoPoint) -> Self {
         Self {
             account_id,
@@ -33,9 +32,7 @@ impl UserLocationBuilder {
         }
     }
 
-    /// CHEMIN 2 : RESTAURATION (Depuis la base de données)
-    /// Utilisé exclusivement par les Repositories.
-    /// Injection directe du AggregateMetadata::new_restored.
+    /// CHEMIN 2 : RESTAURATION (Statique, retourne directement l'entité)
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
         account_id: AccountId,
@@ -48,8 +45,8 @@ impl UserLocationBuilder {
         updated_at: DateTime<Utc>,
         version: i32,
     ) -> UserLocation {
-        UserLocation {
-            account_id: account_id,
+        UserLocation::restore(
+            account_id,
             region_code,
             coordinates,
             metrics,
@@ -57,12 +54,11 @@ impl UserLocationBuilder {
             is_ghost_mode,
             privacy_radius_meters,
             updated_at,
-            // On restaure l'état technique sans lever d'événements
-            metadata: AggregateMetadata::restore(version),
-        }
+            version,
+        )
     }
 
-    // --- SETTERS (Chemin Création) ---
+    // --- SETTERS ---
 
     pub fn with_metrics(mut self, metrics: Option<LocationMetrics>) -> Self {
         self.metrics = metrics;
@@ -80,19 +76,18 @@ impl UserLocationBuilder {
         self
     }
 
-    /// Finalise pour une CRÉATION
     pub fn build(self) -> UserLocation {
-        UserLocation {
-            account_id: self.account_id,
-            region_code: self.region_code,
-            coordinates: self.coordinates,
-            metrics: self.metrics,
-            movement: self.movement,
-            is_ghost_mode: self.is_ghost_mode,
-            privacy_radius_meters: self.privacy_radius_meters,
-            updated_at: self.updated_at,
-            // Nouvelle instance avec versioning activé
-            metadata: AggregateMetadata::new(self.version),
-        }
+        UserLocation::new_from_builder(
+            self.account_id,
+            self.region_code,
+            self.coordinates,
+            self.metrics,
+            self.movement,
+            self.is_ghost_mode,
+            self.privacy_radius_meters,
+            self.updated_at,
+            self.version,
+            false,
+        )
     }
 }

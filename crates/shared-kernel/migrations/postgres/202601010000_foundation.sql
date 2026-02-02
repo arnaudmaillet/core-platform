@@ -1,10 +1,10 @@
--- crates/shared-kernel/migrations/202601010000_foundation.sql
+-- crates/shared-kernel/migrations/postgres/202601010000_foundation.sql
 
 -- 0. EXTENSIONS
-CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS postgis SCHEMA public;
 
 -- 1. UTILITIES
-CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+CREATE OR REPLACE FUNCTION public.trigger_set_timestamp()
     RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();

@@ -7,6 +7,7 @@ edition.workspace = true
 
 [features]
 default = []
+test-utils = []
 
 # --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
@@ -72,3 +73,8 @@ regex = { workspace = true }
 seahash = { workspace = true }
 unicode-normalization = { workspace = true }
 dyn-clone = { workspace = true}
+
+[dev-dependencies]
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+

@@ -8,6 +8,7 @@ use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::create_profile::CreateProfileCommand;
+use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 
@@ -34,11 +35,15 @@ impl CreateProfileUseCase {
 
     async fn try_execute_once(&self, cmd: &CreateProfileCommand) -> Result<Profile> {
         // 1. Instanciation via le domaine
-        let mut profile = Profile::new_initial(
-            cmd.account_id.clone(),
-            cmd.region.clone(),
-            cmd.display_name.clone(),
-            cmd.username.clone(),
+        let mut profile = Profile::create(
+            ProfileBuilder::new(
+                cmd.account_id.clone(),
+                cmd.region.clone(),
+                cmd.display_name.clone(),
+                cmd.username.clone(),
+            )
+                .is_private(false)
+                .build()
         );
 
         // 2. Extraction des événements et préparation de la donnée
@@ -54,11 +59,11 @@ impl CreateProfileUseCase {
 
             Box::pin(async move {
                 // Check d'unicité métier (avant insertion)
-                if repo.exists_by_username(&profile.username, &profile.region_code).await? {
+                if repo.exists_by_username(&profile.username(), &profile.region_code()).await? {
                     return Err(DomainError::AlreadyExists {
                         entity: "Profile",
                         field: "username",
-                        value: profile.username.as_str().to_string(),
+                        value: profile.username().as_str().to_string(),
                     });
                 }
 

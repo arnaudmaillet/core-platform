@@ -26,6 +26,7 @@ pub enum ProfileEvent {
     UsernameChanged {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_username: Username,
         new_username: Username,
         occurred_at: DateTime<Utc>,
@@ -34,6 +35,7 @@ pub enum ProfileEvent {
     DisplayNameChanged {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_display_name: DisplayName,
         new_display_name: DisplayName,
         occurred_at: DateTime<Utc>,
@@ -43,6 +45,7 @@ pub enum ProfileEvent {
     AvatarUpdated {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_avatar_url: Option<Url>,
         new_avatar_url: Url,
         occurred_at: DateTime<Utc>,
@@ -51,6 +54,7 @@ pub enum ProfileEvent {
     AvatarRemoved {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_avatar_url: Option<Url>,
         occurred_at: DateTime<Utc>,
     },
@@ -58,6 +62,7 @@ pub enum ProfileEvent {
     BannerUpdated {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_banner_url: Option<Url>,
         new_banner_url: Url,
         occurred_at: DateTime<Utc>,
@@ -66,6 +71,7 @@ pub enum ProfileEvent {
     BannerRemoved {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_banner_url: Option<Url>,
         occurred_at: DateTime<Utc>,
     },
@@ -73,6 +79,7 @@ pub enum ProfileEvent {
     BioUpdated {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_bio: Option<Bio>,
         new_bio: Option<Bio>,
         occurred_at: DateTime<Utc>,
@@ -82,6 +89,7 @@ pub enum ProfileEvent {
     LocationLabelUpdated {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_location: Option<LocationLabel>,
         new_location: Option<LocationLabel>,
         occurred_at: DateTime<Utc>,
@@ -91,6 +99,7 @@ pub enum ProfileEvent {
     SocialLinksUpdated {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         old_links: Option<SocialLinks>,
         new_links: Option<SocialLinks>,
         occurred_at: DateTime<Utc>,
@@ -108,6 +117,7 @@ pub enum ProfileEvent {
     PostCountIncremented {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         post_id: Uuid,
         new_count: u64,
         occurred_at: DateTime<Utc>,
@@ -116,6 +126,7 @@ pub enum ProfileEvent {
     PostCountDecremented {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         post_id: Uuid,
         new_count: u64,
         occurred_at: DateTime<Utc>,
@@ -125,6 +136,7 @@ pub enum ProfileEvent {
     StatsSnapshotUpdated {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         follower_count: u64,
         following_count: u64,
         post_count: u64,
@@ -177,6 +189,26 @@ impl DomainEvent for ProfileEvent {
             Self::PostCountDecremented { .. } => Cow::Borrowed("profile.post_count.decremented"),
             Self::StatsSnapshotUpdated { .. } => Cow::Borrowed("profile.stats.snapshot"),
             Self::ProfileDeleted { .. } => Cow::Borrowed("profile.deleted"),
+        }
+    }
+
+    fn region_code(&self) -> RegionCode {
+        match self {
+            Self::ProfileCreated { region, .. } |
+            Self::UsernameChanged { region, .. } |
+            Self::DisplayNameChanged { region, .. } |
+            Self::AvatarUpdated { region, .. } |
+            Self::AvatarRemoved { region, .. } |
+            Self::BannerUpdated { region, .. } |
+            Self::BannerRemoved { region, .. } |
+            Self::BioUpdated { region, .. } |
+            Self::LocationLabelUpdated { region, .. } |
+            Self::SocialLinksUpdated { region, .. } |
+            Self::PrivacySettingsChanged { region, .. } |
+            Self::StatsSnapshotUpdated { region, .. } |
+            Self::PostCountIncremented { region, .. } |
+            Self::PostCountDecremented { region, .. } |
+            Self::ProfileDeleted { region, .. } => region.clone(),
         }
     }
 

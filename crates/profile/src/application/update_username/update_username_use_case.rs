@@ -64,11 +64,11 @@ impl UpdateUsernameUseCase {
             Box::pin(async move {
                 // PROTECTION CRITIQUE : Double vérification d'unicité à l'intérieur de la transaction
                 // Empêche deux utilisateurs de prendre le même slug simultanément
-                if repo.exists_by_username(&profile.username, &profile.region_code).await? {
+                if repo.exists_by_username(&profile.username(), &profile.region_code()).await? {
                     return Err(DomainError::AlreadyExists {
                         entity: "Profile",
                         field: "username",
-                        value: profile.username.as_str().to_string(),
+                        value: profile.username().as_str().to_string(),
                     });
                 }
 

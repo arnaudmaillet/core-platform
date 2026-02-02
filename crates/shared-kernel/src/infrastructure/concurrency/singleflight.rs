@@ -45,33 +45,41 @@ where
         F: FnOnce() -> Fut,
         Fut: Future<Output = AppResult<T>> + Send + 'static,
     {
-        // 1. Tenter de récupérer une requête déjà en cours
-        if let Some(shared_fut) = self.requests.get(&key) {
-            return match shared_fut.value().clone().await {
-                Ok(result) => result,
-                Err(_) => Err(AppError::new(
-                    ErrorCode::InternalError,
-                    "Singleflight sender dropped".to_string()
-                )),
-            };
+        use dashmap::mapref::entry::Entry;
+
+        // On utilise Entry pour faire un Check-and-Insert ATOMIQUE
+        let shared_fut = match self.requests.entry(key.clone()) {
+            Entry::Occupied(entry) => {
+                // Déjà un leader en cours, on récupère son futur partagé
+                entry.get().clone()
+            }
+            Entry::Vacant(entry) => {
+                // On est le leader !
+                let (tx, rx) = oneshot::channel();
+                let shared_rx = rx.shared();
+                entry.insert(shared_rx.clone());
+
+                // On lance le travail réel
+                // Note : On sort du verrou DashMap avant le .await pour ne pas bloquer les autres
+                let result = factory().await;
+
+                // On diffuse le résultat
+                let _ = tx.send(result.clone());
+
+                // Nettoyage immédiat après le travail
+                self.requests.remove(&key);
+
+                return result;
+            }
+        };
+
+        // Si on arrive ici, on est un "suiveur", on attend le résultat du leader
+        match shared_fut.await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::new(
+                ErrorCode::InternalError,
+                "Singleflight leader panicked or dropped".to_string(),
+            )),
         }
-
-        // 2. Préparer le canal de communication
-        let (tx, rx) = oneshot::channel();
-        let shared_rx = rx.shared();
-
-        // On insère dans la map (on clone la version partagée)
-        self.requests.insert(key.clone(), shared_rx.clone());
-
-        // 3. Exécuter la factory (le travail réel)
-        let result = factory().await;
-
-        // 4. Envoyer le résultat à tous les Receiver en attente
-        let _ = tx.send(result.clone());
-
-        // 5. Nettoyage
-        self.requests.remove(&key);
-
-        result
     }
 }

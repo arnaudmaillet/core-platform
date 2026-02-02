@@ -70,7 +70,7 @@ impl From<&Account> for PostgresAccountRow {
             account_state: PostgresAccountState::from(a.account_state.clone()),
             birth_date: a.birth_date.as_ref().map(|d| d.value()),
             locale: a.locale.as_str().to_string(),
-            version: a.metadata.version,
+            version: a.version(),
             created_at: a.created_at,
             updated_at: a.updated_at,
             last_active_at: a.last_active_at,

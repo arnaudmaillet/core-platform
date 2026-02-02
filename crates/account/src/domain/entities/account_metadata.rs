@@ -43,6 +43,7 @@ impl AccountMetadata {
 
         self.add_event(Box::new(AccountEvent::BetaStatusChanged {
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             is_beta_tester: status,
             occurred_at: self.updated_at,
         }));
@@ -62,6 +63,7 @@ impl AccountMetadata {
         self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
             id: action_id,
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             delta,
             new_score: self.trust_score,
             reason,
@@ -78,6 +80,7 @@ impl AccountMetadata {
         self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
             id: action_id,
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             delta,
             new_score: self.trust_score,
             reason: reason.clone(),
@@ -103,6 +106,7 @@ impl AccountMetadata {
 
             self.add_event(Box::new(AccountEvent::ShadowbanStatusChanged {
                 account_id: self.account_id.clone(),
+                region: self.region_code.clone(),
                 is_shadowbanned: false,
                 reason,
                 occurred_at: self.updated_at,
@@ -126,6 +130,7 @@ impl AccountMetadata {
         // 3. Capture de l'événement
         self.add_event(Box::new(AccountEvent::AccountRoleChanged {
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_role,
             new_role,
             reason,
@@ -204,6 +209,7 @@ impl AccountMetadata {
 
         self.add_event(Box::new(AccountEvent::ShadowbanStatusChanged {
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             is_shadowbanned: true,
             reason,
             occurred_at: self.updated_at,

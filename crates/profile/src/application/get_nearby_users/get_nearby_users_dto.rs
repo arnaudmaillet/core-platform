@@ -1,7 +1,8 @@
 // crates/profile/src/application/use_cases/get_nearby_users/dto.rs
 
 use serde::Serialize;
-use shared_kernel::domain::value_objects::{GeoPoint, AccountId};
+use shared_kernel::domain::entities::GeoPoint;
+use shared_kernel::domain::value_objects::{AccountId};
 
 #[derive(Serialize)]
 pub struct NearbyUserDto {

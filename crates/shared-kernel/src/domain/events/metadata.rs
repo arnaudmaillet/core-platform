@@ -8,12 +8,17 @@ use crate::domain::events::DomainEvent;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AggregateMetadata {
-    pub version: i32,
+    version: i32,
     #[serde(skip)]
     events: Vec<Box<dyn DomainEvent>>,
 }
 
 impl AggregateMetadata {
+
+    pub fn version(&self) -> i32 {
+        self.version
+    }
+    
     /// Crée une nouvelle instance (par défaut version 1 pour une création)
     pub fn new(version: i32) -> Self {
         Self {
@@ -90,7 +95,7 @@ impl Clone for AggregateMetadata {
     fn clone(&self) -> Self {
         Self {
             version: self.version,
-            events: self.events.clone(),
+            events: Vec::new(),
         }
     }
 }

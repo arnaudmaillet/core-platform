@@ -68,6 +68,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::ExternalIdentityLinked {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             external_id,
             occurred_at: self.updated_at,
         }));
@@ -93,6 +94,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::EmailChanged {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             old_email,
             new_email,
             occurred_at: self.updated_at,
@@ -115,6 +117,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::EmailVerified {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -137,6 +140,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::PhoneNumberChanged {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             old_phone_number,
             new_phone_number: new_phone,
             occurred_at: self.updated_at,
@@ -155,6 +159,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::PhoneVerified {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -182,6 +187,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::UsernameChanged {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             old_username,
             new_username,
             occurred_at: self.updated_at,
@@ -206,6 +212,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::BirthDateChanged {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -222,6 +229,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::LocaleChanged {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             new_locale: self.locale.clone(),
             occurred_at: self.updated_at,
         }));
@@ -262,6 +270,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::AccountDeactivated {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -285,6 +294,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::AccountReactivated {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -301,6 +311,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::AccountSuspended {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             reason,
             occurred_at: self.updated_at,
         }));
@@ -318,6 +329,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::AccountUnsuspended {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -333,6 +345,7 @@ impl Account {
         self.apply_change();
         self.add_event(Box::new(AccountEvent::AccountBanned {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             reason,
             occurred_at: self.updated_at,
         }));
@@ -350,6 +363,7 @@ impl Account {
 
         self.add_event(Box::new(AccountEvent::AccountUnbanned {
             account_id: self.id.clone(),
+            region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 

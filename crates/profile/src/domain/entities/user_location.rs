@@ -1,45 +1,96 @@
+// crates/location/src/domain/entities/user_location.rs
+
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::entities::{EntityMetadata, GeoPoint};
 use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{GeoPoint, RegionCode, AccountId};
+use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use shared_kernel::errors::{DomainError, Result};
 use crate::domain::events::LocationEvent;
 use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
 
 #[derive(Debug, Clone)]
 pub struct UserLocation {
-    pub account_id: AccountId,
-    pub region_code: RegionCode,
-    pub coordinates: GeoPoint,
-    pub metrics: Option<LocationMetrics>,
-    pub movement: Option<MovementMetrics>,
-
-    // --- Privacy Settings ---
-    pub is_ghost_mode: bool,
-    pub privacy_radius_meters: i32,
-
-    pub updated_at: DateTime<Utc>,
-    pub metadata: AggregateMetadata,
+    account_id: AccountId,
+    region_code: RegionCode,
+    coordinates: GeoPoint,
+    metrics: Option<LocationMetrics>,
+    movement: Option<MovementMetrics>,
+    is_ghost_mode: bool,
+    privacy_radius_meters: i32,
+    updated_at: DateTime<Utc>,
+    metadata: AggregateMetadata,
 }
 
 impl UserLocation {
-    /// Initialisation d'une nouvelle localisation
-    pub fn new(account_id: AccountId, region: RegionCode, coords: GeoPoint) -> Self {
+    pub(crate) fn new_from_builder(
+        account_id: AccountId,
+        region_code: RegionCode,
+        coordinates: GeoPoint,
+        metrics: Option<LocationMetrics>,
+        movement: Option<MovementMetrics>,
+        is_ghost_mode: bool,
+        privacy_radius_meters: i32,
+        updated_at: DateTime<Utc>,
+        version: i32,
+        is_restore: bool,
+    ) -> Self {
+        let metadata = if is_restore {
+            AggregateMetadata::restore(version)
+        } else {
+            AggregateMetadata::new(version)
+        };
+
         Self {
-            account_id: account_id,
-            region_code: region,
-            coordinates: coords,
-            metrics: None,
-            movement: None,
-            is_ghost_mode: false,
-            privacy_radius_meters: 0,
-            updated_at: Utc::now(),
-            metadata: AggregateMetadata::default(),
+            account_id,
+            region_code,
+            coordinates,
+            metrics,
+            movement,
+            is_ghost_mode,
+            privacy_radius_meters,
+            updated_at,
+            metadata,
         }
     }
 
-    /// Mise à jour de la position GPS avec les nouveaux VO
+    pub fn restore(
+        account_id: AccountId,
+        region_code: RegionCode,
+        coordinates: GeoPoint,
+        metrics: Option<LocationMetrics>,
+        movement: Option<MovementMetrics>,
+        is_ghost_mode: bool,
+        privacy_radius_meters: i32,
+        updated_at: DateTime<Utc>,
+        version: i32,
+    ) -> Self {
+        Self {
+            account_id,
+            region_code,
+            coordinates,
+            metrics,
+            movement,
+            is_ghost_mode,
+            privacy_radius_meters,
+            updated_at,
+            metadata: AggregateMetadata::restore(version),
+        }
+    }
+
+    // --- Getters (Lecture seule) ---
+
+    pub fn account_id(&self) -> &AccountId { &self.account_id }
+    pub fn region_code(&self) -> &RegionCode { &self.region_code }
+    pub fn coordinates(&self) -> &GeoPoint { &self.coordinates }
+    pub fn metrics(&self) -> Option<&LocationMetrics> { self.metrics.as_ref() }
+    pub fn movement(&self) -> Option<&MovementMetrics> { self.movement.as_ref() }
+    pub fn is_ghost_mode(&self) -> bool { self.is_ghost_mode }
+    pub fn privacy_radius_meters(&self) -> i32 { self.privacy_radius_meters }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+
+    // --- Logic Métier (Commandes) ---
+
     pub fn update_position(
         &mut self,
         coords: GeoPoint,
@@ -52,7 +103,6 @@ impl UserLocation {
 
         self.apply_change();
 
-        // On émet l'événement pour que le reste du système (Feed, Maps) réagisse
         self.add_event(Box::new(LocationEvent::PositionUpdated {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
@@ -61,24 +111,21 @@ impl UserLocation {
         }));
     }
 
-    /// Activation/Désactivation du mode Fantôme
-    pub fn set_ghost_mode(&mut self, enabled: bool) -> bool {
-        if self.is_ghost_mode == enabled {
-            return false;
-        }
-        self.is_ghost_mode = enabled;
-        self.apply_change();
+    pub fn set_ghost_mode(&mut self, enabled: bool) {
+        if self.is_ghost_mode != enabled {
+            self.is_ghost_mode = enabled;
+            self.apply_change();
 
-        self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
-            account_id: self.account_id.clone(),
-            is_ghost_mode: enabled,
-            privacy_radius_meters: self.privacy_radius_meters,
-            occurred_at: self.updated_at,
-        }));
-        true
+            self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
+                account_id: self.account_id.clone(),
+                region: self.region_code.clone(),
+                is_ghost_mode: enabled,
+                privacy_radius_meters: self.privacy_radius_meters,
+                occurred_at: self.updated_at,
+            }));
+        }
     }
 
-    /// Ajustement du rayon de confidentialité
     pub fn update_privacy_radius(&mut self, radius_meters: i32) -> Result<()> {
         if !(0..=5000).contains(&radius_meters) {
             return Err(DomainError::Validation {
@@ -93,6 +140,7 @@ impl UserLocation {
 
             self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
                 account_id: self.account_id.clone(),
+                region: self.region_code.clone(),
                 is_ghost_mode: self.is_ghost_mode,
                 privacy_radius_meters: self.privacy_radius_meters,
                 occurred_at: self.updated_at,
@@ -106,6 +154,8 @@ impl UserLocation {
         self.updated_at = Utc::now();
     }
 }
+
+// --- Trait Implementations ---
 
 impl EntityMetadata for UserLocation {
     fn entity_name() -> &'static str { "UserLocation" }

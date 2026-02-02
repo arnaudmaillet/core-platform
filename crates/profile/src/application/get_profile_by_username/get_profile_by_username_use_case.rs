@@ -1,4 +1,4 @@
-// crates/profile/src/application/get_profile_by_username/get_profile_use_case.rs
+// crates/profile/src/application/get_profile_by_username/get_profile_by_username_use_case
 
 use std::sync::Arc;
 use shared_kernel::errors::{DomainError, Result};
@@ -8,14 +8,14 @@ use crate::application::get_profile_by_username::GetProfileByUsernameCommand;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 
-pub struct GetProfileUseCase {
+pub struct GetProfileByUsernameUseCase {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn CacheRepository>,
     // Key = (Username string + Region string), Value = Profile
     sf: Singleflight<String, Profile>,
 }
 
-impl GetProfileUseCase {
+impl GetProfileByUsernameUseCase {
     pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn CacheRepository>) -> Self {
         Self {
             repo,

@@ -31,15 +31,20 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
         let row = PostgresProfileRow::from(profile);
 
         <dyn Transaction>::execute_on(&pool, tx, |conn| Box::pin(async move {
-            // 1. Tentative d'UPDATE (Optimistic Locking)
+            // 1. On calcule l'ancienne version (celle avant l'incrément du domaine)
+            let current_version = row.version; // C'est la version N + 1
+            let old_version = current_version - 1;
+
+            // 2. Tentative d'UPDATE (Optimistic Locking)
             let update_sql = r#"
-            UPDATE user_profiles SET
-                display_name = $1, username = $2, bio = $3,
-                avatar_url = $4, banner_url = $5, location_label = $6,
-                social_links = $7, post_count = $8, is_private = $9,
-                updated_at = $10, version = version + 1
-            WHERE account_id = $11 AND region_code = $12 AND version = $13
-        "#;
+                UPDATE user_profiles SET
+                    display_name = $1, username = $2, bio = $3,
+                    avatar_url = $4, banner_url = $5, location_label = $6,
+                    social_links = $7, post_count = $8, is_private = $9,
+                    updated_at = $10,
+                    version = $13  -- On enregistre la nouvelle version (déjà incrémentée)
+                WHERE account_id = $11 AND region_code = $12 AND version = $14 -- On check l'ancienne
+            "#;
 
             let result = sqlx::query(update_sql)
                 .bind(&row.display_name)
@@ -54,13 +59,14 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
                 .bind(row.updated_at)
                 .bind(row.account_id)
                 .bind(&row.region_code)
-                .bind(row.version) // On cherche la version actuelle en DB
+                .bind(row.version) // nouvelle version (ex: 2)
+                .bind(old_version) // ancienne version attendue en DB (ex: 1)
                 .execute(&mut *conn)
                 .await
                 .map_domain::<Profile>()?;
 
             if result.rows_affected() == 0 {
-                // 2. Si l'UPDATE échoue, on vérifie si le profil existe
+                // 3. Si l'UPDATE échoue, on vérifie si le profil existe
                 let (exists,): (bool,) = sqlx::query_as("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE account_id = $1 AND region_code = $2)")
                     .bind(row.account_id)
                     .bind(&row.region_code)
@@ -69,14 +75,14 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
                     .map_domain::<Profile>()?;
 
                 if !exists {
-                    // 3. INSERT initial (Version commence à 1)
+                    // 4. INSERT initial
                     let insert_sql = r#"
-                    INSERT INTO user_profiles (
-                        account_id, region_code, display_name, username,
-                        bio, avatar_url, banner_url, location_label,
-                        social_links, post_count, is_private, version,
-                        created_at, updated_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, $12, $12)
+                INSERT INTO user_profiles (
+                    account_id, region_code, display_name, username,
+                    bio, avatar_url, banner_url, location_label,
+                    social_links, post_count, is_private, version,
+                    created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
                 "#;
 
                     sqlx::query(insert_sql)
@@ -91,14 +97,15 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
                         .bind(&row.social_links)
                         .bind(row.post_count)
                         .bind(row.is_private)
-                        .bind(row.created_at) // Utilise la date de création de la Row
+                        .bind(row.version)
+                        .bind(row.created_at)
                         .execute(&mut *conn)
                         .await
                         .map_domain::<Profile>()?;
 
                     Ok(())
                 } else {
-                    // 4. Conflit de concurrence : le profil existe mais la version a changé entre-temps
+                    // 5. Conflit de concurrence : le profil existe mais la version a changé entre-temps
                     Err(shared_kernel::errors::DomainError::ConcurrencyConflict {
                         reason: format!("Profile version mismatch for account {}", row.account_id)
                     })

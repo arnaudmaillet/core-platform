@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/persistence/postgres/outbox_repository
+// crates/shared-kernel/src/infrastructure/postgres/repositories/postgres_outbox_repository.rs
 
 use async_trait::async_trait;
 use sqlx::{query, Pool, Postgres};
@@ -29,11 +29,12 @@ impl OutboxRepository for PostgresOutboxRepository{
 
         query(
             r#"
-            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO outbox_events (id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#
         )
             .bind(envelope.id)
+            .bind(&envelope.region_code)
             .bind(envelope.aggregate_type)
             .bind(envelope.aggregate_id)
             .bind(envelope.event_type)

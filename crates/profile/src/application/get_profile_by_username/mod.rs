@@ -1,5 +1,6 @@
-mod get_profile_command;
-mod get_profile_use_case;
+mod get_profile_by_username_command;
+mod get_profile_by_username_use_case;
+mod get_profile_by_username_use_case_test;
 
-pub use get_profile_command::GetProfileByUsernameCommand;
-pub use get_profile_use_case::GetProfileUseCase;
+pub use get_profile_by_username_command::GetProfileByUsernameCommand;
+pub use get_profile_by_username_use_case::GetProfileByUsernameUseCase;

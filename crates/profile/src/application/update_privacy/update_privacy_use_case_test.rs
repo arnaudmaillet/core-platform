@@ -1,0 +1,169 @@
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::errors::DomainError;
+    use crate::application::update_privacy::{UpdatePrivacyCommand, UpdatePrivacyUseCase};
+    use crate::domain::builders::ProfileBuilder;
+    use crate::domain::entities::Profile;
+    use crate::domain::value_objects::DisplayName;
+    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+
+    fn setup(profile: Option<Profile>) -> UpdatePrivacyUseCase {
+        let repo = Arc::new(ProfileRepositoryStub {
+            profile_to_return: Mutex::new(profile),
+            ..Default::default()
+        });
+
+        UpdatePrivacyUseCase::new(
+            repo,
+            Arc::new(OutboxRepoStub),
+            Arc::new(StubTxManager),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_update_privacy_to_private_success() {
+        // Arrange : Profil public par défaut
+        let account_id = AccountId::new();
+        let region = RegionCode::from_raw("eu");
+        let initial_profile =ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap()
+        ).build();
+
+        let use_case = setup(Some(initial_profile));
+        let cmd = UpdatePrivacyCommand {
+            account_id,
+            region,
+            is_private: true, // Passage en privé
+        };
+
+        // Act
+        let result = use_case.execute(cmd).await;
+
+        // Assert
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+        assert!(updated.is_private());
+        assert_eq!(updated.version(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_update_privacy_idempotency() {
+        // Arrange : Profil déjà privé
+        let account_id = AccountId::new();
+        let region = RegionCode::from_raw("eu");
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap()
+        ).build();
+        profile.update_privacy(true); // Version 2
+
+        let use_case = setup(Some(profile));
+
+        let cmd = UpdatePrivacyCommand {
+            account_id,
+            region,
+            is_private: true, // Demande encore "privé"
+        };
+
+        // Act
+        let result = use_case.execute(cmd).await;
+
+        // Assert
+        assert!(result.is_ok());
+        let profile = result.unwrap();
+        // Pas de changement -> pas d'incrément de version (reste à 2)
+        assert_eq!(profile.version(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_update_privacy_profile_not_found() {
+        // Arrange
+        let use_case = setup(None);
+
+        let cmd = UpdatePrivacyCommand {
+            account_id: AccountId::new(),
+            region: RegionCode::from_raw("eu"),
+            is_private: true,
+        };
+
+        // Act
+        let result = use_case.execute(cmd).await;
+
+        // Assert
+        assert!(matches!(result, Err(DomainError::NotFound { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_update_privacy_concurrency_conflict() {
+        // Arrange
+        let account_id = AccountId::new();
+        let region = RegionCode::from_raw("eu");
+        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+
+        // Simulation d'une erreur d'Optimistic Locking lors du repo.save
+        let repo = Arc::new(ProfileRepositoryStub {
+            profile_to_return: Mutex::new(Some(profile)),
+            error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
+                reason: "Modified by another session".into()
+            })),
+            ..Default::default()
+        });
+
+        let use_case = UpdatePrivacyUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+
+        // Act
+        let result = use_case.execute(UpdatePrivacyCommand {
+            account_id,
+            region,
+            is_private: true,
+        }).await;
+
+        // Assert
+        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_update_privacy_atomic_outbox_failure() {
+        // Arrange
+        let account_id = AccountId::new();
+        let region = RegionCode::from_raw("eu");
+        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+
+        // Stub Outbox qui échoue pour tester le rollback de transaction
+        struct FailingOutbox;
+        #[async_trait::async_trait]
+        impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
+            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+                Err(DomainError::Internal("Kafka/Outbox failure".into()))
+            }
+        }
+
+        let use_case = UpdatePrivacyUseCase::new(
+            Arc::new(ProfileRepositoryStub {
+                profile_to_return: Mutex::new(Some(profile)),
+                ..Default::default()
+            }),
+            Arc::new(FailingOutbox),
+            Arc::new(StubTxManager),
+        );
+
+        // Act
+        let result = use_case.execute(UpdatePrivacyCommand {
+            account_id,
+            region,
+            is_private: true,
+        }).await;
+
+        // Assert
+        // Si l'Outbox crash, le Use Case doit remonter l'erreur (et tx_manager rollback)
+        assert!(result.is_err());
+    }
+}

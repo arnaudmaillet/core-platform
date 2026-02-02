@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{Counter, LocationLabel, RegionCode, Url, AccountId, Username};
 use shared_kernel::errors::{Result, DomainError};
@@ -65,20 +66,20 @@ impl TryFrom<PostgresProfileRow> for Profile {
 impl From<&Profile> for PostgresProfileRow {
     fn from(p: &Profile) -> Self {
         Self {
-            account_id: p.account_id.as_uuid(),
-            region_code: p.region_code.to_string(),
-            display_name: p.display_name.as_str().to_string(),
-            username: p.username.as_str().to_string(),
-            bio: p.bio.as_ref().map(|b| b.as_str().to_string()),
-            avatar_url: p.avatar_url.as_ref().map(|u| u.as_str().to_string()),
-            banner_url: p.banner_url.as_ref().map(|u| u.as_str().to_string()),
-            location_label: p.location_label.as_ref().map(|l| l.as_str().to_string()),
-            social_links: serde_json::to_value(&p.social_links).unwrap_or(JsonValue::Null),
-            post_count: p.post_count.value() as i64,
-            is_private: p.is_private,
-            version: p.metadata.version,
-            created_at: p.created_at,
-            updated_at: p.updated_at,
+            account_id: p.account_id().as_uuid(),
+            region_code: p.region_code().to_string(),
+            display_name: p.display_name().to_string(),
+            username: p.username().to_string(),
+            bio: p.bio().as_ref().map(|b| b.to_string()),
+            avatar_url: p.avatar_url().as_ref().map(|u| u.to_string()),
+            banner_url: p.banner_url().as_ref().map(|u| u.to_string()),
+            location_label: p.location_label().as_ref().map(|l| l.to_string()),
+            social_links: serde_json::to_value(&p.social_links()).unwrap_or(JsonValue::Null),
+            post_count: p.post_count() as i64,
+            is_private: p.is_private(),
+            version: p.version(),
+            created_at: p.created_at(),
+            updated_at: p.updated_at(),
         }
     }
 }

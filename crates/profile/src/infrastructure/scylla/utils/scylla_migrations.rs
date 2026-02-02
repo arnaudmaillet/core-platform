@@ -4,7 +4,7 @@ use anyhow::Result;
 use scylla::client::session::Session;
 
 pub async fn run_scylla_migrations(session: &Session) -> Result<()> {
-    let schema_cql = include_str!("../../../../migrations/202601030000_profile_stats.cql");
+    let schema_cql = include_str!("../../../../migrations/scylla/202601030000_profile_stats.cql");
 
     // On découpe par ';' pour envoyer chaque commande individuellement
     for statement in schema_cql.split(';').filter(|s| !s.trim().is_empty()) {

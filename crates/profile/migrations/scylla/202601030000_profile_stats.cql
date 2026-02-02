@@ -1,3 +1,5 @@
+-- crates/profile/migrations/scylla/202601030000_profile_stats.cql
+
 USE profile;
 
 CREATE TABLE IF NOT EXISTS profile_stats (

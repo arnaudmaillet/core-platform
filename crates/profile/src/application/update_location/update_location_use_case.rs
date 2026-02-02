@@ -38,8 +38,8 @@ impl UpdateLocationUseCase {
 
         // 2. Throttling Métier (Optimisation de la charge DB)
         // On ne fait rien si le mouvement est insignifiant.
-        let distance_moved = location.coordinates.distance_to(&cmd.coords);
-        let time_since_last_update = chrono::Utc::now() - location.updated_at;
+        let distance_moved = location.coordinates().distance_to(&cmd.coords);
+        let time_since_last_update = chrono::Utc::now() - location.updated_at();
 
         if distance_moved < 5.0 && time_since_last_update.num_seconds() < 30 {
             return Ok(());

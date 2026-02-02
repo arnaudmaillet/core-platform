@@ -1,8 +1,9 @@
 // crates/profile/src/domain/repositories/location_repository.rs
 
 use async_trait::async_trait;
+use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{GeoPoint, RegionCode, AccountId};
+use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use shared_kernel::errors::Result;
 use crate::domain::entities::UserLocation;
 

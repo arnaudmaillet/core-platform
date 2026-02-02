@@ -16,21 +16,21 @@ use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Profile {
-    pub account_id: AccountId,
-    pub region_code: RegionCode,
-    pub display_name: DisplayName,
-    pub username: Username,
-    pub bio: Option<Bio>,
-    pub avatar_url: Option<Url>,
-    pub banner_url: Option<Url>,
-    pub location_label: Option<LocationLabel>,
-    pub social_links: Option<SocialLinks>,
-    pub stats: ProfileStats,
-    pub post_count: Counter,
-    pub is_private: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub metadata: AggregateMetadata,
+    account_id: AccountId,
+    region_code: RegionCode,
+    display_name: DisplayName,
+    username: Username,
+    bio: Option<Bio>,
+    avatar_url: Option<Url>,
+    banner_url: Option<Url>,
+    location_label: Option<LocationLabel>,
+    social_links: Option<SocialLinks>,
+    stats: ProfileStats,
+    post_count: Counter,
+    is_private: bool,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    metadata: AggregateMetadata,
 }
 
 impl Profile {
@@ -60,8 +60,112 @@ impl Profile {
         profile
     }
 
+    pub(crate) fn new_from_builder(
+        account_id: AccountId,
+        region_code: RegionCode,
+        display_name: DisplayName,
+        username: Username,
+        bio: Option<Bio>,
+        avatar_url: Option<Url>,
+        banner_url: Option<Url>,
+        location_label: Option<LocationLabel>,
+        social_links: Option<SocialLinks>,
+        stats: ProfileStats,
+        post_count: Counter,
+        is_private: bool,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        version: i32,
+    ) -> Self {
+        Self {
+            account_id,
+            region_code,
+            display_name,
+            username,
+            bio,
+            avatar_url,
+            banner_url,
+            location_label,
+            social_links,
+            stats,
+            post_count,
+            is_private,
+            created_at,
+            updated_at,
+            metadata: AggregateMetadata::new(version),
+        }
+    }
+
+    pub(crate)  fn restore(
+        account_id: AccountId,
+        region_code: RegionCode,
+        display_name: DisplayName,
+        username: Username,
+        bio: Option<Bio>,
+        avatar_url: Option<Url>,
+        banner_url: Option<Url>,
+        location_label: Option<LocationLabel>,
+        social_links: Option<SocialLinks>,
+        post_count: Counter,
+        is_private: bool,
+        version: i32,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    ) -> Profile {
+        Profile {
+            account_id,
+            region_code,
+            display_name,
+            username,
+            bio,
+            avatar_url,
+            banner_url,
+            location_label,
+            social_links,
+            stats: ProfileStats::default(),
+            post_count,
+            is_private,
+            created_at,
+            updated_at,
+            metadata: AggregateMetadata::restore(version),
+        }
+    }
+
+    // --- GETTERS ---
+
+    pub fn account_id(&self) -> &AccountId { &self.account_id }
+    pub fn region_code(&self) -> &RegionCode { &self.region_code }
+    pub fn display_name(&self) -> &DisplayName { &self.display_name }
+    pub fn username(&self) -> &Username { &self.username }
+    pub fn bio(&self) -> Option<&Bio> { self.bio.as_ref() }
+    pub fn avatar_url(&self) -> Option<&Url> { self.avatar_url.as_ref() }
+    pub fn banner_url(&self) -> Option<&Url> { self.banner_url.as_ref() }
+    pub fn location_label(&self) -> Option<&LocationLabel> { self.location_label.as_ref() }
+    pub fn social_links(&self) -> Option<&SocialLinks> { self.social_links.as_ref() }
+    pub fn stats(&self) -> &ProfileStats { &self.stats }
+    pub fn post_count(&self) -> u64 { self.post_count.value() }
+    pub fn is_private(&self) -> bool { self.is_private }
+    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+
     fn create_event_id() -> Uuid {
         Uuid::now_v7()
+    }
+
+    // --- MUTATEURS MÉTIER
+
+    pub fn create(mut profile: Self) -> Self {
+        let occurred_at = profile.created_at();
+        profile.add_event(Box::new(ProfileEvent::ProfileCreated {
+            id: Uuid::now_v7(),
+            account_id: profile.account_id().clone(),
+            region: profile.region_code().clone(),
+            display_name: profile.display_name().clone(),
+            username: profile.username().clone(),
+            occurred_at,
+        }));
+
+        profile
     }
 
     /// Mise à jour identity - Action Critique
@@ -77,6 +181,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::UsernameChanged {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_username,
             new_username,
             occurred_at: self.updated_at,
@@ -97,6 +202,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::DisplayNameChanged {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_display_name,
             new_display_name,
             occurred_at: self.updated_at,
@@ -117,6 +223,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::BioUpdated {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_bio,
             new_bio,
             occurred_at: self.updated_at,
@@ -138,6 +245,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::AvatarUpdated {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_avatar_url,
             new_avatar_url,
             occurred_at: self.updated_at,
@@ -157,6 +265,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::AvatarRemoved {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_avatar_url,
             occurred_at: self.updated_at,
         }));
@@ -176,6 +285,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::BannerUpdated {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_banner_url,
             new_banner_url,
             occurred_at: self.updated_at,
@@ -189,13 +299,14 @@ impl Profile {
             return false;
         }
 
-        let old_banner_url = self.avatar_url.clone();
-        self.avatar_url = None;
+        let old_banner_url = self.banner_url.clone();
+        self.banner_url = None;
         self.apply_change();
 
         self.add_event(Box::new(ProfileEvent::BannerRemoved {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_banner_url,
             occurred_at: self.updated_at,
         }));
@@ -224,6 +335,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::SocialLinksUpdated {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_links,
             new_links: self.social_links.clone(), // Le nouvel état nettoyé
             occurred_at: self.updated_at,
@@ -245,6 +357,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::LocationLabelUpdated {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             old_location,
             new_location: self.location_label.clone(),
             occurred_at: self.updated_at,
@@ -281,6 +394,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::PostCountIncremented {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             post_id: post_id.as_uuid(),
             new_count: self.post_count.value(),
             occurred_at: self.updated_at,
@@ -307,6 +421,7 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::PostCountDecremented {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
             post_id: post_id.as_uuid(),
             new_count: self.post_count.value(),
             occurred_at: self.updated_at,
@@ -318,6 +433,10 @@ impl Profile {
         true
     }
 
+    pub(crate) fn restore_stats(&mut self, stats: ProfileStats) {
+        self.stats = stats;
+        // On ne touche ni à la version, ni aux événements, ni à updated_at.
+    }
 
     // Helpers
     fn apply_change(&mut self) {
@@ -329,8 +448,9 @@ impl Profile {
         self.add_event(Box::new(ProfileEvent::StatsSnapshotUpdated {
             id: Self::create_event_id(),
             account_id: self.account_id.clone(),
-            follower_count: self.stats.follower_count.value(),
-            following_count: self.stats.following_count.value(),
+            region: self.region_code.clone(),
+            follower_count: self.stats.follower_count(),
+            following_count: self.stats.following_count(),
             post_count: self.post_count.value(),
             occurred_at: Utc::now(),
         }));
