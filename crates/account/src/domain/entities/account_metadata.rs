@@ -13,17 +13,17 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct AccountMetadata {
-    pub account_id: AccountId,
-    pub region_code: RegionCode,
-    pub role: AccountRole,
-    pub is_beta_tester: bool,
-    pub is_shadowbanned: bool,
-    pub trust_score: i32,
-    pub last_moderation_at: Option<DateTime<Utc>>,
-    pub moderation_notes: Option<String>,
-    pub estimated_ip: Option<String>,
-    pub updated_at: DateTime<Utc>,
-    pub metadata: AggregateMetadata,
+    account_id: AccountId,
+    region_code: RegionCode,
+    role: AccountRole,
+    is_beta_tester: bool,
+    is_shadowbanned: bool,
+    trust_score: i32,
+    last_moderation_at: Option<DateTime<Utc>>,
+    moderation_notes: Option<String>,
+    estimated_ip: Option<String>,
+    updated_at: DateTime<Utc>,
+    metadata: AggregateMetadata,
 }
 
 impl AccountMetadata {
@@ -31,23 +31,47 @@ impl AccountMetadata {
         AccountMetadataBuilder::new(account_id, region_code)
     }
 
-    pub fn set_beta_status(&mut self, status: bool, reason: String) {
-        if self.is_beta_tester == status {
-            return;
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn restore(
+        account_id: AccountId,
+        region_code: RegionCode,
+        role: AccountRole,
+        is_beta_tester: bool,
+        is_shadowbanned: bool,
+        trust_score: i32,
+        last_moderation_at: Option<DateTime<Utc>>,
+        moderation_notes: Option<String>,
+        estimated_ip: Option<String>,
+        updated_at: DateTime<Utc>,
+        metadata: AggregateMetadata,
+    ) -> Self {
+        Self {
+            account_id,
+            region_code,
+            role,
+            is_beta_tester,
+            is_shadowbanned,
+            trust_score,
+            last_moderation_at,
+            moderation_notes,
+            estimated_ip,
+            updated_at,
+            metadata,
         }
-
-        self.is_beta_tester = status;
-        let action = if status { "enabled" } else { "disabled" };
-
-        self.apply_moderation_change(format!("Beta tester mode {}: {}", action, reason));
-
-        self.add_event(Box::new(AccountEvent::BetaStatusChanged {
-            account_id: self.account_id.clone(),
-            region: self.region_code.clone(),
-            is_beta_tester: status,
-            occurred_at: self.updated_at,
-        }));
     }
+
+    // --- GETTERS PUBLICS ---
+
+    pub fn account_id(&self) -> &AccountId { &self.account_id }
+    pub fn region_code(&self) -> &RegionCode { &self.region_code }
+    pub fn role(&self) -> AccountRole { self.role }
+    pub fn is_beta_tester(&self) -> bool { self.is_beta_tester }
+    pub fn is_shadowbanned(&self) -> bool { self.is_shadowbanned }
+    pub fn trust_score(&self) -> i32 { self.trust_score }
+    pub fn last_moderation_at(&self) -> Option<DateTime<Utc>> { self.last_moderation_at }
+    pub fn moderation_notes(&self) -> Option<&str> { self.moderation_notes.as_deref() }
+    pub fn estimated_ip(&self) -> Option<&str> { self.estimated_ip.as_deref() }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
 
     // ==========================================
     // LOGIQUE DE MODÉRATION & SCORE
@@ -151,6 +175,24 @@ impl AccountMetadata {
         self.role.has_permission_of(AccountRole::Staff)
     }
 
+    pub fn set_beta_status(&mut self, status: bool, reason: String) {
+        if self.is_beta_tester == status {
+            return;
+        }
+
+        self.is_beta_tester = status;
+        let action = if status { "enabled" } else { "disabled" };
+
+        self.apply_moderation_change(format!("Beta tester mode {}: {}", action, reason));
+
+        self.add_event(Box::new(AccountEvent::BetaStatusChanged {
+            account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
+            is_beta_tester: status,
+            occurred_at: self.updated_at,
+        }));
+    }
+
     // ==========================================
     // LOGIQUE DE SHARDING (GÉOGRAPHIE)
     // ==========================================
@@ -174,6 +216,13 @@ impl AccountMetadata {
         }));
 
         Ok(())
+    }
+
+    // --- LOGIQUE DE VERSIONING ---
+
+    fn apply_change(&mut self) {
+        self.increment_version(); // Méthode de AggregateRoot
+        self.updated_at = Utc::now();
     }
 
     // ==========================================

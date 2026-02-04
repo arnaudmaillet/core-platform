@@ -60,22 +60,22 @@ impl TryFrom<PostgresAccountRow> for Account {
 impl From<&Account> for PostgresAccountRow {
     fn from(a: &Account) -> Self {
         Self {
-            id: a.id.as_uuid(),
-            region_code: a.region_code.to_string(),
-            external_id: a.external_id.as_str().to_string(),
-            username: a.username.as_str().to_string(),
-            email: a.email.as_str().to_string(),
-            email_verified: a.email_verified,
-            phone_number: a.phone_number.as_ref().map(|p| p.as_str().to_string()),
-            phone_verified: a.phone_verified,
+            id: a.id().as_uuid(),
+            region_code: a.region_code().to_string(),
+            external_id: a.external_id().to_string(),
+            username: a.username().to_string(),
+            email: a.email().to_string(),
+            email_verified: a.is_email_verified(),
+            phone_number: a.phone_number().as_ref().map(|p| p.to_string()),
+            phone_verified: a.is_phone_verified(),
             // On convertit le Value Object AccountState vers le type PostgresAccountState via From/Into
-            account_state: PostgresAccountState::from(a.account_state.clone()),
-            birth_date: a.birth_date.as_ref().map(|d| d.value()),
-            locale: a.locale.as_str().to_string(),
+            account_state: PostgresAccountState::from(a.state().clone()),
+            birth_date: a.birth_date().as_ref().map(|d| d.value()),
+            locale: a.locale().to_string(),
             version: a.version(),
-            created_at: a.created_at,
-            updated_at: a.updated_at,
-            last_active_at: a.last_active_at,
+            created_at: a.created_at(),
+            updated_at: a.updated_at(),
+            last_active_at: a.last_active_at(),
         }
     }
 }

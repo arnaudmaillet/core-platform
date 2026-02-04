@@ -56,24 +56,24 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let blob = SettingsBlob {
-            privacy: settings.privacy.clone(),
-            notifications: settings.notifications.clone(),
-            appearance: settings.appearance.clone(),
+            privacy: settings.privacy().clone(),
+            notifications: settings.notifications().clone(),
+            appearance: settings.appearance().clone(),
         };
 
         let settings_json =
             serde_json::to_value(blob).map_err(|e| DomainError::Internal(e.to_string()))?;
 
         let push_tokens: Vec<String> = settings
-            .push_tokens
+            .push_tokens()
             .iter()
             .map(|t: &PushToken| t.as_str().to_string())
             .collect();
 
-        let uid = settings.account_id.as_uuid();
-        let region = settings.region_code.as_str().to_string();
-        let tz = settings.timezone.as_str().to_string();
-        let updated_at = settings.updated_at;
+        let uid = settings.account_id().as_uuid();
+        let region = settings.region_code().to_string();
+        let tz = settings.timezone().to_string();
+        let updated_at = settings.updated_at();
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "

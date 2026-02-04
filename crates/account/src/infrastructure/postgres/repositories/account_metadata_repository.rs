@@ -49,18 +49,20 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
 
     /// Insertion initiale. La version est fixée à 1 (via metadata.version()).
     async fn insert(&self, metadata: &AccountMetadata, tx: &mut dyn Transaction) -> Result<()> {
-        let uid = metadata.account_id.as_uuid();
-        let region = metadata.region_code.as_str().to_string();
-        let role = PostgresAccountRole::from(metadata.role);
-        let is_beta = metadata.is_beta_tester;
-        let is_shadow = metadata.is_shadowbanned;
-        let trust = metadata.trust_score;
-        let notes = metadata.moderation_notes.clone();
-        let ip = metadata.estimated_ip.clone();
-        let updated = metadata.updated_at;
+        // 1. On prépare des versions "Owned" (Clonées ou copiées) de toutes les données
+        let uid = metadata.account_id().as_uuid();
+        let region = metadata.region_code().to_string();
+        let role = PostgresAccountRole::from(metadata.role());
+        let is_beta = metadata.is_beta_tester();
+        let is_shadow = metadata.is_shadowbanned();
+        let trust = metadata.trust_score();
+        let notes = metadata.moderation_notes().map(|s| s.to_string());
+        let ip = metadata.estimated_ip().map(|s| s.to_string());
+        let updated = metadata.updated_at();
         let version = metadata.version();
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
+            // 2. On utilise 'async move' pour transférer la propriété des variables ci-dessus
             Box::pin(async move {
                 let sql = r#"
                 INSERT INTO user_internal_metadata (
@@ -87,29 +89,26 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .map_domain::<AccountMetadata>()
             })
         })
-        .await?;
+            .await?;
 
         Ok(())
     }
 
-    /// Mise à jour avec Verrouillage Optimiste (OCC).
-    /// Ne met à jour que si la version en base correspond à la version chargée par l'application.
     async fn save(
         &self,
         metadata: &AccountMetadata,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
-        let uid = metadata.account_id.as_uuid();
+        // 1. Préparation des données Owned
+        let uid = metadata.account_id().as_uuid();
         let current_version = metadata.version();
-
-        // Données provenant de l'entité (Backend)
-        let role = PostgresAccountRole::from(metadata.role);
-        let is_beta = metadata.is_beta_tester;
-        let is_shadow = metadata.is_shadowbanned;
-        let trust = metadata.trust_score;
-        let notes = metadata.moderation_notes.clone();
-        let ip = metadata.estimated_ip.clone();
-        let updated = metadata.updated_at;
+        let role = PostgresAccountRole::from(metadata.role());
+        let is_beta = metadata.is_beta_tester();
+        let is_shadow = metadata.is_shadowbanned();
+        let trust = metadata.trust_score();
+        let notes = metadata.moderation_notes().map(|s| s.to_string());
+        let ip = metadata.estimated_ip().map(|s| s.to_string());
+        let updated = metadata.updated_at();
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
@@ -123,9 +122,9 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     moderation_notes = $5,
                     estimated_ip = $6,
                     updated_at = $7,
-                    version = version + 1  -- Incrément atomique géré par la DB
+                    version = version + 1
                 WHERE account_id = $8
-                  AND version = $9         -- Condition critique pour l'idempotence/concurrence
+                  AND version = $9
             "#;
 
                 let result = query(sql)
@@ -142,14 +141,11 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .await
                     .map_domain::<AccountMetadata>()?;
 
-                // GESTION DU CONFLIT :
-                // Si rows_affected == 0, soit le compte n'existe pas,
-                // soit (plus probable) la version en DB a déjà été incrémentée.
                 if result.rows_affected() == 0 {
                     return Err(DomainError::ConcurrencyConflict {
                         reason: format!(
-                            "Metadata update failed for account {}: version mismatch (expected {})",
-                            uid, current_version
+                            "Metadata update failed: version mismatch (expected {})",
+                            current_version
                         ),
                     });
                 }
@@ -157,7 +153,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                 Ok(())
             })
         })
-        .await?;
+            .await?;
 
         Ok(())
     }

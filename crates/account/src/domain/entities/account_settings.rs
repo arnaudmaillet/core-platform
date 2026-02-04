@@ -18,15 +18,15 @@ pub struct SettingsBlob {
 
 #[derive(Debug, Clone)]
 pub struct AccountSettings {
-    pub account_id: AccountId,
-    pub region_code: RegionCode,
-    pub privacy: PrivacySettings,
-    pub notifications: NotificationSettings,
-    pub appearance: AppearanceSettings,
-    pub timezone: Timezone,
-    pub push_tokens: Vec<PushToken>,
-    pub updated_at: DateTime<Utc>,
-    pub metadata: AggregateMetadata,
+    account_id: AccountId,
+    region_code: RegionCode,
+    privacy: PrivacySettings,
+    notifications: NotificationSettings,
+    appearance: AppearanceSettings,
+    timezone: Timezone,
+    push_tokens: Vec<PushToken>,
+    updated_at: DateTime<Utc>,
+    metadata: AggregateMetadata,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +63,56 @@ impl AccountSettings {
     /// Point d'entrée pour le Builder
     pub fn builder(account_id: AccountId, region_code: RegionCode) -> AccountSettingsBuilder {
         AccountSettingsBuilder::new(account_id, region_code)
+    }
+    /// Utilisé par le Builder et le Repository
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn restore(
+        account_id: AccountId,
+        region_code: RegionCode,
+        privacy: PrivacySettings,
+        notifications: NotificationSettings,
+        appearance: AppearanceSettings,
+        timezone: Timezone,
+        push_tokens: Vec<PushToken>,
+        updated_at: DateTime<Utc>,
+        metadata: AggregateMetadata,
+    ) -> Self {
+        Self {
+            account_id,
+            region_code,
+            privacy,
+            notifications,
+            appearance,
+            timezone,
+            push_tokens,
+            updated_at,
+            metadata,
+        }
+    }
+
+    // --- GETTERS PUBLICS ---
+
+    pub fn account_id(&self) -> &AccountId { &self.account_id }
+    pub fn region_code(&self) -> &RegionCode { &self.region_code }
+    pub fn privacy(&self) -> &PrivacySettings { &self.privacy }
+    pub fn notifications(&self) -> &NotificationSettings { &self.notifications }
+    pub fn appearance(&self) -> &AppearanceSettings { &self.appearance }
+    pub fn timezone(&self) -> &Timezone { &self.timezone }
+    pub fn push_tokens(&self) -> &[PushToken] { &self.push_tokens }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+
+
+    /// Change la région des paramètres (nécessaire pour la cohérence du sharding)
+    pub fn change_region(&mut self, new_region: RegionCode) -> Result<()> {
+        if self.region_code == new_region {
+            return Ok(());
+        }
+
+        self.region_code = new_region;
+        self.updated_at = Utc::now();
+        self.increment_version();
+
+        Ok(())
     }
 
     /// Met à jour la timezone avec un événement spécifique

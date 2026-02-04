@@ -18,21 +18,21 @@ use shared_kernel::errors::{DomainError, Result};
 /// Utilise AggregateMetadata pour l'Optimistic Concurrency Control et la capture d'événements.
 #[derive(Debug, Clone)]
 pub struct Account {
-    pub id: AccountId,
-    pub region_code: RegionCode,
-    pub external_id: ExternalId,
-    pub username: Username,
-    pub email: Email,
-    pub email_verified: bool,
-    pub phone_number: Option<PhoneNumber>,
-    pub phone_verified: bool,
-    pub account_state: AccountState,
-    pub birth_date: Option<BirthDate>,
-    pub locale: Locale,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub last_active_at: Option<DateTime<Utc>>,
-    pub metadata: AggregateMetadata,
+    id: AccountId,
+    region_code: RegionCode,
+    external_id: ExternalId,
+    username: Username,
+    email: Email,
+    email_verified: bool,
+    phone_number: Option<PhoneNumber>,
+    phone_verified: bool,
+    state: AccountState,
+    birth_date: Option<BirthDate>,
+    locale: Locale,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    last_active_at: Option<DateTime<Utc>>,
+    metadata: AggregateMetadata,
 }
 
 impl Account {
@@ -45,6 +45,61 @@ impl Account {
     ) -> AccountBuilder {
         AccountBuilder::new(id, region_code, username, email, external_id)
     }
+
+    /// Utilisé par le Builder ou le Repository pour restaurer l'état
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn restore(
+        id: AccountId,
+        region_code: RegionCode,
+        external_id: ExternalId,
+        username: Username,
+        email: Email,
+        email_verified: bool,
+        phone_number: Option<PhoneNumber>,
+        phone_verified: bool,
+        state: AccountState,
+        birth_date: Option<BirthDate>,
+        locale: Locale,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        last_active_at: Option<DateTime<Utc>>,
+        metadata: AggregateMetadata,
+    ) -> Self {
+        Self {
+            id,
+            region_code,
+            external_id,
+            username,
+            email,
+            email_verified,
+            phone_number,
+            phone_verified,
+            state,
+            birth_date,
+            locale,
+            created_at,
+            updated_at,
+            last_active_at,
+            metadata,
+        }
+    }
+
+    // --- GETTERS PUBLICS ---
+
+    pub fn id(&self) -> &AccountId { &self.id }
+    pub fn region_code(&self) -> &RegionCode { &self.region_code }
+    pub fn external_id(&self) -> &ExternalId { &self.external_id }
+    pub fn username(&self) -> &Username { &self.username }
+    pub fn email(&self) -> &Email { &self.email }
+    pub fn is_email_verified(&self) -> bool { self.email_verified }
+    pub fn phone_number(&self) -> Option<&PhoneNumber> { self.phone_number.as_ref() }
+    pub fn is_phone_verified(&self) -> bool { self.phone_verified }
+    pub fn state(&self) -> &AccountState { &self.state }
+    pub fn birth_date(&self) -> Option<&BirthDate> { self.birth_date.as_ref() }
+    pub fn locale(&self) -> &Locale { &self.locale }
+    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn last_active_at(&self) -> Option<DateTime<Utc>> { self.last_active_at }
 
     // ==========================================
     // GESTION DE L'IDENTITÉ (EMAIL & SÉCURITÉ)
@@ -113,8 +168,8 @@ impl Account {
         self.email_verified = true;
         self.apply_change();
 
-        if self.account_state == AccountState::Pending {
-            self.account_state = AccountState::Active;
+        if self.state == AccountState::Pending {
+            self.state = AccountState::Active;
         }
 
         self.add_event(Box::new(AccountEvent::EmailVerified {
@@ -263,11 +318,11 @@ impl Account {
     // ==========================================
 
     pub fn deactivate(&mut self) -> Result<()> {
-        if self.account_state == AccountState::Deactivated {
+        if self.state == AccountState::Deactivated {
             return Ok(());
         }
 
-        self.account_state = AccountState::Deactivated;
+        self.state = AccountState::Deactivated;
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountDeactivated {
@@ -285,13 +340,13 @@ impl Account {
         }
 
         // Seul un compte désactivé par l'utilisateur peut être réactivé manuellement
-        if self.account_state != AccountState::Deactivated {
+        if self.state != AccountState::Deactivated {
             return Err(DomainError::Forbidden {
                 reason: "Only deactivated accounts can be reactivated manually".into(),
             });
         }
 
-        self.account_state = AccountState::Active;
+        self.state = AccountState::Active;
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountReactivated {
@@ -304,11 +359,11 @@ impl Account {
     }
 
     pub fn suspend(&mut self, reason: String) -> Result<()> {
-        if self.account_state == AccountState::Suspended {
+        if self.state == AccountState::Suspended {
             return Ok(());
         }
 
-        self.account_state = AccountState::Suspended;
+        self.state = AccountState::Suspended;
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountSuspended {
@@ -322,11 +377,11 @@ impl Account {
     }
 
     pub fn unsuspend(&mut self) -> Result<()> {
-        if self.account_state != AccountState::Suspended {
+        if self.state != AccountState::Suspended {
             return Ok(());
         }
 
-        self.account_state = AccountState::Active;
+        self.state = AccountState::Active;
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountUnsuspended {
@@ -339,11 +394,11 @@ impl Account {
     }
 
     pub fn ban(&mut self, reason: String) -> Result<()> {
-        if self.account_state == AccountState::Banned {
+        if self.state == AccountState::Banned {
             return Ok(());
         }
 
-        self.account_state = AccountState::Banned;
+        self.state = AccountState::Banned;
         self.apply_change();
         self.add_event(Box::new(AccountEvent::AccountBanned {
             account_id: self.id.clone(),
@@ -356,11 +411,11 @@ impl Account {
     }
 
     pub fn unban(&mut self) -> Result<()> {
-        if self.account_state != AccountState::Banned {
+        if self.state != AccountState::Banned {
             return Ok(());
         }
 
-        self.account_state = AccountState::Active;
+        self.state = AccountState::Active;
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountUnbanned {
@@ -389,13 +444,13 @@ impl Account {
 
     pub fn is_blocked(&self) -> bool {
         matches!(
-            self.account_state,
+            self.state,
             AccountState::Banned | AccountState::Suspended | AccountState::Deactivated
         )
     }
 
     pub fn is_active(&self) -> bool {
-        self.account_state == AccountState::Active
+        self.state == AccountState::Active
     }
 
     pub fn is_verified(&self) -> bool {
@@ -409,7 +464,7 @@ impl Account {
     }
 
     pub fn can_login(&self) -> bool {
-        self.account_state.can_authenticate()
+        self.state.can_authenticate()
     }
 
     // Helpers

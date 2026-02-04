@@ -15,7 +15,6 @@ pub struct AccountSettingsBuilder {
     notifications: Option<NotificationSettings>,
     appearance: Option<AppearanceSettings>,
     push_tokens: Vec<PushToken>,
-    // Ajout de la version pour le suivi technique
     version: i32,
 }
 
@@ -33,8 +32,7 @@ impl AccountSettingsBuilder {
         }
     }
 
-    /// CHEMIN 2 : RESTAURATION (Haute performance depuis la DB)
-    /// On injecte directement la version stockée en base.
+    /// CHEMIN 2 : RESTAURATION (Depuis la DB)
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
         account_id: AccountId,
@@ -47,7 +45,8 @@ impl AccountSettingsBuilder {
         updated_at: DateTime<Utc>,
         version: i32,
     ) -> AccountSettings {
-        AccountSettings {
+        // On utilise la méthode restore de l'entité AccountSettings
+        AccountSettings::restore(
             account_id,
             region_code,
             privacy,
@@ -56,14 +55,19 @@ impl AccountSettingsBuilder {
             timezone,
             push_tokens,
             updated_at,
-            metadata: AggregateMetadata::restore(version),
-        }
+            AggregateMetadata::restore(version),
+        )
     }
 
-    // --- SETTERS (Chemin Création) ---
+    // --- SETTERS FLUIDES ---
 
     pub fn with_timezone(mut self, timezone: Timezone) -> Self {
         self.timezone = Some(timezone);
+        self
+    }
+
+    pub fn with_optional_timezone(mut self, timezone: Option<Timezone>) -> Self {
+        self.timezone = timezone;
         self
     }
 
@@ -72,8 +76,18 @@ impl AccountSettingsBuilder {
         self
     }
 
+    pub fn with_optional_privacy(mut self, privacy: Option<PrivacySettings>) -> Self {
+        self.privacy = privacy;
+        self
+    }
+
     pub fn with_notifications(mut self, notifications: NotificationSettings) -> Self {
         self.notifications = Some(notifications);
+        self
+    }
+
+    pub fn with_optional_notifications(mut self, notifications: Option<NotificationSettings>) -> Self {
+        self.notifications = notifications;
         self
     }
 
@@ -82,8 +96,13 @@ impl AccountSettingsBuilder {
         self
     }
 
-    pub fn with_initial_push_token(mut self, token: PushToken) -> Self {
-        self.push_tokens.push(token);
+    pub fn with_optional_appearance(mut self, appearance: Option<AppearanceSettings>) -> Self {
+        self.appearance = appearance;
+        self
+    }
+
+    pub fn with_initial_push_tokens(mut self, tokens: Vec<PushToken>) -> Self {
+        self.push_tokens = tokens;
         self
     }
 
@@ -91,16 +110,17 @@ impl AccountSettingsBuilder {
     pub fn build(self) -> AccountSettings {
         let now = Utc::now();
 
-        AccountSettings {
-            account_id: self.account_id,
-            region_code: self.region_code,
-            timezone: self.timezone.unwrap_or_else(|| Timezone::from_raw("UTC")),
-            privacy: self.privacy.unwrap_or_default(),
-            notifications: self.notifications.unwrap_or_default(),
-            appearance: self.appearance.unwrap_or_default(),
-            push_tokens: self.push_tokens,
-            updated_at: now,
-            metadata: AggregateMetadata::new(self.version),
-        }
+        // Centralisation via restore
+        AccountSettings::restore(
+            self.account_id,
+            self.region_code,
+            self.privacy.unwrap_or_default(),
+            self.notifications.unwrap_or_default(),
+            self.appearance.unwrap_or_default(),
+            self.timezone.unwrap_or_else(|| Timezone::from_raw("UTC")),
+            self.push_tokens,
+            now,
+            AggregateMetadata::new(self.version),
+        )
     }
 }

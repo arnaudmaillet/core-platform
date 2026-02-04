@@ -1,4 +1,4 @@
-// crates/account/src/domain/builders/user_buidler.rs
+// crates/account/src/domain/builders/account_builder.rs
 
 use crate::domain::entities::Account;
 use crate::domain::value_objects::{
@@ -22,7 +22,6 @@ pub struct AccountBuilder {
 
 impl AccountBuilder {
     /// Chemin 1 : CRÉATION (Via Use Case d'inscription)
-    /// Initialise les données obligatoires pour un nouveau compte.
     pub fn new(
         id: AccountId,
         region_code: RegionCode,
@@ -43,8 +42,8 @@ impl AccountBuilder {
         }
     }
 
-    /// Chemin 2 : RESTAURATION (Via Repository / Infrastructure)
-    /// Reconstruit l'objet complet sans aucune logique par défaut ni validation.
+    /// Chemin 2 : RESTAURATION (Via Repository)
+    /// Utilise la méthode statique de Account pour reconstruire l'agrégat.
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
         id: AccountId,
@@ -63,7 +62,8 @@ impl AccountBuilder {
         updated_at: DateTime<Utc>,
         last_active_at: Option<DateTime<Utc>>,
     ) -> Account {
-        Account {
+        // On appelle la méthode restore de l'entité Account
+        Account::restore(
             id,
             region_code,
             external_id,
@@ -78,14 +78,19 @@ impl AccountBuilder {
             created_at,
             updated_at,
             last_active_at,
-            metadata: AggregateMetadata::restore(version),
-        }
+            AggregateMetadata::restore(version),
+        )
     }
 
-    // --- SETTERS (Chemin Création) ---
+    // --- SETTERS FLUIDES ---
 
     pub fn with_locale(mut self, locale: Locale) -> Self {
         self.locale = Some(locale);
+        self
+    }
+
+    pub fn with_optional_locale(mut self, locale: Option<Locale>) -> Self {
+        self.locale = locale;
         self
     }
 
@@ -94,8 +99,18 @@ impl AccountBuilder {
         self
     }
 
+    pub fn with_optional_phone(mut self, phone: Option<PhoneNumber>) -> Self {
+        self.phone = phone;
+        self
+    }
+
     pub fn with_birth_date(mut self, birth_date: BirthDate) -> Self {
         self.birth_date = Some(birth_date);
+        self
+    }
+
+    pub fn with_optional_birth_date(mut self, birth_date: Option<BirthDate>) -> Self {
+        self.birth_date = birth_date;
         self
     }
 
@@ -103,22 +118,24 @@ impl AccountBuilder {
     pub fn build(self) -> Account {
         let now = Utc::now();
 
-        Account {
-            id: self.id,
-            region_code: self.region_code,
-            external_id: self.external_id,
-            username: self.username,
-            email: self.email,
-            email_verified: false, // Toujours false à la création
-            phone_number: self.phone,
-            phone_verified: false,
-            account_state: AccountState::Pending, // État initial standard
-            birth_date: self.birth_date,
-            locale: self.locale.unwrap_or_default(),
-            created_at: now,
-            updated_at: now,
-            last_active_at: Some(now), // L'utilisateur est actif à sa création
-            metadata: AggregateMetadata::new(self.version),
-        }
+        // On utilise la même méthode restore en interne pour garantir
+        // que l'instanciation de l'agrégat est centralisée.
+        Account::restore(
+            self.id,
+            self.region_code,
+            self.external_id,
+            self.username,
+            self.email,
+            false,
+            self.phone,
+            false,
+            AccountState::Pending,
+            self.birth_date,
+            self.locale.unwrap_or_default(),
+            now,
+            now,
+            Some(now),
+            AggregateMetadata::new(self.version),
+        )
     }
 }

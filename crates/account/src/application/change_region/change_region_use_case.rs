@@ -73,7 +73,7 @@ impl ChangeRegionUseCase {
         metadata.change_region(cmd.new_region.clone())?;
 
         // On met à jour la région dans les settings aussi pour la cohérence du sharding
-        settings.region_code = cmd.new_region.clone();
+        settings.change_region(cmd.new_region.clone())?;
         // On n'incrémente la version de settings que si un changement réel a eu lieu
         // (Ici on pourrait ajouter une méthode métier dans AccountSettings)
 

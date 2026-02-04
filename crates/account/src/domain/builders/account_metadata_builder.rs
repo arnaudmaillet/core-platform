@@ -12,7 +12,6 @@ pub struct AccountMetadataBuilder {
     role: AccountRole,
     trust_score: i32,
     estimated_ip: Option<String>,
-    // La version est stockée ici pour être passée à l'agrégat final
     version: i32,
 }
 
@@ -25,12 +24,11 @@ impl AccountMetadataBuilder {
             role: AccountRole::User,
             trust_score: 0,
             estimated_ip: None,
-            version: 1, // État initial de tout nouvel agrégat
+            version: 1,
         }
     }
 
     /// CHEMIN 2 : RESTAURATION (Via Repository)
-    /// Injection directe de la version provenant de PostgreSQL
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
         account_id: AccountId,
@@ -45,7 +43,7 @@ impl AccountMetadataBuilder {
         updated_at: DateTime<Utc>,
         version: i32,
     ) -> AccountMetadata {
-        AccountMetadata {
+        AccountMetadata::restore(
             account_id,
             region_code,
             role,
@@ -56,41 +54,52 @@ impl AccountMetadataBuilder {
             moderation_notes,
             estimated_ip,
             updated_at,
-            metadata: AggregateMetadata::restore(version),
-        }
+            AggregateMetadata::restore(version),
+        )
     }
 
-    // --- SETTERS (Chemin Création) ---
-
-    pub fn with_estimated_ip(mut self, ip: String) -> Self {
-        self.estimated_ip = Some(ip);
-        self
-    }
+    // --- SETTERS FLUIDES ---
 
     pub fn with_role(mut self, role: AccountRole) -> Self {
         self.role = role;
         self
     }
 
+    pub fn with_estimated_ip(mut self, ip: String) -> Self {
+        self.estimated_ip = Some(ip);
+        self
+    }
+
+    pub fn with_optional_estimated_ip(mut self, ip: Option<String>) -> Self {
+        self.estimated_ip = ip;
+        self
+    }
+
+    pub fn with_trust_score(mut self, score: i32) -> Self {
+        self.trust_score = score;
+        self
+    }
+
     /// Finalise pour une CRÉATION
     pub fn build(self) -> AccountMetadata {
         let now = Utc::now();
-        AccountMetadata {
-            account_id: self.account_id,
-            region_code: self.region_code,
-            role: self.role,
-            is_beta_tester: false,
-            is_shadowbanned: false,
-            trust_score: self.trust_score,
-            last_moderation_at: None,
-            moderation_notes: Some(format!(
+
+        // On centralise l'instanciation via restore même pour le build initial
+        AccountMetadata::restore(
+            self.account_id,
+            self.region_code,
+            self.role,
+            false, // is_beta_tester
+            false, // is_shadowbanned
+            self.trust_score,
+            None,  // last_moderation_at
+            Some(format!(
                 "[{}] Account metadata initialized.",
                 now.format("%Y-%m-%d %H:%M:%S")
             )),
-            estimated_ip: self.estimated_ip,
-            updated_at: now,
-            // On initialise un nouveau Metadata technique (Version 1)
-            metadata: AggregateMetadata::new(self.version),
-        }
+            self.estimated_ip,
+            now,
+            AggregateMetadata::new(self.version),
+        )
     }
 }
