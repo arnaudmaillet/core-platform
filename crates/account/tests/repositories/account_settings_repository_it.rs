@@ -1,6 +1,7 @@
 use account::domain::entities::AccountSettings;
 use account::domain::repositories::{AccountRepository, AccountSettingsRepository};
 use account::infrastructure::postgres::repositories::PostgresAccountSettingsRepository;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone, RegionCode};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 
@@ -129,4 +130,77 @@ async fn test_delete_settings() {
 
     let found = repo.find_by_account_id(&account_id, None).await.unwrap();
     assert!(found.is_none());
+}
+
+#[tokio::test]
+async fn test_settings_concurrency_conflict() {
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let repo = PostgresAccountSettingsRepository::new(pool.clone());
+    let account_id = AccountId::new();
+    let region = RegionCode::try_new("eu").unwrap();
+
+    // 1. Initialisation (v1)
+    let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+    repo.save(&settings, None).await.unwrap();
+
+    // 2. Deux clients lisent la v1
+    let mut client_a = repo.find_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let mut client_b = repo.find_by_account_id(&account_id, None).await.unwrap().unwrap();
+
+    // 3. Client A gagne (v1 -> v2)
+    client_a.update_timezone(Timezone::try_new("Europe/Berlin").unwrap()).unwrap();
+    repo.save(&client_a, None).await.expect("A should succeed");
+
+    // 4. Client B essaie de sauver v1 -> v2 (Mais la DB est déjà en v2)
+    client_b.update_timezone(Timezone::try_new("Europe/London").unwrap()).unwrap();
+    let result = repo.save(&client_b, None).await;
+
+    // Doit être en erreur
+    assert!(result.is_err(), "B should fail due to optimistic locking conflict");
+}
+
+
+#[tokio::test]
+async fn test_atomic_operations_increment_version() {
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let repo = PostgresAccountSettingsRepository::new(pool.clone());
+    let account_id = AccountId::new();
+    let region = RegionCode::try_new("eu").unwrap();
+
+    repo.save(&AccountSettings::builder(account_id.clone(), region).build(), None).await.unwrap();
+    let initial = repo.find_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let v1 = initial.version();
+
+    // Test sur update_timezone
+    repo.update_timezone(&account_id, &Timezone::try_new("UTC").unwrap(), None).await.unwrap();
+    let after_tz = repo.find_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert!(after_tz.version() > v1, "La version doit augmenter après update_timezone");
+
+    // Test sur add_push_token
+    let token = PushToken::try_new("test_token").unwrap();
+    repo.add_push_token(&account_id, &token, None).await.unwrap();
+    let after_token = repo.find_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert!(after_token.version() > after_tz.version(), "La version doit augmenter après add_push_token");
+}
+
+#[tokio::test]
+async fn test_push_token_idempotency() {
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let repo = PostgresAccountSettingsRepository::new(pool.clone());
+    let account_id = AccountId::new();
+    let region = RegionCode::try_new("eu").unwrap();
+    let token = PushToken::try_new("unique_token").unwrap();
+
+    // --- FIX : Il faut créer l'enregistrement d'abord ! ---
+    let initial = AccountSettings::builder(account_id.clone(), region).build();
+    repo.save(&initial, None).await.unwrap();
+
+    // On ajoute deux fois le même token
+    repo.add_push_token(&account_id, &token, None).await.unwrap();
+    repo.add_push_token(&account_id, &token, None).await.unwrap();
+
+    let found = repo.find_by_account_id(&account_id, None).await.unwrap().expect("Should exist now");
+
+    // Il ne doit y en avoir qu'un seul grâce au DISTINCT en SQL
+    assert_eq!(found.push_tokens().len(), 1, "Le token ne doit pas être dupliqué");
 }

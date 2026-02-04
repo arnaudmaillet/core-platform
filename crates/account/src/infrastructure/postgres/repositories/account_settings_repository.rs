@@ -76,7 +76,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let updated_at = settings.updated_at();
 
         let new_version = settings.version();
-        let old_version = new_version - 1; // On suppose que le domaine a déjà incrémenté
+        let old_version = if new_version > 1 { new_version - 1 } else { 0 };
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "
@@ -86,7 +86,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
                     settings = EXCLUDED.settings,
                     timezone = EXCLUDED.timezone,
                     push_tokens = EXCLUDED.push_tokens,
-                    version = EXCLUDED.version, -- On prend la version incrémentée du domaine
+                    version = EXCLUDED.version,
                     updated_at = EXCLUDED.updated_at
                 WHERE account_settings.version = $8";
 
@@ -96,15 +96,21 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
                 .bind(settings_json)
                 .bind(tz)
                 .bind(push_tokens)
-                .bind(new_version) // $6
-                .bind(updated_at)   // $7
-                .bind(old_version)  // $8
+                .bind(new_version)
+                .bind(updated_at)
+                .bind(old_version)
                 .execute(conn)
                 .await
                 .map_domain_infra("AccountSettings: save")?;
 
+            // ANALYSE DU RÉSULTAT
+            // Si rows_affected == 0, cela signifie que :
+            // 1. Soit la ligne n'existait pas (impossible ici car on fait un INSERT)
+            // 2. Soit la clause WHERE (version = old_version) a échoué.
             if result.rows_affected() == 0 && new_version > 1 {
-                return Err(DomainError::ConcurrencyConflict{reason: "Conflit de version sur AccountSettings".into()});
+                return Err(DomainError::ConcurrencyConflict {
+                    reason: format!("Concurrency conflict for account {}: version mismatch", uid)
+                });
             }
 
             Ok(())
@@ -122,7 +128,9 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let tz = timezone.as_str().to_string();
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
-            let query = "UPDATE account_settings SET timezone = $1, updated_at = NOW() WHERE account_id = $2";
+            let query = "UPDATE account_settings
+             SET timezone = $1, version = version + 1, updated_at = NOW()
+             WHERE account_id = $2";
             sqlx::query(query)
                 .bind(tz)
                 .bind(uid)
@@ -145,9 +153,10 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "UPDATE account_settings
-                         SET push_tokens = ARRAY(SELECT DISTINCT unnest(array_append(push_tokens, $1))),
-                             updated_at = NOW()
-                         WHERE account_id = $2";
+             SET push_tokens = ARRAY(SELECT DISTINCT unnest(array_append(push_tokens, $1))),
+                 version = version + 1,
+                 updated_at = NOW()
+             WHERE account_id = $2";
             sqlx::query(query)
                 .bind(token_str)
                 .bind(uid)
@@ -172,6 +181,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
             Box::pin(async move {
                 let query = "UPDATE account_settings
                          SET push_tokens = array_remove(push_tokens, $1),
+                             version = version + 1,
                              updated_at = NOW()
                          WHERE account_id = $2";
                 sqlx::query(query)
