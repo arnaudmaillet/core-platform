@@ -1,26 +1,32 @@
 -- 1. ENUMS
 DO $$ BEGIN
+    -- On vérifie bien le nom exact du TYPE
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_state') THEN
 CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended');
 END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'internal_role') THEN
 CREATE TYPE internal_role AS ENUM ('user', 'moderator', 'staff', 'admin');
 END IF;
 END $$;
 
--- 2. CORE ACCOUNT
+-- 2. TABLE ACCOUNTS
 CREATE TABLE IF NOT EXISTS accounts (
-                                     id UUID PRIMARY KEY,
-                                     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+                                        id UUID PRIMARY KEY,
+                                        region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
     external_id TEXT NOT NULL UNIQUE,
     username TEXT NOT NULL UNIQUE,
     email TEXT UNIQUE,
     phone_number TEXT UNIQUE,
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    account_state account_state NOT NULL DEFAULT 'active',
-    version INT NOT NULL DEFAULT 1, -- Optimistic Locking
+    phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    state account_state NOT NULL DEFAULT 'active',
+    birth_date DATE,
+    locale VARCHAR(10) NOT NULL DEFAULT 'en',
+    version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_active_at TIMESTAMPTZ
     );
 
 -- 3. SETTINGS
@@ -44,7 +50,7 @@ CREATE TABLE IF NOT EXISTS user_internal_metadata (
     trust_score INT NOT NULL DEFAULT 1,
     moderation_notes TEXT,
     estimated_ip TEXT,
-    version INT NOT NULL DEFAULT 1, -- Crucial pour l'idempotence du Trust Score
+    version INT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (account_id, region_code)
     );
@@ -53,6 +59,6 @@ CREATE TABLE IF NOT EXISTS user_internal_metadata (
 CREATE INDEX IF NOT EXISTS idx_users_username_lower ON accounts (LOWER(username));
 CREATE INDEX IF NOT EXISTS idx_user_settings_push_tokens ON user_settings USING GIN (push_tokens);
 
-CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON users FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON accounts FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON user_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON user_internal_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();

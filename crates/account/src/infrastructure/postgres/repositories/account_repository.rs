@@ -30,18 +30,15 @@ impl AccountRepository for PostgresAccountRepository {
 
     async fn find_account_id_by_email(&self, email: &Email) -> Result<Option<AccountId>> {
         let email_str = email.as_str().to_string();
-
         let id = <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
-                query_scalar::<Postgres, uuid::Uuid>("SELECT id FROM users WHERE email = $1")
+                query_scalar::<Postgres, uuid::Uuid>("SELECT id FROM accounts WHERE email = $1")
                     .bind(email_str)
                     .fetch_optional(conn)
                     .await
                     .map_domain::<Account>()
             })
-        })
-        .await?;
-
+        }).await?;
         Ok(id.map(AccountId::from_uuid))
     }
 
@@ -50,7 +47,7 @@ impl AccountRepository for PostgresAccountRepository {
 
         let id = <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
-                query_scalar::<Postgres, uuid::Uuid>("SELECT id FROM users WHERE username = $1")
+                query_scalar::<Postgres, uuid::Uuid>("SELECT id FROM accounts WHERE username = $1")
                     .bind(username_str)
                     .fetch_optional(conn)
                     .await
@@ -72,7 +69,7 @@ impl AccountRepository for PostgresAccountRepository {
         // 2. On passe 'tx' au lieu de 'None' dans execute_on
         let id = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
-                query_scalar::<Postgres, uuid::Uuid>("SELECT id FROM users WHERE external_id = $1")
+                query_scalar::<Postgres, uuid::Uuid>("SELECT id FROM accounts WHERE external_id = $1")
                     .bind(ext_id)
                     .fetch_optional(conn)
                     .await
@@ -95,9 +92,9 @@ impl AccountRepository for PostgresAccountRepository {
         let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = if has_tx {
-                    "SELECT * FROM users WHERE id = $1 FOR UPDATE"
+                    "SELECT * FROM accounts WHERE id = $1 FOR UPDATE"
                 } else {
-                    "SELECT * FROM users WHERE id = $1"
+                    "SELECT * FROM accounts WHERE id = $1"
                 };
 
                 query_as::<_, PostgresAccountRow>(sql)
@@ -120,7 +117,7 @@ impl AccountRepository for PostgresAccountRepository {
         <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
                 query_scalar::<Postgres, bool>(
-                    "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)",
+                    "SELECT EXISTS(SELECT 1 FROM accounts WHERE email = $1)",
                 )
                 .bind(email_str)
                 .fetch_one(conn)
@@ -137,7 +134,7 @@ impl AccountRepository for PostgresAccountRepository {
         <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
                 query_scalar::<Postgres, bool>(
-                    "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)",
+                    "SELECT EXISTS(SELECT 1 FROM accounts WHERE username = $1)",
                 )
                 .bind(username_str)
                 .fetch_one(conn)
@@ -154,7 +151,7 @@ impl AccountRepository for PostgresAccountRepository {
         <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
                 query_scalar::<Postgres, bool>(
-                    "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)",
+                    "SELECT EXISTS(SELECT 1 FROM accounts WHERE phone_number = $1)",
                 )
                 .bind(phone_str)
                 .fetch_one(conn)
@@ -167,40 +164,37 @@ impl AccountRepository for PostgresAccountRepository {
 
     // --- ÉCRITURES ---
 
-    async fn create_account(&self, user: &Account, tx: &mut dyn Transaction) -> Result<()> {
-        let row = PostgresAccountRow::from(user);
-
+    async fn create_account(&self, account: &Account, tx: &mut dyn Transaction) -> Result<()> {
+        let row = PostgresAccountRow::from(account);
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
                 query(
                     r#"
-            INSERT INTO users (
-                id, region_code, external_id, username, email,
-                phone_number, account_state, birth_date, locale,
-                created_at, updated_at, last_active_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            "#,
+                    INSERT INTO accounts (
+                        id, region_code, external_id, username, email,
+                        phone_number, state, birth_date, locale,
+                        created_at, updated_at, last_active_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    "#,
                 )
-                .bind(row.id)
-                .bind(&row.region_code)
-                .bind(&row.external_id)
-                .bind(&row.username)
-                .bind(&row.email)
-                .bind(&row.phone_number)
-                .bind(&row.account_state)
-                .bind(row.birth_date)
-                .bind(&row.locale)
-                .bind(row.created_at)
-                .bind(row.updated_at)
-                .bind(row.last_active_at)
-                .execute(conn)
-                .await
-                .map_domain::<Account>()
+                    .bind(row.id)
+                    .bind(&row.region_code)
+                    .bind(&row.external_id)
+                    .bind(&row.username)
+                    .bind(&row.email)
+                    .bind(&row.phone_number)
+                    .bind(&row.state) // Colonne 'state'
+                    .bind(row.birth_date)
+                    .bind(&row.locale)
+                    .bind(row.created_at)
+                    .bind(row.updated_at)
+                    .bind(row.last_active_at)
+                    .execute(conn)
+                    .await
+                    .map_domain::<Account>()
             })
-        })
-        .await?;
-
+        }).await?;
         Ok(())
     }
 
@@ -217,49 +211,53 @@ impl AccountRepository for PostgresAccountRepository {
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
-                let mut qb = QueryBuilder::<Postgres>::new("UPDATE users SET ");
-                let mut separated = qb.separated(", ");
+                let mut qb = QueryBuilder::<Postgres>::new("UPDATE accounts SET ");
 
-                if let Some(u) = params.username {
-                    separated
-                        .push("username = ")
-                        .push_bind(u.as_str().to_string());
-                }
-                if let Some(e) = params.email {
-                    separated.push("email = ").push_bind(e.as_str().to_string());
-                }
-                if let Some(v) = params.email_verified {
-                    separated.push("email_verified = ").push_bind(v);
-                }
-                if let Some(p) = params.phone_number {
-                    separated
-                        .push("phone_number = ")
-                        .push_bind(p.as_str().to_string());
-                }
-                if let Some(v) = params.phone_verified {
-                    separated.push("phone_verified = ").push_bind(v);
-                }
-                if let Some(s) = params.account_state {
-                    separated
-                        .push("account_state = ")
-                        .push_bind(s.as_str().to_string());
-                }
-                if let Some(b) = params.birth_date {
-                    separated.push("birth_date = ").push_bind(b.value());
-                }
-                if let Some(l) = params.locale {
-                    separated
-                        .push("locale = ")
-                        .push_bind(l.as_str().to_string());
+                {
+                    let mut separated = qb.separated(", ");
+
+                    if let Some(u) = params.username {
+                        separated.push("username = ")
+                            .push_bind_unseparated(u.as_str().to_string());
+                    }
+                    if let Some(e) = params.email {
+                        separated.push("email = ")
+                            .push_bind_unseparated(e.as_str().to_string());
+                    }
+                    if let Some(v) = params.email_verified {
+                        separated.push("email_verified = ")
+                            .push_bind_unseparated(v);
+                    }
+                    if let Some(p) = params.phone_number {
+                        separated.push("phone_number = ")
+                            .push_bind_unseparated(p.as_str().to_string());
+                    }
+                    if let Some(v) = params.phone_verified {
+                        separated.push("phone_verified = ")
+                            .push_bind_unseparated(v);
+                    }
+                    if let Some(s) = params.state {
+                        separated.push("state = ")
+                            .push_bind_unseparated(s.as_str().to_string());
+                    }
+                    if let Some(b) = params.birth_date {
+                        separated.push("birth_date = ")
+                            .push_bind_unseparated(b.value());
+                    }
+                    if let Some(l) = params.locale {
+                        separated.push("locale = ")
+                            .push_bind_unseparated(l.as_str().to_string());
+                    }
+
+                    separated.push("updated_at = NOW()");
                 }
 
-                separated.push("updated_at = NOW()");
                 qb.push(" WHERE id = ").push_bind(uid);
 
                 qb.build().execute(conn).await.map_domain::<Account>()
             })
         })
-        .await?;
+            .await?;
 
         Ok(())
     }
@@ -279,7 +277,7 @@ impl AccountRepository for PostgresAccountRepository {
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
-                query("UPDATE users SET account_state = $1, updated_at = NOW() WHERE id = $2")
+                query("UPDATE accounts SET state = $1, updated_at = NOW() WHERE id = $2")
                     .bind(state_str)
                     .bind(uid)
                     .execute(conn)
@@ -295,7 +293,7 @@ impl AccountRepository for PostgresAccountRepository {
         let uid = id.as_uuid();
         <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
-                query("UPDATE users SET last_active_at = NOW() WHERE id = $1")
+                query("UPDATE accounts SET last_active_at = NOW() WHERE id = $1")
                     .bind(uid)
                     .execute(conn)
                     .await
@@ -310,7 +308,7 @@ impl AccountRepository for PostgresAccountRepository {
         let uid = id.as_uuid();
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
-                query("DELETE FROM users WHERE id = $1")
+                query("DELETE FROM accounts WHERE id = $1")
                     .bind(uid)
                     .execute(conn)
                     .await
@@ -329,9 +327,9 @@ impl PostgresAccountRepository {
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
-            INSERT INTO users (
+            INSERT INTO accounts (
                 id, region_code, external_id, username, email, email_verified,
-                phone_number, phone_verified, account_state, birth_date,
+                phone_number, phone_verified, state, birth_date,
                 locale, updated_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -340,7 +338,7 @@ impl PostgresAccountRepository {
                 email_verified = EXCLUDED.email_verified,
                 phone_number = EXCLUDED.phone_number,
                 phone_verified = EXCLUDED.phone_verified,
-                account_state = EXCLUDED.account_state,
+                state = EXCLUDED.state,
                 locale = EXCLUDED.locale,
                 updated_at = EXCLUDED.updated_at
         "#;
@@ -355,7 +353,7 @@ impl PostgresAccountRepository {
                     .bind(row.email_verified)
                     .bind(&row.phone_number)
                     .bind(row.phone_verified)
-                    .bind(&row.account_state) // Utilise le type PostgresAccountState de la row
+                    .bind(&row.state) // Utilise le type PostgresAccountState de la row
                     .bind(row.birth_date)
                     .bind(&row.locale)
                     .bind(row.updated_at)
