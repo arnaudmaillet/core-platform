@@ -1,19 +1,25 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::repositories::CacheRepository;
-    use shared_kernel::domain::value_objects::{Username, RegionCode, AccountId};
-    use shared_kernel::errors::DomainError;
-    use shared_kernel::utils::CacheRepositoryStub;
-    use crate::application::get_profile_by_username::{GetProfileByUsernameCommand, GetProfileByUsernameUseCase};
+    use crate::application::get_profile_by_username::{
+        GetProfileByUsernameCommand, GetProfileByUsernameUseCase,
+    };
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::repositories::ProfileIdentityRepository;
     use crate::domain::value_objects::DisplayName;
     use crate::utils::profile_repository_stub::ProfileRepositoryStub;
+    use shared_kernel::domain::repositories::CacheRepository;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use shared_kernel::utils::CacheRepositoryStub;
+    use std::sync::{Arc, Mutex};
 
     /// Helper pour créer le Use Case avec des stubs
-    fn setup(profile: Option<Profile>, cached_json: Option<String>, fail_cache: bool) -> GetProfileByUsernameUseCase {
+    fn setup(
+        profile: Option<Profile>,
+        cached_json: Option<String>,
+        fail_cache: bool,
+    ) -> GetProfileByUsernameUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(profile),
             ..Default::default()
@@ -26,7 +32,11 @@ mod tests {
         cache_stub.fail_all = fail_cache;
 
         if let Some(json) = cached_json {
-            cache_stub.storage.lock().unwrap().insert("profile:un:eu:bob".to_string(), json);
+            cache_stub
+                .storage
+                .lock()
+                .unwrap()
+                .insert("profile:un:eu:bob".to_string(), json);
         }
 
         // 3. On le déplace dans l'Arc seulement à la fin
@@ -42,8 +52,9 @@ mod tests {
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         let json = serde_json::to_string(&bob).unwrap();
 
         // On ne met RIEN dans le repo pour prouver que le cache suffit
@@ -75,7 +86,8 @@ mod tests {
             region.clone(),
             DisplayName::from_raw("Bob"),
             username.clone(),
-        ).build();
+        )
+        .build();
         let repo_stub = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(bob)),
             ..Default::default()
@@ -98,7 +110,8 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        let result: shared_kernel::errors::AppResult<Option<String>> = cache_for_assertion.get(cache_key).await;
+        let result: shared_kernel::errors::AppResult<Option<String>> =
+            cache_for_assertion.get(cache_key).await;
         let cached_data = result.expect("Cache stub should not fail here");
 
         assert!(cached_data.is_some());
@@ -132,8 +145,9 @@ mod tests {
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(bob), None, true);
 
@@ -147,7 +161,10 @@ mod tests {
 
         // Assert
         // Le Use Case doit ignorer l'erreur Redis et renvoyer le profil de la DB
-        assert!(result.is_ok(), "Le Use Case doit survivre à une panne de cache");
+        assert!(
+            result.is_ok(),
+            "Le Use Case doit survivre à une panne de cache"
+        );
         assert_eq!(result.unwrap().username().as_str(), "bob");
     }
 
@@ -158,8 +175,9 @@ mod tests {
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         let use_case = setup(Some(bob), Some("{{invalid_json}}".to_string()), false);
 
         let cmd = GetProfileByUsernameCommand {
@@ -182,8 +200,9 @@ mod tests {
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         // Simulation d'une latence DB pour tester le Singleflight
         let repo = Arc::new(ProfileRepositoryStub {
@@ -204,9 +223,7 @@ mod tests {
         for _ in 0..20 {
             let uc = Arc::clone(&use_case);
             let c = cmd.clone();
-            futures.push(tokio::spawn(async move {
-                uc.execute(c).await
-            }));
+            futures.push(tokio::spawn(async move { uc.execute(c).await }));
         }
 
         // On attend tous les résultats
@@ -217,7 +234,10 @@ mod tests {
 
         // Assert
         for r in results {
-            assert!(r.is_ok(), "Toutes les requêtes concurrentes doivent réussir");
+            assert!(
+                r.is_ok(),
+                "Toutes les requêtes concurrentes doivent réussir"
+            );
         }
 
         // Note: Pour être parfait, on pourrait ajouter un compteur atomique dans ProfileRepoStub
@@ -235,34 +255,108 @@ mod tests {
 
         #[async_trait::async_trait]
         impl crate::domain::repositories::ProfileRepository for CountingRepo {
-            async fn get_full_profile_by_username(&self, _: &Username, _: &RegionCode) -> shared_kernel::errors::Result<Option<Profile>> {
+            async fn get_full_profile_by_username(
+                &self,
+                _: &Username,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<Option<Profile>> {
                 self.call_count.fetch_add(1, Ordering::SeqCst);
                 let p = self.profile.clone();
                 Ok(Some(p))
             }
 
-            async fn get_profile_by_account_id(&self, _: &AccountId, _: &RegionCode) -> shared_kernel::errors::Result<Option<Profile>> { Ok(Some(self.profile.clone())) }
-            async fn get_profile_without_stats(&self, _: &AccountId, _: &RegionCode) -> shared_kernel::errors::Result<Option<Profile>> { Ok(Some(self.profile.clone())) }
-            async fn get_profile_stats(&self, _: &AccountId, _: &RegionCode) -> shared_kernel::errors::Result<Option<crate::domain::value_objects::ProfileStats>> { Ok(None) }
+            async fn get_profile_by_account_id(
+                &self,
+                _: &AccountId,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<Option<Profile>> {
+                Ok(Some(self.profile.clone()))
+            }
+            async fn get_profile_without_stats(
+                &self,
+                _: &AccountId,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<Option<Profile>> {
+                Ok(Some(self.profile.clone()))
+            }
+            async fn get_profile_stats(
+                &self,
+                _: &AccountId,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<Option<crate::domain::value_objects::ProfileStats>>
+            {
+                Ok(None)
+            }
 
             // Bridge vers ProfileIdentityRepository
-            async fn save(&self, _: &Profile, _: Option<&mut dyn shared_kernel::domain::transaction::Transaction>) -> shared_kernel::errors::Result<()> { Ok(()) }
-            async fn exists_by_username(&self, _: &Username, _: &RegionCode) -> shared_kernel::errors::Result<bool> { Ok(true) }
+            async fn save(
+                &self,
+                _: &Profile,
+                _: Option<&mut dyn shared_kernel::domain::transaction::Transaction>,
+            ) -> shared_kernel::errors::Result<()> {
+                Ok(())
+            }
+            async fn exists_by_username(
+                &self,
+                _: &Username,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<bool> {
+                Ok(true)
+            }
         }
 
         #[async_trait::async_trait]
         impl ProfileIdentityRepository for CountingRepo {
-            async fn save(&self, _: &Profile, _: Option<&mut dyn shared_kernel::domain::transaction::Transaction>) -> shared_kernel::errors::Result<()> { Ok(()) }
-            async fn find_by_id(&self, _: &AccountId, _: &RegionCode) -> shared_kernel::errors::Result<Option<Profile>> { Ok(Some(self.profile.clone())) }
-            async fn find_by_username(&self, _: &Username, _: &RegionCode) -> shared_kernel::errors::Result<Option<Profile>> { Ok(Some(self.profile.clone())) }
-            async fn exists_by_username(&self, _: &Username, _: &RegionCode) -> shared_kernel::errors::Result<bool> { Ok(true) }
-            async fn delete_identity(&self, _: &AccountId, _: &RegionCode) -> shared_kernel::errors::Result<()> { Ok(()) }
+            async fn save(
+                &self,
+                _: &Profile,
+                _: Option<&mut dyn shared_kernel::domain::transaction::Transaction>,
+            ) -> shared_kernel::errors::Result<()> {
+                Ok(())
+            }
+            async fn find_by_id(
+                &self,
+                _: &AccountId,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<Option<Profile>> {
+                Ok(Some(self.profile.clone()))
+            }
+            async fn find_by_username(
+                &self,
+                _: &Username,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<Option<Profile>> {
+                Ok(Some(self.profile.clone()))
+            }
+            async fn exists_by_username(
+                &self,
+                _: &Username,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<bool> {
+                Ok(true)
+            }
+            async fn delete_identity(
+                &self,
+                _: &AccountId,
+                _: &RegionCode,
+            ) -> shared_kernel::errors::Result<()> {
+                Ok(())
+            }
         }
 
         let counter = Arc::new(AtomicUsize::new(0));
-        let bob = ProfileBuilder::new(AccountId::new(), RegionCode::from_raw("eu"), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let bob = ProfileBuilder::new(
+            AccountId::new(),
+            RegionCode::from_raw("eu"),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
-        let repo = Arc::new(CountingRepo { call_count: counter.clone(), profile: bob });
+        let repo = Arc::new(CountingRepo {
+            call_count: counter.clone(),
+            profile: bob,
+        });
         let cache = Arc::new(CacheRepositoryStub::default());
         let use_case = Arc::new(GetProfileByUsernameUseCase::new(repo, cache));
 
@@ -273,7 +367,8 @@ mod tests {
                 uc.execute(GetProfileByUsernameCommand {
                     username: Username::try_new("bob").unwrap(),
                     region: RegionCode::from_raw("eu"),
-                }).await
+                })
+                .await
             }));
         }
 
@@ -283,6 +378,10 @@ mod tests {
             assert!(res.is_ok(), "Le Use Case doit réussir");
         }
 
-        assert_eq!(counter.load(Ordering::SeqCst), 1, "Le Singleflight n'a pas dédoublonné les appels !");
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            1,
+            "Le Singleflight n'a pas dédoublonné les appels !"
+        );
     }
 }

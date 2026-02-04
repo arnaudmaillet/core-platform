@@ -1,10 +1,12 @@
 // crates/account/src/domain/builders/user_buidler.rs
 
+use crate::domain::entities::Account;
+use crate::domain::value_objects::{
+    AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
+};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId, Username};
-use crate::domain::entities::Account;
-use crate::domain::value_objects::{ExternalId, Email, Locale, PhoneNumber, BirthDate, AccountState};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 
 pub struct AccountBuilder {
     id: AccountId,
@@ -76,7 +78,7 @@ impl AccountBuilder {
             created_at,
             updated_at,
             last_active_at,
-            metadata: AggregateMetadata::restore(version)
+            metadata: AggregateMetadata::restore(version),
         }
     }
 

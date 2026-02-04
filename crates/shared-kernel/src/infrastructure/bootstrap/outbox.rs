@@ -2,18 +2,15 @@
 
 #![cfg(all(feature = "postgres", feature = "kafka"))]
 
-use std::time::Duration;
-use std::env;
-use sqlx::PgPool;
 use crate::application::workers::OutboxProcessor;
 use crate::errors::AppResult;
 use crate::infrastructure::kafka::KafkaMessageProducer;
 use crate::infrastructure::postgres::storages::PostgresOutboxStore;
+use sqlx::PgPool;
+use std::env;
+use std::time::Duration;
 
-pub async fn run_outbox_relay(
-    domain_name: &str,
-    default_topic: &str,
-) -> AppResult<()> {
+pub async fn run_outbox_relay(domain_name: &str, default_topic: &str) -> AppResult<()> {
     // 1. Initialisation des logs
     tracing_subscriber::fmt::init();
     tracing::info!("📡 Starting Outbox Relay for domain: {}", domain_name);
@@ -34,8 +31,9 @@ pub async fn run_outbox_relay(
         .unwrap_or(500);
 
     // 3. Montage de l'infrastructure
-    let pool = PgPool::connect(&db_url).await
-        .map_err(|e| crate::errors::AppError::new(crate::errors::ErrorCode::InternalError, e.to_string()))?;
+    let pool = PgPool::connect(&db_url).await.map_err(|e| {
+        crate::errors::AppError::new(crate::errors::ErrorCode::InternalError, e.to_string())
+    })?;
 
     let store = PostgresOutboxStore::new(pool);
     let producer = KafkaMessageProducer::new(&brokers, default_topic.to_string()).await?;
@@ -45,7 +43,7 @@ pub async fn run_outbox_relay(
         store,
         producer,
         batch_size,
-        Duration::from_millis(interval_ms)
+        Duration::from_millis(interval_ms),
     );
 
     // 5. Préparation du signal d'arrêt (Graceful Shutdown)

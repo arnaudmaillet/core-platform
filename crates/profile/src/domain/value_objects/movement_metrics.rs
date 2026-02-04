@@ -24,10 +24,7 @@ impl MovementMetrics {
 
     /// Pour les Use Cases (Primitifs -> VO)
     pub fn try_from_primitives(speed: f32, heading: f32) -> Result<Self> {
-        Self::try_new(
-            Speed::try_new(speed)?,
-            Heading::try_new(heading)?
-        )
+        Self::try_new(Speed::try_new(speed)?, Heading::try_new(heading)?)
     }
 
     // --- Getters (Accès en lecture seule) ---

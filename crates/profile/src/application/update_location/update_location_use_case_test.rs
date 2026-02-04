@@ -1,15 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use chrono::{Utc, Duration};
-    use shared_kernel::domain::entities::GeoPoint;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-    use shared_kernel::errors::{DomainError, Result};
     use crate::application::update_location::{UpdateLocationCommand, UpdateLocationUseCase};
     use crate::domain::builders::UserLocationBuilder;
     use crate::domain::entities::UserLocation;
     use crate::utils::LocationRepositoryStub;
     use crate::utils::profile_repository_stub::{OutboxRepoStub, StubTxManager};
+    use chrono::{Duration, Utc};
+    use shared_kernel::domain::entities::GeoPoint;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
+    use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::events::EventEnvelope;
 
     fn setup(location: Option<UserLocation>) -> UpdateLocationUseCase {
         let repo = Arc::new(LocationRepositoryStub {
@@ -17,11 +18,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateLocationUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateLocationUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -30,7 +27,8 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
         let initial_coords = GeoPoint::from_raw(48.8566, 2.3522); // Paris
-        let initial_location = UserLocationBuilder::new(account_id.clone(), region.clone(), initial_coords).build();
+        let initial_location =
+            UserLocationBuilder::new(account_id.clone(), region.clone(), initial_coords).build();
 
         let use_case = setup(Some(initial_location));
 
@@ -68,7 +66,7 @@ mod tests {
             false,
             0,
             ten_seconds_ago,
-            1
+            1,
         );
 
         let use_case = setup(Some(location));
@@ -108,7 +106,7 @@ mod tests {
             false,
             0,
             one_minute_ago,
-            1
+            1,
         );
 
         let use_case = setup(Some(location));
@@ -147,42 +145,66 @@ mod tests {
     async fn test_update_location_concurrency_conflict() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let location = UserLocationBuilder::new(account_id.clone(), region.clone(), GeoPoint::from_raw(0.0, 0.0)).build();
+        let location = UserLocationBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            GeoPoint::from_raw(0.0, 0.0),
+        )
+        .build();
 
         // Simulation d'une erreur de version lors du save
         let repo = Arc::new(LocationRepositoryStub {
             location_to_return: Mutex::new(Some(location)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch".into()
+                reason: "Version mismatch".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = UpdateLocationUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            UpdateLocationUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
-        let result = use_case.execute(UpdateLocationCommand {
-            account_id,
-            region,
-            coords: GeoPoint::from_raw(1.0, 1.0),
-            metrics: None,
-            movement: None,
-        }).await;
+        let result = use_case
+            .execute(UpdateLocationCommand {
+                account_id,
+                region,
+                coords: GeoPoint::from_raw(1.0, 1.0),
+                metrics: None,
+                movement: None,
+            })
+            .await;
 
         // On vérifie que le conflit remonte (le retry aura été tenté par with_retry)
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
     async fn test_update_location_atomic_outbox_failure() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let location = UserLocationBuilder::new(account_id.clone(), region.clone(), GeoPoint::from_raw(0.0, 0.0)).build();
+        let location = UserLocationBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            GeoPoint::from_raw(0.0, 0.0),
+        )
+        .build();
 
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> Result<()> {
                 Err(DomainError::Internal("Outbox error".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -195,13 +217,15 @@ mod tests {
             Arc::new(StubTxManager),
         );
 
-        let result = use_case.execute(UpdateLocationCommand {
-            account_id,
-            region,
-            coords: GeoPoint::from_raw(1.0, 1.0),
-            metrics: None,
-            movement: None,
-        }).await;
+        let result = use_case
+            .execute(UpdateLocationCommand {
+                account_id,
+                region,
+                coords: GeoPoint::from_raw(1.0, 1.0),
+                metrics: None,
+                movement: None,
+            })
+            .await;
 
         // Échec Outbox -> Erreur retournée
         assert!(result.is_err());

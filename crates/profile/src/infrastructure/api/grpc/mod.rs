@@ -24,5 +24,5 @@ pub use profile_v1_raw_proto;
 
 // --- FACADE ---
 // Pour simplifier les imports dans tes handlers
-pub use profile_v1_raw_proto::profile::v1 as profile_v1;
 pub use profile_v1_raw_proto::location::v1 as location_v1;
+pub use profile_v1_raw_proto::profile::v1 as profile_v1;

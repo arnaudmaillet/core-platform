@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/domain/utils/retry.rs
 
-use rand::Rng;
 use crate::errors::{DomainError, Result};
+use rand::Rng;
 
 pub struct RetryConfig {
     pub max_retries: u32,
@@ -50,7 +50,8 @@ where
         }
     }
 
-    Err(DomainError::TooManyConflicts(
-        format!("Operation failed after {} retries due to persistent conflicts", config.max_retries)
-    ))
+    Err(DomainError::TooManyConflicts(format!(
+        "Operation failed after {} retries due to persistent conflicts",
+        config.max_retries
+    )))
 }

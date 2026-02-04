@@ -1,14 +1,14 @@
 // crates/shared-kernel/src/infrastructure/persistence/redis_cache_repository.rs
 
 use async_trait::async_trait;
-use fred::prelude::*;
 use fred::clients::Pool;
-use fred::types::{Builder, Expiration};
+use fred::prelude::*;
 use fred::types::scan::ScanType;
+use fred::types::{Builder, Expiration};
 use std::time::Duration;
 
 use crate::domain::repositories::CacheRepository;
-use crate::errors::{AppResult, AppError, ErrorCode};
+use crate::errors::{AppError, AppResult, ErrorCode};
 
 pub struct RedisCacheRepository {
     pool: Pool,
@@ -31,7 +31,8 @@ impl RedisCacheRepository {
             .build_pool(16)
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
-        pool.init().await
+        pool.init()
+            .await
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
         Ok(Self { pool })
@@ -62,7 +63,8 @@ impl CacheRepository for RedisCacheRepository {
 
     // PLUS de générique <V>. On retourne l'Option<String> brute de Redis.
     async fn get(&self, key: &str) -> AppResult<Option<String>> {
-        let result: Option<String> = self.pool
+        let result: Option<String> = self
+            .pool
             .get(key)
             .await
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
@@ -82,18 +84,23 @@ impl CacheRepository for RedisCacheRepository {
         let mut current_cursor = "0".to_string();
 
         loop {
-            let (next_cursor, keys): (String, Vec<String>) = self.pool
+            let (next_cursor, keys): (String, Vec<String>) = self
+                .pool
                 .scan_page::<(String, Vec<String>), String, String>(
                     current_cursor,
                     pattern.to_string(),
                     Some(250u32),
-                    None::<ScanType>
+                    None::<ScanType>,
                 )
                 .await
-                .map_err(|e| AppError::new(ErrorCode::InternalError, format!("Redis Scan Error: {}", e)))?;
+                .map_err(|e| {
+                    AppError::new(ErrorCode::InternalError, format!("Redis Scan Error: {}", e))
+                })?;
 
             if !keys.is_empty() {
-                self.pool.del::<i64, _>(keys).await
+                self.pool
+                    .del::<i64, _>(keys)
+                    .await
                     .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
             }
 

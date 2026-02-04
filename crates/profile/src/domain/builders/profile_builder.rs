@@ -1,12 +1,14 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-use shared_kernel::domain::value_objects::{Counter, LocationLabel, RegionCode, Url, AccountId, Username};
 use crate::domain::entities::Profile;
 use crate::domain::events::ProfileEvent;
 use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::value_objects::{
+    AccountId, Counter, LocationLabel, RegionCode, Url, Username,
+};
+use uuid::Uuid;
 
 pub struct ProfileBuilder {
     account_id: AccountId,
@@ -31,7 +33,7 @@ impl ProfileBuilder {
         account_id: AccountId,
         region_code: RegionCode,
         display_name: DisplayName,
-        username: Username
+        username: Username,
     ) -> Self {
         Self {
             account_id,
@@ -88,18 +90,54 @@ impl ProfileBuilder {
     }
     // --- SETTERS (Uniquement utiles pour le chemin Création) ---
 
-    pub fn bio(mut self, bio: Bio) -> Self { self.bio = Some(bio); self }
-    pub fn maybe_bio(mut self, bio: Option<Bio>) -> Self { self.bio = bio; self }
-    pub fn avatar_url(mut self, url: Url) -> Self { self.avatar_url = Some(url); self }
-    pub fn maybe_avatar_url(mut self, url: Option<Url>) -> Self { self.avatar_url = url; self }
-    pub fn banner_url(mut self, url: Url) -> Self { self.banner_url = Some(url); self }
-    pub fn maybe_banner_url(mut self, url: Option<Url>) -> Self { self.banner_url = url; self }
-    pub fn location(mut self, label: LocationLabel) -> Self { self.location_label = Some(label); self }
-    pub fn maybe_location(mut self, label: Option<LocationLabel>) -> Self { self.location_label = label; self }
-    pub fn maybe_social_links(mut self, links: Option<SocialLinks>) -> Self { self.social_links = links; self }
-    pub fn stats(mut self, stats: ProfileStats) -> Self { self.stats = stats; self }
-    pub fn post_count(mut self, count: Counter) -> Self { self.post_count = count; self }
-    pub fn is_private(mut self, private: bool) -> Self { self.is_private = private; self }
+    pub fn with_bio(mut self, bio: Bio) -> Self {
+        self.bio = Some(bio);
+        self
+    }
+    pub fn with_optional_bio(mut self, bio: Option<Bio>) -> Self {
+        self.bio = bio;
+        self
+    }
+    pub fn with_avatar_url(mut self, url: Url) -> Self {
+        self.avatar_url = Some(url);
+        self
+    }
+    pub fn with_optional_avatar_url(mut self, url: Option<Url>) -> Self {
+        self.avatar_url = url;
+        self
+    }
+    pub fn with_banner_url(mut self, url: Url) -> Self {
+        self.banner_url = Some(url);
+        self
+    }
+    pub fn with_optional_banner_url(mut self, url: Option<Url>) -> Self {
+        self.banner_url = url;
+        self
+    }
+    pub fn with_location(mut self, label: LocationLabel) -> Self {
+        self.location_label = Some(label);
+        self
+    }
+    pub fn with_optional_location(mut self, label: Option<LocationLabel>) -> Self {
+        self.location_label = label;
+        self
+    }
+    pub fn with_optional_social_links(mut self, links: Option<SocialLinks>) -> Self {
+        self.social_links = links;
+        self
+    }
+    pub fn with_stats(mut self, stats: ProfileStats) -> Self {
+        self.stats = stats;
+        self
+    }
+    pub fn with_post_count(mut self, count: Counter) -> Self {
+        self.post_count = count;
+        self
+    }
+    pub fn with_privacy(mut self, private: bool) -> Self {
+        self.is_private = private;
+        self
+    }
 
     /// Finalisation pour la CREATION
     pub fn build(self) -> Profile {

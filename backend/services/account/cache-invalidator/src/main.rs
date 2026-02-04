@@ -5,9 +5,5 @@ use shared_kernel::infrastructure::bootstrap::run_cache_worker;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    run_cache_worker(
-        "Account",
-        "account.events",
-        "account-cache-group",
-    ).await
+    run_cache_worker("Account", "account.events", "account-cache-group").await
 }

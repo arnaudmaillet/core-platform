@@ -1,16 +1,16 @@
 // crates/profile/src/infrastructure/postgres/repositories/postgres_location_repository.rs
 
-use async_trait::async_trait;
-use sqlx::PgPool;
-use shared_kernel::domain::entities::GeoPoint;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
-use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::domain::entities::UserLocation;
 use crate::domain::repositories::LocationRepository;
 use crate::infrastructure::postgres::rows::PostgresLocationRow;
+use async_trait::async_trait;
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::GeoPoint;
+use shared_kernel::domain::transaction::Transaction;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::errors::Result;
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
+use sqlx::PgPool;
 
 pub struct PostgresLocationRepository {
     pool: PgPool,
@@ -113,7 +113,11 @@ impl LocationRepository for PostgresLocationRepository {
         })).await
     }
 
-    async fn find_by_id(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<UserLocation>> {
+    async fn find_by_id(
+        &self,
+        account_id: &AccountId,
+        region: &RegionCode,
+    ) -> Result<Option<UserLocation>> {
         let sql = r#"
         SELECT
             account_id, region_code, ST_X(coordinates::geometry) as lon, ST_Y(coordinates::geometry) as lat,
@@ -140,7 +144,7 @@ impl LocationRepository for PostgresLocationRepository {
         center: GeoPoint,
         region: RegionCode,
         radius_meters: f64,
-        limit: i64
+        limit: i64,
     ) -> Result<Vec<(UserLocation, f64)>> {
         let sql = r#"
            SELECT

@@ -1,9 +1,9 @@
 // crates/shared_kernel/src/domain/value_objects/bio.rs
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(try_from = "String", into = "String")]
@@ -31,7 +31,6 @@ impl Bio {
         bio.validate()?;
         Ok(bio)
     }
-    
 
     /// Reconstruction rapide (Infrastructure / DB)
     pub fn from_raw(value: impl Into<String>) -> Self {
@@ -70,7 +69,11 @@ impl ValueObject for Bio {
         if count > Self::MAX_LENGTH {
             return Err(DomainError::Validation {
                 field: "bio",
-                reason: format!("Bio is too long (max {} chars, got {})", Self::MAX_LENGTH, count),
+                reason: format!(
+                    "Bio is too long (max {} chars, got {})",
+                    Self::MAX_LENGTH,
+                    count
+                ),
             });
         }
 

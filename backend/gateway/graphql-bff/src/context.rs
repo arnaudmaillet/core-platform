@@ -1,6 +1,5 @@
 // backend/gateway/graphql-bff/src/context.rs
 
-use std::sync::Arc;
 use crate::clients::profile::profile_identity_service_client::ProfileIdentityServiceClient;
 use crate::clients::profile::profile_query_service_client::ProfileQueryServiceClient;
 use tonic::transport::Channel;

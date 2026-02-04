@@ -1,10 +1,10 @@
 // crates/shared_kernel/src/domain/value_objects/location_label.rs
 
-use std::fmt;
-use std::str::FromStr;
-use serde::{Deserialize, Serialize};
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocationLabel(String);

@@ -1,7 +1,7 @@
 // crates/account/src/application/register_account/register_account_command
 
-use shared_kernel::domain::value_objects::{RegionCode, Username};
 use crate::domain::value_objects::{Email, ExternalId, Locale};
+use shared_kernel::domain::value_objects::{RegionCode, Username};
 
 #[derive(Debug, Clone)]
 pub struct RegisterAccountCommand {

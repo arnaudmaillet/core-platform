@@ -1,10 +1,10 @@
 // crates/account/src/domain/value_objects/birth_date.rs
 
-use std::str::FromStr;
-use chrono::{NaiveDate, Utc, Datelike};
+use chrono::{Datelike, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "NaiveDate", into = "NaiveDate")]
@@ -97,8 +97,8 @@ impl From<BirthDate> for NaiveDate {
 impl FromStr for BirthDate {
     type Err = DomainError;
     fn from_str(s: &str) -> Result<Self> {
-        let parsed_date = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .map_err(|_| DomainError::Validation {
+        let parsed_date =
+            NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| DomainError::Validation {
                 field: "birth_date",
                 reason: "Invalid date format. Expected YYYY-MM-DD".into(),
             })?;

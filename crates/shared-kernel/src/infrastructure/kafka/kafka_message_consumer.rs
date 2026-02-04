@@ -1,16 +1,15 @@
 // crates/shared-kernel/src/infrastructure/messaging/kafka_consumer.rs
 
+use crate::application::ports::{MessageConsumer, MessageHandler};
+use crate::domain::events::EventEnvelope;
+use crate::errors::{AppError, AppResult, ErrorCode};
 use async_trait::async_trait;
-use futures_util::future::BoxFuture;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::message::Message;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
-use crate::application::ports::{MessageConsumer, MessageHandler};
-use crate::domain::events::EventEnvelope;
-use crate::errors::{AppResult, AppError, ErrorCode};
 
 pub struct KafkaMessageConsumer {
     client_config: ClientConfig,
@@ -27,7 +26,7 @@ impl KafkaMessageConsumer {
             .set("group.id", group_id)
             .set("enable.auto.commit", "true")
             .set("auto.commit.interval.ms", "5000") // Commit toutes les 5s
-            .set("auto.offset.reset", "earliest")   // Ne rate rien au démarrage
+            .set("auto.offset.reset", "earliest") // Ne rate rien au démarrage
             // Sécurité pour ne pas perdre de messages si le processing est lent
             .set("session.timeout.ms", "45000")
             .set("max.poll.interval.ms", "300000");
@@ -49,7 +48,9 @@ impl KafkaMessageConsumer {
 impl MessageConsumer for KafkaMessageConsumer {
     async fn consume(&self, topic: &str, handler: MessageHandler) -> AppResult<()> {
         let consumer: StreamConsumer = self.client_config.create()?;
-        consumer.subscribe(&[topic]).map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+        consumer
+            .subscribe(&[topic])
+            .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
         let handler = Arc::new(handler);
 

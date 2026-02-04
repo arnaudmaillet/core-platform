@@ -36,3 +36,6 @@ testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true }
 mockall = { workspace = true }
 futures = {workspace = true}
+
+[features]
+test-utils = ["shared-kernel/test-utils"]

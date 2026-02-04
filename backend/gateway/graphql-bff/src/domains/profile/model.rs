@@ -1,5 +1,5 @@
-use async_graphql::{SimpleObject, ID};
 use crate::clients::profile as proto;
+use async_graphql::{ID, SimpleObject};
 
 #[derive(SimpleObject)]
 pub struct Profile {
@@ -32,10 +32,16 @@ impl From<proto::Profile> for Profile {
             banner_url: p.banner_url.map(|v| v.to_string()),
             post_count: p.post_count,
             is_private: p.is_private,
-            stats: p.stats.map(|s| ProfileStats {
-                follower_count: s.follower_count,
-                following_count: s.following_count,
-            }).unwrap_or_else(|| ProfileStats { follower_count: 0, following_count: 0 }),
+            stats: p
+                .stats
+                .map(|s| ProfileStats {
+                    follower_count: s.follower_count,
+                    following_count: s.following_count,
+                })
+                .unwrap_or_else(|| ProfileStats {
+                    follower_count: 0,
+                    following_count: 0,
+                }),
         }
     }
 }

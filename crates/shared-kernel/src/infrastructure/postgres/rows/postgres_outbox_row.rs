@@ -1,11 +1,10 @@
 // crates/shared-kernel/src/infrastructure/postgres/rows/postgres_outbox_row.rs
 
-
+use crate::domain::events::EventEnvelope;
 use chrono::{DateTime, Utc};
+use serde_json::Value;
 use sqlx::FromRow;
 use uuid::Uuid;
-use serde_json::Value;
-use crate::domain::events::EventEnvelope;
 
 /// Struct privé à l'infrastructure pour le mapping SQLx
 #[derive(FromRow)]

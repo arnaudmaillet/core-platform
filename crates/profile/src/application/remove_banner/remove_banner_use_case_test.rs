@@ -1,15 +1,17 @@
 #[cfg(test)]
 mod tests {
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
     // On réutilise nos outils de test centralisés
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
-    use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode, Url};
-    use shared_kernel::errors::DomainError;
     use crate::application::remove_banner::{RemoveBannerCommand, RemoveBannerUseCase};
     use crate::domain::builders::ProfileBuilder;
+    use crate::domain::entities::Profile;
+    use crate::domain::value_objects::DisplayName;
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+    use shared_kernel::errors::DomainError;
 
     /// Helper pour configurer le Use Case avec un état initial
     fn setup(profile: Option<Profile>) -> RemoveBannerUseCase {
@@ -19,11 +21,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        RemoveBannerUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -35,8 +33,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         // On ajoute une bannière via le mutateur métier
         let banner_url = Url::try_from("https://cdn.com/banner.png".to_string()).unwrap();
@@ -53,7 +52,10 @@ mod tests {
         let updated_profile = result.unwrap();
 
         // Vérification via le getter
-        assert!(updated_profile.banner_url().is_none(), "La bannière devrait être supprimée");
+        assert!(
+            updated_profile.banner_url().is_none(),
+            "La bannière devrait être supprimée"
+        );
         assert_eq!(updated_profile.version(), 3); // 1 (création) + 1 (update_banner) + 1 (remove_banner)
     }
 
@@ -66,8 +68,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(profile));
         let cmd = RemoveBannerCommand { account_id, region };
@@ -109,24 +112,22 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_banner(Url::try_from("https://old.png".to_string()).unwrap());
 
         // On configure le stub pour renvoyer un conflit au moment du save (étape 4 du Use Case)
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version changed by another process".into()
+                reason: "Version changed by another process".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = RemoveBannerUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        );
+        let use_case =
+            RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         let cmd = RemoveBannerCommand { account_id, region };
 
@@ -134,7 +135,10 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -142,7 +146,13 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_banner(Url::try_from("https://old.png".to_string()).unwrap());
 
         // On simule une erreur SQL critique
@@ -152,10 +162,13 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case = RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(RemoveBannerCommand { account_id, region }).await;
+        let result = use_case
+            .execute(RemoveBannerCommand { account_id, region })
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::Internal(m)) if m == "Database is down"));
@@ -166,15 +179,29 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_banner(Url::try_from("https://old.png".to_string()).unwrap());
 
         // On crée un Stub Outbox qui crash
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox disk full".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -188,7 +215,9 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(RemoveBannerCommand { account_id, region }).await;
+        let result = use_case
+            .execute(RemoveBannerCommand { account_id, region })
+            .await;
 
         // Assert
         // Si l'outbox échoue, le Use Case doit remonter l'erreur et la transaction échoue

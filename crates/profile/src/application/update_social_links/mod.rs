@@ -2,5 +2,5 @@ mod update_social_links_command;
 mod update_social_links_use_case;
 mod update_social_links_use_case_test;
 
-pub use update_social_links_use_case::UpdateSocialLinksUseCase;
 pub use update_social_links_command::UpdateSocialLinksCommand;
+pub use update_social_links_use_case::UpdateSocialLinksUseCase;

@@ -1,8 +1,8 @@
 // crates/account/src/application/change_email/change_phone_number_dto.rs
 
-use shared_kernel::errors::{DomainError, Result};
 use crate::application::change_phone_number::change_phone_number_command::ChangePhoneNumberCommand;
 use crate::domain::value_objects::PhoneNumber;
+use shared_kernel::errors::{DomainError, Result};
 
 #[derive(serde::Deserialize)]
 pub struct ChangePhoneNumberDto {

@@ -2,15 +2,17 @@
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
     use crate::application::update_username::{UpdateUsernameCommand, UpdateUsernameUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use std::sync::{Arc, Mutex};
 
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
-    use shared_kernel::errors::DomainError;
     use crate::domain::builders::ProfileBuilder;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
 
     /// Helper pour initialiser le Use Case avec des données de test
     fn setup(profile: Option<Profile>, exists: bool) -> UpdateUsernameUseCase {
@@ -20,11 +22,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        UpdateUsernameUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateUsernameUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -36,8 +34,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("old_bob").unwrap()
-        ).build();
+            Username::try_new("old_bob").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile), false);
 
@@ -65,8 +64,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice_orig").unwrap()
-        ).build();
+            Username::try_new("alice_orig").unwrap(),
+        )
+        .build();
 
         // On simule que le pseudo cible est DEJÀ pris
         let use_case = setup(Some(initial_profile), true);
@@ -83,7 +83,10 @@ mod tests {
         // Assert
         match result {
             Err(DomainError::AlreadyExists { field, .. }) => assert_eq!(field, "username"),
-            _ => panic!("Devrait retourner une erreur AlreadyExists, reçu: {:?}", result),
+            _ => panic!(
+                "Devrait retourner une erreur AlreadyExists, reçu: {:?}",
+                result
+            ),
         }
     }
 
@@ -116,8 +119,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            current_username.clone()
-        ).build();
+            current_username.clone(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile), false);
 

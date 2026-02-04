@@ -1,48 +1,52 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode, Url};
-    use shared_kernel::errors::DomainError;
-    use crate::application::update_social_links::{UpdateSocialLinksCommand, UpdateSocialLinksUseCase};
+    use crate::application::update_social_links::{
+        UpdateSocialLinksCommand, UpdateSocialLinksUseCase,
+    };
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::{DisplayName, SocialLinks};
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
-    /// Helper pour configurer le Use Case avec un état initial
     fn setup(profile: Option<Profile>) -> UpdateSocialLinksUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(profile),
             ..Default::default()
         });
 
-        UpdateSocialLinksUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateSocialLinksUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
     async fn test_update_social_links_success() {
-        // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
         let profile = ProfileBuilder::new(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+            .build();
 
         let use_case = setup(Some(profile));
 
-        // Construction des SocialLinks avec le type Url
-        let mut links = SocialLinks::default();
-        links.website = Some(Url::try_from("https://alice.dev".to_string()).unwrap());
-        links.x = Some(Url::try_from("https://x.com/alice".to_string()).unwrap());
-        links.linkedin = Some(Url::try_from("https://linkedin.com/in/alice".to_string()).unwrap());
+        let links = SocialLinks::new()
+            .with_website(Some(Url::try_from("https://alice.dev".to_string())
+                .expect("FAIL: website URL malformed")))
+            .with_x(Some(Url::try_from("https://x.com/alice".to_string())
+                .expect("FAIL: X URL malformed")))
+            .with_linkedin(Some(Url::try_from("https://linkedin.com/in/alice".to_string())
+                .expect("FAIL: LinkedIn URL malformed")))
+            .try_build()
+            .expect("FAIL: SocialLinks validation error")
+            .expect("FAIL: SocialLinks returned None (empty)");
 
         let cmd = UpdateSocialLinksCommand {
             account_id,
@@ -50,10 +54,8 @@ mod tests {
             new_links: Some(links.clone()),
         };
 
-        // Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert_eq!(updated.social_links(), Some(&links));
@@ -62,32 +64,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_clear_social_links_success() {
-        // Arrange : Profil avec des liens existants
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
         let mut profile = ProfileBuilder::new(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+            .build();
 
-        let mut initial_links = SocialLinks::default();
-        initial_links.website = Some(Url::try_from("https://old.com".to_string()).unwrap());
-        profile.update_social_links(Some(initial_links)); // v2
+        let links = SocialLinks::new()
+            .with_website(Some(Url::try_from("https://same.com".to_string())
+                .expect("FAIL: website URL malformed")))
+            .try_build()
+            .expect("FAIL: SocialLinks validation error")
+            .expect("FAIL: SocialLinks returned None");
+
+        profile.update_social_links(Some(links.clone()));
 
         let use_case = setup(Some(profile));
 
-        let cmd = UpdateSocialLinksCommand {
+        let result = use_case.execute(UpdateSocialLinksCommand {
             account_id,
             region,
             new_links: None,
-        };
+        }).await;
 
-        // Act
-        let result = use_case.execute(cmd).await;
-
-        // Assert
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert!(updated.social_links().is_none());
@@ -96,94 +99,103 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_social_links_idempotency() {
-        // Arrange : On renvoie exactement les mêmes liens
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut links = SocialLinks::default();
-        links.website = Some(Url::try_from("https://same.com".to_string()).unwrap());
 
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
-        profile.update_social_links(Some(links.clone())); // v2
+        let links = SocialLinks::new()
+            .with_website(Some(Url::try_from("https://same.com".to_string())
+                .expect("FAIL: website URL malformed")))
+            .try_build()
+            .expect("FAIL: SocialLinks validation error")
+            .expect("FAIL: SocialLinks returned None");
+
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+            .build();
+        profile.update_social_links(Some(links.clone()));
 
         let use_case = setup(Some(profile));
 
-        let cmd = UpdateSocialLinksCommand {
+        let result = use_case.execute(UpdateSocialLinksCommand {
             account_id,
             region,
             new_links: Some(links),
-        };
+        }).await;
 
-        // Act
-        let result = use_case.execute(cmd).await;
-
-        // Assert
         assert!(result.is_ok());
         let updated = result.unwrap();
-        // L'idempotence doit empêcher une nouvelle transaction et un nouvel incrément (reste à 2)
         assert_eq!(updated.version(), 2);
     }
 
     #[tokio::test]
     async fn test_update_social_links_not_found() {
-        // Arrange : Pas de profil en DB
         let use_case = setup(None);
-        let cmd = UpdateSocialLinksCommand {
+        let result = use_case.execute(UpdateSocialLinksCommand {
             account_id: AccountId::new(),
             region: RegionCode::from_raw("eu"),
             new_links: None,
-        };
+        }).await;
 
-        // Act
-        let result = use_case.execute(cmd).await;
-
-        // Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
     }
 
     #[tokio::test]
     async fn test_update_social_links_concurrency_conflict() {
-        // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        ).build();
 
-        // Simulation d'un échec d'Optimistic Locking
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch detected by repo".into()
+                reason: "Version mismatch".into(),
             })),
             ..Default::default()
         });
 
         let use_case = UpdateSocialLinksUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
-        let cmd = UpdateSocialLinksCommand {
+        let result = use_case.execute(UpdateSocialLinksCommand {
             account_id,
             region,
             new_links: Some(SocialLinks::default()),
-        };
+        }).await;
 
-        // Act
-        let result = use_case.execute(cmd).await;
-
-        // Assert
         assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
     }
 
     #[tokio::test]
     async fn test_update_social_links_atomic_rollback_on_outbox_failure() {
-        // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        ).build();
 
-        // On crée un stub Outbox qui échoue systématiquement
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox error".into()))
+            }
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -196,18 +208,19 @@ mod tests {
             Arc::new(StubTxManager),
         );
 
-        let mut links = SocialLinks::default();
-        links.website = Some(Url::try_from("https://fail.com".to_string()).unwrap());
+        let links = SocialLinks::new()
+            .with_website(Some(Url::try_from("https://fail.com".to_string())
+                .expect("FAIL: website URL malformed")))
+            .try_build()
+            .expect("FAIL: SocialLinks validation error")
+            .expect("FAIL: SocialLinks returned None");
 
-        // Act
         let result = use_case.execute(UpdateSocialLinksCommand {
             account_id,
             region,
             new_links: Some(links),
         }).await;
 
-        // Assert
-        // Si l'Outbox échoue, le Use Case doit remonter l'erreur pour forcer le Rollback
         assert!(result.is_err());
     }
 }

@@ -1,6 +1,6 @@
+use crate::domain::entities::{AppearanceSettings, NotificationSettings, PrivacySettings};
 use serde::Deserialize;
 use shared_kernel::domain::value_objects::AccountId;
-use crate::domain::entities::{AppearanceSettings, NotificationSettings, PrivacySettings};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateAccountSettingsCommand {

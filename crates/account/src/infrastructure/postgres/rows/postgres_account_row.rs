@@ -1,16 +1,18 @@
 // crates/account/src/infrastructure/postgres/rows/postgres_account_row
 
+use crate::domain::value_objects::{
+    AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
+};
 use chrono::{DateTime, NaiveDate, Utc};
-use uuid::Uuid;
-use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId, Username};
-use crate::domain::value_objects::{Email, PhoneNumber, BirthDate, ExternalId, Locale, AccountState};
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+use uuid::Uuid;
 
-use shared_kernel::errors::{Result, DomainError};
-use crate::domain::entities::Account;
 use crate::domain::builders::AccountBuilder;
+use crate::domain::entities::Account;
 use crate::infrastructure::postgres::models::PostgresAccountState;
+use shared_kernel::errors::{DomainError, Result};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountRow {

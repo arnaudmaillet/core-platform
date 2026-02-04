@@ -1,16 +1,18 @@
 // crates/profile/src/infrastructure/postgres/rows/postgres_location_row.rs
 
-use sqlx::FromRow;
-use uuid::Uuid;
+use crate::domain::builders::UserLocationBuilder;
+use crate::domain::entities::UserLocation;
+use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
 use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{Altitude, Heading, LocationAccuracy, RegionCode, Speed, AccountId};
-use shared_kernel::errors::{Result, DomainError};
-use crate::domain::entities::UserLocation;
-use crate::domain::builders::UserLocationBuilder;
-use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
+use shared_kernel::domain::value_objects::{
+    AccountId, Altitude, Heading, LocationAccuracy, RegionCode, Speed,
+};
+use shared_kernel::errors::{DomainError, Result};
+use sqlx::FromRow;
+use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct PostgresLocationRow {
@@ -37,7 +39,7 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
         let metrics = row.accuracy_meters.map(|acc| {
             LocationMetrics::from_raw(
                 LocationAccuracy::from_raw(acc),
-                row.altitude.map(Altitude::from_raw)
+                row.altitude.map(Altitude::from_raw),
             )
         });
 
@@ -45,7 +47,7 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
         let movement = match (row.speed, row.heading) {
             (Some(s), Some(h)) => Some(MovementMetrics::from_raw(
                 Speed::from_raw(s),
-                Heading::from_raw(h)
+                Heading::from_raw(h),
             )),
             _ => None,
         };
@@ -74,7 +76,10 @@ impl From<&UserLocation> for PostgresLocationRow {
             lat: l.coordinates().lat(),
             lon: l.coordinates().lon(),
             accuracy_meters: l.metrics().as_ref().map(|m| m.accuracy().value()),
-            altitude: l.metrics().as_ref().and_then(|m| m.altitude().map(|a| a.value())),
+            altitude: l
+                .metrics()
+                .as_ref()
+                .and_then(|m| m.altitude().map(|a| a.value())),
             heading: l.movement().as_ref().map(|m| m.heading().value()),
             speed: l.movement().as_ref().map(|m| m.speed().value()),
             is_ghost_mode: l.is_ghost_mode(),

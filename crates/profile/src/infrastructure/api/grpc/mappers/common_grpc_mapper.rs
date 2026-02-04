@@ -1,5 +1,5 @@
-use prost_types::Timestamp;
 use chrono::{DateTime, Utc};
+use prost_types::Timestamp;
 
 pub fn to_timestamp(dt: DateTime<Utc>) -> Timestamp {
     Timestamp {

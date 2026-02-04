@@ -7,7 +7,7 @@ use shared_kernel::errors::Result;
 
 use crate::domain::entities::Account;
 use crate::domain::params::PatchUserParams;
-use crate::domain::value_objects::{Email, PhoneNumber, ExternalId, AccountState};
+use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber};
 
 #[async_trait]
 pub trait AccountRepository: Send + Sync {
@@ -16,7 +16,11 @@ pub trait AccountRepository: Send + Sync {
     /// Très utile pour les jointures ou les redirections sans charger de données.
     async fn find_account_id_by_email(&self, email: &Email) -> Result<Option<AccountId>>;
     async fn find_account_id_by_username(&self, username: &Username) -> Result<Option<AccountId>>;
-    async fn find_account_id_by_external_id(&self, external_id: &ExternalId, tx: Option<&mut dyn Transaction>) -> Result<Option<AccountId>>;
+    async fn find_account_id_by_external_id(
+        &self,
+        external_id: &ExternalId,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<Option<AccountId>>;
 
     // --- LECTURE COMPLÈTE ---
 
@@ -24,7 +28,7 @@ pub trait AccountRepository: Send + Sync {
     async fn find_account_by_id(
         &self,
         id: &AccountId,
-        tx: Option<&mut dyn Transaction>
+        tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>>;
 
     // --- VÉRIFICATIONS (OPTIMISATION DISQUE/RÉSEAU) ---
@@ -41,11 +45,21 @@ pub trait AccountRepository: Send + Sync {
 
     /// Mise à jour partielle et dynamique (utilise le QueryBuilder).
     /// Permet de ne mettre à jour que ce qui a changé (ex: juste l'email).
-    async fn patch_account_by_id(&self, account_id: &AccountId, params: PatchUserParams, tx: &mut dyn Transaction) -> Result<()>;
+    async fn patch_account_by_id(
+        &self,
+        account_id: &AccountId,
+        params: PatchUserParams,
+        tx: &mut dyn Transaction,
+    ) -> Result<()>;
     async fn save(&self, user: &Account, tx: Option<&mut dyn Transaction>) -> Result<()>;
 
     /// Changement de statut atomique (Active -> Banned, etc.).
-    async fn update_account_status_by_id(&self, account_id: &AccountId, account_state: AccountState, tx: &mut dyn Transaction) -> Result<()>;
+    async fn update_account_status_by_id(
+        &self,
+        account_id: &AccountId,
+        account_state: AccountState,
+        tx: &mut dyn Transaction,
+    ) -> Result<()>;
 
     // --- OPÉRATIONS HAUTE FRÉQUENCE ---
 

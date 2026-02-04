@@ -1,18 +1,20 @@
 // crates/account/src/application/register_account/mod.rs
 
-use std::sync::Arc;
 use chrono::Utc;
 use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::domain::utils::{RetryConfig, with_retry};
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::domain::transaction::TransactionManager;
-use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
+use std::sync::Arc;
 
 use crate::application::register_account::RegisterAccountCommand;
 use crate::domain::entities::{Account, AccountMetadata, AccountSettings};
 use crate::domain::events::AccountEvent;
-use crate::domain::repositories::{AccountRepository, AccountMetadataRepository, AccountSettingsRepository};
+use crate::domain::repositories::{
+    AccountMetadataRepository, AccountRepository, AccountSettingsRepository,
+};
 
 pub struct RegisterAccountUseCase {
     account_repo: Arc<dyn AccountRepository>,

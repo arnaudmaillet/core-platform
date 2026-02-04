@@ -1,13 +1,13 @@
 // crates/profile/src/application/remove_avatar/mod.rs
 
-use std::sync::Arc;
-use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::entities::EntityOptionExt;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::domain::utils::{RetryConfig, with_retry};
 use shared_kernel::errors::Result;
-use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
+use std::sync::Arc;
 
 use crate::application::remove_banner::RemoveBannerCommand;
 use crate::domain::entities::Profile;
@@ -25,18 +25,25 @@ impl RemoveBannerUseCase {
         outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
-        Self { repo, outbox_repo, tx_manager }
+        Self {
+            repo,
+            outbox_repo,
+            tx_manager,
+        }
     }
 
     pub async fn execute(&self, command: RemoveBannerCommand) -> Result<Profile> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
-        }).await
+        })
+        .await
     }
 
     async fn try_execute_once(&self, cmd: &RemoveBannerCommand) -> Result<Profile> {
         // 1. Récupération du profil existant
-        let mut profile = self.repo.get_profile_by_account_id(&cmd.account_id, &cmd.region)
+        let mut profile = self
+            .repo
+            .get_profile_by_account_id(&cmd.account_id, &cmd.region)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
@@ -52,30 +59,32 @@ impl RemoveBannerUseCase {
         if events.is_empty() {
             return Ok(profile);
         }
-        
+
         let updated_profile = profile.clone();
 
         // 4. Persistence Transactionnelle
-        self.tx_manager.run_in_transaction(move |mut tx| {
-            let repo = self.repo.clone();
-            let outbox = self.outbox_repo.clone();
+        self.tx_manager
+            .run_in_transaction(move |mut tx| {
+                let repo = self.repo.clone();
+                let outbox = self.outbox_repo.clone();
 
-            // On clone pour supporter les retries de la transaction
-            let profile = profile.clone();
-            let events = events.clone();
-            
-            Box::pin(async move {
-                // Mise à jour du profil en base (l'avatar_url passera à NULL)
-                repo.save(&profile, Some(&mut *tx)).await?;
+                // On clone pour supporter les retries de la transaction
+                let profile = profile.clone();
+                let events = events.clone();
 
-                // Enregistrement de l'événement pour le nettoyage physique du fichier par un worker
-                for event in events {
-                    outbox.save(&mut *tx, event.as_ref()).await?;
-                }
+                Box::pin(async move {
+                    // Mise à jour du profil en base (l'avatar_url passera à NULL)
+                    repo.save(&profile, Some(&mut *tx)).await?;
 
-                Ok(())
+                    // Enregistrement de l'événement pour le nettoyage physique du fichier par un worker
+                    for event in events {
+                        outbox.save(&mut *tx, event.as_ref()).await?;
+                    }
+                    tx.commit().await?;
+                    Ok(())
+                })
             })
-        }).await?;
+            .await?;
 
         Ok(updated_profile)
     }

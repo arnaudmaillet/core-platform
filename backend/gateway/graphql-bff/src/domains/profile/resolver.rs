@@ -1,7 +1,9 @@
-use async_graphql::{Context, Object, Result};
+// backend/gateway/graphql-bff/src/domains/profile/resolver.rs
+
+use crate::clients::profile::UpdateUsernameRequest;
 use crate::context::ApiContext;
 use crate::domains::profile::model::Profile;
-use crate::clients::profile::UpdateUsernameRequest;
+use async_graphql::{Context, Object, Result};
 
 #[derive(Default)]
 pub struct ProfileQuery;
@@ -38,7 +40,12 @@ pub struct ProfileMutation;
 
 #[Object]
 impl ProfileMutation {
-    async fn update_username(&self, ctx: &Context<'_>, account_id: String, new_username: String) -> Result<Profile> {
+    async fn update_username(
+        &self,
+        ctx: &Context<'_>,
+        account_id: String,
+        new_username: String,
+    ) -> Result<Profile> {
         let api_ctx = ctx.data::<ApiContext>()?;
         let mut client = api_ctx.profile_identity.clone();
 

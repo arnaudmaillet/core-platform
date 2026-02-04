@@ -23,7 +23,7 @@ impl ProfileStats {
         self.follower_count.value()
     }
 
-    pub fn following_count(&self) -> u64{
+    pub fn following_count(&self) -> u64 {
         self.following_count.value()
     }
 

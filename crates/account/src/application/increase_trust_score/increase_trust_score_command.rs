@@ -1,8 +1,8 @@
 // crates/account/src/application/increase_trust_score/command.rs
 
 use serde::Deserialize;
-use uuid::Uuid;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct IncreaseTrustScoreCommand {

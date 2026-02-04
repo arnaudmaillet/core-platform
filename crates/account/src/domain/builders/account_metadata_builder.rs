@@ -1,10 +1,10 @@
 // crates/account/src/domain/builders/account_metadata_builder.rs
 
-use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::AggregateMetadata;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use crate::domain::entities::AccountMetadata;
 use crate::domain::value_objects::AccountRole;
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::events::AggregateMetadata;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 pub struct AccountMetadataBuilder {
     account_id: AccountId,

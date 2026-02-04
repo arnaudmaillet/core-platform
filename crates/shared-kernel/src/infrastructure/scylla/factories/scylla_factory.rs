@@ -1,10 +1,10 @@
 // crates/shared-kernel/src/infrastructure/scylla/factories/scylla_factory.rs
 
-use std::sync::Arc;
-use std::time::Duration;
+use crate::errors::{AppError, AppResult, ErrorCode};
 use scylla::client::session::Session;
 use scylla::client::session_builder::SessionBuilder;
-use crate::errors::{AppResult, AppError, ErrorCode};
+use std::sync::Arc;
+use std::time::Duration;
 
 pub struct ScyllaConfig {
     pub nodes: Vec<String>,
@@ -14,8 +14,8 @@ pub struct ScyllaConfig {
 
 impl ScyllaConfig {
     pub fn from_env() -> AppResult<Self> {
-        let nodes_str = std::env::var("SCYLLA_NODES")
-            .unwrap_or_else(|_| "127.0.0.1:9042".to_string());
+        let nodes_str =
+            std::env::var("SCYLLA_NODES").unwrap_or_else(|_| "127.0.0.1:9042".to_string());
 
         let nodes = nodes_str.split(',').map(|s| s.to_string()).collect();
 
@@ -28,24 +28,22 @@ impl ScyllaConfig {
 }
 
 pub async fn create_scylla_session(config: &ScyllaConfig) -> AppResult<Arc<Session>> {
-    let builder = SessionBuilder::new()
-        .known_nodes(&config.nodes);
+    let builder = SessionBuilder::new().known_nodes(&config.nodes);
 
-    let session = builder
-        .build()
-        .await
-        .map_err(|e| AppError::new(
+    let session = builder.build().await.map_err(|e| {
+        AppError::new(
             ErrorCode::InternalError,
-            format!("Failed to connect to ScyllaDB: {}", e)
-        ))?;
+            format!("Failed to connect to ScyllaDB: {}", e),
+        )
+    })?;
 
     if let Some(ks) = &config.keyspace {
-        session.use_keyspace(ks, true)
-            .await
-            .map_err(|e| AppError::new(
+        session.use_keyspace(ks, true).await.map_err(|e| {
+            AppError::new(
                 ErrorCode::InternalError,
-                format!("Failed to switch to keyspace {}: {}", ks, e)
-            ))?;
+                format!("Failed to switch to keyspace {}: {}", ks, e),
+            )
+        })?;
     }
 
     // On enveloppe la session dans un Arc ici

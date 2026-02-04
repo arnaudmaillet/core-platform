@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::entities::GeoPoint;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use crate::application::get_nearby_users::{GetNearbyUsersCommand, GetNearbyUsersUseCase};
     use crate::domain::builders::UserLocationBuilder;
     use crate::domain::entities::UserLocation;
     use crate::utils::LocationRepositoryStub;
+    use shared_kernel::domain::entities::GeoPoint;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use std::str::FromStr;
+    use std::sync::{Arc, Mutex};
 
     fn create_mock_loc(lat: f64, lon: f64, privacy_radius: i32) -> UserLocation {
         UserLocationBuilder::new(
@@ -15,8 +15,8 @@ mod tests {
             RegionCode::from_raw("eu"),
             GeoPoint::try_new(lat, lon).unwrap(),
         )
-            .with_privacy(false, privacy_radius)
-            .build()
+        .with_privacy(false, privacy_radius)
+        .build()
     }
 
     #[tokio::test]
@@ -69,7 +69,10 @@ mod tests {
         let result = use_case.execute(cmd).await.unwrap();
 
         // Assert
-        assert!(result.is_empty(), "Le Use Case doit filtrer l'ID de l'appelant");
+        assert!(
+            result.is_empty(),
+            "Le Use Case doit filtrer l'ID de l'appelant"
+        );
     }
 
     #[tokio::test]
@@ -117,9 +120,15 @@ mod tests {
 
         // Assert
         let first = samples[0];
-        let identicals = samples.iter().filter(|p| p.lat() == first.lat() && p.lon() == first.lon()).count();
+        let identicals = samples
+            .iter()
+            .filter(|p| p.lat() == first.lat() && p.lon() == first.lon())
+            .count();
 
         // On s'attend à ce que l'aléatoire fonctionne (très peu de chance de retomber sur le même point)
-        assert!(identicals < 2, "L'algorithme d'obfuscation ne semble pas assez aléatoire");
+        assert!(
+            identicals < 2,
+            "L'algorithme d'obfuscation ne semble pas assez aléatoire"
+        );
     }
 }

@@ -1,13 +1,13 @@
 // crates/account/src/domain/value_objects/email.rs
 
-use std::hash::{Hasher, Hash};
-use std::sync::LazyLock;
-use serde::{Deserialize, Serialize};
 use regex::Regex;
 use seahash::SeaHasher;
-use unicode_normalization::UnicodeNormalization;
+use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::hash::{Hash, Hasher};
+use std::sync::LazyLock;
+use unicode_normalization::UnicodeNormalization;
 
 // Regex RFC 5322 simplifiée mais robuste pour le Web
 static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -30,10 +30,7 @@ impl Email {
         let raw = value.into();
 
         // 1. Normalisation Hyperscale (NFC + Lowercase + Trim)
-        let normalized: String = raw.trim()
-            .nfc()
-            .collect::<String>()
-            .to_lowercase();
+        let normalized: String = raw.trim().nfc().collect::<String>().to_lowercase();
 
         let email = Self::from_raw(normalized);
 

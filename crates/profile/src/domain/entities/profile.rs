@@ -2,17 +2,18 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::value_objects::{
+    AccountId, Counter, LocationLabel, PostId, RegionCode, Url, Username,
+};
 use sqlx::__rt::sleep;
 use uuid::Uuid;
-use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-use shared_kernel::domain::entities::EntityMetadata;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{Counter, LocationLabel, RegionCode, Url, AccountId, Username, PostId};
 
 use crate::domain::builders::ProfileBuilder;
 use crate::domain::events::ProfileEvent;
 use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Profile {
@@ -38,15 +39,16 @@ impl Profile {
         account_id: AccountId,
         region: RegionCode,
         display_name: DisplayName,
-        username: Username
+        username: Username,
     ) -> Self {
         let occurred_at = Utc::now();
         let mut profile = ProfileBuilder::new(
             account_id.clone(),
             region.clone(),
             display_name.clone(),
-            username.clone()
-        ).build();
+            username.clone(),
+        )
+        .build();
 
         profile.add_event(Box::new(ProfileEvent::ProfileCreated {
             id: Self::create_event_id(),
@@ -96,7 +98,7 @@ impl Profile {
         }
     }
 
-    pub(crate)  fn restore(
+    pub(crate) fn restore(
         account_id: AccountId,
         region_code: RegionCode,
         display_name: DisplayName,
@@ -133,20 +135,48 @@ impl Profile {
 
     // --- GETTERS ---
 
-    pub fn account_id(&self) -> &AccountId { &self.account_id }
-    pub fn region_code(&self) -> &RegionCode { &self.region_code }
-    pub fn display_name(&self) -> &DisplayName { &self.display_name }
-    pub fn username(&self) -> &Username { &self.username }
-    pub fn bio(&self) -> Option<&Bio> { self.bio.as_ref() }
-    pub fn avatar_url(&self) -> Option<&Url> { self.avatar_url.as_ref() }
-    pub fn banner_url(&self) -> Option<&Url> { self.banner_url.as_ref() }
-    pub fn location_label(&self) -> Option<&LocationLabel> { self.location_label.as_ref() }
-    pub fn social_links(&self) -> Option<&SocialLinks> { self.social_links.as_ref() }
-    pub fn stats(&self) -> &ProfileStats { &self.stats }
-    pub fn post_count(&self) -> u64 { self.post_count.value() }
-    pub fn is_private(&self) -> bool { self.is_private }
-    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn account_id(&self) -> &AccountId {
+        &self.account_id
+    }
+    pub fn region_code(&self) -> &RegionCode {
+        &self.region_code
+    }
+    pub fn display_name(&self) -> &DisplayName {
+        &self.display_name
+    }
+    pub fn username(&self) -> &Username {
+        &self.username
+    }
+    pub fn bio(&self) -> Option<&Bio> {
+        self.bio.as_ref()
+    }
+    pub fn avatar_url(&self) -> Option<&Url> {
+        self.avatar_url.as_ref()
+    }
+    pub fn banner_url(&self) -> Option<&Url> {
+        self.banner_url.as_ref()
+    }
+    pub fn location_label(&self) -> Option<&LocationLabel> {
+        self.location_label.as_ref()
+    }
+    pub fn social_links(&self) -> Option<&SocialLinks> {
+        self.social_links.as_ref()
+    }
+    pub fn stats(&self) -> &ProfileStats {
+        &self.stats
+    }
+    pub fn post_count(&self) -> u64 {
+        self.post_count.value()
+    }
+    pub fn is_private(&self) -> bool {
+        self.is_private
+    }
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 
     fn create_event_id() -> Uuid {
         Uuid::now_v7()
@@ -191,7 +221,7 @@ impl Profile {
     }
 
     pub fn update_display_name(&mut self, new_display_name: DisplayName) -> bool {
-        if self.display_name == new_display_name{
+        if self.display_name == new_display_name {
             return false;
         }
 
@@ -316,11 +346,9 @@ impl Profile {
 
     /// Mise à jour des Metadata
     pub fn update_social_links(&mut self, new_links: Option<SocialLinks>) -> bool {
-        // 1. On nettoie l'objet (si c'est un objet plein de "None", il devient "None")
-        let normalized = new_links.and_then(|l| l.simplify());
 
         // 2. Idempotence : Si rien ne change, on ne fait rien
-        if self.social_links == normalized {
+        if self.social_links == new_links {
             return false;
         }
 
@@ -328,7 +356,7 @@ impl Profile {
         let old_links = self.social_links.clone();
 
         // 4. Mutation
-        self.social_links = normalized;
+        self.social_links = new_links;
         self.apply_change();
 
         // 5. Événement avec les deux états (pour comparaison/audit)
@@ -410,7 +438,7 @@ impl Profile {
 
     pub fn decrement_post_count(&mut self, post_id: PostId) -> bool {
         if self.post_count.value() == 0 {
-            return  false;
+            return false;
         }
 
         self.post_count.decrement();
@@ -458,11 +486,19 @@ impl Profile {
 }
 
 impl EntityMetadata for Profile {
-    fn entity_name() -> &'static str { "Profile" }
+    fn entity_name() -> &'static str {
+        "Profile"
+    }
 }
 
 impl AggregateRoot for Profile {
-    fn id(&self) -> String { self.account_id.as_string() }
-    fn metadata(&self) -> &AggregateMetadata { &self.metadata }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata { &mut self.metadata }
+    fn id(&self) -> String {
+        self.account_id.as_string()
+    }
+    fn metadata(&self) -> &AggregateMetadata {
+        &self.metadata
+    }
+    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
+        &mut self.metadata
+    }
 }

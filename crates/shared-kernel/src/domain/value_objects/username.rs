@@ -1,17 +1,16 @@
-use std::hash::{Hasher, Hash};
-use std::sync::LazyLock;
-use serde::{Deserialize, Serialize};
 use regex::Regex;
 use seahash::SeaHasher;
+use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
+use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
 
 // Regex optimisée compilée une seule fois
-static USERNAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[a-z0-9][a-z0-9._]*[a-z0-9]$").unwrap()
-});
+static USERNAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z0-9][a-z0-9._]*[a-z0-9]$").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -30,10 +29,7 @@ impl Username {
         let raw = value.into();
 
         // 1. Normalisation Hyperscale (NFC + Lowercase + Trim)
-        let normalized: String = raw.trim()
-            .nfc()
-            .collect::<String>()
-            .to_lowercase();
+        let normalized: String = raw.trim().nfc().collect::<String>().to_lowercase();
 
         let username = Self::from_raw(normalized);
 
@@ -70,10 +66,14 @@ impl ValueObject for Username {
         let len = self.inner.chars().count();
 
         // 1. Longueur
-        if len < Self::MIN_LEN || len > Self::MAX_LEN {
+        if !(Self::MIN_LEN..=Self::MAX_LEN).contains(&len) {
             return Err(DomainError::Validation {
                 field: "username",
-                reason: format!("Username must be between {} and {} characters", Self::MIN_LEN, Self::MAX_LEN),
+                reason: format!(
+                    "Username must be between {} and {} characters",
+                    Self::MIN_LEN,
+                    Self::MAX_LEN
+                ),
             });
         }
 
@@ -86,7 +86,11 @@ impl ValueObject for Username {
         }
 
         // 3. Protection contre les séquences spéciales (Anti-obfuscation)
-        if self.inner.contains("..") || self.inner.contains("__") || self.inner.contains("._") || self.inner.contains("_.") {
+        if self.inner.contains("..")
+            || self.inner.contains("__")
+            || self.inner.contains("._")
+            || self.inner.contains("_.")
+        {
             return Err(DomainError::Validation {
                 field: "username",
                 reason: "Username cannot contain consecutive special characters".into(),

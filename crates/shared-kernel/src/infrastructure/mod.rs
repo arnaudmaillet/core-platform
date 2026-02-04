@@ -19,6 +19,3 @@ pub mod concurrency;
 pub mod scylla;
 
 pub mod grpc;
-
-
-

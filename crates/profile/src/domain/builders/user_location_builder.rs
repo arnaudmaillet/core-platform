@@ -1,8 +1,8 @@
-use chrono::{DateTime, Utc};
-use shared_kernel::domain::entities::GeoPoint;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
 use crate::domain::entities::UserLocation;
 use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::entities::GeoPoint;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 pub struct UserLocationBuilder {
     account_id: AccountId,

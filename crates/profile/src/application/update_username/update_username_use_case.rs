@@ -1,14 +1,14 @@
-use std::sync::Arc;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::entities::EntityOptionExt;
-use shared_kernel::domain::repositories::OutboxRepository;
-use shared_kernel::domain::transaction::TransactionManager;
-use shared_kernel::domain::utils::{with_retry, RetryConfig};
-use shared_kernel::errors::{Result, DomainError};
-use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::update_username::UpdateUsernameCommand;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
+use shared_kernel::domain::entities::EntityOptionExt;
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::domain::utils::{RetryConfig, with_retry};
+use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
+use std::sync::Arc;
 
 pub struct UpdateUsernameUseCase {
     repo: Arc<dyn ProfileRepository>,
@@ -22,70 +22,70 @@ impl UpdateUsernameUseCase {
         outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
-        Self { repo, outbox_repo, tx_manager }
+        Self {
+            repo,
+            outbox_repo,
+            tx_manager,
+        }
     }
 
     /// Exécution avec stratégie de retry pour gérer les conflits de concurrence (OCC)
     pub async fn execute(&self, command: UpdateUsernameCommand) -> Result<Profile> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
-        }).await
+        })
+        .await
     }
 
     async fn try_execute_once(&self, cmd: &UpdateUsernameCommand) -> Result<Profile> {
-        // 1. Validation syntaxique du nouveau slug (via Value Object)
-        let new_username = cmd.new_username.clone();
-
-        // 2. Récupération du profil existant
-        let mut profile = self.repo.get_profile_by_account_id(&cmd.account_id, &cmd.region)
+        let mut profile = self.repo
+            .get_profile_by_account_id(&cmd.account_id, &cmd.region)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if !profile.update_username(new_username) {
+        // On prépare le changement
+        if !profile.update_username(cmd.new_username.clone()) {
             return Ok(profile);
         }
 
-        // 5. Extraction des faits (événements) et préparation de la persistence
+        // On extrait les événements
         let events = profile.pull_events();
-        
-        if events.is_empty() {
-            return Ok(profile);
-        }
-        
-        let updated_profile = profile.clone();
 
-        // 6. Phase de commit transactionnel (Garantie Hyperscale)
-        self.tx_manager.run_in_transaction(move | mut tx| {
-            let repo = self.repo.clone();
-            let outbox = self.outbox_repo.clone();
-            let profile = profile.clone();
-            let events = events.clone();
+        // On clone l'état FINAL pour la transaction
+        let profile_to_persist = profile.clone();
 
-            Box::pin(async move {
-                // PROTECTION CRITIQUE : Double vérification d'unicité à l'intérieur de la transaction
-                // Empêche deux utilisateurs de prendre le même slug simultanément
-                if repo.exists_by_username(&profile.username(), &profile.region_code()).await? {
-                    return Err(DomainError::AlreadyExists {
-                        entity: "Profile",
-                        field: "username",
-                        value: profile.username().as_str().to_string(),
-                    });
-                }
+        // On crée une copie dédiée à la closure pour laisser l'originale disponible pour le retour
+        let profile_for_tx = profile_to_persist.clone();
 
-                // Persistence de l'entité (Postgres)
-                // Le repo doit injecter le WHERE version = current_version
-                repo.save(&profile, Some(&mut *tx)).await?;
+        self.tx_manager
+            .run_in_transaction(move |mut tx| {
+                let repo = self.repo.clone();
+                let outbox = self.outbox_repo.clone();
+                let p = profile_for_tx.clone(); // On clone la copie à chaque essai de transaction
+                let evs = events.clone();
 
-                // Persistence des événements (Outbox)
-                // Permet au service de redirection et au moteur de recherche de réagir
-                for event in events {
-                    outbox.save(&mut *tx, event.as_ref()).await?;
-                }
+                Box::pin(async move {
+                    if repo.exists_by_username(&p.username(), &p.region_code()).await? {
+                        return Err(DomainError::AlreadyExists {
+                            entity: "Profile",
+                            field: "username",
+                            value: p.username().as_str().to_string(),
+                        });
+                    }
 
-                Ok(())
+                    repo.save(&p, Some(&mut *tx)).await?;
+
+                    for event in evs {
+                        outbox.save(&mut *tx, event.as_ref()).await?;
+                    }
+
+                    tx.commit().await?;
+                    Ok(())
+                })
             })
-        }).await?;
+            .await?;
 
-        Ok(updated_profile)
+        // On renvoie l'objet original (qui n'a pas été déplacé dans la closure)
+        Ok(profile_to_persist)
     }
 }

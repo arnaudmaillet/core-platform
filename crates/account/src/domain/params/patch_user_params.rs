@@ -1,8 +1,8 @@
 // crates/account/src/domain/params/patch_user_params.rs
 
+use crate::domain::value_objects::{AccountState, BirthDate, Email, Locale, PhoneNumber};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::Username;
-use crate::domain::value_objects::{Email, PhoneNumber, BirthDate, Locale, AccountState};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PatchUserParams {

@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
-    use shared_kernel::errors::DomainError;
     use crate::application::update_privacy::{UpdatePrivacyCommand, UpdatePrivacyUseCase};
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     fn setup(profile: Option<Profile>) -> UpdatePrivacyUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -16,11 +18,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdatePrivacyUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdatePrivacyUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -28,12 +26,13 @@ mod tests {
         // Arrange : Profil public par défaut
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let initial_profile =ProfileBuilder::new(
+        let initial_profile = ProfileBuilder::new(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile));
         let cmd = UpdatePrivacyCommand {
@@ -61,8 +60,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_privacy(true); // Version 2
 
         let use_case = setup(Some(profile));
@@ -106,28 +106,40 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         // Simulation d'une erreur d'Optimistic Locking lors du repo.save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Modified by another session".into()
+                reason: "Modified by another session".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = UpdatePrivacyUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            UpdatePrivacyUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(UpdatePrivacyCommand {
-            account_id,
-            region,
-            is_private: true,
-        }).await;
+        let result = use_case
+            .execute(UpdatePrivacyCommand {
+                account_id,
+                region,
+                is_private: true,
+            })
+            .await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -135,14 +147,28 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
 
         // Stub Outbox qui échoue pour tester le rollback de transaction
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Kafka/Outbox failure".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -156,11 +182,13 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(UpdatePrivacyCommand {
-            account_id,
-            region,
-            is_private: true,
-        }).await;
+        let result = use_case
+            .execute(UpdatePrivacyCommand {
+                account_id,
+                region,
+                is_private: true,
+            })
+            .await;
 
         // Assert
         // Si l'Outbox crash, le Use Case doit remonter l'erreur (et tx_manager rollback)

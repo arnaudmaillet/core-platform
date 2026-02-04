@@ -1,16 +1,18 @@
 // crates/account/src/application/change_region/change_region_use_case.rs
 
-use std::sync::Arc;
-use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::entities::EntityOptionExt;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::domain::utils::{RetryConfig, with_retry};
 use shared_kernel::errors::Result;
-use shared_kernel::domain::utils::{with_retry, RetryConfig};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
+use std::sync::Arc;
 
-use crate::domain::repositories::{AccountMetadataRepository, AccountSettingsRepository, AccountRepository};
 use crate::application::change_region::ChangeRegionCommand;
+use crate::domain::repositories::{
+    AccountMetadataRepository, AccountRepository, AccountSettingsRepository,
+};
 
 pub struct ChangeRegionUseCase {
     account_repo: Arc<dyn AccountRepository>,
@@ -40,23 +42,27 @@ impl ChangeRegionUseCase {
     pub async fn execute(&self, command: ChangeRegionCommand) -> Result<()> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
-        }).await
+        })
+        .await
     }
 
     async fn try_execute_once(&self, cmd: &ChangeRegionCommand) -> Result<()> {
         // 1. RÉCUPÉRATION OPTIMISTE (Hors transaction)
         // On récupère les 3 agrégats. Note: settings n'est chargé que si nécessaire
-        let mut account = self.account_repo
+        let mut account = self
+            .account_repo
             .find_account_by_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut metadata = self.metadata_repo
+        let mut metadata = self
+            .metadata_repo
             .find_by_account_id(&cmd.account_id)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut settings = self.settings_repo
+        let mut settings = self
+            .settings_repo
             .find_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
@@ -86,32 +92,34 @@ impl ChangeRegionUseCase {
         let s_to_save = settings.clone();
 
         // 5. TRANSACTION ATOMIQUE MULTI-AGRÉGATS
-        self.tx_manager.run_in_transaction(move |mut tx| {
-            let account_repo = self.account_repo.clone();
-            let metadata_repo = self.metadata_repo.clone();
-            let settings_repo = self.settings_repo.clone();
-            let outbox = self.outbox_repo.clone();
+        self.tx_manager
+            .run_in_transaction(move |mut tx| {
+                let account_repo = self.account_repo.clone();
+                let metadata_repo = self.metadata_repo.clone();
+                let settings_repo = self.settings_repo.clone();
+                let outbox = self.outbox_repo.clone();
 
-            let u = u_to_save.clone();
-            let m = m_to_save.clone();
-            let s = s_to_save.clone();
+                let u = u_to_save.clone();
+                let m = m_to_save.clone();
+                let s = s_to_save.clone();
 
-            // Fusion des vecteurs sans clone (transfert de propriété)
-            let mut events = account_events;
-            events.extend(meta_events);
+                // Fusion des vecteurs sans clone (transfert de propriété)
+                let mut events = account_events;
+                events.extend(meta_events);
 
-            Box::pin(async move {
-                account_repo.save(&u, Some(&mut *tx)).await?;
-                metadata_repo.save(&m, Some(&mut *tx)).await?;
-                settings_repo.save(&s, Some(&mut *tx)).await?;
+                Box::pin(async move {
+                    account_repo.save(&u, Some(&mut *tx)).await?;
+                    metadata_repo.save(&m, Some(&mut *tx)).await?;
+                    settings_repo.save(&s, Some(&mut *tx)).await?;
 
-                for event in events {
-                    outbox.save(&mut *tx, event.as_ref()).await?;
-                }
+                    for event in events {
+                        outbox.save(&mut *tx, event.as_ref()).await?;
+                    }
 
-                Ok(())
+                    Ok(())
+                })
             })
-        }).await?;
+            .await?;
 
         Ok(())
     }

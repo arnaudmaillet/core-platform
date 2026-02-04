@@ -1,13 +1,13 @@
 // crates/profile/src/domain/events.rs
 
-use std::borrow::Cow;
+use crate::domain::value_objects::{Bio, DisplayName, SocialLinks};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use uuid::Uuid;
+use serde_json::{Value, json};
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{LocationLabel, RegionCode, Url, AccountId, Username};
-use crate::domain::value_objects::{Bio, DisplayName, SocialLinks};
+use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Url, Username};
+use std::borrow::Cow;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -85,7 +85,6 @@ pub enum ProfileEvent {
         occurred_at: DateTime<Utc>,
     },
 
-
     LocationLabelUpdated {
         id: Uuid,
         account_id: AccountId,
@@ -155,21 +154,21 @@ pub enum ProfileEvent {
 impl DomainEvent for ProfileEvent {
     fn event_id(&self) -> Uuid {
         match self {
-            Self::PostCountIncremented { id, .. } |
-            Self::PostCountDecremented { id, .. } |
-            Self::ProfileCreated { id, .. } |
-            Self::UsernameChanged { id, .. } |
-            Self::DisplayNameChanged { id, .. } |
-            Self::AvatarUpdated { id, .. } |
-            Self::AvatarRemoved { id, .. } |
-            Self::BannerUpdated { id, .. } |
-            Self::BannerRemoved { id, .. } |
-            Self::BioUpdated { id, .. } |
-            Self::LocationLabelUpdated { id, .. } |
-            Self::SocialLinksUpdated { id, .. } |
-            Self::PrivacySettingsChanged { id, .. } |
-            Self::StatsSnapshotUpdated { id, .. } |
-            Self::ProfileDeleted { id, .. } => *id,
+            Self::PostCountIncremented { id, .. }
+            | Self::PostCountDecremented { id, .. }
+            | Self::ProfileCreated { id, .. }
+            | Self::UsernameChanged { id, .. }
+            | Self::DisplayNameChanged { id, .. }
+            | Self::AvatarUpdated { id, .. }
+            | Self::AvatarRemoved { id, .. }
+            | Self::BannerUpdated { id, .. }
+            | Self::BannerRemoved { id, .. }
+            | Self::BioUpdated { id, .. }
+            | Self::LocationLabelUpdated { id, .. }
+            | Self::SocialLinksUpdated { id, .. }
+            | Self::PrivacySettingsChanged { id, .. }
+            | Self::StatsSnapshotUpdated { id, .. }
+            | Self::ProfileDeleted { id, .. } => *id,
         }
     }
     fn event_type(&self) -> Cow<'_, str> {
@@ -194,21 +193,21 @@ impl DomainEvent for ProfileEvent {
 
     fn region_code(&self) -> RegionCode {
         match self {
-            Self::ProfileCreated { region, .. } |
-            Self::UsernameChanged { region, .. } |
-            Self::DisplayNameChanged { region, .. } |
-            Self::AvatarUpdated { region, .. } |
-            Self::AvatarRemoved { region, .. } |
-            Self::BannerUpdated { region, .. } |
-            Self::BannerRemoved { region, .. } |
-            Self::BioUpdated { region, .. } |
-            Self::LocationLabelUpdated { region, .. } |
-            Self::SocialLinksUpdated { region, .. } |
-            Self::PrivacySettingsChanged { region, .. } |
-            Self::StatsSnapshotUpdated { region, .. } |
-            Self::PostCountIncremented { region, .. } |
-            Self::PostCountDecremented { region, .. } |
-            Self::ProfileDeleted { region, .. } => region.clone(),
+            Self::ProfileCreated { region, .. }
+            | Self::UsernameChanged { region, .. }
+            | Self::DisplayNameChanged { region, .. }
+            | Self::AvatarUpdated { region, .. }
+            | Self::AvatarRemoved { region, .. }
+            | Self::BannerUpdated { region, .. }
+            | Self::BannerRemoved { region, .. }
+            | Self::BioUpdated { region, .. }
+            | Self::LocationLabelUpdated { region, .. }
+            | Self::SocialLinksUpdated { region, .. }
+            | Self::PrivacySettingsChanged { region, .. }
+            | Self::StatsSnapshotUpdated { region, .. }
+            | Self::PostCountIncremented { region, .. }
+            | Self::PostCountDecremented { region, .. }
+            | Self::ProfileDeleted { region, .. } => region.clone(),
         }
     }
 
@@ -218,41 +217,41 @@ impl DomainEvent for ProfileEvent {
 
     fn aggregate_id(&self) -> String {
         match self {
-            Self::ProfileCreated { account_id, .. } |
-            Self::UsernameChanged { account_id, .. } |
-            Self::DisplayNameChanged { account_id, .. } |
-            Self::AvatarUpdated { account_id, .. } |
-            Self::AvatarRemoved { account_id, .. } |
-            Self::BannerUpdated { account_id, .. } |
-            Self::BannerRemoved { account_id, .. } |
-            Self::BioUpdated { account_id, .. } |
-            Self::LocationLabelUpdated { account_id, .. } |
-            Self::SocialLinksUpdated { account_id, .. } |
-            Self::PrivacySettingsChanged { account_id, .. } |
-            Self::StatsSnapshotUpdated { account_id, .. } |
-            Self::PostCountIncremented { account_id, .. } |
-            Self::PostCountDecremented { account_id, .. } |
-            Self::ProfileDeleted { account_id, .. } => account_id.to_string(),
+            Self::ProfileCreated { account_id, .. }
+            | Self::UsernameChanged { account_id, .. }
+            | Self::DisplayNameChanged { account_id, .. }
+            | Self::AvatarUpdated { account_id, .. }
+            | Self::AvatarRemoved { account_id, .. }
+            | Self::BannerUpdated { account_id, .. }
+            | Self::BannerRemoved { account_id, .. }
+            | Self::BioUpdated { account_id, .. }
+            | Self::LocationLabelUpdated { account_id, .. }
+            | Self::SocialLinksUpdated { account_id, .. }
+            | Self::PrivacySettingsChanged { account_id, .. }
+            | Self::StatsSnapshotUpdated { account_id, .. }
+            | Self::PostCountIncremented { account_id, .. }
+            | Self::PostCountDecremented { account_id, .. }
+            | Self::ProfileDeleted { account_id, .. } => account_id.to_string(),
         }
     }
 
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
-            Self::ProfileCreated { occurred_at, .. } |
-            Self::UsernameChanged { occurred_at, .. } |
-            Self::DisplayNameChanged { occurred_at, .. } |
-            Self::AvatarUpdated { occurred_at, .. } |
-            Self::AvatarRemoved { occurred_at, .. } |
-            Self::BannerUpdated { occurred_at, .. } |
-            Self::BannerRemoved { occurred_at, .. } |
-            Self::BioUpdated { occurred_at, .. } |
-            Self::LocationLabelUpdated { occurred_at, .. } |
-            Self::SocialLinksUpdated { occurred_at, .. } |
-            Self::PrivacySettingsChanged { occurred_at, .. } |
-            Self::StatsSnapshotUpdated { occurred_at, .. } |
-            Self::PostCountIncremented { occurred_at, .. } |
-            Self::PostCountDecremented { occurred_at, .. } |
-            Self::ProfileDeleted { occurred_at, .. } => *occurred_at,
+            Self::ProfileCreated { occurred_at, .. }
+            | Self::UsernameChanged { occurred_at, .. }
+            | Self::DisplayNameChanged { occurred_at, .. }
+            | Self::AvatarUpdated { occurred_at, .. }
+            | Self::AvatarRemoved { occurred_at, .. }
+            | Self::BannerUpdated { occurred_at, .. }
+            | Self::BannerRemoved { occurred_at, .. }
+            | Self::BioUpdated { occurred_at, .. }
+            | Self::LocationLabelUpdated { occurred_at, .. }
+            | Self::SocialLinksUpdated { occurred_at, .. }
+            | Self::PrivacySettingsChanged { occurred_at, .. }
+            | Self::StatsSnapshotUpdated { occurred_at, .. }
+            | Self::PostCountIncremented { occurred_at, .. }
+            | Self::PostCountDecremented { occurred_at, .. }
+            | Self::ProfileDeleted { occurred_at, .. } => *occurred_at,
         }
     }
 

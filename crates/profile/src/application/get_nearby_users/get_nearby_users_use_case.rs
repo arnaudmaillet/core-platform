@@ -1,11 +1,11 @@
 // crates/profile/src/application/use_cases/get_nearby_users/mod.rs
 
-use std::sync::Arc;
+use crate::application::get_nearby_users::{GetNearbyUsersCommand, NearbyUserDto};
+use crate::domain::repositories::LocationRepository;
 use rand::Rng;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::errors::Result;
-use crate::application::get_nearby_users::{GetNearbyUsersCommand, NearbyUserDto};
-use crate::domain::repositories::LocationRepository;
+use std::sync::Arc;
 
 pub struct GetNearbyUsersUseCase {
     repo: Arc<dyn LocationRepository>,
@@ -18,12 +18,10 @@ impl GetNearbyUsersUseCase {
 
     pub async fn execute(&self, cmd: GetNearbyUsersCommand) -> Result<Vec<NearbyUserDto>> {
         // 1. Appel au repository PostGIS (filtre déjà le ghost_mode = false)
-        let raw_results = self.repo.find_nearby(
-            cmd.center,
-            cmd.region,
-            cmd.radius_meters,
-            cmd.limit
-        ).await?;
+        let raw_results = self
+            .repo
+            .find_nearby(cmd.center, cmd.region, cmd.radius_meters, cmd.limit)
+            .await?;
 
         let mut dtos = Vec::new();
         let mut rng = rand::thread_rng();
@@ -38,8 +36,12 @@ impl GetNearbyUsersUseCase {
             let (final_coords, is_obfuscated) = if loc.privacy_radius_meters() > 0 {
                 // Si l'utilisateur a un rayon de 500m, on déplace ses coordonnées
                 (
-                    self.obfuscate_location(&loc.coordinates(), loc.privacy_radius_meters(), &mut rng),
-                    true
+                    self.obfuscate_location(
+                        &loc.coordinates(),
+                        loc.privacy_radius_meters(),
+                        &mut rng,
+                    ),
+                    true,
                 )
             } else {
                 (loc.coordinates().clone(), false)
@@ -57,7 +59,12 @@ impl GetNearbyUsersUseCase {
     }
 
     /// Algorithme de floutage : déplace un point de manière aléatoire dans un rayon donné
-    pub(crate) fn obfuscate_location(&self, point: &GeoPoint, radius_meters: i32, rng: &mut impl Rng) -> GeoPoint {
+    pub(crate) fn obfuscate_location(
+        &self,
+        point: &GeoPoint,
+        radius_meters: i32,
+        rng: &mut impl Rng,
+    ) -> GeoPoint {
         let radius_in_degrees = (radius_meters as f64) / 111320.0;
 
         let u: f64 = rng.random();
@@ -71,9 +78,6 @@ impl GetNearbyUsersUseCase {
 
         // On utilise unwrap_or car si le floutage nous fait sortir de la terre (très improbable),
         // on préfère renvoyer le point original plutôt que de faire crasher le thread.
-        GeoPoint::try_new(
-            point.lat() + delta_lat,
-            point.lon() + delta_lon
-        ).unwrap_or(*point)
+        GeoPoint::try_new(point.lat() + delta_lat, point.lon() + delta_lon).unwrap_or(*point)
     }
 }

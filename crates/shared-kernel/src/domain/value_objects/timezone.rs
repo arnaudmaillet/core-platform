@@ -1,10 +1,9 @@
 // crates/shared_kernel/src/domain/value_objects/timezone.rs
 
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::str::FromStr;
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Timezone(String);
@@ -29,19 +28,23 @@ impl Timezone {
 
     /// Convertit vers l'énumération forte de chrono_tz pour les calculs de dates
     pub fn to_tz(&self) -> chrono_tz::Tz {
-        self.0.parse::<chrono_tz::Tz>()
+        self.0
+            .parse::<chrono_tz::Tz>()
             .expect("Corrupted Timezone: Must be validated at construction")
     }
 }
 
 impl ValueObject for Timezone {
     fn validate(&self) -> Result<()> {
-        // La validation IANA est coûteuse (parsing de table), 
+        // La validation IANA est coûteuse (parsing de table),
         // on ne l'appelle qu'à la création ou via validate().
         if self.0.parse::<chrono_tz::Tz>().is_err() {
             return Err(DomainError::Validation {
                 field: "timezone",
-                reason: format!("'{}' is not a valid IANA timezone (ex: 'Europe/Paris')", self.0),
+                reason: format!(
+                    "'{}' is not a valid IANA timezone (ex: 'Europe/Paris')",
+                    self.0
+                ),
             });
         }
         Ok(())

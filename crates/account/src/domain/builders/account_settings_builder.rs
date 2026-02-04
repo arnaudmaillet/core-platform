@@ -1,11 +1,11 @@
 // crates/account/src/domain/builders/account_settings_builder.rs
 
+use crate::domain::entities::{
+    AccountSettings, AppearanceSettings, NotificationSettings, PrivacySettings,
+};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
-use shared_kernel::domain::value_objects::{PushToken, RegionCode, Timezone, AccountId};
-use crate::domain::entities::{
-    AccountSettings, PrivacySettings, NotificationSettings, AppearanceSettings
-};
+use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
 
 pub struct AccountSettingsBuilder {
     account_id: AccountId,
@@ -94,9 +94,7 @@ impl AccountSettingsBuilder {
         AccountSettings {
             account_id: self.account_id,
             region_code: self.region_code,
-            timezone: self.timezone.unwrap_or_else(|| {
-                Timezone::from_raw("UTC")
-            }),
+            timezone: self.timezone.unwrap_or_else(|| Timezone::from_raw("UTC")),
             privacy: self.privacy.unwrap_or_default(),
             notifications: self.notifications.unwrap_or_default(),
             appearance: self.appearance.unwrap_or_default(),

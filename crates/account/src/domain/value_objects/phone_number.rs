@@ -1,15 +1,13 @@
-use std::hash::{Hasher, Hash};
-use std::sync::LazyLock;
-use serde::{Deserialize, Serialize};
 use regex::Regex;
 use seahash::SeaHasher;
+use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::hash::{Hash, Hasher};
+use std::sync::LazyLock;
 
 // Regex E.164 : un '+' suivi de 7 à 15 chiffres (pas de 0 après le +)
-static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\+[1-9]\d{6,14}$").unwrap()
-});
+static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\+[1-9]\d{6,14}$").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -25,7 +23,8 @@ impl PhoneNumber {
         let raw = value.into();
 
         // 1. Nettoyage agressif (on ne garde que + et chiffres)
-        let cleaned: String = raw.chars()
+        let cleaned: String = raw
+            .chars()
             .filter(|c| c.is_ascii_digit() || *c == '+')
             .collect();
 
@@ -60,7 +59,11 @@ impl PhoneNumber {
     /// Aide au routage SMS (Hyperscale : choix du provider par région)
     pub fn country_code(&self) -> &str {
         // Logique simplifiée E.164 (les 1 à 3 premiers chiffres après le +)
-        if self.inner.len() >= 4 { &self.inner[0..4] } else { &self.inner }
+        if self.inner.len() >= 4 {
+            &self.inner[0..4]
+        } else {
+            &self.inner
+        }
     }
 }
 

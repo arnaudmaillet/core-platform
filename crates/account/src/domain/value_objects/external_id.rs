@@ -2,11 +2,11 @@
 
 // crates/account/src/domain/value_objects/locale.rs
 
-use std::fmt;
-use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]

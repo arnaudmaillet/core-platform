@@ -7,7 +7,7 @@ edition.workspace = true
 
 [features]
 default = []
-test-utils = []
+test-utils = ["postgres", "scylla", "dep:testcontainers", "dep:testcontainers-modules"]
 
 # --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
@@ -65,6 +65,8 @@ futures = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true, features = ["rt"] }
 tracing-subscriber = { workspace = true, optional = true, features = ["fmt", "env-filter"] }
+testcontainers = { workspace = true, optional = true }
+testcontainers-modules = { workspace = true, optional = true, features = ["postgres"] }
 
 # --- Utils (Core) ---
 futures-util = { workspace = true }
@@ -73,8 +75,4 @@ regex = { workspace = true }
 seahash = { workspace = true }
 unicode-normalization = { workspace = true }
 dyn-clone = { workspace = true}
-
-[dev-dependencies]
-testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true }
 

@@ -9,12 +9,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_prost_build::configure()
         .out_dir(out_dir)
         .compile_protos(
-                         &[
-                             format!("{}/profile/v1/profile.proto", proto_root),
-                             format!("{}/profile/v1/profile_query.proto", proto_root),
-                             format!("{}/profile/v1/user_location.proto", proto_root),
-                         ],
-                         &[proto_root.to_string()],
+            &[
+                format!("{}/profile/v1/profile.proto", proto_root),
+                format!("{}/profile/v1/profile_query.proto", proto_root),
+                format!("{}/profile/v1/user_location.proto", proto_root),
+            ],
+            &[proto_root.to_string()],
         )?;
 
     println!("cargo:rerun-if-changed={}", proto_root);

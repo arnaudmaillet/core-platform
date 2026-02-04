@@ -1,11 +1,12 @@
-use tonic::{Request, Status};
 use crate::domain::value_objects::RegionCode;
+use tonic::{Request, Status};
 
 /// Intercepteur gRPC pour extraire la région des métadonnées (Headers).
 /// Injecté par le BFF ou la Gateway.
 pub fn region_interceptor(mut req: Request<()>) -> Result<Request<()>, Status> {
     // 1. Extraction du header 'x-region'
-    let region_raw = req.metadata()
+    let region_raw = req
+        .metadata()
         .get("x-region")
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| Status::invalid_argument("Missing 'x-region' header"))?;

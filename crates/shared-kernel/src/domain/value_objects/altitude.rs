@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Altitude(f32);
@@ -14,7 +14,9 @@ impl Altitude {
         Self(value)
     }
 
-    pub fn value(&self) -> f32 { self.0 }
+    pub fn value(&self) -> f32 {
+        self.0
+    }
 }
 
 impl ValueObject for Altitude {

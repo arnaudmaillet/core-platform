@@ -1,14 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
-    use shared_kernel::errors::DomainError;
-    use crate::application::update_display_name::{UpdateDisplayNameCommand, UpdateDisplayNameUseCase};
+    use crate::application::update_display_name::{
+        UpdateDisplayNameCommand, UpdateDisplayNameUseCase,
+    };
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     fn setup(profile: Option<Profile>) -> UpdateDisplayNameUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -16,11 +20,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateDisplayNameUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateDisplayNameUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -32,8 +32,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Ancien Nom"),
-            Username::try_new("user1").unwrap()
-        ).build();
+            Username::try_new("user1").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile));
         let new_name = DisplayName::from_raw("Nouveau Nom");
@@ -65,8 +66,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             name.clone(),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(profile));
 
@@ -109,28 +111,40 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Nom"), Username::try_new("user").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Nom"),
+            Username::try_new("user").unwrap(),
+        )
+        .build();
 
         // Simulation d'une collision de version au moment du save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version conflict".into()
+                reason: "Version conflict".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = UpdateDisplayNameUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            UpdateDisplayNameUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(UpdateDisplayNameCommand {
-            account_id,
-            region,
-            new_display_name: DisplayName::from_raw("New Name"),
-        }).await;
+        let result = use_case
+            .execute(UpdateDisplayNameCommand {
+                account_id,
+                region,
+                new_display_name: DisplayName::from_raw("New Name"),
+            })
+            .await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -138,13 +152,27 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Nom"), Username::try_new("user").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Nom"),
+            Username::try_new("user").unwrap(),
+        )
+        .build();
 
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox full".into()))
+            }
+            
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -158,11 +186,13 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(UpdateDisplayNameCommand {
-            account_id,
-            region,
-            new_display_name: DisplayName::from_raw("Update"),
-        }).await;
+        let result = use_case
+            .execute(UpdateDisplayNameCommand {
+                account_id,
+                region,
+                new_display_name: DisplayName::from_raw("Update"),
+            })
+            .await;
 
         // Assert
         // Si l'Outbox échoue, le Use Case doit remonter l'erreur (Rollback)

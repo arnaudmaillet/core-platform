@@ -1,10 +1,10 @@
 // crates/account/src/domain/value_objects/locale.rs
 
-use std::fmt;
-use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -47,12 +47,19 @@ impl ValueObject for Locale {
         if len < 2 || len > 10 {
             return Err(DomainError::Validation {
                 field: "locale",
-                reason: format!("Locale length invalid ({}). Expected BCP-47 format.", self.0),
+                reason: format!(
+                    "Locale length invalid ({}). Expected BCP-47 format.",
+                    self.0
+                ),
             });
         }
 
         // On vérifie que la chaîne ne contient que des caractères alphanumériques et des tirets
-        if !self.0.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        if !self
+            .0
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        {
             return Err(DomainError::Validation {
                 field: "locale",
                 reason: "Locale contains invalid characters".into(),

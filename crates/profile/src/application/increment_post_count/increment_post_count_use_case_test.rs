@@ -1,14 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, PostId, Username};
-    use shared_kernel::errors::DomainError;
-    use crate::application::increment_post_count::{IncrementPostCountCommand, IncrementPostCountUseCase};
+    use crate::application::increment_post_count::{
+        IncrementPostCountCommand, IncrementPostCountUseCase,
+    };
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     fn setup(profile: Option<Profile>) -> IncrementPostCountUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -16,11 +20,7 @@ mod tests {
             ..Default::default()
         });
 
-        IncrementPostCountUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        IncrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -32,8 +32,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // On vérifie que le compteur est à 0 au départ
         assert_eq!(initial_profile.post_count(), 0);
@@ -68,8 +69,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // Simuler 5 incréments (version passera à 6)
         for _ in 0..5 {
@@ -115,29 +117,41 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // On simule une erreur de conflit au save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch".into()
+                reason: "Version mismatch".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = IncrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            IncrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(IncrementPostCountCommand {
-            account_id,
-            region,
-            post_id: PostId::new(),
-        }).await;
+        let result = use_case
+            .execute(IncrementPostCountCommand {
+                account_id,
+                region,
+                post_id: PostId::new(),
+            })
+            .await;
 
         // Assert
         // Le with_retry va tenter plusieurs fois avant de rendre les armes
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -145,13 +159,27 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox capacity reached".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -165,11 +193,13 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(IncrementPostCountCommand {
-            account_id,
-            region,
-            post_id: PostId::new(),
-        }).await;
+        let result = use_case
+            .execute(IncrementPostCountCommand {
+                account_id,
+                region,
+                post_id: PostId::new(),
+            })
+            .await;
 
         // Assert
         // Si l'Outbox crash, le compteur ne doit pas être considéré comme incrémenté en base

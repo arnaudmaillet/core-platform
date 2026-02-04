@@ -4,26 +4,22 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 // Valeurs du domaine
-use shared_kernel::domain::value_objects::{RegionCode, AccountId, Url};
-use crate::application::update_avatar::UpdateAvatarUseCase;
 use crate::application::remove_avatar::RemoveAvatarUseCase;
-use crate::application::update_banner::UpdateBannerUseCase;
 use crate::application::remove_banner::RemoveBannerUseCase;
+use crate::application::update_avatar::UpdateAvatarUseCase;
+use crate::application::update_banner::UpdateBannerUseCase;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url};
 
 // Commandes
-use crate::application::update_avatar::UpdateAvatarCommand;
 use crate::application::remove_avatar::RemoveAvatarCommand;
-use crate::application::update_banner::UpdateBannerCommand;
 use crate::application::remove_banner::RemoveBannerCommand;
+use crate::application::update_avatar::UpdateAvatarCommand;
+use crate::application::update_banner::UpdateBannerCommand;
 
 // Proto généré
 use super::super::profile_v1::{
-    profile_media_service_server::ProfileMediaService,
-    UpdateAvatarRequest,
-    RemoveAvatarRequest,
-    UpdateBannerRequest,
-    RemoveBannerRequest,
-    Profile as ProtoProfile,
+    Profile as ProtoProfile, RemoveAvatarRequest, RemoveBannerRequest, UpdateAvatarRequest,
+    UpdateBannerRequest, profile_media_service_server::ProfileMediaService,
 };
 
 pub struct MediaHandler {
@@ -50,7 +46,8 @@ impl MediaHandler {
 
     /// Helper pour extraire la région injectée par l'intercepteur
     fn get_region<T>(&self, request: &Request<T>) -> Result<RegionCode, Status> {
-        request.extensions()
+        request
+            .extensions()
             .get::<RegionCode>()
             .cloned()
             .ok_or_else(|| Status::internal("Region context missing from metadata"))
@@ -67,15 +64,22 @@ impl ProfileMediaService for MediaHandler {
     ) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let req = request.into_inner();
-        
+
         let account_id = AccountId::try_from(req.account_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let new_avatar_url = Url::try_from(req.new_avatar_url)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let command = UpdateAvatarCommand { account_id, region, new_avatar_url };
+        let command = UpdateAvatarCommand {
+            account_id,
+            region,
+            new_avatar_url,
+        };
 
-        let profile = self.update_avatar_uc.execute(command).await
+        let profile = self
+            .update_avatar_uc
+            .execute(command)
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
@@ -93,7 +97,10 @@ impl ProfileMediaService for MediaHandler {
 
         let command = RemoveAvatarCommand { account_id, region };
 
-        let profile = self.remove_avatar_uc.execute(command).await
+        let profile = self
+            .remove_avatar_uc
+            .execute(command)
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
@@ -113,9 +120,16 @@ impl ProfileMediaService for MediaHandler {
         let new_banner_url = Url::try_from(req.new_banner_url)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let command = UpdateBannerCommand { account_id, region, new_banner_url };
+        let command = UpdateBannerCommand {
+            account_id,
+            region,
+            new_banner_url,
+        };
 
-        let profile = self.update_banner_uc.execute(command).await
+        let profile = self
+            .update_banner_uc
+            .execute(command)
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
@@ -133,7 +147,10 @@ impl ProfileMediaService for MediaHandler {
 
         let command = RemoveBannerCommand { account_id, region };
 
-        let profile = self.remove_banner_uc.execute(command).await
+        let profile = self
+            .remove_banner_uc
+            .execute(command)
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))

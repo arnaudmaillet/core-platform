@@ -1,9 +1,9 @@
 // crates/shared-kernel/src/application/workers/cache_worker.rs
 
-use std::sync::Arc;
 use crate::application::ports::{MessageConsumer, MessageHandler};
 use crate::domain::repositories::CacheRepository;
 use crate::errors::AppResult;
+use std::sync::Arc;
 
 pub struct CacheWorker {
     consumer: Arc<dyn MessageConsumer>,
@@ -11,11 +11,11 @@ pub struct CacheWorker {
 }
 
 impl CacheWorker {
-    pub fn new(
-        consumer: Arc<dyn MessageConsumer>,
-        cache_repo: Arc<dyn CacheRepository>
-    ) -> Self {
-        Self { consumer, cache_repo }
+    pub fn new(consumer: Arc<dyn MessageConsumer>, cache_repo: Arc<dyn CacheRepository>) -> Self {
+        Self {
+            consumer,
+            cache_repo,
+        }
     }
 
     pub async fn start(&self, topic: &str) -> AppResult<()> {

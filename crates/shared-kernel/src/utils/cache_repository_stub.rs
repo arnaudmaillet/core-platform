@@ -1,10 +1,10 @@
 // crates/shared-kernel/src/utils/cache_repository_stub.rs
 
+use crate::domain::repositories::CacheRepository;
+use crate::errors::{AppError, AppResult, ErrorCode};
+use async_trait::async_trait;
 use std::sync::Mutex;
 use std::time::Duration;
-use async_trait::async_trait;
-use crate::errors::{AppResult, AppError, ErrorCode};
-use crate::domain::repositories::CacheRepository;
 
 pub struct CacheRepositoryStub {
     pub storage: Mutex<std::collections::HashMap<String, String>>,
@@ -26,7 +26,10 @@ impl CacheRepository for CacheRepositoryStub {
         if self.fail_all {
             return Err(AppError::new(ErrorCode::InternalError, "Cache Down"));
         }
-        self.storage.lock().unwrap().insert(key.to_string(), value.to_string());
+        self.storage
+            .lock()
+            .unwrap()
+            .insert(key.to_string(), value.to_string());
         Ok(())
     }
 

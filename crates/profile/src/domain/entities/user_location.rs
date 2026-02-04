@@ -1,13 +1,13 @@
 // crates/location/src/domain/entities/user_location.rs
 
-use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-use shared_kernel::domain::entities::{EntityMetadata, GeoPoint};
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
-use shared_kernel::errors::{DomainError, Result};
 use crate::domain::events::LocationEvent;
 use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::{EntityMetadata, GeoPoint};
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::errors::{DomainError, Result};
 
 #[derive(Debug, Clone)]
 pub struct UserLocation {
@@ -80,14 +80,30 @@ impl UserLocation {
 
     // --- Getters (Lecture seule) ---
 
-    pub fn account_id(&self) -> &AccountId { &self.account_id }
-    pub fn region_code(&self) -> &RegionCode { &self.region_code }
-    pub fn coordinates(&self) -> &GeoPoint { &self.coordinates }
-    pub fn metrics(&self) -> Option<&LocationMetrics> { self.metrics.as_ref() }
-    pub fn movement(&self) -> Option<&MovementMetrics> { self.movement.as_ref() }
-    pub fn is_ghost_mode(&self) -> bool { self.is_ghost_mode }
-    pub fn privacy_radius_meters(&self) -> i32 { self.privacy_radius_meters }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn account_id(&self) -> &AccountId {
+        &self.account_id
+    }
+    pub fn region_code(&self) -> &RegionCode {
+        &self.region_code
+    }
+    pub fn coordinates(&self) -> &GeoPoint {
+        &self.coordinates
+    }
+    pub fn metrics(&self) -> Option<&LocationMetrics> {
+        self.metrics.as_ref()
+    }
+    pub fn movement(&self) -> Option<&MovementMetrics> {
+        self.movement.as_ref()
+    }
+    pub fn is_ghost_mode(&self) -> bool {
+        self.is_ghost_mode
+    }
+    pub fn privacy_radius_meters(&self) -> i32 {
+        self.privacy_radius_meters
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 
     // --- Logic Métier (Commandes) ---
 
@@ -158,11 +174,19 @@ impl UserLocation {
 // --- Trait Implementations ---
 
 impl EntityMetadata for UserLocation {
-    fn entity_name() -> &'static str { "UserLocation" }
+    fn entity_name() -> &'static str {
+        "UserLocation"
+    }
 }
 
 impl AggregateRoot for UserLocation {
-    fn id(&self) -> String { self.account_id.as_string() }
-    fn metadata(&self) -> &AggregateMetadata { &self.metadata }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata { &mut self.metadata }
+    fn id(&self) -> String {
+        self.account_id.as_string()
+    }
+    fn metadata(&self) -> &AggregateMetadata {
+        &self.metadata
+    }
+    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
+        &mut self.metadata
+    }
 }

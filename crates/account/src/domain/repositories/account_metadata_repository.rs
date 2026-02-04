@@ -16,5 +16,9 @@ pub trait AccountMetadataRepository: Send + Sync {
     async fn insert(&self, metadata: &AccountMetadata, tx: &mut dyn Transaction) -> Result<()>;
 
     /// Met à jour l'intégralité des métadonnées.
-    async fn save(&self, metadata: &AccountMetadata, tx: Option<&mut dyn Transaction>) -> Result<()>;
+    async fn save(
+        &self,
+        metadata: &AccountMetadata,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<()>;
 }

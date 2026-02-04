@@ -1,5 +1,5 @@
-use shared_kernel::errors::DomainError;
 use crate::domain::value_objects::AccountState;
+use shared_kernel::errors::DomainError;
 
 /// Il permet de mapper l'ENUM PostgreSQL sans polluer le Domaine avec SQLx.
 #[derive(Debug, sqlx::Type)]
@@ -9,7 +9,7 @@ pub enum PostgresAccountState {
     Active,
     Deactivated,
     Suspended,
-    Banned
+    Banned,
 }
 
 // --- CONVERSIONS ---

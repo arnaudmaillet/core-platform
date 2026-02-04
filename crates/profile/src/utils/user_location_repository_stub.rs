@@ -1,10 +1,10 @@
 use crate::domain::entities::UserLocation; // Vérifie bien le nom de ton entité
 use crate::domain::repositories::LocationRepository;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use std::sync::Mutex;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::transaction::Transaction;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::Result;
+use std::sync::Mutex;
 
 // --- STUB LOCATION REPOSITORY ---
 pub struct LocationRepositoryStub {
@@ -41,7 +41,7 @@ impl LocationRepository for LocationRepositoryStub {
         _center: GeoPoint,
         _region: RegionCode,
         _radius: f64,
-        _limit: i64
+        _limit: i64,
     ) -> Result<Vec<(UserLocation, f64)>> {
         Ok(self.nearby_to_return.lock().unwrap().clone())
     }

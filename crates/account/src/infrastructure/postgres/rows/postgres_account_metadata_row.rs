@@ -1,13 +1,13 @@
-use sqlx::FromRow;
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
-use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::AccountMetadataBuilder;
 use crate::domain::entities::AccountMetadata;
 use crate::domain::value_objects::AccountRole;
 use crate::infrastructure::postgres::models::PostgresAccountRole;
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::errors::{DomainError, Result};
+use sqlx::FromRow;
+use uuid::Uuid;
 
 #[derive(Debug, FromRow)]
 pub struct PostgresAccountMetadataRow {

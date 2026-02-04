@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 use shared_kernel::domain::entities::GeoPoint;
-use shared_kernel::domain::value_objects::{AccountId};
+use shared_kernel::domain::value_objects::AccountId;
 
 #[derive(Serialize)]
 pub struct NearbyUserDto {

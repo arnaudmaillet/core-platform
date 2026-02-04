@@ -1,15 +1,15 @@
 // crates/account/src/domain/entities/account_metadata.rs
 
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-use shared_kernel::domain::entities::EntityMetadata;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
-use shared_kernel::errors::Result;
 use crate::domain::builders::AccountMetadataBuilder;
 use crate::domain::events::AccountEvent;
 use crate::domain::value_objects::AccountRole;
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::errors::Result;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct AccountMetadata {
@@ -89,7 +89,10 @@ impl AccountMetadata {
 
         // Règle métier Hyperscale : Auto-shadowban si le score chute trop bas
         if self.trust_score < -20 && !self.is_shadowbanned {
-            self.apply_shadowban(format!("Automated system: Trust score critical ({})", self.trust_score));
+            self.apply_shadowban(format!(
+                "Automated system: Trust score critical ({})",
+                self.trust_score
+            ));
         }
     }
 
@@ -218,12 +221,14 @@ impl AccountMetadata {
 }
 
 impl EntityMetadata for AccountMetadata {
-    fn entity_name() -> &'static str { "AccountMetadata" }
+    fn entity_name() -> &'static str {
+        "AccountMetadata"
+    }
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
             "user_internal_metadata_pkey" => "account_id",
-            _ => "internal_metadata"
+            _ => "internal_metadata",
         }
     }
 }

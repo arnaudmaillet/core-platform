@@ -1,10 +1,10 @@
 // crates/shared-kernel/src/domain/region_code
 
-use std::fmt;
-use std::str::FromStr;
-use serde::{Deserialize, Serialize};
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RegionCode(String);
@@ -40,7 +40,10 @@ impl ValueObject for RegionCode {
                 field: "region_code",
                 reason: format!(
                     "Region '{}' not supported. Valid: {}, {}, {}",
-                    self.0, Self::EU, Self::US, Self::ASIA
+                    self.0,
+                    Self::EU,
+                    Self::US,
+                    Self::ASIA
                 ),
             }),
         }

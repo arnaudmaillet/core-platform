@@ -1,15 +1,15 @@
 // crates/account/src/infrastructure/postgres/repositories/account_settings_repository.rs
 
-use async_trait::async_trait;
-use sqlx::PgPool;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{PushToken, Timezone, AccountId};
-use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::domain::entities::{AccountSettings, SettingsBlob};
 use crate::domain::repositories::AccountSettingsRepository;
 use crate::infrastructure::postgres::rows::PostgresAccountSettingsRow;
+use async_trait::async_trait;
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::transaction::Transaction;
+use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
+use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
+use sqlx::PgPool;
 
 pub struct PostgresAccountSettingsRepository {
     pool: PgPool,
@@ -30,38 +30,46 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
     ) -> Result<Option<AccountSettings>> {
         let uid = account_id.as_uuid();
 
-        let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
-            let query = "SELECT account_id, region_code, settings, timezone, push_tokens, updated_at
+        let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            Box::pin(async move {
+                let query =
+                    "SELECT account_id, region_code, settings, timezone, push_tokens, updated_at
                          FROM account_settings WHERE account_id = $1";
 
-            let res: Option<PostgresAccountSettingsRow> = sqlx::query_as(query)
-                .bind(uid)
-                .fetch_optional(conn)
-                .await
-                .map_domain_infra("AccountSettings: find_by_account_id")?;
+                let res: Option<PostgresAccountSettingsRow> = sqlx::query_as(query)
+                    .bind(uid)
+                    .fetch_optional(conn)
+                    .await
+                    .map_domain_infra("AccountSettings: find_by_account_id")?;
 
-            Ok(res)
-        }))
-            .await?;
+                Ok(res)
+            })
+        })
+        .await?;
 
         row.map(AccountSettings::try_from).transpose()
     }
 
-    async fn save(&self, settings: &AccountSettings, tx: Option<&mut dyn Transaction>) -> Result<()> {
+    async fn save(
+        &self,
+        settings: &AccountSettings,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<()> {
         let blob = SettingsBlob {
             privacy: settings.privacy.clone(),
             notifications: settings.notifications.clone(),
             appearance: settings.appearance.clone(),
         };
 
-        let settings_json = serde_json::to_value(blob)
-            .map_err(|e| DomainError::Internal(e.to_string()))?;
+        let settings_json =
+            serde_json::to_value(blob).map_err(|e| DomainError::Internal(e.to_string()))?;
 
-        let push_tokens: Vec<String> = settings.push_tokens
+        let push_tokens: Vec<String> = settings
+            .push_tokens
             .iter()
             .map(|t: &PushToken| t.as_str().to_string())
             .collect();
-        
+
         let uid = settings.account_id.as_uuid();
         let region = settings.region_code.as_str().to_string();
         let tz = settings.timezone.as_str().to_string();
@@ -149,34 +157,42 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let uid = account_id.as_uuid();
         let token_str = token.as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
-            let query = "UPDATE account_settings
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            Box::pin(async move {
+                let query = "UPDATE account_settings
                          SET push_tokens = array_remove(push_tokens, $1),
                              updated_at = NOW()
                          WHERE account_id = $2";
-            sqlx::query(query)
-                .bind(token_str)
-                .bind(uid)
-                .execute(conn)
-                .await
-                .map_domain_infra("AccountSettings: remove_push_token")?;
-            Ok(())
-        }))
-            .await
+                sqlx::query(query)
+                    .bind(token_str)
+                    .bind(uid)
+                    .execute(conn)
+                    .await
+                    .map_domain_infra("AccountSettings: remove_push_token")?;
+                Ok(())
+            })
+        })
+        .await
     }
 
-    async fn delete_for_user(&self, account_id: &AccountId, tx: Option<&mut dyn Transaction>) -> Result<()> {
+    async fn delete_for_user(
+        &self,
+        account_id: &AccountId,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<()> {
         let uid = account_id.as_uuid();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
-            let query = "DELETE FROM account_settings WHERE account_id = $1";
-            sqlx::query(query)
-                .bind(uid)
-                .execute(conn)
-                .await
-                .map_domain_infra("AccountSettings: delete_user")?;
-            Ok(())
-        }))
-            .await
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            Box::pin(async move {
+                let query = "DELETE FROM account_settings WHERE account_id = $1";
+                sqlx::query(query)
+                    .bind(uid)
+                    .execute(conn)
+                    .await
+                    .map_domain_infra("AccountSettings: delete_user")?;
+                Ok(())
+            })
+        })
+        .await
     }
 }

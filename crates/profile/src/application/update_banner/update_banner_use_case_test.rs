@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
-    use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode, Url};
-    use shared_kernel::errors::DomainError;
     use crate::application::update_banner::{UpdateBannerCommand, UpdateBannerUseCase};
     use crate::domain::builders::ProfileBuilder;
+    use crate::domain::entities::Profile;
+    use crate::domain::value_objects::DisplayName;
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     /// Helper pour instancier le Use Case avec les stubs
     fn setup(profile: Option<Profile>) -> UpdateBannerUseCase {
@@ -18,11 +20,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        UpdateBannerUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -34,8 +32,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile));
         let new_url = Url::try_from("https://cdn.com/banner_v1.png".to_string()).unwrap();
@@ -70,8 +69,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.update_banner(banner_url.clone()); // Version passe à 2
 
         let use_case = setup(Some(profile));
@@ -120,8 +120,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.update_banner(Url::try_from("https://old.png".to_string()).unwrap());
 
         let use_case = setup(Some(profile));
@@ -152,23 +153,21 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // Configuration du Stub pour simuler une collision de version au moment du save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Autre mise à jour simultanée détectée".into()
+                reason: "Autre mise à jour simultanée détectée".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = UpdateBannerUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        );
+        let use_case =
+            UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         let cmd = UpdateBannerCommand {
             account_id,
@@ -181,7 +180,10 @@ mod tests {
 
         // Assert
         // On vérifie que l'erreur de concurrence remonte bien
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -189,7 +191,13 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
@@ -197,14 +205,17 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case = UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(UpdateBannerCommand {
-            account_id,
-            region,
-            new_banner_url: Url::try_from("https://new.png".to_string()).unwrap(),
-        }).await;
+        let result = use_case
+            .execute(UpdateBannerCommand {
+                account_id,
+                region,
+                new_banner_url: Url::try_from("https://new.png".to_string()).unwrap(),
+            })
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::Internal(m)) if m == "Erreur disque SQL"));
@@ -215,14 +226,28 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // Stub Outbox qui crash systématiquement
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox capacity reached".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -236,11 +261,13 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(UpdateBannerCommand {
-            account_id,
-            region,
-            new_banner_url: Url::try_from("https://new.png".to_string()).unwrap(),
-        }).await;
+        let result = use_case
+            .execute(UpdateBannerCommand {
+                account_id,
+                region,
+                new_banner_url: Url::try_from("https://new.png".to_string()).unwrap(),
+            })
+            .await;
 
         // Assert
         // Le Use Case doit échouer si l'Outbox échoue (garantie transactionnelle)

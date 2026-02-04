@@ -1,7 +1,7 @@
 // crates/account/src/application/change_email/change_email_dto.rs
 
-use shared_kernel::errors::{DomainError, Result};
 use crate::application::change_email::ChangeEmailCommand;
+use shared_kernel::errors::{DomainError, Result};
 
 pub struct ChangeEmailDto {
     pub account_id: String,

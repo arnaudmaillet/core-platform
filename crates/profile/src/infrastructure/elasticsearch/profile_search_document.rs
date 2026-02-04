@@ -1,6 +1,6 @@
 // crates/profile/src/infrastructure/elasticsearch/profile_search_document.rs
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProfileSearchDocument {

@@ -3,11 +3,11 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use crate::application::update_stats::{UpdateStatsCommand, UpdateStatsUseCase};
     use crate::domain::repositories::ProfileStatsRepository;
     use crate::utils::ProfileStatsRepositoryStub;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_update_stats_nominal_increment() {
@@ -30,7 +30,11 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        let stats = repo.find_by_id(&account_id, &region).await.unwrap().unwrap();
+        let stats = repo
+            .find_by_id(&account_id, &region)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(stats.follower_count(), 5);
         assert_eq!(stats.following_count(), 2);
     }
@@ -43,7 +47,9 @@ mod tests {
         let repo = Arc::new(ProfileStatsRepositoryStub::default());
 
         // On initialise le stub
-        repo.update_stats(&account_id, &region, 10, 0, 0).await.unwrap();
+        repo.save(&account_id, &region, 10, 0, 0)
+            .await
+            .unwrap();
 
         let use_case = UpdateStatsUseCase::new(repo.clone());
         let cmd = UpdateStatsCommand {
@@ -58,7 +64,11 @@ mod tests {
         use_case.execute(cmd).await.unwrap();
 
         // Assert
-        let stats = repo.find_by_id(&account_id, &region).await.unwrap().unwrap();
+        let stats = repo
+            .find_by_id(&account_id, &region)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(stats.follower_count(), 7);
     }
 
@@ -81,8 +91,15 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok(), "Le Use Case aurait dû réussir après 2 retries");
-        assert_eq!(*repo.fail_count.lock().unwrap(), 0, "Toutes les tentatives d'échec ont dû être consommées");
+        assert!(
+            result.is_ok(),
+            "Le Use Case aurait dû réussir après 2 retries"
+        );
+        assert_eq!(
+            *repo.fail_count.lock().unwrap(),
+            0,
+            "Toutes les tentatives d'échec ont dû être consommées"
+        );
     }
 
     #[tokio::test]
@@ -104,6 +121,9 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_err(), "Le Use Case doit finir par échouer si Scylla est définitivement HS");
+        assert!(
+            result.is_err(),
+            "Le Use Case doit finir par échouer si Scylla est définitivement HS"
+        );
     }
 }

@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/domain/events/metadata.rs
 
-use serde::{Deserialize, Serialize};
 use crate::domain::events::DomainEvent;
+use serde::{Deserialize, Serialize};
 
 /// Données techniques partagées par tous les agrégats.
 /// Évite la duplication de la logique de gestion des événements et de versioning.
@@ -14,11 +14,10 @@ pub struct AggregateMetadata {
 }
 
 impl AggregateMetadata {
-
     pub fn version(&self) -> i32 {
         self.version
     }
-    
+
     /// Crée une nouvelle instance (par défaut version 1 pour une création)
     pub fn new(version: i32) -> Self {
         Self {

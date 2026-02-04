@@ -1,5 +1,5 @@
 mod deactivate_account_command;
 mod deactivate_account_use_case;
 
-pub use deactivate_account_use_case::DeactivateAccountUseCase;
 pub use deactivate_account_command::DeactivateAccountCommand;
+pub use deactivate_account_use_case::DeactivateAccountUseCase;

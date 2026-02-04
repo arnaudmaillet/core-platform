@@ -1,7 +1,7 @@
 // crates/account/src/application/link_external_identity/link_external_identity_command.rs
 
-use shared_kernel::domain::value_objects::AccountId;
 use crate::domain::value_objects::ExternalId;
+use shared_kernel::domain::value_objects::AccountId;
 
 #[derive(Debug, Clone)]
 pub struct LinkExternalIdentityCommand {

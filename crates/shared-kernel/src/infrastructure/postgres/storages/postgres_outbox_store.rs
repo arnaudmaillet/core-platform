@@ -1,13 +1,13 @@
 // crates/shared-kernel/src/infrastructure/postgres/storage/postgres_outbox_store.rs
 
-use async_trait::async_trait;
-use sqlx::PgPool;
-use uuid::Uuid;
 use crate::domain::events::EventEnvelope;
 use crate::domain::repositories::OutboxStore;
 use crate::errors::Result;
 use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::rows::OutboxRow;
+use async_trait::async_trait;
+use sqlx::PgPool;
+use uuid::Uuid;
 
 pub struct PostgresOutboxStore {
     pool: PgPool,
@@ -66,7 +66,7 @@ impl OutboxStore for PostgresOutboxStore {
         let sql = "UPDATE outbox SET attempts = attempts + 1, last_error = $2 WHERE id = $1";
 
         sqlx::query(sql)
-            .bind(id)    // $1
+            .bind(id) // $1
             .bind(error) // $2
             .execute(&self.pool)
             .await

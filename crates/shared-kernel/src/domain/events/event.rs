@@ -2,13 +2,13 @@
 
 use dyn_clone::DynClone;
 
-use std::borrow::Cow;
-use std::fmt::Debug;
+use crate::domain::value_objects::RegionCode;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
+use std::borrow::Cow;
+use std::fmt::Debug;
 use uuid::Uuid;
-use crate::domain::value_objects::RegionCode;
 
 #[async_trait]
 pub trait DomainEvent: DynClone + Debug + Send + Sync {

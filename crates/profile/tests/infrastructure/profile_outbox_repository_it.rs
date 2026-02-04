@@ -1,7 +1,6 @@
 // crates/profile/tests/infrastructure/profile_outbox_repository_it.rs
 
 use chrono::Utc;
-use uuid::Uuid;
 use profile::domain::builders::ProfileBuilder;
 use profile::domain::entities::Profile;
 use profile::domain::events::ProfileEvent;
@@ -10,13 +9,14 @@ use profile::domain::value_objects::{Bio, DisplayName};
 use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
-use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_outbox_with_real_profile_events() {
-    let (pool, _c) = crate::common::setup_test_db().await;
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
     let repo = PostgresOutboxRepository::new(pool.clone());
 
     let account_id = AccountId::new();
@@ -37,19 +37,20 @@ async fn test_outbox_with_real_profile_events() {
 
     // 3. Save
     // On passe l'événement qui contient maintenant sa région
-    repo.save(&mut wrapped_tx, &event).await.expect("Save failed");
+    repo.save(&mut wrapped_tx, &event)
+        .await
+        .expect("Save failed");
 
     wrapped_tx.into_inner().commit().await.unwrap();
 
     // 4. Vérification
     // On vérifie aussi que la colonne region_code en DB est bien remplie
-    let row: (serde_json::Value, String) = sqlx::query_as(
-        "SELECT payload, region_code FROM outbox_events WHERE aggregate_id = $1"
-    )
-        .bind(account_id.to_string())
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let row: (serde_json::Value, String) =
+        sqlx::query_as("SELECT payload, region_code FROM outbox_events WHERE aggregate_id = $1")
+            .bind(account_id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     assert_eq!(row.0["type"], "UsernameChanged");
     assert_eq!(row.0["data"]["new_username"], "new_bob");
@@ -58,48 +59,69 @@ async fn test_outbox_with_real_profile_events() {
 
 #[tokio::test]
 async fn test_outbox_atomic_rollback_with_profile() {
-    let (pool, _c) = crate::common::setup_test_db().await;
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
     let profile_repo = PostgresProfileRepository::new(pool.clone());
     let outbox_repo = PostgresOutboxRepository::new(pool.clone());
 
     // 1. Création (Génère ProfileCreated)
     let mut profile = Profile::create(
-            ProfileBuilder::new(
+        ProfileBuilder::new(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Ghost"),
-            Username::try_new("ghost").unwrap()
-        ).build()
+            Username::try_new("ghost").unwrap(),
+        )
+        .build(),
     );
 
     // 2. On tire les events UNE SEULE FOIS
     let events = profile.pull_events();
-    let event = events.first().expect("L'événement ProfileCreated devrait être présent");
+    let event = events
+        .first()
+        .expect("L'événement ProfileCreated devrait être présent");
 
     // 3. TRANSACTION
     let tx_sqlx = pool.begin().await.unwrap();
     let mut wrapped_tx = PostgresTransaction::new(tx_sqlx);
 
     // On sauve
-    profile_repo.save(&profile, Some(&mut wrapped_tx)).await.unwrap();
-    outbox_repo.save(&mut wrapped_tx, event.as_ref()).await.unwrap();
+    profile_repo
+        .save(&profile, Some(&mut wrapped_tx))
+        .await
+        .unwrap();
+    outbox_repo
+        .save(&mut wrapped_tx, event.as_ref())
+        .await
+        .unwrap();
 
     // 4. ROLLBACK
     wrapped_tx.into_inner().rollback().await.unwrap();
 
     // 5. VERIFICATIONS
-    let p_found = profile_repo.find_by_id(&profile.account_id(), &profile.region_code()).await.unwrap();
-    assert!(p_found.is_none(), "Le profil ne devrait pas exister après rollback");
+    let p_found = profile_repo
+        .find_by_id(&profile.account_id(), &profile.region_code())
+        .await
+        .unwrap();
+    assert!(
+        p_found.is_none(),
+        "Le profil ne devrait pas exister après rollback"
+    );
 
-    let e_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = $1")
-        .bind(profile.account_id().to_string())
-        .fetch_one(&pool).await.unwrap();
-    assert_eq!(e_count.0, 0, "L'événement ne devrait pas exister après rollback");
+    let e_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = $1")
+            .bind(profile.account_id().to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        e_count.0, 0,
+        "L'événement ne devrait pas exister après rollback"
+    );
 }
 
 #[tokio::test]
 async fn test_outbox_payload_integrity() {
-    let (pool, _c) = crate::common::setup_test_db().await;
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
     let repo = PostgresOutboxRepository::new(pool.clone());
 
     // Test avec un changement de Bio (Option<Bio>)
@@ -117,7 +139,9 @@ async fn test_outbox_payload_integrity() {
     tx.into_inner().commit().await.unwrap();
 
     let row: (serde_json::Value,) = sqlx::query_as("SELECT payload FROM outbox_events")
-        .fetch_one(&pool).await.unwrap();
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
     // On vérifie que le tag "type" et le contenu "data" sont là (via ton attribut serde)
     assert_eq!(row.0["type"], "BioUpdated");
@@ -127,7 +151,7 @@ async fn test_outbox_payload_integrity() {
 
 #[tokio::test]
 async fn test_outbox_duplicate_prevention() {
-    let (pool, _c) = crate::common::setup_test_db().await;
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
     let repo = PostgresOutboxRepository::new(pool.clone());
 
     let event_id = Uuid::now_v7();
@@ -147,7 +171,9 @@ async fn test_outbox_duplicate_prevention() {
     // 1. Première insertion : succès attendu
     let tx1_sqlx = pool.begin().await.unwrap();
     let mut tx1 = PostgresTransaction::new(tx1_sqlx);
-    repo.save(&mut tx1, &event).await.expect("La première sauvegarde devrait réussir");
+    repo.save(&mut tx1, &event)
+        .await
+        .expect("La première sauvegarde devrait réussir");
     tx1.into_inner().commit().await.unwrap();
 
     // 2. Deuxième tentative avec le même événement (même ID + même Région)
@@ -163,9 +189,11 @@ async fn test_outbox_duplicate_prevention() {
 
     // Optionnel : vérifier que c'est bien une erreur d'infrastructure
     let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("duplicate key value"), "L'erreur devrait être un doublon de clé");
+    assert!(
+        err_msg.contains("duplicate key value"),
+        "L'erreur devrait être un doublon de clé"
+    );
 }
-
 
 // Herlpers
 fn create_test_profile() -> Profile {
@@ -175,7 +203,7 @@ fn create_test_profile() -> Profile {
         DisplayName::from_raw("Alice"),
         Username::try_new("alice_dev").unwrap(),
     )
-        .bio(Bio::try_new("Rustacean & Architect").unwrap())
-        .is_private(false)
-        .build()
+    .with_bio(Bio::try_new("Rustacean & Architect").unwrap())
+    .with_privacy(false)
+    .build()
 }

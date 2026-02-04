@@ -1,13 +1,13 @@
 // crates/shared-kernel/src/domain/value_object/account_id.rs
 
+use crate::domain::entities::EntityMetadata;
+use crate::domain::identifier::Identifier; // Nouvel import
+use crate::domain::value_objects::ValueObject;
+use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
-use crate::domain::entities::EntityMetadata;
-use crate::domain::value_objects::ValueObject;
-use crate::domain::identifier::Identifier; // Nouvel import
-use crate::errors::{DomainError, Result};
 
 /// Identifiant unique pour un compte, basé sur UUID v7 (triable temporellement).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

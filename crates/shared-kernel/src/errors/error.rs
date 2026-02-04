@@ -1,34 +1,26 @@
 // crates/shared-kernel/src/errors/domain_error.rs
 
-use thiserror::Error;
 use crate::errors::AppError;
+use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum DomainError {
     #[error("Validation failed for field '{field}': {reason}")]
-    Validation {
-        field: &'static str,
-        reason: String
-    },
+    Validation { field: &'static str, reason: String },
 
     #[error("{entity} not found with id '{id}'")]
-    NotFound {
-        entity: &'static str,
-        id: String
-    },
+    NotFound { entity: &'static str, id: String },
 
     #[error("{entity} already exists with {field} = '{value}'")]
     AlreadyExists {
         entity: &'static str,
         field: &'static str,
-        value: String
+        value: String,
     },
 
     /// Erreur de concurrence (Optimistic Locking / Version Mismatch)
     #[error("Concurrency conflict: {reason}")]
-    ConcurrencyConflict {
-        reason: String
-    },
+    ConcurrencyConflict { reason: String },
 
     /// Échec définitif après plusieurs tentatives de retry
     #[error("Operation failed after maximum retries: {0}")]
@@ -36,15 +28,11 @@ pub enum DomainError {
 
     /// Erreur de permissions / business rules (ex: compte banni ou bloqué)
     #[error("Unauthorized access: {reason}")]
-    Unauthorized {
-        reason: String
-    },
+    Unauthorized { reason: String },
 
     /// Accès interdit malgré une identité valide (RBAC / ABAC)
     #[error("Forbidden: {reason}")]
-    Forbidden {
-        reason: String
-    },
+    Forbidden { reason: String },
 
     /// Erreur liée à l'infrastructure (DB, Kafka, Redis)
     #[error("Infrastructure failure: {0}")]
@@ -74,7 +62,7 @@ impl From<AppError> for DomainError {
             // on peut le transformer en Not Found domaine.
             crate::errors::ErrorCode::NotFound => DomainError::NotFound {
                 entity: "Resource",
-                id: "unknown".into()
+                id: "unknown".into(),
             },
             _ => DomainError::Internal(err.message),
         }

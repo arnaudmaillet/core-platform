@@ -1,15 +1,18 @@
 // crates/profile/tests/infrastructure/user_location_repository_it.rs
 
-use profile::domain::builders::UserLocationBuilder;
 use crate::common;
-use profile::infrastructure::postgres::repositories::PostgresLocationRepository;
+use profile::domain::builders::UserLocationBuilder;
 use profile::domain::repositories::LocationRepository;
+use profile::infrastructure::postgres::repositories::PostgresLocationRepository;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
-async fn setup() -> (PostgresLocationRepository, testcontainers::ContainerAsync<testcontainers_modules::postgres::Postgres>) {
-    let (pool, container) = common::setup_test_db().await;
+async fn setup() -> (
+    PostgresLocationRepository,
+    testcontainers::ContainerAsync<testcontainers_modules::postgres::Postgres>,
+) {
+    let (pool, container) = common::setup_postgres_test_db().await;
     (PostgresLocationRepository::new(pool), container)
 }
 
@@ -22,8 +25,10 @@ async fn test_location_upsert_lifecycle() {
     let loc = UserLocationBuilder::new(account_id.clone(), region.clone(), point_a).build();
     repo.save(&loc, None).await.expect("Save failed");
 
-    let mut fetched = repo.find_by_id(&account_id, &region)
-        .await.unwrap()
+    let mut fetched = repo
+        .find_by_id(&account_id, &region)
+        .await
+        .unwrap()
         .expect("Should exist");
 
     let point_b = GeoPoint::try_new(2.3500, 48.8500).unwrap();
@@ -35,7 +40,11 @@ async fn test_location_upsert_lifecycle() {
     repo.save(&fetched, None).await.expect("Update failed");
 
     // 5. Verification
-    let final_check = repo.find_by_id(&account_id, &region).await.unwrap().unwrap();
+    let final_check = repo
+        .find_by_id(&account_id, &region)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(final_check.version(), 2);
 }
 
@@ -44,15 +53,28 @@ async fn test_find_nearby_users() {
     let (repo, _c) = setup().await;
     let region = RegionCode::try_new("eu".to_string()).unwrap();
 
-    let user_paris = UserLocationBuilder::new(AccountId::new(), region.clone(), GeoPoint::try_new(2.3522, 48.8566).unwrap()).build();
-    let user_boulogne = UserLocationBuilder::new(AccountId::new(), region.clone(), GeoPoint::try_new(2.2433, 48.8397).unwrap()).build();
+    let user_paris = UserLocationBuilder::new(
+        AccountId::new(),
+        region.clone(),
+        GeoPoint::try_new(2.3522, 48.8566).unwrap(),
+    )
+    .build();
+    let user_boulogne = UserLocationBuilder::new(
+        AccountId::new(),
+        region.clone(),
+        GeoPoint::try_new(2.2433, 48.8397).unwrap(),
+    )
+    .build();
 
     repo.save(&user_paris, None).await.unwrap();
     repo.save(&user_boulogne, None).await.unwrap();
 
     let center = GeoPoint::try_new(2.3522, 48.8566).unwrap();
     // Augmentons un peu le rayon à 15km pour être large et éliminer le doute sur la distance
-    let results = repo.find_nearby(center, region, 15_000.0, 10).await.unwrap();
+    let results = repo
+        .find_nearby(center, region, 15_000.0, 10)
+        .await
+        .unwrap();
 
     assert_eq!(results.len(), 2, "On devrait trouver Paris et Boulogne");
 }
@@ -88,12 +110,22 @@ async fn test_find_nearby_edge_of_radius() {
     repo.save(&loc, None).await.unwrap();
 
     // 1. Recherche à 9km : trop court
-    let results_9k = repo.find_nearby(center, region.clone(), 9_000.0, 10).await.unwrap();
+    let results_9k = repo
+        .find_nearby(center, region.clone(), 9_000.0, 10)
+        .await
+        .unwrap();
     assert_eq!(results_9k.len(), 0);
 
     // 2. Recherche à 12km : doit le trouver
-    let results_12k = repo.find_nearby(center, region, 12_000.0, 10).await.unwrap();
-    assert_eq!(results_12k.len(), 1, "L'utilisateur devrait être trouvé dans un rayon de 12km");
+    let results_12k = repo
+        .find_nearby(center, region, 12_000.0, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        results_12k.len(),
+        1,
+        "L'utilisateur devrait être trouvé dans un rayon de 12km"
+    );
 }
 
 #[tokio::test]
@@ -111,7 +143,10 @@ async fn test_regional_isolation_nearby() {
     repo.save(&user_us, None).await.unwrap();
 
     // Si on cherche en EU, on ne doit pas voir le US
-    let results = repo.find_nearby(point, region_eu, 1000.0, 10).await.unwrap();
+    let results = repo
+        .find_nearby(point, region_eu, 1000.0, 10)
+        .await
+        .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].0.region_code().as_str(), "eu");
 }

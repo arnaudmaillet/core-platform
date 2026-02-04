@@ -7,5 +7,5 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 pub struct ChangeRegionCommand {
     pub account_id: AccountId,
     pub region_code: RegionCode, // La région actuelle (pour router la requête SQL)
-    pub new_region: RegionCode,   // La destination cible
+    pub new_region: RegionCode,  // La destination cible
 }

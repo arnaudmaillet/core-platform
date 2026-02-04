@@ -1,7 +1,7 @@
-use std::fmt;
+use crate::errors::{DomainError, ErrorCode};
 use serde::Serialize;
 use serde_json::Value;
-use crate::errors::{DomainError, ErrorCode};
+use std::fmt;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct AppError {
@@ -36,16 +36,19 @@ impl From<DomainError> for AppError {
             ),
 
             // 2. Cas : Conflit d'unicité (409) - ex: Email déjà pris
-            DomainError::AlreadyExists { entity, field, value } => Self::new(
+            DomainError::AlreadyExists {
+                entity,
+                field,
+                value,
+            } => Self::new(
                 ErrorCode::AlreadyExists,
                 format!("{entity} with {field} '{value}' already exists"),
             ),
 
             // 3. Cas : Concurrence (409/429) - Retry géré par le Use Case
-            DomainError::ConcurrencyConflict { reason } => Self::new(
-                ErrorCode::ConcurrencyConflict,
-                reason,
-            ),
+            DomainError::ConcurrencyConflict { reason } => {
+                Self::new(ErrorCode::ConcurrencyConflict, reason)
+            }
 
             // 4. Cas : Validation (400)
             DomainError::Validation { field, reason } => Self {
@@ -55,31 +58,22 @@ impl From<DomainError> for AppError {
             },
 
             // 5. Cas : Identité non valide (401)
-            DomainError::Unauthorized { reason } => Self::new(
-                ErrorCode::Unauthorized,
-                reason,
-            ),
+            DomainError::Unauthorized { reason } => Self::new(ErrorCode::Unauthorized, reason),
 
             // 6. Cas : Droits insuffisants (403)
-            DomainError::Forbidden { reason } => Self::new(
-                ErrorCode::Forbidden,
-                reason,
-            ),
+            DomainError::Forbidden { reason } => Self::new(ErrorCode::Forbidden, reason),
 
             // 7. Cas : Erreurs techniques (500)
             // On utilise (_) car ce sont des variantes Tuples et on masque le détail au client
-            DomainError::Infrastructure(_) |
-            DomainError::Internal(_) |
-            DomainError::TooManyConflicts(_) => {
-                Self::new(
-                    ErrorCode::InternalError,
-                    "An unexpected error occurred. Please try again later.",
-                )
-            }
+            DomainError::Infrastructure(_)
+            | DomainError::Internal(_)
+            | DomainError::TooManyConflicts(_) => Self::new(
+                ErrorCode::InternalError,
+                "An unexpected error occurred. Please try again later.",
+            ),
         }
     }
 }
-
 
 // Pour transformer les erreurs SQL (sqlx) en AppError
 #[cfg(feature = "postgres")]
@@ -88,10 +82,7 @@ impl From<sqlx::Error> for AppError {
         // En interne, on log l'erreur réelle pour le debugging
         tracing::error!("Database infrastructure error: {:?}", err);
 
-        Self::new(
-            ErrorCode::InternalError,
-            "A database error occurred"
-        )
+        Self::new(ErrorCode::InternalError, "A database error occurred")
     }
 }
 
@@ -104,7 +95,7 @@ impl From<rdkafka::error::KafkaError> for AppError {
 
         Self::new(
             ErrorCode::InternalError,
-            format!("Messaging system error: {}", err)
+            format!("Messaging system error: {}", err),
         )
     }
 }

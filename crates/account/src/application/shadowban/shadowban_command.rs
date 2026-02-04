@@ -1,6 +1,6 @@
 // crates/account/src/application/shadowban_account/shadowban_command.rs
 
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 #[derive(Debug, serde::Deserialize, Clone)]
 pub struct ShadowbanAccountCommand {

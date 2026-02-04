@@ -1,14 +1,13 @@
 // crates/profile/src/infrastructure/api/grpc/mappers/profile_grpc_mapper.rs
 
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+use super::super::profile_v1::Profile as ProtoProfile;
 use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Bio, DisplayName};
+use crate::domain::value_objects::{Bio, DisplayName, SocialLinks};
 use crate::infrastructure::api::grpc::mappers::to_timestamp;
-use super::super::profile_v1::{
-    Profile as ProtoProfile,
-};
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+use shared_kernel::errors::DomainError;
 
 impl From<Profile> for ProtoProfile {
     fn from(domain: Profile) -> Self {
@@ -33,20 +32,39 @@ impl From<Profile> for ProtoProfile {
 }
 
 impl TryFrom<ProtoProfile> for Profile {
-    type Error = String;
+    type Error = DomainError;
 
     fn try_from(proto: ProtoProfile) -> Result<Self, Self::Error> {
-        let account_id = AccountId::try_from(proto.account_id).map_err(|e| e.to_string())?;
-        let region_code = RegionCode::try_from(proto.region_code).map_err(|e| e.to_string())?;
-        let username = Username::try_from(proto.username).map_err(|e| e.to_string())?;
-        let display_name = DisplayName::try_from(proto.display_name).map_err(|e| e.to_string())?;
+        let account_id = AccountId::try_from(proto.account_id)?;
+        let region_code = RegionCode::try_from(proto.region_code)?;
+        let username = Username::try_from(proto.username)?;
+        let display_name = DisplayName::try_from(proto.display_name)?;
+        let social_links = proto.social_links.map(SocialLinks::try_from).transpose()?;
 
         let builder = ProfileBuilder::new(account_id, region_code, display_name, username)
-            .is_private(proto.is_private)
-            .maybe_bio(proto.bio.filter(|s| !s.trim().is_empty()).map(Bio::try_from).transpose().map_err(|e| e.to_string())?)
-            .maybe_avatar_url(proto.avatar_url.filter(|s| !s.trim().is_empty()).map(Url::try_from).transpose().map_err(|e| e.to_string())?)
-            .maybe_banner_url(proto.banner_url.filter(|s| !s.trim().is_empty()).map(Url::try_from).transpose().map_err(|e| e.to_string())?)
-            .maybe_social_links(proto.social_links.map(|s| s.into()));
+            .with_privacy(proto.is_private)
+            .with_optional_bio(
+                proto
+                    .bio
+                    .filter(|s| !s.trim().is_empty())
+                    .map(Bio::try_from)
+                    .transpose()?,
+            )
+            .with_optional_avatar_url(
+                proto
+                    .avatar_url
+                    .filter(|s| !s.trim().is_empty())
+                    .map(Url::try_from)
+                    .transpose()?,
+            )
+            .with_optional_banner_url(
+                proto
+                    .banner_url
+                    .filter(|s| !s.trim().is_empty())
+                    .map(Url::try_from)
+                    .transpose()?,
+            )
+            .with_optional_social_links(social_links);
 
         Ok(builder.build())
     }

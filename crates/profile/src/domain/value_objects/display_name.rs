@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(try_from = "String", into = "String")]
@@ -16,16 +16,10 @@ impl DisplayName {
         let raw = value.into();
 
         // 1. Nettoyage initial : retrait des caractères de contrôle (sécurité UI)
-        let cleaned: String = raw
-            .chars()
-            .filter(|c| !c.is_control())
-            .collect();
+        let cleaned: String = raw.chars().filter(|c| !c.is_control()).collect();
 
         // 2. Normalisation des espaces (évite les doubles espaces ou espaces de fin)
-        let normalized = cleaned
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
+        let normalized = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
 
         let display_name = Self(normalized);
         display_name.validate()?;

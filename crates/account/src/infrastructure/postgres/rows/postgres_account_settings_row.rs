@@ -1,11 +1,11 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
 
+use crate::domain::builders::AccountSettingsBuilder;
+use crate::domain::entities::{AccountSettings, SettingsBlob};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{PushToken, RegionCode, Timezone, AccountId};
+use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
 use shared_kernel::errors::{DomainError, Result};
-use crate::domain::entities::{AccountSettings, SettingsBlob};
-use crate::domain::builders::AccountSettingsBuilder;
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountSettingsRow {
@@ -27,7 +27,8 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
             .map_err(|e| DomainError::Internal(format!("Désérialisation JSON échouée: {}", e)))?;
 
         // 2. Transformer les types simples en Value Objects
-        let push_tokens = row.push_tokens
+        let push_tokens = row
+            .push_tokens
             .into_iter()
             .map(PushToken::from_raw)
             .collect();

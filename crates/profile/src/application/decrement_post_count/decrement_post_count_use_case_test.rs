@@ -1,14 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, PostId, Username};
-    use shared_kernel::errors::DomainError;
-    use crate::application::decrement_post_count::{DecrementPostCountCommand, DecrementPostCountUseCase};
+    use crate::application::decrement_post_count::{
+        DecrementPostCountCommand, DecrementPostCountUseCase,
+    };
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     fn setup(profile: Option<Profile>) -> DecrementPostCountUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -16,11 +20,7 @@ mod tests {
             ..Default::default()
         });
 
-        DecrementPostCountUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -32,8 +32,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.increment_post_count(PostId::new()); // version 2, count 1
 
         let use_case = setup(Some(profile));
@@ -64,8 +65,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(profile));
 
@@ -109,30 +111,42 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.increment_post_count(PostId::new());
 
         // On simule une erreur de version lors du save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch".into()
+                reason: "Version mismatch".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(DecrementPostCountCommand {
-            account_id,
-            region,
-            post_id: PostId::new(),
-        }).await;
+        let result = use_case
+            .execute(DecrementPostCountCommand {
+                account_id,
+                region,
+                post_id: PostId::new(),
+            })
+            .await;
 
         // Assert
         // Le retry est déclenché par with_retry, mais finit par échouer si l'erreur persiste
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -140,14 +154,28 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.increment_post_count(PostId::new());
 
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Disk Full".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -161,11 +189,13 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(DecrementPostCountCommand {
-            account_id,
-            region,
-            post_id: PostId::new(),
-        }).await;
+        let result = use_case
+            .execute(DecrementPostCountCommand {
+                account_id,
+                region,
+                post_id: PostId::new(),
+            })
+            .await;
 
         // Assert
         assert!(result.is_err());

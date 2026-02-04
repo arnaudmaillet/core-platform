@@ -1,6 +1,6 @@
 // crates/profile/src/infrastructure/elasticsearch/profile_search_mapper.rs
 
-use super::profile_search_document::{ProfileSearchDocument, AutocompleteSuggest};
+use super::profile_search_document::{AutocompleteSuggest, ProfileSearchDocument};
 
 pub struct ProfileSearchMapper;
 
@@ -10,7 +10,7 @@ impl ProfileSearchMapper {
         username: &str,
         display_name: &str,
         avatar_url: Option<&str>,
-        occurred_at: &chrono::DateTime<chrono::Utc>
+        occurred_at: &chrono::DateTime<chrono::Utc>,
     ) -> ProfileSearchDocument {
         ProfileSearchDocument {
             account_id: account_id.to_string(),

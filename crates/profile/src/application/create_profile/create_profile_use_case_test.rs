@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
-    use shared_kernel::errors::{DomainError, Result};
-    use crate::application::create_profile::create_profile_use_case::CreateProfileUseCase;
     use crate::application::create_profile::CreateProfileCommand;
+    use crate::application::create_profile::create_profile_use_case::CreateProfileUseCase;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::errors::{DomainError, Result};
+    use std::sync::{Arc, Mutex};
 
     fn setup() -> CreateProfileUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -17,11 +19,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        CreateProfileUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -58,11 +56,8 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case = CreateProfileUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        );
+        let use_case =
+            CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
             account_id: AccountId::new(),
@@ -75,7 +70,9 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "username"));
+        assert!(
+            matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "username")
+        );
     }
 
     #[tokio::test]
@@ -86,7 +83,8 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case = CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
             account_id: AccountId::new(),
@@ -108,8 +106,16 @@ mod tests {
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> Result<()> {
                 Err(DomainError::Internal("Outbox disk full".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -148,7 +154,8 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case = CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
             account_id: AccountId::new(),
@@ -161,6 +168,8 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "username"));
+        assert!(
+            matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "username")
+        );
     }
 }

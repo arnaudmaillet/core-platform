@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Speed(f32);
@@ -16,8 +16,12 @@ impl Speed {
         Self(value)
     }
 
-    pub fn value(&self) -> f32 { self.0 }
-    pub fn to_kmh(&self) -> f32 { self.0 * 3.6 }
+    pub fn value(&self) -> f32 {
+        self.0
+    }
+    pub fn to_kmh(&self) -> f32 {
+        self.0 * 3.6
+    }
 }
 
 impl ValueObject for Speed {

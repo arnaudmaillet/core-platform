@@ -3,16 +3,19 @@
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::events::EventEnvelope;
     // Import de notre kit de survie centralisé
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
 
+    use crate::application::remove_avatar::{RemoveAvatarCommand, RemoveAvatarUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::application::remove_avatar::{RemoveAvatarCommand, RemoveAvatarUseCase};
 
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode, Url};
-    use shared_kernel::errors::DomainError;
     use crate::domain::builders::ProfileBuilder;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+    use shared_kernel::errors::DomainError;
 
     /// Helper local pour instancier le Use Case rapidement
     fn setup(profile: Option<Profile>) -> RemoveAvatarUseCase {
@@ -22,11 +25,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        RemoveAvatarUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -39,8 +38,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_avatar(url);
 
         let use_case = setup(Some(profile));
@@ -52,7 +52,10 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let updated_profile = result.unwrap();
-        assert!(updated_profile.avatar_url().is_none(), "L'avatar devrait être supprimé (None)");
+        assert!(
+            updated_profile.avatar_url().is_none(),
+            "L'avatar devrait être supprimé (None)"
+        );
     }
 
     #[tokio::test]
@@ -64,8 +67,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         // Ici, profile.avatar_url est None par défaut
 
         let use_case = setup(Some(profile));
@@ -107,30 +111,33 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
-        ).build();
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_avatar(Url::from_raw("https://old.png")); // v2
 
         // On configure le stub pour simuler qu'entre-temps, quelqu'un d'autre a modifié le profil
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch in DB".into()
+                reason: "Version mismatch in DB".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = RemoveAvatarUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        );
+        let use_case =
+            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(RemoveAvatarCommand { account_id, region }).await;
+        let result = use_case
+            .execute(RemoveAvatarCommand { account_id, region })
+            .await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -138,20 +145,31 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_avatar(Url::from_raw("https://old.png"));
 
         // On simule une coupure réseau/DB au moment du save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
-            error_to_return: Mutex::new(Some(DomainError::Internal("Postgres connection timeout".into()))),
+            error_to_return: Mutex::new(Some(DomainError::Internal(
+                "Postgres connection timeout".into(),
+            ))),
             ..Default::default()
         });
 
-        let use_case = RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(RemoveAvatarCommand { account_id, region }).await;
+        let result = use_case
+            .execute(RemoveAvatarCommand { account_id, region })
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::Internal(m)) if m.contains("timeout")));
@@ -162,15 +180,29 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Bob"), Username::try_new("bob").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Bob"),
+            Username::try_new("bob").unwrap(),
+        )
+        .build();
         profile.update_avatar(Url::from_raw("https://old.png"));
 
         // Création d'un stub Outbox qui échoue systématiquement
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox capacity reached".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -184,7 +216,9 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(RemoveAvatarCommand { account_id, region }).await;
+        let result = use_case
+            .execute(RemoveAvatarCommand { account_id, region })
+            .await;
 
         // Assert
         // L'échec de l'outbox doit faire échouer l'ensemble du Use Case (atomique)

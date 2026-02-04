@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
-    use crate::domain::entities::Profile;
-    use crate::domain::value_objects::{Bio, DisplayName};
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
-    use shared_kernel::errors::DomainError;
     use crate::application::update_bio::{UpdateBioCommand, UpdateBioUseCase};
     use crate::domain::builders::ProfileBuilder;
+    use crate::domain::entities::Profile;
+    use crate::domain::value_objects::{Bio, DisplayName};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     /// Helper pour configurer le Use Case
     fn setup(profile: Option<Profile>) -> UpdateBioUseCase {
@@ -17,11 +19,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateBioUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateBioUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -33,8 +31,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile));
         let new_bio = Some(Bio::try_new("Hello World").unwrap());
@@ -64,8 +63,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.update_bio(Some(Bio::try_new("Old Bio").unwrap()));
 
         let use_case = setup(Some(profile));
@@ -93,7 +93,13 @@ mod tests {
         let region = RegionCode::from_raw("eu");
         let bio_text = Some(Bio::try_new("Consistent Bio").unwrap());
 
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.update_bio(bio_text.clone());
 
         let use_case = setup(Some(profile));
@@ -137,28 +143,40 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // Simulation d'un conflit de version (Optimistic Locking)
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch".into()
+                reason: "Version mismatch".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = UpdateBioUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case =
+            UpdateBioUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
 
         // Act
-        let result = use_case.execute(UpdateBioCommand {
-            account_id,
-            region,
-            new_bio: Some(Bio::try_new("New Bio").unwrap()),
-        }).await;
+        let result = use_case
+            .execute(UpdateBioCommand {
+                account_id,
+                region,
+                new_bio: Some(Bio::try_new("New Bio").unwrap()),
+            })
+            .await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -166,14 +184,28 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // Stub Outbox qui crash pour forcer un échec de transaction
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox error".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -187,11 +219,13 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(UpdateBioCommand {
-            account_id,
-            region,
-            new_bio: Some(Bio::try_new("Failing Update").unwrap()),
-        }).await;
+        let result = use_case
+            .execute(UpdateBioCommand {
+                account_id,
+                region,
+                new_bio: Some(Bio::try_new("Failing Update").unwrap()),
+            })
+            .await;
 
         // Assert
         assert!(result.is_err());

@@ -1,9 +1,9 @@
 // crates/shared-kernel/src/domain/account_state
-use std::fmt;
-use std::str::FromStr;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -32,7 +32,7 @@ impl AccountState {
             Self::Active => "active",
             Self::Deactivated => "deactivated",
             Self::Suspended => "suspended",
-            Self::Banned => "banned"
+            Self::Banned => "banned",
         }
     }
 

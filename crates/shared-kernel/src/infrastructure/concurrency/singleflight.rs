@@ -18,12 +18,11 @@
 //! - Prévient les pics de latence lors de l'expiration de caches.
 //! - Utilise `DashMap` pour une gestion thread-safe et performante des requêtes en cours.
 
-use std::sync::Arc;
+use crate::errors::{AppError, AppResult, ErrorCode};
 use dashmap::DashMap;
-use futures::future::{Shared, FutureExt};
+use futures::future::{FutureExt, Shared};
 use std::future::Future;
 use tokio::sync::oneshot;
-use crate::errors::{AppResult, AppError, ErrorCode};
 
 pub struct Singleflight<K, T> {
     requests: DashMap<K, Shared<oneshot::Receiver<AppResult<T>>>>,
@@ -80,6 +79,18 @@ where
                 ErrorCode::InternalError,
                 "Singleflight leader panicked or dropped".to_string(),
             )),
+        }
+    }
+}
+
+impl<K, T> Default for Singleflight<K, T>
+where
+    K: std::hash::Hash + Eq + Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self {
+            requests: DashMap::new(),
         }
     }
 }

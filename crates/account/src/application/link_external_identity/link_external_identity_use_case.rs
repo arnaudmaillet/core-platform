@@ -1,15 +1,15 @@
 // crates/account/src/application/link_external_identity/link_external_identity_use_case.rs
 
-use std::sync::Arc;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::entities::EntityOptionExt;
-use shared_kernel::domain::repositories::OutboxRepository;
-use shared_kernel::domain::transaction::TransactionManager;
-use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::domain::utils::{with_retry, RetryConfig};
-use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::link_external_identity::LinkExternalIdentityCommand;
 use crate::domain::repositories::AccountRepository;
+use shared_kernel::domain::entities::EntityOptionExt;
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::domain::utils::{RetryConfig, with_retry};
+use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
+use std::sync::Arc;
 
 pub struct LinkExternalIdentityUseCase {
     account_repo: Arc<dyn AccountRepository>,
@@ -33,14 +33,16 @@ impl LinkExternalIdentityUseCase {
     pub async fn execute(&self, command: LinkExternalIdentityCommand) -> Result<()> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
-        }).await
+        })
+        .await
     }
 
     async fn try_execute_once(&self, cmd: &LinkExternalIdentityCommand) -> Result<()> {
         // 1. VÉRIFICATION D'UNICITÉ ET LECTURE OPTIMISTE (Hors transaction)
 
         // On vérifie si l'ID externe est déjà utilisé par quelqu'un d'autre
-        if let Some(existing_account_id) = self.account_repo
+        if let Some(existing_account_id) = self
+            .account_repo
             .find_account_id_by_external_id(&cmd.external_id, None)
             .await?
         {
@@ -54,7 +56,8 @@ impl LinkExternalIdentityUseCase {
             return Ok(());
         }
 
-        let mut account = self.account_repo
+        let mut account = self
+            .account_repo
             .find_account_by_id(&cmd.internal_account_id, None)
             .await?
             .ok_or_not_found(cmd.internal_account_id.clone())?;
@@ -73,21 +76,23 @@ impl LinkExternalIdentityUseCase {
         let account_to_save = account.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
-        self.tx_manager.run_in_transaction(move |mut tx| {
-            let repo = self.account_repo.clone();
-            let outbox = self.outbox_repo.clone();
-            let u = account_to_save.clone();
-            let evs = events;
+        self.tx_manager
+            .run_in_transaction(move |mut tx| {
+                let repo = self.account_repo.clone();
+                let outbox = self.outbox_repo.clone();
+                let u = account_to_save.clone();
+                let evs = events;
 
-            Box::pin(async move {
-                repo.save(&u, Some(&mut *tx)).await?;
-                for event in evs {
-                    outbox.save(&mut *tx, event.as_ref()).await?;
-                }
+                Box::pin(async move {
+                    repo.save(&u, Some(&mut *tx)).await?;
+                    for event in evs {
+                        outbox.save(&mut *tx, event.as_ref()).await?;
+                    }
 
-                Ok(())
+                    Ok(())
+                })
             })
-        }).await?;
+            .await?;
 
         Ok(())
     }

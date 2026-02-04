@@ -1,10 +1,10 @@
-use std::borrow::Cow;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -32,7 +32,7 @@ pub enum LocationEvent {
         region: RegionCode,
         zone_id: String,
         occurred_at: DateTime<Utc>,
-    }
+    },
 }
 
 impl DomainEvent for LocationEvent {
@@ -50,24 +50,24 @@ impl DomainEvent for LocationEvent {
 
     fn aggregate_id(&self) -> String {
         match self {
-            Self::PositionUpdated { account_id, .. } |
-            Self::LocationPrivacyChanged { account_id, .. } |
-            Self::LeftZone { account_id, .. } => account_id.to_string(),
+            Self::PositionUpdated { account_id, .. }
+            | Self::LocationPrivacyChanged { account_id, .. }
+            | Self::LeftZone { account_id, .. } => account_id.to_string(),
         }
     }
 
     fn region_code(&self) -> RegionCode {
         match self {
-            Self::PositionUpdated { region, .. } |
-            Self::LocationPrivacyChanged { region, .. } |
-            Self::LeftZone { region, .. } => region.clone(),
+            Self::PositionUpdated { region, .. }
+            | Self::LocationPrivacyChanged { region, .. }
+            | Self::LeftZone { region, .. } => region.clone(),
         }
     }
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
-            Self::PositionUpdated { occurred_at, .. } |
-            Self::LocationPrivacyChanged { occurred_at, .. } |
-            Self::LeftZone { occurred_at, .. } => *occurred_at,
+            Self::PositionUpdated { occurred_at, .. }
+            | Self::LocationPrivacyChanged { occurred_at, .. }
+            | Self::LeftZone { occurred_at, .. } => *occurred_at,
         }
     }
 

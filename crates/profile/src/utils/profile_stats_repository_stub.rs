@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
-use async_trait::async_trait;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Counter};
-use shared_kernel::errors::Result;
 use crate::domain::repositories::ProfileStatsRepository;
 use crate::domain::value_objects::ProfileStats;
+use async_trait::async_trait;
+use shared_kernel::domain::value_objects::{AccountId, Counter, RegionCode};
+use shared_kernel::errors::Result;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 pub struct ProfileStatsRepositoryStub {
     pub stats: Mutex<HashMap<(AccountId, RegionCode), ProfileStats>>,
@@ -22,25 +22,29 @@ impl Default for ProfileStatsRepositoryStub {
 
 #[async_trait]
 impl ProfileStatsRepository for ProfileStatsRepositoryStub {
-    async fn find_by_id(&self, account_id: &AccountId, region: &RegionCode) -> Result<Option<ProfileStats>> {
+    async fn find_by_id(
+        &self,
+        account_id: &AccountId,
+        region: &RegionCode,
+    ) -> Result<Option<ProfileStats>> {
         let map = self.stats.lock().unwrap();
         Ok(map.get(&(account_id.clone(), region.clone())).cloned())
     }
 
-    async fn update_stats(
+    async fn save(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
         follower_delta: i64,
         following_delta: i64,
-        _post_delta: i64
+        _post_delta: i64,
     ) -> Result<()> {
         {
             let mut fails = self.fail_count.lock().unwrap();
             if *fails > 0 {
                 *fails -= 1;
                 return Err(shared_kernel::errors::DomainError::ConcurrencyConflict {
-                    reason: "Simulated concurrency conflict".into()
+                    reason: "Simulated concurrency conflict".into(),
                 });
             }
         }
@@ -67,15 +71,23 @@ impl ProfileStatsRepository for ProfileStatsRepositoryStub {
 fn apply_delta_to_stats(stats: &mut ProfileStats, f_delta: i64, ing_delta: i64) {
     // Delta followers
     if f_delta > 0 {
-        for _ in 0..f_delta { stats.increment_followers(); }
+        for _ in 0..f_delta {
+            stats.increment_followers();
+        }
     } else {
-        for _ in 0..f_delta.abs() { stats.decrement_followers(); }
+        for _ in 0..f_delta.abs() {
+            stats.decrement_followers();
+        }
     }
 
     // Delta following
     if ing_delta > 0 {
-        for _ in 0..ing_delta { stats.increment_following(); }
+        for _ in 0..ing_delta {
+            stats.increment_following();
+        }
     } else {
-        for _ in 0..ing_delta.abs() { stats.decrement_following(); }
+        for _ in 0..ing_delta.abs() {
+            stats.decrement_following();
+        }
     }
 }

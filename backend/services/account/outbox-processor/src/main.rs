@@ -3,11 +3,7 @@
 use shared_kernel::errors::AppResult;
 use shared_kernel::infrastructure::bootstrap::run_outbox_relay;
 
-
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    run_outbox_relay(
-        "Account",
-        "account.events",
-    ).await
+    run_outbox_relay("Account", "account.events").await
 }

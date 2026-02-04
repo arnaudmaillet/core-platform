@@ -9,7 +9,8 @@ pub async fn run_scylla_migrations(session: &Session) -> Result<()> {
     // On découpe par ';' pour envoyer chaque commande individuellement
     for statement in schema_cql.split(';').filter(|s| !s.trim().is_empty()) {
         let query = format!("{};", statement.trim());
-        session.query_unpaged(query, ())
+        session
+            .query_unpaged(query, ())
             .await
             .map_err(|e| anyhow::anyhow!("Scylla migration error: {}", e))?;
     }

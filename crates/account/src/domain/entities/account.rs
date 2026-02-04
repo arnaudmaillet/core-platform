@@ -1,14 +1,16 @@
 // crates/account/src/domain/entities/account
 
-use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-use shared_kernel::domain::entities::EntityMetadata;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{RegionCode, AccountId, Username};
-use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::AccountBuilder;
-use crate::domain::value_objects::{ExternalId, Email, PhoneNumber, BirthDate, Locale, AccountState};
 use crate::domain::events::AccountEvent;
+use crate::domain::value_objects::{
+    AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
+};
+use chrono::{DateTime, Utc};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+use shared_kernel::errors::{DomainError, Result};
 
 /// Agrégat Racine User
 ///
@@ -373,7 +375,10 @@ impl Account {
     pub fn record_activity(&mut self) {
         let now = Utc::now();
         //  On ne met à jour en DB que toutes les 5 minutes
-        if self.last_active_at.map_or(true, |last| now - last > chrono::Duration::minutes(5)) {
+        if self
+            .last_active_at
+            .map_or(true, |last| now - last > chrono::Duration::minutes(5))
+        {
             self.last_active_at = Some(now);
         }
     }
@@ -431,7 +436,13 @@ impl EntityMetadata for Account {
 }
 
 impl AggregateRoot for Account {
-    fn id(&self) -> String { self.id.as_string() }
-    fn metadata(&self) -> &AggregateMetadata { &self.metadata }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata { &mut self.metadata }
+    fn id(&self) -> String {
+        self.id.as_string()
+    }
+    fn metadata(&self) -> &AggregateMetadata {
+        &self.metadata
+    }
+    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
+        &mut self.metadata
+    }
 }

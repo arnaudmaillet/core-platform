@@ -1,20 +1,22 @@
 // crates/profile/src/utils/test_utils.rs
 #![cfg(test)]
 
+use futures::Future;
 use std::any::Any;
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use futures::Future;
 
 use crate::domain::entities::Profile;
-use crate::domain::repositories::{ProfileIdentityRepository, ProfileRepository, ProfileStatsRepository};
+use crate::domain::repositories::{
+    ProfileIdentityRepository, ProfileRepository, ProfileStatsRepository,
+};
 use crate::domain::value_objects::ProfileStats;
+use shared_kernel::domain::events::{DomainEvent, EventEnvelope};
+use shared_kernel::domain::repositories::{CacheRepository, OutboxRepository};
 use shared_kernel::domain::transaction::{Transaction, TransactionManager};
-use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode, Counter};
-use shared_kernel::domain::repositories::{OutboxRepository, CacheRepository};
-use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::errors::{Result, AppResult, AppError, ErrorCode};
+use shared_kernel::domain::value_objects::{AccountId, Counter, RegionCode, Username};
+use shared_kernel::errors::{AppError, AppResult, ErrorCode, Result};
 
 // --- STUB PROFILE REPOSITORY (Postgres) ---
 pub struct ProfileRepositoryStub {
@@ -50,21 +52,39 @@ impl ProfileIdentityRepository for ProfileRepositoryStub {
     async fn exists_by_username(&self, _u: &Username, _r: &RegionCode) -> Result<bool> {
         Ok(*self.exists_return.lock().unwrap())
     }
-    async fn delete_identity(&self, _: &AccountId, _: &RegionCode) -> Result<()> { Ok(()) }
+    async fn delete_identity(&self, _: &AccountId, _: &RegionCode) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 impl ProfileRepository for ProfileRepositoryStub {
-    async fn get_profile_by_account_id(&self, id: &AccountId, r: &RegionCode) -> Result<Option<Profile>> {
+    async fn get_profile_by_account_id(
+        &self,
+        id: &AccountId,
+        r: &RegionCode,
+    ) -> Result<Option<Profile>> {
         self.find_by_id(id, r).await
     }
-    async fn get_full_profile_by_username(&self, username: &Username, region: &RegionCode) -> Result<Option<Profile>> {
+    async fn get_full_profile_by_username(
+        &self,
+        username: &Username,
+        region: &RegionCode,
+    ) -> Result<Option<Profile>> {
         self.find_by_username(username, region).await
     }
-    async fn get_profile_without_stats(&self, id: &AccountId, r: &RegionCode) -> Result<Option<Profile>> {
+    async fn get_profile_without_stats(
+        &self,
+        id: &AccountId,
+        r: &RegionCode,
+    ) -> Result<Option<Profile>> {
         self.find_by_id(id, r).await
     }
-    async fn get_profile_stats(&self, _: &AccountId, _: &RegionCode) -> Result<Option<ProfileStats>> {
+    async fn get_profile_stats(
+        &self,
+        _: &AccountId,
+        _: &RegionCode,
+    ) -> Result<Option<ProfileStats>> {
         Ok(None) // Généralement géré par le StatsRepoStub maintenant
     }
     async fn save(&self, p: &Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
@@ -79,21 +99,47 @@ impl ProfileRepository for ProfileRepositoryStub {
 pub struct OutboxRepoStub;
 #[async_trait::async_trait]
 impl OutboxRepository for OutboxRepoStub {
-    async fn save(&self, _tx: &mut dyn Transaction, _event: &dyn DomainEvent) -> Result<()> { Ok(()) }
+    async fn save(&self, _tx: &mut dyn Transaction, _event: &dyn DomainEvent) -> Result<()> {
+        Ok(())
+    }
+
+    async fn find_pending(&self, _limit: i32) -> Result<Vec<EventEnvelope>> {
+        Ok(vec![])
+    }
 }
 
 // --- TRANSACTION MANAGEMENT ---
 pub struct FakeTransaction;
+
 impl Transaction for FakeTransaction {
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    // Indispensable pour la "dyn compatibility" du trait
+    fn commit(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async {
+            println!("🛠️ FakeTransaction: commit called");
+            Ok(())
+        })
+    }
 }
 
 pub struct StubTxManager;
+
 impl TransactionManager for StubTxManager {
     fn in_transaction<'a>(
         &'a self,
-        f: Box<dyn FnOnce(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> + Send + 'a>,
+        f: Box<
+            dyn FnOnce(
+                Box<dyn Transaction>,
+            ) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>>
+            + Send
+            + 'a,
+        >,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
-        Box::pin(async move { f(Box::new(FakeTransaction)).await })
+        // On crée l'instance ici pour qu'elle soit trouvée dans le scope
+        let tx = Box::new(FakeTransaction);
+        Box::pin(async move { f(tx).await })
     }
 }

@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::entities::EntityOptionExt;
-use shared_kernel::domain::repositories::OutboxRepository;
-use shared_kernel::domain::transaction::TransactionManager;
-use shared_kernel::domain::utils::{with_retry, RetryConfig};
-use shared_kernel::errors::Result;
-use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use crate::application::update_location::update_location_command::UpdateLocationCommand;
 use crate::domain::repositories::LocationRepository;
+use shared_kernel::domain::entities::EntityOptionExt;
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::transaction::TransactionManager;
+use shared_kernel::domain::utils::{RetryConfig, with_retry};
+use shared_kernel::errors::Result;
+use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
+use std::sync::Arc;
 
 pub struct UpdateLocationUseCase {
     repo: Arc<dyn LocationRepository>,
@@ -21,18 +21,25 @@ impl UpdateLocationUseCase {
         outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
-        Self { repo, outbox_repo, tx_manager }
+        Self {
+            repo,
+            outbox_repo,
+            tx_manager,
+        }
     }
 
     pub async fn execute(&self, command: UpdateLocationCommand) -> Result<()> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
-        }).await
+        })
+        .await
     }
 
     async fn try_execute_once(&self, cmd: &UpdateLocationCommand) -> Result<()> {
         // 1. Récupération
-        let mut location = self.repo.find_by_id(&cmd.account_id, &cmd.region)
+        let mut location = self
+            .repo
+            .find_by_id(&cmd.account_id, &cmd.region)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
@@ -49,7 +56,7 @@ impl UpdateLocationUseCase {
         location.update_position(
             cmd.coords.clone(),
             cmd.metrics.clone(),
-            cmd.movement.clone()
+            cmd.movement.clone(),
         );
 
         // 4. Extraction & Clonage
@@ -63,24 +70,26 @@ impl UpdateLocationUseCase {
         let loc_cloned = location.clone();
 
         // 5. Persistance Transactionnelle (Atomique)
-        self.tx_manager.run_in_transaction(move |mut tx| {
-            let repo = self.repo.clone();
-            let outbox = self.outbox_repo.clone();
-            let l = loc_cloned.clone();
-            let evs = events;
+        self.tx_manager
+            .run_in_transaction(move |mut tx| {
+                let repo = self.repo.clone();
+                let outbox = self.outbox_repo.clone();
+                let l = loc_cloned.clone();
+                let evs = events;
 
-            Box::pin(async move {
-                // Save avec Optimistic Locking (WHERE version = current_version)
-                repo.save(&l, Some(&mut *tx)).await?;
+                Box::pin(async move {
+                    // Save avec Optimistic Locking (WHERE version = current_version)
+                    repo.save(&l, Some(&mut *tx)).await?;
 
-                // Enregistrement des événements dans la table Outbox
-                for event in evs {
-                    outbox.save(&mut *tx, event.as_ref()).await?;
-                }
-
-                Ok(())
+                    // Enregistrement des événements dans la table Outbox
+                    for event in evs {
+                        outbox.save(&mut *tx, event.as_ref()).await?;
+                    }
+                    tx.commit().await?;
+                    Ok(())
+                })
             })
-        }).await?;
+            .await?;
 
         Ok(())
     }

@@ -1,8 +1,8 @@
 // crates/account/src/application/change_email/change_username_dto.rs
 
+use crate::application::change_username::ChangeUsernameCommand;
 use shared_kernel::domain::value_objects::Username;
 use shared_kernel::errors::{DomainError, Result};
-use crate::application::change_username::ChangeUsernameCommand;
 
 #[derive(serde::Deserialize)]
 pub struct ChangeUsernameDto {

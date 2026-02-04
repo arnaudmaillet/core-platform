@@ -1,10 +1,10 @@
 // crates/shared_kernel/src/domain/value_objects/url.rs
 
-use std::fmt;
-use serde::{Deserialize, Serialize};
-use url::Url as LibUrl;
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use url::Url as LibUrl;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Url(String);

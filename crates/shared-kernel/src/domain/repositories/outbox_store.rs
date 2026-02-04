@@ -1,9 +1,9 @@
 // crates/shared-kernel/src/persistence/outbox_store.rs
 
-use async_trait::async_trait;
-use uuid::Uuid;
 use crate::domain::events::EventEnvelope;
 use crate::errors::Result;
+use async_trait::async_trait;
+use uuid::Uuid;
 
 #[async_trait]
 pub trait OutboxStore: Send + Sync {

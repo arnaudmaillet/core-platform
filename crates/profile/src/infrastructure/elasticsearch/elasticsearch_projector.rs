@@ -1,9 +1,13 @@
-use elasticsearch::{indices::{IndicesCreateParts, IndicesExistsParts}, params::OpType, Elasticsearch, IndexParts, UpdateParts};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use chrono::{DateTime, Utc};
 use crate::domain::events::ProfileEvent;
 use crate::infrastructure::elasticsearch::{AutocompleteSuggest, ProfileSearchDocument};
+use chrono::{DateTime, Utc};
+use elasticsearch::{
+    Elasticsearch, IndexParts, UpdateParts,
+    indices::{IndicesCreateParts, IndicesExistsParts},
+    params::OpType,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 pub struct ProfileElasticProjector {
     client: Elasticsearch,
@@ -20,7 +24,8 @@ impl ProfileElasticProjector {
 
     /// Initialise l'index avec le mapping "Type-Ahead" (Edge N-Grams)
     pub async fn ensure_index_ready(&self) -> anyhow::Result<()> {
-        let exists = self.client
+        let exists = self
+            .client
             .indices()
             .exists(IndicesExistsParts::Index(&[self.index_name]))
             .send()
@@ -30,7 +35,10 @@ impl ProfileElasticProjector {
 
         if !exists {
             self.create_index().await?;
-            tracing::info!("Elasticsearch index '{}' created with Edge N-Gram mapping", self.index_name);
+            tracing::info!(
+                "Elasticsearch index '{}' created with Edge N-Gram mapping",
+                self.index_name
+            );
         }
         Ok(())
     }
@@ -50,10 +58,10 @@ impl ProfileElasticProjector {
                     username.as_str(),
                     display_name.as_str(),
                     None,
-                    occurred_at
+                    occurred_at,
                 );
                 self.upsert_document(doc).await
-            },
+            }
 
             ProfileEvent::UsernameChanged {
                 account_id,
@@ -61,11 +69,15 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "username": new_username.as_str(),
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
-            },
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "username": new_username.as_str(),
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
+            }
 
             ProfileEvent::DisplayNameChanged {
                 account_id,
@@ -73,11 +85,15 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "display_name": new_display_name.as_str(),
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
-            },
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "display_name": new_display_name.as_str(),
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
+            }
 
             ProfileEvent::BioUpdated {
                 account_id,
@@ -85,11 +101,15 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "bio": new_bio.as_ref().map(|b| b.as_str()),
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
-            },
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "bio": new_bio.as_ref().map(|b| b.as_str()),
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
+            }
 
             ProfileEvent::AvatarUpdated {
                 account_id,
@@ -97,10 +117,14 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "avatar_url": new_avatar_url.as_str(),
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "avatar_url": new_avatar_url.as_str(),
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
             }
 
             ProfileEvent::AvatarRemoved {
@@ -108,10 +132,14 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "avatar_url": serde_json::Value::Null,
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "avatar_url": serde_json::Value::Null,
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
             }
 
             ProfileEvent::BannerUpdated {
@@ -120,10 +148,14 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "banner_url": new_banner_url.as_str(),
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "banner_url": new_banner_url.as_str(),
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
             }
 
             ProfileEvent::BannerRemoved {
@@ -131,10 +163,14 @@ impl ProfileElasticProjector {
                 occurred_at,
                 ..
             } => {
-                self.update_partial(&account_id.to_string(), json!({
-                    "banner_url": serde_json::Value::Null,
-                    "updated_at": occurred_at.to_rfc3339()
-                })).await
+                self.update_partial(
+                    &account_id.to_string(),
+                    json!({
+                        "banner_url": serde_json::Value::Null,
+                        "updated_at": occurred_at.to_rfc3339()
+                    }),
+                )
+                .await
             }
 
             _ => Ok(()),
@@ -197,7 +233,7 @@ impl ProfileElasticProjector {
         username: &str,
         name: &str,
         avatar: Option<&str>,
-        ts: &DateTime<Utc>
+        ts: &DateTime<Utc>,
     ) -> ProfileSearchDocument {
         ProfileSearchDocument {
             account_id: id.to_string(),

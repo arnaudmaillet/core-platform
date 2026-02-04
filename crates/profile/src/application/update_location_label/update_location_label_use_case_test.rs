@@ -1,15 +1,19 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Username};
-    use shared_kernel::errors::DomainError;
-    use crate::application::update_location_label::{UpdateLocationLabelCommand, UpdateLocationLabelUseCase};
+    use crate::application::update_location_label::{
+        UpdateLocationLabelCommand, UpdateLocationLabelUseCase,
+    };
     use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{ProfileRepositoryStub, OutboxRepoStub, StubTxManager};
+    use crate::utils::profile_repository_stub::{
+        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
+    };
+    use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
+    use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Username};
+    use shared_kernel::errors::DomainError;
+    use std::sync::{Arc, Mutex};
 
     fn setup(profile: Option<Profile>) -> UpdateLocationLabelUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -17,11 +21,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateLocationLabelUseCase::new(
-            repo,
-            Arc::new(OutboxRepoStub),
-            Arc::new(StubTxManager),
-        )
+        UpdateLocationLabelUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -33,8 +33,9 @@ mod tests {
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap()
-        ).build();
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let use_case = setup(Some(initial_profile));
         // Utilisation du VO LocationLabel
@@ -61,7 +62,13 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         // On initialise avec une localisation via le VO
         profile.update_location_label(Some(LocationLabel::try_new("Tokyo").unwrap()));
@@ -91,7 +98,13 @@ mod tests {
         let region = RegionCode::from_raw("eu");
         let location = Some(LocationLabel::try_new("Berlin").unwrap());
 
-        let mut profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let mut profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
         profile.update_location_label(location.clone());
 
         let use_case = setup(Some(profile));
@@ -129,38 +142,67 @@ mod tests {
     async fn test_update_location_concurrency_conflict() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
-                reason: "Version mismatch".into()
+                reason: "Version mismatch".into(),
             })),
             ..Default::default()
         });
 
-        let use_case = UpdateLocationLabelUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case = UpdateLocationLabelUseCase::new(
+            repo,
+            Arc::new(OutboxRepoStub),
+            Arc::new(StubTxManager),
+        );
 
-        let result = use_case.execute(UpdateLocationLabelCommand {
-            account_id,
-            region,
-            new_location: Some(LocationLabel::try_new("New York").unwrap()),
-        }).await;
+        let result = use_case
+            .execute(UpdateLocationLabelCommand {
+                account_id,
+                region,
+                new_location: Some(LocationLabel::try_new("New York").unwrap()),
+            })
+            .await;
 
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
     async fn test_update_location_atomic_rollback_on_outbox_failure() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(account_id.clone(), region.clone(), DisplayName::from_raw("Alice"), Username::try_new("alice").unwrap()).build();
+        let profile = ProfileBuilder::new(
+            account_id.clone(),
+            region.clone(),
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        )
+        .build();
 
         struct FailingOutbox;
         #[async_trait::async_trait]
         impl shared_kernel::domain::repositories::OutboxRepository for FailingOutbox {
-            async fn save(&self, _: &mut dyn shared_kernel::domain::transaction::Transaction, _: &dyn shared_kernel::domain::events::DomainEvent) -> shared_kernel::errors::Result<()> {
+            async fn save(
+                &self,
+                _: &mut dyn shared_kernel::domain::transaction::Transaction,
+                _: &dyn shared_kernel::domain::events::DomainEvent,
+            ) -> shared_kernel::errors::Result<()> {
                 Err(DomainError::Internal("Outbox error".into()))
+            }
+
+            async fn find_pending(&self, _limit: i32) -> shared_kernel::errors::Result<Vec<EventEnvelope>> {
+                Ok(vec![])
             }
         }
 
@@ -173,11 +215,13 @@ mod tests {
             Arc::new(StubTxManager),
         );
 
-        let result = use_case.execute(UpdateLocationLabelCommand {
-            account_id,
-            region,
-            new_location: Some(LocationLabel::try_new("London").unwrap()),
-        }).await;
+        let result = use_case
+            .execute(UpdateLocationLabelCommand {
+                account_id,
+                region,
+                new_location: Some(LocationLabel::try_new("London").unwrap()),
+            })
+            .await;
 
         assert!(result.is_err());
     }

@@ -7,7 +7,7 @@ mod social_links;
 
 pub use bio::Bio;
 pub use display_name::DisplayName;
-pub use movement_metrics::MovementMetrics;
 pub use location_metrics::LocationMetrics;
+pub use movement_metrics::MovementMetrics;
 pub use profile_stats::ProfileStats;
 pub use social_links::SocialLinks;

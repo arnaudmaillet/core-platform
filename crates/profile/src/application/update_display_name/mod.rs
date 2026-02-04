@@ -1,6 +1,6 @@
 mod update_display_name_command;
-mod update_display_name_use_case;
 mod update_display_name_test;
+mod update_display_name_use_case;
 
-pub use update_display_name_use_case::UpdateDisplayNameUseCase;
 pub use update_display_name_command::UpdateDisplayNameCommand;
+pub use update_display_name_use_case::UpdateDisplayNameUseCase;

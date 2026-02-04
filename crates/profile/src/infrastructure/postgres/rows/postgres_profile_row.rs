@@ -1,16 +1,18 @@
 // crates/profile/src/infrastructure/postgres/rows/postgres_profile_row.rs
 
-use chrono::{DateTime, Utc};
-use sqlx::FromRow;
-use serde_json::Value as JsonValue;
-use uuid::Uuid;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{Counter, LocationLabel, RegionCode, Url, AccountId, Username};
-use shared_kernel::errors::{Result, DomainError};
 use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
 use crate::domain::value_objects::{Bio, DisplayName};
+use chrono::{DateTime, Utc};
+use serde_json::Value as JsonValue;
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::value_objects::{
+    AccountId, Counter, LocationLabel, RegionCode, Url, Username,
+};
+use shared_kernel::errors::{DomainError, Result};
+use sqlx::FromRow;
+use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct PostgresProfileRow {
@@ -35,10 +37,10 @@ impl TryFrom<PostgresProfileRow> for Profile {
 
     fn try_from(row: PostgresProfileRow) -> Result<Self> {
         // Transformation des types techniques en Value Objects (Chemin rapide)
-        let social_links = serde_json::from_value(row.social_links)
-            .map_err(|e| DomainError::Validation {
+        let social_links =
+            serde_json::from_value(row.social_links).map_err(|e| DomainError::Validation {
                 field: "social_links",
-                reason: e.to_string()
+                reason: e.to_string(),
             })?;
 
         // Reconstruction de l'agrégat via la méthode de restauration

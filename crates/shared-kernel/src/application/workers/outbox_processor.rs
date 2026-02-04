@@ -1,15 +1,15 @@
 // crates/shared-kernel/src/application/workers/outbox_processor.rs
 
-use std::time::Duration;
-use tokio::time::sleep;
 use crate::application::ports::MessageProducer;
 use crate::domain::repositories::OutboxStore;
 use crate::errors::AppResult;
+use std::time::Duration;
+use tokio::time::sleep;
 
 pub struct OutboxProcessor<Store, Broker>
 where
     Store: OutboxStore,
-    Broker: MessageProducer
+    Broker: MessageProducer,
 {
     store: Store,
     broker: Broker,
@@ -20,10 +20,15 @@ where
 impl<Store, Broker> OutboxProcessor<Store, Broker>
 where
     Store: OutboxStore,
-    Broker: MessageProducer
+    Broker: MessageProducer,
 {
     pub fn new(store: Store, broker: Broker, batch_size: u32, interval: Duration) -> Self {
-        Self { store, broker, batch_size, polling_interval: interval }
+        Self {
+            store,
+            broker,
+            batch_size,
+            polling_interval: interval,
+        }
     }
 
     pub async fn run(&self, mut shutdown_signal: tokio::sync::watch::Receiver<bool>) {
@@ -56,9 +61,9 @@ where
             // Sinon (erreur ou file vide), on attend le prochain intervalle ou le signal d'arrêt
             if processed_count < self.batch_size as usize {
                 tokio::select! {
-                _ = sleep(self.polling_interval) => {},
-                _ = shutdown_signal.changed() => break,
-            }
+                    _ = sleep(self.polling_interval) => {},
+                    _ = shutdown_signal.changed() => break,
+                }
             }
         }
 

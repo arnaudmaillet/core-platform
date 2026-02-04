@@ -1,12 +1,12 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-use shared_kernel::domain::value_objects::{PushToken, RegionCode, Timezone, AccountId};
-use shared_kernel::domain::entities::EntityMetadata;
-use shared_kernel::domain::Identifier;
-use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::AccountSettingsBuilder;
 use crate::domain::events::AccountEvent;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::EntityMetadata;
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
+use shared_kernel::errors::{DomainError, Result};
 
 /// Cette struct représente exactement le contenu de la colonne JSONB 'settings'
 #[derive(Serialize, Deserialize)]
@@ -179,16 +179,17 @@ impl AccountSettings {
 }
 
 impl EntityMetadata for AccountSettings {
-    fn entity_name() -> &'static str { "AccountSettings" }
+    fn entity_name() -> &'static str {
+        "AccountSettings"
+    }
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
             "account_settings_pkey" => "account_id",
-            _ => "settings"
+            _ => "settings",
         }
     }
 }
-
 
 impl AggregateRoot for AccountSettings {
     fn id(&self) -> String {

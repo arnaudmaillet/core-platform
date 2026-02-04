@@ -1,12 +1,12 @@
 // crates/profile/src/application/get_profile_by_username/get_profile_by_username_use_case
 
-use std::sync::Arc;
-use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::infrastructure::concurrency::Singleflight;
-use shared_kernel::domain::repositories::CacheRepository;
 use crate::application::get_profile_by_username::GetProfileByUsernameCommand;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
+use shared_kernel::domain::repositories::CacheRepository;
+use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::infrastructure::concurrency::Singleflight;
+use std::sync::Arc;
 
 pub struct GetProfileByUsernameUseCase {
     repo: Arc<dyn ProfileRepository>,
@@ -25,7 +25,11 @@ impl GetProfileByUsernameUseCase {
     }
 
     pub async fn execute(&self, cmd: GetProfileByUsernameCommand) -> Result<Profile> {
-        let cache_key = format!("profile:un:{}:{}", cmd.region.as_str(), cmd.username.as_str());
+        let cache_key = format!(
+            "profile:un:{}:{}",
+            cmd.region.as_str(),
+            cmd.username.as_str()
+        );
 
         // 1. TENTATIVE CACHE (Fast Path)
         // On récupère la String, puis on tente de la transformer en Profile
@@ -38,29 +42,35 @@ impl GetProfileByUsernameUseCase {
 
         // 2. PROTECTION SINGLEFLIGHT
         let sf_key = cache_key.clone();
-        let profile = self.sf.execute(sf_key, || {
-            let repo = Arc::clone(&self.repo);
-            let cache = Arc::clone(&self.cache);
-            let username = cmd.username.clone();
-            let region = cmd.region.clone();
-            let key = cache_key.clone();
+        let profile = self
+            .sf
+            .execute(sf_key, || {
+                let repo = Arc::clone(&self.repo);
+                let cache = Arc::clone(&self.cache);
+                let username = cmd.username.clone();
+                let region = cmd.region.clone();
+                let key = cache_key.clone();
 
-            async move {
-                let p = repo.get_full_profile_by_username(&username, &region)
-                    .await?
-                    .ok_or_else(|| DomainError::NotFound {
-                        entity: "Profile",
-                        id: username.as_str().to_string(),
-                    })?;
+                async move {
+                    let p = repo
+                        .get_full_profile_by_username(&username, &region)
+                        .await?
+                        .ok_or_else(|| DomainError::NotFound {
+                            entity: "Profile",
+                            id: username.as_str().to_string(),
+                        })?;
 
-                // On sérialise en JSON avant de stocker dans Redis
-                if let Ok(json) = serde_json::to_string(&p) {
-                    let _ = cache.set(&key, &json, Some(std::time::Duration::from_secs(3600))).await;
+                    // On sérialise en JSON avant de stocker dans Redis
+                    if let Ok(json) = serde_json::to_string(&p) {
+                        let _ = cache
+                            .set(&key, &json, Some(std::time::Duration::from_secs(3600)))
+                            .await;
+                    }
+
+                    Ok(p)
                 }
-
-                Ok(p)
-            }
-        }).await?;
+            })
+            .await?;
 
         Ok(profile)
     }

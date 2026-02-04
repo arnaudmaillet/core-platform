@@ -1,8 +1,5 @@
 // crates/profile/build.rs
 
-use std::fs;
-use std::path::Path;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = "src/infrastructure/api/grpc/proto";
     let proto_root = "../../proto";

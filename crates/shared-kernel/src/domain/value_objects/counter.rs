@@ -1,8 +1,8 @@
 // crates/shared_kernel/src/domain/value_objects/counter.rs
 
-use serde::{Deserialize, Serialize};
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub struct Counter(u64);
