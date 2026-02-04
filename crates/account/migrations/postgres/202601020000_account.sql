@@ -30,12 +30,13 @@ CREATE TABLE IF NOT EXISTS accounts (
     );
 
 -- 3. SETTINGS
-CREATE TABLE IF NOT EXISTS user_settings (
+CREATE TABLE IF NOT EXISTS account_settings (
                                              account_id UUID NOT NULL,
                                              region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
     settings JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
+    version INT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (account_id, region_code)
     );
@@ -57,8 +58,8 @@ CREATE TABLE IF NOT EXISTS user_internal_metadata (
 
 -- 5. INDEXES & TRIGGERS
 CREATE INDEX IF NOT EXISTS idx_users_username_lower ON accounts (LOWER(username));
-CREATE INDEX IF NOT EXISTS idx_user_settings_push_tokens ON user_settings USING GIN (push_tokens);
+CREATE INDEX IF NOT EXISTS idx_account_settings_push_tokens ON account_settings USING GIN (push_tokens);
 
 CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON accounts FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
-CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON user_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON user_internal_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();

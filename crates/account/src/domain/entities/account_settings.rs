@@ -107,10 +107,8 @@ impl AccountSettings {
         if self.region_code == new_region {
             return Ok(());
         }
-
         self.region_code = new_region;
-        self.updated_at = Utc::now();
-        self.increment_version();
+        self.apply_change();
 
         Ok(())
     }
@@ -130,7 +128,7 @@ impl AccountSettings {
         }
 
         self.timezone = new_tz.clone();
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::TimezoneChanged {
             account_id: self.account_id.clone(),
@@ -154,7 +152,7 @@ impl AccountSettings {
         }
 
         self.push_tokens.push(token.clone());
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::PushTokenAdded {
             account_id: self.account_id.clone(),
@@ -175,7 +173,7 @@ impl AccountSettings {
             return Ok(());
         }
 
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::PushTokenRemoved {
             account_id: self.account_id.clone(),
@@ -216,7 +214,7 @@ impl AccountSettings {
         }
 
         if changed {
-            self.updated_at = Utc::now();
+            self.apply_change();
             self.add_event(Box::new(AccountEvent::AccountSettingsUpdated {
                 account_id: self.account_id.clone(),
                 region: self.region_code.clone(),
@@ -226,6 +224,15 @@ impl AccountSettings {
 
         Ok(())
     }
+
+
+    // --- LOGIQUE DE VERSIONING ---
+
+    fn apply_change(&mut self) {
+        self.increment_version(); // Méthode de AggregateRoot
+        self.updated_at = Utc::now();
+    }
+
 }
 
 impl EntityMetadata for AccountSettings {
