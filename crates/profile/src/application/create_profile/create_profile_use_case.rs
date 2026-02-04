@@ -1,7 +1,6 @@
 // crates/profile/src/application/use_cases/create_profile/create_profile_use_case.rs
 
 use crate::application::create_profile::CreateProfileCommand;
-use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 use shared_kernel::domain::events::AggregateRoot;
@@ -40,16 +39,14 @@ impl CreateProfileUseCase {
 
     async fn try_execute_once(&self, cmd: &CreateProfileCommand) -> Result<Profile> {
         // 1. Instanciation via le domaine
-        let mut profile = Profile::create(
-            ProfileBuilder::new(
-                cmd.account_id.clone(),
-                cmd.region.clone(),
-                cmd.display_name.clone(),
-                cmd.username.clone(),
-            )
+        let mut profile = Profile::builder(
+            cmd.account_id.clone(),
+            cmd.region.clone(),
+            cmd.display_name.clone(),
+            cmd.username.clone(),
+        )
             .with_privacy(false)
-            .build(),
-        );
+            .build();
 
         // 2. Extraction des événements et préparation de la donnée
         let events = profile.pull_events();

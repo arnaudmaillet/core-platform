@@ -9,8 +9,7 @@ mod tests {
         OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
     };
     use std::sync::{Arc, Mutex};
-
-    use crate::domain::builders::ProfileBuilder;
+    
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
 
@@ -30,7 +29,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let initial_profile = ProfileBuilder::new(
+        let initial_profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -60,7 +59,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("us");
-        let initial_profile = ProfileBuilder::new(
+        let initial_profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -115,7 +114,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
         let current_username = Username::try_new("no_change").unwrap();
 
-        let initial_profile = ProfileBuilder::new(
+        let initial_profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),

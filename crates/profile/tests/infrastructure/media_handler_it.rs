@@ -14,6 +14,7 @@ use profile::application::update_avatar::UpdateAvatarUseCase;
 use profile::application::remove_avatar::RemoveAvatarUseCase;
 use profile::application::update_banner::UpdateBannerUseCase;
 use profile::application::remove_banner::RemoveBannerUseCase;
+use profile::domain::entities::Profile;
 use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
 use profile::domain::value_objects::DisplayName;
 use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
@@ -60,7 +61,7 @@ async fn setup_test_context() -> TestContext {
     // Seed initial d'un profil sans media
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
-    let initial_profile = profile::domain::builders::ProfileBuilder::new(
+    let initial_profile = Profile::builder(
         account_id.clone(),
         region.clone(),
         DisplayName::try_new("Media User").unwrap(),

@@ -1,7 +1,6 @@
 // crates/profile/tests/infrastructure/profile_outbox_repository_it.rs
 
 use chrono::Utc;
-use profile::domain::builders::ProfileBuilder;
 use profile::domain::entities::Profile;
 use profile::domain::events::ProfileEvent;
 use profile::domain::repositories::ProfileIdentityRepository;
@@ -65,7 +64,7 @@ async fn test_outbox_atomic_rollback_with_profile() {
 
     // 1. Création (Génère ProfileCreated)
     let mut profile = Profile::create(
-        ProfileBuilder::new(
+        Profile::builder(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Ghost"),
@@ -197,7 +196,7 @@ async fn test_outbox_duplicate_prevention() {
 
 // Herlpers
 fn create_test_profile() -> Profile {
-    ProfileBuilder::new(
+    Profile::builder(
         AccountId::new(),
         RegionCode::from_raw("eu".to_string()),
         DisplayName::from_raw("Alice"),

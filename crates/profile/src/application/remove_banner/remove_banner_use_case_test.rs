@@ -4,7 +4,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
     // On réutilise nos outils de test centralisés
     use crate::application::remove_banner::{RemoveBannerCommand, RemoveBannerUseCase};
-    use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
     use crate::utils::profile_repository_stub::{
@@ -29,7 +28,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile =Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -64,7 +63,7 @@ mod tests {
         // Arrange : Profil sans bannière
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -108,7 +107,7 @@ mod tests {
         // Arrange : On simule un profil existant
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -146,7 +145,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -179,7 +178,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),

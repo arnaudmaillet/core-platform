@@ -1,6 +1,5 @@
 // crates/profile/tests/infrastructure/profile_repository_it.rs
 
-use profile::domain::builders::ProfileBuilder;
 use profile::domain::entities::Profile;
 use profile::domain::repositories::ProfileIdentityRepository;
 use profile::domain::value_objects::{Bio, DisplayName};
@@ -25,7 +24,7 @@ async fn test_profile_lifecycle() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
 
     // 1. Création initiale
-    let mut profile = ProfileBuilder::new(
+    let mut profile = Profile::builder(
         account_id,
         region.clone(),
         DisplayName::from_raw("Alice"),
@@ -87,7 +86,7 @@ async fn test_concurrency_conflict_real_scenario() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
     let account_id = AccountId::new();
 
-    let profile = ProfileBuilder::new(
+    let profile = Profile::builder(
         account_id,
         region.clone(),
         DisplayName::from_raw("Concurrency Test"),
@@ -130,7 +129,7 @@ async fn test_unique_username_constraint() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
     let username = Username::try_new("unique_bob".to_string()).unwrap();
 
-    let bob1 = ProfileBuilder::new(
+    let bob1 = Profile::builder(
         AccountId::new(),
         region.clone(),
         DisplayName::from_raw("Bob 1"),
@@ -141,7 +140,7 @@ async fn test_unique_username_constraint() {
         .await
         .expect("First save should work");
 
-    let bob2 = ProfileBuilder::new(
+    let bob2 = Profile::builder(
         AccountId::new(),
         region.clone(),
         DisplayName::from_raw("Bob 2"),
@@ -167,7 +166,7 @@ async fn test_partial_update_integrity() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
 
     // 1. Création avec bio et avatar
-    let mut profile = ProfileBuilder::new(
+    let mut profile = Profile::builder(
         account_id,
         region.clone(),
         DisplayName::from_raw("Alice"),
@@ -219,7 +218,7 @@ async fn test_transaction_rollback_logic() {
     let mut wrapped_tx =
         shared_kernel::infrastructure::postgres::transactions::PostgresTransaction::new(tx_sqlx);
 
-    let profile = ProfileBuilder::new(
+    let profile = Profile::builder(
         account_id,
         region.clone(),
         DisplayName::from_raw("Ghost"),

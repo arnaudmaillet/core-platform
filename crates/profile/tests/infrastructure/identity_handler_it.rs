@@ -11,6 +11,7 @@ use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_ser
 use profile::application::update_username::UpdateUsernameUseCase;
 use profile::application::update_display_name::UpdateDisplayNameUseCase;
 use profile::application::update_privacy::UpdatePrivacyUseCase;
+use profile::domain::entities::Profile;
 use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
 use profile::domain::value_objects::DisplayName;
 use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
@@ -58,7 +59,7 @@ async fn setup_test_context() -> TestContext {
     // Seed initial
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
-    let initial_profile = profile::domain::builders::ProfileBuilder::new(
+    let initial_profile = Profile::builder(
         account_id.clone(),
         region.clone(),
         DisplayName::try_new("Original Name").unwrap(),
@@ -143,7 +144,7 @@ async fn test_identity_handler_update_username_already_exists() {
     // 1. Créer un autre utilisateur avec un nom précis
     let taken_username = "already_taken";
     let other_id = AccountId::new();
-    let other_profile = profile::domain::builders::ProfileBuilder::new(
+    let other_profile = Profile::builder(
         other_id,
         ctx.region.clone(),
         DisplayName::try_new("Other").unwrap(),

@@ -35,67 +35,13 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub fn new_initial(
-        account_id: AccountId,
-        region: RegionCode,
-        display_name: DisplayName,
-        username: Username,
-    ) -> Self {
-        let occurred_at = Utc::now();
-        let mut profile = ProfileBuilder::new(
-            account_id.clone(),
-            region.clone(),
-            display_name.clone(),
-            username.clone(),
-        )
-        .build();
-
-        profile.add_event(Box::new(ProfileEvent::ProfileCreated {
-            id: Self::create_event_id(),
-            account_id,
-            region,
-            display_name,
-            username,
-            occurred_at,
-        }));
-
-        profile
-    }
-
-    pub(crate) fn new_from_builder(
+    pub fn builder(
         account_id: AccountId,
         region_code: RegionCode,
         display_name: DisplayName,
         username: Username,
-        bio: Option<Bio>,
-        avatar_url: Option<Url>,
-        banner_url: Option<Url>,
-        location_label: Option<LocationLabel>,
-        social_links: Option<SocialLinks>,
-        stats: ProfileStats,
-        post_count: Counter,
-        is_private: bool,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
-        version: i32,
-    ) -> Self {
-        Self {
-            account_id,
-            region_code,
-            display_name,
-            username,
-            bio,
-            avatar_url,
-            banner_url,
-            location_label,
-            social_links,
-            stats,
-            post_count,
-            is_private,
-            created_at,
-            updated_at,
-            metadata: AggregateMetadata::new(version),
-        }
+    ) -> ProfileBuilder {
+        ProfileBuilder::new(account_id, region_code, display_name, username)
     }
 
     pub(crate) fn restore(

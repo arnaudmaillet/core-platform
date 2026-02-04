@@ -4,7 +4,7 @@ use crate::domain::entities::Profile;
 use crate::domain::events::ProfileEvent;
 use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::value_objects::{
     AccountId, Counter, LocationLabel, RegionCode, Url, Username,
 };
@@ -29,7 +29,7 @@ pub struct ProfileBuilder {
 
 impl ProfileBuilder {
     /// Chemin 1 : CREATION (Via Use Case / API)
-    pub fn new(
+    pub(crate) fn new(
         account_id: AccountId,
         region_code: RegionCode,
         display_name: DisplayName,
@@ -139,10 +139,11 @@ impl ProfileBuilder {
         self
     }
 
-    /// Finalisation pour la CREATION
     pub fn build(self) -> Profile {
         let now = Utc::now();
-        Profile::new_from_builder(
+
+        // On crée l'instance via le restore interne de Profile
+        let mut profile = Profile::restore(
             self.account_id,
             self.region_code,
             self.display_name,
@@ -152,19 +153,14 @@ impl ProfileBuilder {
             self.banner_url,
             self.location_label,
             self.social_links,
-            self.stats,
             self.post_count,
             self.is_private,
+            self.version,
             self.created_at.unwrap_or(now),
             now,
-            self.version,
-        )
-    }
+        );
 
-    pub fn build_new(self) -> Profile {
-        let mut profile = self.build(); // Utilise ton build() actuel
-
-        // On enregistre l'événement de création dans l'agrégat
+        // Le builder de création génère TOUJOURS l'événement
         profile.add_event(Box::new(ProfileEvent::ProfileCreated {
             id: Uuid::now_v7(),
             account_id: profile.account_id().clone(),

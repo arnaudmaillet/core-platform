@@ -14,6 +14,7 @@ use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_ser
 use profile::application::update_bio::UpdateBioUseCase;
 use profile::application::update_location_label::UpdateLocationLabelUseCase;
 use profile::application::update_social_links::UpdateSocialLinksUseCase;
+use profile::domain::entities::Profile;
 use profile::domain::repositories::ProfileRepository;
 use profile::domain::value_objects::DisplayName;
 use shared_kernel::domain::value_objects::Username;
@@ -58,7 +59,7 @@ async fn setup_test_context() -> TestContext {
 
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
-    let initial_profile = profile::domain::builders::ProfileBuilder::new(
+    let initial_profile = Profile::builder(
         account_id.clone(),
         region.clone(),
         DisplayName::try_new("Metadata User").unwrap(),

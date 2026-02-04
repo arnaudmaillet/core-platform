@@ -3,7 +3,6 @@ mod tests {
     use crate::application::get_profile_by_username::{
         GetProfileByUsernameCommand, GetProfileByUsernameUseCase,
     };
-    use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::repositories::ProfileIdentityRepository;
     use crate::domain::value_objects::DisplayName;
@@ -48,7 +47,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_profile_cache_hit_success() {
         // Arrange : Profil déjà sérialisé en cache
-        let bob = ProfileBuilder::new(
+        let bob = Profile::builder(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
@@ -81,7 +80,7 @@ mod tests {
         let username = Username::try_new("bob").unwrap();
         let cache_key = "profile:un:eu:bob";
 
-        let bob = ProfileBuilder::new(
+        let bob = Profile::builder(
             account_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -141,7 +140,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_profile_resilience_on_redis_failure() {
         // Arrange : Redis est en panne (fail_all = true)
-        let bob = ProfileBuilder::new(
+        let bob = Profile::builder(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
@@ -171,7 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_profile_corrupted_cache_trigger_refresh() {
         // Arrange : Donnée invalide en cache
-        let bob = ProfileBuilder::new(
+        let bob = Profile::builder(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
@@ -196,7 +195,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_profile_singleflight_deduplication() {
         // Arrange : On crée un Use Case partagé
-        let bob = ProfileBuilder::new(
+        let bob = Profile::builder(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),
@@ -345,7 +344,7 @@ mod tests {
         }
 
         let counter = Arc::new(AtomicUsize::new(0));
-        let bob = ProfileBuilder::new(
+        let bob = Profile::builder(
             AccountId::new(),
             RegionCode::from_raw("eu"),
             DisplayName::from_raw("Bob"),

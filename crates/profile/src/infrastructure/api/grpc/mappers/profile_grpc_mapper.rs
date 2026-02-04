@@ -1,7 +1,6 @@
 // crates/profile/src/infrastructure/api/grpc/mappers/profile_grpc_mapper.rs
 
 use super::super::profile_v1::Profile as ProtoProfile;
-use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
 use crate::domain::value_objects::{Bio, DisplayName, SocialLinks};
 use crate::infrastructure::api::grpc::mappers::to_timestamp;
@@ -41,7 +40,7 @@ impl TryFrom<ProtoProfile> for Profile {
         let display_name = DisplayName::try_from(proto.display_name)?;
         let social_links = proto.social_links.map(SocialLinks::try_from).transpose()?;
 
-        let builder = ProfileBuilder::new(account_id, region_code, display_name, username)
+        let builder = Profile::builder(account_id, region_code, display_name, username)
             .with_privacy(proto.is_private)
             .with_optional_bio(
                 proto

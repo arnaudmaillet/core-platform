@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use crate::application::update_bio::{UpdateBioCommand, UpdateBioUseCase};
-    use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::{Bio, DisplayName};
     use crate::utils::profile_repository_stub::{
@@ -27,7 +26,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let initial_profile = ProfileBuilder::new(
+        let initial_profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -59,7 +58,7 @@ mod tests {
         // Arrange : Profil ayant déjà une bio
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -93,7 +92,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
         let bio_text = Some(Bio::try_new("Consistent Bio").unwrap());
 
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -143,7 +142,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -184,7 +183,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),

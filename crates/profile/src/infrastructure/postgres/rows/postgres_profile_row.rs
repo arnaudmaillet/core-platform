@@ -1,6 +1,5 @@
 // crates/profile/src/infrastructure/postgres/rows/postgres_profile_row.rs
 
-use crate::domain::builders::ProfileBuilder;
 use crate::domain::entities::Profile;
 use crate::domain::value_objects::{Bio, DisplayName};
 use chrono::{DateTime, Utc};
@@ -44,7 +43,7 @@ impl TryFrom<PostgresProfileRow> for Profile {
             })?;
 
         // Reconstruction de l'agrégat via la méthode de restauration
-        let profile = ProfileBuilder::restore(
+        let profile = Profile::restore(
             AccountId::from_uuid(row.account_id),
             RegionCode::from_raw(row.region_code),
             DisplayName::from_raw(row.display_name),

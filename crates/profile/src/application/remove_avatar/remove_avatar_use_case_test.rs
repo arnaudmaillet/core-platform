@@ -12,8 +12,7 @@ mod tests {
     use crate::application::remove_avatar::{RemoveAvatarCommand, RemoveAvatarUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-
-    use crate::domain::builders::ProfileBuilder;
+    
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
     use shared_kernel::errors::DomainError;
 
@@ -34,7 +33,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
         let url = Url::from_raw("https://cdn.com/old_photo.png");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -63,7 +62,7 @@ mod tests {
         // Arrange : Un profil qui n'a DEJA PAS d'avatar
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -107,7 +106,7 @@ mod tests {
         // Arrange : On simule un profil chargé en v2
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -145,7 +144,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -180,7 +179,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),

@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use crate::application::update_banner::{UpdateBannerCommand, UpdateBannerUseCase};
-    use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
     use crate::utils::profile_repository_stub::{
@@ -28,7 +27,7 @@ mod tests {
         // Arrange : Profil initial sans bannière
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let initial_profile = ProfileBuilder::new(
+        let initial_profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -65,7 +64,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
         let banner_url = Url::try_from("https://cdn.com/banner_v1.png".to_string()).unwrap();
 
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -116,7 +115,7 @@ mod tests {
         // Arrange : On passe d'une bannière A à une bannière B
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -149,7 +148,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -191,7 +190,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -226,7 +225,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),

@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use crate::application::update_privacy::{UpdatePrivacyCommand, UpdatePrivacyUseCase};
-    use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
     use crate::utils::profile_repository_stub::{
@@ -26,7 +25,7 @@ mod tests {
         // Arrange : Profil public par défaut
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let initial_profile = ProfileBuilder::new(
+        let initial_profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -56,7 +55,7 @@ mod tests {
         // Arrange : Profil déjà privé
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -106,7 +105,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),
@@ -147,7 +146,7 @@ mod tests {
         // Arrange
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Bob"),

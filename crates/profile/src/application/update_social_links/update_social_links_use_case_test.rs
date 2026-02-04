@@ -3,7 +3,6 @@ mod tests {
     use crate::application::update_social_links::{
         UpdateSocialLinksCommand, UpdateSocialLinksUseCase,
     };
-    use crate::domain::builders::ProfileBuilder;
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::{DisplayName, SocialLinks};
     use crate::utils::profile_repository_stub::{
@@ -27,7 +26,7 @@ mod tests {
     async fn test_update_social_links_success() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -66,7 +65,7 @@ mod tests {
     async fn test_clear_social_links_success() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -109,7 +108,7 @@ mod tests {
             .expect("FAIL: SocialLinks validation error")
             .expect("FAIL: SocialLinks returned None");
 
-        let mut profile = ProfileBuilder::new(
+        let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -147,7 +146,7 @@ mod tests {
     async fn test_update_social_links_concurrency_conflict() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
@@ -177,7 +176,7 @@ mod tests {
     async fn test_update_social_links_atomic_rollback_on_outbox_failure() {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
-        let profile = ProfileBuilder::new(
+        let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
