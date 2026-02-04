@@ -44,13 +44,10 @@ impl ValueObject for Locale {
         let len = self.0.len();
 
         // Validation BCP-47 légère : min 2 (ex: "en"), max 10 (ex: "zh-Hans-CN")
-        if len < 2 || len > 10 {
+        if len < 2 || len > 16 {
             return Err(DomainError::Validation {
                 field: "locale",
-                reason: format!(
-                    "Locale length invalid ({}). Expected BCP-47 format.",
-                    self.0
-                ),
+                reason: format!("Locale length invalid ({}). Max 16.", len),
             });
         }
 

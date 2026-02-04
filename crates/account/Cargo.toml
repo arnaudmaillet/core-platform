@@ -16,4 +16,5 @@ sqlx = { workspace = true }
 async-trait = { workspace = true }
 regex = { workspace = true }
 unicode-normalization = { workspace = true }
+idna = { workspace = true }
 seahash = { workspace = true }

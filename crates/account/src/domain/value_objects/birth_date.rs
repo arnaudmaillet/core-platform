@@ -14,16 +14,12 @@ impl BirthDate {
     pub const MIN_AGE: u32 = 13;
     pub const MAX_AGE: u32 = 125;
 
-    /// Constructeur sécurisé (API / Inscription)
     pub fn try_new(date: NaiveDate) -> Result<Self> {
         let birth_date = Self(date);
         birth_date.validate()?;
         Ok(birth_date)
     }
 
-    /// Reconstruction rapide (Infrastructure / DB)
-    /// On ne valide pas l'âge lors de la lecture DB pour éviter les bugs si un utilisateur
-    /// a fêté son anniversaire entre l'écriture et la lecture.
     pub fn from_raw(date: NaiveDate) -> Self {
         Self(date)
     }
@@ -32,14 +28,18 @@ impl BirthDate {
         self.0
     }
 
-    /// Calcule l'âge à une date de référence donnée
-    /// Hyperscale : On passe la date de référence pour rester déterministe
+    /// Calcule l'âge (gère les années bissextiles)
     pub fn age_at(&self, reference: NaiveDate) -> u32 {
         let mut age = reference.year() - self.0.year();
-        if reference.ordinal() < self.0.ordinal() {
+        if (reference.month(), reference.day()) < (self.0.month(), self.0.day()) {
             age -= 1;
         }
+
         age as u32
+    }
+
+    pub fn has_reached_age(&self, required_age: u32) -> bool {
+        self.current_age() >= required_age
     }
 
     pub fn current_age(&self) -> u32 {
@@ -51,7 +51,6 @@ impl ValueObject for BirthDate {
     fn validate(&self) -> Result<()> {
         let now = Utc::now().date_naive();
 
-        // 1. Validation : Pas dans le futur
         if self.0 > now {
             return Err(DomainError::Validation {
                 field: "birth_date",
@@ -59,7 +58,6 @@ impl ValueObject for BirthDate {
             });
         }
 
-        // 2. Vérification des bornes d'âge
         let age = self.age_at(now);
         if age < Self::MIN_AGE {
             return Err(DomainError::Validation {

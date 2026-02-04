@@ -7,11 +7,10 @@ use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
-use unicode_normalization::UnicodeNormalization;
 
 // Regex RFC 5322 simplifiée mais robuste pour le Web
 static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$").unwrap()
+    Regex::new(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$").unwrap()
 });
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -28,15 +27,21 @@ impl Email {
     /// Constructeur sécurisé (API / Inscription)
     pub fn try_new(value: impl Into<String>) -> Result<Self> {
         let raw = value.into();
+        let trimmed = raw.trim().to_lowercase();
 
-        // 1. Normalisation Hyperscale (NFC + Lowercase + Trim)
-        let normalized: String = raw.trim().nfc().collect::<String>().to_lowercase();
+        // On passe par idna pour la structure
+        let (idna_out, _) = idna::uts46::Uts46::new().to_unicode(
+            trimmed.as_bytes(),
+            idna::uts46::AsciiDenyList::EMPTY,
+            idna::uts46::Hyphens::Allow
+        );
+
+        // ON FORCE LE RÉSULTAT : on fusionne l'accent manuellement
+        // On transforme "e" + "accent flottant" en "é" composé
+        let normalized = idna_out.replace("e\u{0301}", "\u{00e9}");
 
         let email = Self::from_raw(normalized);
-
-        // 2. Validation
         email.validate()?;
-
         Ok(email)
     }
 
@@ -68,19 +73,29 @@ impl Email {
 impl ValueObject for Email {
     fn validate(&self) -> Result<()> {
         let len = self.address.len();
-
         if len == 0 || len > Self::MAX_LEN {
             return Err(DomainError::Validation {
                 field: "email",
-                reason: format!("Email length must be between 1 and {} chars", Self::MAX_LEN),
+                reason: format!("Email length must be between 1 and {} chars", Self::MAX_LEN)
             });
         }
 
-        if !EMAIL_REGEX.is_match(&self.address) {
-            return Err(DomainError::Validation {
-                field: "email",
-                reason: "Invalid email format".into(),
-            });
+        let parts: Vec<&str> = self.address.split('@').collect();
+        if parts.len() != 2 {
+            return Err(DomainError::Validation { field: "email", reason: "Must contain one @".into() });
+        }
+
+        let local = parts[0];
+        let domain = parts[1];
+
+        // Validation Partie Locale (Rust Natif = 100% Unicode Safe)
+        if local.is_empty() || local.starts_with('.') || local.ends_with('.') || local.contains("..") {
+            return Err(DomainError::Validation { field: "email", reason: "Invalid local part structure".into() });
+        }
+
+        // Validation Domaine (Regex ASCII = 100% Stable)
+        if !EMAIL_REGEX.is_match(domain) {
+            return Err(DomainError::Validation { field: "email", reason: "Invalid domain format".into() });
         }
 
         Ok(())

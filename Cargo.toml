@@ -60,10 +60,11 @@ elasticsearch = "9.1.0-alpha.1"
 scylla = "1.4.1"
 
 # Utils
-regex = "1.12"
+regex = { version = "1.12", features = ["unicode", "unicode-perl"] }
 lazy_static = "1.5"
 seahash = "4.1"
-unicode-normalization = "0.1.25"
+unicode-normalization = { version = "0.1", features = ["std"] }
+idna = "1.1.0"
 
 # Proto / gRPC
 tonic = { version = "0.14.2", features = ["codegen", "transport", "tls-webpki-roots"] }

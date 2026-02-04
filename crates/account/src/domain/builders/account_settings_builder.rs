@@ -45,7 +45,6 @@ impl AccountSettingsBuilder {
         updated_at: DateTime<Utc>,
         version: i32,
     ) -> AccountSettings {
-        // On utilise la méthode restore de l'entité AccountSettings
         AccountSettings::restore(
             account_id,
             region_code,

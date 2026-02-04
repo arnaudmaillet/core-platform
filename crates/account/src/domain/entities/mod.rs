@@ -7,3 +7,6 @@ pub use account_metadata::AccountMetadata;
 pub use account_settings::{
     AccountSettings, AppearanceSettings, NotificationSettings, PrivacySettings, SettingsBlob,
 };
+
+#[cfg(test)]
+mod tests;
