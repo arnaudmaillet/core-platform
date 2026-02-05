@@ -1,6 +1,9 @@
 mod account_metadata_repository;
 mod account_repository;
 mod account_settings_repository;
+mod account_repository_stub;
+mod account_metadata_repository_stub;
+mod account_settings_repository_stub;
 
 pub use account_metadata_repository::AccountMetadataRepository;
 pub use account_repository::AccountRepository;
