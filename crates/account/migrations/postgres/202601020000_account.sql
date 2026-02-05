@@ -42,14 +42,15 @@ CREATE TABLE IF NOT EXISTS account_settings (
     );
 
 -- 4. INTERNAL METADATA (Security & Trust)
-CREATE TABLE IF NOT EXISTS user_internal_metadata (
+CREATE TABLE IF NOT EXISTS account_metadata (
                                                       account_id UUID NOT NULL,
                                                       region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
     role internal_role NOT NULL DEFAULT 'user',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
-    trust_score INT NOT NULL DEFAULT 1,
+    trust_score INT NOT NULL DEFAULT 0,
     moderation_notes TEXT,
+    last_moderation_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     estimated_ip TEXT,
     version INT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -62,4 +63,4 @@ CREATE INDEX IF NOT EXISTS idx_account_settings_push_tokens ON account_settings 
 
 CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON accounts FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
-CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON user_internal_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON account_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();

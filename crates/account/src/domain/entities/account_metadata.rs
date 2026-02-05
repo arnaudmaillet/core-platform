@@ -206,7 +206,7 @@ impl AccountMetadata {
 
         let old_region = self.region_code.clone();
         self.region_code = new_region.clone();
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountRegionChanged {
             account_id: self.account_id.clone(),
@@ -218,27 +218,10 @@ impl AccountMetadata {
         Ok(())
     }
 
-    // --- LOGIQUE DE VERSIONING ---
-
-    fn apply_change(&mut self) {
-        self.increment_version(); // Méthode de AggregateRoot
-        self.updated_at = Utc::now();
-    }
 
     // ==========================================
     // HELPERS PRIVÉS
     // ==========================================
-
-    fn add_moderation_note(&mut self, note: String) {
-        let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S");
-        let new_note = format!("[{}] {}", timestamp, note);
-
-        if let Some(ref mut existing) = self.moderation_notes {
-            existing.push_str(&format!("\n{}", new_note));
-        } else {
-            self.moderation_notes = Some(new_note);
-        }
-    }
 
     fn apply_moderation_change(&mut self, log_entry: String) {
         let now = Utc::now();
@@ -252,7 +235,7 @@ impl AccountMetadata {
         }
 
         self.last_moderation_at = Some(now);
-        self.updated_at = now;
+        self.apply_change();
     }
 
     fn apply_shadowban(&mut self, reason: String) {
@@ -267,6 +250,14 @@ impl AccountMetadata {
             occurred_at: self.updated_at,
         }));
     }
+
+    // --- LOGIQUE DE VERSIONING ---
+
+    fn apply_change(&mut self) {
+        self.increment_version(); // Méthode de AggregateRoot
+        self.updated_at = Utc::now();
+    }
+
 }
 
 impl EntityMetadata for AccountMetadata {
@@ -276,7 +267,7 @@ impl EntityMetadata for AccountMetadata {
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
-            "user_internal_metadata_pkey" => "account_id",
+            "account_metadata_pkey" => "account_id",
             _ => "internal_metadata",
         }
     }

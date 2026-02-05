@@ -34,7 +34,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
 
         let row = <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
-                let sql = "SELECT * FROM user_internal_metadata WHERE account_id = $1";
+                let sql = "SELECT * FROM account_metadata WHERE account_id = $1";
                 query_as::<_, PostgresAccountMetadataRow>(sql)
                     .bind(uid)
                     .fetch_optional(conn)
@@ -42,7 +42,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .map_domain::<AccountMetadata>()
             })
         })
-        .await?;
+            .await?;
 
         row.map(|r| AccountMetadata::try_from(r)).transpose()
     }
@@ -65,7 +65,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
             // 2. On utilise 'async move' pour transférer la propriété des variables ci-dessus
             Box::pin(async move {
                 let sql = r#"
-                INSERT INTO user_internal_metadata (
+                INSERT INTO account_metadata (
                     account_id, region_code, role, is_beta_tester,
                     is_shadowbanned, trust_score, moderation_notes,
                     estimated_ip, version, updated_at
@@ -99,9 +99,8 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         metadata: &AccountMetadata,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
-        // 1. Préparation des données Owned
         let uid = metadata.account_id().as_uuid();
-        let current_version = metadata.version();
+        let region = metadata.region_code().to_string();
         let role = PostgresAccountRole::from(metadata.role());
         let is_beta = metadata.is_beta_tester();
         let is_shadow = metadata.is_shadowbanned();
@@ -109,22 +108,19 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let notes = metadata.moderation_notes().map(|s| s.to_string());
         let ip = metadata.estimated_ip().map(|s| s.to_string());
         let updated = metadata.updated_at();
+        let new_version = metadata.version();
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
-                UPDATE user_internal_metadata
+                UPDATE account_metadata
                 SET
-                    role = $1,
-                    is_beta_tester = $2,
-                    is_shadowbanned = $3,
-                    trust_score = $4,
-                    moderation_notes = $5,
-                    estimated_ip = $6,
-                    updated_at = $7,
-                    version = version + 1
-                WHERE account_id = $8
-                  AND version = $9
+                    role = $1, is_beta_tester = $2, is_shadowbanned = $3,
+                    trust_score = $4, moderation_notes = $5, estimated_ip = $6,
+                    updated_at = $7, version = $8,
+                    region_code = $9  -- Mise à jour de la région pour le sharding
+                WHERE account_id = $10
+                  AND version < $8
             "#;
 
                 let result = query(sql)
@@ -135,26 +131,20 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .bind(notes)
                     .bind(ip)
                     .bind(updated)
-                    .bind(uid)
-                    .bind(current_version)
+                    .bind(new_version) // $8
+                    .bind(region)      // $9
+                    .bind(uid)         // $10
                     .execute(conn)
                     .await
                     .map_domain::<AccountMetadata>()?;
 
                 if result.rows_affected() == 0 {
                     return Err(DomainError::ConcurrencyConflict {
-                        reason: format!(
-                            "Metadata update failed: version mismatch (expected {})",
-                            current_version
-                        ),
+                        reason: format!("Metadata version mismatch for {}", uid),
                     });
                 }
-
                 Ok(())
             })
-        })
-            .await?;
-
-        Ok(())
+        }).await
     }
 }

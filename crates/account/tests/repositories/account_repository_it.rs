@@ -167,3 +167,67 @@ async fn test_upsert_idempotency() {
     let final_acc = repo.find_account_by_id(account.id(), None).await.unwrap().unwrap();
     assert_eq!(final_acc.state(), &AccountState::Deactivated);
 }
+
+#[tokio::test]
+async fn test_account_concurrency_conflict() {
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let repo = PostgresAccountRepository::new(pool.clone());
+
+    // 1. Setup initial (v1 - État Active par défaut)
+    let account = Account::builder(
+        AccountId::new(),
+        RegionCode::try_new("eu").unwrap(),
+        Username::try_new("concurrent_user").unwrap(),
+        Email::try_new("concurrent@test.com").unwrap(),
+        ExternalId::try_new(Uuid::now_v7().to_string()).unwrap(),
+    ).build();
+    repo.save(&account, None).await.unwrap();
+
+    // 2. Deux clients lisent la v1 (État Active)
+    let mut client_a = repo.find_account_by_id(account.id(), None).await.unwrap().unwrap();
+    let mut client_b = repo.find_account_by_id(account.id(), None).await.unwrap().unwrap();
+
+    // 3. Client A gagne : il désactive le compte (v1 -> v2)
+    client_a.deactivate().unwrap();
+    repo.save(&client_a, None).await.expect("Client A should succeed");
+
+    // 4. Client B tente aussi de désactiver le compte (v1 -> v2)
+    // C'est valide au niveau métier car pour lui le compte est encore Active
+    // Mais SQL doit rejeter car la version en base est déjà 2
+    client_b.deactivate().unwrap();
+    let result = repo.save(&client_b, None).await;
+
+    // Doit échouer sur le ConcurrencyConflict
+    assert!(result.is_err(), "Client B should fail due to version mismatch");
+}
+
+#[tokio::test]
+async fn test_account_lookups_and_existence() {
+    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let repo = PostgresAccountRepository::new(pool.clone());
+
+    let email = Email::try_new("unique@check.com").unwrap();
+    let username = Username::try_new("unique_check").unwrap();
+
+    let account = Account::builder(
+        AccountId::new(),
+        RegionCode::try_new("eu").unwrap(),
+        username.clone(),
+        email.clone(),
+        ExternalId::try_new("ext_123").unwrap(),
+    ).build();
+
+    repo.save(&account, None).await.unwrap();
+
+    // Test find_id
+    let id_by_email = repo.find_account_id_by_email(&email).await.unwrap();
+    assert_eq!(id_by_email.unwrap(), *account.id());
+
+    // Test exists
+    assert!(repo.exists_account_by_email(&email).await.unwrap());
+    assert!(repo.exists_account_by_username(&username).await.unwrap());
+
+    // Test non-existence
+    let unknown_email = Email::try_new("unknown@test.com").unwrap();
+    assert!(!repo.exists_account_by_email(&unknown_email).await.unwrap());
+}

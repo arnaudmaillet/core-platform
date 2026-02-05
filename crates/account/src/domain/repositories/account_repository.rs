@@ -54,7 +54,7 @@ pub trait AccountRepository: Send + Sync {
     async fn save(&self, user: &Account, tx: Option<&mut dyn Transaction>) -> Result<()>;
 
     /// Changement de statut atomique (Active -> Banned, etc.).
-    async fn update_account_status_by_id(
+    async fn update_account_state_by_id(
         &self,
         account_id: &AccountId,
         account_state: AccountState,

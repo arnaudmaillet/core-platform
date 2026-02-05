@@ -7,7 +7,7 @@ use shared_kernel::domain::value_objects::{AccountId, Username};
 use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use sqlx::{Pool, Postgres, QueryBuilder, query, query_as, query_scalar};
-
+use shared_kernel::domain::events::AggregateRoot;
 use crate::domain::entities::Account;
 use crate::domain::params::PatchUserParams;
 use crate::domain::repositories::AccountRepository;
@@ -266,7 +266,7 @@ impl AccountRepository for PostgresAccountRepository {
         self.execute_upsert(user, tx).await
     }
 
-    async fn update_account_status_by_id(
+    async fn update_account_state_by_id(
         &self,
         id: &AccountId,
         state: AccountState,
@@ -277,7 +277,7 @@ impl AccountRepository for PostgresAccountRepository {
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
-                query("UPDATE accounts SET state = $1, updated_at = NOW() WHERE id = $2")
+                query("UPDATE accounts SET state = $1, version = version + 1, updated_at = NOW() WHERE id = $2")
                     .bind(state_str)
                     .bind(uid)
                     .execute(conn)
@@ -285,7 +285,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .map_domain::<Account>()
             })
         })
-        .await?;
+            .await?;
         Ok(())
     }
 
@@ -293,14 +293,14 @@ impl AccountRepository for PostgresAccountRepository {
         let uid = id.as_uuid();
         <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
-                query("UPDATE accounts SET last_active_at = NOW() WHERE id = $1")
+                query("UPDATE accounts SET last_active_at = NOW(), version = version + 1 WHERE id = $1")
                     .bind(uid)
                     .execute(conn)
                     .await
                     .map_domain::<Account>()
             })
         })
-        .await?;
+            .await?;
         Ok(())
     }
 
@@ -323,28 +323,31 @@ impl AccountRepository for PostgresAccountRepository {
 impl PostgresAccountRepository {
     async fn execute_upsert(&self, user: &Account, tx: Option<&mut dyn Transaction>) -> Result<()> {
         let row = PostgresAccountRow::from(user);
+        let new_version = user.version();
+        let old_version = if new_version > 1 { new_version - 1 } else { 0 };
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
-            INSERT INTO accounts (
-                id, region_code, external_id, username, email, email_verified,
-                phone_number, phone_verified, state, birth_date,
-                locale, updated_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            ON CONFLICT (id) DO UPDATE SET
-                email = EXCLUDED.email,
-                email_verified = EXCLUDED.email_verified,
-                phone_number = EXCLUDED.phone_number,
-                phone_verified = EXCLUDED.phone_verified,
-                state = EXCLUDED.state,
-                locale = EXCLUDED.locale,
-                updated_at = EXCLUDED.updated_at
-        "#;
+                INSERT INTO accounts (
+                    id, region_code, external_id, username, email, email_verified,
+                    phone_number, phone_verified, state, birth_date,
+                    locale, version, updated_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                ON CONFLICT (id) DO UPDATE SET
+                    email = EXCLUDED.email,
+                    email_verified = EXCLUDED.email_verified,
+                    phone_number = EXCLUDED.phone_number,
+                    phone_verified = EXCLUDED.phone_verified,
+                    state = EXCLUDED.state,
+                    locale = EXCLUDED.locale,
+                    version = EXCLUDED.version,
+                    updated_at = EXCLUDED.updated_at
+                WHERE accounts.version = $14
+            "#;
 
-                // 2. On bind directement les champs de la row
-                query(sql)
+                let result = query(sql)
                     .bind(row.id)
                     .bind(&row.region_code)
                     .bind(&row.external_id)
@@ -353,17 +356,25 @@ impl PostgresAccountRepository {
                     .bind(row.email_verified)
                     .bind(&row.phone_number)
                     .bind(row.phone_verified)
-                    .bind(&row.state) // Utilise le type PostgresAccountState de la row
+                    .bind(&row.state)
                     .bind(row.birth_date)
                     .bind(&row.locale)
-                    .bind(row.updated_at)
+                    .bind(new_version) // $12
+                    .bind(row.updated_at) // $13
+                    .bind(old_version) // $14
                     .execute(conn)
                     .await
-                    .map_domain::<Account>()
+                    .map_domain::<Account>()?;
+
+                if result.rows_affected() == 0 && new_version > 1 {
+                    return Err(shared_kernel::errors::DomainError::ConcurrencyConflict {
+                        reason: format!("Account {}: version mismatch", row.id)
+                    });
+                }
+                Ok(())
             })
         })
-        .await?;
-
+            .await?;
         Ok(())
     }
 }

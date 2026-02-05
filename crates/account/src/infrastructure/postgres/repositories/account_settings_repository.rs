@@ -103,10 +103,6 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
                 .await
                 .map_domain_infra("AccountSettings: save")?;
 
-            // ANALYSE DU RÉSULTAT
-            // Si rows_affected == 0, cela signifie que :
-            // 1. Soit la ligne n'existait pas (impossible ici car on fait un INSERT)
-            // 2. Soit la clause WHERE (version = old_version) a échoué.
             if result.rows_affected() == 0 && new_version > 1 {
                 return Err(DomainError::ConcurrencyConflict {
                     reason: format!("Concurrency conflict for account {}: version mismatch", uid)
