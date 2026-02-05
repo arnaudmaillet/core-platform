@@ -9,8 +9,7 @@ use crate::application::update_location_label::{
     UpdateLocationLabelCommand, UpdateLocationLabelUseCase,
 };
 use crate::application::update_social_links::{UpdateSocialLinksCommand, UpdateSocialLinksUseCase};
-use crate::domain::value_objects::{Bio, SocialLinks};
-use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 // Proto généré
 use super::super::profile_v1::{
     Profile as ProtoProfile, UpdateBioRequest, UpdateLocationLabelRequest,
@@ -48,94 +47,31 @@ impl MetadataHandler {
 
 #[tonic::async_trait]
 impl ProfileMetadataService for MetadataHandler {
-    async fn update_bio(
-        &self,
-        request: Request<UpdateBioRequest>,
-    ) -> Result<Response<ProtoProfile>, Status> {
+    async fn update_bio(&self, request: Request<UpdateBioRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
-        let req = request.into_inner();
+        let command = UpdateBioCommand::try_from_proto(request.into_inner(), region)?;
 
-        let account_id = AccountId::try_from(req.account_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let new_bio = req
-            .new_bio
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| Bio::try_from(s).map_err(|e| Status::invalid_argument(e.to_string())))
-            .transpose()?;
-
-        let command = UpdateBioCommand {
-            account_id,
-            region,
-            new_bio,
-        };
-
-        let profile = self
-            .update_bio_uc
-            .execute(command)
-            .await
+        let profile = self.update_bio_uc.execute(command).await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
     }
 
-    async fn update_location_label(
-        &self,
-        request: Request<UpdateLocationLabelRequest>,
-    ) -> Result<Response<ProtoProfile>, Status> {
+    async fn update_location_label(&self, request: Request<UpdateLocationLabelRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
-        let req = request.into_inner();
+        let command = UpdateLocationLabelCommand::try_from_proto(request.into_inner(), region)?;
 
-        let new_location = req
-            .new_location_label
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| {
-                LocationLabel::try_from(s).map_err(|e| Status::invalid_argument(e.to_string()))
-            })
-            .transpose()?;
-
-        let account_id = AccountId::try_from(req.account_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let command = UpdateLocationLabelCommand {
-            account_id,
-            region,
-            new_location,
-        };
-
-        let profile = self
-            .update_location_uc
-            .execute(command)
-            .await
+        let profile = self.update_location_uc.execute(command).await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
     }
 
-    async fn update_social_links(
-        &self,
-        request: Request<UpdateSocialLinksRequest>,
-    ) -> Result<Response<ProtoProfile>, Status> {
+    async fn update_social_links(&self, request: Request<UpdateSocialLinksRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
-        let req = request.into_inner();
-        let new_links = req
-            .new_links
-            .map(|l| SocialLinks::try_from(l).map_err(|e| Status::invalid_argument(e.to_string())))
-            .transpose()?;
+        let command = UpdateSocialLinksCommand::try_from_proto(request.into_inner(), region)?;
 
-        let account_id = AccountId::try_from(req.account_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let command = UpdateSocialLinksCommand {
-            account_id,
-            region,
-            new_links,
-        };
-
-        let profile = self
-            .update_social_links_uc
-            .execute(command)
-            .await
+        let profile = self.update_social_links_uc.execute(command).await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
