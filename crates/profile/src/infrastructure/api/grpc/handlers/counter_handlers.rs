@@ -42,63 +42,27 @@ impl ProfileCounterHandler {
 
 #[tonic::async_trait]
 impl ProfileCounterService for ProfileCounterHandler {
-    /// Incrémente le compteur de posts
     async fn increment_post_count(
         &self,
         request: Request<IncrementPostCountRequest>,
     ) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
-        let req = request.into_inner();
+        let command = IncrementPostCountCommand::try_from_proto(request.into_inner(), region)?;
 
-        // Conversion et validation de l'ID
-        let account_id = AccountId::try_from(req.account_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let post_id =
-            PostId::try_from(req.post_id).map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        // Création de la commande
-        let command = IncrementPostCountCommand {
-            account_id,
-            region,
-            post_id,
-        };
-
-        // Exécution du Use Case
-        let profile = self
-            .increment_post_uc
-            .execute(command)
-            .await
+        let profile = self.increment_post_uc.execute(command).await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        // Transformation de l'entité Domaine en Proto via notre Mapper
         Ok(Response::new(profile.into()))
     }
 
-    /// Décrémente le compteur de posts
     async fn decrement_post_count(
         &self,
         request: Request<DecrementPostCountRequest>,
     ) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
-        let req = request.into_inner();
+        let command = DecrementPostCountCommand::try_from_proto(request.into_inner(), region)?;
 
-        let post_id =
-            PostId::try_from(req.post_id).map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let account_id = AccountId::try_from(req.account_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let command = DecrementPostCountCommand {
-            account_id,
-            region,
-            post_id,
-        };
-
-        let profile = self
-            .decrement_post_uc
-            .execute(command)
-            .await
+        let profile = self.decrement_post_uc.execute(command).await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(profile.into()))
