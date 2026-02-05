@@ -5,13 +5,12 @@ mod tests {
     use crate::application::update_username::{UpdateUsernameCommand, UpdateUsernameUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use std::sync::{Arc, Mutex};
-    
+    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::transaction::StubTxManager;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour initialiser le Use Case avec des données de test
     fn setup(profile: Option<Profile>, exists: bool) -> UpdateUsernameUseCase {

@@ -3,14 +3,15 @@ mod tests {
     use crate::application::update_location::{UpdateLocationCommand, UpdateLocationUseCase};
     use crate::domain::builders::UserLocationBuilder;
     use crate::domain::entities::UserLocation;
-    use crate::utils::LocationRepositoryStub;
-    use crate::utils::profile_repository_stub::{OutboxRepoStub, StubTxManager};
     use chrono::{Duration, Utc};
     use shared_kernel::domain::entities::GeoPoint;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
     use shared_kernel::domain::events::EventEnvelope;
+    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::LocationRepositoryStub;
 
     fn setup(location: Option<UserLocation>) -> UpdateLocationUseCase {
         let repo = Arc::new(LocationRepositoryStub {

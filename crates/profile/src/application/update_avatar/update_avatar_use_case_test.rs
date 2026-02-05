@@ -3,13 +3,13 @@ mod tests {
     use crate::application::update_avatar::{UpdateAvatarCommand, UpdateAvatarUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
     use shared_kernel::errors::DomainError;
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour instancier le Use Case
     fn setup(profile: Option<Profile>) -> UpdateAvatarUseCase {

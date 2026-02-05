@@ -3,11 +3,10 @@ mod tests {
     use crate::application::get_nearby_users::{GetNearbyUsersCommand, GetNearbyUsersUseCase};
     use crate::domain::builders::UserLocationBuilder;
     use crate::domain::entities::UserLocation;
-    use crate::utils::LocationRepositoryStub;
     use shared_kernel::domain::entities::GeoPoint;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-    use std::str::FromStr;
     use std::sync::{Arc, Mutex};
+    use crate::domain::repositories::LocationRepositoryStub;
 
     fn create_mock_loc(lat: f64, lon: f64, privacy_radius: i32) -> UserLocation {
         UserLocationBuilder::new(

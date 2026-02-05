@@ -88,7 +88,7 @@ impl LinkExternalIdentityUseCase {
                     for event in evs {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })

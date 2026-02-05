@@ -4,13 +4,13 @@ mod tests {
     use crate::application::create_profile::CreateProfileCommand;
     use crate::application::create_profile::create_profile_use_case::CreateProfileUseCase;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     fn setup() -> CreateProfileUseCase {
         let repo = Arc::new(ProfileRepositoryStub {

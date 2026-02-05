@@ -115,7 +115,7 @@ impl ChangeRegionUseCase {
                     for event in events {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })

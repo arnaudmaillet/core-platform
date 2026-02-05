@@ -4,8 +4,7 @@
 mod tests {
     use super::*;
     use crate::application::update_stats::{UpdateStatsCommand, UpdateStatsUseCase};
-    use crate::domain::repositories::ProfileStatsRepository;
-    use crate::utils::ProfileStatsRepositoryStub;
+    use crate::domain::repositories::{ProfileStatsRepository, ProfileStatsRepositoryStub};
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use std::sync::Arc;
 
