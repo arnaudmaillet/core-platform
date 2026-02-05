@@ -1,9 +1,10 @@
-// crates/account/src/application/change_email/change_accountname_command.rs
+// crates/account/src/application/change_username/change_username_command.rs
 
-use shared_kernel::domain::value_objects::{AccountId, Username};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 
 #[derive(Clone)]
 pub struct ChangeUsernameCommand {
     pub account_id: AccountId,
+    pub region_code: RegionCode,
     pub new_username: Username,
 }

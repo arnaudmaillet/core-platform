@@ -80,8 +80,15 @@ impl AccountMetadata {
     /// Ajuste le score de confiance. Un score trop bas pourrait déclencher
     /// des restrictions automatiques via le Use Case.
     pub fn increase_trust_score(&mut self, action_id: Uuid, amount: u32, reason: String) {
+        let previous_score = self.trust_score;
         let delta = amount as i32;
-        self.trust_score += delta;
+
+        self.trust_score = (self.trust_score + delta).min(100);
+
+        if self.trust_score == previous_score {
+            return;
+        }
+
         self.apply_moderation_change(format!("Score increased by {}: {}", amount, reason));
 
         self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
@@ -97,27 +104,33 @@ impl AccountMetadata {
 
     /// Sanctionne un comportement négatif
     pub fn decrease_trust_score(&mut self, action_id: Uuid, amount: u32, reason: String) {
-        let delta = -(amount as i32);
-        self.trust_score += delta;
-        self.apply_moderation_change(format!("Score decreased by {}: {}", amount, reason));
+        let previous_score = self.trust_score;
+        let delta = amount as i32;
+
+        // garantit qu'on ne descend jamais sous 0
+        self.trust_score = (self.trust_score - delta).max(0);
+
+        // Idempotence : si le score était déjà à 0, on arrête tout
+        if self.trust_score == previous_score {
+            return;
+        }
+
+        self.apply_moderation_change(format!("Score decreased: {}", reason));
+
+        // Si le score tombe à 0, on applique le shadowban automatique
+        if self.trust_score == 0 && !self.is_shadowbanned {
+            self.apply_shadowban("Trust score depleted".into());
+        }
 
         self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
             id: action_id,
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
-            delta,
-            new_score: self.trust_score,
-            reason: reason.clone(),
+            delta: -(amount as i32),
+            new_score: self.trust_score as i32,
+            reason,
             occurred_at: self.updated_at,
         }));
-
-        // Règle métier Hyperscale : Auto-shadowban si le score chute trop bas
-        if self.trust_score < -20 && !self.is_shadowbanned {
-            self.apply_shadowban(format!(
-                "Automated system: Trust score critical ({})",
-                self.trust_score
-            ));
-        }
     }
 
     pub fn shadowban(&mut self, reason: String) {

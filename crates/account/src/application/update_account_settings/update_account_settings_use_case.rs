@@ -45,6 +45,13 @@ impl UpdateAccountSettingsUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
+        if settings.region_code() != &cmd.region_code {
+            return Err(shared_kernel::errors::DomainError::Validation {
+                field: "region_code",
+                reason: "Account region mismatch".into(),
+            });
+        }
+
         // 2. MUTATION DU MODÈLE RICHE
         settings.update_preferences(
             cmd.privacy.clone(),

@@ -9,7 +9,7 @@ mod tests {
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
-    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::domain::repositories::ProfileRepositoryStub;
 
@@ -19,7 +19,7 @@ mod tests {
             ..Default::default()
         });
 
-        DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -129,7 +129,7 @@ mod tests {
         });
 
         let use_case =
-            DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

@@ -1,5 +1,6 @@
 mod update_account_settings_command;
 mod update_account_settings_use_case;
+mod update_account_settings_use_case_test;
 
 pub use update_account_settings_command::UpdateAccountSettingsCommand;
 pub use update_account_settings_use_case::UpdateAccountSettingsUseCase;

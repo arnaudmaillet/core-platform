@@ -1,4 +1,4 @@
-// crates/account/src/application/decrease_trust_score/command.rs
+// crates/account/src/application/decrease_trust_score/decrease_trust_score_command.rs
 
 use serde::Deserialize;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};

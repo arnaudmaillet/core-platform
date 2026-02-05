@@ -46,6 +46,13 @@ impl SetAsBetaAccountUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
+        if metadata.region_code() != &cmd.region_code {
+            return Err(shared_kernel::errors::DomainError::Validation {
+                field: "region_code",
+                reason: "Account region mismatch".into(),
+            });
+        }
+
         // 2. MUTATION DU MODÈLE RICHE
         // L'entité vérifie si le statut change réellement.
         // Si oui : metadata.metadata.increment_version() + Event "BetaStatusChanged"

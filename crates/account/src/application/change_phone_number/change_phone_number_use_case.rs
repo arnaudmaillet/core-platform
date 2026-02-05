@@ -5,7 +5,7 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::Result;
+use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
 
@@ -45,6 +45,13 @@ impl ChangePhoneNumberUseCase {
             .find_account_by_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
+
+        if account.region_code() != &cmd.region_code {
+            return Err(DomainError::Validation {
+                field: "region_code",
+                reason: "This account does not belong to the specified region".into(),
+            });
+        }
 
         // 2. MUTATION DU MODÈLE RICHE
         account.change_phone_number(cmd.new_phone.clone())?;

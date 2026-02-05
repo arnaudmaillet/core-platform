@@ -17,12 +17,12 @@ pub struct AccountMetadataBuilder {
 
 impl AccountMetadataBuilder {
     /// CHEMIN 1 : CRÉATION (Via Use Case)
-    pub fn new(account_id: AccountId, region_code: RegionCode) -> Self {
+    pub(crate) fn new(account_id: AccountId, region_code: RegionCode) -> Self {
         Self {
             account_id,
             region_code,
             role: AccountRole::User,
-            trust_score: 0,
+            trust_score: 50,
             estimated_ip: None,
             version: 1,
         }

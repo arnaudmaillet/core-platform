@@ -16,4 +16,4 @@ pub mod outbox_repository_stub;
 #[cfg(feature = "test-utils")]
 pub use cache_repository_stub::CacheRepositoryStub;
 #[cfg(feature = "test-utils")]
-pub use outbox_repository_stub::OutboxRepoStub;
+pub use outbox_repository_stub::OutboxRepositoryStub;

@@ -19,7 +19,7 @@ pub struct AccountSettingsBuilder {
 }
 
 impl AccountSettingsBuilder {
-    pub fn new(account_id: AccountId, region_code: RegionCode) -> Self {
+    pub(crate) fn new(account_id: AccountId, region_code: RegionCode) -> Self {
         Self {
             account_id,
             region_code,

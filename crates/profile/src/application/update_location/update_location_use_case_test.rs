@@ -9,7 +9,7 @@ mod tests {
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
     use shared_kernel::domain::events::EventEnvelope;
-    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::domain::repositories::LocationRepositoryStub;
 
@@ -19,7 +19,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateLocationUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        UpdateLocationUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -163,7 +163,7 @@ mod tests {
         });
 
         let use_case =
-            UpdateLocationUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            UpdateLocationUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let result = use_case
             .execute(UpdateLocationCommand {

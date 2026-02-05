@@ -4,7 +4,7 @@
 mod tests {
     use std::sync::{Arc, Mutex};
     use shared_kernel::domain::events::EventEnvelope;
-    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     // Import de notre kit de survie centralisé
 
@@ -24,7 +24,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -125,7 +125,7 @@ mod tests {
         });
 
         let use_case =
-            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case
@@ -163,7 +163,7 @@ mod tests {
         });
 
         let use_case =
-            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

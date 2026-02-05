@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS account_metadata (
     role internal_role NOT NULL DEFAULT 'user',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
-    trust_score INT NOT NULL DEFAULT 0,
+    trust_score INT NOT NULL DEFAULT 50,
     moderation_notes TEXT,
     last_moderation_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     estimated_ip TEXT,

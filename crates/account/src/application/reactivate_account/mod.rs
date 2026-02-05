@@ -1,5 +1,6 @@
 mod reactivate_account_command;
 mod reactivate_account_use_case;
+mod reactivate_account_use_case_test;
 
 pub use reactivate_account_command::ReactivateAccountCommand;
 pub use reactivate_account_use_case::ReactivateAccountUseCase;

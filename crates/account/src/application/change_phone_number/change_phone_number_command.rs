@@ -1,10 +1,11 @@
 // crates/account/src/application/change_email/change_phone_number_command.rs
 
 use crate::domain::value_objects::PhoneNumber;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 #[derive(Clone)]
 pub struct ChangePhoneNumberCommand {
     pub account_id: AccountId,
+    pub region_code: RegionCode,
     pub new_phone: PhoneNumber,
 }

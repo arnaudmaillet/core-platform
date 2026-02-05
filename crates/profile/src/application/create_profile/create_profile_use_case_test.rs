@@ -8,7 +8,7 @@ mod tests {
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::domain::repositories::ProfileRepositoryStub;
 
@@ -19,7 +19,12 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        // Utiliser .new() au lieu de l'instanciation directe
+        CreateProfileUseCase::new(
+            repo,
+            Arc::new(OutboxRepositoryStub::new()),
+            Arc::new(StubTxManager)
+        )
     }
 
     #[tokio::test]
@@ -57,7 +62,7 @@ mod tests {
         });
 
         let use_case =
-            CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            CreateProfileUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
             account_id: AccountId::new(),
@@ -84,7 +89,7 @@ mod tests {
         });
 
         let use_case =
-            CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            CreateProfileUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
             account_id: AccountId::new(),
@@ -155,7 +160,7 @@ mod tests {
         });
 
         let use_case =
-            CreateProfileUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            CreateProfileUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
             account_id: AccountId::new(),

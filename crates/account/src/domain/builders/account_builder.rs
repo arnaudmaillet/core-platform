@@ -22,7 +22,7 @@ pub struct AccountBuilder {
 
 impl AccountBuilder {
     /// Chemin 1 : CRÉATION (Via Use Case d'inscription)
-    pub fn new(
+    pub(crate) fn new(
         id: AccountId,
         region_code: RegionCode,
         username: Username,

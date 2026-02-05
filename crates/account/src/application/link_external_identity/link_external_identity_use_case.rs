@@ -62,6 +62,13 @@ impl LinkExternalIdentityUseCase {
             .await?
             .ok_or_not_found(cmd.internal_account_id.clone())?;
 
+        if account.region_code() != &cmd.region_code {
+            return Err(DomainError::Validation {
+                field: "region_code",
+                reason: "This account does not belong to the specified region".into(),
+            });
+        }
+
         // 2. MUTATION DU MODÈLE RICHE
         account.link_external_identity(cmd.external_id.clone())?;
 

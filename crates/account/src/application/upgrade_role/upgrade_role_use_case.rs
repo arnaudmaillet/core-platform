@@ -46,6 +46,14 @@ impl UpgradeRoleUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
+        if metadata.region_code() != &cmd.region_code {
+            return Err(shared_kernel::errors::DomainError::Validation {
+                field: "region_code",
+                reason: "Account region mismatch".into(),
+            });
+        }
+
+
         // 2. MUTATION DU MODÈLE RICHE
         metadata.upgrade_role(cmd.new_role.into(), cmd.reason.clone())?;
 

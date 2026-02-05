@@ -11,7 +11,7 @@ mod tests {
     use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Username};
     use shared_kernel::errors::DomainError;
     use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::domain::repositories::ProfileRepositoryStub;
 
@@ -21,7 +21,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateLocationLabelUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        UpdateLocationLabelUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -160,7 +160,7 @@ mod tests {
 
         let use_case = UpdateLocationLabelUseCase::new(
             repo,
-            Arc::new(OutboxRepoStub),
+            Arc::new(OutboxRepositoryStub::new()),
             Arc::new(StubTxManager),
         );
 

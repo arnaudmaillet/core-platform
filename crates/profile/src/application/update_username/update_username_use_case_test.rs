@@ -6,7 +6,7 @@ mod tests {
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
     use std::sync::{Arc, Mutex};
-    use shared_kernel::domain::repositories::OutboxRepoStub;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
@@ -20,7 +20,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        UpdateUsernameUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        UpdateUsernameUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]

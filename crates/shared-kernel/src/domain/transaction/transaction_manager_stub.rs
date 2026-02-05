@@ -1,3 +1,5 @@
+// crates/shared-kernel/src/domain/transaction/transaction_manager_stub.rs
+
 use std::pin::Pin;
 use crate::domain::transaction::{Transaction, TransactionManager};
 use crate::domain::transaction::transaction_stub::FakeTransaction;

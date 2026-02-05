@@ -345,7 +345,7 @@ impl Account {
                 reason: "Only deactivated accounts can be reactivated manually".into(),
             });
         }
-
+        
         self.state = AccountState::Active;
         self.apply_change();
 
@@ -476,15 +476,15 @@ impl Account {
 
 impl EntityMetadata for Account {
     fn entity_name() -> &'static str {
-        "User"
+        "Account"
     }
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
-            "users_email_key" => "email",
-            "users_username_key" => "username",
-            "users_phone_number_key" => "phone_number",
-            "users_external_id_key" => "external_id",
+            "account_email_key" => "email",
+            "account_username_key" => "username",
+            "account_phone_number_key" => "phone_number",
+            "account_external_id_key" => "external_id",
             _ => "unique_constraint",
         }
     }
