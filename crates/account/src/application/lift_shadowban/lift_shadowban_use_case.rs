@@ -31,14 +31,14 @@ impl LiftShadowbanUseCase {
         }
     }
 
-    pub async fn execute(&self, command: LiftShadowbanCommand) -> Result<()> {
+    pub async fn execute(&self, command: LiftShadowbanCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &LiftShadowbanCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &LiftShadowbanCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut metadata = self
             .metadata_repo
@@ -46,25 +46,14 @@ impl LiftShadowbanUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if metadata.region_code() != &cmd.region_code {
-            return Err(DomainError::Validation {
-                field: "region_code",
-                reason: "This account does not belong to the specified region".into(),
-            });
-        }
-
         // 2. MUTATION DU MODÈLE RICHE
-        metadata.lift_shadowban(cmd.reason.clone());
+        let changed = metadata.lift_shadowban(&cmd.region_code, cmd.reason.clone())?;
+        if !changed {
+            return Ok(false);
+        }
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        // Si l'utilisateur n'était pas shadowbanned, aucun événement n'est produit.
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let metadata_cloned = metadata.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -86,6 +75,6 @@ impl LiftShadowbanUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

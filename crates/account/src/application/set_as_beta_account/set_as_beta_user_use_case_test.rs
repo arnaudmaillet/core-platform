@@ -23,7 +23,7 @@ mod tests {
     async fn test_set_beta_status_to_true_success() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
         // Arrange : Nouveau compte (beta_tester = false par défaut)
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
@@ -35,11 +35,11 @@ mod tests {
             reason: "Early adopter program".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(true)
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok());
+        assert!(matches!(result, Ok(true)));
         let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert!(saved.is_beta_tester());
         assert!(saved.moderation_notes().unwrap().contains("Beta tester mode enabled"));
@@ -50,27 +50,26 @@ mod tests {
     async fn test_set_beta_status_idempotency() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
         // Arrange : Déjà beta tester
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        metadata.set_beta_status(true, "init".into());
-        metadata.pull_events(); // Clear events
+        metadata.set_beta_status(&region, true, "init".into()).unwrap();
+        metadata.pull_events();
         metadata_repo.add_metadata(metadata);
 
         let cmd = SetAsBetaAccountCommand {
-            account_id,
+            account_id: account_id.clone(),
             region_code: region,
-            status: true, // On essaie de remettre à true
+            status: true,
             reason: "Double call".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(false) car le statut ne change pas
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok());
-        // L'idempotence métier empêche de générer un nouvel event
+        assert!(matches!(result, Ok(false)));
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
@@ -78,17 +77,20 @@ mod tests {
     async fn test_set_beta_status_fails_on_region_mismatch() {
         let (use_case, metadata_repo, _) = setup();
         let account_id = AccountId::new();
+        let actual_region = RegionCode::try_new("eu").unwrap();
 
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), RegionCode::from_raw("eu")).build());
+        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), actual_region).build());
 
         let cmd = SetAsBetaAccountCommand {
             account_id,
-            region_code: RegionCode::from_raw("us"), // Mismatch
+            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
             status: true,
             reason: "Wrong region".into(),
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+
+        // Sécurité Shard : Forbidden
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

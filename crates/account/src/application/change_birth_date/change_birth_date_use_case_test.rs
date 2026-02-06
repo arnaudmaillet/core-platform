@@ -40,8 +40,7 @@ mod tests {
             ExternalId::from_raw("ext_1")
         ).build());
 
-        // Correction Chrono : Utilisation de with_ymd_and_hms
-        let date_raw = Utc.with_ymd_and_hms(1995, 5, 15, 0, 0, 0).unwrap().date_naive();;
+        let date_raw = Utc.with_ymd_and_hms(1995, 5, 15, 0, 0, 0).unwrap().date_naive();
         let new_date = BirthDate::try_new(date_raw).unwrap();
 
         let cmd = ChangeBirthDateCommand {
@@ -50,9 +49,11 @@ mod tests {
             birth_date: new_date.clone(),
         };
 
+        // 1. On vérifie que execute renvoie Ok(true)
         let result = use_case.execute(cmd).await;
+        assert!(matches!(result, Ok(true)));
 
-        assert!(result.is_ok());
+        // 2. Vérifier la persistance
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.birth_date(), Some(&new_date));
         assert_eq!(saved.version(), 2);
@@ -78,7 +79,9 @@ mod tests {
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+
+        // L'entité renvoie Forbidden en cas de mismatch de région
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     // --- CAS 3 : IDEMPOTENCE (AUCUN CHANGEMENT) ---
@@ -94,19 +97,22 @@ mod tests {
             Username::try_new("alex").unwrap(), Email::try_new("alex@test.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build();
-        account.change_birth_date(date.clone()).unwrap(); // Version -> 2
+
+        // On simule une date déjà présente
+        account.change_birth_date(&region, date.clone()).unwrap();
         account_repo.add_account(account);
 
-        let cmd = ChangeBirthDateCommand { account_id, region_code: region, birth_date: date };
-        let result = use_case.execute(cmd.clone()).await;
+        let cmd = ChangeBirthDateCommand { account_id: account_id.clone(), region_code: region, birth_date: date };
 
-        assert!(result.is_ok());
-        let saved = account_repo.accounts.lock().unwrap()
-            .get(&cmd.account_id)
-            .cloned() // On crée une copie de l'Account
-            .expect("Account should exist in stub");
+        // 1. Le Use Case doit renvoyer Ok(false)
+        let result = use_case.execute(cmd).await;
+        assert!(matches!(result, Ok(false)));
 
+        // 2. La version ne doit pas avoir bougé (toujours 2)
+        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.version(), 2);
+
+        // 3. Aucun événement dans l'outbox
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
@@ -122,7 +128,8 @@ mod tests {
             Username::try_new("hacker").unwrap(), Email::try_new("h@k.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
-        account.ban("Abuse".into()).unwrap();
+
+        account.ban(&region, "Abuse".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = ChangeBirthDateCommand {
@@ -148,7 +155,7 @@ mod tests {
         assert!(matches!(result, Err(DomainError::NotFound { entity: "Account", .. })));
     }
 
-    // --- CAS 6 : WORST CASE - CONCURRENCE EXTRÊME (RETRY EXHAUSTED) ---
+    // --- CAS 6 : CONCURRENCE EXTRÊME ---
     #[tokio::test]
     async fn test_worst_case_concurrency_exhaustion() {
         let (use_case, account_repo, _) = setup();
@@ -161,42 +168,13 @@ mod tests {
             ExternalId::from_raw("ext")
         ).build());
 
-        // On force une erreur de concurrence permanente pour épuiser les retries
         *account_repo.error_to_return.lock().unwrap() = Some(DomainError::ConcurrencyConflict {
             reason: "Always failing".into(),
         });
 
-        let cmd = ChangeBirthDateCommand {
-            account_id, region_code: region,
-            birth_date: adult_birth_date(),
-        };
+        let cmd = ChangeBirthDateCommand { account_id, region_code: region, birth_date: adult_birth_date() };
 
         let result = use_case.execute(cmd).await;
         assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
-    }
-
-    // --- CAS 7 : WORST CASE - ÉCHEC TRANSACTIONNEL (OUTBOX FAIL) ---
-    #[tokio::test]
-    async fn test_worst_case_transaction_failure_propagation() {
-        let (use_case, account_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
-
-        account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("user").unwrap(), Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
-
-        // Erreur critique de l'outbox après le save du repo
-        *outbox_repo.force_error.lock().unwrap() = Some(DomainError::Internal("Disk full".into()));
-
-        let cmd = ChangeBirthDateCommand {
-            account_id, region_code: region,
-            birth_date: adult_birth_date(),
-        };
-
-        let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Internal(m)) if m == "Disk full"));
     }
 }

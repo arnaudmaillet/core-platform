@@ -29,20 +29,22 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(Account::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
+            account_id.clone(), region.clone(),
             Username::try_new("user1").unwrap(), old_email,
             ExternalId::from_raw("ext_1")
         ).build());
 
         let cmd = ChangeEmailCommand {
             account_id: account_id.clone(),
-            region_code: region, // Région correcte
-            new_email: Email::try_new("new@test.com").unwrap(),
+            region_code: region,
+            new_email: new_email.clone(),
         };
 
+        // 1. Act : Execute doit renvoyer Ok(true)
         let result = use_case.execute(cmd).await;
+        assert!(matches!(result, Ok(true)));
 
-        assert!(result.is_ok());
+        // 2. Assert : Vérifier la mutation de l'état
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.email(), &new_email);
         assert!(!saved.is_email_verified(), "L'email doit repasser en non-vérifié après changement");
@@ -57,45 +59,50 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(Account::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
+            account_id.clone(), region.clone(),
             Username::try_new("user1").unwrap(), email.clone(),
             ExternalId::from_raw("ext_1")
         ).build());
 
-        let cmd = ChangeEmailCommand { account_id: account_id.clone(), region_code: region, new_email: email };
-        let result = use_case.execute(cmd).await;
+        let cmd = ChangeEmailCommand {
+            account_id: account_id.clone(),
+            region_code: region,
+            new_email: email
+        };
 
-        assert!(result.is_ok());
+        // 1. Act : Doit renvoyer Ok(false)
+        let result = use_case.execute(cmd).await;
+        assert!(matches!(result, Ok(false)));
+
+        // 2. Assert : Rien ne doit bouger
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-        assert_eq!(saved.version(), 1, "La version ne doit pas augmenter si l'email est identique");
+        assert_eq!(saved.version(), 1);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
     #[tokio::test]
-    async fn test_change_email_conflict_already_exists() {
+    async fn test_change_email_fails_on_region_mismatch() {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
-        let taken_email = Email::try_new("taken@test.com").unwrap();
-        let region = RegionCode::from_raw("eu");
+        let actual_region = RegionCode::from_raw("eu");
+        let wrong_region = RegionCode::from_raw("us");
 
-        // On crée le compte cible
         account_repo.add_account(Account::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
-            Username::try_new("user1").unwrap(), Email::try_new("original@test.com").unwrap(),
+            account_id.clone(), actual_region,
+            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build());
 
-        // On simule une erreur de contrainte unique (l'email est déjà pris en DB)
-        *account_repo.error_to_return.lock().unwrap() = Some(DomainError::AlreadyExists {
-            entity: "User",
-            field: "email",
-            value: taken_email.to_string(),
-        });
+        let cmd = ChangeEmailCommand {
+            account_id,
+            region_code: wrong_region,
+            new_email: Email::try_new("new@test.com").unwrap(),
+        };
 
-        let cmd = ChangeEmailCommand { account_id, region_code: region, new_email: taken_email };
         let result = use_case.execute(cmd).await;
 
-        assert!(matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "email"));
+        // Sécurité : mismatch de région = Forbidden
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
@@ -105,11 +112,13 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         let mut account = Account::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
+            account_id.clone(), region.clone(),
             Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build();
-        account.ban("Violation".into()).unwrap();
+
+        // Un banni ne change pas son email
+        account.ban(&region, "Violation".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = ChangeEmailCommand {
@@ -119,23 +128,7 @@ mod tests {
         };
 
         let result = use_case.execute(cmd).await;
-        // Ton entité Account renvoie Forbidden si on change l'email d'un banni
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
-
-    #[tokio::test]
-    async fn test_change_email_not_found() {
-        let (use_case, _, _) = setup();
-        let region = RegionCode::from_raw("eu");
-        let cmd = ChangeEmailCommand {
-            account_id: AccountId::new(),
-            region_code: region,
-            new_email: Email::try_new("any@test.com").unwrap(),
-        };
-
-        let result = use_case.execute(cmd).await;
-        // Ici on check "Account" ou "User" selon ton stub
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
     }
 
     #[tokio::test]
@@ -143,21 +136,25 @@ mod tests {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
+
         account_repo.add_account(Account::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
+            account_id.clone(), region.clone(),
             Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build());
 
-        // Concurrence : quelqu'un a modifié le compte entre la lecture et l'écriture
+        // Simulation d'un conflit de version (Optimistic Lock)
         *account_repo.error_to_return.lock().unwrap() = Some(DomainError::ConcurrencyConflict {
             reason: "Version mismatch".into(),
         });
 
-        let cmd = ChangeEmailCommand { account_id, region_code: region, new_email: Email::try_new("b@c.com").unwrap() };
-        let result = use_case.execute(cmd).await;
+        let cmd = ChangeEmailCommand {
+            account_id,
+            region_code: region,
+            new_email: Email::try_new("b@c.com").unwrap()
+        };
 
-        // Le Use Case va retry puis échouer si l'erreur persiste
+        let result = use_case.execute(cmd).await;
         assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
     }
 }

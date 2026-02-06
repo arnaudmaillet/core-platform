@@ -24,7 +24,7 @@ mod tests {
     async fn test_suspend_account_success() {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
         // Arrange : Un compte actif normal
         account_repo.add_account(Account::builder(
@@ -40,11 +40,11 @@ mod tests {
             reason: "Under investigation for fraud".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(true)
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok());
+        assert!(matches!(result, Ok(true)));
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(*saved.state(), AccountState::Suspended);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
@@ -54,7 +54,7 @@ mod tests {
     async fn test_suspend_idempotency() {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
         // Arrange : Déjà suspendu
         let mut account = Account::builder(
@@ -63,21 +63,23 @@ mod tests {
             Email::try_new("p@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
-        account.suspend("Original reason".into()).unwrap();
+
+        // On suspend une première fois avec la nouvelle signature
+        account.suspend(&region, "Original reason".into()).unwrap();
         account.pull_events();
         account_repo.add_account(account);
 
         let cmd = SuspendAccountCommand {
-            account_id,
+            account_id: account_id.clone(),
             region_code: region,
             reason: "Second call".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(false)
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok());
+        assert!(matches!(result, Ok(false)));
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Pas d'event si déjà suspendu");
     }
 
@@ -85,20 +87,23 @@ mod tests {
     async fn test_suspend_fails_on_region_mismatch() {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
+        let actual_region = RegionCode::try_new("eu").unwrap();
 
         account_repo.add_account(Account::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
+            account_id.clone(), actual_region,
             Username::try_new("user").unwrap(), Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 
         let cmd = SuspendAccountCommand {
             account_id,
-            region_code: RegionCode::from_raw("us"), // Mismatch
+            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
             reason: "Wrong region".into(),
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+
+        // Sécurité Shard : renvoie Forbidden
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

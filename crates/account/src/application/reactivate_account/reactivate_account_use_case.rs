@@ -31,14 +31,14 @@ impl ReactivateAccountUseCase {
         }
     }
 
-    pub async fn execute(&self, command: ReactivateAccountCommand) -> Result<()> {
+    pub async fn execute(&self, command: ReactivateAccountCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ReactivateAccountCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &ReactivateAccountCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut account = self
             .account_repo
@@ -46,24 +46,14 @@ impl ReactivateAccountUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if account.region_code() != &cmd.region_code {
-            return Err(shared_kernel::errors::DomainError::Validation {
-                field: "region_code",
-                reason: "Account region mismatch".into(),
-            });
-        }
-
         // 2. MUTATION DU MODÈLE RICHE
-        account.reactivate()?;
+        let changed = account.reactivate(&cmd.region_code)?;
+        if !changed {
+            return Ok(false);
+        }
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = account.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let account_to_save = account.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -90,6 +80,6 @@ impl ReactivateAccountUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

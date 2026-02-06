@@ -72,7 +72,7 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Doit échouer car on tente de bannir un compte sur la mauvaise région (shard)
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
@@ -89,7 +89,7 @@ mod tests {
             ExternalId::from_raw("ext")
         ).build();
 
-        account.ban("First reason".into()).unwrap(); // Déjà banni, version = 2
+        account.ban(&region, "First reason".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = BanAccountCommand {

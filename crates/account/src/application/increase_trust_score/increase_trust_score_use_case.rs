@@ -31,14 +31,14 @@ impl IncreaseTrustScoreUseCase {
         }
     }
 
-    pub async fn execute(&self, command: IncreaseTrustScoreCommand) -> Result<()> {
+    pub async fn execute(&self, command: IncreaseTrustScoreCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &IncreaseTrustScoreCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &IncreaseTrustScoreCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut metadata = self
             .metadata_repo
@@ -46,24 +46,14 @@ impl IncreaseTrustScoreUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if metadata.region_code() != &cmd.region_code {
-            return Err(DomainError::Validation {
-                field: "region_code",
-                reason: "This account does not belong to the specified region".into(),
-            });
-        }
-
         // 2. MUTATION DU MODÈLE RICHE
-        metadata.increase_trust_score(cmd.action_id, cmd.amount, cmd.reason.clone());
+        let changed = metadata.increase_trust_score(&cmd.region_code, cmd.action_id, cmd.amount, cmd.reason.clone())?;
+        if !changed {
+            return Ok(false);
+        }
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let metadata_cloned = metadata.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -89,6 +79,6 @@ impl IncreaseTrustScoreUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

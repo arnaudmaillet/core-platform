@@ -72,8 +72,10 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
     ) -> Result<()> {
         self.check_error()?;
         let mut map = self.settings_map.lock().unwrap();
+
         if let Some(settings) = map.get_mut(account_id) {
-            settings.update_timezone(timezone.clone());
+            let region = settings.region_code().clone();
+            settings.update_timezone(&region, timezone.clone())?;
             Ok(())
         } else {
             Err(self.not_found(account_id.as_string()))
@@ -88,8 +90,10 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
     ) -> Result<()> {
         self.check_error()?;
         let mut map = self.settings_map.lock().unwrap();
+
         if let Some(settings) = map.get_mut(account_id) {
-            settings.add_push_token(token.clone())?;
+            let region = settings.region_code().clone();
+            settings.add_push_token(&region, token.clone())?;
             Ok(())
         } else {
             Err(self.not_found(account_id.as_string()))
@@ -104,8 +108,10 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
     ) -> Result<()> {
         self.check_error()?;
         let mut map = self.settings_map.lock().unwrap();
+
         if let Some(settings) = map.get_mut(account_id) {
-            settings.remove_push_token(token);
+            let region = settings.region_code().clone();
+            settings.remove_push_token(&region, token)?;
             Ok(())
         } else {
             Err(self.not_found(account_id.as_string()))

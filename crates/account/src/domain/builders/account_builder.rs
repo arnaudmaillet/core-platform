@@ -18,6 +18,7 @@ pub struct AccountBuilder {
     phone: Option<PhoneNumber>,
     birth_date: Option<BirthDate>,
     version: i32,
+    last_active_at: Option<DateTime<Utc>>,
 }
 
 impl AccountBuilder {
@@ -39,6 +40,7 @@ impl AccountBuilder {
             phone: None,
             birth_date: None,
             version: 1,
+            last_active_at: None,
         }
     }
 
@@ -114,9 +116,15 @@ impl AccountBuilder {
         self
     }
 
+    pub fn with_last_active_at(mut self, last_active: DateTime<Utc>) -> Self {
+        self.last_active_at = Some(last_active);
+        self
+    }
+
     /// Finalise la création d'un NOUVEL utilisateur
     pub fn build(self) -> Account {
         let now = Utc::now();
+        let activity = self.last_active_at.or(Some(now));
 
         // On utilise la même méthode restore en interne pour garantir
         // que l'instanciation de l'agrégat est centralisée.
@@ -134,7 +142,7 @@ impl AccountBuilder {
             self.locale.unwrap_or_default(),
             now,
             now,
-            Some(now),
+            activity,
             AggregateMetadata::new(self.version),
         )
     }

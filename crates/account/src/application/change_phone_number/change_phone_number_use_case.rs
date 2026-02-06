@@ -31,39 +31,30 @@ impl ChangePhoneNumberUseCase {
         }
     }
 
-    pub async fn execute(&self, command: ChangePhoneNumberCommand) -> Result<()> {
+    pub async fn execute(&self, command: ChangePhoneNumberCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ChangePhoneNumberCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &ChangePhoneNumberCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut account = self
             .account_repo
             .find_account_by_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
-
-        if account.region_code() != &cmd.region_code {
-            return Err(DomainError::Validation {
-                field: "region_code",
-                reason: "This account does not belong to the specified region".into(),
-            });
+        
+        // 2. MUTATION DU MODÈLE RICHE
+        let changed = account.change_phone_number(&cmd.region_code, cmd.new_phone.clone())?;
+        if !changed {
+            return Ok(false);
         }
 
-        // 2. MUTATION DU MODÈLE RICHE
-        account.change_phone_number(cmd.new_phone.clone())?;
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = account.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let account_cloned = account.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -85,6 +76,6 @@ impl ChangePhoneNumberUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

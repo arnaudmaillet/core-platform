@@ -130,6 +130,6 @@ mod tests {
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

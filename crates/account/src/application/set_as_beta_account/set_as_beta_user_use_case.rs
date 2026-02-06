@@ -31,14 +31,14 @@ impl SetAsBetaAccountUseCase {
         }
     }
 
-    pub async fn execute(&self, command: SetAsBetaAccountCommand) -> Result<()> {
+    pub async fn execute(&self, command: SetAsBetaAccountCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &SetAsBetaAccountCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &SetAsBetaAccountCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut metadata = self
             .metadata_repo
@@ -46,27 +46,14 @@ impl SetAsBetaAccountUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if metadata.region_code() != &cmd.region_code {
-            return Err(shared_kernel::errors::DomainError::Validation {
-                field: "region_code",
-                reason: "Account region mismatch".into(),
-            });
-        }
-
         // 2. MUTATION DU MODÈLE RICHE
-        // L'entité vérifie si le statut change réellement.
-        // Si oui : metadata.metadata.increment_version() + Event "BetaStatusChanged"
-        metadata.set_beta_status(cmd.status, cmd.reason.clone());
+        let changed = metadata.set_beta_status(&cmd.region_code, cmd.status, cmd.reason.clone())?;
+        if !changed {
+            return Ok(false);
+        }
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        // Si le statut est déjà identique, aucun événement n'est produit.
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let metadata_cloned = metadata.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -92,6 +79,6 @@ impl SetAsBetaAccountUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

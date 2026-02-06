@@ -24,7 +24,7 @@ mod tests {
     async fn test_verify_phone_success() {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
         // ✅ Arrange : Compte avec un téléphone non vérifié
         let account = Account::builder(
@@ -43,14 +43,14 @@ mod tests {
         let cmd = VerifyPhoneNumberCommand {
             account_id: account_id.clone(),
             region_code: region,
-            code: "123456".into(), // Le code OTP simulé
+            code: "123456".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(true)
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok());
+        assert!(matches!(result, Ok(true)));
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert!(saved.is_phone_verified());
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
@@ -60,9 +60,9 @@ mod tests {
     async fn test_verify_phone_idempotency() {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
-        // ✅ Arrange : Compte déjà vérifié
+        // ✅ Arrange : Compte déjà vérifié via le contrat Result<bool>
         let mut account = Account::builder(
             account_id.clone(),
             region.clone(),
@@ -73,22 +73,21 @@ mod tests {
             .with_phone(PhoneNumber::try_new("+33600000000").unwrap())
             .build();
 
-        account.verify_phone();
+        account.verify_phone(&region).unwrap();
         account.pull_events();
         account_repo.add_account(account);
 
         let cmd = VerifyPhoneNumberCommand {
-            account_id,
+            account_id: account_id.clone(),
             region_code: region,
             code: "000000".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(false) car déjà vérifié
         let result = use_case.execute(cmd).await;
 
         // Assert
-        assert!(result.is_ok());
-        // Pas d'événement produit car l'état n'a pas changé
+        assert!(matches!(result, Ok(false)));
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
@@ -96,10 +95,11 @@ mod tests {
     async fn test_verify_phone_fails_on_region_mismatch() {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
+        let actual_region = RegionCode::try_new("eu").unwrap();
 
         account_repo.add_account(Account::builder(
             account_id.clone(),
-            RegionCode::from_raw("eu"),
+            actual_region,
             Username::try_new("user").unwrap(),
             Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
@@ -107,11 +107,13 @@ mod tests {
 
         let cmd = VerifyPhoneNumberCommand {
             account_id,
-            region_code: RegionCode::from_raw("us"), // 👈 Mismatch de shard
+            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
             code: "111111".into(),
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+
+        // Sécurité Shard : Forbidden
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

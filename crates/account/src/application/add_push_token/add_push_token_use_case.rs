@@ -30,7 +30,7 @@ impl AddPushTokenUseCase {
         }
     }
 
-    pub async fn execute(&self, command: AddPushTokenCommand) -> Result<()> {
+    pub async fn execute(&self, command: AddPushTokenCommand) -> Result<bool> {
         // En Hyperscale, les conflits de tokens sont rares mais possibles si
         // l'utilisateur se connecte sur deux devices en même temps.
         with_retry(RetryConfig::default(), || async {
@@ -39,7 +39,7 @@ impl AddPushTokenUseCase {
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &AddPushTokenCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &AddPushTokenCommand) -> Result<bool> {
         // 1. Récupération (Lecture hors transaction pour ne pas bloquer de lignes inutilement)
         let mut settings = self
             .settings_repo
@@ -48,15 +48,15 @@ impl AddPushTokenUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application de la logique métier
-        settings.add_push_token(cmd.token.clone())?;
+        let changed = settings.add_push_token(&cmd.region_code, cmd.token.clone())?;
 
-        // 3. Extraction des faits
-        let events = settings.pull_events();
-
-        if events.is_empty() {
-            return Ok(());
+        // 3. IDEMPOTENCE
+        if !changed {
+            return Ok(false);
         }
 
+        // 4. Extraction des faits
+        let events = settings.pull_events();
         let settings_to_save = settings.clone();
 
         // 5. Persistance Transactionnelle Atomique
@@ -78,6 +78,6 @@ impl AddPushTokenUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

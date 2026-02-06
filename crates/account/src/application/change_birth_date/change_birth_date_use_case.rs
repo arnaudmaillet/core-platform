@@ -31,14 +31,14 @@ impl ChangeBirthDateUseCase {
         }
     }
 
-    pub async fn execute(&self, command: ChangeBirthDateCommand) -> Result<()> {
+    pub async fn execute(&self, command: ChangeBirthDateCommand) ->Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ChangeBirthDateCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &ChangeBirthDateCommand) -> Result<bool> {
         // 1. Lecture Optimiste (hors transaction)
         let mut account = self
             .account_repo
@@ -46,27 +46,17 @@ impl ChangeBirthDateUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if account.region_code() != &cmd.region_code {
-            return Err(DomainError::Validation {
-                field: "region_code",
-                reason: "Region mismatch for this account".into(),
-            });
-        }
-
         // 2. Application de la logique métier via le Modèle Riche
-        account.change_birth_date(cmd.birth_date.clone())?;
+        let changed =account.change_birth_date(&cmd.region_code, cmd.birth_date.clone())?;
+        if !changed {
+            return Ok(false);
+        }
 
         // 3. Extraction des événements
         let events = account.pull_events();
-
-        // 4. Idempotence Applicative
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let account_cloned = account.clone();
 
-        // 5. Persistence Transactionnelle Atomique
+        // 4. Persistence Transactionnelle Atomique
         self.tx_manager
             .run_in_transaction(move |mut tx| {
                 let repo = self.account_repo.clone();
@@ -85,6 +75,6 @@ impl ChangeBirthDateUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

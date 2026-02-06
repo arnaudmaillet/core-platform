@@ -30,14 +30,14 @@ impl LinkExternalIdentityUseCase {
         }
     }
 
-    pub async fn execute(&self, command: LinkExternalIdentityCommand) -> Result<()> {
+    pub async fn execute(&self, command: LinkExternalIdentityCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &LinkExternalIdentityCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &LinkExternalIdentityCommand) -> Result<bool> {
         // 1. VÉRIFICATION D'UNICITÉ ET LECTURE OPTIMISTE (Hors transaction)
 
         // On vérifie si l'ID externe est déjà utilisé par quelqu'un d'autre
@@ -53,7 +53,7 @@ impl LinkExternalIdentityUseCase {
                     value: cmd.external_id.as_str().to_string(),
                 });
             }
-            return Ok(());
+            return Ok(false);
         }
 
         let mut account = self
@@ -62,24 +62,14 @@ impl LinkExternalIdentityUseCase {
             .await?
             .ok_or_not_found(cmd.internal_account_id.clone())?;
 
-        if account.region_code() != &cmd.region_code {
-            return Err(DomainError::Validation {
-                field: "region_code",
-                reason: "This account does not belong to the specified region".into(),
-            });
-        }
-
         // 2. MUTATION DU MODÈLE RICHE
-        account.link_external_identity(cmd.external_id.clone())?;
-
+        let changed = account.link_external_identity(&cmd.region_code, cmd.external_id.clone())?;
+        if !changed {
+            return Ok(false);
+        }
+        
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = account.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let account_to_save = account.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -101,6 +91,6 @@ impl LinkExternalIdentityUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

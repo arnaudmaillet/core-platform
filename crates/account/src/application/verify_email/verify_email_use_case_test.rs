@@ -24,9 +24,9 @@ mod tests {
     async fn test_verify_email_success() {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Compte créé via Builder (état Pending par défaut)
+        // Arrange : Compte Pending
         let account = Account::builder(
             account_id.clone(),
             region.clone(),
@@ -34,7 +34,6 @@ mod tests {
             Email::try_new("verify@test.com").unwrap(),
             ExternalId::from_raw("ext_999")
         ).build();
-
         account_repo.add_account(account);
 
         let cmd = VerifyEmailCommand {
@@ -43,13 +42,12 @@ mod tests {
             token: "valid_secure_token_123".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(true)
         let result = use_case.execute(cmd).await;
+        assert!(matches!(result, Ok(true)));
 
         // Assert
-        assert!(result.is_ok());
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-
         assert!(saved.is_email_verified());
         assert_eq!(*saved.state(), AccountState::Active);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
@@ -59,7 +57,7 @@ mod tests {
     async fn test_verify_email_idempotency() {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
 
         // Arrange : Compte déjà vérifié
         let mut account = Account::builder(
@@ -70,22 +68,22 @@ mod tests {
             ExternalId::from_raw("ext")
         ).build();
 
-        account.verify_email(); // On simule une vérification passée
-        account.pull_events();  // On vide l'Outbox
+        // On simule une vérification passée avec le nouveau contrat
+        account.verify_email(&region).unwrap();
+        account.pull_events();
         account_repo.add_account(account);
 
         let cmd = VerifyEmailCommand {
-            account_id,
+            account_id: account_id.clone(),
             region_code: region,
-            token: "any_token_since_already_verified".into(),
+            token: "any_token".into(),
         };
 
-        // Act
+        // Act : Doit renvoyer Ok(false) car déjà vérifié
         let result = use_case.execute(cmd).await;
+        assert!(matches!(result, Ok(false)));
 
-        // Assert
-        assert!(result.is_ok());
-        // L'idempotence du modèle riche empêche de générer un nouvel event
+        // Assert : Pas de double event
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
@@ -93,10 +91,11 @@ mod tests {
     async fn test_verify_email_fails_on_region_mismatch() {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
+        let actual_region = RegionCode::try_new("eu").unwrap();
 
         account_repo.add_account(Account::builder(
             account_id.clone(),
-            RegionCode::from_raw("eu"),
+            actual_region,
             Username::try_new("user").unwrap(),
             Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
@@ -104,11 +103,13 @@ mod tests {
 
         let cmd = VerifyEmailCommand {
             account_id,
-            region_code: RegionCode::from_raw("us"), // 👈 Mauvais shard
+            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
             token: "token".into(),
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Validation { field, .. }) if field == "region_code"));
+
+        // Sécurité Shard : renvoie Forbidden
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

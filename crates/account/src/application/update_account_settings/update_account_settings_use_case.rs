@@ -30,43 +30,36 @@ impl UpdateAccountSettingsUseCase {
         }
     }
 
-    pub async fn execute(&self, command: UpdateAccountSettingsCommand) -> Result<()> {
+    pub async fn execute(&self, command: UpdateAccountSettingsCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpdateAccountSettingsCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &UpdateAccountSettingsCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut settings = self
             .settings_repo
             .find_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
-
-        if settings.region_code() != &cmd.region_code {
-            return Err(shared_kernel::errors::DomainError::Validation {
-                field: "region_code",
-                reason: "Account region mismatch".into(),
-            });
-        }
-
+        
         // 2. MUTATION DU MODÈLE RICHE
-        settings.update_preferences(
+        let changed = settings.update_preferences(
+            &cmd.region_code,
             cmd.privacy.clone(),
             cmd.notifications.clone(),
             cmd.appearance.clone(),
         )?;
+        
+        if !changed {
+            return Ok(false);
+        }
+
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = settings.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let settings_to_save = settings.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -88,6 +81,6 @@ impl UpdateAccountSettingsUseCase {
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }
