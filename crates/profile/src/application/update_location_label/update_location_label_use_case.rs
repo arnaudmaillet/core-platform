@@ -48,7 +48,9 @@ impl UpdateLocationLabelUseCase {
 
         // 2. Application du changement
         // update_metadata encapsule l'idempotence et l'appel à apply_change()
-        profile.update_location_label(cmd.new_location.clone());
+        if !profile.update_location_label(&cmd.region, cmd.new_location.clone())? {
+            return Ok(profile)
+        }
 
         // 3. Extraction des événements
         let events = profile.pull_events();

@@ -44,7 +44,7 @@ impl UpdateUsernameUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // On prépare le changement
-        if !profile.update_username(cmd.new_username.clone()) {
+        if !profile.update_username(&cmd.region, cmd.new_username.clone())? {
             return Ok(profile);
         }
 

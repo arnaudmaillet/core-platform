@@ -10,7 +10,7 @@ use shared_kernel::domain::value_objects::{
 };
 use sqlx::__rt::sleep;
 use uuid::Uuid;
-
+use shared_kernel::errors::{DomainError, Result};
 use crate::domain::builders::ProfileBuilder;
 use crate::domain::events::ProfileEvent;
 use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
@@ -145,9 +145,10 @@ impl Profile {
     }
 
     /// Mise à jour identity - Action Critique
-    pub fn update_username(&mut self, new_username: Username) -> bool {
+    pub fn update_username(&mut self, region: &RegionCode, new_username: Username) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.username == new_username {
-            return false;
+            return Ok(false);
         }
 
         let old_username = self.username.clone();
@@ -163,12 +164,14 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
-    pub fn update_display_name(&mut self, new_display_name: DisplayName) -> bool {
+    pub fn update_display_name(&mut self, region: &RegionCode, new_display_name: DisplayName) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         if self.display_name == new_display_name {
-            return false;
+            return Ok(false);
         }
 
         let old_display_name = self.display_name.clone();
@@ -184,12 +187,14 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
-    pub fn update_bio(&mut self, new_bio: Option<Bio>) -> bool {
+    pub fn update_bio(&mut self, region: &RegionCode, new_bio: Option<Bio>) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         if self.bio == new_bio {
-            return false;
+            return Ok(false);
         }
 
         let old_bio = self.bio.take();
@@ -205,13 +210,15 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
     /// Mise à jour des Medias
-    pub fn update_avatar(&mut self, new_avatar_url: Url) -> bool {
+    pub fn update_avatar(&mut self, region: &RegionCode, new_avatar_url: Url) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         if self.avatar_url == Some(new_avatar_url.clone()) {
-            return false;
+            return Ok(false);
         }
 
         let old_avatar_url = self.avatar_url.take();
@@ -226,12 +233,14 @@ impl Profile {
             new_avatar_url,
             occurred_at: self.updated_at,
         }));
-        true
+
+        Ok(true)
     }
 
-    pub fn remove_avatar(&mut self) -> bool {
+    pub fn remove_avatar(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.avatar_url.is_none() {
-            return false;
+            return Ok(false);
         }
 
         let old_avatar_url = self.avatar_url.clone();
@@ -246,12 +255,13 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
-    pub fn update_banner(&mut self, new_banner_url: Url) -> bool {
+    pub fn update_banner(&mut self, region: &RegionCode, new_banner_url: Url) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.banner_url == Some(new_banner_url.clone()) {
-            return false;
+            return Ok(false);
         }
 
         let old_banner_url = self.banner_url.take();
@@ -267,12 +277,13 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
-    pub fn remove_banner(&mut self) -> bool {
+    pub fn remove_banner(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.banner_url.is_none() {
-            return false;
+            return Ok(false);
         }
 
         let old_banner_url = self.banner_url.clone();
@@ -287,15 +298,16 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
     /// Mise à jour des Metadata
-    pub fn update_social_links(&mut self, new_links: Option<SocialLinks>) -> bool {
+    pub fn update_social_links(&mut self, region: &RegionCode, new_links: Option<SocialLinks>) -> Result<bool> {
+        self.ensure_region_match(region)?;
 
         // 2. Idempotence : Si rien ne change, on ne fait rien
         if self.social_links == new_links {
-            return false;
+            return Ok(false);
         }
 
         // 3. Capturer l'ancien état AVANT la modification
@@ -315,12 +327,14 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
-    pub fn update_location_label(&mut self, new_label: Option<LocationLabel>) -> bool {
+    pub fn update_location_label(&mut self, region: &RegionCode, new_label: Option<LocationLabel>) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         if self.location_label == new_label {
-            return false;
+            return Ok(false);
         }
 
         let old_location = self.location_label.clone();
@@ -337,12 +351,14 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
-    pub fn update_privacy(&mut self, is_private: bool) -> bool {
+    pub fn update_privacy(&mut self, region: &RegionCode, is_private: bool) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         if self.is_private == is_private {
-            return false;
+            return Ok(false);
         }
 
         self.is_private = is_private;
@@ -356,11 +372,13 @@ impl Profile {
             occurred_at: self.updated_at,
         }));
 
-        true
+        Ok(true)
     }
 
     /// Mise à jour des compteurs internes
-    pub fn increment_post_count(&mut self, post_id: PostId) -> bool {
+    pub fn increment_post_count(&mut self, region: &RegionCode, post_id: PostId) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         self.post_count.increment();
         self.apply_change();
 
@@ -379,12 +397,14 @@ impl Profile {
             self.record_stats_snapshot();
         }
 
-        true
+        Ok(true)
     }
 
-    pub fn decrement_post_count(&mut self, post_id: PostId) -> bool {
+    pub fn decrement_post_count(&mut self, region: &RegionCode, post_id: PostId) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         if self.post_count.value() == 0 {
-            return false;
+            return Ok(false);
         }
 
         self.post_count.decrement();
@@ -404,7 +424,7 @@ impl Profile {
         if self.post_count.value() % 10 == 0 {
             self.record_stats_snapshot();
         }
-        true
+        Ok(true)
     }
 
     pub(crate) fn restore_stats(&mut self, stats: ProfileStats) {
@@ -428,6 +448,15 @@ impl Profile {
             post_count: self.post_count.value(),
             occurred_at: Utc::now(),
         }));
+    }
+
+    fn ensure_region_match(&self, region: &RegionCode) -> Result<()> {
+        if &self.region_code != region {
+            return Err(DomainError::Forbidden {
+                reason: "Cross-region operation detected on Profile".into(),
+            });
+        }
+        Ok(())
     }
 }
 

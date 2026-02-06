@@ -47,7 +47,9 @@ impl DecrementPostCountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Business Logic
-        profile.decrement_post_count(cmd.post_id);
+        if !profile.decrement_post_count(&cmd.region, cmd.post_id)? {
+            return Ok(profile);
+        }
 
         // 3. Extraction & Clonage
         let events = profile.pull_events();

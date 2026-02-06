@@ -46,7 +46,7 @@ impl UpdateAvatarUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if !profile.update_avatar(cmd.new_avatar_url.clone()) {
+        if !profile.update_avatar(&cmd.region, cmd.new_avatar_url.clone())? {
             return Ok(profile);
         }
 

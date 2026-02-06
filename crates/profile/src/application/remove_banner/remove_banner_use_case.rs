@@ -1,4 +1,4 @@
-// crates/profile/src/application/remove_avatar/mod.rs
+// crates/profile/src/application/remove_banner/mod.rs
 
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;
@@ -48,12 +48,12 @@ impl RemoveBannerUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application de la suppression dans le Modèle Riche
-        // Si profile.avatar_url était déjà None, remove_avatar() retourne false.
-        if !profile.remove_banner() {
+        // Si profile.banner_url était déjà None, remove_banner() retourne false.
+        if !profile.remove_banner(&cmd.region)? {
             return Ok(profile);
         }
 
-        // 3. Extraction des faits (l'événement AvatarRemoved est maintenant dans la liste)
+        // 3. Extraction des faits (l'événement bannerRemoved est maintenant dans la liste)
         let events = profile.pull_events();
 
         if events.is_empty() {
@@ -73,7 +73,7 @@ impl RemoveBannerUseCase {
                 let events = events.clone();
 
                 Box::pin(async move {
-                    // Mise à jour du profil en base (l'avatar_url passera à NULL)
+                    // Mise à jour du profil en base (l'banner_url passera à NULL)
                     repo.save(&profile, Some(&mut *tx)).await?;
 
                     // Enregistrement de l'événement pour le nettoyage physique du fichier par un worker

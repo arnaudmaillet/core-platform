@@ -47,7 +47,7 @@ impl UpdatePrivacyUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if !profile.update_privacy(cmd.is_private) {
+        if !profile.update_privacy(&cmd.region, cmd.is_private)? {
             return Ok(profile);
         };
 
