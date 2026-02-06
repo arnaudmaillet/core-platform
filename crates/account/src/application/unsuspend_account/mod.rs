@@ -1,5 +1,6 @@
 mod unsuspend_account_command;
 mod unsuspend_account_use_case;
+mod unsuspend_account_use_case_test;
 
 pub use unsuspend_account_command::UnsuspendAccountCommand;
 pub use unsuspend_account_use_case::UnsuspendAccountUseCase;

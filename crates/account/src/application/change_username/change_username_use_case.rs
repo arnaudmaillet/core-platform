@@ -5,7 +5,7 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::Result;
+use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
 
@@ -31,16 +31,16 @@ impl ChangeUsernameUseCase {
         }
     }
 
-    pub async fn execute(&self, command: ChangeUsernameCommand) -> Result<()> {
+    pub async fn execute(&self, command: ChangeUsernameCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ChangeUsernameCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &ChangeUsernameCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
-        let mut user = self
+        let mut account = self
             .account_repo
             .find_account_by_id(&cmd.account_id, None)
             .await?
@@ -48,17 +48,15 @@ impl ChangeUsernameUseCase {
 
         // 2. MUTATION DU MODÈLE RICHE
         // L'entité vérifie si le username change et appelle apply_change()
-        user.change_username(cmd.new_username.clone())?;
-
-        // 3. EXTRACTION DES ÉVÉNEMENTS
-        let events = user.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
+        let changed = account.change_username(&cmd.region_code, cmd.new_username.clone())?;
+        if !changed {
+            return Ok(false);
         }
 
-        let user_cloned = user.clone();
+
+        // 3. EXTRACTION DES ÉVÉNEMENTS
+        let events = account.pull_events();
+        let user_cloned = account.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
         self.tx_manager
@@ -69,21 +67,16 @@ impl ChangeUsernameUseCase {
                 let events_to_process = events;
 
                 Box::pin(async move {
-                    // Sauvegarde avec Optimistic Locking (WHERE version = current)
-                    // Note : le repo lèvera une erreur DomainError::AlreadyExists si le
-                    // nouveau username est déjà pris (via contrainte UNIQUE DB).
                     repo.save(&u, Some(&mut *tx)).await?;
-
-                    // Enregistrement des événements (UsernameChanged)
                     for event in events_to_process {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

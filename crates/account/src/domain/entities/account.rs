@@ -5,7 +5,7 @@ use crate::domain::events::AccountEvent;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
@@ -107,9 +107,10 @@ impl Account {
 
     /// Lie une identité externe (ex: Cognito sub) au compte utilisateur.
     /// Cette opération est critique pour la sécurité.
-    pub fn link_external_identity(&mut self, external_id: ExternalId) -> Result<()> {
+    pub fn link_external_identity(&mut self, region: &RegionCode, external_id: ExternalId) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.external_id == external_id {
-            return Ok(());
+            return Ok(false);
         }
 
         // Sécurité Hyperscale : Empêcher le double linkage si l'ID n'est pas vide
@@ -130,12 +131,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn change_email(&mut self, new_email: Email) -> Result<()> {
+    pub fn change_email(&mut self, region: &RegionCode, new_email: Email) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.email == new_email {
-            return Ok(());
+            return Ok(false);
         }
 
         if self.is_blocked() {
@@ -157,12 +159,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn verify_email(&mut self) -> Result<()> {
+    pub fn verify_email(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.email_verified {
-            return Ok(());
+            return Ok(false);
         }
 
         self.email_verified = true;
@@ -178,16 +181,17 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     // ==========================================
     // GESTION DU TÉLÉPHONE (MFA / NOTIFICATIONS)
     // ==========================================
 
-    pub fn change_phone_number(&mut self, new_phone: PhoneNumber) -> Result<()> {
+    pub fn change_phone_number(&mut self, region: &RegionCode, new_phone: PhoneNumber) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.phone_number.as_ref() == Some(&new_phone) {
-            return Ok(());
+            return Ok(false);
         }
 
         let old_phone_number = self.phone_number.clone();
@@ -203,12 +207,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn verify_phone(&mut self) -> Result<()> {
+    pub fn verify_phone(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.phone_verified {
-            return Ok(());
+            return Ok(false);
         }
 
         self.phone_verified = true;
@@ -220,16 +225,17 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     // ==========================================
     // GESTION DU PROFIL & CONFORMITÉ
     // ==========================================
 
-    pub fn change_username(&mut self, new_username: Username) -> Result<()> {
+    pub fn change_username(&mut self, region: &RegionCode, new_username: Username) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.username == new_username {
-            return Ok(());
+            return Ok(false);
         }
 
         if self.is_blocked() {
@@ -250,12 +256,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn change_birth_date(&mut self, new_date: BirthDate) -> Result<()> {
+    pub fn change_birth_date(&mut self, region: &RegionCode, new_date: BirthDate) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.birth_date.as_ref() == Some(&new_date) {
-            return Ok(());
+            return Ok(false);
         }
 
         if self.is_blocked() {
@@ -273,12 +280,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn update_locale(&mut self, new_locale: Locale) -> Result<()> {
+    pub fn update_locale(&mut self, region: &RegionCode, new_locale: Locale) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.locale == new_locale {
-            return Ok(());
+            return Ok(false);
         }
 
         self.locale = new_locale;
@@ -291,12 +299,12 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn change_region(&mut self, new_region: RegionCode) -> Result<()> {
+    pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
         if self.region_code == new_region {
-            return Ok(());
+            return Ok(false);
         }
 
         let old_region = self.region_code.clone();
@@ -310,16 +318,17 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     // ==========================================
     // CYCLE DE VIE & ÉTATS DE SÉCURITÉ
     // ==========================================
 
-    pub fn deactivate(&mut self) -> Result<()> {
+    pub fn deactivate(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.state == AccountState::Deactivated {
-            return Ok(());
+            return Ok(false);
         }
 
         self.state = AccountState::Deactivated;
@@ -331,12 +340,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn reactivate(&mut self) -> Result<()> {
+    pub fn reactivate(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.is_active() {
-            return Ok(());
+            return Ok(false);
         }
 
         // Seul un compte désactivé par l'utilisateur peut être réactivé manuellement
@@ -345,7 +355,7 @@ impl Account {
                 reason: "Only deactivated accounts can be reactivated manually".into(),
             });
         }
-
+        
         self.state = AccountState::Active;
         self.apply_change();
 
@@ -355,12 +365,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn suspend(&mut self, reason: String) -> Result<()> {
+    pub fn suspend(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.state == AccountState::Suspended {
-            return Ok(());
+            return Ok(false);
         }
 
         self.state = AccountState::Suspended;
@@ -373,12 +384,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn unsuspend(&mut self) -> Result<()> {
+    pub fn unsuspend(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.state != AccountState::Suspended {
-            return Ok(());
+            return Ok(false);
         }
 
         self.state = AccountState::Active;
@@ -390,12 +402,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn ban(&mut self, reason: String) -> Result<()> {
+    pub fn ban(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.state == AccountState::Banned {
-            return Ok(());
+            return Ok(false);
         }
 
         self.state = AccountState::Banned;
@@ -407,12 +420,13 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn unban(&mut self) -> Result<()> {
+    pub fn unban(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.state != AccountState::Banned {
-            return Ok(());
+            return Ok(false);
         }
 
         self.state = AccountState::Active;
@@ -424,17 +438,18 @@ impl Account {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn record_activity(&mut self) {
+    pub fn record_activity(&mut self, region: &RegionCode) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         let now = Utc::now();
-        //  On ne met à jour en DB que toutes les 5 minutes
-        if self
-            .last_active_at
-            .map_or(true, |last| now - last > chrono::Duration::minutes(5))
-        {
+        if self.last_active_at.map_or(true, |l| now - l > Duration::minutes(5)) {
             self.last_active_at = Some(now);
+            Ok(true)
+        } else {
+            Ok(false)
         }
     }
 
@@ -472,19 +487,28 @@ impl Account {
         self.increment_version();
         self.updated_at = Utc::now();
     }
+
+    fn ensure_region_match(&self, region: &RegionCode) -> Result<()> {
+        if &self.region_code != region {
+            return Err(DomainError::Forbidden {
+                reason: "Cross-region operation detected".into(),
+            });
+        }
+        Ok(())
+    }
 }
 
 impl EntityMetadata for Account {
     fn entity_name() -> &'static str {
-        "User"
+        "Account"
     }
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
-            "users_email_key" => "email",
-            "users_username_key" => "username",
-            "users_phone_number_key" => "phone_number",
-            "users_external_id_key" => "external_id",
+            "account_email_key" => "email",
+            "account_username_key" => "username",
+            "account_phone_number_key" => "phone_number",
+            "account_external_id_key" => "external_id",
             _ => "unique_constraint",
         }
     }

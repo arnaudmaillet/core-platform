@@ -3,13 +3,13 @@ mod tests {
     use crate::application::update_banner::{UpdateBannerCommand, UpdateBannerUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
     use shared_kernel::errors::DomainError;
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour instancier le Use Case avec les stubs
     fn setup(profile: Option<Profile>) -> UpdateBannerUseCase {
@@ -19,7 +19,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        UpdateBannerUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -166,7 +166,7 @@ mod tests {
         });
 
         let use_case =
-            UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            UpdateBannerUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = UpdateBannerCommand {
             account_id,
@@ -205,7 +205,7 @@ mod tests {
         });
 
         let use_case =
-            UpdateBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            UpdateBannerUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

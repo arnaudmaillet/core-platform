@@ -10,6 +10,7 @@ use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use sqlx::PgPool;
+use shared_kernel::domain::events::AggregateRoot;
 
 pub struct PostgresAccountSettingsRepository {
     pool: PgPool,
@@ -32,9 +33,8 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
 
         let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
-                let query =
-                    "SELECT account_id, region_code, settings, timezone, push_tokens, updated_at
-                         FROM account_settings WHERE account_id = $1";
+                let query = "SELECT account_id, region_code, settings, timezone, push_tokens, version, updated_at
+             FROM account_settings WHERE account_id = $1";
 
                 let res: Option<PostgresAccountSettingsRow> = sqlx::query_as(query)
                     .bind(uid)
@@ -75,26 +75,39 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let tz = settings.timezone().to_string();
         let updated_at = settings.updated_at();
 
+        let new_version = settings.version();
+        let old_version = if new_version > 1 { new_version - 1 } else { 0 };
+
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "
-                INSERT INTO account_settings (account_id, region_code, settings, timezone, push_tokens, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (account_id) DO UPDATE SET
+                INSERT INTO account_settings (account_id, region_code, settings, timezone, push_tokens, version, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (account_id, region_code) DO UPDATE SET
                     settings = EXCLUDED.settings,
                     timezone = EXCLUDED.timezone,
                     push_tokens = EXCLUDED.push_tokens,
-                    updated_at = EXCLUDED.updated_at";
+                    version = EXCLUDED.version,
+                    updated_at = EXCLUDED.updated_at
+                WHERE account_settings.version = $8";
 
-            sqlx::query(query)
+            let result = sqlx::query(query)
                 .bind(uid)
                 .bind(region)
                 .bind(settings_json)
                 .bind(tz)
                 .bind(push_tokens)
+                .bind(new_version)
                 .bind(updated_at)
+                .bind(old_version)
                 .execute(conn)
                 .await
                 .map_domain_infra("AccountSettings: save")?;
+
+            if result.rows_affected() == 0 && new_version > 1 {
+                return Err(DomainError::ConcurrencyConflict {
+                    reason: format!("Concurrency conflict for account {}: version mismatch", uid)
+                });
+            }
 
             Ok(())
         }))
@@ -111,7 +124,9 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let tz = timezone.as_str().to_string();
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
-            let query = "UPDATE account_settings SET timezone = $1, updated_at = NOW() WHERE account_id = $2";
+            let query = "UPDATE account_settings
+             SET timezone = $1, version = version + 1, updated_at = NOW()
+             WHERE account_id = $2";
             sqlx::query(query)
                 .bind(tz)
                 .bind(uid)
@@ -134,9 +149,10 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "UPDATE account_settings
-                         SET push_tokens = ARRAY(SELECT DISTINCT unnest(array_append(push_tokens, $1))),
-                             updated_at = NOW()
-                         WHERE account_id = $2";
+             SET push_tokens = ARRAY(SELECT DISTINCT unnest(array_append(push_tokens, $1))),
+                 version = version + 1,
+                 updated_at = NOW()
+             WHERE account_id = $2";
             sqlx::query(query)
                 .bind(token_str)
                 .bind(uid)
@@ -161,6 +177,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
             Box::pin(async move {
                 let query = "UPDATE account_settings
                          SET push_tokens = array_remove(push_tokens, $1),
+                             version = version + 1,
                              updated_at = NOW()
                          WHERE account_id = $2";
                 sqlx::query(query)

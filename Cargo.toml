@@ -61,7 +61,6 @@ scylla = "1.4.1"
 
 # Utils
 regex = { version = "1.12", features = ["unicode", "unicode-perl"] }
-lazy_static = "1.5"
 seahash = "4.1"
 unicode-normalization = { version = "0.1", features = ["std"] }
 idna = "1.1.0"
@@ -84,4 +83,6 @@ axum = "0.8.8"
 # Tests
 testcontainers = "0.26"
 testcontainers-modules = { version = "0.14", features = ["postgres"] }
-mockall = "0.14.0"
+
+[workspace.dev-dependencies]
+tokio = { version = "1.40", features = ["test-util"] }

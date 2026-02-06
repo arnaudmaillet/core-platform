@@ -11,7 +11,7 @@ pub struct PatchUserParams {
     pub email_verified: Option<bool>,
     pub phone_number: Option<PhoneNumber>,
     pub phone_verified: Option<bool>,
-    pub account_state: Option<AccountState>,
+    pub state: Option<AccountState>,
     pub birth_date: Option<BirthDate>,
     pub locale: Option<Locale>,
 }
@@ -23,7 +23,7 @@ impl PatchUserParams {
             && self.email_verified.is_none()
             && self.phone_number.is_none()
             && self.phone_verified.is_none()
-            && self.account_state.is_none()
+            && self.state.is_none()
             && self.birth_date.is_none()
             && self.locale.is_none()
     }

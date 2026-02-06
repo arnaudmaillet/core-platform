@@ -5,7 +5,7 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::Result;
+use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
 
@@ -31,33 +31,29 @@ impl DecreaseTrustScoreUseCase {
         }
     }
 
-    pub async fn execute(&self, command: DecreaseTrustScoreCommand) -> Result<()> {
+    pub async fn execute(&self, command: DecreaseTrustScoreCommand) ->Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &DecreaseTrustScoreCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &DecreaseTrustScoreCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut metadata = self
             .metadata_repo
             .find_by_account_id(&cmd.account_id)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
-
+        
         // 2. MUTATION DU MODÈLE RICHE
-        metadata.decrease_trust_score(cmd.action_id, cmd.amount, cmd.reason.clone());
+        let changed = metadata.decrease_trust_score(&cmd.region_code, cmd.action_id, cmd.amount, cmd.reason.clone())?;
+        if !changed {
+            return Ok(false);
+        }
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        // Si aucune modification n'a été faite (ex: score déjà à 0), on s'arrête.
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let metadata_cloned = metadata.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -76,12 +72,12 @@ impl DecreaseTrustScoreUseCase {
                     for event in events_to_process {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

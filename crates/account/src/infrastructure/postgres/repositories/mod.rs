@@ -1,3 +1,7 @@
 mod account_metadata_repository;
 mod account_repository;
 mod account_settings_repository;
+
+pub use account_repository::PostgresAccountRepository;
+pub use account_settings_repository::PostgresAccountSettingsRepository;
+pub use account_metadata_repository::PostgresAccountMetadataRepository;

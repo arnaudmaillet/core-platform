@@ -31,14 +31,14 @@ impl UpgradeRoleUseCase {
         }
     }
 
-    pub async fn execute(&self, command: UpgradeRoleCommand) -> Result<()> {
+    pub async fn execute(&self, command: UpgradeRoleCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpgradeRoleCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &UpgradeRoleCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut metadata = self
             .metadata_repo
@@ -47,16 +47,14 @@ impl UpgradeRoleUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        metadata.upgrade_role(cmd.new_role.into(), cmd.reason.clone())?;
+        let changed = metadata.upgrade_role(&cmd.region_code, cmd.new_role.into(), cmd.reason.clone())?;
+        if !changed {
+            return Ok(false);
+        }
+
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let metadata_cloned = metadata.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -72,12 +70,12 @@ impl UpgradeRoleUseCase {
                     for event in events_to_process {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

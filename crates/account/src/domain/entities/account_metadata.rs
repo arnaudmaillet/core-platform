@@ -8,7 +8,7 @@ use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::Result;
+use shared_kernel::errors::{DomainError, Result};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -79,9 +79,17 @@ impl AccountMetadata {
 
     /// Ajuste le score de confiance. Un score trop bas pourrait déclencher
     /// des restrictions automatiques via le Use Case.
-    pub fn increase_trust_score(&mut self, action_id: Uuid, amount: u32, reason: String) {
+    pub fn increase_trust_score(&mut self, region: &RegionCode, action_id: Uuid, amount: u32, reason: String) -> Result<bool> {
+        self.ensure_region_match(region)?;
+        let previous_score = self.trust_score;
         let delta = amount as i32;
-        self.trust_score += delta;
+
+        self.trust_score = (self.trust_score + delta).min(100);
+
+        if self.trust_score == previous_score {
+            return Ok(false);
+        }
+
         self.apply_moderation_change(format!("Score increased by {}: {}", amount, reason));
 
         self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
@@ -93,40 +101,63 @@ impl AccountMetadata {
             reason,
             occurred_at: self.updated_at,
         }));
+
+        Ok(true)
     }
 
     /// Sanctionne un comportement négatif
-    pub fn decrease_trust_score(&mut self, action_id: Uuid, amount: u32, reason: String) {
-        let delta = -(amount as i32);
-        self.trust_score += delta;
-        self.apply_moderation_change(format!("Score decreased by {}: {}", amount, reason));
+    pub fn decrease_trust_score(&mut self, region: &RegionCode, action_id: Uuid, amount: u32, reason: String) -> Result<bool> {
+        self.ensure_region_match(region)?;
 
-        self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
-            id: action_id,
-            account_id: self.account_id.clone(),
-            region: self.region_code.clone(),
-            delta,
-            new_score: self.trust_score,
-            reason: reason.clone(),
-            occurred_at: self.updated_at,
-        }));
+        let previous_score = self.trust_score;
+        let delta = amount as i32;
+        self.trust_score = (self.trust_score - delta).max(0);
 
-        // Règle métier Hyperscale : Auto-shadowban si le score chute trop bas
-        if self.trust_score < -20 && !self.is_shadowbanned {
-            self.apply_shadowban(format!(
-                "Automated system: Trust score critical ({})",
-                self.trust_score
-            ));
+        // Si le score n'a pas bougé (déjà à 0) ET que l'utilisateur est déjà shadowbanned
+        // alors on a vraiment une opération idempotente (Ok(false))
+        if self.trust_score == previous_score && self.is_shadowbanned {
+            return Ok(false);
         }
+
+        // Si le score a changé, on enregistre la note
+        if self.trust_score != previous_score {
+            self.apply_moderation_change(format!("Score decreased: {}", reason));
+        }
+
+        // Shadowban automatique si on tombe à zéro
+        let mut shadowban_triggered = false;
+        if self.trust_score == 0 && !self.is_shadowbanned {
+            self.apply_shadowban("Automated system: Trust score dropped below critical threshold".into());
+            shadowban_triggered = true;
+        }
+
+        // On n'ajoute l'événement de score que s'il y a eu un changement de score
+        if self.trust_score != previous_score {
+            self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
+                id: action_id,
+                account_id: self.account_id.clone(),
+                region: self.region_code.clone(),
+                delta: -(amount as i32),
+                new_score: self.trust_score,
+                reason,
+                occurred_at: self.updated_at,
+            }));
+        }
+
+        Ok(self.trust_score != previous_score || shadowban_triggered)
     }
 
-    pub fn shadowban(&mut self, reason: String) {
+    pub fn shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool>  {
+        self.ensure_region_match(region)?;
         if !self.is_shadowbanned {
             self.apply_shadowban(reason);
+            return Ok(true);
         }
+        Ok(false)
     }
 
-    pub fn lift_shadowban(&mut self, reason: String) {
+    pub fn lift_shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool>  {
+        self.ensure_region_match(region)?;
         if self.is_shadowbanned {
             self.is_shadowbanned = false;
             self.apply_moderation_change(format!("Shadowban lifted: {}", reason));
@@ -138,14 +169,18 @@ impl AccountMetadata {
                 reason,
                 occurred_at: self.updated_at,
             }));
+            return Ok(true);
         }
+        Ok(false)
     }
 
     /// Change le rôle du compte (Admin only via Use Case)
-    pub fn upgrade_role(&mut self, new_role: AccountRole, reason: String) -> Result<()> {
+    pub fn upgrade_role(&mut self, region: &RegionCode, new_role: AccountRole, reason: String) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         // 1. Idempotence : si le rôle est déjà le bon, on ne fait rien
         if self.role == new_role {
-            return Ok(());
+            return Ok(false);
         }
 
         let old_role = self.role;
@@ -164,7 +199,7 @@ impl AccountMetadata {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     pub fn is_high_trust(&self) -> bool {
@@ -175,9 +210,10 @@ impl AccountMetadata {
         self.role.has_permission_of(AccountRole::Staff)
     }
 
-    pub fn set_beta_status(&mut self, status: bool, reason: String) {
+    pub fn set_beta_status(&mut self, region: &RegionCode, status: bool, reason: String) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.is_beta_tester == status {
-            return;
+            return Ok(false);
         }
 
         self.is_beta_tester = status;
@@ -191,6 +227,8 @@ impl AccountMetadata {
             is_beta_tester: status,
             occurred_at: self.updated_at,
         }));
+
+        Ok(true)
     }
 
     // ==========================================
@@ -199,14 +237,14 @@ impl AccountMetadata {
 
     /// Change la région du compte.
     /// ATTENTION: cela implique souvent une migration physique des données.
-    pub fn change_region(&mut self, new_region: RegionCode) -> Result<()> {
+    pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
         if self.region_code == new_region {
-            return Ok(());
+            return Ok(false);
         }
 
         let old_region = self.region_code.clone();
         self.region_code = new_region.clone();
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountRegionChanged {
             account_id: self.account_id.clone(),
@@ -215,29 +253,16 @@ impl AccountMetadata {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
-    }
-
-    // --- LOGIQUE DE VERSIONING ---
-
-    fn apply_change(&mut self) {
-        self.increment_version(); // Méthode de AggregateRoot
-        self.updated_at = Utc::now();
+        Ok(true)
     }
 
     // ==========================================
     // HELPERS PRIVÉS
     // ==========================================
 
-    fn add_moderation_note(&mut self, note: String) {
-        let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S");
-        let new_note = format!("[{}] {}", timestamp, note);
-
-        if let Some(ref mut existing) = self.moderation_notes {
-            existing.push_str(&format!("\n{}", new_note));
-        } else {
-            self.moderation_notes = Some(new_note);
-        }
+    fn apply_change(&mut self) {
+        self.increment_version(); // Méthode de AggregateRoot
+        self.updated_at = Utc::now();
     }
 
     fn apply_moderation_change(&mut self, log_entry: String) {
@@ -252,7 +277,7 @@ impl AccountMetadata {
         }
 
         self.last_moderation_at = Some(now);
-        self.updated_at = now;
+        self.apply_change();
     }
 
     fn apply_shadowban(&mut self, reason: String) {
@@ -267,6 +292,15 @@ impl AccountMetadata {
             occurred_at: self.updated_at,
         }));
     }
+
+    fn ensure_region_match(&self, region: &RegionCode) -> Result<()> {
+        if &self.region_code != region {
+            return Err(DomainError::Forbidden {
+                reason: "Cross-region operation detected".into(),
+            });
+        }
+        Ok(())
+    }
 }
 
 impl EntityMetadata for AccountMetadata {
@@ -276,7 +310,7 @@ impl EntityMetadata for AccountMetadata {
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
-            "user_internal_metadata_pkey" => "account_id",
+            "account_metadata_pkey" => "account_id",
             _ => "internal_metadata",
         }
     }

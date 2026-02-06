@@ -4,10 +4,9 @@
 mod tests {
     use std::sync::{Arc, Mutex};
     use shared_kernel::domain::events::EventEnvelope;
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
     // Import de notre kit de survie centralisé
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
 
     use crate::application::remove_avatar::{RemoveAvatarCommand, RemoveAvatarUseCase};
     use crate::domain::entities::Profile;
@@ -15,6 +14,7 @@ mod tests {
     
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
     use shared_kernel::errors::DomainError;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper local pour instancier le Use Case rapidement
     fn setup(profile: Option<Profile>) -> RemoveAvatarUseCase {
@@ -24,7 +24,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -125,7 +125,7 @@ mod tests {
         });
 
         let use_case =
-            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case
@@ -163,7 +163,7 @@ mod tests {
         });
 
         let use_case =
-            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

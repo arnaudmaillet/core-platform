@@ -5,7 +5,7 @@ mod account_settings;
 pub use account::Account;
 pub use account_metadata::AccountMetadata;
 pub use account_settings::{
-    AccountSettings, AppearanceSettings, NotificationSettings, PrivacySettings, SettingsBlob,
+    AccountSettings, AppearanceSettings, NotificationSettings, PrivacySettings, SettingsBlob, ThemeMode
 };
 
 #[cfg(test)]

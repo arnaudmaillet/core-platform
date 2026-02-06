@@ -3,13 +3,13 @@ mod tests {
     use crate::application::update_bio::{UpdateBioCommand, UpdateBioUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::{Bio, DisplayName};
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour configurer le Use Case
     fn setup(profile: Option<Profile>) -> UpdateBioUseCase {
@@ -18,7 +18,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateBioUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        UpdateBioUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -160,7 +160,7 @@ mod tests {
         });
 
         let use_case =
-            UpdateBioUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            UpdateBioUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

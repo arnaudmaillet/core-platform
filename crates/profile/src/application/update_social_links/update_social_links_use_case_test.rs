@@ -5,13 +5,14 @@ mod tests {
     };
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::{DisplayName, SocialLinks};
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
+
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
     use shared_kernel::errors::DomainError;
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     fn setup(profile: Option<Profile>) -> UpdateSocialLinksUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -19,7 +20,7 @@ mod tests {
             ..Default::default()
         });
 
-        UpdateSocialLinksUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        UpdateSocialLinksUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -161,7 +162,7 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case = UpdateSocialLinksUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+        let use_case = UpdateSocialLinksUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let result = use_case.execute(UpdateSocialLinksCommand {
             account_id,

@@ -1,5 +1,6 @@
 mod increase_trust_score_command;
 mod increase_trust_score_use_case;
+mod increase_trust_score_use_case_test;
 
 pub use increase_trust_score_command::IncreaseTrustScoreCommand;
 pub use increase_trust_score_use_case::IncreaseTrustScoreUseCase;

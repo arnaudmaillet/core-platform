@@ -1,17 +1,17 @@
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
     use crate::application::decrement_post_count::{
         DecrementPostCountCommand, DecrementPostCountUseCase,
     };
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
-    use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     fn setup(profile: Option<Profile>) -> DecrementPostCountUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
@@ -19,7 +19,7 @@ mod tests {
             ..Default::default()
         });
 
-        DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -129,7 +129,7 @@ mod tests {
         });
 
         let use_case =
-            DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

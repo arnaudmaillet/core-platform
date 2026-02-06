@@ -103,22 +103,21 @@ impl AccountSettings {
 
 
     /// Change la région des paramètres (nécessaire pour la cohérence du sharding)
-    pub fn change_region(&mut self, new_region: RegionCode) -> Result<()> {
+    pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
         if self.region_code == new_region {
-            return Ok(());
+            return Ok(false);
         }
-
         self.region_code = new_region;
-        self.updated_at = Utc::now();
-        self.increment_version();
+        self.apply_change();
 
-        Ok(())
+        Ok(true)
     }
 
     /// Met à jour la timezone avec un événement spécifique
-    pub fn update_timezone(&mut self, new_tz: Timezone) -> Result<()> {
+    pub fn update_timezone(&mut self, region: &RegionCode, new_tz: Timezone) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.timezone == new_tz {
-            return Ok(());
+            return Ok(false);
         }
 
         // Garde métier : Cohérence régionale (exemple Hyperscale)
@@ -130,7 +129,7 @@ impl AccountSettings {
         }
 
         self.timezone = new_tz.clone();
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::TimezoneChanged {
             account_id: self.account_id.clone(),
@@ -139,13 +138,14 @@ impl AccountSettings {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     /// Ajoute un token avec événement spécifique et rotation FIFO
-    pub fn add_push_token(&mut self, token: PushToken) -> Result<()> {
+    pub fn add_push_token(&mut self, region: &RegionCode, token: PushToken) -> Result<bool> {
+        self.ensure_region_match(region)?;
         if self.push_tokens.contains(&token) {
-            return Ok(());
+            return Ok(false);
         }
 
         // Rotation FIFO (Max 10 tokens par utilisateur pour limiter la taille du champ)
@@ -154,7 +154,7 @@ impl AccountSettings {
         }
 
         self.push_tokens.push(token.clone());
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::PushTokenAdded {
             account_id: self.account_id.clone(),
@@ -163,19 +163,20 @@ impl AccountSettings {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     /// Supprime un token (ex: au logout) avec événement spécifique
-    pub fn remove_push_token(&mut self, token: &PushToken) -> Result<()> {
+    pub fn remove_push_token(&mut self, region: &RegionCode, token: &PushToken) -> Result<bool> {
+        self.ensure_region_match(region)?;
         let original_len = self.push_tokens.len();
         self.push_tokens.retain(|t| t != token);
 
         if self.push_tokens.len() == original_len {
-            return Ok(());
+            return Ok(false);
         }
 
-        self.updated_at = Utc::now();
+        self.apply_change();
 
         self.add_event(Box::new(AccountEvent::PushTokenRemoved {
             account_id: self.account_id.clone(),
@@ -184,16 +185,19 @@ impl AccountSettings {
             occurred_at: self.updated_at,
         }));
 
-        Ok(())
+        Ok(true)
     }
 
     /// Mise à jour globale
     pub fn update_preferences(
         &mut self,
+        region: &RegionCode,
         privacy: Option<PrivacySettings>,
         notifications: Option<NotificationSettings>,
         appearance: Option<AppearanceSettings>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
         let mut changed = false;
 
         if let Some(p) = privacy {
@@ -216,7 +220,7 @@ impl AccountSettings {
         }
 
         if changed {
-            self.updated_at = Utc::now();
+            self.apply_change();
             self.add_event(Box::new(AccountEvent::AccountSettingsUpdated {
                 account_id: self.account_id.clone(),
                 region: self.region_code.clone(),
@@ -224,6 +228,23 @@ impl AccountSettings {
             }));
         }
 
+        Ok(changed)
+    }
+
+
+    // --- LOGIQUE DE VERSIONING ---
+
+    fn apply_change(&mut self) {
+        self.increment_version(); // Méthode de AggregateRoot
+        self.updated_at = Utc::now();
+    }
+
+    fn ensure_region_match(&self, region: &RegionCode) -> Result<()> {
+        if &self.region_code != region {
+            return Err(DomainError::Forbidden {
+                reason: "Cross-region operation detected".into(),
+            });
+        }
         Ok(())
     }
 }

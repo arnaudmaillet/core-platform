@@ -4,13 +4,11 @@ mod tests {
         GetProfileByUsernameCommand, GetProfileByUsernameUseCase,
     };
     use crate::domain::entities::Profile;
-    use crate::domain::repositories::ProfileIdentityRepository;
+    use crate::domain::repositories::{ProfileIdentityRepository, ProfileRepositoryStub};
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::ProfileRepositoryStub;
-    use shared_kernel::domain::repositories::CacheRepository;
+    use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryStub};
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
     use shared_kernel::errors::DomainError;
-    use shared_kernel::utils::CacheRepositoryStub;
     use std::sync::{Arc, Mutex};
 
     /// Helper pour créer le Use Case avec des stubs

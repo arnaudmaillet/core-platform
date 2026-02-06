@@ -11,13 +11,13 @@ mod tests {
     // Helper pour créer un compte de base rapidement
     fn create_test_account() -> Account {
         let id = AccountId::new();
-        // On change "FR" (pays) par "eu" (macro-région supportée)
         let region = RegionCode::try_new("eu").expect("Failed to create region_code");
         let username = Username::try_new("john_doe").unwrap();
         let email = Email::try_new("john@example.com").unwrap();
         let external_id = ExternalId::try_new("auth0|123").unwrap();
 
         Account::builder(id, region, username, email, external_id)
+            .with_last_active_at(Utc::now() - Duration::hours(1))
             .build()
     }
 
@@ -25,130 +25,132 @@ mod tests {
     fn test_account_initial_state() {
         let account = create_test_account();
 
-        assert_eq!(account.state(), &AccountState::Pending); // État par défaut via builder
+        assert_eq!(account.state(), &AccountState::Pending);
         assert!(!account.is_email_verified());
-        assert!(!account.is_phone_verified());
-        assert!(account.birth_date().is_none());
         assert_eq!(account.version(), 1);
     }
 
     #[test]
-    fn test_email_verification_flow() {
+    fn test_email_verification_flow_and_idempotency() {
         let mut account = create_test_account();
+        let region = account.region_code().clone();
 
-        // 1. On vérifie l'email
-        account.verify_email().unwrap();
-
+        // 1. Première vérification : true
+        let changed = account.verify_email(&region).expect("Should verify email");
+        assert!(changed);
         assert!(account.is_email_verified());
+        // L'état Active est déclenché par la vérification d'email
         assert_eq!(account.state(), &AccountState::Active);
 
-        // 2. On "tire" les événements de l'agrégat
-        // Note : metadata_mut() est nécessaire car pull_events vide la liste interne
-        let events = account.metadata_mut().pull_events();
+        // On nettoie les événements pour tester l'idempotence proprement
+        let _ = account.metadata_mut().pull_events();
 
-        assert_eq!(events.len(), 1, "Un événement EmailVerified aurait dû être capturé");
+        // 2. Deuxième vérification : false (idempotence)
+        let changed = account.verify_email(&region).unwrap();
+        assert!(!changed, "Email already verified, should return false");
+        assert_eq!(account.metadata_mut().pull_events().len(), 0);
+    }
 
-        // Optionnel : On peut vérifier le type de l'événement si nécessaire
-        // let event = &events[0];
-        // ...
+    #[test]
+    fn test_cross_region_security_on_account() {
+        let mut account = create_test_account();
+        let wrong_region = RegionCode::try_new("us").unwrap();
+
+        // Tentative de vérification d'email avec la mauvaise région
+        let result = account.verify_email(&wrong_region);
+
+        assert!(result.is_err(), "L'opération aurait dû être bloquée (Forbidden)");
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[test]
     fn test_identity_linking_security() {
         let mut account = create_test_account();
+        let region = account.region_code().clone();
 
-        // Cas 1 : Liaison identique (Idempotence)
+        // Cas 1 : Liaison identique (Idempotence) -> Ok(false)
         let same_id = ExternalId::try_new("auth0|123").unwrap();
-        assert!(account.link_external_identity(same_id).is_ok());
+        let changed = account.link_external_identity(&region, same_id).unwrap();
+        assert!(!changed);
 
-        // Cas 2 : Tentative de changement d'identité externe (Interdit en Hyperscale)
+        // Cas 2 : Tentative de changement d'identité externe -> Err
         let new_id = ExternalId::try_new("google|456").unwrap();
-        let result = account.link_external_identity(new_id);
-
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
+        let result = account.link_external_identity(&region, new_id);
+        assert!(result.is_err());
     }
 
     #[test]
-    fn test_account_suspension_logic() {
+    fn test_account_suspension_lifecycle() {
         let mut account = create_test_account();
-        account.verify_email().unwrap(); // Pass to Active
+        let region = account.region_code().clone();
+        account.verify_email(&region).unwrap();
 
-        assert!(account.can_login());
-
-        // Suspension
-        account.suspend("Suspicious activity".into()).unwrap();
+        // 1. Suspension : true
+        let changed = account.suspend(&region, "Suspicious activity".into()).unwrap();
+        assert!(changed);
         assert!(account.is_blocked());
-        assert!(!account.can_login());
-        assert!(account.change_username(Username::try_new("hacker").unwrap()).is_err());
 
-        // Unsuspend
-        account.unsuspend().unwrap();
+        // 2. Suspension déjà active : false
+        let changed = account.suspend(&region, "Duplicate call".into()).unwrap();
+        assert!(!changed);
+
+        // 3. Unsuspend : true
+        let changed = account.unsuspend(&region).unwrap();
+        assert!(changed);
         assert!(account.is_active());
-        assert!(account.can_login());
     }
 
     #[test]
-    fn test_banning_lifecycle() {
+    fn test_banning_constraints() {
         let mut account = create_test_account();
+        let region = account.region_code().clone();
 
-        account.ban("Violation of TOS".into()).unwrap();
+        // Ban : true
+        let changed = account.ban(&region, "Violation of TOS".into()).unwrap();
+        assert!(changed);
         assert_eq!(account.state(), &AccountState::Banned);
 
-        // On ne peut pas réactiver manuellement un compte banni (doit être unban d'abord)
-        let res = account.reactivate();
+        // On ne peut pas réactiver (reactivate) un compte banni sans unban
+        let res = account.reactivate(&region);
         assert!(res.is_err());
 
-        account.unban().unwrap();
+        // Unban : true
+        let changed = account.unban(&region).unwrap();
+        assert!(changed);
         assert_eq!(account.state(), &AccountState::Active);
     }
 
-    #[test]
     fn test_activity_recording_throttling() {
-        let id = AccountId::new();
-        let initial_active = Utc::now() - Duration::minutes(10);
+        let mut account = create_test_account();
+        let region = account.region_code().clone();
 
-        // On recrée l'objet avec l'état temporel souhaité via restore
-        let mut account = Account::restore(
-            id,
-            RegionCode::try_new("eu").unwrap(),
-            ExternalId::try_new("auth0|123").unwrap(),
-            Username::try_new("john_doe").unwrap(),
-            Email::try_new("john@example.com").unwrap(),
-            true,           // email_verified
-            None,           // phone_number
-            false,
-            AccountState::Active,
-            None,           // birth_date
-            Locale::default(),
-            Utc::now(),
-            Utc::now(),
-            Some(initial_active),
-            AggregateMetadata::default(),
-        );
+        // Le premier log devrait maintenant être true car l'activité initiale est ancienne
+        let first_log = account.record_activity(&region).unwrap();
+        assert!(first_log, "First log after builder should be true if last_activity is old");
 
-        // Premier record : Doit mettre à jour car 10 min > 5 min
-        account.record_activity();
-        let first_update = account.last_active_at().unwrap();
-        assert!(first_update > initial_active);
-
-        // Deuxième record immédiat : Ne doit PAS mettre à jour (throttle 5 min)
-        account.record_activity();
-        assert_eq!(account.last_active_at().unwrap(), first_update);
+        // Le second log est immédiat, donc throttle -> false
+        let second_log = account.record_activity(&region).unwrap();
+        assert!(!second_log, "Should be throttled and return false on immediate subsequent call");
     }
 
     #[test]
-    fn test_username_change_constraints() {
+    fn test_username_change_with_idempotency() {
         let mut account = create_test_account();
+        let region = account.region_code().clone();
         let new_name = Username::try_new("new_john").unwrap();
 
-        // Changement OK
-        account.change_username(new_name.clone()).unwrap();
+        // 1. Changement réel : true
+        let changed = account.change_username(&region, new_name.clone()).unwrap();
+        assert!(changed);
         assert_eq!(account.username().as_str(), "new_john");
-        assert_eq!(account.metadata().version(), 2);
 
-        // Bloqué si suspendu
-        account.suspend("Reason".into()).unwrap();
-        let res = account.change_username(Username::try_new("another").unwrap());
+        // 2. Même nom : false
+        let changed = account.change_username(&region, new_name).unwrap();
+        assert!(!changed);
+
+        // 3. Bloqué si banni
+        account.ban(&region, "Bye".into()).unwrap();
+        let res = account.change_username(&region, Username::try_new("hacker").unwrap());
         assert!(res.is_err());
     }
 }

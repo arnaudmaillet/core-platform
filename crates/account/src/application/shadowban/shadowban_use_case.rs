@@ -31,32 +31,30 @@ impl ShadowbanAccountUseCase {
         }
     }
 
-    pub async fn execute(&self, command: ShadowbanAccountCommand) -> Result<()> {
+    pub async fn execute(&self, command: ShadowbanAccountCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ShadowbanAccountCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &ShadowbanAccountCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut metadata = self
             .metadata_repo
             .find_by_account_id(&cmd.account_id)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
-
+        
         // 2. MUTATION DU MODÈLE RICHE
-        metadata.shadowban(cmd.reason.clone());
+        let changed = metadata.shadowban(&cmd.region_code, cmd.reason.clone())?;
+        if !changed {
+            return Ok(false);
+        }
+
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let metadata_cloned = metadata.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -72,11 +70,12 @@ impl ShadowbanAccountUseCase {
                     for event in events_to_process {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

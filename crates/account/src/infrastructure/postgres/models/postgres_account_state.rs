@@ -1,9 +1,8 @@
 use crate::domain::value_objects::AccountState;
-use shared_kernel::errors::DomainError;
 
 /// Il permet de mapper l'ENUM PostgreSQL sans polluer le Domaine avec SQLx.
 #[derive(Debug, sqlx::Type)]
-#[sqlx(type_name = "user_status", rename_all = "lowercase")]
+#[sqlx(type_name = "account_state", rename_all = "lowercase")]
 pub enum PostgresAccountState {
     Pending,
     Active,

@@ -5,7 +5,7 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::Result;
+use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
 
@@ -31,14 +31,14 @@ impl BanAccountUseCase {
         }
     }
 
-    pub async fn execute(&self, command: BanAccountCommand) -> Result<()> {
+    pub async fn execute(&self, command: BanAccountCommand) -> Result<bool>{
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &BanAccountCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &BanAccountCommand) -> Result<bool> {
         // 1. Récupération (Identity-only suffit généralement pour la modération)
         let mut account = self
             .account_repo
@@ -47,16 +47,15 @@ impl BanAccountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application du changement d'état
-        account.ban(cmd.reason.clone())?;
+        let changed = account.ban(&cmd.region_code, cmd.reason.clone())?;
 
-        // 3. Extraction des événements
-        let events = account.pull_events();
-
-        // 4. Idempotence Applicative
-        if events.is_empty() {
-            return Ok(());
+        // 3. IDEMPOTENCE
+        if !changed {
+            return Ok(false);
         }
-
+        
+        // 4. Extraction des événements
+        let events = account.pull_events();
         let account_to_save = account.clone();
 
         // 5. Persistance Transactionnelle Atomique (Standard Hyperscale)
@@ -72,12 +71,12 @@ impl BanAccountUseCase {
                     for event in events_to_process {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

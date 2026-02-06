@@ -2,15 +2,15 @@
 mod tests {
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
     use std::sync::{Arc, Mutex};
+    use shared_kernel::domain::repositories::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
     // On réutilise nos outils de test centralisés
     use crate::application::remove_banner::{RemoveBannerCommand, RemoveBannerUseCase};
     use crate::domain::entities::Profile;
     use crate::domain::value_objects::DisplayName;
-    use crate::utils::profile_repository_stub::{
-        OutboxRepoStub, ProfileRepositoryStub, StubTxManager,
-    };
     use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
     use shared_kernel::errors::DomainError;
+    use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour configurer le Use Case avec un état initial
     fn setup(profile: Option<Profile>) -> RemoveBannerUseCase {
@@ -20,7 +20,7 @@ mod tests {
             error_to_return: Mutex::new(None),
         });
 
-        RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager))
+        RemoveBannerUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager))
     }
 
     #[tokio::test]
@@ -126,7 +126,7 @@ mod tests {
         });
 
         let use_case =
-            RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            RemoveBannerUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = RemoveBannerCommand { account_id, region };
 
@@ -162,7 +162,7 @@ mod tests {
         });
 
         let use_case =
-            RemoveBannerUseCase::new(repo, Arc::new(OutboxRepoStub), Arc::new(StubTxManager));
+            RemoveBannerUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case

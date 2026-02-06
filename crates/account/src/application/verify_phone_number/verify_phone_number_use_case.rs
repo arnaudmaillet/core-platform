@@ -31,32 +31,30 @@ impl VerifyPhoneNumberUseCase {
         }
     }
 
-    pub async fn execute(&self, command: VerifyPhoneNumberCommand) -> Result<()> {
+    pub async fn execute(&self, command: VerifyPhoneNumberCommand) -> Result<bool> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &VerifyPhoneNumberCommand) -> Result<()> {
+    async fn try_execute_once(&self, cmd: &VerifyPhoneNumberCommand) -> Result<bool> {
         // 1. LECTURE OPTIMISTE (Hors transaction)
         let mut account = self
             .account_repo
             .find_account_by_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
-
+        
         // 2. MUTATION DU MODÈLE RICHE
-        account.verify_phone();
+        let changed = account.verify_phone(&cmd.region_code)?;
+        if !changed {
+            return Ok(false);
+        }
+
 
         // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = account.pull_events();
-
-        // 4. IDEMPOTENCE APPLICATIVE
-        if events.is_empty() {
-            return Ok(());
-        }
-
         let account_to_save = account.clone();
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
@@ -72,12 +70,12 @@ impl VerifyPhoneNumberUseCase {
                     for event in events_to_process {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(())
+        Ok(true)
     }
 }

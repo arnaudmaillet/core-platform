@@ -7,7 +7,7 @@ edition.workspace = true
 
 [features]
 default = []
-test-utils = ["postgres", "scylla", "dep:testcontainers", "dep:testcontainers-modules"]
+test-utils = ["postgres", "scylla", "dep:testcontainers", "dep:testcontainers-modules", "tokio/test-util"]
 
 # --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
