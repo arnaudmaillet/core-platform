@@ -47,7 +47,9 @@ impl UpdateDisplayNameUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application du changement via le Modèle Riche
-        profile.update_display_name(cmd.new_display_name.clone());
+        if !profile.update_display_name(&cmd.region, cmd.new_display_name.clone())? {
+            return Ok(profile)
+        };
 
         // 3. Extraction des événements
         let events = profile.pull_events();

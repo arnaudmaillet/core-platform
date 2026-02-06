@@ -48,7 +48,9 @@ impl IncrementPostCountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Logique Métier
-        profile.increment_post_count(cmd.post_id);
+        if !profile.increment_post_count(&cmd.region, cmd.post_id)? {
+            return Ok(profile);
+        };
 
         // 3. Préparation pour la transaction
         let events = profile.pull_events();

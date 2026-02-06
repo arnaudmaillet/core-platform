@@ -26,22 +26,24 @@ mod tests {
     async fn test_decrement_post_count_success() {
         // Arrange : Profil ayant 1 post
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
             Username::try_new("alice").unwrap(),
         )
-        .build();
-        profile.increment_post_count(PostId::new()); // version 2, count 1
+            .build();
+
+        // On doit passer la région ici aussi
+        profile.increment_post_count(&region, PostId::new()).unwrap(); // version 2, count 1
 
         let use_case = setup(Some(profile));
         let post_id = PostId::new();
 
         let cmd = DecrementPostCountCommand {
             account_id,
-            region,
+            region: region.clone(),
             post_id,
         };
 
@@ -59,14 +61,14 @@ mod tests {
     async fn test_decrement_prevent_negative_count() {
         // Arrange : Profil ayant 0 post
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
             Username::try_new("alice").unwrap(),
         )
-        .build();
+            .build();
 
         let use_case = setup(Some(profile));
 
@@ -82,7 +84,8 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let updated = result.unwrap();
-        // Le compteur reste à 0, pas d'événement, donc pas de transaction (version reste 1)
+        // Le compteur reste à 0, decrement_post_count renvoie Ok(false),
+        // pas d'événement, donc pas de transaction (version reste 1)
         assert_eq!(updated.post_count(), 0);
         assert_eq!(updated.version(), 1);
     }
@@ -109,17 +112,18 @@ mod tests {
     async fn test_decrement_concurrency_conflict() {
         // Arrange
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap(); // Utilise try_new
         let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
             Username::try_new("alice").unwrap(),
         )
-        .build();
-        profile.increment_post_count(PostId::new());
+            .build();
 
-        // On simule une erreur de version lors du save
+        // FIX: Ajout de la région ici
+        profile.increment_post_count(&region, PostId::new()).unwrap();
+
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
@@ -128,8 +132,7 @@ mod tests {
             ..Default::default()
         });
 
-        let use_case =
-            DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
+        let use_case = DecrementPostCountUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         // Act
         let result = use_case
@@ -141,26 +144,24 @@ mod tests {
             .await;
 
         // Assert
-        // Le retry est déclenché par with_retry, mais finit par échouer si l'erreur persiste
-        assert!(matches!(
-            result,
-            Err(DomainError::ConcurrencyConflict { .. })
-        ));
+        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
     }
 
     #[tokio::test]
     async fn test_decrement_outbox_failure_rollbacks_count() {
         // Arrange
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
             account_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
             Username::try_new("alice").unwrap(),
         )
-        .build();
-        profile.increment_post_count(PostId::new());
+            .build();
+
+        // FIX: Ajout de la région ici
+        profile.increment_post_count(&region, PostId::new()).unwrap();
 
         struct FailingOutbox;
         #[async_trait::async_trait]
@@ -198,5 +199,36 @@ mod tests {
 
         // Assert
         assert!(result.is_err());
+    }
+
+
+    #[tokio::test]
+    async fn test_decrement_fails_on_region_mismatch() {
+        // Arrange
+        let account_id = AccountId::new();
+        let actual_region = RegionCode::try_new("eu").unwrap();
+        let wrong_region = RegionCode::try_new("us").unwrap();
+
+        let profile = Profile::builder(
+            account_id.clone(),
+            actual_region,
+            DisplayName::from_raw("Alice"),
+            Username::try_new("alice").unwrap(),
+        ).build();
+
+        let use_case = setup(Some(profile));
+
+        let cmd = DecrementPostCountCommand {
+            account_id,
+            region: wrong_region, // Mismatch avec le profil
+            post_id: PostId::new(),
+        };
+
+        // Act
+        let result = use_case.execute(cmd).await;
+
+        // Assert
+        // Doit renvoyer Forbidden car le check est dans l'entité
+        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

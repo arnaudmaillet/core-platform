@@ -49,7 +49,7 @@ async fn test_profile_lifecycle() {
         .await
         .unwrap()
         .unwrap();
-    profile.update_display_name(DisplayName::from_raw("Alice Updated"));
+    profile.update_display_name(&region, DisplayName::from_raw("Alice Updated")).unwrap();
     // Supposons que tu aies un champ bio ou social_links accessible
     repo.save(&profile, None).await.expect("Update failed");
 
@@ -110,11 +110,11 @@ async fn test_concurrency_conflict_real_scenario() {
         .unwrap();
 
     // A gagne la course et passe en v2
-    instance_a.update_display_name(DisplayName::from_raw("Winner"));
+    instance_a.update_display_name(&region, DisplayName::from_raw("Winner")).unwrap();
     repo.save(&instance_a, None).await.unwrap();
 
     // B essaie de save alors qu'il a toujours sa v1 en mémoire
-    instance_b.update_display_name(DisplayName::from_raw("Loser"));
+    instance_b.update_display_name(&region, DisplayName::from_raw("Loser")).unwrap();
     let result = repo.save(&instance_b, None).await;
 
     assert!(matches!(
@@ -173,8 +173,8 @@ async fn test_partial_update_integrity() {
         Username::try_new("alice").unwrap(),
     )
     .build();
-    profile.update_bio(Some(Bio::try_new("Ma bio initiale").unwrap()));
-    profile.update_avatar(Url::try_new("https://avatar.com/1").unwrap());
+    profile.update_bio(&region, Some(Bio::try_new("Ma bio initiale").unwrap())).unwrap();
+    profile.update_avatar(&region, Url::try_new("https://avatar.com/1").unwrap()).unwrap();
     repo.save(&profile, None).await.unwrap();
 
     // 2. Update uniquement du display_name
@@ -183,7 +183,7 @@ async fn test_partial_update_integrity() {
         .await
         .unwrap()
         .unwrap();
-    to_update.update_display_name(DisplayName::from_raw("Alice Nouvelle"));
+    to_update.update_display_name(&region, DisplayName::from_raw("Alice Nouvelle")).unwrap();
     repo.save(&to_update, None).await.unwrap();
 
     // 3. Vérification : La bio et l'avatar n'ont pas disparu (pas de NULL accidentel)

@@ -49,7 +49,7 @@ impl RemoveAvatarUseCase {
 
         // 2. Application de la suppression dans le Modèle Riche
         // Si profile.avatar_url était déjà None, remove_avatar() retourne false.
-        if !profile.remove_avatar() {
+        if !profile.remove_avatar(&cmd.region)? {
             return Ok(profile);
         }
 

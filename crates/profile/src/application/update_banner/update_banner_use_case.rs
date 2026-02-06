@@ -46,7 +46,7 @@ impl UpdateBannerUseCase {
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        if !profile.update_banner(cmd.new_banner_url.clone()) {
+        if !profile.update_banner(&cmd.region, cmd.new_banner_url.clone())? {
             return Ok(profile);
         }
 

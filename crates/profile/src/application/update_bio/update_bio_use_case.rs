@@ -48,7 +48,7 @@ impl UpdateBioUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application du changement (Modèle Riche)
-        if !profile.update_bio(cmd.new_bio.clone()) {
+        if !profile.update_bio(&cmd.region, cmd.new_bio.clone())? {
             return Ok(profile);
         }
 

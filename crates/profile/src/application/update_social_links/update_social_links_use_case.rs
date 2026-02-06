@@ -48,7 +48,9 @@ impl UpdateSocialLinksUseCase {
 
         // 2. Application de la logique métier
         // L'entité vérifie si les liens ont changé, incrémente la version et émet l'événement
-        profile.update_social_links(cmd.new_links.clone());
+        if !profile.update_social_links(&cmd.region, cmd.new_links.clone())? {
+            return Ok(profile)
+        };
 
         // 3. Extraction des événements
         let events = profile.pull_events();
