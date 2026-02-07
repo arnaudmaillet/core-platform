@@ -46,8 +46,7 @@ impl UpdateAccountTimezoneUseCase {
             .ok_or_not_found(&cmd.account_id)?;
         
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = settings.update_timezone(&cmd.region_code, cmd.new_timezone.clone())?;
-        if !changed {
+        if !settings.update_timezone(&cmd.region_code, cmd.new_timezone.clone())? {
             return Ok(false);
         }
 

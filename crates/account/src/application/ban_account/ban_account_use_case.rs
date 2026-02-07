@@ -47,13 +47,10 @@ impl BanAccountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application du changement d'état
-        let changed = account.ban(&cmd.region_code, cmd.reason.clone())?;
-
-        // 3. IDEMPOTENCE
-        if !changed {
+        if ! account.ban(&cmd.region_code, cmd.reason.clone())?{
             return Ok(false);
         }
-        
+
         // 4. Extraction des événements
         let events = account.pull_events();
         let account_to_save = account.clone();

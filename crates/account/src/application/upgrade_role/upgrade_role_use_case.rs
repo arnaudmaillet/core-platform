@@ -47,8 +47,7 @@ impl UpgradeRoleUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = metadata.upgrade_role(&cmd.region_code, cmd.new_role.into(), cmd.reason.clone())?;
-        if !changed {
+        if !metadata.upgrade_role(&cmd.region_code, cmd.new_role.into(), cmd.reason.clone())? {
             return Ok(false);
         }
 

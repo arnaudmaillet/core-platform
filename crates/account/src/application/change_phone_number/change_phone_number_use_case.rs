@@ -47,8 +47,7 @@ impl ChangePhoneNumberUseCase {
             .ok_or_not_found(&cmd.account_id)?;
         
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.change_phone_number(&cmd.region_code, cmd.new_phone.clone())?;
-        if !changed {
+        if !account.change_phone_number(&cmd.region_code, cmd.new_phone.clone())? {
             return Ok(false);
         }
 

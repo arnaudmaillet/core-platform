@@ -47,8 +47,7 @@ impl DecreaseTrustScoreUseCase {
             .ok_or_not_found(&cmd.account_id)?;
         
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = metadata.decrease_trust_score(&cmd.region_code, cmd.action_id, cmd.amount, cmd.reason.clone())?;
-        if !changed {
+        if !metadata.decrease_trust_score(&cmd.region_code, cmd.action_id, cmd.amount, cmd.reason.clone())? {
             return Ok(false);
         }
 

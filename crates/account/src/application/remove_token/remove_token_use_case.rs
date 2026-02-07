@@ -46,8 +46,7 @@ impl RemovePushTokenUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = settings.remove_push_token(&cmd.region_code, &cmd.token)?;
-        if !changed {
+        if !settings.remove_push_token(&cmd.region_code, &cmd.token)? {
             return Ok(false);
         }
 

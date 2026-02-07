@@ -47,8 +47,7 @@ impl ShadowbanAccountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
         
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = metadata.shadowban(&cmd.region_code, cmd.reason.clone())?;
-        if !changed {
+        if !metadata.shadowban(&cmd.region_code, cmd.reason.clone())? {
             return Ok(false);
         }
 
