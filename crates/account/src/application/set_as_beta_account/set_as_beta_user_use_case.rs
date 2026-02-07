@@ -47,8 +47,7 @@ impl SetAsBetaAccountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = metadata.set_beta_status(&cmd.region_code, cmd.status, cmd.reason.clone())?;
-        if !changed {
+        if !metadata.set_beta_status(&cmd.region_code, cmd.status, cmd.reason.clone())? {
             return Ok(false);
         }
 

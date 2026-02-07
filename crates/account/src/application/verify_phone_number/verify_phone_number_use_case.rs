@@ -47,8 +47,7 @@ impl VerifyPhoneNumberUseCase {
             .ok_or_not_found(&cmd.account_id)?;
         
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.verify_phone(&cmd.region_code)?;
-        if !changed {
+        if !account.verify_phone(&cmd.region_code)? {
             return Ok(false);
         }
 

@@ -47,8 +47,7 @@ impl SuspendAccountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.suspend(&cmd.region_code, cmd.reason.clone())?;
-        if !changed {
+        if !account.suspend(&cmd.region_code, cmd.reason.clone())? {
             return Ok(false);
         }
 

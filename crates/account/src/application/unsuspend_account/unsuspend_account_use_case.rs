@@ -47,8 +47,7 @@ impl UnsuspendAccountUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.unsuspend(&cmd.region_code)?;
-        if !changed {
+        if !account.unsuspend(&cmd.region_code)? {
             return Ok(false);
         }
 

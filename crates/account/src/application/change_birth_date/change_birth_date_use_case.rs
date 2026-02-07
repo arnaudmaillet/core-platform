@@ -47,8 +47,7 @@ impl ChangeBirthDateUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application de la logique métier via le Modèle Riche
-        let changed =account.change_birth_date(&cmd.region_code, cmd.birth_date.clone())?;
-        if !changed {
+        if !account.change_birth_date(&cmd.region_code, cmd.birth_date.clone())? {
             return Ok(false);
         }
 

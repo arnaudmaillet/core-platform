@@ -63,8 +63,7 @@ impl LinkExternalIdentityUseCase {
             .ok_or_not_found(cmd.internal_account_id.clone())?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.link_external_identity(&cmd.region_code, cmd.external_id.clone())?;
-        if !changed {
+        if !account.link_external_identity(&cmd.region_code, cmd.external_id.clone())? {
             return Ok(false);
         }
         

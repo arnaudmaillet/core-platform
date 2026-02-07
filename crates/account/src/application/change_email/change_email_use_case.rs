@@ -48,8 +48,7 @@ impl ChangeEmailUseCase {
 
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.change_email(&cmd.region_code, cmd.new_email.clone())?;
-        if !changed {
+        if !account.change_email(&cmd.region_code, cmd.new_email.clone())? {
             return Ok(false);
         }
 

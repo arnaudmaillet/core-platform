@@ -47,8 +47,7 @@ impl UpdateLocaleUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = account.update_locale(&cmd.region_code, cmd.locale.clone())?;
-        if !changed {
+        if !account.update_locale(&cmd.region_code, cmd.locale.clone())? {
             return Ok(false);
         }
 

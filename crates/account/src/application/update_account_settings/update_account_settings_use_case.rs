@@ -46,14 +46,12 @@ impl UpdateAccountSettingsUseCase {
             .ok_or_not_found(&cmd.account_id)?;
         
         // 2. MUTATION DU MODÈLE RICHE
-        let changed = settings.update_preferences(
+        if !settings.update_preferences(
             &cmd.region_code,
             cmd.privacy.clone(),
             cmd.notifications.clone(),
             cmd.appearance.clone(),
-        )?;
-        
-        if !changed {
+        )? {
             return Ok(false);
         }
 

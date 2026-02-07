@@ -48,12 +48,9 @@ impl AddPushTokenUseCase {
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application de la logique métier
-        let changed = settings.add_push_token(&cmd.region_code, cmd.token.clone())?;
-
-        // 3. IDEMPOTENCE
-        if !changed {
+        if !settings.add_push_token(&cmd.region_code, cmd.token.clone())? {
             return Ok(false);
-        }
+        };
 
         // 4. Extraction des faits
         let events = settings.pull_events();

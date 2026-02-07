@@ -48,8 +48,7 @@ impl ChangeUsernameUseCase {
 
         // 2. MUTATION DU MODÈLE RICHE
         // L'entité vérifie si le username change et appelle apply_change()
-        let changed = account.change_username(&cmd.region_code, cmd.new_username.clone())?;
-        if !changed {
+        if !account.change_username(&cmd.region_code, cmd.new_username.clone())? {
             return Ok(false);
         }
 
