@@ -2,8 +2,9 @@
 
 -- 1. USER PROFILES (Social View)
 CREATE TABLE IF NOT EXISTS user_profiles (
-                                             account_id UUID NOT NULL,
-                                             region_code VARCHAR(10) NOT NULL,
+    id UUID NOT NULL,
+    account_id UUID NOT NULL,
+    region_code VARCHAR(10) NOT NULL,
     display_name VARCHAR(50) NOT NULL,
     username VARCHAR(30) NOT NULL,
     bio VARCHAR(255),
@@ -16,13 +17,16 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    PRIMARY KEY (account_id, region_code)
+
+    PRIMARY KEY (id, region_code),
+    CONSTRAINT uq_user_profiles_username UNIQUE (username)
     );
 
 -- 2. LOCATIONS (High Frequency Updates)
 CREATE TABLE IF NOT EXISTS user_locations (
-                                              account_id UUID NOT NULL,
-                                              region_code VARCHAR(10) NOT NULL,
+    profile_id UUID NOT NULL,
+    account_id UUID NOT NULL,
+    region_code VARCHAR(10) NOT NULL,
     coordinates GEOGRAPHY(POINT, 4326) NOT NULL,
     accuracy_meters DOUBLE PRECISION,
     altitude DOUBLE PRECISION,
@@ -32,14 +36,14 @@ CREATE TABLE IF NOT EXISTS user_locations (
     privacy_radius_meters INT DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     version INT NOT NULL DEFAULT 1,
-    PRIMARY KEY (account_id, region_code)
+
+    PRIMARY KEY (profile_id, region_code)
     );
 
-CREATE UNIQUE INDEX idx_user_profiles_username_global ON user_profiles (username);
-
 -- 4. PERFORMANCE INDEXES
+CREATE UNIQUE INDEX idx_user_profiles_username_global ON user_profiles (username);
 CREATE INDEX IF NOT EXISTS idx_user_locations_gist ON user_locations USING GIST (coordinates);
-CREATE INDEX IF NOT EXISTS idx_user_profiles_username ON user_profiles (username);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_account_id ON user_profiles (account_id);
 
 -- 5. TRIGGERS
 CREATE TRIGGER trg_set_timestamp_profiles BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE PROCEDURE public.trigger_set_timestamp();
