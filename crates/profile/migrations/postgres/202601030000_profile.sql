@@ -3,10 +3,10 @@
 -- 1. USER PROFILES (Social View)
 CREATE TABLE IF NOT EXISTS user_profiles (
     id UUID NOT NULL,
-    account_id UUID NOT NULL,
+    owner_id UUID NOT NULL,
     region_code VARCHAR(10) NOT NULL,
     display_name VARCHAR(50) NOT NULL,
-    username VARCHAR(30) NOT NULL,
+    handle VARCHAR(30) NOT NULL,
     bio VARCHAR(255),
     avatar_url TEXT,
     banner_url TEXT,
@@ -19,13 +19,13 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
 
     PRIMARY KEY (id, region_code),
-    CONSTRAINT uq_user_profiles_username UNIQUE (username)
+    CONSTRAINT uq_user_profiles_handle UNIQUE (handle)
     );
 
 -- 2. LOCATIONS (High Frequency Updates)
 CREATE TABLE IF NOT EXISTS user_locations (
     profile_id UUID NOT NULL,
-    account_id UUID NOT NULL,
+    owner_id UUID NOT NULL,
     region_code VARCHAR(10) NOT NULL,
     coordinates GEOGRAPHY(POINT, 4326) NOT NULL,
     accuracy_meters DOUBLE PRECISION,
@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS user_locations (
     );
 
 -- 4. PERFORMANCE INDEXES
-CREATE UNIQUE INDEX idx_user_profiles_username_global ON user_profiles (username);
+CREATE UNIQUE INDEX idx_user_profiles_profile_global ON user_profiles (handle);
 CREATE INDEX IF NOT EXISTS idx_user_locations_gist ON user_locations USING GIST (coordinates);
-CREATE INDEX IF NOT EXISTS idx_user_profiles_account_id ON user_profiles (account_id);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_owner_id ON user_profiles (owner_id);
 
 -- 5. TRIGGERS
 CREATE TRIGGER trg_set_timestamp_profiles BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE PROCEDURE public.trigger_set_timestamp();
