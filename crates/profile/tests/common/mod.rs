@@ -1,7 +1,5 @@
 // crates/profile/tests/common/mod.rs
 
-mod setup_postgres_test_db;
-mod setup_scylla_test_db;
+mod setup_infrastructure;
 
-pub use setup_postgres_test_db::setup_postgres_test_db;
-pub use setup_scylla_test_db::setup_scylla_db;
+pub use setup_infrastructure:: {setup_postgres_test_db, setup_scylla_db, setup_redis_test_cache};

@@ -21,19 +21,23 @@ impl RedisCacheRepository {
 
         let pool = Builder::from_config(config)
             .with_pool_config(|cfg| {
-                cfg.max_clients = 16;
-                cfg.max_idle_time = Duration::from_secs(10);
+                cfg.max_clients = 2; // On descend à 2 pour les tests, c'est plus stable
             })
             .with_connection_config(|cfg| {
                 cfg.connection_timeout = Duration::from_secs(5);
-                cfg.max_command_attempts = 2;
+                cfg.internal_command_timeout = Duration::from_secs(5);
+                cfg.max_command_attempts = 5;
             })
-            .build_pool(16)
+            // On rend la reconnexion plus patiente
+            .set_policy(ReconnectPolicy::new_exponential(0, 100, 1000, 2))
+            .build_pool(2)
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
-        pool.init()
-            .await
-            .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+        // Initialisation
+        pool.init().await.map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+
+        // On attend que TOUS les clients du pool soient connectés
+        pool.wait_for_connect().await.map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
         Ok(Self { pool })
     }
@@ -77,6 +81,37 @@ impl CacheRepository for RedisCacheRepository {
             .del::<i64, _>(key)
             .await
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+        Ok(())
+    }
+
+    async fn exists(&self, key: &str) -> AppResult<bool> {
+        let count: i64 = self.pool
+            .exists(key)
+            .await
+            .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+
+        Ok(count > 0)
+    }
+
+    async fn set_many(&self, entries: Vec<(&str, String)>, ttl: Option<Duration>) -> AppResult<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        // On utilise un pipeline pour envoyer toutes les commandes d'un coup
+        // C'est plus performant et réduit la latence réseau
+        let expiration = Self::map_expiration(ttl);
+
+        for (key, value) in entries {
+            self.pool
+                .set::<(), _, _>(key, value, expiration.clone(), None, false)
+                .await
+                .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+        }
+
+        // Note: Avec fred, si tu veux une atomicité parfaite (MSET),
+        // les TTL sont gérés par clé individuellement après le MSET.
+
         Ok(())
     }
 

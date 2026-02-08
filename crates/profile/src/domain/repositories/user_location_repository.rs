@@ -13,7 +13,7 @@ pub trait LocationRepository: Send + Sync {
     async fn save(&self, location: &UserLocation, tx: Option<&mut dyn Transaction>) -> Result<()>;
 
     /// Récupère la position actuelle d'un utilisateur
-    async fn find_by_id(
+    async fn fetch(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
@@ -21,7 +21,7 @@ pub trait LocationRepository: Send + Sync {
 
     /// Recherche de proximité : Trouve les utilisateurs dans un rayon donné (en mètres)
     /// Retourne une liste de tuples (UserLocation, distance_en_metres)
-    async fn find_nearby(
+    async fn fetch_nearby(
         &self,
         center: GeoPoint,
         region: RegionCode,

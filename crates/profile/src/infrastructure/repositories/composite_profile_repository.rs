@@ -5,7 +5,7 @@ use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 use shared_kernel::errors::Result;
 use std::sync::Arc;
-
+use std::time::Duration;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::{
     ProfileIdentityRepository, ProfileRepository, ProfileStatsRepository,
@@ -17,53 +17,66 @@ use crate::domain::value_objects::ProfileStats;
 pub struct CompositeProfileRepository {
     identity: Arc<dyn ProfileIdentityRepository>,
     stats: Arc<dyn ProfileStatsRepository>,
+    cache: Arc<dyn shared_kernel::domain::repositories::CacheRepository>,
 }
 
 impl CompositeProfileRepository {
     pub fn new(
         identity: Arc<dyn ProfileIdentityRepository>,
         stats: Arc<dyn ProfileStatsRepository>,
+        cache: Arc<dyn shared_kernel::domain::repositories::CacheRepository>,
     ) -> Self {
-        Self { identity, stats }
+        Self { identity, stats, cache }
     }
 
-    fn merge_identity_and_stats(
-        &self,
-        profile_opt: Option<Profile>,
-        stats_res: Result<Option<ProfileStats>>,
-    ) -> Result<Option<Profile>> {
-        match profile_opt {
-            Some(mut profile) => {
-                if let Ok(Some(scylla_stats)) = stats_res {
-                    profile.restore_stats(scylla_stats)
-                }
-                Ok(Some(profile))
+    /// Logique de "Read-Through Cache" pour les statistiques
+    async fn fetch_live_stats(&self, account_id: &AccountId) -> Result<ProfileStats> {
+        let cache_key = format!("profile_stats:{}", account_id);
+
+        // 1. Tenter Redis (on ignore l'erreur Redis pour ne pas bloquer le flux)
+        if let Ok(Some(json_str)) = self.cache.get(&cache_key).await {
+            if let Ok(stats) = serde_json::from_str::<ProfileStats>(&json_str) {
+                return Ok(stats);
             }
-            None => Ok(None),
         }
+
+        // 2. Fallback sur ScyllaDB (notre source de vérité)
+        // Note: On utilise une région par défaut ou celle du contexte si nécessaire
+        let scylla_stats = self.stats.fetch(account_id, &RegionCode::from_raw("eu")).await?;
+        let stats = scylla_stats.unwrap_or_default();
+
+        // 3. Mettre à jour Redis en tâche de fond (Fire and forget)
+        let cache_stats = stats.clone();
+        let cache_repo = self.cache.clone();
+        tokio::spawn(async move {
+            if let Ok(json) = serde_json::to_string(&cache_stats) {
+                let _ = cache_repo.set(&cache_key, &json, Some(Duration::from_secs(3600))).await;
+            }
+        });
+
+        Ok(stats)
     }
 }
 
 #[async_trait]
 impl ProfileRepository for CompositeProfileRepository {
     /// Méthode de fusion : Récupère l'identité et les stats en parallèle.
-    async fn get_profile_by_account_id(
+    async fn assemble_full_profile(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
     ) -> Result<Option<Profile>> {
         // Exécution parallèle des deux requêtes IO pour minimiser la latence
         let (id_res, stats_res) = tokio::join!(
-            self.identity.find_by_id(account_id, region),
-            self.stats.find_by_id(account_id, region)
+            self.identity.fetch(account_id, region),
+            self.fetch_live_stats(account_id)
         );
 
         match id_res? {
             Some(mut profile) => {
-                // Si Scylla répond, on injecte les compteurs réels.
-                // Sinon (ex: Scylla temporairement down), on garde les stats par défaut (0).
-                if let Ok(Some(scylla_stats)) = stats_res {
-                    profile.restore_stats(scylla_stats)
+                // On injecte les stats (soit Redis, soit Scylla, soit default)
+                if let Ok(stats) = stats_res {
+                    profile.restore_stats(stats);
                 }
                 Ok(Some(profile))
             }
@@ -71,47 +84,100 @@ impl ProfileRepository for CompositeProfileRepository {
         }
     }
 
-    async fn get_full_profile_by_username(
+    async fn resolve_profile_from_username(
         &self,
-        slug: &Username,
-        reg: &RegionCode,
+        username: &Username,
+        region: &RegionCode,
     ) -> Result<Option<Profile>> {
-        // 1. On cherche d'abord l'identité par slug dans Postgres
-        let id_opt = self.identity.find_by_username(slug, reg).await?;
+        let un_key = username.as_str();
+        let mapping_key = format!("un_to_id:{}", un_key);
 
-        match id_opt {
-            Some(profile) => {
-                // 2. Si trouvé, on récupère les stats par ID dans Scylla
-                let stats_res = self.stats.find_by_id(&profile.account_id(), reg).await;
-                self.merge_identity_and_stats(Some(profile), stats_res)
+        // 1. TENTATIVE "ELITE" : On cherche l'ID dans l'index Redis
+        if let Ok(Some(id_str)) = self.cache.get(&mapping_key).await {
+            if let Ok(account_id) = AccountId::try_new(&id_str) {
+                return self.assemble_full_profile(&account_id, region).await;
+            }
+        }
+
+        // 2. FALLBACK : Si l'index n'existe pas, on passe par Postgres d'abord
+        let profile_opt = self.identity.fetch_by_username(username, region).await?;
+
+        match profile_opt {
+            Some(mut profile) => {
+                let account_id = profile.account_id().clone();
+                let stats = self.fetch_live_stats(&account_id).await?;
+
+                profile.restore_stats(stats);
+
+                let _ = self.cache.set(
+                    &mapping_key,
+                    &account_id.to_string(),
+                    Some(Duration::from_secs(3600))
+                ).await;
+
+                Ok(Some(profile))
             }
             None => Ok(None),
         }
     }
 
-    async fn get_profile_without_stats(
+    async fn fetch_identity_only(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
     ) -> Result<Option<Profile>> {
-        self.identity.find_by_id(account_id, region).await
+        self.identity.fetch(account_id, region).await
     }
 
-    async fn get_profile_stats(
+    async fn fetch_stats_only(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
     ) -> Result<Option<ProfileStats>> {
-        self.stats.find_by_id(account_id, region).await
+        self.stats.fetch(account_id, region).await
     }
 
     // Dans CompositeProfileRepository
-    async fn save(&self, profile: &Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
+    async fn save_identity(&self, profile: &Profile, original: Option<&Profile>, tx: Option<&mut dyn Transaction>) -> Result<()> {
+        // 1. Sauvegarde Postgres
         self.identity.save(profile, tx).await?;
+
+        // 2. Invalidation intelligente
+        if let Some(old) = original {
+            if old.username() != profile.username() {
+                // On supprime l'ancien index car le pseudo n'appartient plus à cet ID
+                let _ = self.cache.delete(&format!("un_to_id:{}", old.username().as_str())).await;
+            }
+        }
+
+        // On invalide toujours le profil complet (stats + identité fusionnées) 
+        // pour forcer le refresh au prochain assemble_full_profile
+        let _ = self.cache.delete(&format!("profile_stats:{}", profile.account_id())).await;
+        let _ = self.cache.delete(&format!("un_to_id:{}", profile.username().as_str())).await;
+
         Ok(())
     }
 
     async fn exists_by_username(&self, username: &Username, region: &RegionCode) -> Result<bool> {
         self.identity.exists_by_username(username, region).await
+    }
+
+    async fn delete_full_profile(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
+        // On récupère le profile pour avoir le username (pour nettoyer l'index Redis)
+        if let Ok(Some(profile)) = self.identity.fetch(account_id, region).await {
+            let un_key = format!("idx:un_to_id:{}", profile.username().as_str());
+            let stats_key = format!("profile_stats:{}", account_id);
+
+            let _ = self.cache.delete(&un_key).await;
+            let _ = self.cache.delete(&stats_key).await;
+        }
+
+        // Suppression DB
+        let _ = tokio::join!(
+            self.identity.delete(account_id, region),
+            self.stats.delete(account_id, region)
+        );
+
+        Ok(())
     }
 }

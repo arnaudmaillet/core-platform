@@ -113,7 +113,7 @@ impl LocationRepository for PostgresLocationRepository {
         })).await
     }
 
-    async fn find_by_id(
+    async fn fetch(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
@@ -139,7 +139,7 @@ impl LocationRepository for PostgresLocationRepository {
         row.map(|r| r.try_into()).transpose()
     }
 
-    async fn find_nearby(
+    async fn fetch_nearby(
         &self,
         center: GeoPoint,
         region: RegionCode,

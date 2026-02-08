@@ -35,6 +35,8 @@ pub struct ProfileStats {
     pub follower_count: i64,
     #[prost(int64, tag = "2")]
     pub following_count: i64,
+    #[prost(int64, tag = "3")]
+    pub post_count: i64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Profile {

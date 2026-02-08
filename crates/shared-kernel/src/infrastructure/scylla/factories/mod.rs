@@ -1,3 +1,3 @@
-mod scylla_factory;
+mod scylla_config;
 
-pub use scylla_factory::{ScyllaConfig, create_scylla_session};
+pub use scylla_config::{ScyllaConfig, create_scylla_session};

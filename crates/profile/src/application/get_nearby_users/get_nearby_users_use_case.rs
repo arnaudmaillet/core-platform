@@ -20,7 +20,7 @@ impl GetNearbyUsersUseCase {
         // 1. Appel au repository PostGIS (filtre déjà le ghost_mode = false)
         let raw_results = self
             .repo
-            .find_nearby(cmd.center, cmd.region, cmd.radius_meters, cmd.limit)
+            .fetch_nearby(cmd.center, cmd.region, cmd.radius_meters, cmd.limit)
             .await?;
 
         let mut dtos = Vec::new();

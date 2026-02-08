@@ -40,36 +40,41 @@ impl UpdateSocialLinksUseCase {
 
     async fn try_execute_once(&self, cmd: &UpdateSocialLinksCommand) -> Result<Profile> {
         // 1. Récupération du profil
-        let mut profile = self
+        let original_profile = self
             .repo
-            .get_profile_by_account_id(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.account_id, &cmd.region)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application de la logique métier
         // L'entité vérifie si les liens ont changé, incrémente la version et émet l'événement
-        if !profile.update_social_links(&cmd.region, cmd.new_links.clone())? {
-            return Ok(profile)
+        let mut profile_to_update = original_profile.clone();
+        
+        if !profile_to_update.update_social_links(&cmd.region, cmd.new_links.clone())? {
+            return Ok(original_profile)
         };
 
         // 3. Extraction des événements
-        let events = profile.pull_events();
-        let updated_profile = profile.clone();
+        let events = profile_to_update.pull_events();
+        let updated_profile = profile_to_update.clone();
 
         // 4. Persistence Transactionnelle
         self.tx_manager
             .run_in_transaction(move |mut tx| {
                 let repo = self.repo.clone();
                 let outbox = self.outbox_repo.clone();
-                let profile = profile.clone();
-                let events = events.clone();
+                
+                let original_for_tx = original_profile.clone();
+                let updated_for_tx = profile_to_update.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&profile, Some(&mut *tx)).await?;
+                    repo.save_identity(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
 
-                    for event in events {
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
+                    
                     tx.commit().await?;
                     Ok(())
                 })

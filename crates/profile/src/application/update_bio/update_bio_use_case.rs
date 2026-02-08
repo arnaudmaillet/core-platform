@@ -40,40 +40,44 @@ impl UpdateBioUseCase {
 
     async fn try_execute_once(&self, cmd: &UpdateBioCommand) -> Result<Profile> {
         // 1. Récupération du profil
-        // En Hyperscale, on ne charge que l'identité + les champs nécessaires à la mutation
-        let mut profile = self
+        let original_profile = self
             .repo
-            .get_profile_by_account_id(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.account_id, &cmd.region)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
         // 2. Application du changement (Modèle Riche)
-        if !profile.update_bio(&cmd.region, cmd.new_bio.clone())? {
-            return Ok(profile);
+        let mut profile_to_update = original_profile.clone();
+        
+        if !profile_to_update.update_bio(&cmd.region, cmd.new_bio.clone())? {
+            return Ok(original_profile);
         }
 
         // 3. Extraction des événements
-        let events = profile.pull_events();
+        let events = profile_to_update.pull_events();
 
         // Idempotence Applicative : Si aucun événement n'a été produit,
         // c'est que la donnée était identique. On s'arrête là (pas d'IO DB).
         if events.is_empty() {
-            return Ok(profile);
+            return Ok(profile_to_update);
         }
 
-        let updated_profile = profile.clone();
+        let updated_profile = profile_to_update.clone();
 
         // 4. Persistence Transactionnelle
         self.tx_manager
             .run_in_transaction(move |mut tx| {
                 let repo = self.repo.clone();
                 let outbox = self.outbox_repo.clone();
-                let profile = profile.clone();
-                let events = events.clone();
-
+                
+                let original_for_tx = original_profile.clone();
+                let updated_for_tx = profile_to_update.clone();
+                let events_for_tx = events.clone();
+                
                 Box::pin(async move {
-                    repo.save(&profile, Some(&mut *tx)).await?;
-                    for event in events {
+                    repo.save_identity(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+                    
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;

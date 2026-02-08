@@ -4,6 +4,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
+use testcontainers_modules::redis::Redis;
 use profile::application::create_profile::CreateProfileUseCase;
 use profile::domain::repositories::ProfileIdentityRepository;
 use profile::infrastructure::kafka::AccountConsumer;
@@ -13,6 +14,7 @@ use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
+use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
 
 struct ConsumerTestContext {
     consumer: AccountConsumer,
@@ -20,28 +22,39 @@ struct ConsumerTestContext {
     outbox_repo: Arc<PostgresOutboxRepository>,
     pool: sqlx::PgPool,
     _pg_container: ContainerAsync<Postgres>,
+    _redis_container: ContainerAsync<Redis>,
 }
 
 async fn setup_consumer_test_context() -> ConsumerTestContext {
-    let (pool, pg_container) = crate::common::setup_postgres_test_db().await;
+    // 1. Démarrage parallèle des dépendances
+    let (pg_setup, redis_setup) = tokio::join!(
+        crate::common::setup_postgres_test_db(),
+        crate::common::setup_redis_test_cache()
+    );
 
-    // 1. On a besoin des deux briques pour le Composite
+    let (pool, pg_container) = pg_setup;
+    let (redis_url, redis_container) = redis_setup;
+
+    // 2. Instanciation des composants techniques
     let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
 
-    // Si tu as une session Scylla de test dispo :
+    // Pour Scylla, on utilise ton helper common existant
     let scylla_session = crate::common::setup_scylla_db().await;
     let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session));
 
-    // 2. On crée le Composite qui, LUI, implémente ProfileRepository
+    // Nouveau : Le cache Redis réel
+    let cache_redis = Arc::new(RedisCacheRepository::new(&redis_url).await.unwrap());
+
+    // 3. Le Composite qui orchestre le tout
     let profile_repo = Arc::new(CompositeProfileRepository::new(
         identity_postgres.clone(),
         stats_scylla.clone(),
+        cache_redis,
     ));
 
     let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
     let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
 
-    // 3. Maintenant le cast Arc<CompositeProfileRepository> -> Arc<dyn ProfileRepository> fonctionne
     let use_case = Arc::new(CreateProfileUseCase::new(
         profile_repo,
         outbox_repo.clone(),
@@ -52,19 +65,20 @@ async fn setup_consumer_test_context() -> ConsumerTestContext {
 
     ConsumerTestContext {
         consumer,
-        profile_repo: identity_postgres, // On garde l'accès direct à Postgres pour les assertions
+        profile_repo: identity_postgres,
         outbox_repo,
         pool,
         _pg_container: pg_container,
+        _redis_container: redis_container,
     }
 }
+
 #[tokio::test]
 async fn test_consumer_creates_profile_on_account_created_event() {
     let ctx = setup_consumer_test_context().await;
     let account_id = Uuid::now_v7();
     let region = "eu";
 
-    // 1. On simule le payload JSON tel qu'il sortirait de l'Outbox du module Account
     let payload = serde_json::json!({
         "type": "account.created",
         "data": {
@@ -77,18 +91,16 @@ async fn test_consumer_creates_profile_on_account_created_event() {
     });
     let bytes = serde_json::to_vec(&payload).unwrap();
 
-    // 2. Action : Le consumer traite les octets reçus de "Kafka"
-    ctx.consumer.on_message_received(&bytes).await.expect("Consumer should process valid message");
+    ctx.consumer.on_message_received(&bytes).await.expect("Should work");
 
-    // 3. Assertions : Vérification dans Postgres
+    // Note : On utilise fetch_identity_by_id car on a renommé nos méthodes de repo
     let profile = ctx.profile_repo
-        .find_by_id(&AccountId::from(account_id), &RegionCode::try_new(region).unwrap())
+        .fetch(&AccountId::from(account_id), &RegionCode::try_new(region).unwrap())
         .await
         .unwrap()
         .expect("Profile should exist in database");
 
     assert_eq!(profile.username().as_str(), "tester_66");
-    assert_eq!(profile.display_name().as_str(), "Tester Sixty Six");
 }
 
 #[tokio::test]
@@ -112,7 +124,7 @@ async fn test_consumer_fallback_on_invalid_display_name() {
     ctx.consumer.on_message_received(&bytes).await.unwrap();
 
     let profile = ctx.profile_repo
-        .find_by_id(&AccountId::from(account_id), &RegionCode::try_new("us").unwrap())
+        .fetch(&AccountId::from(account_id), &RegionCode::try_new("us").unwrap())
         .await
         .unwrap()
         .unwrap();

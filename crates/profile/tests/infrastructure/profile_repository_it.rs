@@ -45,7 +45,7 @@ async fn test_profile_lifecycle() {
 
     // 3. Mise à jour des champs (et test du JSONB / Versioning)
     let mut profile = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .unwrap();
@@ -55,7 +55,7 @@ async fn test_profile_lifecycle() {
 
     // 4. Récupération et validation des données persistées
     let fetched = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .expect("Should find profile");
@@ -63,10 +63,10 @@ async fn test_profile_lifecycle() {
     assert_eq!(fetched.version(), 2); // Le trigger ou la logique repo a incrémenté la version
 
     // 5. Suppression
-    repo.delete_identity(&account_id, &region)
+    repo.delete(&account_id, &region)
         .await
         .expect("Delete failed");
-    let after_delete = repo.find_by_id(&account_id, &region).await.unwrap();
+    let after_delete = repo.fetch(&account_id, &region).await.unwrap();
     assert!(after_delete.is_none());
 }
 
@@ -76,7 +76,7 @@ async fn test_find_by_username_not_found() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
     let username = Username::try_new("unknown_user".to_string()).unwrap();
 
-    let result = repo.find_by_username(&username, &region).await.unwrap();
+    let result = repo.fetch_by_username(&username, &region).await.unwrap();
     assert!(result.is_none());
 }
 
@@ -99,12 +99,12 @@ async fn test_concurrency_conflict_real_scenario() {
 
     // On simule deux instances chargées en mémoire avec la v1
     let mut instance_a = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .unwrap();
     let mut instance_b = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .unwrap();
@@ -179,7 +179,7 @@ async fn test_partial_update_integrity() {
 
     // 2. Update uniquement du display_name
     let mut to_update = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .unwrap();
@@ -188,7 +188,7 @@ async fn test_partial_update_integrity() {
 
     // 3. Vérification : La bio et l'avatar n'ont pas disparu (pas de NULL accidentel)
     let final_p = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .unwrap();
@@ -233,7 +233,7 @@ async fn test_transaction_rollback_logic() {
     tx_to_rollback.rollback().await.unwrap();
 
     // 5. Vérification
-    let found = repo.find_by_id(&account_id, &region).await.unwrap();
+    let found = repo.fetch(&account_id, &region).await.unwrap();
     assert!(
         found.is_none(),
         "Le profil ne devrait pas exister après un rollback"

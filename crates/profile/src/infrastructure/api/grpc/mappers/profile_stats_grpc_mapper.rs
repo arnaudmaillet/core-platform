@@ -9,6 +9,7 @@ impl From<ProfileStats> for ProtoProfileStats {
         Self {
             follower_count: domain.follower_count() as i64,
             following_count: domain.following_count() as i64,
+            post_count: domain.post_count() as i64,
         }
     }
 }
@@ -17,9 +18,12 @@ impl TryFrom<ProtoProfileStats> for ProfileStats {
     type Error = DomainError;
 
     fn try_from(proto: ProtoProfileStats) -> Result<Self> {
+        // .max(0) est une sécurité au cas où un compteur Scylla
+        // deviendrait négatif par erreur de synchronisation (rare mais possible)
         Ok(Self::new(
             proto.follower_count.max(0) as u64,
             proto.following_count.max(0) as u64,
+            proto.post_count.max(0) as u64,
         ))
     }
 }

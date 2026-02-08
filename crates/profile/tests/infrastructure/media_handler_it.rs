@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
+use testcontainers_modules::redis::Redis;
 use tonic::Request;
 
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
@@ -23,34 +24,43 @@ use profile::infrastructure::repositories::CompositeProfileRepository;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
-
+use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
+use shared_kernel::infrastructure::utils::{setup_full_infrastructure, InfrastructureTestContext};
 // --- UTILS DE SETUP ---
 
 struct TestContext {
     handler: MediaHandler,
+    infra: InfrastructureTestContext,
     identity_repo: Arc<PostgresProfileRepository>,
+    composite_repo: Arc<CompositeProfileRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
     account_id: AccountId,
     region: RegionCode,
-    _pg_container: ContainerAsync<Postgres>,
 }
 
 async fn setup_test_context() -> TestContext {
-    // Utilisation des Singletons configurés précédemment
-    let (pool, pg_container) = crate::common::setup_postgres_test_db().await;
-    let scylla_session = crate::common::setup_scylla_db().await;
+    // 1. Setup unique via le Kernel (Infrastucture partagée)
+    let infra = setup_full_infrastructure(
+        &["./migrations/postgres"],
+        &["./migrations/scylla"]
+    ).await;
 
-    let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session.clone()));
+    // 2. Instanciation des dépôts réels
+    let identity_postgres = Arc::new(PostgresProfileRepository::new(infra.pg_pool.clone()));
+    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
+    let cache_redis = Arc::new(RedisCacheRepository::new(&infra.redis_url).await.unwrap());
 
+    // 3. Création du Composite
     let profile_repo = Arc::new(CompositeProfileRepository::new(
         identity_postgres.clone(),
-        stats_scylla.clone(),
+        stats_scylla,
+        cache_redis,
     ));
 
-    let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(infra.pg_pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(infra.pg_pool.clone()));
 
+    // 4. Injection du Composite dans les Use Cases
     let handler = MediaHandler::new(
         Arc::new(UpdateAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(RemoveAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
@@ -58,28 +68,28 @@ async fn setup_test_context() -> TestContext {
         Arc::new(RemoveBannerUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
     );
 
-    // Seed initial d'un profil sans media
+    // Seed initial
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
     let initial_profile = Profile::builder(
         account_id.clone(),
         region.clone(),
         DisplayName::try_new("Media User").unwrap(),
-        Username::try_new(format!("user_{}", account_id.to_string()[..8].to_string())).unwrap(),
+        Username::try_new(format!("user_{}", &account_id.to_string()[..8])).unwrap(),
     ).build();
 
-    profile_repo.save(&initial_profile, None).await.expect("Failed to seed user");
+    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed user");
 
     TestContext {
         handler,
+        infra,
         identity_repo: identity_postgres,
+        composite_repo: profile_repo,
         outbox_repo,
         account_id,
         region,
-        _pg_container: pg_container,
     }
 }
-
 // --- TESTS ---
 
 #[tokio::test]
@@ -98,7 +108,7 @@ async fn test_media_handler_avatar_lifecycle() {
     assert_eq!(response.into_inner().avatar_url, Some(avatar_url.into()));
 
     // Vérification DB
-    let profile = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let profile = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert_eq!(profile.avatar_url().unwrap().as_str(), avatar_url);
 
     // 2. REMOVE AVATAR
@@ -111,7 +121,7 @@ async fn test_media_handler_avatar_lifecycle() {
     assert_eq!(response.into_inner().avatar_url, None);
 
     // Vérification finale DB
-    let profile_final = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let profile_final = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert!(profile_final.avatar_url().is_none());
 }
 

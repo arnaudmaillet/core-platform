@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
+use testcontainers_modules::redis::Redis;
 use tonic::Request;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 use profile::infrastructure::api::grpc::handlers::IdentityHandler;
@@ -22,34 +23,41 @@ use shared_kernel::domain::Identifier;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
-
+use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
+use shared_kernel::infrastructure::utils::{setup_full_infrastructure, InfrastructureTestContext};
 // --- UTILS DE SETUP ---
 
 struct TestContext {
     handler: IdentityHandler,
-    pool: sqlx::PgPool,
+    infra: InfrastructureTestContext,
     identity_repo: Arc<PostgresProfileRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
     account_id: AccountId,
     region: RegionCode,
-    _pg_container: ContainerAsync<Postgres>,
 }
 
 async fn setup_test_context() -> TestContext {
-    let (pool, pg_container) = crate::common::setup_postgres_test_db().await;
-    let scylla_session = crate::common::setup_scylla_db().await;
+    // 1. Setup unique via le Kernel (Orchestration générique)
+    let infra = setup_full_infrastructure(
+        &["./migrations/postgres"],
+        &["./migrations/scylla"]
+    ).await;
 
-    let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session.clone()));
+    // 2. Instanciation des repositories réels
+    let identity_postgres = Arc::new(PostgresProfileRepository::new(infra.pg_pool.clone()));
+    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
+    let cache_redis = Arc::new(RedisCacheRepository::new(&infra.redis_url).await.unwrap());
 
     let profile_repo = Arc::new(CompositeProfileRepository::new(
         identity_postgres.clone(),
-        stats_scylla.clone(),
+        stats_scylla,
+        cache_redis,
     ));
 
-    let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(infra.pg_pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(infra.pg_pool.clone()));
 
+    // 3. Handler avec les Use Cases
     let handler = IdentityHandler::new(
         Arc::new(UpdateUsernameUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(UpdateDisplayNameUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
@@ -63,19 +71,18 @@ async fn setup_test_context() -> TestContext {
         account_id.clone(),
         region.clone(),
         DisplayName::try_new("Original Name").unwrap(),
-        Username::try_new(format!("user_{}", account_id.to_string()[..8].to_string())).unwrap(),
+        Username::try_new(format!("user_{}", &account_id.to_string()[..8])).unwrap(),
     ).build();
 
-    profile_repo.save(&initial_profile, None).await.expect("Failed to seed user");
+    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed user");
 
     TestContext {
         handler,
-        pool: pool.clone(),
+        infra,
         identity_repo: identity_postgres,
         outbox_repo,
         account_id,
         region,
-        _pg_container: pg_container,
     }
 }
 
@@ -96,7 +103,7 @@ async fn test_identity_handler_update_username_success() {
     assert_eq!(response.into_inner().username, new_username);
 
     // Vérification Postgres (Persistance et Commit)
-    let db_profile = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert_eq!(db_profile.username().as_str(), new_username);
 
     // Vérification Outbox
@@ -117,7 +124,7 @@ async fn test_identity_handler_update_display_name_success() {
 
     ctx.handler.update_display_name(request).await.expect("gRPC call failed");
 
-    let db_profile = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert_eq!(db_profile.display_name().as_str(), new_name);
 }
 
@@ -133,7 +140,7 @@ async fn test_identity_handler_update_privacy_success() {
 
     ctx.handler.update_privacy(request).await.expect("gRPC call failed");
 
-    let db_profile = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert!(db_profile.is_private());
 }
 
@@ -187,7 +194,7 @@ async fn test_identity_handler_rollback_on_outbox_failure() {
     let _ = ctx.handler.update_username(request).await;
 
     // ASSERTION : L'username en base doit TOUJOURS être l'ancien
-    let db_profile = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert_eq!(db_profile.username().as_str(), db_profile.username().as_str());
 }
 
@@ -196,7 +203,7 @@ async fn test_identity_handler_update_with_same_value_is_noop() {
     let ctx = setup_test_context().await;
 
     // 1. Récupérer le profil initial pour avoir l'username actuel
-    let initial_db = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let initial_db = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     let current_username = initial_db.username().as_str().to_string();
     let initial_version = initial_db.metadata().version();
 
@@ -210,7 +217,7 @@ async fn test_identity_handler_update_with_same_value_is_noop() {
     ctx.handler.update_username(request).await.expect("Should be OK");
 
     // 3. Vérifier que la version n'a PAS augmenté
-    let final_db = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let final_db = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
     assert_eq!(final_db.metadata().version(), initial_version, "Version should not increment on NOOP");
 }
 
@@ -233,20 +240,21 @@ async fn test_identity_handler_invalid_inputs() {
 async fn test_identity_handler_optimistic_concurrency_retry() {
     let ctx = setup_test_context().await;
 
-    // On récupère le profil pour avoir la version actuelle
-    let profile = ctx.identity_repo.find_by_id(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let profile = ctx.identity_repo
+        .fetch(&ctx.account_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     let current_version = profile.metadata().version();
 
-    // 1. On va simuler un "concurrent update" en changeant la version en DB
-    // sournoisement juste avant notre appel
     sqlx::query("UPDATE user_profiles SET version = $1 WHERE account_id = $2")
-        .bind(current_version + 10) // On saute des versions pour créer un conflit
+        .bind(current_version + 10)
         .bind(ctx.account_id.as_uuid())
-        .execute(&ctx.pool)
+        .execute(&ctx.infra.pg_pool) // <--- C'est ici le changement
         .await
         .unwrap();
 
-    // 2. L'appel gRPC devrait échouer OU réussir s'il y a un retry intelligent qui recharge l'entité
+    // 3. Appel gRPC
     let mut request = Request::new(UpdateUsernameRequest {
         account_id: ctx.account_id.to_string(),
         new_username: "retry_works".into(),
@@ -255,7 +263,8 @@ async fn test_identity_handler_optimistic_concurrency_retry() {
 
     let result = ctx.handler.update_username(request).await;
 
-    // Si ton with_retry recharge le profil, ça passera. Sinon, ConcurrencyConflict.
+    // Si ton Use Case utilise une stratégie de retry (ex: avec un décorateur ou loop),
+    // il rechargera le profil, verra la nouvelle version, et appliquera le changement.
     assert!(result.is_ok(), "Retry logic should have reloaded the profile and succeeded");
 }
 

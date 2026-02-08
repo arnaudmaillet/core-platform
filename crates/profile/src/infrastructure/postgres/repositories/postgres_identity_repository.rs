@@ -114,11 +114,7 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
         })).await
     }
 
-    async fn find_by_id(
-        &self,
-        account_id: &AccountId,
-        region: &RegionCode,
-    ) -> Result<Option<Profile>> {
+    async fn fetch(&self, account_id: &AccountId, region: &RegionCode, ) -> Result<Option<Profile>> {
         let sql = "SELECT * FROM user_profiles WHERE account_id = $1 AND region_code = $2";
 
         let row = sqlx::query_as::<_, PostgresProfileRow>(sql)
@@ -131,11 +127,7 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
         row.map(|r| r.try_into()).transpose()
     }
 
-    async fn find_by_username(
-        &self,
-        username: &Username,
-        region: &RegionCode,
-    ) -> Result<Option<Profile>> {
+    async fn fetch_by_username(&self, username: &Username, region: &RegionCode, ) -> Result<Option<Profile>> {
         let sql = "SELECT * FROM user_profiles WHERE username = $1 AND region_code = $2";
 
         let row = sqlx::query_as::<_, PostgresProfileRow>(sql)
@@ -162,7 +154,7 @@ impl ProfileIdentityRepository for PostgresProfileRepository {
         Ok(row.get(0))
     }
 
-    async fn delete_identity(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
+    async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
         let pool = self.pool.clone();
         let uid = *account_id;
         let reg = region.clone();
