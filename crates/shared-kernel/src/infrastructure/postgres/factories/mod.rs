@@ -1,3 +1,3 @@
-mod postgres_factory;
+mod postgres_config;
 
-pub use postgres_factory::{DbConfig, create_postgres_pool};
+pub use postgres_config::{PostgresConfig, create_postgres_pool};

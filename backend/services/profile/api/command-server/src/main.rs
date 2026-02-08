@@ -30,9 +30,10 @@ use profile::infrastructure::scylla::utils::run_scylla_migrations;
 
 // Shared Kernel
 use shared_kernel::infrastructure::grpc::region_interceptor;
-use shared_kernel::infrastructure::postgres::factories::{DbConfig, create_postgres_pool};
+use shared_kernel::infrastructure::postgres::factories::{PostgresConfig, create_postgres_pool};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
+use shared_kernel::infrastructure::redis::factories::{create_redis_repository, RedisConfig};
 use shared_kernel::infrastructure::scylla::factories::{ScyllaConfig, create_scylla_session};
 
 #[tokio::main]
@@ -43,9 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- 1. INITIALISATION DES CLIENTS DB ---
 
     // Configuration et création de la pool Postgres (Shared Kernel)
-    let mut db_config = DbConfig::from_env()?;
-    db_config.max_connections = 5;
-    let pool = create_postgres_pool(&db_config).await?;
+    let postgres_config = PostgresConfig::from_env()?;
+    let pool = create_postgres_pool(&postgres_config).await?;
 
     run_postgres_migrations(&pool).await?;
     println!("✅ Postgres migrations completed.");
@@ -57,6 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_scylla_migrations(&scylla_session).await?;
     println!("✅ ScyllaDB migrations completed.");
 
+    // Configuration et création de Redis (Shared Kernel)
+    let redis_config = RedisConfig::from_env()?;
+    let cache_redis = create_redis_repository(&redis_config).await?;
+    println!("✅ Redis connection established.");
+
     // --- 2. INITIALISATION DES REPOSITORIES (Infrastructure) ---
 
     // Implémentations techniques (On clone les pools car elles sont conçues pour ça)
@@ -67,6 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let profile_repo = Arc::new(CompositeProfileRepository::new(
         identity_postgres.clone(),
         stats_scylla.clone(),
+        cache_redis.clone(),
     ));
 
     // Outils techniques partagés pour la cohérence des données (Transaction + Outbox)
