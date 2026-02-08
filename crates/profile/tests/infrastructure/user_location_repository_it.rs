@@ -26,7 +26,7 @@ async fn test_location_upsert_lifecycle() {
     repo.save(&loc, None).await.expect("Save failed");
 
     let mut fetched = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .expect("Should exist");
@@ -41,7 +41,7 @@ async fn test_location_upsert_lifecycle() {
 
     // 5. Verification
     let final_check = repo
-        .find_by_id(&account_id, &region)
+        .fetch(&account_id, &region)
         .await
         .unwrap()
         .unwrap();
@@ -72,7 +72,7 @@ async fn test_find_nearby_users() {
     let center = GeoPoint::try_new(2.3522, 48.8566).unwrap();
     // Augmentons un peu le rayon à 15km pour être large et éliminer le doute sur la distance
     let results = repo
-        .find_nearby(center, region, 15_000.0, 10)
+        .fetch_nearby(center, region, 15_000.0, 10)
         .await
         .unwrap();
 
@@ -90,7 +90,7 @@ async fn test_ghost_mode_is_excluded_from_nearby() {
 
     repo.save(&ghost_user, None).await.unwrap();
 
-    let results = repo.find_nearby(point, region, 1000.0, 10).await.unwrap();
+    let results = repo.fetch_nearby(point, region, 1000.0, 10).await.unwrap();
 
     // L'utilisateur est juste là, mais en Ghost Mode, il ne doit pas apparaître
     assert_eq!(results.len(), 0);
@@ -111,14 +111,14 @@ async fn test_find_nearby_edge_of_radius() {
 
     // 1. Recherche à 9km : trop court
     let results_9k = repo
-        .find_nearby(center, region.clone(), 9_000.0, 10)
+        .fetch_nearby(center, region.clone(), 9_000.0, 10)
         .await
         .unwrap();
     assert_eq!(results_9k.len(), 0);
 
     // 2. Recherche à 12km : doit le trouver
     let results_12k = repo
-        .find_nearby(center, region, 12_000.0, 10)
+        .fetch_nearby(center, region, 12_000.0, 10)
         .await
         .unwrap();
     assert_eq!(
@@ -144,7 +144,7 @@ async fn test_regional_isolation_nearby() {
 
     // Si on cherche en EU, on ne doit pas voir le US
     let results = repo
-        .find_nearby(point, region_eu, 1000.0, 10)
+        .fetch_nearby(point, region_eu, 1000.0, 10)
         .await
         .unwrap();
     assert_eq!(results.len(), 1);

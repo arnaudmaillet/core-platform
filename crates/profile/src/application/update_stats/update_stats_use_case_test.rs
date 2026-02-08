@@ -30,7 +30,7 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let stats = repo
-            .find_by_id(&account_id, &region)
+            .fetch(&account_id, &region)
             .await
             .unwrap()
             .unwrap();
@@ -64,7 +64,7 @@ mod tests {
 
         // Assert
         let stats = repo
-            .find_by_id(&account_id, &region)
+            .fetch(&account_id, &region)
             .await
             .unwrap()
             .unwrap();

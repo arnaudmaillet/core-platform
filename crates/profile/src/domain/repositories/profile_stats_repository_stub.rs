@@ -22,7 +22,7 @@ impl Default for ProfileStatsRepositoryStub {
 
 #[async_trait]
 impl ProfileStatsRepository for ProfileStatsRepositoryStub {
-    async fn find_by_id(
+    async fn fetch(
         &self,
         account_id: &AccountId,
         region: &RegionCode,
@@ -53,14 +53,14 @@ impl ProfileStatsRepository for ProfileStatsRepositoryStub {
         let key = (account_id.clone(), region.clone());
 
         // Utilisation de entry pour modifier l'élément en place
-        let stats = map.entry(key).or_insert_with(|| ProfileStats::new(0, 0));
+        let stats = map.entry(key).or_insert_with(|| ProfileStats::new(0, 0, 0));
 
         apply_delta_to_stats(stats, follower_delta, following_delta);
 
         Ok(())
     }
 
-    async fn delete_stats(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
+    async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
         let mut map = self.stats.lock().unwrap();
         map.remove(&(account_id.clone(), region.clone()));
         Ok(())

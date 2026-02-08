@@ -32,11 +32,11 @@ impl LocationRepository for LocationRepositoryStub {
         Ok(())
     }
 
-    async fn find_by_id(&self, _id: &AccountId, _r: &RegionCode) -> Result<Option<UserLocation>> {
+    async fn fetch(&self, _id: &AccountId, _r: &RegionCode) -> Result<Option<UserLocation>> {
         Ok(self.location_to_return.lock().unwrap().clone())
     }
 
-    async fn find_nearby(
+    async fn fetch_nearby(
         &self,
         _center: GeoPoint,
         _region: RegionCode,

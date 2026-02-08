@@ -24,7 +24,7 @@ async fn test_outbox_with_real_profile_events() {
     let event = ProfileEvent::UsernameChanged {
         id: Uuid::new_v4(),
         account_id: account_id.clone(),
-        region: region.clone(), // <--- AJOUTÉ ICI
+        region: region.clone(),
         old_username: Username::try_new("old_bob").unwrap(),
         new_username: Username::try_new("new_bob").unwrap(),
         occurred_at: Utc::now(),
@@ -98,7 +98,7 @@ async fn test_outbox_atomic_rollback_with_profile() {
 
     // 5. VERIFICATIONS
     let p_found = profile_repo
-        .find_by_id(&profile.account_id(), &profile.region_code())
+        .fetch(&profile.account_id(), &profile.region_code())
         .await
         .unwrap();
     assert!(

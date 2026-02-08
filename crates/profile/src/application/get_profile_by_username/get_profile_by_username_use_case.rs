@@ -53,7 +53,7 @@ impl GetProfileByUsernameUseCase {
 
                 async move {
                     let p = repo
-                        .get_full_profile_by_username(&username, &region)
+                        .resolve_profile_from_username(&username, &region)
                         .await?
                         .ok_or_else(|| DomainError::NotFound {
                             entity: "Profile",

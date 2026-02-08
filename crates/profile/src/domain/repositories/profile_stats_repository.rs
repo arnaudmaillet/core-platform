@@ -5,7 +5,7 @@ use shared_kernel::errors::Result;
 
 #[async_trait]
 pub trait ProfileStatsRepository: Send + Sync {
-    async fn find_by_id(&self, id: &AccountId, reg: &RegionCode) -> Result<Option<ProfileStats>>;
+    async fn fetch(&self, id: &AccountId, reg: &RegionCode) -> Result<Option<ProfileStats>>;
     async fn save(
         &self,
         id: &AccountId,
@@ -14,5 +14,5 @@ pub trait ProfileStatsRepository: Send + Sync {
         following_delta: i64,
         post_delta: i64,
     ) -> Result<()>;
-    async fn delete_stats(&self, id: &AccountId, reg: &RegionCode) -> Result<()>;
+    async fn delete(&self, id: &AccountId, reg: &RegionCode) -> Result<()>;
 }

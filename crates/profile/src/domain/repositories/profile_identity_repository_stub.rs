@@ -43,54 +43,44 @@ impl ProfileIdentityRepository for ProfileRepositoryStub {
         }
         Ok(())
     }
-    async fn find_by_id(&self, _id: &AccountId, _r: &RegionCode) -> Result<Option<Profile>> {
+    async fn fetch(&self, _id: &AccountId, _r: &RegionCode) -> Result<Option<Profile>> {
         Ok(self.profile_to_return.lock().unwrap().clone())
     }
-    async fn find_by_username(&self, _: &Username, _: &RegionCode) -> Result<Option<Profile>> {
+    async fn fetch_by_username(&self, _: &Username, _: &RegionCode) -> Result<Option<Profile>> {
         Ok(self.profile_to_return.lock().unwrap().clone())
     }
     async fn exists_by_username(&self, _u: &Username, _r: &RegionCode) -> Result<bool> {
         Ok(*self.exists_return.lock().unwrap())
     }
-    async fn delete_identity(&self, _: &AccountId, _: &RegionCode) -> Result<()> {
+    async fn delete(&self, _: &AccountId, _: &RegionCode) -> Result<()> {
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl ProfileRepository for ProfileRepositoryStub {
-    async fn get_profile_by_account_id(
-        &self,
-        id: &AccountId,
-        r: &RegionCode,
-    ) -> Result<Option<Profile>> {
-        self.find_by_id(id, r).await
+    async fn assemble_full_profile(&self, id: &AccountId, r: &RegionCode, ) -> Result<Option<Profile>> {
+        self.fetch(id, r).await
     }
-    async fn get_full_profile_by_username(
-        &self,
-        username: &Username,
-        region: &RegionCode,
-    ) -> Result<Option<Profile>> {
-        self.find_by_username(username, region).await
+    async fn resolve_profile_from_username(&self, username: &Username, region: &RegionCode, ) -> Result<Option<Profile>> {
+        self.fetch_by_username(username, region).await
     }
-    async fn get_profile_without_stats(
-        &self,
-        id: &AccountId,
-        r: &RegionCode,
-    ) -> Result<Option<Profile>> {
-        self.find_by_id(id, r).await
+    async fn fetch_identity_only(&self, id: &AccountId, r: &RegionCode, ) -> Result<Option<Profile>> {
+        self.fetch(id, r).await
     }
-    async fn get_profile_stats(
-        &self,
-        _: &AccountId,
-        _: &RegionCode,
-    ) -> Result<Option<ProfileStats>> {
-        Ok(None) // Généralement géré par le StatsRepoStub maintenant
+    async fn fetch_stats_only(&self, _: &AccountId, _: &RegionCode, ) -> Result<Option<ProfileStats>> {
+        Ok(None)
     }
-    async fn save(&self, p: &Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
+    async fn save_identity(&self, p: &Profile, _original: Option<&Profile>, tx: Option<&mut dyn Transaction>) -> Result<()> {
         ProfileIdentityRepository::save(self, p, tx).await
     }
     async fn exists_by_username(&self, u: &Username, r: &RegionCode) -> Result<bool> {
         ProfileIdentityRepository::exists_by_username(self, u, r).await
+    }
+    async fn delete_full_profile(&self, _id: &AccountId, _r: &RegionCode) -> Result<()> {
+        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+            return Err(err);
+        }
+        Ok(())
     }
 }

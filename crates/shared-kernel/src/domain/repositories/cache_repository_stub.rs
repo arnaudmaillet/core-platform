@@ -48,6 +48,26 @@ impl CacheRepository for CacheRepositoryStub {
         Ok(())
     }
 
+    async fn exists(&self, key: &str) -> AppResult<bool> {
+        if self.fail_all {
+            return Err(AppError::new(ErrorCode::InternalError, "Cache Down"));
+        }
+        Ok(self.storage.lock().unwrap().contains_key(key))
+    }
+
+    async fn set_many(&self, entries: Vec<(&str, String)>, _ttl: Option<Duration>) -> AppResult<()> {
+        if self.fail_all {
+            return Err(AppError::new(ErrorCode::InternalError, "Cache Down"));
+        }
+
+        let mut map = self.storage.lock().unwrap();
+        for (key, value) in entries {
+            map.insert(key.to_string(), value);
+        }
+
+        Ok(())
+    }
+
     async fn invalidate_pattern(&self, pattern: &str) -> AppResult<()> {
         if self.fail_all {
             return Err(AppError::new(ErrorCode::InternalError, "Cache Down"));

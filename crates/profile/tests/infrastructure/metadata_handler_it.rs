@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
+use testcontainers_modules::redis::Redis;
 use tonic::Request;
 
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, LocationLabel};
@@ -24,57 +25,74 @@ use profile::infrastructure::repositories::CompositeProfileRepository;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
-
+use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
 // --- UTILS DE SETUP ---
 
 struct TestContext {
     handler: MetadataHandler,
     identity_repo: Arc<PostgresProfileRepository>,
+    composite_repo: Arc<CompositeProfileRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
     account_id: AccountId,
     region: RegionCode,
     _pg_container: ContainerAsync<Postgres>,
+    _redis_container: ContainerAsync<Redis>,
 }
 
 async fn setup_test_context() -> TestContext {
-    let (pool, pg_container) = crate::common::setup_postgres_test_db().await;
+    // 1. Setup des containers en parallèle (Postgres + Redis)
+    let (pg_setup, redis_setup) = tokio::join!(
+        crate::common::setup_postgres_test_db(),
+        crate::common::setup_redis_test_cache()
+    );
+
+    let (pool, pg_container) = pg_setup;
+    let (redis_url, redis_container) = redis_setup;
     let scylla_session = crate::common::setup_scylla_db().await;
 
+    // 2. Instanciation des briques d'infrastructure
     let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session.clone()));
+    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session));
+    let cache_redis = Arc::new(RedisCacheRepository::new(&redis_url).await.unwrap());
 
+    // 3. Le Composite (Façade unique)
     let profile_repo = Arc::new(CompositeProfileRepository::new(
         identity_postgres.clone(),
         stats_scylla.clone(),
+        cache_redis,
     ));
 
     let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
     let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
 
+    // 4. Injection du Composite dans les Use Cases
     let handler = MetadataHandler::new(
         Arc::new(UpdateBioUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(UpdateLocationLabelUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(UpdateSocialLinksUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
     );
 
+    // Seed initial via le composite
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
     let initial_profile = Profile::builder(
         account_id.clone(),
         region.clone(),
         DisplayName::try_new("Metadata User").unwrap(),
-        Username::try_new(format!("meta_{}", account_id.to_string()[..8].to_string())).unwrap(),
+        Username::try_new(format!("meta_{}", &account_id.to_string()[..8])).unwrap(),
     ).build();
 
-    profile_repo.save(&initial_profile, None).await.expect("Failed to seed user");
+    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed user");
 
     TestContext {
         handler,
         identity_repo: identity_postgres,
+        composite_repo: profile_repo,
         outbox_repo,
         account_id,
         region,
         _pg_container: pg_container,
+        _redis_container: redis_container,
     }
 }
 

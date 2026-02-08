@@ -252,7 +252,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl crate::domain::repositories::ProfileRepository for CountingRepo {
-            async fn get_full_profile_by_username(
+            async fn resolve_profile_from_username(
                 &self,
                 _: &Username,
                 _: &RegionCode,
@@ -262,21 +262,21 @@ mod tests {
                 Ok(Some(p))
             }
 
-            async fn get_profile_by_account_id(
+            async fn assemble_full_profile(
                 &self,
                 _: &AccountId,
                 _: &RegionCode,
             ) -> shared_kernel::errors::Result<Option<Profile>> {
                 Ok(Some(self.profile.clone()))
             }
-            async fn get_profile_without_stats(
+            async fn fetch_identity_only(
                 &self,
                 _: &AccountId,
                 _: &RegionCode,
             ) -> shared_kernel::errors::Result<Option<Profile>> {
                 Ok(Some(self.profile.clone()))
             }
-            async fn get_profile_stats(
+            async fn fetch_stats_only(
                 &self,
                 _: &AccountId,
                 _: &RegionCode,
@@ -286,9 +286,10 @@ mod tests {
             }
 
             // Bridge vers ProfileIdentityRepository
-            async fn save(
+            async fn save_identity(
                 &self,
                 _: &Profile,
+                _: Option<&Profile>,
                 _: Option<&mut dyn shared_kernel::domain::transaction::Transaction>,
             ) -> shared_kernel::errors::Result<()> {
                 Ok(())
@@ -299,6 +300,10 @@ mod tests {
                 _: &RegionCode,
             ) -> shared_kernel::errors::Result<bool> {
                 Ok(true)
+            }
+
+            async fn delete_full_profile(&self, _: &AccountId, _: &RegionCode) -> shared_kernel::errors::Result<()> {
+                Ok(())
             }
         }
 
@@ -311,14 +316,14 @@ mod tests {
             ) -> shared_kernel::errors::Result<()> {
                 Ok(())
             }
-            async fn find_by_id(
+            async fn fetch(
                 &self,
                 _: &AccountId,
                 _: &RegionCode,
             ) -> shared_kernel::errors::Result<Option<Profile>> {
                 Ok(Some(self.profile.clone()))
             }
-            async fn find_by_username(
+            async fn fetch_by_username(
                 &self,
                 _: &Username,
                 _: &RegionCode,
@@ -332,7 +337,7 @@ mod tests {
             ) -> shared_kernel::errors::Result<bool> {
                 Ok(true)
             }
-            async fn delete_identity(
+            async fn delete(
                 &self,
                 _: &AccountId,
                 _: &RegionCode,
