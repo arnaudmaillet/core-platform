@@ -39,9 +39,9 @@ impl UpdateLocationUseCase {
         // 1. Récupération
         let mut location = self
             .repo
-            .fetch(&cmd.account_id, &cmd.region)
+            .fetch(&cmd.profile_id, &cmd.region)
             .await?
-            .ok_or_not_found(&cmd.account_id)?;
+            .ok_or_not_found(&cmd.profile_id)?;
 
         // 2. Throttling Métier (Optimisation de la charge DB)
         // On ne fait rien si le mouvement est insignifiant.

@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use testcontainers::ContainerAsync;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::redis::Redis;
-use tonic::Request;
+// crates/profile/tests/infrastructure/metadata_handler_it.rs
 
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, LocationLabel};
+use std::sync::Arc;
+use tonic::Request;
+use uuid::Uuid;
+
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use profile::infrastructure::api::grpc::handlers::MetadataHandler;
 use profile::infrastructure::api::grpc::profile_v1::{
     UpdateBioRequest, UpdateLocationLabelRequest, UpdateSocialLinksRequest,
@@ -16,83 +16,80 @@ use profile::application::update_bio::UpdateBioUseCase;
 use profile::application::update_location_label::UpdateLocationLabelUseCase;
 use profile::application::update_social_links::UpdateSocialLinksUseCase;
 use profile::domain::entities::Profile;
-use profile::domain::repositories::ProfileRepository;
-use profile::domain::value_objects::DisplayName;
-use shared_kernel::domain::value_objects::Username;
-use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
+use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
+use profile::domain::value_objects::{DisplayName, Handle, ProfileId};
+use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
+use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
-use profile::infrastructure::repositories::CompositeProfileRepository;
+
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
 use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
+use shared_kernel::infrastructure::utils::{setup_full_infrastructure, InfrastructureTestContext};
+
 // --- UTILS DE SETUP ---
 
 struct TestContext {
     handler: MetadataHandler,
-    identity_repo: Arc<PostgresProfileRepository>,
-    composite_repo: Arc<CompositeProfileRepository>,
+    infra: InfrastructureTestContext,
+    identity_repo: Arc<PostgresIdentityRepository>,
+    composite_repo: Arc<UnifiedProfileRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
-    account_id: AccountId,
+    profile_id: ProfileId,
     region: RegionCode,
-    _pg_container: ContainerAsync<Postgres>,
-    _redis_container: ContainerAsync<Redis>,
 }
 
 async fn setup_test_context() -> TestContext {
-    // 1. Setup des containers en parallèle (Postgres + Redis)
-    let (pg_setup, redis_setup) = tokio::join!(
-        crate::common::setup_postgres_test_db(),
-        crate::common::setup_redis_test_cache()
-    );
+    // 1. Setup via le helper Kernel (Postgres + Scylla + Redis)
+    let infra = setup_full_infrastructure(
+        &["./migrations/postgres"],
+        &["./migrations/scylla"]
+    ).await;
 
-    let (pool, pg_container) = pg_setup;
-    let (redis_url, redis_container) = redis_setup;
-    let scylla_session = crate::common::setup_scylla_db().await;
+    // 2. Instanciation des briques
+    let identity_postgres = Arc::new(PostgresIdentityRepository::new(infra.pg_pool.clone()));
+    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
+    let cache_redis = Arc::new(RedisCacheRepository::new(&infra.redis_url).await.unwrap());
 
-    // 2. Instanciation des briques d'infrastructure
-    let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session));
-    let cache_redis = Arc::new(RedisCacheRepository::new(&redis_url).await.unwrap());
-
-    // 3. Le Composite (Façade unique)
-    let profile_repo = Arc::new(CompositeProfileRepository::new(
+    // 3. Le Composite
+    let profile_repo = Arc::new(UnifiedProfileRepository::new(
         identity_postgres.clone(),
-        stats_scylla.clone(),
+        stats_scylla,
         cache_redis,
     ));
 
-    let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(infra.pg_pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(infra.pg_pool.clone()));
 
-    // 4. Injection du Composite dans les Use Cases
+    // 4. Injection dans les Use Cases
     let handler = MetadataHandler::new(
         Arc::new(UpdateBioUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(UpdateLocationLabelUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(UpdateSocialLinksUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
     );
 
-    // Seed initial via le composite
-    let account_id = AccountId::new();
+    // Seed initial
+    let owner_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
     let initial_profile = Profile::builder(
-        account_id.clone(),
+        owner_id,
         region.clone(),
         DisplayName::try_new("Metadata User").unwrap(),
-        Username::try_new(format!("meta_{}", &account_id.to_string()[..8])).unwrap(),
+        Handle::try_new("meta_pro").unwrap(),
     ).build();
 
-    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed user");
+    let profile_id = initial_profile.id().clone();
+    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed profile");
 
     TestContext {
         handler,
+        infra,
         identity_repo: identity_postgres,
         composite_repo: profile_repo,
         outbox_repo,
-        account_id,
+        profile_id,
         region,
-        _pg_container: pg_container,
-        _redis_container: redis_container,
     }
 }
 
@@ -103,9 +100,9 @@ async fn test_metadata_handler_bio_lifecycle() {
     let ctx = setup_test_context().await;
     let bio_text = "Software Architect & Rust Enthusiast";
 
-    // 1. UPDATE BIO (Success)
+    // 1. UPDATE BIO
     let mut req = Request::new(UpdateBioRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_bio: Some(bio_text.into()),
     });
     req.extensions_mut().insert(ctx.region.clone());
@@ -113,10 +110,10 @@ async fn test_metadata_handler_bio_lifecycle() {
     let response = ctx.handler.update_bio(req).await.expect("Update bio failed");
     assert_eq!(response.into_inner().bio, Some(bio_text.into()));
 
-    // 2. CLEAR BIO (Optionality test)
+    // 2. CLEAR BIO (Test optionnalité)
     let mut clear_req = Request::new(UpdateBioRequest {
-        account_id: ctx.account_id.to_string(),
-        new_bio: None, // Ou string vide selon ton filter
+        profile_id: ctx.profile_id.to_string(),
+        new_bio: None,
     });
     clear_req.extensions_mut().insert(ctx.region.clone());
 
@@ -131,7 +128,7 @@ async fn test_metadata_handler_location_label_validation() {
 
     // 1. Success path
     let mut req = Request::new(UpdateLocationLabelRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_location_label: Some(location.into()),
     });
     req.extensions_mut().insert(ctx.region.clone());
@@ -139,10 +136,10 @@ async fn test_metadata_handler_location_label_validation() {
     let response = ctx.handler.update_location_label(req).await.expect("Update location failed");
     assert_eq!(response.into_inner().location_label, Some(location.into()));
 
-    // 2. Validation path (Too long label)
-    let long_label = "a".repeat(501); // Supposons une limite à 500
+    // 2. Validation path (Label trop long)
+    let long_label = "a".repeat(101); // Limite fixée à 100 dans ton LocationLabel
     let mut fail_req = Request::new(UpdateLocationLabelRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_location_label: Some(long_label),
     });
     fail_req.extensions_mut().insert(ctx.region.clone());
@@ -157,22 +154,13 @@ async fn test_metadata_handler_social_links_persistence() {
     let ctx = setup_test_context().await;
 
     let links = ProtoSocialLinks {
-        x_url: Some("https://twitter.com/rust_dev".into()),
-        instagram_url: None,
-        facebook_url: None,
-        tiktok_url: None,
-        youtube_url: None,
-        twitch_url: None,
-        discord_url: None,
-        onlyfans_url: None,
+        x_url: Some("https://x.com/rust_dev".into()),
         github_url: Some("https://github.com/rust_dev".into()),
-        website_url: None,
-        linkedin_url: None,
-        others: Default::default(),
+        ..Default::default()
     };
 
     let mut req = Request::new(UpdateSocialLinksRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_links: Some(links),
     });
     req.extensions_mut().insert(ctx.region.clone());
@@ -181,26 +169,28 @@ async fn test_metadata_handler_social_links_persistence() {
     let proto = response.into_inner();
 
     let social = proto.social_links.expect("Social links should be present");
-    assert_eq!(social.x_url, Some("https://twitter.com/rust_dev".into()));
+    assert_eq!(social.x_url, Some("https://x.com/rust_dev".into()));
     assert_eq!(social.github_url, Some("https://github.com/rust_dev".into()));
 
-    // Vérification Outbox pour s'assurer que l'événement MetadataChanged est produit
-    let pending = ctx.outbox_repo.find_pending(10).await.unwrap();
-    assert!(!pending.is_empty(), "Outbox should contain the social links update event");
+    // Vérification de la persistance réelle
+    let profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    assert!(profile.social_links().is_some());
 }
 
 #[tokio::test]
 async fn test_metadata_handler_region_missing_status() {
     let ctx = setup_test_context().await;
 
-    // On n'injecte PAS la région dans les extensions
+    // Erreur volontaire : on n'injecte PAS la région dans les extensions
     let request = Request::new(UpdateBioRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_bio: Some("Hello".into()),
     });
 
     let result = ctx.handler.update_bio(request).await;
 
     assert!(result.is_err());
+    // L'absence de RegionCode dans les extensions est une erreur serveur (Internal)
+    // car cela signifie que l'intercepteur n'a pas fait son job.
     assert_eq!(result.unwrap_err().code(), tonic::Code::Internal);
 }

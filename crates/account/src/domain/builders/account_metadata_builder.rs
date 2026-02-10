@@ -12,7 +12,7 @@ pub struct AccountMetadataBuilder {
     role: AccountRole,
     trust_score: i32,
     estimated_ip: Option<String>,
-    version: i32,
+    version: u64,
 }
 
 impl AccountMetadataBuilder {
@@ -41,7 +41,7 @@ impl AccountMetadataBuilder {
         moderation_notes: Option<String>,
         estimated_ip: Option<String>,
         updated_at: DateTime<Utc>,
-        version: i32,
+        version: u64,
     ) -> AccountMetadata {
         AccountMetadata::restore(
             account_id,

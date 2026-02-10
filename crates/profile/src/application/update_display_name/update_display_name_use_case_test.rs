@@ -7,12 +7,12 @@ mod tests {
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope, DomainEvent};
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
 
     use crate::application::update_display_name::{UpdateDisplayNameCommand, UpdateDisplayNameUseCase};
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle, ProfileId}; // Ajout Handle et ProfileId
     use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour instancier le Use Case avec ses dépendances
@@ -32,21 +32,22 @@ mod tests {
     #[tokio::test]
     async fn test_update_display_name_success() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new(); // Contexte proprio
         let region = RegionCode::try_new("eu").unwrap();
         let initial_profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Old Name"),
-            Username::try_new("user123").unwrap(),
+            Handle::try_new("user123").unwrap(), // Username -> Handle
         )
             .build();
 
+        let profile_id = initial_profile.id().clone(); // Pivot identité
         let use_case = setup(Some(initial_profile));
         let new_display_name = DisplayName::from_raw("New Name");
 
         let cmd = UpdateDisplayNameCommand {
-            account_id: account_id.clone(),
+            profile_id: profile_id.clone(),
             region: region.clone(),
             new_display_name: new_display_name.clone(),
         };
@@ -58,27 +59,28 @@ mod tests {
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert_eq!(updated.display_name(), &new_display_name);
-        assert_eq!(updated.version(), 2); // Initial(1) -> Updated(2)
+        assert_eq!(updated.version(), 2);
     }
 
     #[tokio::test]
     async fn test_update_display_name_fails_on_region_mismatch() {
-        // Arrange : Profil en EU, Commande en US
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             actual_region,
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
 
         let cmd = UpdateDisplayNameCommand {
-            account_id,
+            profile_id,
             region: wrong_region,
             new_display_name: DisplayName::from_raw("Hacker Name"),
         };
@@ -86,28 +88,29 @@ mod tests {
         // Act
         let result = use_case.execute(cmd).await;
 
-        // Assert : Doit être bloqué par l'entité
+        // Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
     async fn test_update_display_name_idempotency() {
-        // Arrange : Nom identique à l'existant
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let current_name = DisplayName::from_raw("Alice");
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             current_name.clone(),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
 
         let cmd = UpdateDisplayNameCommand {
-            account_id,
+            profile_id,
             region,
             new_display_name: current_name,
         };
@@ -118,7 +121,6 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let updated = result.unwrap();
-        // La version ne doit pas avoir bougé (reste 1) car l'entité a retourné false
         assert_eq!(updated.version(), 1);
     }
 
@@ -128,7 +130,7 @@ mod tests {
         let use_case = setup(None);
 
         let cmd = UpdateDisplayNameCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::try_new("eu").unwrap(),
             new_display_name: DisplayName::from_raw("Ghost"),
         };
@@ -143,16 +145,17 @@ mod tests {
     #[tokio::test]
     async fn test_update_display_name_concurrency_conflict() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
 
-        // Stub simulant une collision de version lors du save
+        let profile_id = profile.id().clone();
+
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
@@ -168,7 +171,7 @@ mod tests {
         );
 
         let cmd = UpdateDisplayNameCommand {
-            account_id,
+            profile_id,
             region,
             new_display_name: DisplayName::from_raw("New Alice"),
         };
@@ -183,14 +186,16 @@ mod tests {
     #[tokio::test]
     async fn test_update_display_name_transaction_failure() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
+
+        let profile_id = profile.id().clone();
 
         struct FailingOutbox;
         #[async_trait]
@@ -212,7 +217,7 @@ mod tests {
 
         // Act
         let result = use_case.execute(UpdateDisplayNameCommand {
-            account_id,
+            profile_id,
             region,
             new_display_name: DisplayName::from_raw("Failing Name"),
         }).await;

@@ -7,9 +7,9 @@ use shared_kernel::errors::{DomainError, Result};
 impl From<ProfileStats> for ProtoProfileStats {
     fn from(domain: ProfileStats) -> Self {
         Self {
-            follower_count: domain.follower_count() as i64,
-            following_count: domain.following_count() as i64,
-            post_count: domain.post_count() as i64,
+            follower_count: domain.follower_count(),
+            following_count: domain.following_count(),
+            post_count: domain.post_count(),
         }
     }
 }

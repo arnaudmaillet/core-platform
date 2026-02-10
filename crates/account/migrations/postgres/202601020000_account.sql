@@ -12,8 +12,8 @@ END $$;
 
 -- 2. TABLE ACCOUNTS
 CREATE TABLE IF NOT EXISTS accounts (
-                                        id UUID PRIMARY KEY,
-                                        region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+    id UUID PRIMARY KEY,
+    region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
     external_id TEXT NOT NULL UNIQUE,
     username TEXT NOT NULL UNIQUE,
     email TEXT UNIQUE,
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 -- 3. SETTINGS
 CREATE TABLE IF NOT EXISTS account_settings (
-                                             account_id UUID NOT NULL,
-                                             region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+    account_id UUID NOT NULL,
+    region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
     settings JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS account_settings (
 
 -- 4. INTERNAL METADATA (Security & Trust)
 CREATE TABLE IF NOT EXISTS account_metadata (
-                                                      account_id UUID NOT NULL,
-                                                      region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+    account_id UUID NOT NULL,
+    region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
     role internal_role NOT NULL DEFAULT 'user',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,

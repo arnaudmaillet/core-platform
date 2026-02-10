@@ -2,22 +2,22 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::application::update_stats::{UpdateStatsCommand, UpdateStatsUseCase};
     use crate::domain::repositories::{ProfileStatsRepository, ProfileStatsRepositoryStub};
+    use crate::domain::value_objects::ProfileId; // Ajout du ProfileId
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use std::sync::Arc;
 
     #[tokio::test]
     async fn test_update_stats_nominal_increment() {
         // Arrange
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let profile_id = ProfileId::new(); // Pivot sur le profil
+        let region = RegionCode::try_new("eu").unwrap();
         let repo = Arc::new(ProfileStatsRepositoryStub::default());
         let use_case = UpdateStatsUseCase::new(repo.clone());
 
         let cmd = UpdateStatsCommand {
-            account_id: account_id.clone(),
+            profile_id: profile_id.clone(),
             region: region.clone(),
             follower_delta: 5,
             following_delta: 2,
@@ -30,7 +30,7 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let stats = repo
-            .fetch(&account_id, &region)
+            .fetch(&profile_id, &region)
             .await
             .unwrap()
             .unwrap();
@@ -41,18 +41,18 @@ mod tests {
     #[tokio::test]
     async fn test_update_stats_nominal_decrement() {
         // Arrange : On part d'un état à 10 followers
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let profile_id = ProfileId::new();
+        let region = RegionCode::try_new("eu").unwrap();
         let repo = Arc::new(ProfileStatsRepositoryStub::default());
 
-        // On initialise le stub
-        repo.save(&account_id, &region, 10, 0, 0)
+        // On initialise le stub (save utilise profile_id + region)
+        repo.save(&profile_id, &region, 10, 0, 0)
             .await
             .unwrap();
 
         let use_case = UpdateStatsUseCase::new(repo.clone());
         let cmd = UpdateStatsCommand {
-            account_id: account_id.clone(),
+            profile_id: profile_id.clone(),
             region: region.clone(),
             follower_delta: -3, // On perd 3 followers
             following_delta: 0,
@@ -64,7 +64,7 @@ mod tests {
 
         // Assert
         let stats = repo
-            .fetch(&account_id, &region)
+            .fetch(&profile_id, &region)
             .await
             .unwrap()
             .unwrap();
@@ -79,8 +79,8 @@ mod tests {
 
         let use_case = UpdateStatsUseCase::new(repo.clone());
         let cmd = UpdateStatsCommand {
-            account_id: AccountId::new(),
-            region: RegionCode::from_raw("eu"),
+            profile_id: ProfileId::new(),
+            region: RegionCode::try_new("eu").unwrap(),
             follower_delta: 1,
             following_delta: 0,
             post_delta: 0,
@@ -103,14 +103,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_stats_failure_after_max_retries() {
-        // Arrange : Le repo échoue 10 fois (le défaut de RetryConfig est souvent 3 ou 5)
+        // Arrange : Le repo échoue 10 fois
         let repo = Arc::new(ProfileStatsRepositoryStub::default());
         *repo.fail_count.lock().unwrap() = 10;
 
         let use_case = UpdateStatsUseCase::new(repo.clone());
         let cmd = UpdateStatsCommand {
-            account_id: AccountId::new(),
-            region: RegionCode::from_raw("eu"),
+            profile_id: ProfileId::new(),
+            region: RegionCode::try_new("eu").unwrap(),
             follower_delta: 1,
             following_delta: 0,
             post_delta: 0,
@@ -122,7 +122,7 @@ mod tests {
         // Assert
         assert!(
             result.is_err(),
-            "Le Use Case doit finir par échouer si Scylla est définitivement HS"
+            "Le Use Case doit finir par échouer si ScyllaDB est définitivement HS"
         );
     }
 }

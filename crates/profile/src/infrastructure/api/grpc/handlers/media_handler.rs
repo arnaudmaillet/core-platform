@@ -8,7 +8,8 @@ use crate::application::remove_avatar::RemoveAvatarUseCase;
 use crate::application::remove_banner::RemoveBannerUseCase;
 use crate::application::update_avatar::UpdateAvatarUseCase;
 use crate::application::update_banner::UpdateBannerUseCase;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url};
+use shared_kernel::domain::value_objects::RegionCode;
+use crate::infrastructure::api::grpc::mappers::ToGrpcStatus;
 
 // Commandes
 use crate::application::remove_avatar::RemoveAvatarCommand;
@@ -59,40 +60,28 @@ impl ProfileMediaService for MediaHandler {
     async fn update_avatar(&self, request: Request<UpdateAvatarRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = UpdateAvatarCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.update_avatar_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.update_avatar_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 
     async fn remove_avatar(&self, request: Request<RemoveAvatarRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = RemoveAvatarCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.remove_avatar_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.remove_avatar_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 
     async fn update_banner(&self, request: Request<UpdateBannerRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = UpdateBannerCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.update_banner_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.update_banner_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 
     async fn remove_banner(&self, request: Request<RemoveBannerRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = RemoveBannerCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.remove_banner_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.remove_banner_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 }

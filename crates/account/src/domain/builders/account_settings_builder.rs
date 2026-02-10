@@ -15,7 +15,7 @@ pub struct AccountSettingsBuilder {
     notifications: Option<NotificationSettings>,
     appearance: Option<AppearanceSettings>,
     push_tokens: Vec<PushToken>,
-    version: i32,
+    version: u64,
 }
 
 impl AccountSettingsBuilder {
@@ -43,7 +43,7 @@ impl AccountSettingsBuilder {
         timezone: Timezone,
         push_tokens: Vec<PushToken>,
         updated_at: DateTime<Utc>,
-        version: i32,
+        version: u64,
     ) -> AccountSettings {
         AccountSettings::restore(
             account_id,

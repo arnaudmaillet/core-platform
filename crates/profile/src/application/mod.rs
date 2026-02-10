@@ -1,7 +1,7 @@
 pub mod create_profile;
 pub mod decrement_post_count;
 pub mod get_nearby_users;
-pub mod get_profile_by_username;
+pub mod get_profile_by_handle;
 pub mod increment_post_count;
 pub mod remove_avatar;
 pub mod remove_banner;
@@ -14,4 +14,4 @@ pub mod update_location_label;
 pub mod update_privacy;
 pub mod update_social_links;
 pub mod update_stats;
-pub mod update_username;
+pub mod update_handle;

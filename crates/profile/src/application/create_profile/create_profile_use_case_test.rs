@@ -3,9 +3,9 @@ mod tests {
     use super::*;
     use crate::application::create_profile::CreateProfileCommand;
     use crate::application::create_profile::create_profile_use_case::CreateProfileUseCase;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle};
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
@@ -31,14 +31,14 @@ mod tests {
     async fn test_create_profile_success() {
         // Arrange
         let use_case = setup();
-        let account_id = AccountId::new();
-        let username = Username::try_new("john_doe").unwrap();
+        let owner_id = AccountId::new();
+        let handle = Handle::try_new("john_doe").unwrap();
 
         let cmd = CreateProfileCommand {
-            account_id: account_id.clone(),
+            owner_id: owner_id.clone(),
             region: RegionCode::from_raw("eu"),
             display_name: DisplayName::from_raw("John"),
-            username: username.clone(),
+            handle: handle.clone(),
         };
 
         // Act
@@ -47,14 +47,14 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let profile = result.unwrap();
-        assert_eq!(profile.account_id(), &account_id);
-        assert_eq!(profile.username(), &username);
+        assert_eq!(profile.owner_id(), &owner_id);
+        assert_eq!(profile.handle(), &handle);
         assert_eq!(profile.version(), 1);
         assert_eq!(profile.post_count(), 0);
     }
 
     #[tokio::test]
-    async fn test_create_profile_conflict_username() {
+    async fn test_create_profile_conflict_handle() {
         // Arrange : On simule que le pseudo existe déjà
         let repo = Arc::new(ProfileRepositoryStub {
             exists_return: Mutex::new(true), // Simulation du doublon
@@ -65,10 +65,10 @@ mod tests {
             CreateProfileUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
-            account_id: AccountId::new(),
+            owner_id: AccountId::new(),
             region: RegionCode::from_raw("eu"),
             display_name: DisplayName::from_raw("John"),
-            username: Username::try_new("already_taken").unwrap(),
+            handle: Handle::try_new("already_taken").unwrap(),
         };
 
         // Act
@@ -76,7 +76,7 @@ mod tests {
 
         // Assert
         assert!(
-            matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "username")
+            matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "handle")
         );
     }
 
@@ -92,10 +92,10 @@ mod tests {
             CreateProfileUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
-            account_id: AccountId::new(),
+            owner_id: AccountId::new(),
             region: RegionCode::from_raw("eu"),
             display_name: DisplayName::from_raw("John"),
-            username: Username::try_new("johnny").unwrap(),
+            handle: Handle::try_new("johnny").unwrap(),
         };
 
         // Act
@@ -131,10 +131,10 @@ mod tests {
         );
 
         let cmd = CreateProfileCommand {
-            account_id: AccountId::new(),
+            owner_id: AccountId::new(),
             region: RegionCode::from_raw("eu"),
             display_name: DisplayName::from_raw("John"),
-            username: Username::try_new("johnny").unwrap(),
+            handle: Handle::try_new("johnny").unwrap(),
         };
 
         // Act
@@ -147,13 +147,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_profile_race_condition_database_unique_violation() {
-        // Arrange : On simule que exists_by_username dit "Non" (étape 1),
+        // Arrange : On simule que exists_by_handle dit "Non" (étape 1),
         // mais que le save échoue quand même car quelqu'un a été plus rapide (étape 2).
         let repo = Arc::new(ProfileRepositoryStub {
             exists_return: Mutex::new(false),
             error_to_return: Mutex::new(Some(DomainError::AlreadyExists {
                 entity: "Profile",
-                field: "username",
+                field: "handle",
                 value: "fast_user".to_string(),
             })),
             ..Default::default()
@@ -163,10 +163,10 @@ mod tests {
             CreateProfileUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
         let cmd = CreateProfileCommand {
-            account_id: AccountId::new(),
+            owner_id: AccountId::new(),
             region: RegionCode::from_raw("eu"),
             display_name: DisplayName::from_raw("Fast"),
-            username: Username::try_new("fast_user").unwrap(),
+            handle: Handle::try_new("fast_user").unwrap(),
         };
 
         // Act
@@ -174,7 +174,7 @@ mod tests {
 
         // Assert
         assert!(
-            matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "username")
+            matches!(result, Err(DomainError::AlreadyExists { field, .. }) if field == "handle")
         );
     }
 }

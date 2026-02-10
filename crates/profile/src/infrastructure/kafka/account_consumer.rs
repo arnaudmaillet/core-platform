@@ -5,7 +5,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::application::create_profile::{CreateProfileUseCase, CreateProfileCommand};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
-use crate::domain::value_objects::DisplayName;
+use crate::domain::value_objects::{DisplayName, Handle};
 
 /// Le contrat local : on ne définit que ce qui nous intéresse.
 #[derive(Deserialize)]
@@ -46,20 +46,32 @@ impl AccountConsumer {
 
         match event {
             AccountIncomingEvent::Created { account_id, region, username, display_name } => {
+                // 1. On mappe le username du compte vers le handle du profil
+                // C'est ici que la règle métier "Profile Main Handle = Account Username" s'applique
+                let handle = Handle::try_new(username.clone())
+                    .map_err(|e| format!("Invalid handle from account username: {}", e))?;
+
+                // 2. Préparation de la commande avec le renommage sémantique
                 let command = CreateProfileCommand {
-                    account_id: AccountId::from(account_id),
+                    owner_id: AccountId::from(account_id),
                     region: RegionCode::try_new(region).map_err(|e| e.to_string())?,
-                    username: Username::try_new(username.clone()).map_err(|e| e.to_string())?,
-                    display_name: match DisplayName::try_new(display_name) {
+                    handle, // username -> handle
+                    display_name: match DisplayName::try_new(display_name.clone()) {
                         Ok(vo) => vo,
-                        Err(_) => DisplayName::try_new(username).map_err(|e| e.to_string())?,
+                        Err(_) => DisplayName::try_new(username) // Si le username est trop court/long, ça échouera aussi ici
+                            .map_err(|e| format!("Could not fallback display_name: {}", e))?,
                     },
                 };
 
+                // 3. Exécution
                 match self.use_case.execute(command).await {
                     Ok(_) => Ok(()),
+                    // Si le profil existe déjà (ex: message rejoué), on acquitte sans erreur
                     Err(shared_kernel::errors::DomainError::AlreadyExists { .. }) => Ok(()),
-                    Err(e) => Err(Box::new(e)),
+                    Err(e) => {
+                        eprintln!("KAFKA CONSUMER ERROR: {:?}", e);
+                        Err(Box::new(e))
+                    },
                 }
             },
             AccountIncomingEvent::Ignored => Ok(()),

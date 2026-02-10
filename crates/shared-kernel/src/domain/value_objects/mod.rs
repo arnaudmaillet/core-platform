@@ -14,6 +14,7 @@ mod timezone;
 mod url;
 mod username;
 mod value_object;
+mod slug;
 
 pub use account_id::AccountId;
 pub use altitude::Altitude;
@@ -30,4 +31,5 @@ pub use speed::Speed;
 pub use timezone::Timezone;
 pub use url::Url;
 pub use username::Username;
+pub use slug::Slug;
 pub use value_object::ValueObject;

@@ -2,21 +2,19 @@
 
 use crate::domain::builders::UserLocationBuilder;
 use crate::domain::entities::UserLocation;
-use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
+use crate::domain::value_objects::{LocationMetrics, MovementMetrics, ProfileId};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{
-    AccountId, Altitude, Heading, LocationAccuracy, RegionCode, Speed,
-};
+use shared_kernel::domain::value_objects::{ Altitude, Heading, LocationAccuracy, RegionCode, Speed };
 use shared_kernel::errors::{DomainError, Result};
 use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct PostgresLocationRow {
-    pub account_id: Uuid,
+    pub profile_id: Uuid,
     pub region_code: String,
     pub lon: f64,
     pub lat: f64,
@@ -27,7 +25,7 @@ pub struct PostgresLocationRow {
     pub is_ghost_mode: bool,
     pub privacy_radius_meters: i32,
     pub updated_at: DateTime<Utc>,
-    pub version: i32,
+    pub version: i64,
     pub distance: Option<f64>,
 }
 
@@ -52,10 +50,13 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
             _ => None,
         };
 
+        let version_u64: u64 = row.version.try_into()
+            .map_err(|_| DomainError::Internal("Negative version in database".into()))?;
+
         // 3. Utilisation du tunnel RESTORE (Chemin Elite)
         // On ne passe plus par .build() qui est réservé à la création de nouveaux points GPS.
         Ok(UserLocationBuilder::restore(
-            AccountId::from_uuid(row.account_id),
+            ProfileId::from_uuid(row.profile_id),
             RegionCode::from_raw(row.region_code),
             GeoPoint::from_raw(row.lon, row.lat),
             metrics,
@@ -63,7 +64,7 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
             row.is_ghost_mode,
             row.privacy_radius_meters,
             row.updated_at,
-            row.version,
+            version_u64,
         ))
     }
 }
@@ -71,7 +72,7 @@ impl TryFrom<PostgresLocationRow> for UserLocation {
 impl From<&UserLocation> for PostgresLocationRow {
     fn from(l: &UserLocation) -> Self {
         Self {
-            account_id: l.account_id().as_uuid(),
+            profile_id: l.profile_id().as_uuid(),
             region_code: l.region_code().to_string(),
             lat: l.coordinates().lat(),
             lon: l.coordinates().lon(),
@@ -85,7 +86,7 @@ impl From<&UserLocation> for PostgresLocationRow {
             is_ghost_mode: l.is_ghost_mode(),
             privacy_radius_meters: l.privacy_radius_meters(),
             updated_at: l.updated_at(),
-            version: l.version(),
+            version: l.version() as i64,
             distance: None,
         }
     }

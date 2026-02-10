@@ -4,10 +4,10 @@
 mod tests {
     use crate::application::update_privacy::{UpdatePrivacyCommand, UpdatePrivacyUseCase};
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle, ProfileId}; // Ajout Handle et ProfileId
 
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope, DomainEvent};
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
     use async_trait::async_trait;
@@ -31,19 +31,21 @@ mod tests {
     #[tokio::test]
     async fn test_update_privacy_to_private_success() {
         // Arrange : Profil public par défaut (is_private = false)
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let initial_profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(), // Username -> Handle
         )
             .build();
 
+        let profile_id = initial_profile.id().clone(); // Pivot identité
         let use_case = setup(Some(initial_profile));
+
         let cmd = UpdatePrivacyCommand {
-            account_id,
+            profile_id: profile_id.clone(),
             region,
             is_private: true, // Passage en privé
         };
@@ -55,27 +57,28 @@ mod tests {
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert!(updated.is_private());
-        assert_eq!(updated.version(), 2); // Init(1) -> Update(2)
+        assert_eq!(updated.version(), 2);
     }
 
     #[tokio::test]
     async fn test_update_privacy_fails_on_region_mismatch() {
-        // Arrange : Profil en EU, Commande en US
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             actual_region,
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
 
         let cmd = UpdatePrivacyCommand {
-            account_id,
+            profile_id,
             region: wrong_region,
             is_private: true,
         };
@@ -83,30 +86,30 @@ mod tests {
         // Act
         let result = use_case.execute(cmd).await;
 
-        // Assert : Doit être bloqué par l'entité
+        // Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
     async fn test_update_privacy_idempotency() {
         // Arrange : Profil déjà privé
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         )
             .build();
 
-        // On le passe en privé manuellement pour le setup (nécessite la région)
+        let profile_id = profile.id().clone();
         profile.update_privacy(&region, true).unwrap(); // Version passe à 2
 
         let use_case = setup(Some(profile));
 
         let cmd = UpdatePrivacyCommand {
-            account_id: account_id.clone(),
+            profile_id,
             region,
             is_private: true, // On redemande "privé"
         };
@@ -117,7 +120,6 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let profile_result = result.unwrap();
-        // L'idempotence métier empêche l'incrément de version (reste à 2)
         assert_eq!(profile_result.version(), 2);
     }
 
@@ -127,7 +129,7 @@ mod tests {
         let use_case = setup(None);
 
         let cmd = UpdatePrivacyCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::try_new("eu").unwrap(),
             is_private: true,
         };
@@ -142,17 +144,18 @@ mod tests {
     #[tokio::test]
     async fn test_update_privacy_concurrency_conflict() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         )
             .build();
 
-        // Stub simulant une erreur de version lors du save
+        let profile_id = profile.id().clone();
+
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
@@ -170,7 +173,7 @@ mod tests {
         // Act
         let result = use_case
             .execute(UpdatePrivacyCommand {
-                account_id,
+                profile_id,
                 region,
                 is_private: true,
             })
@@ -186,15 +189,17 @@ mod tests {
     #[tokio::test]
     async fn test_update_privacy_atomic_outbox_failure() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         )
             .build();
+
+        let profile_id = profile.id().clone();
 
         struct FailingOutbox;
         #[async_trait]
@@ -217,7 +222,7 @@ mod tests {
         // Act
         let result = use_case
             .execute(UpdatePrivacyCommand {
-                account_id,
+                profile_id,
                 region,
                 is_private: true,
             })

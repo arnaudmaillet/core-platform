@@ -10,6 +10,7 @@ use crate::application::update_location_label::{
 };
 use crate::application::update_social_links::{UpdateSocialLinksCommand, UpdateSocialLinksUseCase};
 use shared_kernel::domain::value_objects::RegionCode;
+use crate::infrastructure::api::grpc::mappers::ToGrpcStatus;
 // Proto généré
 use super::super::profile_v1::{
     Profile as ProtoProfile, UpdateBioRequest, UpdateLocationLabelRequest,
@@ -50,30 +51,21 @@ impl ProfileMetadataService for MetadataHandler {
     async fn update_bio(&self, request: Request<UpdateBioRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = UpdateBioCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.update_bio_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.update_bio_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 
     async fn update_location_label(&self, request: Request<UpdateLocationLabelRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = UpdateLocationLabelCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.update_location_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.update_location_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 
     async fn update_social_links(&self, request: Request<UpdateSocialLinksRequest>) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = UpdateSocialLinksCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.update_social_links_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.update_social_links_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 }

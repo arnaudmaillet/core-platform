@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProfileSearchDocument {
-    pub account_id: String,
-    pub username: String,
+    pub profile_id: String,
+    pub handle: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub suggest: AutocompleteSuggest,

@@ -22,6 +22,7 @@ core_rust_library(
         "@crates//:regex",
         "@crates//:unicode-normalization",
         "@crates//:seahash",
+        "@crates//:idna",
     ],
 
     proc_macro_deps = [

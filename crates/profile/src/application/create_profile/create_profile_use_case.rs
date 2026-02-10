@@ -40,10 +40,10 @@ impl CreateProfileUseCase {
     async fn try_execute_once(&self, cmd: &CreateProfileCommand) -> Result<Profile> {
         // 1. Instanciation via le domaine
         let mut profile = Profile::builder(
-            cmd.account_id.clone(),
+            cmd.owner_id.clone(),
             cmd.region.clone(),
             cmd.display_name.clone(),
-            cmd.username.clone(),
+            cmd.handle.clone(),
         )
             .with_privacy(false)
             .build();
@@ -68,11 +68,11 @@ impl CreateProfileUseCase {
 
                 Box::pin(async move {
                     // Check d'unicité (Source de vérité : Postgres via le Repo)
-                    if repo.exists_by_username(&profile_for_tx.username(), &profile_for_tx.region_code()).await? {
+                    if repo.exists_by_handle(&profile_for_tx.handle(), &profile_for_tx.region_code()).await? {
                         return Err(DomainError::AlreadyExists {
                             entity: "Profile",
-                            field: "username",
-                            value: profile_for_tx.username().as_str().to_string(),
+                            field: "handle",
+                            value: profile_for_tx.handle().as_str().to_string(),
                         });
                     }
 

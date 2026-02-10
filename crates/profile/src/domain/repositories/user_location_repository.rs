@@ -4,8 +4,9 @@ use crate::domain::entities::UserLocation;
 use async_trait::async_trait;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::errors::Result;
+use crate::domain::value_objects::ProfileId;
 
 #[async_trait]
 pub trait LocationRepository: Send + Sync {
@@ -15,7 +16,7 @@ pub trait LocationRepository: Send + Sync {
     /// Récupère la position actuelle d'un utilisateur
     async fn fetch(
         &self,
-        account_id: &AccountId,
+        profile_id: &ProfileId,
         region: &RegionCode,
     ) -> Result<Option<UserLocation>>;
 
@@ -29,5 +30,5 @@ pub trait LocationRepository: Send + Sync {
         limit: i64,
     ) -> Result<Vec<(UserLocation, f64)>>;
 
-    async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()>;
+    async fn delete(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<()>;
 }

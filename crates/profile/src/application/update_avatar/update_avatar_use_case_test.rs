@@ -6,12 +6,12 @@ mod tests {
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url};
     use shared_kernel::errors::DomainError;
 
     use crate::application::update_avatar::{UpdateAvatarCommand, UpdateAvatarUseCase};
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle, ProfileId};
     use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour instancier le Use Case avec ses dépendances
@@ -31,21 +31,22 @@ mod tests {
     #[tokio::test]
     async fn test_update_avatar_success() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let initial_profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(), // Username -> Handle
         )
             .build();
 
+        let profile_id = initial_profile.id().clone();
         let use_case = setup(Some(initial_profile));
         let new_url = Url::try_new("https://cdn.com/new_avatar.png").unwrap();
 
         let cmd = UpdateAvatarCommand {
-            account_id: account_id.clone(),
+            profile_id: profile_id.clone(), // Pivot par profile_id
             region: region.clone(),
             new_avatar_url: new_url.clone(),
         };
@@ -57,31 +58,30 @@ mod tests {
         assert!(result.is_ok());
         let updated = result.unwrap();
 
-        // Vérification du changement d'état
         assert_eq!(updated.avatar_url(), Some(&new_url));
-        // Version : 1 (création) + 1 (update légitime) = 2
         assert_eq!(updated.version(), 2);
     }
 
     #[tokio::test]
     async fn test_update_avatar_fails_on_region_mismatch() {
         // Arrange : Profil en EU, Commande en US
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             actual_region,
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
         let new_url = Url::try_new("https://cdn.com/new_avatar.png").unwrap();
 
         let cmd = UpdateAvatarCommand {
-            account_id,
+            profile_id,
             region: wrong_region,
             new_avatar_url: new_url,
         };
@@ -89,34 +89,34 @@ mod tests {
         // Act
         let result = use_case.execute(cmd).await;
 
-        // Assert : La Business Logic de l'entité doit bloquer
+        // Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
     async fn test_update_avatar_idempotency() {
         // Arrange : Profil qui a DÉJÀ cet avatar
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let avatar_url = Url::try_new("https://cdn.com/existing.png").unwrap();
 
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         )
             .build();
 
-        // On simule l'état déjà présent (version passe à 2)
+        let profile_id = profile.id().clone();
         profile.update_avatar(&region, avatar_url.clone()).unwrap();
 
         let use_case = setup(Some(profile));
 
         let cmd = UpdateAvatarCommand {
-            account_id,
+            profile_id,
             region,
-            new_avatar_url: avatar_url, // Même URL
+            new_avatar_url: avatar_url,
         };
 
         // Act
@@ -125,8 +125,6 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let returned_profile = result.unwrap();
-
-        // La version ne doit pas avoir bougé (reste 2) car le domaine a renvoyé false
         assert_eq!(returned_profile.version(), 2);
     }
 
@@ -137,7 +135,7 @@ mod tests {
         let url = Url::try_new("https://cdn.com/photo.png").unwrap();
 
         let cmd = UpdateAvatarCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::try_new("eu").unwrap(),
             new_avatar_url: url,
         };
@@ -152,17 +150,18 @@ mod tests {
     #[tokio::test]
     async fn test_update_avatar_concurrency_conflict() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         )
             .build();
 
-        // Stub simulant une erreur de version lors du save()
+        let profile_id = profile.id().clone();
+
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
@@ -178,7 +177,7 @@ mod tests {
         );
 
         let cmd = UpdateAvatarCommand {
-            account_id,
+            profile_id,
             region,
             new_avatar_url: Url::try_new("https://new.com/avatar.png").unwrap(),
         };
@@ -196,17 +195,18 @@ mod tests {
     #[tokio::test]
     async fn test_update_avatar_db_error() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         )
             .build();
 
-        // Erreur SQL critique simulée
+        let profile_id = profile.id().clone();
+
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::Internal("DB Down".into()))),
@@ -220,7 +220,7 @@ mod tests {
         );
 
         let cmd = UpdateAvatarCommand {
-            account_id,
+            profile_id,
             region,
             new_avatar_url: Url::try_new("https://new.com/avatar.png").unwrap(),
         };

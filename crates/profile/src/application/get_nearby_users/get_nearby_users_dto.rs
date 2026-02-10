@@ -2,11 +2,11 @@
 
 use serde::Serialize;
 use shared_kernel::domain::entities::GeoPoint;
-use shared_kernel::domain::value_objects::AccountId;
+use crate::domain::value_objects::ProfileId;
 
 #[derive(Serialize)]
 pub struct NearbyUserDto {
-    pub account_id: AccountId,
+    pub profile_id: ProfileId,
     pub coordinates: GeoPoint,
     pub distance_meters: f64,
     pub is_obfuscated: bool,

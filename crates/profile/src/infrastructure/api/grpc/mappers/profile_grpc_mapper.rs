@@ -2,30 +2,31 @@
 
 use super::super::profile_v1::Profile as ProtoProfile;
 use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Bio, DisplayName, SocialLinks};
+use crate::domain::value_objects::{Bio, DisplayName, SocialLinks, ProfileId, Handle};
 use crate::infrastructure::api::grpc::mappers::to_timestamp;
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Url};
 use shared_kernel::errors::DomainError;
 
 impl From<Profile> for ProtoProfile {
     fn from(domain: Profile) -> Self {
         Self {
-            account_id: domain.account_id().to_string(),
+            profile_id: domain.id().to_string(),
+            owner_id: domain.owner_id().to_string(),
             region_code: domain.region_code().to_string(),
-            username: domain.username().to_string(),
+            handle: domain.handle().to_string(),
             display_name: domain.display_name().to_string(),
-            bio: domain.bio().map(|b| b.to_string().into()),
-            avatar_url: domain.avatar_url().map(|u| u.to_string().into()),
-            banner_url: domain.banner_url().map(|u| u.to_string().into()),
-            location_label: domain.location_label().map(|l| l.to_string().into()),
+            bio: domain.bio().map(|b| b.to_string()),
+            avatar_url: domain.avatar_url().map(|u| u.to_string()),
+            banner_url: domain.banner_url().map(|u| u.to_string()),
+            location_label: domain.location_label().map(|l| l.to_string()),
             social_links: domain.social_links().map(|s| s.clone().into()),
             stats: Some(domain.stats().clone().into()),
-            post_count: domain.post_count() as i64,
+            post_count: domain.post_count() as u64,
             is_private: domain.is_private(),
             created_at: Some(to_timestamp(domain.created_at())),
             updated_at: Some(to_timestamp(domain.updated_at())),
-            version: domain.metadata().version() as i64,
+            version: domain.version(),
         }
     }
 }
@@ -34,37 +35,36 @@ impl TryFrom<ProtoProfile> for Profile {
     type Error = DomainError;
 
     fn try_from(proto: ProtoProfile) -> Result<Self, Self::Error> {
-        let account_id = AccountId::try_from(proto.account_id)?;
-        let region_code = RegionCode::try_from(proto.region_code)?;
-        let username = Username::try_from(proto.username)?;
-        let display_name = DisplayName::try_from(proto.display_name)?;
-        let social_links = proto.social_links.map(SocialLinks::try_from).transpose()?;
+        let profile_id = ProfileId::try_from(proto.profile_id)?;
+        let owner_id = AccountId::try_from(proto.owner_id)?;
+        let region_code = RegionCode::try_new(proto.region_code)?;
+        let handle = Handle::try_new(proto.handle)?;
+        let display_name = DisplayName::try_new(proto.display_name)?;
 
-        let builder = Profile::builder(account_id, region_code, display_name, username)
-            .with_privacy(proto.is_private)
-            .with_optional_bio(
-                proto
-                    .bio
-                    .filter(|s| !s.trim().is_empty())
-                    .map(Bio::try_from)
-                    .transpose()?,
-            )
-            .with_optional_avatar_url(
-                proto
-                    .avatar_url
-                    .filter(|s| !s.trim().is_empty())
-                    .map(Url::try_from)
-                    .transpose()?,
-            )
-            .with_optional_banner_url(
-                proto
-                    .banner_url
-                    .filter(|s| !s.trim().is_empty())
-                    .map(Url::try_from)
-                    .transpose()?,
-            )
-            .with_optional_social_links(social_links);
+        let social_links = proto.social_links
+            .map(SocialLinks::try_from)
+            .transpose()?;
 
-        Ok(builder.build())
+        // Utilisation de restore() pour préserver l'état (ID et Version)
+        Ok(Profile::restore(
+            profile_id,
+            owner_id,
+            region_code,
+            display_name,
+            handle,
+            proto.bio.filter(|s| !s.trim().is_empty()).map(Bio::from_raw),
+            proto.avatar_url.filter(|s| !s.trim().is_empty()).map(Url::from_raw),
+            proto.banner_url.filter(|s| !s.trim().is_empty()).map(Url::from_raw),
+            proto.location_label.filter(|s| !s.trim().is_empty()).map(LocationLabel::from_raw),
+            social_links,
+            proto.post_count.try_into().map_err(|_| DomainError::Validation {
+                field: "post_count",
+                reason: "Invalid count".into()
+            })?,
+            proto.is_private,
+            proto.version,
+            chrono::Utc::now(),
+            chrono::Utc::now(),
+        ))
     }
 }

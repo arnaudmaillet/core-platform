@@ -42,9 +42,9 @@ impl UpdateDisplayNameUseCase {
         // 1. Récupération du profil
         let original_profile = self
             .repo
-            .assemble_full_profile(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.profile_id, &cmd.region)
             .await?
-            .ok_or_not_found(&cmd.account_id)?;
+            .ok_or_not_found(&cmd.profile_id)?;
 
         // 2. Application du changement via le Modèle Riche
         let mut profile_to_update = original_profile.clone();

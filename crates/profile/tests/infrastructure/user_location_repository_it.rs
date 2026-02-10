@@ -3,10 +3,11 @@
 use crate::common;
 use profile::domain::builders::UserLocationBuilder;
 use profile::domain::repositories::LocationRepository;
+use profile::domain::value_objects::ProfileId;
 use profile::infrastructure::postgres::repositories::PostgresLocationRepository;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 
 async fn setup() -> (
     PostgresLocationRepository,
@@ -19,14 +20,14 @@ async fn setup() -> (
 #[tokio::test]
 async fn test_location_upsert_lifecycle() {
     let (repo, _c) = setup().await;
-    let account_id = AccountId::new();
+    let profile_id = ProfileId::new();
     let region = RegionCode::try_new("eu".to_string()).unwrap();
     let point_a = GeoPoint::try_new(2.3522, 48.8566).unwrap();
-    let loc = UserLocationBuilder::new(account_id.clone(), region.clone(), point_a).build();
+    let loc = UserLocationBuilder::new(profile_id.clone(), region.clone(), point_a).build();
     repo.save(&loc, None).await.expect("Save failed");
 
     let mut fetched = repo
-        .fetch(&account_id, &region)
+        .fetch(&profile_id, &region)
         .await
         .unwrap()
         .expect("Should exist");
@@ -41,7 +42,7 @@ async fn test_location_upsert_lifecycle() {
 
     // 5. Verification
     let final_check = repo
-        .fetch(&account_id, &region)
+        .fetch(&profile_id, &region)
         .await
         .unwrap()
         .unwrap();
@@ -54,13 +55,13 @@ async fn test_find_nearby_users() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
 
     let user_paris = UserLocationBuilder::new(
-        AccountId::new(),
+        ProfileId::new(),
         region.clone(),
         GeoPoint::try_new(2.3522, 48.8566).unwrap(),
     )
     .build();
     let user_boulogne = UserLocationBuilder::new(
-        AccountId::new(),
+        ProfileId::new(),
         region.clone(),
         GeoPoint::try_new(2.2433, 48.8397).unwrap(),
     )
@@ -85,7 +86,7 @@ async fn test_ghost_mode_is_excluded_from_nearby() {
     let region = RegionCode::try_new("eu".to_string()).unwrap();
     let point = GeoPoint::try_new(2.3522, 48.8566).unwrap();
 
-    let mut ghost_user = UserLocationBuilder::new(AccountId::new(), region.clone(), point).build();
+    let mut ghost_user = UserLocationBuilder::new(ProfileId::new(), region.clone(), point).build();
     ghost_user.set_ghost_mode(true);
 
     repo.save(&ghost_user, None).await.unwrap();
@@ -106,7 +107,7 @@ async fn test_find_nearby_edge_of_radius() {
     // À Paris, 0.13 degré de longitude est environ égal à 9.5km.
     // On va placer le point à 0.145 degré, ce qui devrait être autour de 10.5km.
     let just_outside = GeoPoint::try_new(2.3522 + 0.145, 48.8566).unwrap();
-    let loc = UserLocationBuilder::new(AccountId::new(), region.clone(), just_outside).build();
+    let loc = UserLocationBuilder::new(ProfileId::new(), region.clone(), just_outside).build();
     repo.save(&loc, None).await.unwrap();
 
     // 1. Recherche à 9km : trop court
@@ -136,8 +137,8 @@ async fn test_regional_isolation_nearby() {
     let point = GeoPoint::try_new(2.3522, 48.8566).unwrap();
 
     // Deux utilisateurs au MÊME ENDROIT mais dans deux régions différentes
-    let user_eu = UserLocationBuilder::new(AccountId::new(), region_eu.clone(), point).build();
-    let user_us = UserLocationBuilder::new(AccountId::new(), region_us.clone(), point).build();
+    let user_eu = UserLocationBuilder::new(ProfileId::new(), region_eu.clone(), point).build();
+    let user_us = UserLocationBuilder::new(ProfileId::new(), region_us.clone(), point).build();
 
     repo.save(&user_eu, None).await.unwrap();
     repo.save(&user_us, None).await.unwrap();

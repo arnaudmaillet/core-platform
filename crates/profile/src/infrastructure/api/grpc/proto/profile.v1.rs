@@ -31,134 +31,138 @@ pub struct SocialLinks {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ProfileStats {
-    #[prost(int64, tag = "1")]
-    pub follower_count: i64,
-    #[prost(int64, tag = "2")]
-    pub following_count: i64,
-    #[prost(int64, tag = "3")]
-    pub post_count: i64,
+    #[prost(uint64, tag = "1")]
+    pub follower_count: u64,
+    #[prost(uint64, tag = "2")]
+    pub following_count: u64,
+    #[prost(uint64, tag = "3")]
+    pub post_count: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Profile {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub region_code: ::prost::alloc::string::String,
+    pub owner_id: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
-    pub username: ::prost::alloc::string::String,
+    pub region_code: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
+    pub handle: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
     pub display_name: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "5")]
-    pub bio: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "6")]
-    pub avatar_url: ::core::option::Option<::prost::alloc::string::String>,
+    pub bio: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "7")]
-    pub banner_url: ::core::option::Option<::prost::alloc::string::String>,
+    pub avatar_url: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "8")]
-    pub location_label: ::core::option::Option<::prost::alloc::string::String>,
+    pub banner_url: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "9")]
-    pub social_links: ::core::option::Option<SocialLinks>,
+    pub location_label: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "10")]
+    pub social_links: ::core::option::Option<SocialLinks>,
+    #[prost(message, optional, tag = "11")]
     pub stats: ::core::option::Option<ProfileStats>,
-    #[prost(int64, tag = "11")]
-    pub post_count: i64,
-    #[prost(bool, tag = "12")]
+    #[prost(uint64, tag = "12")]
+    pub post_count: u64,
+    #[prost(bool, tag = "13")]
     pub is_private: bool,
-    #[prost(message, optional, tag = "13")]
-    pub created_at: ::core::option::Option<::prost_types::Timestamp>,
     #[prost(message, optional, tag = "14")]
+    pub created_at: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "15")]
     pub updated_at: ::core::option::Option<::prost_types::Timestamp>,
-    #[prost(int64, tag = "15")]
-    pub version: i64,
+    #[prost(uint64, tag = "16")]
+    pub version: u64,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ProfileSummary {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub username: ::prost::alloc::string::String,
+    pub owner_id: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
-    pub display_name: ::prost::alloc::string::String,
+    pub handle: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
+    pub display_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
     pub avatar_url: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct UpdateUsernameRequest {
+pub struct UpdateHandleRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub new_username: ::prost::alloc::string::String,
+    pub new_handle: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateDisplayNameRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub new_display_name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdatePrivacyRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(bool, tag = "2")]
     pub is_private: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateAvatarRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub new_avatar_url: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateBannerRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub new_banner_url: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RemoveAvatarRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RemoveBannerRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateBioRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub new_bio: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateLocationLabelRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub new_location_label: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpdateSocialLinksRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub new_links: ::core::option::Option<SocialLinks>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct IncrementPostCountRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub post_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DecrementPostCountRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub post_id: ::prost::alloc::string::String,
 }
@@ -256,9 +260,9 @@ pub mod profile_identity_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        pub async fn update_username(
+        pub async fn update_handle(
             &mut self,
-            request: impl tonic::IntoRequest<super::UpdateUsernameRequest>,
+            request: impl tonic::IntoRequest<super::UpdateHandleRequest>,
         ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status> {
             self.inner
                 .ready()
@@ -270,15 +274,12 @@ pub mod profile_identity_service_client {
                 })?;
             let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/profile.v1.ProfileIdentityService/UpdateUsername",
+                "/profile.v1.ProfileIdentityService/UpdateHandle",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new(
-                        "profile.v1.ProfileIdentityService",
-                        "UpdateUsername",
-                    ),
+                    GrpcMethod::new("profile.v1.ProfileIdentityService", "UpdateHandle"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -346,9 +347,9 @@ pub mod profile_identity_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with ProfileIdentityServiceServer.
     #[async_trait]
     pub trait ProfileIdentityService: std::marker::Send + std::marker::Sync + 'static {
-        async fn update_username(
+        async fn update_handle(
             &self,
-            request: tonic::Request<super::UpdateUsernameRequest>,
+            request: tonic::Request<super::UpdateHandleRequest>,
         ) -> std::result::Result<tonic::Response<super::Profile>, tonic::Status>;
         async fn update_display_name(
             &self,
@@ -437,13 +438,13 @@ pub mod profile_identity_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/profile.v1.ProfileIdentityService/UpdateUsername" => {
+                "/profile.v1.ProfileIdentityService/UpdateHandle" => {
                     #[allow(non_camel_case_types)]
-                    struct UpdateUsernameSvc<T: ProfileIdentityService>(pub Arc<T>);
+                    struct UpdateHandleSvc<T: ProfileIdentityService>(pub Arc<T>);
                     impl<
                         T: ProfileIdentityService,
-                    > tonic::server::UnaryService<super::UpdateUsernameRequest>
-                    for UpdateUsernameSvc<T> {
+                    > tonic::server::UnaryService<super::UpdateHandleRequest>
+                    for UpdateHandleSvc<T> {
                         type Response = super::Profile;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -451,11 +452,11 @@ pub mod profile_identity_service_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::UpdateUsernameRequest>,
+                            request: tonic::Request<super::UpdateHandleRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as ProfileIdentityService>::update_username(
+                                <T as ProfileIdentityService>::update_handle(
                                         &inner,
                                         request,
                                     )
@@ -470,7 +471,7 @@ pub mod profile_identity_service_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = UpdateUsernameSvc(inner);
+                        let method = UpdateHandleSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

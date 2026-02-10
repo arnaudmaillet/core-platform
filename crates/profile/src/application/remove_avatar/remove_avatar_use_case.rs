@@ -43,9 +43,9 @@ impl RemoveAvatarUseCase {
         // 1. Récupération du profil existant
         let original_profile = self
             .repo
-            .assemble_full_profile(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.profile_id, &cmd.region)
             .await?
-            .ok_or_not_found(&cmd.account_id)?;
+            .ok_or_not_found(&cmd.profile_id)?;
 
         // 2. Application de la suppression dans le Modèle Riche
         // Si profile.avatar_url était déjà None, remove_avatar() retourne false.

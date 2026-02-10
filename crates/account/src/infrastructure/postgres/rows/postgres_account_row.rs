@@ -5,7 +5,7 @@ use crate::domain::value_objects::{
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use shared_kernel::domain::Identifier;
-use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 use uuid::Uuid;
 
@@ -27,16 +27,43 @@ pub struct PostgresAccountRow {
     pub state: PostgresAccountState,
     pub birth_date: Option<NaiveDate>,
     pub locale: String,
-    pub version: i32,
+    pub version: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_active_at: Option<DateTime<Utc>>,
+}
+
+
+impl TryFrom<&Account> for PostgresAccountRow {
+    type Error = DomainError;
+
+    fn try_from(a: &Account) -> Result<Self> {
+        Ok(Self {
+            id: a.id().as_uuid(),
+            region_code: a.region_code().to_string(),
+            external_id: a.external_id().to_string(),
+            username: a.username().to_string(),
+            email: a.email().to_string(),
+            email_verified: a.is_email_verified(),
+            phone_number: a.phone_number().as_ref().map(|p| p.to_string()),
+            phone_verified: a.is_phone_verified(),
+            state: PostgresAccountState::from(a.state().clone()),
+            birth_date: a.birth_date().as_ref().map(|d| d.value()),
+            locale: a.locale().to_string(),
+            version: a.version_i64()?,
+            created_at: a.created_at(),
+            updated_at: a.updated_at(),
+            last_active_at: a.last_active_at(),
+        })
+    }
 }
 
 impl TryFrom<PostgresAccountRow> for Account {
     type Error = DomainError;
 
     fn try_from(row: PostgresAccountRow) -> Result<Self> {
+        let metadata = AggregateMetadata::try_from(row.version)?;
+
         Ok(AccountBuilder::restore(
             AccountId::from_uuid(row.id),
             RegionCode::from_raw(row.region_code),
@@ -49,32 +76,10 @@ impl TryFrom<PostgresAccountRow> for Account {
             AccountState::from_raw(row.state.into()),
             row.birth_date.map(BirthDate::from_raw),
             Locale::from_raw(row.locale),
-            row.version,
+            metadata.version(),
             row.created_at,
             row.updated_at,
             row.last_active_at,
         ))
-    }
-}
-
-impl From<&Account> for PostgresAccountRow {
-    fn from(a: &Account) -> Self {
-        Self {
-            id: a.id().as_uuid(),
-            region_code: a.region_code().to_string(),
-            external_id: a.external_id().to_string(),
-            username: a.username().to_string(),
-            email: a.email().to_string(),
-            email_verified: a.is_email_verified(),
-            phone_number: a.phone_number().as_ref().map(|p| p.to_string()),
-            phone_verified: a.is_phone_verified(),
-            state: PostgresAccountState::from(a.state().clone()),
-            birth_date: a.birth_date().as_ref().map(|d| d.value()),
-            locale: a.locale().to_string(),
-            version: a.version(),
-            created_at: a.created_at(),
-            updated_at: a.updated_at(),
-            last_active_at: a.last_active_at(),
-        }
     }
 }

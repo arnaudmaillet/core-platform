@@ -5,13 +5,14 @@ mod tests {
     use crate::domain::entities::UserLocation;
     use chrono::{Duration, Utc};
     use shared_kernel::domain::entities::GeoPoint;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::{DomainError, Result};
     use std::sync::{Arc, Mutex};
     use shared_kernel::domain::events::EventEnvelope;
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::domain::repositories::LocationRepositoryStub;
+    use crate::domain::value_objects::ProfileId;
 
     fn setup(location: Option<UserLocation>) -> UpdateLocationUseCase {
         let repo = Arc::new(LocationRepositoryStub {
@@ -25,18 +26,18 @@ mod tests {
     #[tokio::test]
     async fn test_update_location_success() {
         // Arrange : Position initiale à Paris
-        let account_id = AccountId::new();
+        let profile_id = ProfileId::new();
         let region = RegionCode::from_raw("eu");
         let initial_coords = GeoPoint::from_raw(48.8566, 2.3522); // Paris
         let initial_location =
-            UserLocationBuilder::new(account_id.clone(), region.clone(), initial_coords).build();
+            UserLocationBuilder::new(profile_id.clone(), region.clone(), initial_coords).build();
 
         let use_case = setup(Some(initial_location));
 
         // Nouvelle position à plus de 5 mètres (ex: Lyon)
         let new_coords = GeoPoint::from_raw(45.7640, 4.8357);
         let cmd = UpdateLocationCommand {
-            account_id,
+            profile_id,
             region,
             coords: new_coords.clone(),
             metrics: None,
@@ -54,12 +55,12 @@ mod tests {
     #[tokio::test]
     async fn test_throttling_insignificant_movement() {
         // Arrange : Position initiale
-        let account_id = AccountId::new();
+        let profile_id = ProfileId::new();
         let region = RegionCode::from_raw("eu");
         let initial_coords = GeoPoint::from_raw(48.8566, 2.3522);
         let ten_seconds_ago = Utc::now() - Duration::seconds(10);
         let location = UserLocation::restore(
-            account_id.clone(),
+            profile_id.clone(),
             region.clone(),
             initial_coords.clone(),
             None,
@@ -76,7 +77,7 @@ mod tests {
         let tiny_move = GeoPoint::from_raw(48.8566001, 2.3522001);
 
         let cmd = UpdateLocationCommand {
-            account_id,
+            profile_id,
             region,
             coords: tiny_move,
             metrics: None,
@@ -94,12 +95,12 @@ mod tests {
     #[tokio::test]
     async fn test_update_forced_after_time_limit() {
         // Arrange : Même avec un mouvement nul, si assez de temps est passé, on update
-        let account_id = AccountId::new();
+        let profile_id = ProfileId::new();
         let region = RegionCode::from_raw("eu");
         let coords = GeoPoint::from_raw(48.8566, 2.3522);
         let one_minute_ago = Utc::now() - Duration::seconds(60);
         let location = UserLocation::restore(
-            account_id.clone(),
+            profile_id.clone(),
             region.clone(),
             coords.clone(),
             None,
@@ -113,7 +114,7 @@ mod tests {
         let use_case = setup(Some(location));
 
         let cmd = UpdateLocationCommand {
-            account_id,
+            profile_id,
             region,
             coords, // Identique
             metrics: None,
@@ -131,7 +132,7 @@ mod tests {
     async fn test_update_location_not_found() {
         let use_case = setup(None);
         let cmd = UpdateLocationCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::from_raw("eu"),
             coords: GeoPoint::from_raw(0.0, 0.0),
             metrics: None,
@@ -144,10 +145,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_location_concurrency_conflict() {
-        let account_id = AccountId::new();
+        let profile_id = ProfileId::new();
         let region = RegionCode::from_raw("eu");
         let location = UserLocationBuilder::new(
-            account_id.clone(),
+            profile_id.clone(),
             region.clone(),
             GeoPoint::from_raw(0.0, 0.0),
         )
@@ -167,7 +168,7 @@ mod tests {
 
         let result = use_case
             .execute(UpdateLocationCommand {
-                account_id,
+                profile_id,
                 region,
                 coords: GeoPoint::from_raw(1.0, 1.0),
                 metrics: None,
@@ -184,10 +185,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_location_atomic_outbox_failure() {
-        let account_id = AccountId::new();
+        let profile_id = ProfileId::new();
         let region = RegionCode::from_raw("eu");
         let location = UserLocationBuilder::new(
-            account_id.clone(),
+            profile_id.clone(),
             region.clone(),
             GeoPoint::from_raw(0.0, 0.0),
         )
@@ -220,7 +221,7 @@ mod tests {
 
         let result = use_case
             .execute(UpdateLocationCommand {
-                account_id,
+                profile_id,
                 region,
                 coords: GeoPoint::from_raw(1.0, 1.0),
                 metrics: None,

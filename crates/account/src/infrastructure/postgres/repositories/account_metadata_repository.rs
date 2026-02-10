@@ -59,7 +59,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let notes = metadata.moderation_notes().map(|s| s.to_string());
         let ip = metadata.estimated_ip().map(|s| s.to_string());
         let updated = metadata.updated_at();
-        let version = metadata.version();
+        let version_i64 = metadata.version_i64()?;
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             // 2. On utilise 'async move' pour transférer la propriété des variables ci-dessus
@@ -82,7 +82,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .bind(trust)
                     .bind(notes)
                     .bind(ip)
-                    .bind(version)
+                    .bind(version_i64)
                     .bind(updated)
                     .execute(conn)
                     .await
@@ -108,7 +108,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let notes = metadata.moderation_notes().map(|s| s.to_string());
         let ip = metadata.estimated_ip().map(|s| s.to_string());
         let updated = metadata.updated_at();
-        let new_version = metadata.version();
+        let new_version_i64 = metadata.version_i64()?;
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
@@ -131,9 +131,9 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .bind(notes)
                     .bind(ip)
                     .bind(updated)
-                    .bind(new_version) // $8
-                    .bind(region)      // $9
-                    .bind(uid)         // $10
+                    .bind(new_version_i64)
+                    .bind(region)
+                    .bind(uid)
                     .execute(conn)
                     .await
                     .map_domain::<AccountMetadata>()?;

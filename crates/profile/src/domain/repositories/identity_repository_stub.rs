@@ -11,7 +11,7 @@ use crate::domain::entities::Profile;
 use crate::domain::repositories::{
     ProfileIdentityRepository, ProfileRepository, ProfileStatsRepository,
 };
-use crate::domain::value_objects::ProfileStats;
+use crate::domain::value_objects::{Handle, ProfileId, ProfileStats};
 use shared_kernel::domain::events::{DomainEvent, EventEnvelope};
 use shared_kernel::domain::repositories::{CacheRepository, OutboxRepository};
 use shared_kernel::domain::transaction::{Transaction, TransactionManager};
@@ -43,41 +43,46 @@ impl ProfileIdentityRepository for ProfileRepositoryStub {
         }
         Ok(())
     }
-    async fn fetch(&self, _id: &AccountId, _r: &RegionCode) -> Result<Option<Profile>> {
+    async fn fetch(&self, _id: &ProfileId, _r: &RegionCode) -> Result<Option<Profile>> {
         Ok(self.profile_to_return.lock().unwrap().clone())
     }
-    async fn fetch_by_username(&self, _: &Username, _: &RegionCode) -> Result<Option<Profile>> {
+    async fn fetch_by_handle(&self, _: &Handle, _: &RegionCode) -> Result<Option<Profile>> {
         Ok(self.profile_to_return.lock().unwrap().clone())
     }
-    async fn exists_by_username(&self, _u: &Username, _r: &RegionCode) -> Result<bool> {
+
+    async fn fetch_all_by_owner(&self, _: &AccountId) -> Result<Vec<Profile>> {
+        Ok(self.profile_to_return.lock().unwrap().clone().into_iter().collect())
+    }
+
+    async fn exists_by_handle(&self, _h: &Handle, _r: &RegionCode) -> Result<bool> {
         Ok(*self.exists_return.lock().unwrap())
     }
-    async fn delete(&self, _: &AccountId, _: &RegionCode) -> Result<()> {
+    async fn delete(&self, _: &ProfileId, _: &RegionCode) -> Result<()> {
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl ProfileRepository for ProfileRepositoryStub {
-    async fn assemble_full_profile(&self, id: &AccountId, r: &RegionCode, ) -> Result<Option<Profile>> {
+    async fn assemble_full_profile(&self, id: &ProfileId, r: &RegionCode, ) -> Result<Option<Profile>> {
         self.fetch(id, r).await
     }
-    async fn resolve_profile_from_username(&self, username: &Username, region: &RegionCode, ) -> Result<Option<Profile>> {
-        self.fetch_by_username(username, region).await
+    async fn resolve_profile_from_handle(&self, h: &Handle, r: &RegionCode, ) -> Result<Option<Profile>> {
+        self.fetch_by_handle(h, r).await
     }
-    async fn fetch_identity_only(&self, id: &AccountId, r: &RegionCode, ) -> Result<Option<Profile>> {
+    async fn fetch_identity_only(&self, id: &ProfileId, r: &RegionCode, ) -> Result<Option<Profile>> {
         self.fetch(id, r).await
     }
-    async fn fetch_stats_only(&self, _: &AccountId, _: &RegionCode, ) -> Result<Option<ProfileStats>> {
+    async fn fetch_stats_only(&self, _: &ProfileId, _: &RegionCode, ) -> Result<Option<ProfileStats>> {
         Ok(None)
     }
     async fn save_identity(&self, p: &Profile, _original: Option<&Profile>, tx: Option<&mut dyn Transaction>) -> Result<()> {
         ProfileIdentityRepository::save(self, p, tx).await
     }
-    async fn exists_by_username(&self, u: &Username, r: &RegionCode) -> Result<bool> {
-        ProfileIdentityRepository::exists_by_username(self, u, r).await
+    async fn exists_by_handle(&self, h: &Handle, r: &RegionCode) -> Result<bool> {
+        ProfileIdentityRepository::exists_by_handle(self, h, r).await
     }
-    async fn delete_full_profile(&self, _id: &AccountId, _r: &RegionCode) -> Result<()> {
+    async fn delete_full_profile(&self, _id: &ProfileId, _r: &RegionCode) -> Result<()> {
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }

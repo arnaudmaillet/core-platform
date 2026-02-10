@@ -42,9 +42,9 @@ impl DecrementPostCountUseCase {
         // 1. Fetch
         let original_profile = self
             .repo
-            .assemble_full_profile(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.profile_id, &cmd.region)
             .await?
-            .ok_or_not_found(&cmd.account_id)?;
+            .ok_or_not_found(&cmd.profile_id)?;
 
         // 2. Business Logic
         let mut profile_to_update = original_profile.clone();

@@ -1,13 +1,13 @@
 use crate::domain::repositories::ProfileStatsRepository;
-use crate::domain::value_objects::ProfileStats;
+use crate::domain::value_objects::{ProfileId, ProfileStats};
 use async_trait::async_trait;
-use shared_kernel::domain::value_objects::{AccountId, Counter, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::errors::Result;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 pub struct ProfileStatsRepositoryStub {
-    pub stats: Mutex<HashMap<(AccountId, RegionCode), ProfileStats>>,
+    pub stats: Mutex<HashMap<(ProfileId, RegionCode), ProfileStats>>,
     pub fail_count: Mutex<i32>,
 }
 
@@ -24,16 +24,16 @@ impl Default for ProfileStatsRepositoryStub {
 impl ProfileStatsRepository for ProfileStatsRepositoryStub {
     async fn fetch(
         &self,
-        account_id: &AccountId,
+        profile_id: &ProfileId,
         region: &RegionCode,
     ) -> Result<Option<ProfileStats>> {
         let map = self.stats.lock().unwrap();
-        Ok(map.get(&(account_id.clone(), region.clone())).cloned())
+        Ok(map.get(&(profile_id.clone(), region.clone())).cloned())
     }
 
     async fn save(
         &self,
-        account_id: &AccountId,
+        profile_id: &ProfileId,
         region: &RegionCode,
         follower_delta: i64,
         following_delta: i64,
@@ -50,7 +50,7 @@ impl ProfileStatsRepository for ProfileStatsRepositoryStub {
         }
 
         let mut map = self.stats.lock().unwrap();
-        let key = (account_id.clone(), region.clone());
+        let key = (profile_id.clone(), region.clone());
 
         // Utilisation de entry pour modifier l'élément en place
         let stats = map.entry(key).or_insert_with(|| ProfileStats::new(0, 0, 0));
@@ -60,9 +60,9 @@ impl ProfileStatsRepository for ProfileStatsRepositoryStub {
         Ok(())
     }
 
-    async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
+    async fn delete(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<()> {
         let mut map = self.stats.lock().unwrap();
-        map.remove(&(account_id.clone(), region.clone()));
+        map.remove(&(profile_id.clone(), region.clone()));
         Ok(())
     }
 }

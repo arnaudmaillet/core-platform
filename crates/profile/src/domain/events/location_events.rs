@@ -3,15 +3,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 use std::borrow::Cow;
+use crate::domain::value_objects::ProfileId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum LocationEvent {
     /// Mise à jour de la position GPS (Fréquent)
     PositionUpdated {
-        account_id: AccountId,
+        profile_id: ProfileId,
         region: RegionCode,
         coordinates: GeoPoint,
         occurred_at: DateTime<Utc>,
@@ -19,7 +20,7 @@ pub enum LocationEvent {
 
     /// Changement des paramètres de confidentialité
     LocationPrivacyChanged {
-        account_id: AccountId,
+        profile_id: ProfileId,
         region: RegionCode,
         is_ghost_mode: bool,
         privacy_radius_meters: i32,
@@ -28,7 +29,7 @@ pub enum LocationEvent {
 
     /// Signalement de sortie de zone (Geofencing)
     LeftZone {
-        account_id: AccountId,
+        profile_id: ProfileId,
         region: RegionCode,
         zone_id: String,
         occurred_at: DateTime<Utc>,
@@ -50,9 +51,9 @@ impl DomainEvent for LocationEvent {
 
     fn aggregate_id(&self) -> String {
         match self {
-            Self::PositionUpdated { account_id, .. }
-            | Self::LocationPrivacyChanged { account_id, .. }
-            | Self::LeftZone { account_id, .. } => account_id.to_string(),
+            Self::PositionUpdated { profile_id, .. }
+            | Self::LocationPrivacyChanged { profile_id, .. }
+            | Self::LeftZone { profile_id, .. } => profile_id.to_string(),
         }
     }
 

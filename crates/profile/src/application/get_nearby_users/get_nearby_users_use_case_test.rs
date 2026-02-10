@@ -4,13 +4,14 @@ mod tests {
     use crate::domain::builders::UserLocationBuilder;
     use crate::domain::entities::UserLocation;
     use shared_kernel::domain::entities::GeoPoint;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::domain::value_objects::RegionCode;
     use std::sync::{Arc, Mutex};
     use crate::domain::repositories::LocationRepositoryStub;
+    use crate::domain::value_objects::ProfileId;
 
     fn create_mock_loc(lat: f64, lon: f64, privacy_radius: i32) -> UserLocation {
         UserLocationBuilder::new(
-            AccountId::new(),
+            ProfileId::new(),
             RegionCode::from_raw("eu"),
             GeoPoint::try_new(lat, lon).unwrap(),
         )
@@ -33,7 +34,7 @@ mod tests {
 
         let use_case = GetNearbyUsersUseCase::new(repo);
         let cmd = GetNearbyUsersCommand {
-            account_id: AccountId::new(), // ID de l'appelant différent
+            profile_id: ProfileId::new(), // ID de l'appelant différent
             center: GeoPoint::try_new(48.8566, 2.3522).unwrap(),
             region: RegionCode::from_raw("eu"),
             radius_meters: 1000.0,
@@ -51,14 +52,14 @@ mod tests {
     #[tokio::test]
     async fn test_get_nearby_users_excludes_self() {
         let myself = create_mock_loc(48.0, 2.0, 0);
-        let my_id = myself.account_id().clone();
+        let my_id = myself.profile_id().clone();
 
         let repo = Arc::new(LocationRepositoryStub::default());
         repo.nearby_to_return.lock().unwrap().push((myself, 0.0));
 
         let use_case = GetNearbyUsersUseCase::new(repo);
         let cmd = GetNearbyUsersCommand {
-            account_id: my_id,
+            profile_id: my_id,
             center: GeoPoint::try_new(48.0, 2.0).unwrap(),
             region: RegionCode::from_raw("eu"),
             radius_meters: 1000.0,
@@ -85,7 +86,7 @@ mod tests {
 
         let use_case = GetNearbyUsersUseCase::new(repo);
         let cmd = GetNearbyUsersCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             center: original_coords,
             region: RegionCode::from_raw("eu"),
             radius_meters: 1000.0,

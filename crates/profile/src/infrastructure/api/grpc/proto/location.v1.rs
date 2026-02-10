@@ -23,7 +23,37 @@ pub struct MovementMetrics {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UserLocation {
     #[prost(string, tag = "1")]
+    pub profile_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub owner_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub region_code: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "4")]
+    pub coordinates: ::core::option::Option<GeoPoint>,
+    #[prost(message, optional, tag = "5")]
+    pub metrics: ::core::option::Option<LocationMetrics>,
+    #[prost(message, optional, tag = "6")]
+    pub movement: ::core::option::Option<MovementMetrics>,
+    #[prost(bool, tag = "7")]
+    pub is_ghost_mode: bool,
+    #[prost(int32, tag = "8")]
+    pub privacy_radius_meters: i32,
+    #[prost(message, optional, tag = "9")]
+    pub updated_at: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(int32, tag = "10")]
+    pub version: i32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetUserLocationRequest {
+    #[prost(string, tag = "1")]
     pub account_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub region_code: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdatePositionRequest {
+    #[prost(string, tag = "1")]
+    pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub region_code: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "3")]
@@ -32,43 +62,23 @@ pub struct UserLocation {
     pub metrics: ::core::option::Option<LocationMetrics>,
     #[prost(message, optional, tag = "5")]
     pub movement: ::core::option::Option<MovementMetrics>,
-    #[prost(bool, tag = "6")]
-    pub is_ghost_mode: bool,
-    #[prost(int32, tag = "7")]
-    pub privacy_radius_meters: i32,
-    #[prost(message, optional, tag = "8")]
-    pub updated_at: ::core::option::Option<::prost_types::Timestamp>,
-    #[prost(int64, tag = "9")]
-    pub version: i64,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GetUserLocationRequest {
-    #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdatePositionRequest {
-    #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "2")]
-    pub coordinates: ::core::option::Option<GeoPoint>,
-    #[prost(message, optional, tag = "3")]
-    pub metrics: ::core::option::Option<LocationMetrics>,
-    #[prost(message, optional, tag = "4")]
-    pub movement: ::core::option::Option<MovementMetrics>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetGhostModeRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-    #[prost(bool, tag = "2")]
+    pub profile_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub region_code: ::prost::alloc::string::String,
+    #[prost(bool, tag = "3")]
     pub enabled: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdatePrivacyRadiusRequest {
     #[prost(string, tag = "1")]
-    pub account_id: ::prost::alloc::string::String,
-    #[prost(int32, tag = "2")]
+    pub profile_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub region_code: ::prost::alloc::string::String,
+    #[prost(int32, tag = "3")]
     pub radius_meters: i32,
 }
 /// Generated client implementations.

@@ -11,9 +11,7 @@ use profile::application::update_privacy::UpdatePrivacyUseCase;
 use profile::application::update_social_links::UpdateSocialLinksUseCase;
 use std::sync::Arc;
 use tonic::transport::Server;
-// Application
-use profile::application::update_username::UpdateUsernameUseCase;
-
+use profile::application::update_handle::UpdateHandleUseCase;
 // Infrastructure - API
 use profile::infrastructure::api::grpc::handlers::{
     IdentityHandler, MediaHandler, MetadataHandler,
@@ -21,10 +19,10 @@ use profile::infrastructure::api::grpc::handlers::{
 use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_media_service_server::ProfileMediaServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_server::ProfileMetadataServiceServer;
+use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
+use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 // Infrastructure - Repositories (Spécifiques au Profile)
-use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
 use profile::infrastructure::postgres::utils::run_postgres_migrations;
-use profile::infrastructure::repositories::CompositeProfileRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
 use profile::infrastructure::scylla::utils::run_scylla_migrations;
 
@@ -65,11 +63,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- 2. INITIALISATION DES REPOSITORIES (Infrastructure) ---
 
     // Implémentations techniques (On clone les pools car elles sont conçues pour ça)
-    let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
+    let identity_postgres = Arc::new(PostgresIdentityRepository::new(pool.clone()));
     let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session.clone()));
 
     // L'orchestrateur (Façade Composite) qui masque la dualité DB au Domaine
-    let profile_repo = Arc::new(CompositeProfileRepository::new(
+    let profile_repo = Arc::new(UnifiedProfileRepository::new(
         identity_postgres.clone(),
         stats_scylla.clone(),
         cache_redis.clone(),
@@ -81,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- 3. INITIALISATION DES USE CASES (Application) ---
 
-    let update_username_usecase = Arc::new(UpdateUsernameUseCase::new(
+    let update_username_usecase = Arc::new(UpdateHandleUseCase::new(
         profile_repo.clone(),
         outbox_repo.clone(),
         tx_manager.clone(),
