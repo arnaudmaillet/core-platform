@@ -45,11 +45,17 @@ impl ValueObject for Counter {
     }
 }
 
-impl TryFrom<i64> for Counter {
+impl TryFrom<u64> for Counter {
     type Error = DomainError;
 
-    fn try_from(val: i64) -> Result<Self> {
-        let safe_val = if val < 0 { 0 } else { val as u64 };
-        Self::try_new(safe_val)
+    fn try_from(val: u64) -> Result<Self> {
+        Self::try_new(val)
+    }
+}
+
+/// Permet de faire : domain.post_count().into() vers un u64 (infaillible)
+impl From<Counter> for u64 {
+    fn from(counter: Counter) -> Self {
+        counter.0
     }
 }

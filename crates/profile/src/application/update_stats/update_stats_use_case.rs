@@ -29,7 +29,7 @@ impl UpdateStatsUseCase {
         // On envoie directement les deltas (follower_count = follower_count + delta)
         self.profile_repo
             .save(
-                &cmd.account_id,
+                &cmd.profile_id,
                 &cmd.region,
                 cmd.follower_delta,
                 cmd.following_delta,

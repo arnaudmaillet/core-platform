@@ -47,15 +47,15 @@ impl ProfileElasticProjector {
     pub async fn project(&self, event: &ProfileEvent) -> anyhow::Result<()> {
         match event {
             ProfileEvent::ProfileCreated {
-                account_id,
+                profile_id,
                 display_name,
-                username,
+                handle,
                 occurred_at,
                 ..
             } => {
                 let doc = self.map_to_doc(
-                    &account_id.to_string(),
-                    username.as_str(),
+                    &profile_id.to_string(),
+                    handle.as_str(),
                     display_name.as_str(),
                     None,
                     occurred_at,
@@ -63,16 +63,16 @@ impl ProfileElasticProjector {
                 self.upsert_document(doc).await
             }
 
-            ProfileEvent::UsernameChanged {
-                account_id,
-                new_username,
+            ProfileEvent::HandleChanged {
+                profile_id,
+                new_handle,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
-                        "username": new_username.as_str(),
+                        "handle": new_handle.as_str(),
                         "updated_at": occurred_at.to_rfc3339()
                     }),
                 )
@@ -80,13 +80,13 @@ impl ProfileElasticProjector {
             }
 
             ProfileEvent::DisplayNameChanged {
-                account_id,
+                profile_id,
                 new_display_name,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
                         "display_name": new_display_name.as_str(),
                         "updated_at": occurred_at.to_rfc3339()
@@ -96,13 +96,13 @@ impl ProfileElasticProjector {
             }
 
             ProfileEvent::BioUpdated {
-                account_id,
+                profile_id,
                 new_bio,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
                         "bio": new_bio.as_ref().map(|b| b.as_str()),
                         "updated_at": occurred_at.to_rfc3339()
@@ -112,13 +112,13 @@ impl ProfileElasticProjector {
             }
 
             ProfileEvent::AvatarUpdated {
-                account_id,
+                profile_id,
                 new_avatar_url,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
                         "avatar_url": new_avatar_url.as_str(),
                         "updated_at": occurred_at.to_rfc3339()
@@ -128,12 +128,12 @@ impl ProfileElasticProjector {
             }
 
             ProfileEvent::AvatarRemoved {
-                account_id,
+                profile_id,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
                         "avatar_url": serde_json::Value::Null,
                         "updated_at": occurred_at.to_rfc3339()
@@ -143,13 +143,13 @@ impl ProfileElasticProjector {
             }
 
             ProfileEvent::BannerUpdated {
-                account_id,
+                profile_id,
                 new_banner_url,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
                         "banner_url": new_banner_url.as_str(),
                         "updated_at": occurred_at.to_rfc3339()
@@ -159,12 +159,12 @@ impl ProfileElasticProjector {
             }
 
             ProfileEvent::BannerRemoved {
-                account_id,
+                profile_id,
                 occurred_at,
                 ..
             } => {
                 self.update_partial(
-                    &account_id.to_string(),
+                    &profile_id.to_string(),
                     json!({
                         "banner_url": serde_json::Value::Null,
                         "updated_at": occurred_at.to_rfc3339()
@@ -209,8 +209,8 @@ impl ProfileElasticProjector {
                 },
                 "mappings": {
                     "properties": {
-                        "account_id": { "type": "keyword" },
-                        "username": {
+                        "profile_id": { "type": "keyword" },
+                        "handle": {
                             "type": "text",
                             "analyzer": "autocomplete_analyzer",
                             "search_analyzer": "standard"
@@ -229,19 +229,19 @@ impl ProfileElasticProjector {
 
     fn map_to_doc(
         &self,
-        id: &str,
-        username: &str,
+        profile_id: &str,
+        handle: &str,
         name: &str,
         avatar: Option<&str>,
         ts: &DateTime<Utc>,
     ) -> ProfileSearchDocument {
         ProfileSearchDocument {
-            account_id: id.to_string(),
-            username: username.to_string(),
+            profile_id: profile_id.to_string(),
+            handle: handle.to_string(),
             display_name: name.to_string(),
             avatar_url: avatar.map(|s| s.to_string()),
             suggest: AutocompleteSuggest {
-                input: vec![username.to_string(), name.to_string()],
+                input: vec![handle.to_string(), name.to_string()],
                 weight: 10,
             },
             updated_at: ts.to_rfc3339(),
@@ -250,7 +250,7 @@ impl ProfileElasticProjector {
 
     async fn upsert_document(&self, doc: ProfileSearchDocument) -> anyhow::Result<()> {
         self.client
-            .index(IndexParts::IndexId(self.index_name, &doc.account_id))
+            .index(IndexParts::IndexId(self.index_name, &doc.profile_id))
             .op_type(OpType::Index) // Ecrase si existe (Idempotence)
             .body(serde_json::to_value(&doc)?)
             .send()

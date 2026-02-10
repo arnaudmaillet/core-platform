@@ -9,6 +9,8 @@ core_rust_library(
     compile_data = glob(["migrations/**"]),
     crate_features = [
         "postgres",
+        "scylla",
+        "redis",
         "concurrency",
         "runtime",
     ],
@@ -16,25 +18,27 @@ core_rust_library(
     deps = [
         "//crates/shared-kernel:shared_kernel",
 
-        # --- Dépendances gRPC Runtime (Indispensables en 0.14) ---
+        # --- Dépendances gRPC Runtime ---
         "@crates//:tonic",
         "@crates//:tonic-prost",
         "@crates//:prost",
         "@crates//:prost-types",
 
-        # --- Autres dépendances ---
+        # --- Drivers & Persistence ---
+        "@crates//:sqlx",
+        "@crates//:scylla",
+        "@crates//:elasticsearch",
+
+        # --- Core ---
         "@crates//:tokio",
         "@crates//:serde",
         "@crates//:serde_json",
         "@crates//:chrono",
         "@crates//:uuid",
-        "@crates//:sqlx",
         "@crates//:rand",
         "@crates//:anyhow",
         "@crates//:tracing",
-        "@crates//:elasticsearch",
-        "@crates//:scylla",
-        "@crates//:futures-util"
+        "@crates//:futures-util",
     ],
     proc_macro_deps = [
         "@crates//:async-trait",

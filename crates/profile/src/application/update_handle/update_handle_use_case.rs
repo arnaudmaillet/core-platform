@@ -1,4 +1,3 @@
-use crate::application::update_username::UpdateUsernameCommand;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
@@ -9,14 +8,15 @@ use shared_kernel::domain::utils::{RetryConfig, with_retry};
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
+use crate::application::update_handle::UpdateHandleCommand;
 
-pub struct UpdateUsernameUseCase {
+pub struct UpdateHandleUseCase {
     repo: Arc<dyn ProfileRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
-impl UpdateUsernameUseCase {
+impl UpdateHandleUseCase {
     pub fn new(
         repo: Arc<dyn ProfileRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
@@ -30,23 +30,23 @@ impl UpdateUsernameUseCase {
     }
 
     /// Exécution avec stratégie de retry pour gérer les conflits de concurrence (OCC)
-    pub async fn execute(&self, command: UpdateUsernameCommand) -> Result<Profile> {
+    pub async fn execute(&self, command: UpdateHandleCommand) -> Result<Profile> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpdateUsernameCommand) -> Result<Profile> {
+    async fn try_execute_once(&self, cmd: &UpdateHandleCommand) -> Result<Profile> {
         let original_profile = self.repo
-            .assemble_full_profile(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.profile_id, &cmd.region)
             .await?
-            .ok_or_not_found(&cmd.account_id)?;
+            .ok_or_not_found(&cmd.profile_id)?;
 
         // On prépare le changement
         let mut profile_to_update = original_profile.clone();
         
-        if !profile_to_update.update_username(&cmd.region, cmd.new_username.clone())? {
+        if !profile_to_update.update_handle(&cmd.region, cmd.new_handle.clone())? {
             return Ok(original_profile);
         }
 
@@ -70,11 +70,11 @@ impl UpdateUsernameUseCase {
                 let events_for_tx = events.clone();
                 
                 Box::pin(async move {
-                    if repo.exists_by_username(&updated_for_tx.username(), &updated_for_tx.region_code()).await? {
+                    if repo.exists_by_handle(&updated_for_tx.handle(), &updated_for_tx.region_code()).await? {
                         return Err(DomainError::AlreadyExists {
                             entity: "Profile",
-                            field: "username",
-                            value: updated_for_tx.username().as_str().to_string(),
+                            field: "handle",
+                            value: updated_for_tx.handle().as_str().to_string(),
                         });
                     }
 

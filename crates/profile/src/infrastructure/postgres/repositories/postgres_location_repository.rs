@@ -7,10 +7,11 @@ use async_trait::async_trait;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use sqlx::PgPool;
+use crate::domain::value_objects::ProfileId;
 
 pub struct PostgresLocationRepository {
     pool: PgPool,
@@ -40,11 +41,11 @@ impl LocationRepository for PostgresLocationRepository {
                 accuracy_meters = $5, altitude = $6, heading = $7, speed = $8,
                 is_ghost_mode = $9, privacy_radius_meters = $10,
                 updated_at = $11, version = $12
-            WHERE account_id = $1 AND region_code = $2 AND version = $13
+            WHERE profile_id = $1 AND region_code = $2 AND version = $13
         "#;
 
             let result = sqlx::query(update_sql)
-                .bind(row.account_id)            // $1
+                .bind(row.profile_id)            // $1
                 .bind(&row.region_code)          // $2
                 .bind(row.lon)                   // $3
                 .bind(row.lat)                   // $4
@@ -64,9 +65,9 @@ impl LocationRepository for PostgresLocationRepository {
             if result.rows_affected() == 0 {
                 // 2. Si l'UPDATE échoue, soit ça n'existe pas, soit il y a un conflit
                 let (exists,): (bool,) = sqlx::query_as(
-                    "SELECT EXISTS(SELECT 1 FROM user_locations WHERE account_id = $1 AND region_code = $2)"
+                    "SELECT EXISTS(SELECT 1 FROM user_locations WHERE profile_id = $1 AND region_code = $2)"
                 )
-                    .bind(row.account_id)
+                    .bind(row.profile_id)
                     .bind(&row.region_code)
                     .fetch_one(&mut *conn)
                     .await
@@ -76,7 +77,7 @@ impl LocationRepository for PostgresLocationRepository {
                     // 3. INSERT initial
                     let insert_sql = r#"
                     INSERT INTO user_locations (
-                        account_id, region_code, coordinates, accuracy_meters,
+                        profile_id, region_code, coordinates, accuracy_meters,
                         altitude, heading, speed, is_ghost_mode,
                         privacy_radius_meters, updated_at, version
                     ) VALUES (
@@ -86,7 +87,7 @@ impl LocationRepository for PostgresLocationRepository {
                 "#;
 
                     sqlx::query(insert_sql)
-                        .bind(row.account_id)
+                        .bind(row.profile_id)
                         .bind(&row.region_code)
                         .bind(row.lon)
                         .bind(row.lat)
@@ -104,7 +105,7 @@ impl LocationRepository for PostgresLocationRepository {
                 } else {
                     // 4. Conflit de concurrence réel
                     return Err(shared_kernel::errors::DomainError::ConcurrencyConflict {
-                        reason: format!("Location version mismatch for account {}", row.account_id)
+                        reason: format!("Location version mismatch for profile {}", row.profile_id)
                     });
                 }
             }
@@ -115,22 +116,22 @@ impl LocationRepository for PostgresLocationRepository {
 
     async fn fetch(
         &self,
-        account_id: &AccountId,
+        profile_id: &ProfileId,
         region: &RegionCode,
     ) -> Result<Option<UserLocation>> {
         let sql = r#"
         SELECT
-            account_id, region_code, ST_X(coordinates::geometry) as lon, ST_Y(coordinates::geometry) as lat,
+            profile_id, region_code, ST_X(coordinates::geometry) as lon, ST_Y(coordinates::geometry) as lat,
             accuracy_meters, altitude, heading, speed, is_ghost_mode,
             privacy_radius_meters, updated_at,
             version,
             NULL as distance
         FROM user_locations
-        WHERE account_id = $1 AND region_code = $2
+        WHERE profile_id = $1 AND region_code = $2
     "#;
 
         let row = sqlx::query_as::<_, PostgresLocationRow>(sql)
-            .bind(account_id.as_uuid())
+            .bind(profile_id.as_uuid())
             .bind(region.as_str())
             .fetch_optional(&self.pool)
             .await
@@ -148,7 +149,7 @@ impl LocationRepository for PostgresLocationRepository {
     ) -> Result<Vec<(UserLocation, f64)>> {
         let sql = r#"
            SELECT
-            account_id, region_code, ST_X(coordinates::geometry) as lon, ST_Y(coordinates::geometry) as lat,
+            profile_id, region_code, ST_X(coordinates::geometry) as lon, ST_Y(coordinates::geometry) as lat,
             accuracy_meters, altitude, heading, speed, is_ghost_mode,
             privacy_radius_meters, updated_at,
             version,
@@ -179,11 +180,11 @@ impl LocationRepository for PostgresLocationRepository {
             .collect()
     }
 
-    async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
-        let sql = "DELETE FROM user_locations WHERE account_id = $1 AND region_code = $2";
+    async fn delete(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<()> {
+        let sql = "DELETE FROM user_locations WHERE profile_id = $1 AND region_code = $2";
 
         sqlx::query(sql)
-            .bind(account_id.as_uuid())
+            .bind(profile_id.as_uuid())
             .bind(region.as_str())
             .execute(&self.pool)
             .await

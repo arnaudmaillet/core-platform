@@ -7,12 +7,12 @@ mod tests {
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope, DomainEvent};
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
 
     use crate::application::update_bio::{UpdateBioCommand, UpdateBioUseCase};
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::{Bio, DisplayName};
+    use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId}; // Ajout Handle et ProfileId
     use crate::domain::repositories::ProfileRepositoryStub;
 
     /// Helper pour configurer le Use Case avec ses dépendances
@@ -32,21 +32,22 @@ mod tests {
     #[tokio::test]
     async fn test_update_bio_success() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new(); // Contexte proprio
         let region = RegionCode::try_new("eu").unwrap();
         let initial_profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(), // Username -> Handle
         )
             .build();
 
+        let profile_id = initial_profile.id().clone(); // Pivot identité
         let use_case = setup(Some(initial_profile));
         let new_bio = Some(Bio::try_new("Hello World").unwrap());
 
         let cmd = UpdateBioCommand {
-            account_id: account_id.clone(),
+            profile_id: profile_id.clone(),
             region: region.clone(),
             new_bio: new_bio.clone(),
         };
@@ -58,28 +59,29 @@ mod tests {
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert_eq!(updated.bio(), new_bio.as_ref());
-        assert_eq!(updated.version(), 2); // Init(1) + Update(2)
+        assert_eq!(updated.version(), 2);
     }
 
     #[tokio::test]
     async fn test_update_bio_fails_on_region_mismatch() {
-        // Arrange : Profil en EU, Commande en US
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             actual_region,
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
         let new_bio = Some(Bio::try_new("Illegal Update").unwrap());
 
         let cmd = UpdateBioCommand {
-            account_id,
+            profile_id,
             region: wrong_region,
             new_bio,
         };
@@ -87,30 +89,29 @@ mod tests {
         // Act
         let result = use_case.execute(cmd).await;
 
-        // Assert : Doit être bloqué par l'entité
+        // Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
     async fn test_remove_bio_success() {
-        // Arrange : Profil ayant déjà une bio
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
-        )
-            .build();
+            Handle::try_new("alice").unwrap(),
+        ).build();
 
-        // Setup initial avec bio (version 2)
+        let profile_id = profile.id().clone();
         profile.update_bio(&region, Some(Bio::try_new("Old Bio").unwrap())).unwrap();
 
         let use_case = setup(Some(profile));
 
         let cmd = UpdateBioCommand {
-            account_id,
+            profile_id,
             region,
             new_bio: None, // Suppression
         };
@@ -122,31 +123,30 @@ mod tests {
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert!(updated.bio().is_none());
-        assert_eq!(updated.version(), 3); // Init(1) + Old(2) + Remove(3)
+        assert_eq!(updated.version(), 3);
     }
 
     #[tokio::test]
     async fn test_update_bio_idempotency() {
-        // Arrange : Nouvelle bio identique à l'ancienne
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let bio_text = Some(Bio::try_new("Consistent Bio").unwrap());
 
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
-        )
-            .build();
+            Handle::try_new("alice").unwrap(),
+        ).build();
 
-        // On fixe déjà la bio (version 2)
+        let profile_id = profile.id().clone();
         profile.update_bio(&region, bio_text.clone()).unwrap();
 
         let use_case = setup(Some(profile));
 
         let cmd = UpdateBioCommand {
-            account_id,
+            profile_id,
             region,
             new_bio: bio_text,
         };
@@ -157,7 +157,6 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let updated = result.unwrap();
-        // L'idempotence bloque l'incrément de version (reste 2)
         assert_eq!(updated.version(), 2);
     }
 
@@ -167,7 +166,7 @@ mod tests {
         let use_case = setup(None);
 
         let cmd = UpdateBioCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::try_new("eu").unwrap(),
             new_bio: None,
         };
@@ -182,17 +181,17 @@ mod tests {
     #[tokio::test]
     async fn test_update_bio_concurrency_conflict() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
-        )
-            .build();
+            Handle::try_new("alice").unwrap(),
+        ).build();
 
-        // On simule une collision de version lors de la sauvegarde
+        let profile_id = profile.id().clone();
+
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
@@ -210,7 +209,7 @@ mod tests {
         // Act
         let result = use_case
             .execute(UpdateBioCommand {
-                account_id,
+                profile_id,
                 region,
                 new_bio: Some(Bio::try_new("New Bio").unwrap()),
             })
@@ -226,15 +225,16 @@ mod tests {
     #[tokio::test]
     async fn test_update_bio_transaction_atomic_failure() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
-        )
-            .build();
+            Handle::try_new("alice").unwrap(),
+        ).build();
+
+        let profile_id = profile.id().clone();
 
         struct FailingOutbox;
         #[async_trait]
@@ -257,14 +257,13 @@ mod tests {
         // Act
         let result = use_case
             .execute(UpdateBioCommand {
-                account_id,
+                profile_id,
                 region,
                 new_bio: Some(Bio::try_new("Failing Update").unwrap()),
             })
             .await;
 
         // Assert
-        // Si l'Outbox échoue, le Use Case remonte l'erreur et rien n'est persisté
         assert!(result.is_err());
     }
 }

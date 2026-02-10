@@ -8,8 +8,8 @@ use testcontainers_modules::redis::Redis;
 use profile::application::create_profile::CreateProfileUseCase;
 use profile::domain::repositories::ProfileIdentityRepository;
 use profile::infrastructure::kafka::AccountConsumer;
-use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
-use profile::infrastructure::repositories::CompositeProfileRepository;
+use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
+use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
@@ -18,9 +18,9 @@ use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
 
 struct ConsumerTestContext {
     consumer: AccountConsumer,
-    profile_repo: Arc<PostgresProfileRepository>,
-    outbox_repo: Arc<PostgresOutboxRepository>,
-    pool: sqlx::PgPool,
+    profile_repo: Arc<PostgresIdentityRepository>,
+    _outbox_repo: Arc<PostgresOutboxRepository>,
+    _pool: sqlx::PgPool,
     _pg_container: ContainerAsync<Postgres>,
     _redis_container: ContainerAsync<Redis>,
 }
@@ -36,17 +36,17 @@ async fn setup_consumer_test_context() -> ConsumerTestContext {
     let (redis_url, redis_container) = redis_setup;
 
     // 2. Instanciation des composants techniques
-    let identity_postgres = Arc::new(PostgresProfileRepository::new(pool.clone()));
+    let identity_postgres = Arc::new(PostgresIdentityRepository::new(pool.clone()));
 
     // Pour Scylla, on utilise ton helper common existant
     let scylla_session = crate::common::setup_scylla_db().await;
     let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session));
 
-    // Nouveau : Le cache Redis réel
+    // Le cache Redis réel
     let cache_redis = Arc::new(RedisCacheRepository::new(&redis_url).await.unwrap());
 
     // 3. Le Composite qui orchestre le tout
-    let profile_repo = Arc::new(CompositeProfileRepository::new(
+    let profile_repo = Arc::new(UnifiedProfileRepository::new(
         identity_postgres.clone(),
         stats_scylla.clone(),
         cache_redis,
@@ -66,8 +66,8 @@ async fn setup_consumer_test_context() -> ConsumerTestContext {
     ConsumerTestContext {
         consumer,
         profile_repo: identity_postgres,
-        outbox_repo,
-        pool,
+        _outbox_repo: outbox_repo,
+        _pool: pool,
         _pg_container: pg_container,
         _redis_container: redis_container,
     }
@@ -76,13 +76,13 @@ async fn setup_consumer_test_context() -> ConsumerTestContext {
 #[tokio::test]
 async fn test_consumer_creates_profile_on_account_created_event() {
     let ctx = setup_consumer_test_context().await;
-    let account_id = Uuid::now_v7();
+    let owner_id = Uuid::now_v7();
     let region = "eu";
 
     let payload = serde_json::json!({
         "type": "account.created",
         "data": {
-            "account_id": account_id,
+            "account_id": owner_id,
             "region": region,
             "username": "tester_66",
             "display_name": "Tester Sixty Six",
@@ -91,56 +91,61 @@ async fn test_consumer_creates_profile_on_account_created_event() {
     });
     let bytes = serde_json::to_vec(&payload).unwrap();
 
+    // Act
     ctx.consumer.on_message_received(&bytes).await.expect("Should work");
 
-    // Note : On utilise fetch_identity_by_id car on a renommé nos méthodes de repo
-    let profile = ctx.profile_repo
-        .fetch(&AccountId::from(account_id), &RegionCode::try_new(region).unwrap())
+    // Assert
+    let profiles = ctx.profile_repo
+        .fetch_all_by_owner(&AccountId::from(owner_id))
         .await
-        .unwrap()
-        .expect("Profile should exist in database");
+        .unwrap();
 
-    assert_eq!(profile.username().as_str(), "tester_66");
+    assert_eq!(profiles.len(), 1, "Un profil aurait dû être créé");
+    let profile = &profiles[0];
+
+    assert_eq!(profile.handle().as_str(), "tester_66");
+    assert_eq!(profile.region_code().as_str(), "eu");
 }
 
 #[tokio::test]
 async fn test_consumer_fallback_on_invalid_display_name() {
     let ctx = setup_consumer_test_context().await;
-    let account_id = Uuid::now_v7();
+    let owner_id = Uuid::now_v7();
 
-    // On envoie un display_name vide (qui serait rejeté par le VO DisplayName)
     let payload = serde_json::json!({
         "type": "account.created",
         "data": {
-            "account_id": account_id,
+            "account_id": owner_id, // FIX: account_id et non owner_id
             "region": "us",
-            "username": "safe_username",
-            "display_name": "",
+            "username": "safe_handle",
+            "display_name": "", // Devrait trigger le fallback sur le username
             "occurred_at": "2026-02-04T12:00:00Z"
         }
     });
     let bytes = serde_json::to_vec(&payload).unwrap();
 
-    ctx.consumer.on_message_received(&bytes).await.unwrap();
+    ctx.consumer.on_message_received(&bytes).await.expect("Message processing failed");
 
-    let profile = ctx.profile_repo
-        .fetch(&AccountId::from(account_id), &RegionCode::try_new("us").unwrap())
+    let profiles = ctx.profile_repo
+        .fetch_all_by_owner(&AccountId::from(owner_id))
         .await
-        .unwrap()
         .unwrap();
 
-    // On vérifie que le fallback a fonctionné : le display_name est devenu le username
-    assert_eq!(profile.display_name().as_str(), "safe_username");
+    let profile = profiles.first().expect("Profile should exist");
+
+    // Fallback : si display_name est vide, le consumer doit utiliser le handle
+    assert_eq!(profile.display_name().as_str(), "safe_handle");
 }
 
 #[tokio::test]
 async fn test_consumer_is_idempotent() {
     let ctx = setup_consumer_test_context().await;
-    let account_id = Uuid::now_v7();
+    let owner_id = Uuid::now_v7();
+
     let payload = serde_json::json!({
         "type": "account.created",
         "data": {
-            "account_id": account_id,
+            "account_id": owner_id, // FIX: account_id et non owner_id
             "region": "eu",
             "username": "unique_tester",
             "display_name": "Unique",
@@ -149,14 +154,20 @@ async fn test_consumer_is_idempotent() {
     });
     let bytes = serde_json::to_vec(&payload).unwrap();
 
-    // Premier passage
+    // Premier passage : Création
     ctx.consumer.on_message_received(&bytes).await.expect("First pass should work");
 
-    // Deuxième passage (simule un retry Kafka)
+    // Deuxième passage : Doit ignorer (grâce au catch AlreadyExists dans le consumer)
     let result = ctx.consumer.on_message_received(&bytes).await;
 
-    // Doit être OK (soit ignoré, soit géré par un ON CONFLICT)
     assert!(result.is_ok(), "Second pass should not return an error (idempotency)");
+
+    let profiles = ctx.profile_repo
+        .fetch_all_by_owner(&AccountId::from(owner_id))
+        .await
+        .unwrap();
+
+    assert_eq!(profiles.len(), 1, "Il ne doit toujours y avoir qu'un seul profil après le replay");
 }
 
 #[tokio::test]
@@ -164,20 +175,21 @@ async fn test_consumer_ignores_unknown_event_types() {
     let ctx = setup_consumer_test_context().await;
 
     let payload = serde_json::json!({
-        "type": "account.password_changed", // Event inconnu pour le module Profile
+        "type": "account.email_verified",
         "data": { "account_id": Uuid::now_v7() }
     });
     let bytes = serde_json::to_vec(&payload).unwrap();
 
     let result = ctx.consumer.on_message_received(&bytes).await;
-    assert!(result.is_ok(), "Should silently ignore unknown event types");
+    assert!(result.is_ok(), "Should silently ignore unknown event types thanks to #[serde(other)]");
 }
 
 #[tokio::test]
 async fn test_consumer_fails_on_corrupted_json() {
     let ctx = setup_consumer_test_context().await;
-    let corrupted_bytes = b"{ invalid json ]";
+    // JSON invalide (manque de guillemets, etc)
+    let corrupted_bytes = b"{ \"type\": \"account.created\", \"data\": corrupted }";
 
     let result = ctx.consumer.on_message_received(corrupted_bytes).await;
-    assert!(result.is_err(), "Should return error on corrupted payload");
+    assert!(result.is_err(), "Should return error on corrupted payload for monitoring/dead-letter purposes");
 }

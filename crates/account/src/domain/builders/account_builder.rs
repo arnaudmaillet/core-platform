@@ -17,7 +17,7 @@ pub struct AccountBuilder {
     locale: Option<Locale>,
     phone: Option<PhoneNumber>,
     birth_date: Option<BirthDate>,
-    version: i32,
+    version: u64,
     last_active_at: Option<DateTime<Utc>>,
 }
 
@@ -59,7 +59,7 @@ impl AccountBuilder {
         account_state: AccountState,
         birth_date: Option<BirthDate>,
         locale: Locale,
-        version: i32,
+        version: u64,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
         last_active_at: Option<DateTime<Utc>>,

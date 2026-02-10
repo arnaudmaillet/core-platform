@@ -2,19 +2,18 @@
 
 use crate::domain::entities::Profile;
 use crate::domain::events::ProfileEvent;
-use crate::domain::value_objects::{Bio, DisplayName, ProfileStats, SocialLinks};
+use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, ProfileStats, SocialLinks};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{
-    AccountId, Counter, LocationLabel, RegionCode, Url, Username,
-};
+use shared_kernel::domain::value_objects::{AccountId, Counter, LocationLabel, RegionCode, Url };
 use uuid::Uuid;
 
 pub struct ProfileBuilder {
-    account_id: AccountId,
+    id: ProfileId,
+    owner_id: AccountId,
     region_code: RegionCode,
     display_name: DisplayName,
-    username: Username,
+    handle: Handle,
     bio: Option<Bio>,
     avatar_url: Option<Url>,
     banner_url: Option<Url>,
@@ -23,23 +22,23 @@ pub struct ProfileBuilder {
     stats: ProfileStats,
     post_count: Counter,
     is_private: bool,
-    version: i32,
+    version: u64,
     created_at: Option<DateTime<Utc>>,
 }
 
 impl ProfileBuilder {
-    /// Chemin 1 : CREATION (Via Use Case / API)
     pub(crate) fn new(
-        account_id: AccountId,
+        owner_id: AccountId,
         region_code: RegionCode,
         display_name: DisplayName,
-        username: Username,
+        handle: Handle,
     ) -> Self {
         Self {
-            account_id,
+            id: ProfileId::new(),
+            owner_id,
             region_code,
             display_name,
-            username,
+            handle,
             bio: None,
             avatar_url: None,
             banner_url: None,
@@ -56,10 +55,11 @@ impl ProfileBuilder {
     /// Chemin 2 : RESTAURATION (Via Infrastructure / Repository)
     /// Direct et sans détour pour la performance SQL
     pub fn restore(
-        account_id: AccountId,
+        id: ProfileId,
+        owner_id: AccountId,
         region_code: RegionCode,
         display_name: DisplayName,
-        username: Username,
+        handle: Handle,
         bio: Option<Bio>,
         avatar_url: Option<Url>,
         banner_url: Option<Url>,
@@ -67,15 +67,16 @@ impl ProfileBuilder {
         social_links: Option<SocialLinks>,
         post_count: Counter,
         is_private: bool,
-        version: i32,
+        version: u64,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Profile {
         Profile::restore(
-            account_id,
+            id,
+            owner_id,
             region_code,
             display_name,
-            username,
+            handle,
             bio,
             avatar_url,
             banner_url,
@@ -144,10 +145,11 @@ impl ProfileBuilder {
 
         // On crée l'instance via le restore interne de Profile
         let mut profile = Profile::restore(
-            self.account_id,
+            self.id,
+            self.owner_id,
             self.region_code,
             self.display_name,
-            self.username,
+            self.handle,
             self.bio,
             self.avatar_url,
             self.banner_url,
@@ -163,10 +165,11 @@ impl ProfileBuilder {
         // Le builder de création génère TOUJOURS l'événement
         profile.add_event(Box::new(ProfileEvent::ProfileCreated {
             id: Uuid::now_v7(),
-            account_id: profile.account_id().clone(),
+            profile_id: profile.id().clone(),
+            owner_id: profile.owner_id().clone(),
             region: profile.region_code().clone(),
             display_name: profile.display_name().clone(),
-            username: profile.username().clone(),
+            handle: profile.handle().clone(),
             occurred_at: profile.created_at(),
         }));
 

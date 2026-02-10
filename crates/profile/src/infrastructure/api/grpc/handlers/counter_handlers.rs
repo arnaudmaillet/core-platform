@@ -13,6 +13,7 @@ use crate::infrastructure::api::grpc::profile_v1::{
 use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
+use crate::infrastructure::api::grpc::mappers::ToGrpcStatus;
 
 pub struct ProfileCounterHandler {
     increment_post_uc: Arc<IncrementPostCountUseCase>,
@@ -48,10 +49,7 @@ impl ProfileCounterService for ProfileCounterHandler {
     ) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = IncrementPostCountCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.increment_post_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.increment_post_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 
@@ -61,10 +59,7 @@ impl ProfileCounterService for ProfileCounterHandler {
     ) -> Result<Response<ProtoProfile>, Status> {
         let region = self.get_region(&request)?;
         let command = DecrementPostCountCommand::try_from_proto(request.into_inner(), region)?;
-
-        let profile = self.decrement_post_uc.execute(command).await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
+        let profile = self.decrement_post_uc.execute(command).await.map_grpc()?;
         Ok(Response::new(profile.into()))
     }
 }

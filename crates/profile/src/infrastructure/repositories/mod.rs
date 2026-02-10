@@ -1,3 +1,0 @@
-mod composite_profile_repository;
-
-pub use composite_profile_repository::CompositeProfileRepository;

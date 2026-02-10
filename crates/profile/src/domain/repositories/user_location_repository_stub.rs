@@ -2,9 +2,10 @@ use crate::domain::entities::UserLocation; // VÃ©rifie bien le nom de ton entitÃ
 use crate::domain::repositories::LocationRepository;
 use shared_kernel::domain::entities::GeoPoint;
 use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::errors::Result;
 use std::sync::Mutex;
+use crate::domain::value_objects::ProfileId;
 
 // --- STUB LOCATION REPOSITORY ---
 pub struct LocationRepositoryStub {
@@ -32,7 +33,7 @@ impl LocationRepository for LocationRepositoryStub {
         Ok(())
     }
 
-    async fn fetch(&self, _id: &AccountId, _r: &RegionCode) -> Result<Option<UserLocation>> {
+    async fn fetch(&self, _id: &ProfileId, _r: &RegionCode) -> Result<Option<UserLocation>> {
         Ok(self.location_to_return.lock().unwrap().clone())
     }
 
@@ -46,7 +47,7 @@ impl LocationRepository for LocationRepositoryStub {
         Ok(self.nearby_to_return.lock().unwrap().clone())
     }
 
-    async fn delete(&self, _id: &AccountId, _r: &RegionCode) -> Result<()> {
+    async fn delete(&self, _id: &ProfileId, _r: &RegionCode) -> Result<()> {
         Ok(())
     }
 }

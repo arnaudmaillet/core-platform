@@ -9,20 +9,22 @@ core_rust_library(
     crate_features = [
         "postgres",
         "redis",
+        "scylla",
         "kafka",
+        "elasticsearch",
         "grpc",
         "concurrency",
         "runtime",
-        "scylla",
     ],
     visibility = ["//visibility:public"],
-    # 1. Les bibliothèques normales (Runtime)
     deps = [
+        # --- Core (Always included) ---
         "@crates//:uuid",
         "@crates//:chrono",
         "@crates//:chrono-tz",
         "@crates//:serde",
         "@crates//:serde_json",
+        "@crates//:thiserror",
         "@crates//:tracing",
         "@crates//:url",
         "@crates//:rand",
@@ -31,23 +33,25 @@ core_rust_library(
         "@crates//:regex",
         "@crates//:seahash",
         "@crates//:unicode-normalization",
-        "@crates//:sqlx",
-        "@crates//:fred",
-        "@crates//:rdkafka",
-        "@crates//:dashmap",
-        "@crates//:futures",
+        "@crates//:dyn-clone",
+
+        # --- gRPC / Protobuf ---
         "@crates//:tonic",
         "@crates//:prost",
         "@crates//:prost-types",
+
+        # --- Drivers & Async (Optional in Cargo, but mapped here) ---
+        "@crates//:sqlx",
+        "@crates//:fred",
+        "@crates//:scylla",
+        "@crates//:rdkafka",
+        "@crates//:elasticsearch", # Ajouté
+        "@crates//:dashmap",
+        "@crates//:futures",
         "@crates//:tokio",
         "@crates//:tokio-util",
         "@crates//:tracing-subscriber",
-        "@crates//:thiserror",
-        "@crates//:scylla",
-        "@crates//:dyn-clone",
     ],
-    # 2. Les macros de compilation (Compile-time)
-    # C'est ici que tu mets ce qui génère du code
     proc_macro_deps = [
         "@crates//:async-trait",
     ],

@@ -16,7 +16,7 @@ option go_package = "github.com/core-platform/proto/profile/v1";
 
 // 1. SERVICE D'IDENTITÉ
 service ProfileIdentityService {
-  rpc UpdateUsername(UpdateUsernameRequest) returns (Profile);
+  rpc UpdateHandle(UpdateHandleRequest) returns (Profile);
   rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (Profile);
   rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
 }
@@ -47,67 +47,67 @@ service ProfileCounterService {
 
 // --- Identity ---
 
-message UpdateUsernameRequest {
-  string account_id = 1;
-  string new_username = 2;
+message UpdateHandleRequest {
+  string profile_id = 1;
+  string new_handle = 2;
 }
 
 message UpdateDisplayNameRequest {
-  string account_id = 1;
+  string profile_id = 1;
   string new_display_name = 2;
 }
 
 
 message UpdatePrivacyRequest {
-  string account_id = 1;
+  string profile_id = 1;
   bool is_private = 2;
 }
 
 // --- Medias ---
 
 message UpdateAvatarRequest {
-  string account_id = 1;
+  string profile_id = 1;
   string new_avatar_url = 2;
 }
 
 message UpdateBannerRequest {
-  string account_id = 1;
+  string profile_id = 1;
   string new_banner_url = 2;
 }
 
 message RemoveAvatarRequest {
-  string account_id = 1;
+  string profile_id = 1;
 }
 
 message RemoveBannerRequest {
-  string account_id = 1;
+  string profile_id = 1;
 }
 
 // --- Metadata ---
 
 message UpdateBioRequest {
-  string account_id = 1;
+  string profile_id = 1;
   google.protobuf.StringValue new_bio = 2;
 }
 
 message UpdateLocationLabelRequest {
-  string account_id = 1;
+  string profile_id = 1;
   google.protobuf.StringValue new_location_label = 2;
 }
 
 message UpdateSocialLinksRequest {
-  string account_id = 1;
+  string profile_id = 1;
   optional SocialLinks new_links = 2;
 }
 
 // --- Compteurs / Automation ---
 
 message IncrementPostCountRequest {
-  string account_id = 1;
+  string profile_id = 1;
   string post_id = 2;
 }
 
 message DecrementPostCountRequest {
-  string account_id = 1;
+  string profile_id = 1;
   string post_id = 2;
 }

@@ -1,21 +1,20 @@
 // crates/profile/src/application/get_profile_by_username/get_profile_by_username_use_case
 
-use crate::application::get_profile_by_username::GetProfileByUsernameCommand;
 use crate::domain::entities::Profile;
 use crate::domain::repositories::ProfileRepository;
 use shared_kernel::domain::repositories::CacheRepository;
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::concurrency::Singleflight;
 use std::sync::Arc;
+use crate::application::get_profile_by_handle::GetProfileByHandleCommand;
 
-pub struct GetProfileByUsernameUseCase {
+pub struct GetProfileByHandleUseCase {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn CacheRepository>,
-    // Key = (Username string + Region string), Value = Profile
     sf: Singleflight<String, Profile>,
 }
 
-impl GetProfileByUsernameUseCase {
+impl GetProfileByHandleUseCase {
     pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn CacheRepository>) -> Self {
         Self {
             repo,
@@ -24,11 +23,11 @@ impl GetProfileByUsernameUseCase {
         }
     }
 
-    pub async fn execute(&self, cmd: GetProfileByUsernameCommand) -> Result<Profile> {
+    pub async fn execute(&self, cmd: GetProfileByHandleCommand) -> Result<Profile> {
         let cache_key = format!(
-            "profile:un:{}:{}",
+            "profile:h:{}:{}",
             cmd.region.as_str(),
-            cmd.username.as_str()
+            cmd.handle.as_str()
         );
 
         // 1. TENTATIVE CACHE (Fast Path)
@@ -47,17 +46,17 @@ impl GetProfileByUsernameUseCase {
             .execute(sf_key, || {
                 let repo = Arc::clone(&self.repo);
                 let cache = Arc::clone(&self.cache);
-                let username = cmd.username.clone();
+                let handle = cmd.handle.clone();
                 let region = cmd.region.clone();
                 let key = cache_key.clone();
 
                 async move {
                     let p = repo
-                        .resolve_profile_from_username(&username, &region)
+                        .resolve_profile_from_handle(&handle, &region)
                         .await?
                         .ok_or_else(|| DomainError::NotFound {
                             entity: "Profile",
-                            id: username.as_str().to_string(),
+                            id: handle.as_str().to_string(),
                         })?;
 
                     // On sérialise en JSON avant de stocker dans Redis

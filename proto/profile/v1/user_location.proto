@@ -31,18 +31,19 @@ message MovementMetrics {
 // ==========================================
 
 message UserLocation {
-  string account_id = 1;
-  string region_code = 2;
+  string profile_id = 1;
+  string owner_id = 2;
+  string region_code = 3;
 
-  GeoPoint coordinates = 3;
-  LocationMetrics metrics = 4;
-  MovementMetrics movement = 5;
+  GeoPoint coordinates = 4;
+  LocationMetrics metrics = 5;
+  MovementMetrics movement = 6;
 
-  bool is_ghost_mode = 6;
-  int32 privacy_radius_meters = 7;
+  bool is_ghost_mode = 7;
+  int32 privacy_radius_meters = 8;
 
-  google.protobuf.Timestamp updated_at = 8;
-  int64 version = 9;
+  google.protobuf.Timestamp updated_at = 9;
+  int32 version = 10;
 }
 
 // ==========================================
@@ -62,21 +63,25 @@ service LocationService {
 
 message GetUserLocationRequest {
   string account_id = 1;
+  string region_code = 2;
 }
 
 message UpdatePositionRequest {
-  string account_id = 1;
-  GeoPoint coordinates = 2;
-  optional LocationMetrics metrics = 3;
-  optional MovementMetrics movement = 4;
+  string profile_id = 1;
+  string region_code = 2;
+  GeoPoint coordinates = 3;
+  optional LocationMetrics metrics = 4;
+  optional MovementMetrics movement = 5;
 }
 
 message SetGhostModeRequest {
-  string account_id = 1;
-  bool enabled = 2;
+  string profile_id = 1;
+  string region_code = 2;
+  bool enabled = 3;
 }
 
 message UpdatePrivacyRadiusRequest {
-  string account_id = 1;
-  int32 radius_meters = 2;
+  string profile_id = 1;
+  string region_code = 2;
+  int32 radius_meters = 3;
 }

@@ -7,15 +7,14 @@ mod tests {
     use shared_kernel::domain::events::{EventEnvelope, DomainEvent, AggregateRoot};
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url}; // Suppression Username
     use shared_kernel::errors::{DomainError, Result};
 
     use crate::application::remove_avatar::{RemoveAvatarCommand, RemoveAvatarUseCase};
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle, ProfileId}; // Ajout Handle et ProfileId
     use crate::domain::repositories::ProfileRepositoryStub;
 
-    /// Helper pour instancier le Use Case avec ses dépendances
     fn setup(profile: Option<Profile>) -> RemoveAvatarUseCase {
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(profile),
@@ -31,25 +30,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_avatar_success() {
-        // Arrange : Un profil qui possède un avatar
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new(); // Renommé pour la clarté
         let region = RegionCode::try_new("eu").unwrap();
         let url = Url::try_new("https://cdn.com/old_photo.png").unwrap();
 
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
-        )
-            .build();
+            Handle::try_new("bob").unwrap(), // Utilisation de Handle
+        ).build();
 
-        // On simule un état existant avec avatar (version 2)
+        let profile_id = profile.id().clone();
         profile.update_avatar(&region, url).unwrap();
 
         let use_case = setup(Some(profile));
         let cmd = RemoveAvatarCommand {
-            account_id: account_id.clone(),
+            profile_id: profile_id.clone(),
             region: region.clone()
         };
 
@@ -60,27 +58,28 @@ mod tests {
         assert!(result.is_ok());
         let updated_profile = result.unwrap();
         assert!(updated_profile.avatar_url().is_none());
-        assert_eq!(updated_profile.version(), 3); // Initial(1) -> Set(2) -> Remove(3)
+        assert_eq!(updated_profile.version(), 3);
     }
 
     #[tokio::test]
     async fn test_remove_avatar_fails_on_region_mismatch() {
-        // Arrange : Profil en EU, Commande en US
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             actual_region,
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
 
         let cmd = RemoveAvatarCommand {
-            account_id,
+            profile_id,
             region: wrong_region
         };
 
@@ -88,24 +87,24 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         // Assert
-        // Doit renvoyer Forbidden car le check est dans l'entité
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
     async fn test_remove_avatar_already_none() {
-        // Arrange : Un profil qui n'a déjà pas d'avatar
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
-        let cmd = RemoveAvatarCommand { account_id, region };
+        let cmd = RemoveAvatarCommand { profile_id, region };
 
         // Act
         let result = use_case.execute(cmd).await;
@@ -114,7 +113,6 @@ mod tests {
         assert!(result.is_ok());
         let updated_profile = result.unwrap();
         assert!(updated_profile.avatar_url().is_none());
-        // L'idempotence a fonctionné : la version n'a pas bougé
         assert_eq!(updated_profile.version(), 1);
     }
 
@@ -124,7 +122,7 @@ mod tests {
         let use_case = setup(None);
 
         let cmd = RemoveAvatarCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::try_new("eu").unwrap(),
         };
 
@@ -138,18 +136,18 @@ mod tests {
     #[tokio::test]
     async fn test_remove_avatar_concurrency_conflict() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         profile.update_avatar(&region, Url::try_new("https://old.png").unwrap()).unwrap();
 
-        // Stub configuré pour renvoyer une erreur de version au save
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
@@ -165,7 +163,7 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(RemoveAvatarCommand { account_id, region }).await;
+        let result = use_case.execute(RemoveAvatarCommand { profile_id, region }).await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
@@ -173,18 +171,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_avatar_db_internal_error() {
-        let account_id = AccountId::new();
+        // Arrange
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // IMPORTANT : On crée un profil qui A un avatar pour forcer la mutation
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap()
+            Handle::try_new("bob").unwrap()
         ).build();
 
-        // On ajoute un avatar (version passe à 2)
+        let profile_id = profile.id().clone();
         profile.update_avatar(&region, Url::try_new("https://photo.png").unwrap()).unwrap();
 
         let repo = Arc::new(ProfileRepositoryStub {
@@ -195,7 +193,7 @@ mod tests {
 
         let use_case = RemoveAvatarUseCase::new(repo, Arc::new(OutboxRepositoryStub::new()), Arc::new(StubTxManager));
 
-        let result = use_case.execute(RemoveAvatarCommand { account_id, region }).await;
+        let result = use_case.execute(RemoveAvatarCommand { profile_id, region }).await;
 
         match result {
             Err(DomainError::Internal(m)) => assert!(m.contains("timeout")),
@@ -206,14 +204,16 @@ mod tests {
     #[tokio::test]
     async fn test_remove_avatar_outbox_error_rollbacks() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Bob"),
-            Username::try_new("bob").unwrap(),
+            Handle::try_new("bob").unwrap(),
         ).build();
+
+        let profile_id = profile.id().clone();
         profile.update_avatar(&region, Url::try_new("https://old.png").unwrap()).unwrap();
 
         struct FailingOutbox;
@@ -235,10 +235,9 @@ mod tests {
         );
 
         // Act
-        let result = use_case.execute(RemoveAvatarCommand { account_id, region }).await;
+        let result = use_case.execute(RemoveAvatarCommand { profile_id, region }).await;
 
         // Assert
-        // L'échec de l'outbox doit faire échouer le use case
         assert!(result.is_err());
     }
 }

@@ -5,9 +5,9 @@ mod tests {
         IncrementPostCountCommand, IncrementPostCountUseCase,
     };
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle, ProfileId}; // Ajout Handle et ProfileId
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
-    use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -25,23 +25,25 @@ mod tests {
     #[tokio::test]
     async fn test_increment_post_count_success() {
         // Arrange
-        let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap(); // Remplacement de from_raw
+        let owner_id = AccountId::new();
+        let region = RegionCode::try_new("eu").unwrap();
+
         let initial_profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
 
+        let profile_id = initial_profile.id().clone(); // On récupère l'ID généré par le builder
         assert_eq!(initial_profile.post_count(), 0);
 
         let use_case = setup(Some(initial_profile));
         let post_id = PostId::new();
 
         let cmd = IncrementPostCountCommand {
-            account_id,
+            profile_id: profile_id.clone(), // Le pivot est maintenant le profile_id
             region: region.clone(),
             post_id,
         };
@@ -60,24 +62,25 @@ mod tests {
     #[tokio::test]
     async fn test_increment_multiple_times_logic() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
 
-        // FIX: Passage de la région obligatoire pour muter l'entité
+        let profile_id = profile.id().clone();
+
         for _ in 0..5 {
             profile.increment_post_count(&region, PostId::new()).unwrap();
         }
 
         let use_case = setup(Some(profile));
         let cmd = IncrementPostCountCommand {
-            account_id,
+            profile_id,
             region,
             post_id: PostId::new(),
         };
@@ -94,21 +97,22 @@ mod tests {
     #[tokio::test]
     async fn test_increment_fails_on_region_mismatch() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             actual_region,
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
 
+        let profile_id = profile.id().clone();
         let use_case = setup(Some(profile));
 
         let cmd = IncrementPostCountCommand {
-            account_id,
+            profile_id,
             region: wrong_region,
             post_id: PostId::new(),
         };
@@ -126,7 +130,7 @@ mod tests {
         let use_case = setup(None);
 
         let cmd = IncrementPostCountCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(), // ID inexistant
             region: RegionCode::try_new("eu").unwrap(),
             post_id: PostId::new(),
         };
@@ -141,15 +145,17 @@ mod tests {
     #[tokio::test]
     async fn test_increment_concurrency_conflict_triggers_retry() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
+
+        let profile_id = profile.id().clone();
 
         let repo = Arc::new(ProfileRepositoryStub {
             profile_to_return: Mutex::new(Some(profile)),
@@ -163,7 +169,7 @@ mod tests {
 
         // Act
         let result = use_case.execute(IncrementPostCountCommand {
-            account_id,
+            profile_id,
             region,
             post_id: PostId::new(),
         }).await;
@@ -175,15 +181,17 @@ mod tests {
     #[tokio::test]
     async fn test_increment_atomic_rollback_on_outbox_failure() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id,
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
+
+        let profile_id = profile.id().clone();
 
         struct FailingOutbox;
         #[async_trait::async_trait]
@@ -205,7 +213,7 @@ mod tests {
 
         // Act
         let result = use_case.execute(IncrementPostCountCommand {
-            account_id,
+            profile_id,
             region,
             post_id: PostId::new(),
         }).await;

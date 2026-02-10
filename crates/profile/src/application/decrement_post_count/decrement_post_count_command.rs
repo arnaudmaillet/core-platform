@@ -2,12 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 use tonic::Status;
-use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode};
+use shared_kernel::domain::value_objects::{PostId, RegionCode};
+use crate::domain::value_objects::ProfileId;
 use crate::infrastructure::api::grpc::profile_v1::DecrementPostCountRequest;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecrementPostCountCommand {
-    pub account_id: AccountId,
+    pub profile_id: ProfileId,
     pub post_id: PostId,
     pub region: RegionCode,
 }
@@ -15,11 +16,11 @@ pub struct DecrementPostCountCommand {
 impl DecrementPostCountCommand {
     pub fn try_from_proto(req: DecrementPostCountRequest, region: RegionCode) -> Result<Self, Status> {
         Ok(Self {
-            account_id: AccountId::try_from(req.account_id)
-                .map_err(|e| Status::invalid_argument(format!("AccountID: {}", e)))?,
+            profile_id: ProfileId::try_from(req.profile_id)
+                .map_err(|e| Status::invalid_argument(format!("ProfileId: {}", e)))?,
             region,
             post_id: PostId::try_from(req.post_id)
-                .map_err(|e| Status::invalid_argument(format!("PostID: {}", e)))?,
+                .map_err(|e| Status::invalid_argument(format!("PostId: {}", e)))?,
         })
     }
 }

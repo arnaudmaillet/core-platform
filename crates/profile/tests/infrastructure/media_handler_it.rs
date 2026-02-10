@@ -17,10 +17,10 @@ use profile::application::update_banner::UpdateBannerUseCase;
 use profile::application::remove_banner::RemoveBannerUseCase;
 use profile::domain::entities::Profile;
 use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
-use profile::domain::value_objects::DisplayName;
-use profile::infrastructure::postgres::repositories::PostgresProfileRepository;
+use profile::domain::value_objects::{DisplayName, Handle, ProfileId};
+use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
+use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
-use profile::infrastructure::repositories::CompositeProfileRepository;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
@@ -31,27 +31,24 @@ use shared_kernel::infrastructure::utils::{setup_full_infrastructure, Infrastruc
 struct TestContext {
     handler: MediaHandler,
     infra: InfrastructureTestContext,
-    identity_repo: Arc<PostgresProfileRepository>,
-    composite_repo: Arc<CompositeProfileRepository>,
+    identity_repo: Arc<PostgresIdentityRepository>,
+    composite_repo: Arc<UnifiedProfileRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
-    account_id: AccountId,
+    profile_id: ProfileId,
     region: RegionCode,
 }
 
 async fn setup_test_context() -> TestContext {
-    // 1. Setup unique via le Kernel (Infrastucture partagée)
     let infra = setup_full_infrastructure(
         &["./migrations/postgres"],
         &["./migrations/scylla"]
     ).await;
 
-    // 2. Instanciation des dépôts réels
-    let identity_postgres = Arc::new(PostgresProfileRepository::new(infra.pg_pool.clone()));
+    let identity_postgres = Arc::new(PostgresIdentityRepository::new(infra.pg_pool.clone()));
     let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
     let cache_redis = Arc::new(RedisCacheRepository::new(&infra.redis_url).await.unwrap());
 
-    // 3. Création du Composite
-    let profile_repo = Arc::new(CompositeProfileRepository::new(
+    let profile_repo = Arc::new(UnifiedProfileRepository::new(
         identity_postgres.clone(),
         stats_scylla,
         cache_redis,
@@ -60,7 +57,6 @@ async fn setup_test_context() -> TestContext {
     let tx_manager = Arc::new(PostgresTransactionManager::new(infra.pg_pool.clone()));
     let outbox_repo = Arc::new(PostgresOutboxRepository::new(infra.pg_pool.clone()));
 
-    // 4. Injection du Composite dans les Use Cases
     let handler = MediaHandler::new(
         Arc::new(UpdateAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(RemoveAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
@@ -68,17 +64,18 @@ async fn setup_test_context() -> TestContext {
         Arc::new(RemoveBannerUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
     );
 
-    // Seed initial
-    let account_id = AccountId::new();
+    // Seed initial avec le nouveau ProfileId
+    let owner_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
     let initial_profile = Profile::builder(
-        account_id.clone(),
+        owner_id,
         region.clone(),
         DisplayName::try_new("Media User").unwrap(),
-        Username::try_new(format!("user_{}", &account_id.to_string()[..8])).unwrap(),
+        Handle::try_new("media_pro").unwrap(),
     ).build();
 
-    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed user");
+    let profile_id = initial_profile.id().clone();
+    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed profile");
 
     TestContext {
         handler,
@@ -86,10 +83,11 @@ async fn setup_test_context() -> TestContext {
         identity_repo: identity_postgres,
         composite_repo: profile_repo,
         outbox_repo,
-        account_id,
+        profile_id,
         region,
     }
 }
+
 // --- TESTS ---
 
 #[tokio::test]
@@ -99,7 +97,7 @@ async fn test_media_handler_avatar_lifecycle() {
 
     // 1. UPDATE AVATAR
     let mut update_req = Request::new(UpdateAvatarRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_avatar_url: avatar_url.into(),
     });
     update_req.extensions_mut().insert(ctx.region.clone());
@@ -107,21 +105,20 @@ async fn test_media_handler_avatar_lifecycle() {
     let response = ctx.handler.update_avatar(update_req).await.expect("Update avatar failed");
     assert_eq!(response.into_inner().avatar_url, Some(avatar_url.into()));
 
-    // Vérification DB
-    let profile = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    // Vérification DB (Fetch par ProfileId)
+    let profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
     assert_eq!(profile.avatar_url().unwrap().as_str(), avatar_url);
 
     // 2. REMOVE AVATAR
     let mut remove_req = Request::new(RemoveAvatarRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
     });
     remove_req.extensions_mut().insert(ctx.region.clone());
 
     let response = ctx.handler.remove_avatar(remove_req).await.expect("Remove avatar failed");
     assert_eq!(response.into_inner().avatar_url, None);
 
-    // Vérification finale DB
-    let profile_final = ctx.identity_repo.fetch(&ctx.account_id, &ctx.region).await.unwrap().unwrap();
+    let profile_final = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
     assert!(profile_final.avatar_url().is_none());
 }
 
@@ -132,7 +129,7 @@ async fn test_media_handler_banner_lifecycle() {
 
     // 1. UPDATE BANNER
     let mut update_req = Request::new(UpdateBannerRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
         new_banner_url: banner_url.into(),
     });
     update_req.extensions_mut().insert(ctx.region.clone());
@@ -142,13 +139,13 @@ async fn test_media_handler_banner_lifecycle() {
 
     // 2. REMOVE BANNER
     let mut remove_req = Request::new(RemoveBannerRequest {
-        account_id: ctx.account_id.to_string(),
+        profile_id: ctx.profile_id.to_string(),
     });
     remove_req.extensions_mut().insert(ctx.region.clone());
 
     ctx.handler.remove_banner(remove_req).await.expect("Remove banner failed");
 
-    // Vérification Outbox : on attend 2 événements (Update + Remove) + 1 du Seed
+    // Vérification Outbox
     let pending = ctx.outbox_repo.find_pending(10).await.unwrap();
     assert!(pending.len() >= 2);
 }
@@ -158,31 +155,30 @@ async fn test_media_handler_invalid_url_format() {
     let ctx = setup_test_context().await;
 
     let mut request = Request::new(UpdateAvatarRequest {
-        account_id: ctx.account_id.to_string(),
-        new_avatar_url: "not-a-valid-url".into(),
+        profile_id: ctx.profile_id.to_string(),
+        new_avatar_url: "ftp://not-allowed-scheme.com".into(), // Supposons que ton VO Url rejette ftp
     });
     request.extensions_mut().insert(ctx.region.clone());
 
     let result = ctx.handler.update_avatar(request).await;
 
     assert!(result.is_err());
-    // On vérifie que c'est bien une erreur de validation (InvalidArgument)
     assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
 }
 
 #[tokio::test]
-async fn test_media_handler_account_not_found() {
+async fn test_media_handler_profile_not_found() {
     let ctx = setup_test_context().await;
-    let random_id = AccountId::new(); // ID qui n'existe pas en DB
+    let random_pid = ProfileId::new(); // ID inexistant
 
     let mut request = Request::new(RemoveAvatarRequest {
-        account_id: random_id.to_string(),
+        profile_id: random_pid.to_string(),
     });
     request.extensions_mut().insert(ctx.region.clone());
 
     let result = ctx.handler.remove_avatar(request).await;
 
     assert!(result.is_err());
-    // Selon ton implémentation, ça peut être NotFound ou Internal
-    // On s'assure juste que le système ne panique pas
+    // On s'attend à un NotFound mappé depuis DomainError::NotFound
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
 }

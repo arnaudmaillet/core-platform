@@ -165,7 +165,7 @@ impl AccountRepository for PostgresAccountRepository {
     // --- ÉCRITURES ---
 
     async fn create_account(&self, account: &Account, tx: &mut dyn Transaction) -> Result<()> {
-        let row = PostgresAccountRow::from(account);
+        let row = PostgresAccountRow::try_from(account)?;
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
                 query(
@@ -321,10 +321,18 @@ impl AccountRepository for PostgresAccountRepository {
 }
 
 impl PostgresAccountRepository {
-    async fn execute_upsert(&self, user: &Account, tx: Option<&mut dyn Transaction>) -> Result<()> {
-        let row = PostgresAccountRow::from(user);
-        let new_version = user.version();
-        let old_version = if new_version > 1 { new_version - 1 } else { 0 };
+    async fn execute_upsert(&self, account: &Account, tx: Option<&mut dyn Transaction>) -> Result<()> {
+        let row = PostgresAccountRow::try_from(account)?;
+        let account_id_for_err = account.id().to_string();
+        let current_version = account.version();
+
+        let new_version_i64 = row.version;
+        let old_version_i64: i64 = if current_version > 1 {
+            (current_version - 1).try_into()
+                .map_err(|_| shared_kernel::errors::DomainError::Internal("Version math overflow".into()))?
+        } else {
+            0
+        };
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
@@ -345,9 +353,9 @@ impl PostgresAccountRepository {
                     version = EXCLUDED.version,
                     updated_at = EXCLUDED.updated_at
                 WHERE accounts.version = $14
-            "#;
+                "#;
 
-                let result = query(sql)
+                let result = sqlx::query(sql)
                     .bind(row.id)
                     .bind(&row.region_code)
                     .bind(&row.external_id)
@@ -356,25 +364,26 @@ impl PostgresAccountRepository {
                     .bind(row.email_verified)
                     .bind(&row.phone_number)
                     .bind(row.phone_verified)
-                    .bind(&row.state)
+                    .bind(row.state)
                     .bind(row.birth_date)
                     .bind(&row.locale)
-                    .bind(new_version) // $12
-                    .bind(row.updated_at) // $13
-                    .bind(old_version) // $14
+                    .bind(new_version_i64)
+                    .bind(row.updated_at)
+                    .bind(old_version_i64)
                     .execute(conn)
                     .await
                     .map_domain::<Account>()?;
 
-                if result.rows_affected() == 0 && new_version > 1 {
+                if result.rows_affected() == 0 && current_version > 1 {
                     return Err(shared_kernel::errors::DomainError::ConcurrencyConflict {
-                        reason: format!("Account {}: version mismatch", row.id)
+                        reason: format!("Account {}: version mismatch", account_id_for_err)
                     });
                 }
                 Ok(())
             })
         })
             .await?;
+
         Ok(())
     }
 }

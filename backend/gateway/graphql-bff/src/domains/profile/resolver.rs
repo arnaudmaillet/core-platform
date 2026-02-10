@@ -1,9 +1,9 @@
 // backend/gateway/graphql-bff/src/domains/profile/resolver.rs
 
-use crate::clients::profile::UpdateUsernameRequest;
 use crate::context::ApiContext;
 use crate::domains::profile::model::Profile;
 use async_graphql::{Context, Object, Result};
+use crate::clients::profile::UpdateHandleRequest;
 
 #[derive(Default)]
 pub struct ProfileQuery;
@@ -40,21 +40,21 @@ pub struct ProfileMutation;
 
 #[Object]
 impl ProfileMutation {
-    async fn update_username(
+    async fn update_handle(
         &self,
         ctx: &Context<'_>,
-        account_id: String,
-        new_username: String,
+        profile_id: String,
+        new_handle: String,
     ) -> Result<Profile> {
         let api_ctx = ctx.data::<ApiContext>()?;
         let mut client = api_ctx.profile_identity.clone();
 
-        let request = tonic::Request::new(UpdateUsernameRequest {
-            account_id,
-            new_username,
+        let request = tonic::Request::new(UpdateHandleRequest {
+            profile_id,
+            new_handle,
         });
 
-        let response = client.update_username(request).await?.into_inner();
+        let response = client.update_handle(request).await?.into_inner();
         Ok(Profile::from(response))
     }
 }

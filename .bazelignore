@@ -1,3 +1,6 @@
+# .bazelignore
+
+infrastructure
 .terraform
 .terragrunt-cache
 terragrunt-cache

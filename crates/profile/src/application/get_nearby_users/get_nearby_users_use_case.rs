@@ -28,7 +28,7 @@ impl GetNearbyUsersUseCase {
 
         for (loc, distance) in raw_results {
             // Ne pas s'inclure soi-même dans les résultats
-            if loc.account_id().clone() == cmd.account_id {
+            if loc.profile_id().clone() == cmd.profile_id {
                 continue;
             }
 
@@ -48,7 +48,7 @@ impl GetNearbyUsersUseCase {
             };
 
             dtos.push(NearbyUserDto {
-                account_id: loc.account_id().clone(),
+                profile_id: loc.profile_id().clone(),
                 coordinates: final_coords,
                 distance_meters: distance,
                 is_obfuscated,

@@ -3,6 +3,7 @@
 use crate::domain::builders::AccountSettingsBuilder;
 use crate::domain::entities::{AccountSettings, SettingsBlob};
 use serde::{Deserialize, Serialize};
+use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
 use shared_kernel::errors::{DomainError, Result};
@@ -15,7 +16,7 @@ pub struct PostgresAccountSettingsRow {
     pub timezone: String,
     pub push_tokens: Vec<String>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
-    pub version: i32, // Indispensable pour l'Hyperscale
+    pub version: i64,
 }
 
 impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
@@ -25,6 +26,8 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
         // 1. Extraire les données du JSONB (Privacy, Notifications, Appearance)
         let blob: SettingsBlob = serde_json::from_value(row.settings)
             .map_err(|e| DomainError::Internal(format!("Désérialisation JSON échouée: {}", e)))?;
+
+        let metadata = AggregateMetadata::try_from(row.version)?;
 
         // 2. Transformer les types simples en Value Objects
         let push_tokens = row
@@ -43,7 +46,7 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
             Timezone::from_raw(row.timezone),
             push_tokens,
             row.updated_at,
-            row.version,
+            metadata.version(),
         ))
     }
 }

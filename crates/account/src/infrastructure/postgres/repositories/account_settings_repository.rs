@@ -75,8 +75,13 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let tz = settings.timezone().to_string();
         let updated_at = settings.updated_at();
 
-        let new_version = settings.version();
-        let old_version = if new_version > 1 { new_version - 1 } else { 0 };
+        let new_version_i64 = settings.version_i64()?;
+        let old_version_i64: i64 = if settings.version() > 1 {
+            (settings.version() - 1).try_into()
+                .map_err(|_| DomainError::Internal("Version overflow".into()))?
+        } else {
+            0
+        };
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "
@@ -96,14 +101,14 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
                 .bind(settings_json)
                 .bind(tz)
                 .bind(push_tokens)
-                .bind(new_version)
+                .bind(new_version_i64)
                 .bind(updated_at)
-                .bind(old_version)
+                .bind(old_version_i64)
                 .execute(conn)
                 .await
                 .map_domain_infra("AccountSettings: save")?;
 
-            if result.rows_affected() == 0 && new_version > 1 {
+            if result.rows_affected() == 0 && new_version_i64 > 1 {
                 return Err(DomainError::ConcurrencyConflict {
                     reason: format!("Concurrency conflict for account {}: version mismatch", uid)
                 });

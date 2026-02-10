@@ -1,11 +1,11 @@
 use crate::domain::entities::UserLocation;
-use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
+use crate::domain::value_objects::{LocationMetrics, MovementMetrics, ProfileId};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::entities::GeoPoint;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 
 pub struct UserLocationBuilder {
-    account_id: AccountId,
+    profile_id: ProfileId,
     region_code: RegionCode,
     coordinates: GeoPoint,
     metrics: Option<LocationMetrics>,
@@ -13,14 +13,14 @@ pub struct UserLocationBuilder {
     is_ghost_mode: bool,
     privacy_radius_meters: i32,
     updated_at: DateTime<Utc>,
-    version: i32,
+    version: u64,
 }
 
 impl UserLocationBuilder {
     /// CHEMIN 1 : CRÉATION (Nouveau signal GPS reçu)
-    pub fn new(account_id: AccountId, region_code: RegionCode, coordinates: GeoPoint) -> Self {
+    pub fn new(profile_id: ProfileId, region_code: RegionCode, coordinates: GeoPoint) -> Self {
         Self {
-            account_id,
+            profile_id: profile_id,
             region_code,
             coordinates,
             metrics: None,
@@ -35,7 +35,7 @@ impl UserLocationBuilder {
     /// CHEMIN 2 : RESTAURATION (Statique, retourne directement l'entité)
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
-        account_id: AccountId,
+        profile_id: ProfileId,
         region_code: RegionCode,
         coordinates: GeoPoint,
         metrics: Option<LocationMetrics>,
@@ -43,10 +43,10 @@ impl UserLocationBuilder {
         is_ghost_mode: bool,
         privacy_radius_meters: i32,
         updated_at: DateTime<Utc>,
-        version: i32,
+        version: u64,
     ) -> UserLocation {
         UserLocation::restore(
-            account_id,
+            profile_id,
             region_code,
             coordinates,
             metrics,
@@ -78,7 +78,7 @@ impl UserLocationBuilder {
 
     pub fn build(self) -> UserLocation {
         UserLocation::new_from_builder(
-            self.account_id,
+            self.profile_id,
             self.region_code,
             self.coordinates,
             self.metrics,

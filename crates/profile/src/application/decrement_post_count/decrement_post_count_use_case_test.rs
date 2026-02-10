@@ -5,9 +5,9 @@ mod tests {
         DecrementPostCountCommand, DecrementPostCountUseCase,
     };
     use crate::domain::entities::Profile;
-    use crate::domain::value_objects::DisplayName;
+    use crate::domain::value_objects::{DisplayName, Handle, ProfileId};
     use shared_kernel::domain::events::{AggregateRoot, EventEnvelope};
-    use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, PostId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::repositories::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -25,24 +25,23 @@ mod tests {
     #[tokio::test]
     async fn test_decrement_post_count_success() {
         // Arrange : Profil ayant 1 post
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
 
         // On doit passer la région ici aussi
         profile.increment_post_count(&region, PostId::new()).unwrap(); // version 2, count 1
-
-        let use_case = setup(Some(profile));
+        let use_case = setup(Some(profile.clone()));
         let post_id = PostId::new();
 
         let cmd = DecrementPostCountCommand {
-            account_id,
+            profile_id: profile.id().clone(),
             region: region.clone(),
             post_id,
         };
@@ -60,20 +59,20 @@ mod tests {
     #[tokio::test]
     async fn test_decrement_prevent_negative_count() {
         // Arrange : Profil ayant 0 post
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
 
-        let use_case = setup(Some(profile));
+        let use_case = setup(Some(profile.clone()));
 
         let cmd = DecrementPostCountCommand {
-            account_id,
+            profile_id: profile.id().clone(),
             region,
             post_id: PostId::new(),
         };
@@ -96,7 +95,7 @@ mod tests {
         let use_case = setup(None);
 
         let cmd = DecrementPostCountCommand {
-            account_id: AccountId::new(),
+            profile_id: ProfileId::new(),
             region: RegionCode::from_raw("eu"),
             post_id: PostId::new(),
         };
@@ -111,13 +110,13 @@ mod tests {
     #[tokio::test]
     async fn test_decrement_concurrency_conflict() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap(); // Utilise try_new
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
 
@@ -125,7 +124,7 @@ mod tests {
         profile.increment_post_count(&region, PostId::new()).unwrap();
 
         let repo = Arc::new(ProfileRepositoryStub {
-            profile_to_return: Mutex::new(Some(profile)),
+            profile_to_return: Mutex::new(Some(profile.clone())),
             error_to_return: Mutex::new(Some(DomainError::ConcurrencyConflict {
                 reason: "Version mismatch".into(),
             })),
@@ -137,7 +136,7 @@ mod tests {
         // Act
         let result = use_case
             .execute(DecrementPostCountCommand {
-                account_id,
+                profile_id: profile.id().clone(),
                 region,
                 post_id: PostId::new(),
             })
@@ -150,13 +149,13 @@ mod tests {
     #[tokio::test]
     async fn test_decrement_outbox_failure_rollbacks_count() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
         let mut profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             region.clone(),
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         )
             .build();
 
@@ -181,7 +180,7 @@ mod tests {
 
         let use_case = DecrementPostCountUseCase::new(
             Arc::new(ProfileRepositoryStub {
-                profile_to_return: Mutex::new(Some(profile)),
+                profile_to_return: Mutex::new(Some(profile.clone())),
                 ..Default::default()
             }),
             Arc::new(FailingOutbox),
@@ -191,7 +190,7 @@ mod tests {
         // Act
         let result = use_case
             .execute(DecrementPostCountCommand {
-                account_id,
+                profile_id: profile.id().clone(),
                 region,
                 post_id: PostId::new(),
             })
@@ -205,21 +204,21 @@ mod tests {
     #[tokio::test]
     async fn test_decrement_fails_on_region_mismatch() {
         // Arrange
-        let account_id = AccountId::new();
+        let owner_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
         let wrong_region = RegionCode::try_new("us").unwrap();
 
         let profile = Profile::builder(
-            account_id.clone(),
+            owner_id.clone(),
             actual_region,
             DisplayName::from_raw("Alice"),
-            Username::try_new("alice").unwrap(),
+            Handle::try_new("alice").unwrap(),
         ).build();
 
-        let use_case = setup(Some(profile));
+        let use_case = setup(Some(profile.clone()));
 
         let cmd = DecrementPostCountCommand {
-            account_id,
+            profile_id: profile.id().clone(),
             region: wrong_region, // Mismatch avec le profil
             post_id: PostId::new(),
         };

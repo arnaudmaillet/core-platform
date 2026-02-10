@@ -1,7 +1,7 @@
 // crates/location/src/domain/entities/user_location.rs
 
 use crate::domain::events::LocationEvent;
-use crate::domain::value_objects::{LocationMetrics, MovementMetrics};
+use crate::domain::value_objects::{LocationMetrics, MovementMetrics, ProfileId};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::{EntityMetadata, GeoPoint};
@@ -11,7 +11,7 @@ use shared_kernel::errors::{DomainError, Result};
 
 #[derive(Debug, Clone)]
 pub struct UserLocation {
-    account_id: AccountId,
+    profile_id: ProfileId,
     region_code: RegionCode,
     coordinates: GeoPoint,
     metrics: Option<LocationMetrics>,
@@ -24,7 +24,7 @@ pub struct UserLocation {
 
 impl UserLocation {
     pub(crate) fn new_from_builder(
-        account_id: AccountId,
+        profile_id: ProfileId,
         region_code: RegionCode,
         coordinates: GeoPoint,
         metrics: Option<LocationMetrics>,
@@ -32,7 +32,7 @@ impl UserLocation {
         is_ghost_mode: bool,
         privacy_radius_meters: i32,
         updated_at: DateTime<Utc>,
-        version: i32,
+        version: u64,
         is_restore: bool,
     ) -> Self {
         let metadata = if is_restore {
@@ -42,7 +42,7 @@ impl UserLocation {
         };
 
         Self {
-            account_id,
+            profile_id,
             region_code,
             coordinates,
             metrics,
@@ -55,7 +55,7 @@ impl UserLocation {
     }
 
     pub fn restore(
-        account_id: AccountId,
+        profile_id: ProfileId,
         region_code: RegionCode,
         coordinates: GeoPoint,
         metrics: Option<LocationMetrics>,
@@ -63,10 +63,10 @@ impl UserLocation {
         is_ghost_mode: bool,
         privacy_radius_meters: i32,
         updated_at: DateTime<Utc>,
-        version: i32,
+        version: u64,
     ) -> Self {
         Self {
-            account_id,
+            profile_id,
             region_code,
             coordinates,
             metrics,
@@ -80,30 +80,14 @@ impl UserLocation {
 
     // --- Getters (Lecture seule) ---
 
-    pub fn account_id(&self) -> &AccountId {
-        &self.account_id
-    }
-    pub fn region_code(&self) -> &RegionCode {
-        &self.region_code
-    }
-    pub fn coordinates(&self) -> &GeoPoint {
-        &self.coordinates
-    }
-    pub fn metrics(&self) -> Option<&LocationMetrics> {
-        self.metrics.as_ref()
-    }
-    pub fn movement(&self) -> Option<&MovementMetrics> {
-        self.movement.as_ref()
-    }
-    pub fn is_ghost_mode(&self) -> bool {
-        self.is_ghost_mode
-    }
-    pub fn privacy_radius_meters(&self) -> i32 {
-        self.privacy_radius_meters
-    }
-    pub fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
-    }
+    pub fn profile_id(&self) -> &ProfileId { &self.profile_id }
+    pub fn region_code(&self) -> &RegionCode { &self.region_code }
+    pub fn coordinates(&self) -> &GeoPoint { &self.coordinates }
+    pub fn metrics(&self) -> Option<&LocationMetrics> { self.metrics.as_ref() }
+    pub fn movement(&self) -> Option<&MovementMetrics> { self.movement.as_ref() }
+    pub fn is_ghost_mode(&self) -> bool { self.is_ghost_mode }
+    pub fn privacy_radius_meters(&self) -> i32 { self.privacy_radius_meters }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
 
     // --- Logic Métier (Commandes) ---
 
@@ -120,7 +104,7 @@ impl UserLocation {
         self.apply_change();
 
         self.add_event(Box::new(LocationEvent::PositionUpdated {
-            account_id: self.account_id.clone(),
+            profile_id: self.profile_id.clone(),
             region: self.region_code.clone(),
             coordinates: self.coordinates,
             occurred_at: self.updated_at,
@@ -133,7 +117,7 @@ impl UserLocation {
             self.apply_change();
 
             self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
-                account_id: self.account_id.clone(),
+                profile_id: self.profile_id.clone(),
                 region: self.region_code.clone(),
                 is_ghost_mode: enabled,
                 privacy_radius_meters: self.privacy_radius_meters,
@@ -155,7 +139,7 @@ impl UserLocation {
             self.apply_change();
 
             self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
-                account_id: self.account_id.clone(),
+                profile_id: self.profile_id.clone(),
                 region: self.region_code.clone(),
                 is_ghost_mode: self.is_ghost_mode,
                 privacy_radius_meters: self.privacy_radius_meters,
@@ -181,7 +165,7 @@ impl EntityMetadata for UserLocation {
 
 impl AggregateRoot for UserLocation {
     fn id(&self) -> String {
-        self.account_id.as_string()
+        self.profile_id.as_string()
     }
     fn metadata(&self) -> &AggregateMetadata {
         &self.metadata

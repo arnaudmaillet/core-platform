@@ -8,6 +8,7 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::{DomainError, Result};
 use sqlx::FromRow;
 use uuid::Uuid;
+use shared_kernel::domain::events::AggregateMetadata;
 
 #[derive(Debug, FromRow)]
 pub struct PostgresAccountMetadataRow {
@@ -21,13 +22,16 @@ pub struct PostgresAccountMetadataRow {
     pub moderation_notes: Option<String>,
     pub estimated_ip: Option<String>,
     pub updated_at: DateTime<Utc>,
-    pub version: i32,
+    pub version: i64,
 }
+
 
 impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
     type Error = DomainError;
 
     fn try_from(row: PostgresAccountMetadataRow) -> Result<Self> {
+        let metadata = AggregateMetadata::try_from(row.version)?;
+
         Ok(AccountMetadataBuilder::restore(
             AccountId::from_uuid(row.account_id),
             RegionCode::from_raw(row.region_code),
@@ -39,7 +43,7 @@ impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
             row.moderation_notes,
             row.estimated_ip,
             row.updated_at,
-            row.version,
+            metadata.version(),
         ))
     }
 }

@@ -1,10 +1,11 @@
 // crates/profile/src/application/use_cases/get_nearby_users/query.rs
 
 use shared_kernel::domain::entities::GeoPoint;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
+use crate::domain::value_objects::ProfileId;
 
 pub struct GetNearbyUsersCommand {
-    pub account_id: AccountId, // L'utilisateur qui regarde
+    pub profile_id: ProfileId,
     pub center: GeoPoint,      // Sa position actuelle
     pub region: RegionCode,    // Sa région de sharding
     pub radius_meters: f64,    // Rayon de recherche (ex: 2000.0)

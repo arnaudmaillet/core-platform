@@ -42,9 +42,9 @@ impl UpdateLocationLabelUseCase {
         // 1. Récupération (Identity-only suffit pour valider la mutation)
         let original_profile = self
             .repo
-            .assemble_full_profile(&cmd.account_id, &cmd.region)
+            .assemble_full_profile(&cmd.profile_id, &cmd.region)
             .await?
-            .ok_or_not_found(&cmd.account_id)?;
+            .ok_or_not_found(&cmd.profile_id)?;
 
         // 2. Application du changement
         // update_metadata encapsule l'idempotence et l'appel à apply_change()

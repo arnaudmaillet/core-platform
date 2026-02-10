@@ -1,14 +1,14 @@
-// crates/profile/src/infrastructure/repositories/scylla_profile_repository.rs
+// crates/profile/src/infrastructure/scylla/repositories/scylla_profile_repository.rs
 
 use async_trait::async_trait;
 use scylla::client::session::Session;
 use scylla::value::Counter;
 use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::errors::{DomainError, Result};
 use std::sync::Arc;
 use crate::domain::repositories::ProfileStatsRepository;
-use crate::domain::value_objects::ProfileStats;
+use crate::domain::value_objects::{ProfileId, ProfileStats};
 
 pub struct ScyllaProfileRepository {
     session: Arc<Session>,
@@ -24,14 +24,14 @@ impl ScyllaProfileRepository {
 impl ProfileStatsRepository for ScyllaProfileRepository {
     async fn fetch(
         &self,
-        account_id: &AccountId,
+        profile_id: &ProfileId,
         region: &RegionCode,
     ) -> Result<Option<ProfileStats>> {
-        let query = "SELECT follower_count, following_count, post_count FROM profile_stats WHERE account_id = ? AND region_code = ?";
+        let query = "SELECT follower_count, following_count, post_count FROM profile_stats WHERE profile_id = ? AND region_code = ?";
 
         // Exécuter la requête
         let result = self.session
-            .query_unpaged(query, (account_id.as_uuid(), region.as_str().to_string()))
+            .query_unpaged(query, (profile_id.as_uuid(), region.as_str().to_string()))
             .await
             .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
 
@@ -63,7 +63,7 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
 
     async fn save(
         &self,
-        account_id: &AccountId,
+        profile_id: &ProfileId,
         region: &RegionCode,
         follower_delta: i64,
         following_delta: i64,
@@ -73,13 +73,13 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
                      follower_count = follower_count + ?, \
                      following_count = following_count + ?, \
                      post_count = post_count + ? \
-                     WHERE account_id = ? AND region_code = ?";
+                     WHERE profile_id = ? AND region_code = ?";
 
         let values = (
             Counter(follower_delta),
             Counter(following_delta),
             Counter(post_delta),
-            account_id.as_uuid(),
+            profile_id.as_uuid(),
             region.as_str().to_string(),
         );
 
@@ -91,17 +91,17 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
         Ok(())
     }
 
-    async fn delete(&self, account_id: &AccountId, region: &RegionCode) -> Result<()> {
+    async fn delete(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<()> {
         let prepared = self
             .session
-            .prepare("DELETE FROM profile_stats WHERE account_id = ? AND region_code = ?")
+            .prepare("DELETE FROM profile_stats WHERE profile_id = ? AND region_code = ?")
             .await
             .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
 
         self.session
             .execute_unpaged(
                 &prepared,
-                (account_id.as_uuid(), region.as_str().to_string()),
+                (profile_id.as_uuid(), region.as_str().to_string()),
             )
             .await
             .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
