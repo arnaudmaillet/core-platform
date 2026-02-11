@@ -13,7 +13,7 @@ pub async fn run_cache_worker(service_name: &str, topic: &str, group_id: &str) -
     tracing_subscriber::fmt::init();
     log::info!("🚀 Starting {} Cache Worker...", service_name);
 
-    let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+    let redis_url = env::var("PROFILE_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".into());
 
     // Limite de parallélisme pour Redis

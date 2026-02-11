@@ -12,12 +12,12 @@ pub struct RedisConfig {
 impl RedisConfig {
     pub fn from_env() -> AppResult<Self> {
         Ok(Self {
-            url: std::env::var("REDIS_URL")
-                .map_err(|_| AppError::new(ErrorCode::InternalError, "REDIS_URL must be set"))?,
-            max_clients: std::env::var("REDIS_MAX_CLIENTS")
+            url: std::env::var("PROFILE_REDIS_URL")
+                .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_REDIS_URL must be set"))?,
+            max_clients: std::env::var("PROFILE_REDIS_MAX_CLIENTS")
                 .unwrap_or_else(|_| "16".to_string())
                 .parse()
-                .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid REDIS_MAX_CLIENTS"))?,
+                .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid PROFILE_REDIS_MAX_CLIENTS"))?,
         })
     }
 }
