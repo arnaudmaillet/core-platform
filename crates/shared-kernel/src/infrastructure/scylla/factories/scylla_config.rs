@@ -15,17 +15,17 @@ pub struct ScyllaConfig {
 impl ScyllaConfig {
     pub fn from_env() -> AppResult<Self> {
         // Nodes et Keyspace restent obligatoires
-        let nodes_str = std::env::var("SCYLLA_NODES")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "SCYLLA_NODES must be set"))?;
+        let nodes_str = std::env::var("PROFILE_SCYLLA_NODES")
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_SCYLLA_NODES must be set"))?;
 
-        let keyspace = std::env::var("SCYLLA_KEYSPACE")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "SCYLLA_KEYSPACE must be set"))?;
+        let keyspace = std::env::var("PROFILE_SCYLLA_KEYSPACE")
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_SCYLLA_KEYSPACE must be set"))?;
 
         // Timeout avec valeur par défaut (5s par défaut pour Scylla est standard)
-        let connect_timeout_secs = std::env::var("SCYLLA_CONNECT_TIMEOUT")
+        let connect_timeout_secs = std::env::var("PROFILE_SCYLLA_CONNECT_TIMEOUT")
             .unwrap_or_else(|_| "5".to_string())
             .parse::<u64>()
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid SCYLLA_CONNECT_TIMEOUT"))?;
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid PROFILE_SCYLLA_CONNECT_TIMEOUT"))?;
 
         Ok(Self {
             nodes: nodes_str.split(',').map(|s| s.trim().to_string()).collect(),

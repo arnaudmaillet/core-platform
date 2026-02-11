@@ -15,24 +15,24 @@ pub struct PostgresConfig {
 impl PostgresConfig {
     pub fn from_env() -> AppResult<Self> {
         // La DATABASE_URL reste obligatoire
-        let url = std::env::var("POSTGRES_URL")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "POSTGRES_URL must be set"))?;
+        let url = std::env::var("PROFILE_DB_URL")
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_DB_URL must be set"))?;
 
         // Pour les chiffres, on tente de parser, sinon on met une valeur par défaut
-        let max_connections = std::env::var("POSTGRES_MAX_CONNECTIONS")
+        let max_connections = std::env::var("PROFILE_DB_MAX_CONNECTIONS")
             .unwrap_or_else(|_| "10".to_string())
             .parse::<u32>()
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid POSTGRES_MAX_CONNECTIONS"))?;
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid PROFILE_DB_MAX_CONNECTIONS"))?;
 
-        let min_connections = std::env::var("POSTGRES_MIN_CONNECTIONS")
+        let min_connections = std::env::var("PROFILE_DB_MIN_CONNECTIONS")
             .unwrap_or_else(|_| "2".to_string())
             .parse::<u32>()
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid POSTGRES_MIN_CONNECTIONS"))?;
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid PROFILE_DB_MIN_CONNECTIONS"))?;
 
-        let timeout_secs = std::env::var("POSTGRES_CONNECT_TIMEOUT")
+        let timeout_secs = std::env::var("PROFILE_DB_CONNECT_TIMEOUT")
             .unwrap_or_else(|_| "3".to_string())
             .parse::<u64>()
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid POSTGRES_CONNECT_TIMEOUT"))?;
+            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid PROFILE_DB_CONNECT_TIMEOUT"))?;
 
         Ok(Self {
             url,
