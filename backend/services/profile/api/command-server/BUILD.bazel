@@ -12,6 +12,7 @@ core_rust_binary(
         "//crates/shared-kernel:shared_kernel",
         "//proto/profile/v1:profile_v1",
         "@crates//:tonic",
+         "@crates//:tonic-health",
         "@crates//:tracing-subscriber",
         "@crates//:tokio",
         "@crates//:serde",

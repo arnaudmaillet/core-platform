@@ -5,6 +5,8 @@ infrastructure
 .terragrunt-cache
 terragrunt-cache
 
+k8s
+
 node_modules
 target
 bazel-*

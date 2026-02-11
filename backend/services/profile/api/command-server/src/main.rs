@@ -11,16 +11,17 @@ use profile::application::update_privacy::UpdatePrivacyUseCase;
 use profile::application::update_social_links::UpdateSocialLinksUseCase;
 use std::sync::Arc;
 use tonic::transport::Server;
+use tonic_health::server::health_reporter;
 use profile::application::update_handle::UpdateHandleUseCase;
+
 // Infrastructure - API
-use profile::infrastructure::api::grpc::handlers::{
-    IdentityHandler, MediaHandler, MetadataHandler,
-};
+use profile::infrastructure::api::grpc::handlers::{IdentityHandler, MediaHandler, MetadataHandler, };
 use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_media_service_server::ProfileMediaServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_server::ProfileMetadataServiceServer;
 use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
 use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
+
 // Infrastructure - Repositories (Spécifiques au Profile)
 use profile::infrastructure::postgres::utils::run_postgres_migrations;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
@@ -38,6 +39,13 @@ use shared_kernel::infrastructure::scylla::factories::{ScyllaConfig, create_scyl
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
+
+    // --- INITIALISATION DU SERVICE DE SANTÉ ---
+
+    let (health_reporter, health_service) = health_reporter();
+    health_reporter.set_serving::<ProfileIdentityServiceServer<IdentityHandler>>().await;
+    health_reporter.set_serving::<ProfileMediaServiceServer<MediaHandler>>().await;
+    health_reporter.set_serving::<ProfileMetadataServiceServer<MetadataHandler>>().await;
 
     // --- 1. INITIALISATION DES CLIENTS DB ---
 
@@ -79,70 +87,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- 3. INITIALISATION DES USE CASES (Application) ---
 
-    let update_username_usecase = Arc::new(UpdateHandleUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let update_display_name_use_case = Arc::new(UpdateDisplayNameUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let update_privacy_use_case = Arc::new(UpdatePrivacyUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let update_avatar_use_case = Arc::new(UpdateAvatarUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let remove_avatar_use_case = Arc::new(RemoveAvatarUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let update_banner_use_case = Arc::new(UpdateBannerUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let remove_banner_use_case = Arc::new(RemoveBannerUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let bio_update_use_case = Arc::new(UpdateBioUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let update_location_label_use_case = Arc::new(UpdateLocationLabelUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
-
-    let update_social_links_use_case = Arc::new(UpdateSocialLinksUseCase::new(
-        profile_repo.clone(),
-        outbox_repo.clone(),
-        tx_manager.clone(),
-    ));
+    let update_username_use_case = Arc::new(UpdateHandleUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let update_display_name_use_case = Arc::new(UpdateDisplayNameUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let update_privacy_use_case = Arc::new(UpdatePrivacyUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let update_avatar_use_case = Arc::new(UpdateAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let remove_avatar_use_case = Arc::new(RemoveAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let update_banner_use_case = Arc::new(UpdateBannerUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let remove_banner_use_case = Arc::new(RemoveBannerUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let bio_update_use_case = Arc::new(UpdateBioUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let update_location_label_use_case = Arc::new(UpdateLocationLabelUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
+    let update_social_links_use_case = Arc::new(UpdateSocialLinksUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));
 
     // --- 4. INITIALISATION DES HANDLERS (API) ---
 
     let identity_handler = IdentityHandler::new(
-        update_username_usecase,
+        update_username_use_case,
         update_display_name_use_case,
         update_privacy_use_case,
     );
@@ -163,6 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Profile Query-Server listening on {}", addr);
 
     Server::builder()
+        .add_service(health_service)
         // Utilisation de l'intercepteur de région partagé pour extraire les headers gRPC
         .add_service(ProfileIdentityServiceServer::with_interceptor(
             identity_handler,
