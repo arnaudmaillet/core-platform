@@ -36,10 +36,18 @@ build --incompatible_enable_cc_toolchain_resolution
 # CONFIGURATION SPÉCIFIQUE POUR LA CI (GitHub Actions)
 # ==================================================================
 
-# Utilisé via --config=ci
-build:ci --jobs=100
-build:ci --keep_going
-build:ci --remote_download_toplevel  # Télécharge uniquement les outputs finaux
+# Affiche les logs en cas d'échec des tests (crucial pour Testcontainers)
+test:ci --test_output=errors
+# Augmente le timeout car l'initialisation des containers peut être lente en CI
+test:ci --test_timeout=300,600,1200,3600
+
+# Réduit la consommation de ressources pour éviter que l'agent OOM (Out Of Memory)
+build:ci --local_cpu_resources=HOST_CPUS-1
+build:ci --local_ram_resources=HOST_RAM-1024
+
+# Optimisation du cache sur GitHub Actions
+# Permet de ne pas invalider le cache inutilement à cause du timestamp des fichiers
+build:ci --collect_code_coverage=false
 
 # ==================================================================
 # CONFIGURATION RUST

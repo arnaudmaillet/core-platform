@@ -37,6 +37,10 @@ jobs:
       - name: Setup Bazel
         uses: bazelbuild/setup-bazelisk@v3
 
+      - name: Run Profile Tests
+        run: |
+          bazel test --config=ci //backend/services/profile/...
+
       - name: Bazel Build and Push
         run: |
           bazel run --config=ci //backend/services/profile/api/command-server:profile_command_server_push

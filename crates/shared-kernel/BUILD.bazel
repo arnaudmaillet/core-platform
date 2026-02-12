@@ -15,6 +15,7 @@ core_rust_library(
         "grpc",
         "concurrency",
         "runtime",
+        "test-utils",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -51,8 +52,18 @@ core_rust_library(
         "@crates//:tokio",
         "@crates//:tokio-util",
         "@crates//:tracing-subscriber",
+
+         # --- Tests ---
+        "@crates//:testcontainers",
+        "@crates//:testcontainers-modules",
     ],
     proc_macro_deps = [
         "@crates//:async-trait",
     ],
+)
+
+filegroup(
+    name = "migration_files",
+    srcs = glob(["migrations/**/*"]),
+    visibility = ["//visibility:public"],
 )

@@ -1,6 +1,6 @@
 # crates/profile/BUILD.bazel
 
-load("//:defs.bzl", "core_rust_library")
+load("//:defs.bzl", "core_rust_library", "core_rust_test")
 
 core_rust_library(
     name = "profile",
@@ -42,6 +42,63 @@ core_rust_library(
     ],
     proc_macro_deps = [
         "@crates//:async-trait",
+    ],
+)
+
+core_rust_test(
+    name = "profile_test",
+    crate = ":profile",
+    # On active test-utils pour profile ET pour ses dépendances locales
+    crate_features = [
+        "test-utils",
+        "postgres", # Assure-toi que les drivers sont là pour les tests
+        "scylla",
+    ],
+    tags = ["local", "requires-network"],
+    data = [":migration_files"],
+    deps = [
+        # On s'assure que shared-kernel est bien là
+        "//crates/shared-kernel:shared_kernel",
+        "@crates//:testcontainers",
+        "@crates//:testcontainers-modules",
+        "@crates//:sqlx",
+        "@crates//:scylla",
+        "@crates//:tokio",
+        "@crates//:futures",
+    ],
+)
+
+core_rust_test(
+    name = "profile_integration_test",
+    # On va chercher tous les fichiers .rs dans le dossier tests/
+    srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/integration_tests.rs",
+    edition = "2024",
+    crate_features = [
+        "test-utils",
+        "postgres",
+        "scylla",
+    ],
+    # Tags indispensables pour Testcontainers
+    tags = ["local", "requires-network"],
+    # On passe les migrations pour que sqlx puisse initialiser la DB dans le container
+    data = [
+        ":migration_files",
+        "//crates/shared-kernel:migration_files",
+        ],
+    deps = [
+        ":profile", # On dépend de la library qu'on teste
+        "//crates/shared-kernel:shared_kernel",
+        "@crates//:testcontainers",
+        "@crates//:testcontainers-modules",
+        "@crates//:sqlx",
+        "@crates//:scylla",
+        "@crates//:tokio",
+        "@crates//:futures",
+        "@crates//:chrono",
+        "@crates//:uuid",
+        "@crates//:tonic",
+        "@crates//:serde_json",
     ],
 )
 
