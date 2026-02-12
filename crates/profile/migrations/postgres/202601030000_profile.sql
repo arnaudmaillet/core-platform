@@ -1,5 +1,14 @@
 -- crates/profile/migrations/postgres/202601030000_profile.sql
 
+-- 0. SHARED LOGIC
+CREATE OR REPLACE FUNCTION public.trigger_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+RETURN NEW;
+END;
+$$ language 'plpgsql';
+
 -- 1. USER PROFILES (Social View)
 CREATE TABLE IF NOT EXISTS user_profiles (
     id UUID NOT NULL,
