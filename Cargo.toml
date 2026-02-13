@@ -70,6 +70,7 @@ tonic-health = "0.14.3"
 tonic = { version = "0.14.2", features = ["codegen", "transport", "tls-webpki-roots"] }
 tonic-prost = "0.14.2"
 tonic-build = "0.14.2"
+tonic-reflection = "0.14.3"
 tonic-prost-build = "0.14.2"
 prost = "0.14.3"
 prost-types = "0.14.3"
