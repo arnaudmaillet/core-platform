@@ -37,6 +37,7 @@ use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionMa
 use shared_kernel::infrastructure::redis::factories::{create_redis_repository, RedisConfig};
 use shared_kernel::infrastructure::scylla::factories::{ScyllaConfig, create_scylla_session};
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
