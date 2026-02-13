@@ -8,8 +8,10 @@ pub async fn run_postgres_migrations(pool: &sqlx::PgPool) -> anyhow::Result<()> 
     println!("✅ Shared Kernel migrations applied");
 
     // 2. On applique les migrations spécifiques au domaine Profile
-    sqlx::migrate!("./migrations/postgres").run(pool).await?;
-    println!("✅ Profile domain migrations applied");
+    let schema = include_str!("../../../../migrations/postgres/202601030000_profile.sql");
+    sqlx::query(schema).execute(pool).await?;
+
+    println!("✅ Profile domain migrations applied (via include_str)");
 
     Ok(())
 }
