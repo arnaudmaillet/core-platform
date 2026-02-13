@@ -6,6 +6,7 @@ load("//:defs.bzl", "core_rust_library")
 core_rust_library(
     name = "shared_kernel",
     srcs = glob(["src/**/*.rs"]),
+    compile_data = glob(["migrations/**"]),
     crate_features = [
         "postgres",
         "redis",
@@ -35,6 +36,7 @@ core_rust_library(
         "@crates//:seahash",
         "@crates//:unicode-normalization",
         "@crates//:dyn-clone",
+         "@crates//:anyhow",
 
         # --- gRPC / Protobuf ---
         "@crates//:tonic",
