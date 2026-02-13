@@ -6,8 +6,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::fs::create_dir_all(out_dir)?;
 
+    let descriptor_path = std::path::PathBuf::from(out_dir).join("profile_descriptor.bin");
+
     tonic_prost_build::configure()
         .out_dir(out_dir)
+        .file_descriptor_set_path(&descriptor_path)
         .compile_protos(
             &[
                 format!("{}/profile/v1/types.proto", proto_root),

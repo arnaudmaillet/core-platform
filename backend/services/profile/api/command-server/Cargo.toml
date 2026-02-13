@@ -17,4 +17,5 @@ profile = { workspace = true }
 # Dépendances externes nécessaires au binaire
 tokio = { workspace = true }
 tonic = { workspace = true }
+tonic-reflection = { workspace = true }
 tonic-health = {workspace = true}

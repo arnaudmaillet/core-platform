@@ -13,6 +13,7 @@ pub mod profile_v1_raw_proto {
     pub mod profile {
         pub mod v1 {
             include!("proto/profile.v1.rs");
+            pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("proto/profile_descriptor.bin");
         }
     }
 }
@@ -26,3 +27,4 @@ pub use profile_v1_raw_proto;
 // Pour simplifier les imports dans tes handlers
 pub use profile_v1_raw_proto::location::v1 as location_v1;
 pub use profile_v1_raw_proto::profile::v1 as profile_v1;
+pub const SERVICE_DESCRIPTOR_SET: &[u8] = profile_v1_raw_proto::profile::v1::FILE_DESCRIPTOR_SET;
