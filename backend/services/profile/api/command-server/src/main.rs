@@ -12,7 +12,9 @@ use profile::application::update_social_links::UpdateSocialLinksUseCase;
 use std::sync::Arc;
 use tonic::transport::Server;
 use tonic_health::server::health_reporter;
+use tonic_reflection::server::Builder;
 use profile::application::update_handle::UpdateHandleUseCase;
+use profile::infrastructure::api::grpc::SERVICE_DESCRIPTOR_SET;
 
 // Infrastructure - API
 use profile::infrastructure::api::grpc::handlers::{IdentityHandler, MediaHandler, MetadataHandler, };
@@ -35,6 +37,7 @@ use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionMa
 use shared_kernel::infrastructure::redis::factories::{create_redis_repository, RedisConfig};
 use shared_kernel::infrastructure::scylla::factories::{ScyllaConfig, create_scylla_session};
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
@@ -46,6 +49,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     health_reporter.set_serving::<ProfileIdentityServiceServer<IdentityHandler>>().await;
     health_reporter.set_serving::<ProfileMediaServiceServer<MediaHandler>>().await;
     health_reporter.set_serving::<ProfileMetadataServiceServer<MetadataHandler>>().await;
+
+    // --- INITIALISATION DU SERVICE DE RÉFLEXION ---
+    let reflection_service = Builder::configure()
+        .register_encoded_file_descriptor_set(SERVICE_DESCRIPTOR_SET)
+        .build_v1()?;
 
     // --- 1. INITIALISATION DES CLIENTS DB ---
 
@@ -123,6 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Server::builder()
         .add_service(health_service)
+        .add_service(reflection_service)
         // Utilisation de l'intercepteur de région partagé pour extraire les headers gRPC
         .add_service(ProfileIdentityServiceServer::with_interceptor(
             identity_handler,

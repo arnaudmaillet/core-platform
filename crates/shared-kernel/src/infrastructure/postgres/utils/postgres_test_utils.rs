@@ -49,20 +49,32 @@ pub async fn setup_test_postgres(
         );
     "#).await.expect("Failed to initialize system tables");
 
-    // 3. RÉSOLUTION DES CHEMINS (Inchangé)
+    // 3. RÉSOLUTION DES CHEMINS
     let mut paths_to_run = Vec::new();
-    let possible_kernel_paths = [
-        "../shared-kernel/migrations/postgres",
-        "./crates/shared-kernel/migrations/postgres",
-        "../../shared-kernel/migrations/postgres"
-    ];
 
+    // Résolution Kernel
+    let possible_kernel_paths = [
+        "crates/shared-kernel/migrations/postgres",
+        "../shared-kernel/migrations/postgres",
+    ];
     if let Some(kp) = possible_kernel_paths.iter().find(|p| Path::new(p).exists()) {
         paths_to_run.push(kp.to_string());
     }
+
+    // Résolution Module (On transforme les chemins relatifs en chemins Bazel si nécessaire)
     for p in module_migrations {
         if Path::new(p).exists() {
             paths_to_run.push(p.to_string());
+        } else {
+            // HACK BAZEL: Si on ne trouve pas "./migrations/postgres",
+            // on cherche "crates/profile/migrations/postgres"
+            let bazel_path = format!("crates/profile/{}", p.trim_start_matches("./"));
+            if Path::new(&bazel_path).exists() {
+                println!("✅ Bazel Auto-fix: Found Module migrations at: {}", bazel_path);
+                paths_to_run.push(bazel_path);
+            } else {
+                println!("⚠️ WARNING: Migration path not found: {} (tried {})", p, bazel_path);
+            }
         }
     }
 

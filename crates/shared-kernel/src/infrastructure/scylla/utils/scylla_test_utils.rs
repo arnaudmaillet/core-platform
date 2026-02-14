@@ -1,10 +1,14 @@
 // crates/shared-kernel/src/infrastructure/scylla/utils/scylla_test_utils.rs
 
+use std::num::NonZeroUsize;
 #[cfg(feature = "test-utils")]
 
 use std::sync::Arc;
+use scylla::client::execution_profile::ExecutionProfile;
+use scylla::client::PoolSize;
 use scylla::client::session::Session;
 use scylla::client::session_builder::SessionBuilder;
+use scylla::policies::retry::DefaultRetryPolicy;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
@@ -26,7 +30,9 @@ pub async fn setup_test_scylla(module_migration_paths: &[&str]) -> Arc<Session> 
         let node = GenericImage::new("scylladb/scylla", "6.2.1")
             .with_exposed_port(port)
             .with_wait_for(WaitFor::message_on_either_std("init - serving"))
-            .with_cmd(["--developer-mode", "1", "--smp", "1", "--memory", "1G"])
+            .with_cmd([
+                "--developer-mode", "1",
+            ])
             .start()
             .await
             .expect("Scylla failed to start");
@@ -35,14 +41,43 @@ pub async fn setup_test_scylla(module_migration_paths: &[&str]) -> Arc<Session> 
         let uri = format!("127.0.0.1:{}", host_port);
 
         // --- 2. Création Session ---
+        let handle = ExecutionProfile::builder()
+            .request_timeout(Some(std::time::Duration::from_secs(30)))
+            .retry_policy(Arc::new(DefaultRetryPolicy::default()))
+            .build()
+            .into_handle();
+
         let session = SessionBuilder::new()
             .known_node(&uri)
+            // CRUCIAL sur Mac : Docker Desktop ne gère pas bien le shard-aware port
             .disallow_shard_aware_port(true)
+            .connection_timeout(std::time::Duration::from_secs(30))
+            // On donne beaucoup de connexions pour absorber les pics de charge
+            .pool_size(PoolSize::PerHost(NonZeroUsize::new(10).unwrap()))
+            .default_execution_profile_handle(handle)
             .build()
             .await
             .expect("Failed to create Scylla session");
 
         let shared_session = Arc::new(session);
+
+        let mut attempts = 0;
+        while attempts < 10 {
+            match shared_session.query_unpaged("SELECT now() FROM system.local", ()).await {
+                Ok(_) => {
+                    println!("✅ ScyllaDB is officially ready and responding!");
+                    break;
+                }
+                Err(e) => {
+                    attempts += 1;
+                    println!("⏳ ScyllaDB warming up... (attempt {}/10): {:?}", attempts, e);
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+            }
+            if attempts == 10 {
+                panic!("ScyllaDB failed to respond to health check after 20 seconds");
+            }
+        }
 
         // 🚨 ON CRÉE LE KEYSPACE UNIQUE ICI (UNE SEULE FOIS)
         let ks_name = "integration_tests";
@@ -92,19 +127,31 @@ pub async fn setup_test_scylla(module_migration_paths: &[&str]) -> Arc<Session> 
 async fn run_scylla_migrations_internal(session: &Arc<Session>, paths: &[&str]) {
     let mut all_paths = Vec::new();
 
-    // 1. Chemins par défaut du Kernel (Scylla)
+    // 1. Chemins Kernel (Scylla) - AJOUT DU CHEMIN BAZEL
     let possible_kernel_paths = [
-        "../shared-kernel/migrations/scylla",
+        "crates/shared-kernel/migrations/scylla", // Chemin Bazel
+        "../shared-kernel/migrations/scylla",      // Cargo
         "./crates/shared-kernel/migrations/scylla",
     ];
     if let Some(kp) = possible_kernel_paths.iter().find(|p| std::path::Path::new(p).exists()) {
+        println!("✅ Scylla: Found Kernel migrations at: {}", kp);
         all_paths.push(kp.to_string());
     }
 
-    // 2. Chemins spécifiques au module
+    // 2. Chemins Module - AVEC AUTO-FIX BAZEL
     for p in paths {
         if std::path::Path::new(p).exists() {
+            println!("✅ Scylla: Found Module migrations at: {}", p);
             all_paths.push(p.to_string());
+        } else {
+            // Tentative de reconstruction du chemin pour Bazel
+            let bazel_path = format!("crates/profile/{}", p.trim_start_matches("./"));
+            if std::path::Path::new(&bazel_path).exists() {
+                println!("✅ Scylla Bazel Auto-fix: Found at {}", bazel_path);
+                all_paths.push(bazel_path);
+            } else {
+                println!("⚠️ Scylla WARNING: Migration path not found: {}", p);
+            }
         }
     }
 
