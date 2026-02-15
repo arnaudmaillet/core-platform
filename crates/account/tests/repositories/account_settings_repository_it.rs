@@ -6,20 +6,22 @@ use account::infrastructure::postgres::repositories::PostgresAccountSettingsRepo
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone, RegionCode};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
+use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
 
 /// Helper pour instancier le repo et la pool
-async fn get_repo_and_pool() -> (
-    PostgresAccountSettingsRepository,
-    sqlx::PgPool,
-    testcontainers::ContainerAsync<testcontainers_modules::postgres::Postgres>,
-) {
-    let (pool, container) = crate::common::setup_postgres_test_db().await;
-    (PostgresAccountSettingsRepository::new(pool.clone()), pool, container)
+async fn get_test_context() -> (PostgresAccountSettingsRepository, PostgresTestContext) {
+    let ctx = PostgresTestContext::builder()
+        .with_migrations(&["./migrations/postgres"])
+        .build()
+        .await;
+
+    let repo = PostgresAccountSettingsRepository::new(ctx.pool());
+    (repo, ctx)
 }
 
 #[tokio::test]
 async fn test_settings_lifecycle_and_upsert() {
-    let (repo, pool, _c) = get_repo_and_pool().await;
+    let (repo, ctx) = get_test_context().await;
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
 
@@ -37,7 +39,6 @@ async fn test_settings_lifecycle_and_upsert() {
 
     // 3. Mise à jour via le domaine (v1 -> v2)
     let mut updated_settings = found;
-    // Mise à jour sécurisée par région
     updated_settings.update_timezone(&region, Timezone::try_new("UTC").unwrap()).unwrap();
 
     repo.save(&updated_settings, None).await.expect("Should update settings");
@@ -49,7 +50,7 @@ async fn test_settings_lifecycle_and_upsert() {
 
 #[tokio::test]
 async fn test_push_tokens_atomic_operations() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
     let account_id = AccountId::new();
     let region = RegionCode::try_new("us").unwrap();
 
@@ -59,7 +60,7 @@ async fn test_push_tokens_atomic_operations() {
     let token_1 = PushToken::try_new("token_alpha").unwrap();
     let token_2 = PushToken::try_new("token_beta").unwrap();
 
-    // 1. Ajout atomique (via Repo directement pour simuler l'infrastructure)
+    // 1. Ajout atomique
     repo.add_push_token(&account_id, &token_1, None).await.unwrap();
     repo.add_push_token(&account_id, &token_2, None).await.unwrap();
 
@@ -78,11 +79,11 @@ async fn test_push_tokens_atomic_operations() {
 
 #[tokio::test]
 async fn test_settings_transactional_integrity() {
-    let (repo, pool, _c) = get_repo_and_pool().await;
+    let (repo, ctx) = get_test_context().await;
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
 
-    let tx_sqlx = pool.begin().await.unwrap();
+    let tx_sqlx = ctx.pool().begin().await.unwrap();
     let mut tx = PostgresTransaction::new(tx_sqlx);
 
     let settings = AccountSettings::builder(account_id.clone(), region).build();
@@ -97,7 +98,7 @@ async fn test_settings_transactional_integrity() {
 
 #[tokio::test]
 async fn test_settings_concurrency_conflict() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
 
@@ -113,7 +114,7 @@ async fn test_settings_concurrency_conflict() {
     client_a.update_timezone(&region, Timezone::try_new("Europe/Berlin").unwrap()).unwrap();
     repo.save(&client_a, None).await.expect("A should succeed");
 
-    // 4. Client B échoue (tente v1 -> v2 alors que DB est en v2)
+    // 4. Client B échoue
     client_b.update_timezone(&region, Timezone::try_new("Europe/London").unwrap()).unwrap();
     let result = repo.save(&client_b, None).await;
 
@@ -122,7 +123,7 @@ async fn test_settings_concurrency_conflict() {
 
 #[tokio::test]
 async fn test_push_token_idempotency_it() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
     let token = PushToken::try_new("unique_token").unwrap();
@@ -134,24 +135,25 @@ async fn test_push_token_idempotency_it() {
     repo.add_push_token(&account_id, &token, None).await.unwrap();
 
     let found = repo.find_by_account_id(&account_id, None).await.unwrap().expect("Should exist");
-
-    // Vérification de l'unicité en base (SQL DISTINCT ou contrainte)
     assert_eq!(found.push_tokens().len(), 1, "Token should not be duplicated in DB");
 }
 
 #[tokio::test]
 async fn test_settings_region_mismatch_security() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
+
     let account_id = AccountId::new();
     let region_eu = RegionCode::try_new("eu").unwrap();
     let region_us = RegionCode::try_new("us").unwrap();
 
     let mut settings = AccountSettings::builder(account_id, region_eu).build();
 
-    // Tentative de modification avec la mauvaise région
+    // Tentative de modification avec la mauvaise région (US au lieu de EU)
+    // La logique de garde du domaine doit bloquer l'appel avant même d'atteindre le repository
     let result = settings.update_timezone(&region_us, Timezone::try_new("UTC").unwrap());
 
-    assert!(result.is_err());
+    // Assertions
+    assert!(result.is_err(), "Le domaine devrait interdire la modification d'un shard différent");
     assert!(matches!(
         result.unwrap_err(),
         shared_kernel::errors::DomainError::Forbidden { .. }

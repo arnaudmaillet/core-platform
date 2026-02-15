@@ -12,10 +12,12 @@ description.workspace = true
 [dependencies]
 # On active spécifiquement les capacités de recherche (ES + gRPC)
 shared-kernel = { workspace = true, features = ["service-search", "scylla"] }
-profile = { workspace = true }
+profile = { workspace = true, features = ["test-utils"] }
 
 # Dépendances externes nécessaires au binaire
 tokio = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 tonic-health = {workspace = true}
+uuid = {workspace = true}
+futures = {workspace = true}

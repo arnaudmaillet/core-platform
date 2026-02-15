@@ -1,9 +1,6 @@
-// crates/profile/tests/infrastructure/identity_handler_it.rs
+// crates/profile/tests/infrastructure/handler_it_for_identity.rs
 
 use std::sync::Arc;
-use testcontainers::ContainerAsync;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::redis::Redis;
 use tonic::Request;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use profile::infrastructure::api::grpc::handlers::IdentityHandler;
@@ -24,12 +21,11 @@ use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
 use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
-use shared_kernel::infrastructure::utils::{setup_full_infrastructure, InfrastructureTestContext};
-// --- UTILS DE SETUP ---
+use shared_kernel::infrastructure::utils::InfrastructureKernelTestContext;
 
-struct TestContext {
+struct IdentityHandlerTestContext {
     handler: IdentityHandler,
-    infra: InfrastructureTestContext,
+    infra: InfrastructureKernelTestContext,
     identity_repo: Arc<PostgresIdentityRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
     profile_id: ProfileId,
@@ -37,28 +33,33 @@ struct TestContext {
     region: RegionCode,
 }
 
-async fn setup_test_context() -> TestContext {
-    // 1. Setup de l'infrastructure via Testcontainers (Postgres, Scylla, Redis)
-    let infra = setup_full_infrastructure(
-        &["./migrations/postgres"],
-        &["./migrations/scylla"]
-    ).await;
+async fn setup_test_context() -> IdentityHandlerTestContext {
+    // 1. Setup de l'infrastructure (orchestration parallèle interne)
+    let infra_from_test_containers = InfrastructureKernelTestContext::builder()
+        .with_postgres_migrations(&["./migrations/postgres"])
+        .with_scylla_migrations(&["./migrations/scylla"])
+        .build()
+        .await;
 
-    // 2. Instanciation des repositories réels
-    let identity_postgres = Arc::new(PostgresIdentityRepository::new(infra.pg_pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
-    let cache_redis = Arc::new(RedisCacheRepository::new(&infra.redis_url).await.unwrap());
+    // 2. Instanciation des repositories via les contextes spécialisés
+    let pg_pool = infra_from_test_containers.postgres().pool();
+    let scylla_session = infra_from_test_containers.scylla().session();
+
+    // 3. Instanciation des repositories
+    let postgres_repo = Arc::new(PostgresIdentityRepository::new(pg_pool.clone()));
+    let scylla_repo = Arc::new(ScyllaProfileRepository::new(scylla_session));
+    let redis_repo = infra_from_test_containers.redis().repository(); // Directement l'Arc<RedisCacheRepository>
 
     let profile_repo = Arc::new(UnifiedProfileRepository::new(
-        identity_postgres.clone(),
-        stats_scylla,
-        cache_redis,
+        postgres_repo.clone(),
+        scylla_repo,
+        redis_repo,
     ));
 
-    let tx_manager = Arc::new(PostgresTransactionManager::new(infra.pg_pool.clone()));
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(infra.pg_pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(pg_pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg_pool.clone()));
 
-    // 3. Initialisation du Handler avec les Use Cases
+    // 3. Initialisation du Handler
     let handler = IdentityHandler::new(
         Arc::new(UpdateHandleUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(UpdateDisplayNameUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
@@ -76,12 +77,14 @@ async fn setup_test_context() -> TestContext {
     ).build();
 
     let profile_id = initial_profile.id().clone();
-    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed profile");
+    profile_repo.save_identity(&initial_profile, None, None)
+        .await
+        .expect("Failed to seed profile");
 
-    TestContext {
+    IdentityHandlerTestContext {
         handler,
-        infra,
-        identity_repo: identity_postgres,
+        infra: infra_from_test_containers,
+        identity_repo: postgres_repo,
         outbox_repo,
         profile_id,
         owner_id,
@@ -238,6 +241,7 @@ async fn test_identity_handler_invalid_inputs() {
 #[tokio::test]
 async fn test_identity_handler_optimistic_concurrency_retry() {
     let ctx = setup_test_context().await;
+    let pool = ctx.infra.postgres().pool();
 
     // 1. Récupérer version actuelle
     let profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
@@ -245,13 +249,13 @@ async fn test_identity_handler_optimistic_concurrency_retry() {
 
     // 2. Simuler une mise à jour concurrente directe en DB (Out-of-band)
     // On incrémente la version de force pour faire échouer le prochain save du handler
-    sqlx::query("UPDATE user_profiles SET version = $1 WHERE id = $2 AND region_code = $3")
-        .bind((current_version + 1) as i64) // Cast nécessaire pour Postgres BIGINT
-        .bind(ctx.profile_id.as_uuid())
-        .bind(ctx.region.as_str())
-        .execute(&ctx.infra.pg_pool)
-        .await
-        .unwrap();
+sqlx::query("UPDATE user_profiles SET version = $1 WHERE id = $2 AND region_code = $3")
+    .bind((current_version + 1) as i64)
+    .bind(ctx.profile_id.as_uuid())
+    .bind(ctx.region.as_str())
+    .execute(&pool)
+    .await
+    .unwrap();
 
     // 3. Appel gRPC : Le Use Case devrait détecter le conflit, recharger le profil et réessayer
     let mut request = Request::new(UpdateHandleRequest {

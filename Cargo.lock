@@ -2496,12 +2496,14 @@ dependencies = [
 name = "profile-command-server"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "profile",
  "shared-kernel",
  "tokio",
  "tonic",
  "tonic-health",
  "tonic-reflection",
+ "uuid",
 ]
 
 [[package]]
@@ -3265,6 +3267,7 @@ dependencies = [
  "futures",
  "futures-util",
  "log",
+ "once_cell",
  "prost",
  "prost-types",
  "rand 0.9.2",
