@@ -1,0 +1,33 @@
+# infrastructure/argocd/external-dns.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: external-dns
+    repoURL: https://kubernetes-sigs.github.io/external-dns/
+    targetRevision: 1.15.0
+    helm:
+      values: |
+        provider: aws
+        domainFilters:
+          - core-platform.click
+        policy: sync
+        txtOwnerId: core-platform-eks
+        # AJOUTE CECI :
+        serviceAccount:
+          create: true
+          name: external-dns
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/eks-external-dns-role
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

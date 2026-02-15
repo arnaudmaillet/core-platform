@@ -144,6 +144,23 @@ module "lb_controller_irsa_role" {
   }
 }
 
+# Rôle IAM pour External-DNS (permet au cluster de mettre à jour Route53 tout seul)
+module "external_dns_irsa_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name                     = "${var.cluster_name}-external-dns-role"
+  attach_external_dns_policy    = true # Le module inclut déjà la politique standard
+  external_dns_hosted_zone_arns = [data.aws_route53_zone.main.arn]
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:external-dns"]
+    }
+  }
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 # IAM POUR EBS : Permet à K8s de créer des disques durs AWS (EBS) dynamiquement
 # ---------------------------------------------------------------------------------------------------------------------
