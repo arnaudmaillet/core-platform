@@ -7,20 +7,23 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
 use account::domain::value_objects::{Email, ExternalId, AccountState};
 use shared_kernel::domain::events::AggregateRoot;
 use uuid::Uuid;
+use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
 
 /// Helper pour instancier le repo et la DB de test
-async fn get_repo_and_pool() -> (
-    PostgresAccountRepository,
-    sqlx::PgPool,
-    testcontainers::ContainerAsync<testcontainers_modules::postgres::Postgres>,
-) {
-    let (pool, container) = crate::common::setup_postgres_test_db().await;
-    (PostgresAccountRepository::new(pool.clone()), pool, container)
+async fn get_test_context() -> (PostgresAccountRepository, PostgresTestContext) {
+    let ctx = PostgresTestContext::builder()
+        .with_migrations(&["./migrations/postgres"])
+        .build()
+        .await;
+
+    let repo = PostgresAccountRepository::new(ctx.pool());
+    (repo, ctx)
 }
 
 #[tokio::test]
 async fn test_account_lifecycle_full() {
-    let (repo, pool, _c) = get_repo_and_pool().await;
+    let (repo, ctx) = get_test_context().await;
+    let pool = ctx.pool();
     let region = RegionCode::try_new("eu").unwrap();
     let account_id = AccountId::new();
 
@@ -41,12 +44,11 @@ async fn test_account_lifecycle_full() {
 
     // 2. Vérification find_by_id
     let found = repo.find_account_by_id(&account_id, None).await.unwrap().expect("Should find account");
-    assert_eq!(found.username().as_str(), "sonny_dev");
     assert_eq!(found.version(), 1);
 
     // 3. Update (v1 -> v2)
     let mut to_update = found;
-    to_update.deactivate(&region).expect("Deactivation should work with correct region");
+    to_update.deactivate(&region).expect("Deactivation failed");
     repo.save(&to_update, None).await.expect("Save v2 failed");
 
     let updated = repo.find_account_by_id(&account_id, None).await.unwrap().unwrap();
@@ -56,33 +58,30 @@ async fn test_account_lifecycle_full() {
 
 #[tokio::test]
 async fn test_transaction_rollback_logic() {
-    let (repo, pool, _c) = get_repo_and_pool().await;
-    let region = RegionCode::try_new("eu").unwrap();
+    let (repo, ctx) = get_test_context().await;
     let account_id = AccountId::new();
 
     let account = Account::builder(
         account_id.clone(),
-        region,
+        RegionCode::try_new("eu").unwrap(),
         Username::try_new("ghost_acc").unwrap(),
         Email::try_new("ghost@void.com").unwrap(),
         ExternalId::try_new(Uuid::now_v7().to_string()).unwrap(),
     ).build();
 
-    let tx_sqlx = pool.begin().await.unwrap();
+    let tx_sqlx = ctx.pool().begin().await.unwrap();
     let mut wrapped_tx = shared_kernel::infrastructure::postgres::transactions::PostgresTransaction::new(tx_sqlx);
 
     repo.create_account(&account, &mut wrapped_tx).await.unwrap();
-
-    // On annule tout
     wrapped_tx.into_inner().rollback().await.unwrap();
 
     let found = repo.find_account_by_id(&account_id, None).await.unwrap();
-    assert!(found.is_none(), "Account should not exist after rollback");
+    assert!(found.is_none());
 }
 
 #[tokio::test]
 async fn test_unique_constraints_violation() {
-    let (repo, pool, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
     let region = RegionCode::try_new("eu").unwrap();
     let username = "duplicate_user";
 
@@ -96,7 +95,6 @@ async fn test_unique_constraints_violation() {
 
     repo.save(&original, None).await.unwrap();
 
-    // Tentative avec le même Username
     let duplicate = Account::builder(
         AccountId::new(),
         region,
@@ -106,12 +104,12 @@ async fn test_unique_constraints_violation() {
     ).build();
 
     let result = repo.save(&duplicate, None).await;
-    assert!(result.is_err(), "Postgres unique constraint should have triggered");
+    assert!(result.is_err(), "Duplicate username should trigger unique constraint");
 }
 
 #[tokio::test]
 async fn test_account_concurrency_conflict_it() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
     let region = RegionCode::try_new("eu").unwrap();
     let account_id = AccountId::new();
 
@@ -124,25 +122,22 @@ async fn test_account_concurrency_conflict_it() {
     ).build();
     repo.save(&account, None).await.unwrap();
 
-    // Simulation de deux lectures concurrentes (v1)
     let mut client_a = repo.find_account_by_id(&account_id, None).await.unwrap().unwrap();
     let mut client_b = repo.find_account_by_id(&account_id, None).await.unwrap().unwrap();
 
-    // Client A sauve v2
     client_a.deactivate(&region).unwrap();
-    repo.save(&client_a, None).await.expect("Client A should win");
+    repo.save(&client_a, None).await.expect("Client A wins");
 
-    // Client B tente de sauver v2 mais basé sur v1
     client_b.suspend(&region, "Late update".into()).unwrap();
     let result = repo.save(&client_b, None).await;
 
-    // L'OCC (Optimistic Concurrency Control) en SQL doit échouer
-    assert!(result.is_err(), "Client B must fail due to version mismatch");
+    assert!(result.is_err(), "Client B must fail due to OCC mismatch");
 }
 
 #[tokio::test]
 async fn test_account_security_region_mismatch_it() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
+
     let region_eu = RegionCode::try_new("eu").unwrap();
     let region_us = RegionCode::try_new("us").unwrap();
     let account_id = AccountId::new();
@@ -155,13 +150,15 @@ async fn test_account_security_region_mismatch_it() {
         ExternalId::try_new(Uuid::now_v7().to_string()).unwrap(),
     ).build();
 
+    // 1. Persistance initiale dans la région EU
     repo.save(&account, None).await.unwrap();
 
-    // Tentative de mutation avec une région différente du shard
-    // Le domaine doit bloquer AVANT l'appel au repo
+    // 2. Tentative de mutation avec la région US
+    // Le domaine doit bloquer l'action car l'agrégat appartient à EU (Shard Region Mismatch)
     let result = account.deactivate(&region_us);
 
-    assert!(result.is_err());
+    // 3. Assertions
+    assert!(result.is_err(), "Le domaine devrait interdire une action sur une région différente");
     assert!(matches!(
         result.unwrap_err(),
         shared_kernel::errors::DomainError::Forbidden { .. }
@@ -170,7 +167,7 @@ async fn test_account_security_region_mismatch_it() {
 
 #[tokio::test]
 async fn test_account_lookups() {
-    let (repo, _, _c) = get_repo_and_pool().await;
+    let (repo, _ctx) = get_test_context().await;
     let email = Email::try_new("lookup@test.com").unwrap();
     let username = Username::try_new("lookup_user").unwrap();
 

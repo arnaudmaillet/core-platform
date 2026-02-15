@@ -1,75 +1,61 @@
-// crates/profile/tests/infrastructure/account_consumer_it.rs
+// crates/profile/tests/infrastructure/consumer_it_for_account.rs
 
 use std::sync::Arc;
 use uuid::Uuid;
-use testcontainers::ContainerAsync;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::redis::Redis;
 use profile::application::create_profile::CreateProfileUseCase;
 use profile::domain::repositories::ProfileIdentityRepository;
 use profile::infrastructure::kafka::AccountConsumer;
 use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
 use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
-use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
+use shared_kernel::infrastructure::utils::InfrastructureKernelTestContext;
 
-struct ConsumerTestContext {
+struct AccountConsumerTestContext {
     consumer: AccountConsumer,
     profile_repo: Arc<PostgresIdentityRepository>,
-    _outbox_repo: Arc<PostgresOutboxRepository>,
-    _pool: sqlx::PgPool,
-    _pg_container: ContainerAsync<Postgres>,
-    _redis_container: ContainerAsync<Redis>,
+    _infra: InfrastructureKernelTestContext,
 }
 
-async fn setup_consumer_test_context() -> ConsumerTestContext {
-    // 1. Démarrage parallèle des dépendances
-    let (pg_setup, redis_setup) = tokio::join!(
-        crate::common::setup_postgres_test_db(),
-        crate::common::setup_redis_test_cache()
-    );
+async fn setup_consumer_test_context() -> AccountConsumerTestContext {
+    // 1. On configure et on lance tout ici, c'est très explicite
+    let infra_from_test_containers = InfrastructureKernelTestContext::builder()
+        .with_postgres_migrations(&["./migrations/postgres"])
+        .with_scylla_migrations(&["./migrations/scylla"])
+        .build()
+        .await;
 
-    let (pool, pg_container) = pg_setup;
-    let (redis_url, redis_container) = redis_setup;
+    // 2. On instancie les repositories (Note les chemins d'accès via _ctx)
+    let pg_pool = infra_from_test_containers.postgres().pool();
+    let scylla_session = infra_from_test_containers.scylla().session();
 
-    // 2. Instanciation des composants techniques
-    let identity_postgres = Arc::new(PostgresIdentityRepository::new(pool.clone()));
+    let postgres_repo = Arc::new(PostgresIdentityRepository::new(pg_pool.clone()));
+    let scylla_repo = Arc::new(ScyllaProfileRepository::new(scylla_session));
+    let redis_repo = infra_from_test_containers.redis().repository();
 
-    // Pour Scylla, on utilise ton helper common existant
-    let scylla_session = crate::common::setup_scylla_db().await;
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session));
-
-    // Le cache Redis réel
-    let cache_redis = Arc::new(RedisCacheRepository::new(&redis_url).await.unwrap());
-
-    // 3. Le Composite qui orchestre le tout
     let profile_repo = Arc::new(UnifiedProfileRepository::new(
-        identity_postgres.clone(),
-        stats_scylla.clone(),
-        cache_redis,
+        postgres_repo.clone(),
+        scylla_repo,
+        redis_repo,
     ));
 
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
-    let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg_pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(pg_pool));
 
     let use_case = Arc::new(CreateProfileUseCase::new(
         profile_repo,
-        outbox_repo.clone(),
+        outbox_repo,
         tx_manager,
     ));
 
     let consumer = AccountConsumer::new(use_case);
 
-    ConsumerTestContext {
+    AccountConsumerTestContext {
         consumer,
-        profile_repo: identity_postgres,
-        _outbox_repo: outbox_repo,
-        _pool: pool,
-        _pg_container: pg_container,
-        _redis_container: redis_container,
+        profile_repo: postgres_repo,
+        _infra: infra_from_test_containers,
     }
 }
 

@@ -9,46 +9,48 @@ use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
-use shared_kernel::infrastructure::utils::{setup_full_infrastructure, InfrastructureTestContext};
+use shared_kernel::infrastructure::utils::InfrastructureKernelTestContext;
 
-struct CompositeTestContext {
+struct CompositeRepositoryTestContext {
     repo: Arc<UnifiedProfileRepository>,
     stats_repo: Arc<ScyllaProfileRepository>,
-    infra : InfrastructureTestContext,
+    infra : InfrastructureKernelTestContext,
 }
 
-async fn setup_composite_test_context() -> CompositeTestContext {
-    let infra = setup_full_infrastructure(
-        &["./migrations/postgres"],
-        &["./migrations/scylla"]
-    ).await;
+async fn setup_composite_test_context() -> CompositeRepositoryTestContext {
+    // 1. Orchestration parallèle via le shared-kernel (Builder inchangé)
+    let infra_from_test_containers = InfrastructureKernelTestContext::builder()
+        .with_postgres_migrations(&["./migrations/postgres"])
+        .with_scylla_migrations(&["./migrations/scylla"])
+        .build()
+        .await;
 
-    // --- AJOUT DE SÉCURITÉ POUR SCYLLA ---
-    // On vérifie que la session est vivante avant de passer aux tests
-    infra.scylla_session
+    // --- SÉCURITÉ SCYLLA (Vérification via le getter session()) ---
+    infra_from_test_containers.scylla().session()
         .query_unpaged("SELECT now() FROM system.local", ())
         .await
         .expect("ScyllaDB session is broken or not ready");
 
-    let cache_redis = {
-        let repo = RedisCacheRepository::new(&infra.redis_url).await
-            .expect("Failed to connect to Redis IT container");
-        Arc::new(repo)
-    };
+    // 2. Instanciation des dépôts techniques via les getters
+    // Plus besoin de builder manuellement le RedisCacheRepository ici !
+    let cache_redis = infra_from_test_containers.redis().repository();
 
-    let identity_pg = Arc::new(PostgresIdentityRepository::new(infra.pg_pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
+    let pg_pool = infra_from_test_containers.postgres().pool();
+    let identity_pg = Arc::new(PostgresIdentityRepository::new(pg_pool));
 
+    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra_from_test_containers.scylla().session()));
+
+    // 3. L'orchestrateur (UnifiedProfileRepository)
     let composite = Arc::new(UnifiedProfileRepository::new(
         identity_pg,
         stats_scylla.clone(),
-        cache_redis.clone(),
+        cache_redis,
     ));
 
-    CompositeTestContext {
+    CompositeRepositoryTestContext {
         repo: composite,
         stats_repo: stats_scylla,
-        infra,
+        infra: infra_from_test_containers,
     }
 }
 

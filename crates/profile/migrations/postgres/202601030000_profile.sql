@@ -40,9 +40,12 @@ CREATE TABLE IF NOT EXISTS user_locations (
     );
 
 -- 4. PERFORMANCE INDEXES
-CREATE UNIQUE INDEX idx_user_profiles_profile_global ON user_profiles (handle);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_profiles_profile_global ON user_profiles (handle);
 CREATE INDEX IF NOT EXISTS idx_user_locations_gist ON user_locations USING GIST (coordinates);
 
 -- 5. TRIGGERS
+DROP TRIGGER IF EXISTS trg_set_timestamp_profiles ON user_profiles;
 CREATE TRIGGER trg_set_timestamp_profiles BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE PROCEDURE public.trigger_set_timestamp();
+
+DROP TRIGGER IF EXISTS trg_set_timestamp_locations ON user_locations;
 CREATE TRIGGER trg_set_timestamp_locations BEFORE UPDATE ON user_locations FOR EACH ROW EXECUTE PROCEDURE public.trigger_set_timestamp();

@@ -1,10 +1,9 @@
+// crates/profile/tests/infrastructure/handler_it_for_media.rs
+
 use std::sync::Arc;
-use testcontainers::ContainerAsync;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::redis::Redis;
 use tonic::Request;
 
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Url, Username};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use profile::infrastructure::api::grpc::handlers::MediaHandler;
 use profile::infrastructure::api::grpc::profile_v1::{
     UpdateAvatarRequest, RemoveAvatarRequest, UpdateBannerRequest, RemoveBannerRequest
@@ -25,12 +24,13 @@ use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
 use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
-use shared_kernel::infrastructure::utils::{setup_full_infrastructure, InfrastructureTestContext};
+use shared_kernel::infrastructure::utils::InfrastructureKernelTestContext;
+
 // --- UTILS DE SETUP ---
 
-struct TestContext {
+struct MediaHandlerTestContext {
     handler: MediaHandler,
-    infra: InfrastructureTestContext,
+    infra: InfrastructureKernelTestContext,
     identity_repo: Arc<PostgresIdentityRepository>,
     composite_repo: Arc<UnifiedProfileRepository>,
     outbox_repo: Arc<PostgresOutboxRepository>,
@@ -38,25 +38,33 @@ struct TestContext {
     region: RegionCode,
 }
 
-async fn setup_test_context() -> TestContext {
-    let infra = setup_full_infrastructure(
-        &["./migrations/postgres"],
-        &["./migrations/scylla"]
-    ).await;
+async fn setup_test_context() -> MediaHandlerTestContext {
+    // 1. Setup de l'infrastructure (orchestration parallèle interne)
+    let infra_from_test_containers = InfrastructureKernelTestContext::builder()
+        .with_postgres_migrations(&["./migrations/postgres"])
+        .with_scylla_migrations(&["./migrations/scylla"])
+        .build()
+        .await;
 
-    let identity_postgres = Arc::new(PostgresIdentityRepository::new(infra.pg_pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(infra.scylla_session.clone()));
-    let cache_redis = Arc::new(RedisCacheRepository::new(&infra.redis_url).await.unwrap());
+    // 2. Instanciation des repositories via les contextes spécialisés
+    let pg_pool = infra_from_test_containers.postgres().pool();
+    let scylla_session = infra_from_test_containers.scylla().session();
+
+    // 3. Instanciation des repositories
+    let postgres_repo = Arc::new(PostgresIdentityRepository::new(pg_pool.clone()));
+    let scylla_repo = Arc::new(ScyllaProfileRepository::new(scylla_session));
+    let redis_repo = infra_from_test_containers.redis().repository(); // Directement l'Arc<RedisCacheRepository>
 
     let profile_repo = Arc::new(UnifiedProfileRepository::new(
-        identity_postgres.clone(),
-        stats_scylla,
-        cache_redis,
+        postgres_repo.clone(),
+        scylla_repo,
+        redis_repo,
     ));
 
-    let tx_manager = Arc::new(PostgresTransactionManager::new(infra.pg_pool.clone()));
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(infra.pg_pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(pg_pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg_pool.clone()));
 
+    // 3. Initialisation du MediaHandler
     let handler = MediaHandler::new(
         Arc::new(UpdateAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
         Arc::new(RemoveAvatarUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
@@ -64,7 +72,7 @@ async fn setup_test_context() -> TestContext {
         Arc::new(RemoveBannerUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
     );
 
-    // Seed initial avec le nouveau ProfileId
+    // 4. Seed initial
     let owner_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
     let initial_profile = Profile::builder(
@@ -75,12 +83,14 @@ async fn setup_test_context() -> TestContext {
     ).build();
 
     let profile_id = initial_profile.id().clone();
-    profile_repo.save_identity(&initial_profile, None, None).await.expect("Failed to seed profile");
+    profile_repo.save_identity(&initial_profile, None, None)
+        .await
+        .expect("Failed to seed profile");
 
-    TestContext {
+    MediaHandlerTestContext {
         handler,
-        infra,
-        identity_repo: identity_postgres,
+        infra: infra_from_test_containers,
+        identity_repo: postgres_repo,
         composite_repo: profile_repo,
         outbox_repo,
         profile_id,

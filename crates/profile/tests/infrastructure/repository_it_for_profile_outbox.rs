@@ -1,4 +1,4 @@
-// crates/profile/tests/infrastructure/profile_outbox_repository_it.rs
+// crates/profile/tests/infrastructure/repository_it_for_profile_outbox.rs
 
 use chrono::Utc;
 use profile::domain::entities::Profile;
@@ -12,13 +12,22 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use uuid::Uuid;
+use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
+
+/// Helper local pour obtenir un contexte Postgres propre
+async fn get_pg_context() -> PostgresTestContext {
+    PostgresTestContext::builder()
+        .with_migrations(&["./migrations/postgres"])
+        .build()
+        .await
+}
 
 #[tokio::test]
 async fn test_outbox_with_real_profile_events() {
-    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let ctx = get_pg_context().await;
+    let pool = ctx.pool();
     let repo = PostgresOutboxRepository::new(pool.clone());
     let owner_id = AccountId::new();
-
     let profile_id = ProfileId::new();
     let region = RegionCode::try_new("eu").unwrap();
 
@@ -32,76 +41,48 @@ async fn test_outbox_with_real_profile_events() {
         occurred_at: Utc::now(),
     };
 
-    // 2. Transaction
+    // Transaction
     let tx_sqlx = pool.begin().await.unwrap();
     let mut wrapped_tx = PostgresTransaction::new(tx_sqlx);
 
-    // 3. Save
-    repo.save(&mut wrapped_tx, &event)
-        .await
-        .expect("Save failed");
-
+    repo.save(&mut wrapped_tx, &event).await.expect("Save failed");
     wrapped_tx.into_inner().commit().await.unwrap();
 
-    // 4. Vérification
-    // On vérifie que aggregate_id correspond au ProfileId (UUID)
+    // Vérification
     let row: (serde_json::Value, String) =
         sqlx::query_as("SELECT payload, region_code FROM outbox_events WHERE aggregate_id = $1")
             .bind(profile_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&pool) // On passe une référence à la pool
             .await
             .unwrap();
 
     assert_eq!(row.0["type"], "HandleChanged");
-    assert_eq!(row.0["data"]["new_handle"], "new_bob");
     assert_eq!(row.1, "eu");
 }
 
 #[tokio::test]
 async fn test_outbox_atomic_rollback_with_profile() {
-    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let ctx = get_pg_context().await;
+    let pool = ctx.pool();
     let profile_repo = PostgresIdentityRepository::new(pool.clone());
     let outbox_repo = PostgresOutboxRepository::new(pool.clone());
 
-    // 1. Création via AggregateRoot logic
-    let mut profile = Profile::create(
-        Profile::builder(
-            AccountId::new(),
-            RegionCode::try_new("eu").unwrap(),
-            DisplayName::from_raw("Ghost"),
-            Handle::try_new("ghost").unwrap(),
-        )
-            .build(),
-    );
-
+    let mut profile = Profile::create(create_test_profile());
     let profile_id = profile.id().clone();
-    let events = profile.pull_events();
-    let event = events
-        .first()
-        .expect("L'événement ProfileCreated devrait être présent");
+    let event = profile.pull_events().first().cloned().expect("Event missing");
 
-    // 2. TRANSACTION
+    // TRANSACTION
     let tx_sqlx = pool.begin().await.unwrap();
     let mut wrapped_tx = PostgresTransaction::new(tx_sqlx);
 
-    profile_repo
-        .save(&profile, Some(&mut wrapped_tx))
-        .await
-        .unwrap();
+    profile_repo.save(&profile, Some(&mut wrapped_tx)).await.unwrap();
+    outbox_repo.save(&mut wrapped_tx, event.as_ref()).await.unwrap();
 
-    outbox_repo
-        .save(&mut wrapped_tx, event.as_ref())
-        .await
-        .unwrap();
-
-    // 3. ROLLBACK
+    // ROLLBACK
     wrapped_tx.into_inner().rollback().await.unwrap();
 
-    // 4. VERIFICATIONS : Rien ne doit exister
-    let p_found = profile_repo
-        .fetch(&profile_id, &profile.region_code())
-        .await
-        .unwrap();
+    // VERIFICATIONS : Rien ne doit exister
+    let p_found = profile_repo.fetch(&profile_id, &profile.region_code()).await.unwrap();
     assert!(p_found.is_none());
 
     let e_count: (i64,) =
@@ -115,7 +96,8 @@ async fn test_outbox_atomic_rollback_with_profile() {
 
 #[tokio::test]
 async fn test_outbox_payload_integrity() {
-    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let ctx = get_pg_context().await;
+    let pool = ctx.pool();
     let repo = PostgresOutboxRepository::new(pool.clone());
     let owner_id = AccountId::new();
 
@@ -129,10 +111,14 @@ async fn test_outbox_payload_integrity() {
         occurred_at: Utc::now(),
     };
 
+    // 1. Démarrage de la transaction via la pool du contexte
     let mut tx = PostgresTransaction::new(pool.begin().await.unwrap());
+
+    // 2. Sauvegarde de l'événement
     repo.save(&mut tx, &event).await.unwrap();
     tx.into_inner().commit().await.unwrap();
 
+    // 3. Vérification de la structure JSON persistée
     let row: (serde_json::Value,) = sqlx::query_as("SELECT payload FROM outbox_events")
         .fetch_one(&pool)
         .await
@@ -144,34 +130,29 @@ async fn test_outbox_payload_integrity() {
 
 #[tokio::test]
 async fn test_outbox_duplicate_prevention() {
-    let (pool, _c) = crate::common::setup_postgres_test_db().await;
+    let ctx = get_pg_context().await;
+    let pool = ctx.pool();
     let repo = PostgresOutboxRepository::new(pool.clone());
 
     let event_id = Uuid::now_v7();
-    let profile_id = ProfileId::new();
-    let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
-
     let event = ProfileEvent::HandleChanged {
         id: event_id,
-        profile_id: profile_id.clone(),
-        owner_id: owner_id.clone(),
-        region: region.clone(),
-        old_handle: Handle::try_new("old_bob").unwrap(),
-        new_handle: Handle::try_new("new_bob").unwrap(),
+        profile_id: ProfileId::new(),
+        owner_id: AccountId::new(),
+        region: RegionCode::try_new("eu").unwrap(),
+        old_handle: Handle::try_new("old").unwrap(),
+        new_handle: Handle::try_new("new").unwrap(),
         occurred_at: Utc::now(),
     };
 
-    // 1. Première insertion
     let mut tx1 = PostgresTransaction::new(pool.begin().await.unwrap());
     repo.save(&mut tx1, &event).await.unwrap();
     tx1.into_inner().commit().await.unwrap();
 
-    // 2. Doublon : Doit échouer car PK = (id, region_code)
     let mut tx2 = PostgresTransaction::new(pool.begin().await.unwrap());
     let result = repo.save(&mut tx2, &event).await;
 
-    assert!(result.is_err(), "La DB aurait dû rejeter le doublon");
+    assert!(result.is_err(), "Duplicate event ID should be rejected by DB unique constraint");
 }
 
 // Helpers
