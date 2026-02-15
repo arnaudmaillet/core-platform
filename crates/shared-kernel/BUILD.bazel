@@ -1,6 +1,5 @@
 # crates/shared-kernel/BUILD.bazel
 
-# On utilise notre wrapper pour avoir l'édition 2024 par défaut
 load("//:defs.bzl", "core_rust_library")
 
 core_rust_library(
@@ -58,6 +57,7 @@ core_rust_library(
          # --- Tests ---
         "@crates//:testcontainers",
         "@crates//:testcontainers-modules",
+        "@crates//:once_cell",
     ],
     proc_macro_deps = [
         "@crates//:async-trait",

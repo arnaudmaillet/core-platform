@@ -31,17 +31,20 @@ use profile::infrastructure::scylla::utils::run_scylla_migrations;
 
 // Shared Kernel
 use shared_kernel::infrastructure::grpc::region_interceptor;
-use shared_kernel::infrastructure::postgres::factories::{PostgresConfig, create_postgres_pool};
+use shared_kernel::infrastructure::postgres::factories::PostgresContext;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
-use shared_kernel::infrastructure::redis::factories::{create_redis_repository, RedisConfig};
-use shared_kernel::infrastructure::scylla::factories::{ScyllaConfig, create_scylla_session};
-
+use shared_kernel::infrastructure::redis::factories::RedisContext;
+use shared_kernel::infrastructure::scylla::factories::ScyllaContext;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
-    let addr = format!("0.0.0.0:{}", port).parse()?;
+
+    run_server(format!("0.0.0.0:{}", port).parse()?, ).await
+}
+
+pub async fn run_server(addr: std::net::SocketAddr, ) -> Result<(), Box<dyn std::error::Error>> {
 
     // --- INITIALISATION DU SERVICE DE SANTÉ ---
 
@@ -57,41 +60,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- 1. INITIALISATION DES CLIENTS DB ---
 
-    // Configuration et création de la pool Postgres (Shared Kernel)
-    let postgres_config = PostgresConfig::from_env()?;
-    let pool = create_postgres_pool(&postgres_config).await?;
-
-    run_postgres_migrations(&pool).await?;
+    // création de la pool Postgres (Shared Kernel)
+    let pg_ctx = PostgresContext::builder()?.build().await?;
+    run_postgres_migrations(&pg_ctx.pool()).await?;
     println!("✅ Postgres migrations completed.");
 
-    // Configuration et création de la session ScyllaDB (Shared Kernel)
-    let scylla_config = ScyllaConfig::from_env()?;
-    let scylla_session = create_scylla_session(&scylla_config).await?;
-
-    run_scylla_migrations(&scylla_session).await?;
+    // création de la session ScyllaDB (Shared Kernel)
+    let scylla_ctx = ScyllaContext::builder()?.build().await?;
+    run_scylla_migrations(&scylla_ctx.session()).await?;
     println!("✅ ScyllaDB migrations completed.");
 
-    // Configuration et création de Redis (Shared Kernel)
-    let redis_config = RedisConfig::from_env()?;
-    let cache_redis = create_redis_repository(&redis_config).await?;
+    // création de Redis (Shared Kernel)
+    let redis_ctx = RedisContext::builder()?.build().await?;
     println!("✅ Redis connection established.");
 
     // --- 2. INITIALISATION DES REPOSITORIES (Infrastructure) ---
 
     // Implémentations techniques (On clone les pools car elles sont conçues pour ça)
-    let identity_postgres = Arc::new(PostgresIdentityRepository::new(pool.clone()));
-    let stats_scylla = Arc::new(ScyllaProfileRepository::new(scylla_session.clone()));
+    let postgres_repository = Arc::new(PostgresIdentityRepository::new(pg_ctx.pool()));
+    let scylla_repository = Arc::new(ScyllaProfileRepository::new(scylla_ctx.session()));
+    let redis_repository = redis_ctx.repository();
 
     // L'orchestrateur (Façade Composite) qui masque la dualité DB au Domaine
     let profile_repo = Arc::new(UnifiedProfileRepository::new(
-        identity_postgres.clone(),
-        stats_scylla.clone(),
-        cache_redis.clone(),
+        postgres_repository,
+        scylla_repository,
+        redis_repository
     ));
 
     // Outils techniques partagés pour la cohérence des données (Transaction + Outbox)
-    let tx_manager = Arc::new(PostgresTransactionManager::new(pool.clone()));
-    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(pg_ctx.pool()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg_ctx.pool()));
 
     // --- 3. INITIALISATION DES USE CASES (Application) ---
 

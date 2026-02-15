@@ -67,12 +67,6 @@ resource "aws_subnet" "private_data" {
   }
 }
 
-resource "aws_route_table_association" "private_data" {
-  count          = length(var.availability_zones)
-  subnet_id      = aws_subnet.private_data[count.index].id
-  route_table_id = aws_route_table.private.id
-}
-
 # --- NAT GATEWAY (Sortie Internet pour les Apps) ---
 resource "aws_eip" "nat" {
   count = 1 # Pour la DEV on en met un seul, en PROD on en mettrait un par AZ
@@ -112,4 +106,15 @@ resource "aws_route_table_association" "private_apps" {
   count          = length(var.availability_zones)
   subnet_id      = aws_subnet.private_apps[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table" "data" {
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "${var.project_name}-rt-data" }
+}
+
+resource "aws_route_table_association" "private_data" {
+  count          = length(var.availability_zones)
+  subnet_id      = aws_subnet.private_data[count.index].id
+  route_table_id = aws_route_table.data.id
 }

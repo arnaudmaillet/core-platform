@@ -1,0 +1,49 @@
+# k8s/base/services/profile/apps/command-server/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: profile-command-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: profile-command-server
+  template:
+    metadata:
+      labels:
+        app: profile-command-server
+    spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "database"
+          effect: "NoSchedule"
+      containers:
+        - name: server
+          image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:latest
+          envFrom:
+            - configMapRef:
+                name: profile-api-config
+          env:
+            # Variables Postgres dynamiques
+            - name: _DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dev-profile-db-app
+                  key: password
+            - name: PROFILE_DB_URL
+              value: "postgres://app:$(_DB_PASSWORD)@dev-profile-db-rw:5432/profile"
+
+          ports:
+            - containerPort: 50051
+
+          readinessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 15

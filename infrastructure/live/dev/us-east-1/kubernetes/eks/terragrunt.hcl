@@ -8,12 +8,23 @@ terraform {
   source = "../../../../../modules/kubernetes/eks"
 }
 
-dependency "networking" {
+dependency "vpc" {
   config_path = "../../networking"
 }
 
+locals {
+  env_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+}
+
 inputs = {
-  cluster_name       = "core-eks-dev"
-  vpc_id             = dependency.networking.outputs.vpc_id
-  private_subnet_ids = dependency.networking.outputs.private_app_subnet_ids
+  cluster_name = "core-platform-${local.env_vars.locals.env}"
+  vpc_id       = dependency.vpc.outputs.vpc_id
+  private_subnet_ids = dependency.vpc.outputs.private_app_subnet_ids
+  iam_policy_json_content = file("iam_policy.json")
+
+  # Injection des tailles d'instances dynamiques
+  eks_instance_types_system   = local.env_vars.locals.eks_instance_types_system
+  eks_instance_types_database = local.env_vars.locals.eks_instance_types_database
+  eks_min_size                = local.env_vars.locals.eks_min_size
+  eks_max_size                = local.env_vars.locals.eks_max_size
 }

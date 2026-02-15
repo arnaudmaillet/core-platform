@@ -8,12 +8,18 @@ include "root" {
 
 # Indique où se trouve le code source du module (le blueprint)
 terraform {
-  source = "${get_repo_root()}//infrastructure/modules/networking"
+  source = "../../../../modules/networking"
+}
+
+locals {
+  # On récupère les variables centralisées
+  env_vars    = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  region_vars = read_terragrunt_config(find_in_parent_folders("region.hcl"))
 }
 
 # On passe les variables spécifiques à ce déploiement "dev"
 inputs = {
-  cluster_name       = "core-eks-dev"
-  vpc_cidr           = "10.0.0.0/16"
-  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  cluster_name       = "core-platform-${local.env_vars.locals.env}"
+  vpc_cidr           = local.env_vars.locals.vpc_cidr
+  availability_zones = ["${local.region_vars.locals.aws_region}a", "${local.region_vars.locals.aws_region}b"]
 }

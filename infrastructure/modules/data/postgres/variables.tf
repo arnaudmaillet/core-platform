@@ -1,14 +1,17 @@
 # infrastructure/modules/data/postgres/variables.tf
 
-variable "project_name" { type = string }
-variable "env"          { type = string }
-variable "vpc_id"       { type = string }
-variable "vpc_cidr"     { type = string }
+variable "project_name"      { type = string }
+variable "env"               { type = string }
+variable "vpc_id"            { type = string }
+variable "vpc_cidr"          { type = string }
 variable "private_subnet_ids" { type = list(string) }
 
 variable "db_name"     { type = string }
 variable "db_username" { type = string }
-variable "db_password" { type = string }
+variable "db_password" {
+  type    = string
+  default = "" # Laisser vide pour générer un mot de passe aléatoire
+}
 
 variable "engine_version" {
   type    = string
@@ -17,7 +20,7 @@ variable "engine_version" {
 
 variable "instance_class" {
   type    = string
-  default = "db.t3.micro" # Gratuit ou très peu cher
+  default = "db.t4g.micro" # Utilise Graviton pour un meilleur rapport prix/perf
 }
 
 variable "allocated_storage" {

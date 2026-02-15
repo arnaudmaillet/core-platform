@@ -1,0 +1,18 @@
+#  k8s/base/services/profile/apps/command-server/service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: profile-command-server
+  # On peut aussi ajouter des annotations ici, mais le Ingress gère déjà le gros du travail
+spec:
+  selector:
+    app: profile-command-server
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 50051
+      targetPort: 50051
+      # Indique explicitement le protocole au contrôleur AWS
+      appProtocol: grpc
+  type: ClusterIP

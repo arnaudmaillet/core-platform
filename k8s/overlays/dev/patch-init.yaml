@@ -1,0 +1,25 @@
+# k8s/overlays/dev/patch-init.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: profile-command-server
+spec:
+  selector:
+    matchLabels:
+      app: profile-command-server
+  template:
+    spec:
+      containers:
+        - name: server
+      initContainers:
+        - name: init-scylla-keyspace
+          image: scylladb/scylla:latest
+          command:
+            - "/bin/bash"
+            - "-c"
+            - |
+              until cqlsh dev-profile-nosql -e "CREATE KEYSPACE IF NOT EXISTS profile_service WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};" ; do
+                echo "Waiting for ScyllaDB to be ready..."
+                sleep 5
+              done

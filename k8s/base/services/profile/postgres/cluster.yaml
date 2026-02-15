@@ -1,0 +1,33 @@
+# k8s/base/services/profile/postgres/cluster.yaml
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: profile-db
+  annotations:
+    reconcile-at: "now"
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgis:16-3.5
+
+  # Configuration du placement sur le nœud database (t3.large)
+  affinity:
+    nodeSelector:
+      role: storage  # Correspond au label présent sur ip-10-0-26-245
+    tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "database"
+        effect: "NoSchedule"
+
+  bootstrap:
+    initdb:
+      database: profile
+      owner: app
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis;
+        - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+  storage:
+    size: 10Gi
+    storageClass: gp3

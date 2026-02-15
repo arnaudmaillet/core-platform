@@ -1,0 +1,27 @@
+#  k8s/overlays/dev/kustomization.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base/services/profile/postgres
+  - ../../base/services/profile/redis
+  - ../../base/services/profile/scylla
+  - ../../base/services/profile/apps/command-server
+  - ingress.yaml
+namePrefix: dev-
+configMapGenerator:
+  - name: profile-api-config
+    envs:
+      - profile-api.env
+images:
+  - name: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server
+    newTag: latest
+patches:
+  - path: patch-init.yaml
+  - target:
+      kind: Cluster
+      name: profile-db
+    patch: |-
+      - op: replace
+        path: /spec/instances
+        value: 1

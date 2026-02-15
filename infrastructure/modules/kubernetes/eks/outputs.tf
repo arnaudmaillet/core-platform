@@ -25,3 +25,8 @@ output "oidc_provider_arn" {
   description = "L'ARN du provider OIDC pour les rôles IAM des Service Accounts (IRSA)"
   value       = module.eks.oidc_provider_arn
 }
+
+output "oidc_provider" {
+  description = "L'URL de l'OIDC Provider (sans le protocole https://)"
+  value       = replace(module.eks.cluster_oidc_issuer_url, "https://", "")
+}
