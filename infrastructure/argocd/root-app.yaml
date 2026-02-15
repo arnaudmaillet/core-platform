@@ -1,0 +1,22 @@
+#  infrastructure/argocd/root-app.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: core-platform-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/arnaudmaillet/core-platform' # <-- Ton URL GitHub ici
+    targetRevision: HEAD     # Ou ta branche spécifique 'feature/infra/setup'
+    path: k8s/overlays/dev   # Chemin vers tes manifests
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default       # Où tes ressources seront déployées
+  syncPolicy:
+    automated:
+      prune: true            # Supprime les ressources K8s si tu les enlèves de Git
+      selfHeal: true         # Répare si quelqu'un modifie un truc à la main
+    syncOptions:
+      - CreateNamespace=true
