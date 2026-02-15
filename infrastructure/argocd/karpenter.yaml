@@ -1,0 +1,28 @@
+#  infrastructure/argocd/karpenter.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: karpenter
+    repoURL: oci://public.ecr.aws/karpenter/karpenter
+    targetRevision: 1.0.1
+    helm:
+      values: |
+        settings:
+          clusterName: core-platform-dev
+          interruptionQueue: core-platform-dev
+        serviceAccount:
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/core-platform-dev-karpenter
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
