@@ -1,4 +1,4 @@
-# infrastructure/live/dev/us-east-1/data/postgres/terragrunt.hcl
+# infrastructure/live/prod/us-east-1/networking/terragrunt.hcl
 
 include "root" {
   path = find_in_parent_folders("root.hcl")

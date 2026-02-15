@@ -1,0 +1,42 @@
+#  k8s/base/services/profile/scylla/scylla.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: profile-nosql
+spec:
+  selector:
+    matchLabels:
+      app: scylla
+  template:
+    metadata:
+      labels:
+        app: scylla
+    spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "database"
+          effect: "NoSchedule"
+      containers:
+        - name: scylla
+          image: scylladb/scylla:5.4
+          # AJOUTE CE BLOC ICI
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          args: [ "--smp", "1", "--memory", "512M", "--overprovisioned", "1" ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: profile-nosql # Doit matcher l'URL dans ton API
+spec:
+  ports:
+    - port: 9042
+  selector:
+    app: scylla

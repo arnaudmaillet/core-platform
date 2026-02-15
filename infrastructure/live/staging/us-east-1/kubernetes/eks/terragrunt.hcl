@@ -1,4 +1,4 @@
-# infrastructure/live/dev/us-east-1/kubernetes/eks/terragrunt.hcl
+# infrastructure/live/staging/us-east-1/kubernetes/eks/terragrunt.hcl
 
 include "root" {
   path = find_in_parent_folders("root.hcl")
@@ -20,7 +20,6 @@ inputs = {
   cluster_name = "core-platform-${local.env_vars.locals.env}"
   vpc_id       = dependency.vpc.outputs.vpc_id
   private_subnet_ids = dependency.vpc.outputs.private_app_subnet_ids
-  iam_policy_json_content = file("iam_policy.json")
 
   # Injection des tailles d'instances dynamiques
   eks_instance_types_system   = local.env_vars.locals.eks_instance_types_system

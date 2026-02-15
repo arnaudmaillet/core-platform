@@ -1,0 +1,18 @@
+#  k8s/overlays/staging/kustomization.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base/postgres
+namePrefix: staging-
+patches:
+  - target:
+      kind: Cluster
+      name: platform-db
+    patch: |-
+      - op: replace
+        path: /spec/instances
+        value: 2
+      - op: replace
+        path: /spec/storage/size
+        value: 20Gi

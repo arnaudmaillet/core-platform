@@ -12,6 +12,7 @@ locals {
 
   # Variables par défaut
   aws_region   = local.region_vars.locals.aws_region
+  owner = "no-team"
   project_name = "core-platform"
 }
 

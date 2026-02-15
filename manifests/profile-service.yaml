@@ -1,46 +1,46 @@
-#  manifests/profile-service.yaml
-
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: profile-command-server
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: profile-command-server
-  template:
-    metadata:
-      labels:
-        app: profile-command-server
-    spec:
-      containers:
-        - name: profile-service
-          image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:4735f81
-          ports:
-            - containerPort: 50051
-          env:
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-credentials # Le nom du secret K8s créé par ExternalSecret
-                  key: DB_URL               # La clé à l'intérieur du secret
-            - name:  SCYLLA_NODES
-              value: "scylla-dev-client.default.svc.cluster.local:9042"
-            - name: SCYLLA_KEYSPACE
-              value: "profile"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: profile-command-server
-  namespace: default
-spec:
-  type: ClusterIP
-  ports:
-    - name: grpc
-      port: 50051
-      targetPort: 50051
-  selector:
-    app: profile-command-server
+##  manifests/profile-service.yaml
+#
+#apiVersion: apps/v1
+#kind: Deployment
+#metadata:
+#  name: profile-command-server
+#  namespace: default
+#spec:
+#  replicas: 1
+#  selector:
+#    matchLabels:
+#      app: profile-command-server
+#  template:
+#    metadata:
+#      labels:
+#        app: profile-command-server
+#    spec:
+#      containers:
+#        - name: profile-service
+#          image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:4735f81
+#          ports:
+#            - containerPort: 50051
+#          env:
+#            - name: DATABASE_URL
+#              valueFrom:
+#                secretKeyRef:
+#                  name: postgres-credentials # Le nom du secret K8s créé par ExternalSecret
+#                  key: DB_URL               # La clé à l'intérieur du secret
+#            - name:  SCYLLA_NODES
+#              value: "scylla-dev-client.default.svc.cluster.local:9042"
+#            - name: SCYLLA_KEYSPACE
+#              value: "profile"
+#---
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: profile-command-server
+#  namespace: default
+#spec:
+#  type: ClusterIP
+#  ports:
+#    - name: grpc
+#      port: 50051
+#      targetPort: 50051
+#  selector:
+#    app: profile-command-server

@@ -1,0 +1,35 @@
+#  k8s/base/services/profile/redis/redis.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: profile-redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "database"
+          effect: "NoSchedule"
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: profile-redis # Doit matcher l'URL dans ton API
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: redis
