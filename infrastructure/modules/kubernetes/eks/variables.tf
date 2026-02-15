@@ -18,14 +18,19 @@ variable "eks_instance_types_database" {
   default     = ["t3.large"]
 }
 
+variable "eks_desired_size" {
+  type    = number
+  default = 3
+}
+
 variable "eks_min_size" {
   type    = number
-  default = 1
+  default = 3
 }
 
 variable "eks_max_size" {
   type    = number
-  default = 3
+  default = 5
 }
 
 variable "iam_policy_json_content" {

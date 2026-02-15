@@ -25,6 +25,7 @@ inputs = {
   # Injection des tailles d'instances dynamiques
   eks_instance_types_system   = local.env_vars.locals.eks_instance_types_system
   eks_instance_types_database = local.env_vars.locals.eks_instance_types_database
+  eks_desired_size = local.env_vars.locals.eks_desired_size
   eks_min_size                = local.env_vars.locals.eks_min_size
   eks_max_size                = local.env_vars.locals.eks_max_size
 }

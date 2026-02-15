@@ -29,7 +29,7 @@ module "eks" {
       instance_types = var.eks_instance_types_system # Ex: t3.medium (économique)
       min_size       = var.eks_min_size             # Taille minimale du groupe
       max_size       = var.eks_max_size             # Taille maximale (en cas de pic)
-      desired_size   = var.eks_min_size             # Nombre de machines au démarrage
+      desired_size   = var.eks_desired_size            # Nombre de machines au démarrage
 
       labels = { "intent" = "control-plane" }       # Label K8s pour cibler ce groupe
     }
@@ -39,7 +39,7 @@ module "eks" {
       instance_types = var.eks_instance_types_database # Ex: r6i.large (optimisé RAM/IO)
       min_size       = var.eks_min_size
       max_size       = var.eks_max_size
-      desired_size   = var.eks_min_size
+      desired_size   = var.eks_desired_size
 
       # TAINT (Anti-Affinité) : Empêche les pods "normaux" (APIs, Web) de se mettre ici.
       # Seuls les pods avec une "toleration" spécifique peuvent s'installer sur ces nœuds.
@@ -290,26 +290,30 @@ resource "helm_release" "aws_lb_controller" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# PROVIDERS : Authentification pour que Terraform puisse parler à Kubernetes
+# PROVIDERS : Version finale stabilisée
 # ---------------------------------------------------------------------------------------------------------------------
 
-# Récupère un token d'accès temporaire via AWS CLI/SDK
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_name
-}
-
-# Configure Terraform pour agir sur les ressources Kubernetes (ex: StorageClass)
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-  token                  = data.aws_eks_cluster_auth.cluster.token
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+  }
 }
 
-# Configure Terraform pour installer des graphiques Helm (ex: Postgres, Scylla)
 provider "helm" {
   kubernetes = {
     host                   = module.eks.cluster_endpoint
     cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-    token                  = data.aws_eks_cluster_auth.cluster.token
+
+    # On utilise "exec" comme une clé de la map
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    }
   }
 }
