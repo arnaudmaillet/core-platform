@@ -20,7 +20,7 @@ variable "eks_instance_types_database" {
 
 variable "eks_desired_size" {
   type    = number
-  default = 3
+  default = 5
 }
 
 variable "eks_min_size" {
@@ -30,7 +30,7 @@ variable "eks_min_size" {
 
 variable "eks_max_size" {
   type    = number
-  default = 5
+  default = 10
 }
 
 variable "iam_policy_json_content" {
