@@ -8,8 +8,9 @@ metadata:
 spec:
   project: default
   source:
+    # L'adresse du registre SANS le oci://
+    repoURL: public.ecr.aws/karpenter
     chart: karpenter
-    repoURL: oci://public.ecr.aws/karpenter/karpenter
     targetRevision: 1.0.1
     helm:
       values: |
@@ -26,3 +27,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

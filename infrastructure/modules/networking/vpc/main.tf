@@ -1,4 +1,4 @@
-# infrastructure/modules/networking/main.tf
+# infrastructure/modules/networking/vpc/main.tf
 
 # --- VPC PRINCIPAL ---
 resource "aws_vpc" "main" {

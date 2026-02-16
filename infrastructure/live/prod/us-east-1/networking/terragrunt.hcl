@@ -9,7 +9,7 @@ terraform {
 }
 
 dependency "vpc" {
-  config_path = "../../networking"
+  config_path = "../../networking/vpc"
 }
 
 locals {

@@ -1,4 +1,4 @@
-# infrastructure/modules/networking/variables.tf
+# infrastructure/modules/networking/vpc/variables.tf
 
 variable "project_name" {
   type        = string
