@@ -23,27 +23,6 @@ module "lb_controller_irsa_role" {
   }
 }
 
-# --- IAM POUR KARPENTER ---
-module "karpenter_irsa_role" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.0"
-
-  role_name                          = "${var.cluster_name}-karpenter-role"
-  attach_karpenter_controller_policy = true
-
-  karpenter_controller_cluster_name = var.cluster_name
-
-  # Cette ligne récupère l'ARN de TOUS les node groups dynamiquement
-  karpenter_controller_node_iam_role_arns = [for group in module.eks.eks_managed_node_groups : group.iam_role_arn]
-
-  oidc_providers = {
-    main = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:karpenter"]
-    }
-  }
-}
-
 # --- IAM POUR EXTERNAL-DNS ---
 module "external_dns_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"

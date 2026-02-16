@@ -19,7 +19,7 @@ spec:
           interruptionQueue: core-platform-dev
         serviceAccount:
           annotations:
-            eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/core-platform-dev-karpenter-role
+            eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/KarpenterController-20260215230326379100000001
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
