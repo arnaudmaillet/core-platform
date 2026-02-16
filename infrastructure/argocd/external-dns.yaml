@@ -17,8 +17,7 @@ spec:
         domainFilters:
           - core-platform.click
         policy: sync
-        txtOwnerId: core-platform-eks
-        # AJOUTE CECI :
+        txtOwnerId: core-platform-dev
         serviceAccount:
           create: true
           name: external-dns
@@ -31,3 +30,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
