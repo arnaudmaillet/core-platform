@@ -8,18 +8,24 @@ metadata:
 spec:
   project: default
   source:
-    # L'adresse du registre SANS le oci://
     repoURL: public.ecr.aws/karpenter
     chart: karpenter
     targetRevision: 1.0.1
     helm:
       values: |
+        # IMPORTANT : En v1.0+, settings devient une sous-clé de 'settings' ou est passé directement
         settings:
           clusterName: core-platform-dev
-          interruptionQueue: core-platform-dev
+          interruptionQueue: Karpenter-core-platform-dev # Ajout du préfixe 'Karpenter-'
+        
         serviceAccount:
           annotations:
             eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/KarpenterController-20260215230326379100000001
+        
+        # En v1, on doit souvent spécifier le clusterEndpoint pour éviter le Panic
+        # Tu peux le récupérer via: aws eks describe-cluster --name core-platform-dev --query cluster.endpoint
+        controller:
+          clusterEndpoint: "https://023D00442DF03F15F838F67C312A7415.gr7.us-east-1.eks.amazonaws.com"
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
