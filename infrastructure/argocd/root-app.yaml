@@ -1,4 +1,4 @@
-#  infrastructure/argocd/root-app.yaml
+# infrastructure/argocd/root-app.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -6,7 +6,7 @@ metadata:
   name: root-application
   namespace: argocd
   finalizers:
-    - resources-finalizer.argocd.argoproj.io # Assure une suppression propre si tu supprimes l'app
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
@@ -22,6 +22,7 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -43,3 +44,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
