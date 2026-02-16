@@ -20,7 +20,7 @@ spec:
             annotations:
               alb.ingress.kubernetes.io/scheme: internet-facing
               alb.ingress.kubernetes.io/target-type: ip
-              alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:724772065879:certificate/87e8a81b-e23f-4c76-a85e-9602054f4d60
+              alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:724772065879:certificate/9be4e9a0-676c-41d9-a7b0-9a94dd25e749
               alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
             hosts:
               - grafana.core-platform.click
