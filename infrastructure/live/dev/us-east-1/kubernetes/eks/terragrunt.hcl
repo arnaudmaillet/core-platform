@@ -9,7 +9,7 @@ terraform {
 }
 
 dependency "vpc" {
-  config_path = "../../networking"
+  config_path = "../../networking/vpc"
 }
 
 locals {
@@ -17,15 +17,16 @@ locals {
 }
 
 inputs = {
-  cluster_name = "core-platform-${local.env_vars.locals.env}"
-  vpc_id       = dependency.vpc.outputs.vpc_id
+  cluster_name       = "core-platform-${local.env_vars.locals.env}"
+  vpc_id             = dependency.vpc.outputs.vpc_id
   private_subnet_ids = dependency.vpc.outputs.private_app_subnet_ids
-  iam_policy_json_content = file("iam_policy.json")
 
-  # Injection des tailles d'instances dynamiques
-  eks_instance_types_system   = local.env_vars.locals.eks_instance_types_system
-  eks_instance_types_database = local.env_vars.locals.eks_instance_types_database
-  eks_desired_size = local.env_vars.locals.eks_desired_size
-  eks_min_size                = local.env_vars.locals.eks_min_size
-  eks_max_size                = local.env_vars.locals.eks_max_size
+  # EKS Node Groups
+  system_node_settings = local.env_vars.locals.system_node_settings
+  mgmt_node_settings   = local.env_vars.locals.mgmt_node_settings
+  db_node_settings     = local.env_vars.locals.db_node_settings
+
+  iam_policy_json_content = file("iam_policy.json")
+  project_name            = "core-platform"
+  env                     = local.env_vars.locals.env
 }

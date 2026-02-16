@@ -1,4 +1,4 @@
-# infrastructure/live/dev/us-east-1/networking/terragrunt.hcl
+# infrastructure/live/dev/us-east-1/networking/vpc/terragrunt.hcl
 
 # Indique à Terragrunt d'inclure la configuration racine (S3, Providers, etc.)
 include "root" {
@@ -8,7 +8,7 @@ include "root" {
 
 # Indique où se trouve le code source du module (le blueprint)
 terraform {
-  source = "../../../../modules/networking"
+  source = "../../../../../modules/networking/vpc"
 }
 
 locals {
