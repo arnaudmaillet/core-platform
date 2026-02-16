@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/arnaudmaillet/core-platform'
-    targetRevision: develop
+    targetRevision: HEAD
     path: infrastructure/argocd
   destination:
     server: 'https://kubernetes.default.svc'
@@ -32,7 +32,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/arnaudmaillet/core-platform'
-    targetRevision: develop
+    targetRevision: HEAD
     path: k8s/overlays/dev
   destination:
     server: 'https://kubernetes.default.svc'
