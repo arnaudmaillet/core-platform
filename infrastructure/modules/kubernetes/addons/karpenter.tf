@@ -24,28 +24,3 @@ module "karpenter" {
   node_iam_role_arn    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.karpenter_node_role_name}"
   create_access_entry = false
 }
-
-
-resource "helm_release" "karpenter" {
-  namespace = "kube-system"
-  name = "karpenter"
-  repository = "oci://public.ecr.aws/karpenter"
-  chart = "karpenter"
-  version = "1.0.0"
-  wait = false
-
-  set = [
-    {
-      name  = "settings.clusterName"
-      value = var.cluster_name
-    },
-    {
-      name  = "settings.interruptionQueue"
-      value = module.karpenter.queue_name
-    },
-    {
-      name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-      value = module.karpenter.iam_role_arn
-    }
-  ]
-}
