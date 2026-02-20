@@ -34,13 +34,18 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Bazel Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk-cache
+          key: bazel-disk-cache-${{ runner.os }}-${{ hashFiles('**/BUILD.bazel', 'MODULE.bazel') }}
+          restore-keys: bazel-disk-cache-${{ runner.os }}-
+
       - name: Setup Bazel
         uses: bazelbuild/setup-bazelisk@v3
 
 #      - name: Run Profile Tests
-#        run: |
-#          bazel test --config=ci //backend/services/profile/...
+#        run: bazel test --config=ci //backend/services/profile/...
 
       - name: Bazel Build and Push
-        run: |
-          bazel run --config=ci //backend/services/profile/api/command-server:profile_command_server_push
+        run: bazel run --config=ci //backend/services/profile/api/command-server:profile_command_server_push

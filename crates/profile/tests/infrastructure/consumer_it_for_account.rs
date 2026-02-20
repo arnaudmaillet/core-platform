@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use uuid::Uuid;
-use profile::application::create_profile::CreateProfileUseCase;
+use profile::application::use_cases::create_profile::CreateProfileUseCase;
 use profile::domain::repositories::ProfileIdentityRepository;
 use profile::infrastructure::kafka::AccountConsumer;
 use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;

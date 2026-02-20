@@ -1,10 +1,10 @@
 // crates/profile/src/infrastructure/api/grpc/handlers/counter_handler.rs
 
 use crate::application::{
-    decrement_post_count::DecrementPostCountCommand,
-    decrement_post_count::DecrementPostCountUseCase,
-    increment_post_count::IncrementPostCountCommand,
-    increment_post_count::IncrementPostCountUseCase,
+    use_cases::decrement_post_count::DecrementPostCountCommand,
+    use_cases::decrement_post_count::DecrementPostCountUseCase,
+    use_cases::increment_post_count::IncrementPostCountCommand,
+    use_cases::increment_post_count::IncrementPostCountUseCase,
 };
 use crate::infrastructure::api::grpc::profile_v1::{
     DecrementPostCountRequest, IncrementPostCountRequest, Profile as ProtoProfile,

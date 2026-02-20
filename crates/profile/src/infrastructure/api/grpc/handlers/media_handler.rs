@@ -4,18 +4,18 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 // Valeurs du domaine
-use crate::application::remove_avatar::RemoveAvatarUseCase;
-use crate::application::remove_banner::RemoveBannerUseCase;
-use crate::application::update_avatar::UpdateAvatarUseCase;
-use crate::application::update_banner::UpdateBannerUseCase;
+use crate::application::use_cases::remove_avatar::RemoveAvatarUseCase;
+use crate::application::use_cases::remove_banner::RemoveBannerUseCase;
+use crate::application::use_cases::update_avatar::UpdateAvatarUseCase;
+use crate::application::use_cases::update_banner::UpdateBannerUseCase;
 use shared_kernel::domain::value_objects::RegionCode;
 use crate::infrastructure::api::grpc::mappers::ToGrpcStatus;
 
 // Commandes
-use crate::application::remove_avatar::RemoveAvatarCommand;
-use crate::application::remove_banner::RemoveBannerCommand;
-use crate::application::update_avatar::UpdateAvatarCommand;
-use crate::application::update_banner::UpdateBannerCommand;
+use crate::application::use_cases::remove_avatar::RemoveAvatarCommand;
+use crate::application::use_cases::remove_banner::RemoveBannerCommand;
+use crate::application::use_cases::update_avatar::UpdateAvatarCommand;
+use crate::application::use_cases::update_banner::UpdateBannerCommand;
 
 // Proto généré
 use super::super::profile_v1::{

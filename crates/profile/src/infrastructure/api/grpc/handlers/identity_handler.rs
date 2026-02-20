@@ -4,13 +4,13 @@ use super::super::profile_v1::{
     Profile as ProtoProfile, UpdateDisplayNameRequest, UpdatePrivacyRequest,
     profile_identity_service_server::ProfileIdentityService,
 };
-use crate::application::update_display_name::{UpdateDisplayNameCommand, UpdateDisplayNameUseCase};
-use crate::application::update_privacy::{UpdatePrivacyCommand, UpdatePrivacyUseCase};
+use crate::application::use_cases::update_display_name::{UpdateDisplayNameCommand, UpdateDisplayNameUseCase};
+use crate::application::use_cases::update_privacy::{UpdatePrivacyCommand, UpdatePrivacyUseCase};
 
 use shared_kernel::domain::value_objects::RegionCode;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use crate::application::update_handle::{UpdateHandleCommand, UpdateHandleUseCase};
+use crate::application::use_cases::update_handle::{UpdateHandleCommand, UpdateHandleUseCase};
 use crate::infrastructure::api::grpc::mappers::ToGrpcStatus;
 use crate::infrastructure::api::grpc::profile_v1::UpdateHandleRequest;
 
