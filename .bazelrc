@@ -32,6 +32,9 @@ build --disk_cache=~/.cache/bazel-disk-cache
 # On force l'utilisation des toolchains enregistrées pour Rust et LLVM
 build --incompatible_enable_cc_toolchain_resolution
 
+# Pour builder pour Linux (ECR) depuis un Mac
+build:linux --platforms=//tools/platforms:linux_x86_64
+
 # ==================================================================
 # CONFIGURATION SPÉCIFIQUE POUR LA CI (GitHub Actions)
 # ==================================================================
@@ -49,6 +52,16 @@ build:ci --local_ram_resources=HOST_RAM-1024
 # Permet de ne pas invalider le cache inutilement à cause du timestamp des fichiers
 build:ci --collect_code_coverage=false
 
+build:ci --remote_cache=https://ghcr.io/votre-org/votre-repo # Optionnel: si vous avez un cache distant
+build:ci --jobs=4
+
+build --workspace_status_command=tools/workspace_status.sh
+
+# Permet de construire des images OCI sans avoir besoin d'un démon Docker local
+# (Très important pour la rapidité sur GitHub Actions)
+build --define=oci_go_binary=true
+build:ci --extra_toolchains=@llvm_toolchain//:all
+
 # ==================================================================
 # CONFIGURATION RUST
 # ==================================================================
@@ -56,14 +69,3 @@ build:ci --collect_code_coverage=false
 # On s'assure que Bazel propage les variables d'environnement nécessaires
 build --action_env=PATH
 build --action_env=LD_LIBRARY_PATH
-
-# ==================================================================
-# OPTIONS DE DÉPLOIEMENT (OCI / DOCKER)
-# ==================================================================
-
-# Permet de construire des images OCI sans avoir besoin d'un démon Docker local
-# (Très important pour la rapidité sur GitHub Actions)
-build --define=oci_go_binary=true
-build --workspace_status_command=tools/workspace_status.sh
-build:ci --extra_toolchains=@llvm_toolchain//:all
-build:ci --incompatible_enable_cc_toolchain_resolution

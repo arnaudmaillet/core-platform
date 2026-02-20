@@ -94,4 +94,4 @@ llvm.toolchain(
 )
 
 use_repo(llvm, "llvm_toolchain")
-# register_toolchains("@llvm_toolchain//:all")
+register_toolchains("@llvm_toolchain//:all")
