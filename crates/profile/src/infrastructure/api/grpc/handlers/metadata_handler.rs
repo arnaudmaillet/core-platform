@@ -4,11 +4,11 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 // Valeurs du domaine et Use Cases
-use crate::application::update_bio::{UpdateBioCommand, UpdateBioUseCase};
-use crate::application::update_location_label::{
+use crate::application::use_cases::update_bio::{UpdateBioCommand, UpdateBioUseCase};
+use crate::application::use_cases::update_location_label::{
     UpdateLocationLabelCommand, UpdateLocationLabelUseCase,
 };
-use crate::application::update_social_links::{UpdateSocialLinksCommand, UpdateSocialLinksUseCase};
+use crate::application::use_cases::update_social_links::{UpdateSocialLinksCommand, UpdateSocialLinksUseCase};
 use shared_kernel::domain::value_objects::RegionCode;
 use crate::infrastructure::api::grpc::mappers::ToGrpcStatus;
 // Proto généré

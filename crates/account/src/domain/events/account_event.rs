@@ -23,7 +23,8 @@ pub enum AccountEvent {
     ExternalIdentityLinked {
         account_id: AccountId,
         region: RegionCode,
-        external_id: ExternalId,
+        old_external_id: ExternalId,
+        new_external_id: ExternalId,
         occurred_at: DateTime<Utc>,
     },
     UsernameChanged {

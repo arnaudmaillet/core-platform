@@ -14,7 +14,7 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: api.core-platform.click  # On définit le host
+    - host: api.core-platform.click
       http:
         paths:
           - path: /

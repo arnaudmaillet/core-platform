@@ -1,19 +1,19 @@
 // backend/services/profile/api/command-server/src/main.rs
 
-use profile::application::remove_avatar::RemoveAvatarUseCase;
-use profile::application::remove_banner::RemoveBannerUseCase;
-use profile::application::update_avatar::UpdateAvatarUseCase;
-use profile::application::update_banner::UpdateBannerUseCase;
-use profile::application::update_bio::UpdateBioUseCase;
-use profile::application::update_display_name::UpdateDisplayNameUseCase;
-use profile::application::update_location_label::UpdateLocationLabelUseCase;
-use profile::application::update_privacy::UpdatePrivacyUseCase;
-use profile::application::update_social_links::UpdateSocialLinksUseCase;
+use profile::application::use_cases::remove_avatar::RemoveAvatarUseCase;
+use profile::application::use_cases::remove_banner::RemoveBannerUseCase;
+use profile::application::use_cases::update_avatar::UpdateAvatarUseCase;
+use profile::application::use_cases::update_banner::UpdateBannerUseCase;
+use profile::application::use_cases::update_bio::UpdateBioUseCase;
+use profile::application::use_cases::update_display_name::UpdateDisplayNameUseCase;
+use profile::application::use_cases::update_location_label::UpdateLocationLabelUseCase;
+use profile::application::use_cases::update_privacy::UpdatePrivacyUseCase;
+use profile::application::use_cases::update_social_links::UpdateSocialLinksUseCase;
 use std::sync::Arc;
 use tonic::transport::Server;
 use tonic_health::server::health_reporter;
 use tonic_reflection::server::Builder;
-use profile::application::update_handle::UpdateHandleUseCase;
+use profile::application::use_cases::update_handle::UpdateHandleUseCase;
 use profile::infrastructure::api::grpc::SERVICE_DESCRIPTOR_SET;
 
 // Infrastructure - API
@@ -91,7 +91,7 @@ pub async fn run_server(addr: std::net::SocketAddr, ) -> Result<(), Box<dyn std:
     // Outils techniques partagés pour la cohérence des données (Transaction + Outbox)
     let tx_manager = Arc::new(PostgresTransactionManager::new(pg_ctx.pool()));
     let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg_ctx.pool()));
-
+    
     // --- 3. INITIALISATION DES USE CASES (Application) ---
 
     let update_username_use_case = Arc::new(UpdateHandleUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone(), ));

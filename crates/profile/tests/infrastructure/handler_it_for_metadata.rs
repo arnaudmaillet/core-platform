@@ -11,9 +11,9 @@ use profile::infrastructure::api::grpc::profile_v1::{
 };
 use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_server::ProfileMetadataService;
 
-use profile::application::update_bio::UpdateBioUseCase;
-use profile::application::update_location_label::UpdateLocationLabelUseCase;
-use profile::application::update_social_links::UpdateSocialLinksUseCase;
+use profile::application::use_cases::update_bio::UpdateBioUseCase;
+use profile::application::use_cases::update_location_label::UpdateLocationLabelUseCase;
+use profile::application::use_cases::update_social_links::UpdateSocialLinksUseCase;
 use profile::domain::entities::Profile;
 use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
 use profile::domain::value_objects::{DisplayName, Handle, ProfileId};

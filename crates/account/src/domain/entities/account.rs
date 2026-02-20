@@ -107,9 +107,9 @@ impl Account {
 
     /// Lie une identité externe (ex: Cognito sub) au compte utilisateur.
     /// Cette opération est critique pour la sécurité.
-    pub fn link_external_identity(&mut self, region: &RegionCode, external_id: ExternalId) -> Result<bool> {
+    pub fn link_external_identity(&mut self, region: &RegionCode, new_external_id: ExternalId) -> Result<bool> {
         self.ensure_region_match(region)?;
-        if self.external_id == external_id {
+        if self.external_id == new_external_id {
             return Ok(false);
         }
 
@@ -120,14 +120,14 @@ impl Account {
                 reason: "Account is already linked to an external provider".into(),
             });
         }
-
-        self.external_id = external_id.clone();
+        let old_external_id = std::mem::replace(&mut self.external_id, new_external_id);
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::ExternalIdentityLinked {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
-            external_id,
+            old_external_id,
+            new_external_id: self.external_id.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -146,16 +146,15 @@ impl Account {
             });
         }
 
-        let old_email = Some(self.email.clone());
-        self.email = new_email.clone();
+        let old_email = std::mem::replace(&mut self.email, new_email);
         self.email_verified = false;
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::EmailChanged {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
-            old_email,
-            new_email,
+            old_email: Some(old_email),
+            new_email: self.email.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -194,8 +193,7 @@ impl Account {
             return Ok(false);
         }
 
-        let old_phone_number = self.phone_number.clone();
-        self.phone_number = Some(new_phone.clone());
+        let old_phone_number = std::mem::replace(&mut self.phone_number, Some(new_phone));
         self.phone_verified = false;
         self.apply_change();
 
@@ -203,7 +201,7 @@ impl Account {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             old_phone_number,
-            new_phone_number: new_phone,
+            new_phone_number: self.phone_number.clone().unwrap(),
             occurred_at: self.updated_at,
         }));
 
@@ -244,15 +242,14 @@ impl Account {
             });
         }
 
-        let old_username = self.username.clone();
-        self.username = new_username.clone();
+        let old_username = std::mem::replace(&mut self.username, new_username);
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::UsernameChanged {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             old_username,
-            new_username,
+            new_username: self.username.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -307,14 +304,13 @@ impl Account {
             return Ok(false);
         }
 
-        let old_region = self.region_code.clone();
-        self.region_code = new_region.clone();
+        let old_region = std::mem::replace(&mut self.region_code, new_region);
         self.apply_change();
 
         self.add_event(Box::new(AccountEvent::AccountRegionChanged {
             account_id: self.id.clone(),
             old_region,
-            new_region,
+            new_region: self.region_code.clone(),
             occurred_at: self.updated_at,
         }));
 

@@ -10,10 +10,10 @@ use profile::infrastructure::api::grpc::profile_v1::{
 };
 use profile::infrastructure::api::grpc::profile_v1::profile_media_service_server::ProfileMediaService;
 
-use profile::application::update_avatar::UpdateAvatarUseCase;
-use profile::application::remove_avatar::RemoveAvatarUseCase;
-use profile::application::update_banner::UpdateBannerUseCase;
-use profile::application::remove_banner::RemoveBannerUseCase;
+use profile::application::use_cases::update_avatar::UpdateAvatarUseCase;
+use profile::application::use_cases::remove_avatar::RemoveAvatarUseCase;
+use profile::application::use_cases::update_banner::UpdateBannerUseCase;
+use profile::application::use_cases::remove_banner::RemoveBannerUseCase;
 use profile::domain::entities::Profile;
 use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
 use profile::domain::value_objects::{DisplayName, Handle, ProfileId};

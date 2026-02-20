@@ -125,8 +125,9 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_handle = self.handle.clone();
-        self.handle = new_handle.clone();
+        // let old_handle = self.handle.clone();
+        // self.handle = new_handle;
+        let old_handle = std::mem::replace(&mut self.handle, new_handle);
 
         self.apply_change();
         self.add_event(Box::new(ProfileEvent::HandleChanged {
@@ -135,7 +136,7 @@ impl Profile {
             owner_id: self.owner_id.clone(),
             region: self.region_code.clone(),
             old_handle,
-            new_handle,
+            new_handle: self.handle.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -149,8 +150,9 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_display_name = self.display_name.clone();
-        self.display_name = new_display_name.clone();
+        // let old_display_name = self.display_name.clone();
+        // self.display_name = new_display_name.clone();
+        let old_display_name = std::mem::replace(&mut self.display_name, new_display_name);
 
         self.apply_change();
         self.add_event(Box::new(ProfileEvent::DisplayNameChanged {
@@ -159,7 +161,7 @@ impl Profile {
             owner_id: self.owner_id.clone(),
             region: self.region_code.clone(),
             old_display_name,
-            new_display_name,
+            new_display_name: self.display_name.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -174,7 +176,7 @@ impl Profile {
         }
 
         let old_bio = self.bio.take();
-        self.bio = new_bio.clone();
+        self.bio = new_bio;
 
         self.apply_change();
         self.add_event(Box::new(ProfileEvent::BioUpdated {
@@ -183,7 +185,7 @@ impl Profile {
             owner_id: self.owner_id.clone(),
             region: self.region_code.clone(),
             old_bio,
-            new_bio,
+            new_bio:self.bio.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -198,8 +200,7 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_avatar_url = self.avatar_url.take();
-        self.avatar_url = Some(new_avatar_url.clone());
+        let old_avatar_url = std::mem::replace(&mut self.avatar_url, Some(new_avatar_url));
         self.apply_change();
 
         self.add_event(Box::new(ProfileEvent::AvatarUpdated {
@@ -208,7 +209,7 @@ impl Profile {
             owner_id: self.owner_id.clone(),
             region: self.region_code.clone(),
             old_avatar_url,
-            new_avatar_url,
+            new_avatar_url:  self.avatar_url.clone().unwrap(),
             occurred_at: self.updated_at,
         }));
 
@@ -221,8 +222,9 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_avatar_url = self.avatar_url.clone();
-        self.avatar_url = None;
+        // let old_avatar_url = self.avatar_url.clone();
+        // self.avatar_url = None;
+        let old_avatar_url = self.avatar_url.take();
         self.apply_change();
 
         self.add_event(Box::new(ProfileEvent::AvatarRemoved {
@@ -243,8 +245,7 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_banner_url = self.banner_url.take();
-        self.banner_url = Some(new_banner_url.clone());
+        let old_banner_url = std::mem::replace(&mut self.banner_url, Some(new_banner_url)) ;
         self.apply_change();
 
         self.add_event(Box::new(ProfileEvent::BannerUpdated {
@@ -253,7 +254,7 @@ impl Profile {
             owner_id: self.owner_id.clone(),
             region: self.region_code.clone(),
             old_banner_url,
-            new_banner_url,
+            new_banner_url: self.banner_url.clone().unwrap(),
             occurred_at: self.updated_at,
         }));
 
@@ -266,8 +267,7 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_banner_url = self.banner_url.clone();
-        self.banner_url = None;
+        let old_banner_url = self.banner_url.take();
         self.apply_change();
 
         self.add_event(Box::new(ProfileEvent::BannerRemoved {
@@ -292,10 +292,7 @@ impl Profile {
         }
 
         // 3. Capturer l'ancien état AVANT la modification
-        let old_links = self.social_links.clone();
-
-        // 4. Mutation
-        self.social_links = new_links;
+        let old_links = std::mem::replace(&mut self.social_links, new_links);
         self.apply_change();
 
         // 5. Événement avec les deux états (pour comparaison/audit)
@@ -305,7 +302,7 @@ impl Profile {
             owner_id: self.owner_id.clone(),
             region: self.region_code.clone(),
             old_links,
-            new_links: self.social_links.clone(), // Le nouvel état nettoyé
+            new_links: self.social_links.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -319,8 +316,7 @@ impl Profile {
             return Ok(false);
         }
 
-        let old_location = self.location_label.clone();
-        self.location_label = new_label;
+        let old_location = std::mem::replace(&mut self.location_label, new_label);
         self.apply_change();
 
         // 3. Émission de l'événement
