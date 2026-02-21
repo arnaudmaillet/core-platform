@@ -33,5 +33,7 @@ inputs = {
   route53_zone_id = dependency.route53.outputs.zone_id
   ssl_certificate_arn      = dependency.eks.outputs.ssl_certificate_arn
   karpenter_node_role_name = dependency.eks.outputs.karpenter_node_role_name
+  external_dns_role_arn         = dependency.eks.outputs.external_dns_role_arn
+  karpenter_controller_role_arn = dependency.eks.outputs.karpenter_controller_role_arn
   create_karpenter_node_iam_role = false
 }
