@@ -15,7 +15,6 @@ spec:
       values: |
         settings:
           clusterName: {{ .Values.global.clusterName }}
-          interruptionQueue: Karpenter-{{ .Values.global.clusterName }}
         serviceAccount:
           create: true
           name: karpenter
