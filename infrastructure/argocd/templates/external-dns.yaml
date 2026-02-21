@@ -1,4 +1,4 @@
-# infrastructure/argocd/external-dns.yaml
+# infrastructure/argocd/templates/external-dns.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -17,12 +17,12 @@ spec:
         domainFilters:
           - core-platform.click
         policy: sync
-        txtOwnerId: core-platform-dev
+        txtOwnerId: {{ .Values.global.clusterName }}
         serviceAccount:
           create: true
           name: external-dns
           annotations:
-            eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role
+            eks.amazonaws.com/role-arn: {{ .Values.global.externalDnsRoleArn }}
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system

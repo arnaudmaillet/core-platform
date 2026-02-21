@@ -46,6 +46,16 @@ variable "eks_oidc_provider_arn" {
   type        = string
 }
 
+variable "external_dns_role_arn" {
+  description = "ARN du rôle IAM pour ExternalDNS"
+  type        = string
+}
+
+variable "karpenter_controller_role_arn" {
+  description = "ARN du rôle IAM pour le contrôleur Karpenter (IRSA)"
+  type        = string
+}
+
 # --- AUTOSCALING & NODES ---
 
 variable "karpenter_node_role_name" {

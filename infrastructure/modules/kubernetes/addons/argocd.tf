@@ -15,7 +15,6 @@ resource "helm_release" "argocd" {
     },
     {
       name  = "server.extraArgs"
-      # On utilise {--insecure} pour simplifier le dialogue avec l'ALB
       value = "{--insecure}"
     },
     {
@@ -28,7 +27,7 @@ resource "helm_release" "argocd" {
     },
     {
       name  = "global.nodeSelector.intent"
-      value = "management"
+      value = "system"
     }
   ]
 
@@ -106,6 +105,63 @@ resource "kubernetes_ingress_v1" "argocd_server" {
               }
             }
           }
+        }
+      }
+    }
+  }
+
+  depends_on = [helm_release.argocd]
+}
+
+# --- BOOTSTRAP : DÉPLOIEMENT DE LA ROOT APP ---
+resource "kubernetes_manifest" "argocd_root_app" {
+  manifest = {
+    apiVersion = "argoproj.io/v1alpha1"
+    kind       = "Application"
+    metadata = {
+      name      = "root-application"
+      namespace = "argocd"
+    }
+    spec = {
+      project = "default"
+      source = {
+        repoURL        = "https://github.com/arnaudmaillet/core-platform"
+        targetRevision = "HEAD"
+        path           = "infrastructure/argocd"
+        helm = {
+          parameters = [
+            {
+              name  = "global.certificateArn"
+              value = var.ssl_certificate_arn
+            },
+            {
+              name  = "global.clusterEndpoint"
+              value = var.cluster_endpoint
+            },
+            {
+              name  = "global.clusterName"
+              value = var.cluster_name
+            },
+            {
+              name  = "global.externalDnsRoleArn"
+              value = var.external_dns_role_arn
+            },
+            {
+              name  = "global.karpenterRoleArn"
+              # Si tu n'as pas cette variable, utilise l'output direct de ton module EKS
+              value = var.karpenter_node_role_name 
+            }
+          ]
+        }
+      }
+      destination = {
+        server    = "https://kubernetes.default.svc"
+        namespace = "argocd"
+      }
+      syncPolicy = {
+        automated = {
+          prune    = true
+          selfHeal = true
         }
       }
     }
