@@ -3,7 +3,7 @@
 load("//:defs.bzl", "core_rust_binary")
 
 core_rust_binary(
-    name = "profile_command_server",
+    name = "profile_command_server", 
     srcs = glob(["src/**/*.rs"]),
     compile_data = ["//crates/profile:migration_files"],
     edition = "2024",

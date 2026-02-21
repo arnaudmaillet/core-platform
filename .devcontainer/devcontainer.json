@@ -1,0 +1,14 @@
+{
+  "name": "Core Platform Bazel Dev",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "bazel",
+  "workspaceFolder": "/app",
+  "remoteUser": "root",
+  "customizations": {
+    "jetbrains": {
+      "plugins": [
+        "org.jetbrains.bazel"
+      ]
+    }
+  }
+}

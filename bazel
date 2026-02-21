@@ -1,0 +1,12 @@
+#!/bin/bash
+CONTAINER_NAME="bazel_dev"
+WORKDIR="/app"
+
+# Flags pour isoler les sorties de l'IDE
+BAZEL_FLAGS="--output_user_root=/root/.cache/bazel/_intelli_user --output_base=/root/.cache/bazel/_intelli_base"
+
+if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+    exec docker exec -u root -w "$WORKDIR" -i "$CONTAINER_NAME" bazel $BAZEL_FLAGS "$@"
+else
+    exec docker compose run --rm -u root -w "$WORKDIR" -T bazel $BAZEL_FLAGS "$@"
+fi

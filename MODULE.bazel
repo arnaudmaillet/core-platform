@@ -17,15 +17,16 @@ rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",
     versions = ["1.92.0"],
-    extra_target_triples = ["x86_64-unknown-linux-gnu"],
+    # On supporte les deux pour la parité Docker local (ARM) et CI (x86)
+    extra_target_triples = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+    ],
 )
 use_repo(rust, "rust_toolchains")
-
 register_toolchains("@rust_toolchains//:all")
 
 # --- 3. CONFIGURATION PROST & TONIC (gRPC) ---
-# On enregistre toutes les toolchains fournies par rules_rust_prost
-# Cela inclut la toolchain par défaut pour Prost
 register_toolchains("@rules_rust_prost//:all")
 
 # --- 4. GESTION DES DÉPENDANCES CARGO ---
@@ -48,50 +49,41 @@ crate.from_cargo(
     ],
 )
 
-# 4b. On ajoute les annotations comme des tags SEPARÉS
 crate.annotation(
     crate = "async-graphql",
-    crate_features = [
-        "federation",
-        "dynamic-schema",
-        "dataloader",
-    ],
+    crate_features = ["federation", "dynamic-schema", "dataloader"],
 )
 crate.annotation(
     crate = "async-graphql-derive",
     crate_features = ["federation"],
 )
+
+# Configuration robuste pour rdkafka sous Linux
+crate.annotation(
+    crate = "rdkafka-sys",
+    gen_build_script = "on",
+    build_script_env = {
+        "RDKAFKA_SYS_STATIC": "1",
+    },
+)
 use_repo(crate, "crates")
 
-# --- 5. CONTAINERS (OCI) & DÉPLOIEMENT ---
+# --- 5. CONTAINERS (OCI) ---
 bazel_dep(name = "rules_oci", version = "2.2.0")
 bazel_dep(name = "aspect_bazel_lib", version = "2.10.0")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_rust",
-    # Digest exact du manifeste index (multi-arch)
     digest = "sha256:66d87e170bc2c5e2b8cf853501141c3c55b4e502b8677595c57534df54a68cc5",
     image = "gcr.io/distroless/cc-debian12",
-    platforms = [
-        "linux/amd64",
-        "linux/arm64/v8",
-    ],
+    platforms = ["linux/amd64", "linux/arm64/v8"],
 )
-use_repo(
-    oci,
-    "distroless_rust",
-    "distroless_rust_linux_amd64",
-    "distroless_rust_linux_arm64_v8",
-)
+use_repo(oci, "distroless_rust", "distroless_rust_linux_amd64", "distroless_rust_linux_arm64_v8")
 
-# --- 6. TOOLCHAIN LLVM ---
+# --- 6. TOOLCHAIN LLVM (Indispensable pour Docker/Linux) ---
 bazel_dep(name = "toolchains_llvm", version = "1.2.0")
-
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
-llvm.toolchain(
-    llvm_version = "16.0.0",
-)
-
+llvm.toolchain(llvm_version = "16.0.0")
 use_repo(llvm, "llvm_toolchain")
 register_toolchains("@llvm_toolchain//:all")
