@@ -148,8 +148,7 @@ resource "kubernetes_manifest" "argocd_root_app" {
             },
             {
               name  = "global.karpenterRoleArn"
-              # Si tu n'as pas cette variable, utilise l'output direct de ton module EKS
-              value = var.karpenter_node_role_name 
+              value = var.karpenter_controller_role_arn
             }
           ]
         }

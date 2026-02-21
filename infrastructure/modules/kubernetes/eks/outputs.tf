@@ -58,6 +58,11 @@ output "karpenter_node_role_name" {
   value = module.eks.eks_managed_node_groups["system"].iam_role_name
 }
 
+output "karpenter_controller_role_arn" {
+  description = "ARN du rôle IAM (IRSA) pour le contrôleur Karpenter"
+  value       = module.karpenter_irsa_role.iam_role_arn
+}
+
 output "ssl_certificate_arn" {
   description = "L'ARN du certificat ACM validé pour l'Ingress"
   value       = aws_acm_certificate.cert.arn
