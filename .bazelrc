@@ -1,4 +1,190 @@
-# .bazelrc
+# # ==================================================================
+# # CONFIGURATION GÉNÉRALE
+# # ==================================================================
+#
+# # Affiche les options actives au démarrage pour faciliter le débug
+# build --announce_rc
+# build --color=yes
+#
+# # Optimisation du build (Release mode par défaut)
+# build --copt=-O3
+# build --compilation_mode=opt
+#
+# # Logs propres : évite de polluer la console avec des milliers de lignes INFO
+# common --ui_event_filters=-INFO,-DEBUG
+# build --show_progress_rate_limit=30
+#
+# # ==================================================================
+# # CACHE & PERFORMANCE
+# # ==================================================================
+#
+# # Cache local : Bazel réutilisera les objets déjà compilés
+# # Sur GitHub Actions, ce dossier pourra être mis en cache entre les runs
+# build --disk_cache=~/.cache/bazel-disk-cache
+#
+# # ==================================================================
+# # TOOLCHAINS & PLATEFORMES
+# # ==================================================================
+#
+# # On laisse Bazel détecter automatiquement l'OS hôte (Linux sur CI, macOS en local)
+# # La toolchain LLVM définie dans MODULE.bazel s'occupera de l'herméticité.
+#
+# # On force l'utilisation des toolchains enregistrées pour Rust et LLVM
+# build --incompatible_enable_cc_toolchain_resolution
+#
+# # Pour builder pour Linux (ECR) depuis un Mac
+# build:linux --platforms=//tools/platforms:linux_x86_64
+#
+# # Ajoute/Modifie ces lignes pour ton SDK 26.2
+# build --macos_sdk_version=26.2
+# build --action_env=SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk
+#
+# # Pour le local, on désactive la résolution stricte des toolchains CC
+# # afin d'utiliser le Clang natif d'Apple pour les build scripts (comme rdkafka)
+# build --incompatible_enable_cc_toolchain_resolution=false
+#
+# # On garde les toolchains LLVM uniquement pour la CI (Linux)
+# build:ci --incompatible_enable_cc_toolchain_resolution=true
+# build:ci --extra_toolchains=@llvm_toolchain//:all
+#
+# # ==================================================================
+# # CONFIGURATION SPÉCIFIQUE POUR LA CI (GitHub Actions)
+# # ==================================================================
+#
+# # Affiche les logs en cas d'échec des tests (crucial pour Testcontainers)
+# test:ci --test_output=errors
+# # Augmente le timeout car l'initialisation des containers peut être lente en CI
+# test:ci --test_timeout=300,600,1200,3600
+#
+# # Réduit la consommation de ressources pour éviter que l'agent OOM (Out Of Memory)
+# build:ci --local_resources=cpu=HOST_CPUS-1
+# build:ci --local_resources=memory=HOST_RAM-1024
+#
+# # Optimisation du cache sur GitHub Actions
+# # Permet de ne pas invalider le cache inutilement à cause du timestamp des fichiers
+# build:ci --collect_code_coverage=false
+#
+# # build:ci --remote_cache=https://ghcr.io/votre-org/votre-repo # Optionnel: si vous avez un cache distant
+# build:ci --jobs=4
+#
+# build --workspace_status_command=tools/workspace_status.sh
+#
+# # Permet de construire des images OCI sans avoir besoin d'un démon Docker local
+# # (Très important pour la rapidité sur GitHub Actions)
+# build --define=oci_go_binary=true
+# build:ci --extra_toolchains=@llvm_toolchain//:all
+#
+# # ==================================================================
+# # CONFIGURATION RUST
+# # ==================================================================
+#
+# # On s'assure que Bazel propage les variables d'environnement nécessaires
+# build --action_env=PATH
+# build --action_env=LD_LIBRARY_PATH
+#
+#
+# build --action_env=AR=/usr/bin/ar
+# build --action_env=CC=/usr/bin/clang
+# build --action_env=CXX=/usr/bin/clang++
+#
+# # On désactive la recherche de librairies qui n'existent pas sur macOS
+# build --action_env=RDKAFKA_SYS_STATIC=1
+#
+# # Autorise Bazel à utiliser les headers du SDK macOS sans crier à l'erreur d'herméticité
+# build --noexperimental_check_external_repository_files
+# build --apple_generate_dsym
+# build --features=-use_header_modules
+#
+# # Cette option permet d'ignorer les erreurs de chemins absolus pour les headers système
+# build --copt=-Wno-everything
+
+
+
+# # ==================================================================
+# # CONFIGURATION GÉNÉRALE
+# # ==================================================================
+# build --announce_rc
+# build --color=yes
+# build --copt=-O3
+# build --compilation_mode=opt
+# common --ui_event_filters=-INFO,-DEBUG
+# build --show_progress_rate_limit=30
+# build --workspace_status_command=tools/workspace_status.sh
+#
+# # ==================================================================
+# # CACHE & PERFORMANCE
+# # ==================================================================
+# build --disk_cache=~/.cache/bazel-disk-cache
+#
+# # ==================================================================
+# # CONFIGURATION MACOS (LOCAL)
+# # ==================================================================
+# build --incompatible_enable_cc_toolchain_resolution=false
+#
+# # On déclare le SDK pour que Bazel sache où il est
+# build --macos_sdk_version=26.2
+# build --action_env=SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk
+#
+# # FLAGS CRUCIAUX : On désactive la vérification des headers pour les dépôts externes
+# build --features=-strict_system_includes
+# build --features=-parse_headers
+# build --features=-preprocess_headers
+# build --noexperimental_check_external_repository_files
+# build --check_visibility=false
+# build --process_headers_in_dependencies=false
+#
+# build --features=-use_header_modules
+# build --features=-dependency_check_traversal
+#
+# # On dit au compilateur de ne pas se plaindre des chemins système
+# build --copt=-Wno-everything
+# build --host_copt=-Wno-everything
+#
+# # On autorise les chemins absolus (C'est ce qui te bloque actuellement)
+# build --spawn_strategy=local
+# build --strategy=CppCompile=local
+#
+# # Désactive la vérification stricte des headers système (remède pour Abseil/Protobuf)
+# build --features=-check_system_includes
+# build --features=-parse_headers
+# build --features=-preprocess_headers
+#
+# # On force l'inclusion du SDK dans le "monde connu" de Bazel
+# build --cxxopt="-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk"
+# build --linkopt="-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk"
+#
+# # On ignore les erreurs de headers absolus sur toutes les cibles
+# build --host_copt=-Wno-everything
+# build --host_cxxopt=-Wno-everything
+#
+# # ==================================================================
+# # CONFIGURATION RUST & LIBS
+# # ==================================================================
+# build --action_env=PATH
+# build --action_env=LD_LIBRARY_PATH
+# build --action_env=AR=/usr/bin/ar
+# build --action_env=CC=/usr/bin/clang
+# build --action_env=CXX=/usr/bin/clang++
+# build --action_env=RDKAFKA_SYS_STATIC=1
+#
+# # ==================================================================
+# # CONFIGURATION CI (LINUX / GITHUB ACTIONS)
+# # ==================================================================
+# # On réactive la résolution stricte et LLVM hermétique pour Linux
+# build:ci --incompatible_enable_cc_toolchain_resolution=true
+# build:ci --extra_toolchains=@llvm_toolchain//:all
+# build:ci --local_resources=cpu=HOST_CPUS-1,memory=HOST_RAM-1024
+# build:ci --jobs=4
+# build:ci --define=oci_go_binary=true
+#
+# test:ci --test_output=errors
+# test:ci --test_timeout=300,600,1200,3600
+#
+# # Pour forcer le build Linux depuis le Mac si besoin
+# build:linux --platforms=//tools/platforms:linux_x86_64
+
+
+
 
 # ==================================================================
 # CONFIGURATION GÉNÉRALE
