@@ -1,16 +1,24 @@
 # core-platform/docker-compose.yml
 services:
-  postgres:
-    image: postgis/postgis:15-3.3
-    container_name: identity-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: identity_db
+  bazel:
+    build: .
+    container_name: bazel_dev
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - .:/app:rw
+      - bazel_cache:/root/.cache/bazel
+      - cargo_cache:/usr/local/cargo/registry # Cache des crates téléchargées
+      - cargo_target:/app/target               # Sorties de compilation Rust
+    working_dir: /app
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+    user: "0:0"
+    network_mode: "bridge"
 
 volumes:
-  postgres_data:
+  bazel_cache:
+    name: core_platform_bazel_cache
+  cargo_cache:
+    name: core_platform_cargo_cache
+  cargo_target:
+    name: core_platform_cargo_target
