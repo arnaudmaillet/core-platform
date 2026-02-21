@@ -15,12 +15,11 @@ spec:
       values: |
         settings:
           clusterName: {{ .Values.global.clusterName }}
-          interruptionQueue: Karpenter-{{ .Values.global.clusterName }}
         serviceAccount:
           create: true
           name: karpenter
           annotations:
-            eks.amazonaws.com/role-arn: {{ .Values.global.karpenterRoleArn }}
+            eks.amazonaws.com/role-arn: "{{ .Values.global.karpenterRoleArn }}"
         controller:
           clusterEndpoint: {{ .Values.global.clusterEndpoint }}
   destination:
