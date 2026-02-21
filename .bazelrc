@@ -29,24 +29,18 @@ build --define=oci_go_binary=true
 # ==================================================================
 # CONFIGURATION RUST & LIBS
 # ==================================================================
+build --action_env=PATH
+build --action_env=RDKAFKA_SYS_STATIC=1
 
-# Affiche les logs en cas d'échec des tests (crucial pour Testcontainers)
-test:ci --test_output=errors
-# Augmente le timeout car l'initialisation des containers peut être lente en CI
-test:ci --test_timeout=300,600,1200,3600
-
-# Réduit la consommation de ressources pour éviter que l'agent OOM (Out Of Memory)
-build:ci --local_resources=cpu=HOST_CPUS-1
-build:ci --local_resources=memory=HOST_RAM-1024
-
-# Optimisation du cache sur GitHub Actions
-# Permet de ne pas invalider le cache inutilement à cause du timestamp des fichiers
-build:ci --collect_code_coverage=false
-
-# build:ci --remote_cache=https://ghcr.io/votre-org/votre-repo # Optionnel: si vous avez un cache distant
+# ==================================================================
+# CONFIGURATION CI & RESSOURCES (GitHub Actions)
+# ==================================================================
+# On garde le flag :ci pour les réglages spécifiques à l'agent GitHub
+build:ci --local_resources=cpu=HOST_CPUS-1,memory=HOST_RAM-1024
 build:ci --jobs=4
 
-build --workspace_status_command=tools/workspace_status.sh
+test:ci --test_output=errors
+test:ci --test_timeout=300,600,1200,3600
 
 # Permet de construire des images OCI sans avoir besoin d'un démon Docker local
 # (Très important pour la rapidité sur GitHub Actions)
