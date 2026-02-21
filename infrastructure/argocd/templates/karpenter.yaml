@@ -1,4 +1,4 @@
-#  infrastructure/argocd/karpenter.yaml
+#  infrastructure/argocd/templates/karpenter.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -14,15 +14,15 @@ spec:
     helm:
       values: |
         settings:
-          clusterName: core-platform-dev
-          interruptionQueue: Karpenter-core-platform-dev
+          clusterName: {{ .Values.global.clusterName }}
+          interruptionQueue: Karpenter-{{ .Values.global.clusterName }}
         serviceAccount:
           create: true
           name: karpenter
           annotations:
-            eks.amazonaws.com/role-arn: arn:aws:iam::724772065879:role/KarpenterController-20260215230326379100000001
+            eks.amazonaws.com/role-arn: {{ .Values.global.karpenterRoleArn }}
         controller:
-          clusterEndpoint: "https://023D00442DF03F15F838F67C312A7415.gr7.us-east-1.eks.amazonaws.com"
+          clusterEndpoint: {{ .Values.global.clusterEndpoint }}
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system

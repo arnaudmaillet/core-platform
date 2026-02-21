@@ -1,4 +1,4 @@
-# infrastructure/argocd/monitoring.yaml
+# infrastructure/argocd/templates/monitoring.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -21,7 +21,7 @@ spec:
               external-dns.alpha.kubernetes.io/hostname: grafana.core-platform.click
               alb.ingress.kubernetes.io/scheme: internet-facing
               alb.ingress.kubernetes.io/target-type: ip
-              alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:724772065879:certificate/9be4e9a0-676c-41d9-a7b0-9a94dd25e749
+              alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificateArn }}
               alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
             hosts:
               - grafana.core-platform.click

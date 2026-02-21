@@ -1,0 +1,7 @@
+# infrastructure/argocd/Chart.yaml
+
+apiVersion: v2
+name: argocd-bootstrap
+description: "Chart pour booster le cluster"
+version: 0.1.0
+type: application
