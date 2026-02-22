@@ -4,7 +4,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: profile-grpc-ingress
-annotations:
+  annotations:
     external-dns.alpha.kubernetes.io/hostname: api-profile.core-platform.click
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
