@@ -8,6 +8,7 @@ resources:
   - ../../base/services/profile/scylla
   - ../../base/services/profile/apps/command-server
   - ingress.yaml
+  - karpenter-config.yaml
 namePrefix: dev-
 configMapGenerator:
   - name: profile-api-config
