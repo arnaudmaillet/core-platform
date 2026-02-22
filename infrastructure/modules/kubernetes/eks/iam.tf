@@ -61,6 +61,29 @@ module "karpenter_irsa_role" {
   }
 }
 
+resource "aws_iam_role_policy" "karpenter_controller_extra" {
+  name = "KarpenterControllerExtraPermissions"
+  role = module.karpenter_irsa_role.iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "iam:GetInstanceProfile",
+          "iam:CreateInstanceProfile",
+          "iam:TagInstanceProfile",
+          "iam:AddRoleToInstanceProfile",
+          "iam:RemoveRoleFromInstanceProfile",
+          "iam:DeleteInstanceProfile"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # --- IAM POUR EBS (Disques) ---
 module "ebs_csi_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
