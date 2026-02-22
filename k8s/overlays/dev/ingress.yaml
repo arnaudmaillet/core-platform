@@ -11,8 +11,9 @@ metadata:
     # --- PARTIE ALB & gRPC ---
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: GRPC
     alb.ingress.kubernetes.io/backend-protocol-version: GRPC
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 50051}]'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificateArn }}
     
     # Optionnel mais recommandé : autoriser le trafic entrant sur ce port
