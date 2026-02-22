@@ -5,13 +5,13 @@ kind: Ingress
 metadata:
   name: profile-grpc-ingress
   annotations:
-      external-dns.alpha.kubernetes.io/hostname: api-profile.core-platform.click
-      alb.ingress.kubernetes.io/scheme: internet-facing
-      alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/backend-protocol: HTTPS
-      alb.ingress.kubernetes.io/backend-protocol-version: GRPC
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
-      alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0
+    external-dns.alpha.kubernetes.io/hostname: api-profile.core-platform.click
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/backend-protocol-version: GRPC
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0
 spec:
   ingressClassName: alb
   rules:
