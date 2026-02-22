@@ -30,10 +30,10 @@ metadata:
   name: default
 spec:
   amiFamily: AL2
-  role: "core-platform-node-role"
+  role: "core-platform-dev-node-role"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "core-platform"
+        karpenter.sh/discovery: "core-platform-dev"
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "core-platform"
+        karpenter.sh/discovery: "core-platform-dev"
