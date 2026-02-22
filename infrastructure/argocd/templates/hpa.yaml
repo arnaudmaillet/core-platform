@@ -1,0 +1,21 @@
+# infrastructure/argocd/templates/hpa.yaml
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: profile-command-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dev-profile-command-server
+  minReplicas: 2 # On commence à 2 pour tester le balancing
+  maxReplicas: 10 # Limite haute pour forcer Karpenter à créer des Nodes
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50 # On scale si le CPU dépasse 50% de la "request"

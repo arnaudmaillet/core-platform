@@ -1,7 +1,5 @@
 # .bazelrc
 
-# .bazelrc
-
 # ==================================================================
 # CONFIGURATION GÉNÉRALE
 # ==================================================================
@@ -33,6 +31,21 @@ build --define=oci_go_binary=true
 # ==================================================================
 build --action_env=PATH
 build --action_env=RDKAFKA_SYS_STATIC=1
+
+# ==================================================================
+# CONFIGURATION CI & RESSOURCES (GitHub Actions)
+# ==================================================================
+# On garde le flag :ci pour les réglages spécifiques à l'agent GitHub
+build:ci --local_resources=cpu=HOST_CPUS-1,memory=HOST_RAM-1024
+build:ci --jobs=4
+
+test:ci --test_output=errors
+test:ci --test_timeout=300,600,1200,3600
+
+# Permet de construire des images OCI sans avoir besoin d'un démon Docker local
+# (Très important pour la rapidité sur GitHub Actions)
+build --define=oci_go_binary=true
+build:ci --extra_toolchains=@llvm_toolchain//:all
 
 # ==================================================================
 # CONFIGURATION CI & RESSOURCES (GitHub Actions)
