@@ -22,7 +22,7 @@ export const options = {
 };
 
 export default () => {
-    client.connect('localhost:50051', { plaintext: true });
+    client.connect('api-profile.core-platform.click', { plaintext: false });
 
     // On pioche un ID au hasard dans la liste
     const randomId = profileIds[Math.floor(Math.random() * profileIds.length)];
