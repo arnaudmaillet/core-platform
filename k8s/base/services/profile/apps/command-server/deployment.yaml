@@ -14,14 +14,16 @@ spec:
       labels:
         app: profile-command-server
     spec:
-      tolerations:
-        - key: "dedicated"
-          operator: "Equal"
-          value: "database"
-          effect: "NoSchedule"
       containers:
         - name: server
           image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:latest
+          resources:
+            requests:
+              cpu: "500m"      # Réserve 0.5 vCPU
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"     # Plafonne à 1 vCPU
+              memory: "512Mi"
           envFrom:
             - configMapRef:
                 name: profile-api-config

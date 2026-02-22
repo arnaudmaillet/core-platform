@@ -126,7 +126,7 @@ pub async fn run_server(addr: std::net::SocketAddr, ) -> Result<(), Box<dyn std:
 
     // --- 5. DÉMARRAGE DU SERVEUR TONIC ---
 
-    println!("🚀 Profile Query-Server listening on {}", addr);
+    println!("🚀 Profile Command-Server listening on {}", addr);
 
     Server::builder()
         .add_service(health_service)
