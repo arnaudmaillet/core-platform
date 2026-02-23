@@ -10,6 +10,8 @@ resources:
   - ingress.yaml
   - karpenter-config.yaml
 namePrefix: dev-
+configurations:
+  - karpenter-refs-config.yaml
 configMapGenerator:
   - name: profile-api-config
     envs:

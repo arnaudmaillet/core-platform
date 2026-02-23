@@ -1,0 +1,8 @@
+# k8s/overlays/dev/karpenter-refs-config.yaml
+
+nameReference:
+- kind: EC2NodeClass
+  group: karpenter.k8s.aws
+  fieldSpecs:
+  - path: spec/template/spec/nodeClassRef/name
+    kind: NodePool
