@@ -85,15 +85,37 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
     Version = "2012-10-17"
     Statement = [
       {
+        # On ajoute RunInstances et CreateFleet qui manquaient cruellement
         Action = [
-          "iam:GetInstanceProfile", "iam:CreateInstanceProfile", "iam:TagInstanceProfile",
-          "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile",
-          "ec2:DescribeSubnets", "ec2:DescribeSecurityGroups", "ec2:DescribeInstances",
-          "ec2:DescribeInstanceTypes", "ec2:DescribeInstanceTypeOfferings",
-          "ec2:DescribeAvailabilityZones", "ssm:GetParameter"
+          "ec2:RunInstances",
+          "ec2:CreateFleet",
+          "ec2:CreateLaunchTemplate",
+          "ec2:CreateTags",
+          "iam:GetInstanceProfile",
+          "iam:CreateInstanceProfile",
+          "iam:TagInstanceProfile",
+          "iam:AddRoleToInstanceProfile",
+          "iam:RemoveRoleFromInstanceProfile",
+          "iam:DeleteInstanceProfile",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeInstanceTypeOfferings",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeImages",
+          "ec2:DescribeSpotPriceHistory",
+          "ssm:GetParameter"
         ]
         Effect   = "Allow"
         Resource = "*"
+      },
+      {
+        # IMPORTANT : Autoriser Karpenter à passer le rôle des nodes
+        Action   = "iam:PassRole"
+        Effect   = "Allow"
+        # Utilise l'ARN du rôle que tu as écrit dans ton YAML (EC2NodeClass)
+        Resource = "arn:aws:iam::724772065879:role/core-platform-dev-node-role"
       }
     ]
   })
