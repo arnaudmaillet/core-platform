@@ -21,8 +21,10 @@ spec:
         serviceAccount:
           create: true
           name: external-dns
+          {{- if .Values.global.externalDnsRoleArn }}
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.externalDnsRoleArn }}
+          {{- end }}
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
