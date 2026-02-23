@@ -3,7 +3,7 @@
 apiVersion: karpenter.sh/v1beta1
 kind: NodePool
 metadata:
-  name: dev-default
+  name: default
 spec:
   template:
     spec:
@@ -18,16 +18,16 @@ spec:
           operator: In
           values: ["c", "m", "r"]
       nodeClassRef:
-        name: dev-default
+        name: default
   limits:
-    cpu: 100
+    cpu: "100"
   disruption:
     consolidationPolicy: WhenUnderutilized
 ---
 apiVersion: karpenter.k8s.aws/v1beta1
 kind: EC2NodeClass
 metadata:
-  name: dev-default
+  name: default
 spec:
   amiFamily: AL2
   role: "core-platform-dev-node-role"
