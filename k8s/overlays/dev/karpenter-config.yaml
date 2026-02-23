@@ -1,6 +1,6 @@
 # k8s/overlays/dev/karpenter-config.yaml
 
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: default
@@ -18,13 +18,16 @@ spec:
           operator: In
           values: ["c", "m", "r"]
       nodeClassRef:
+        group: karpenter.k8s.aws # Ajout nécessaire en v1
+        kind: EC2NodeClass # Ajout nécessaire en v1
         name: default
   limits:
     cpu: "100"
   disruption:
-    consolidationPolicy: WhenUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized # Le nom a changé en v1
+    consolidateAfter: 1m
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: default
