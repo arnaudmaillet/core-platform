@@ -1,4 +1,42 @@
 {
+    "metrics": {
+        "checks": {
+            "passes": 1,
+            "fails": 0,
+            "value": 1
+        },
+        "data_sent": {
+            "count": 2205,
+            "rate": 3722.2225973517357
+        },
+        "data_received": {
+            "count": 4736,
+            "rate": 7994.760190955927
+        },
+        "iteration_duration": {
+            "avg": 592.1535,
+            "min": 592.1535,
+            "med": 592.1535,
+            "max": 592.1535,
+            "p(90)": 592.1535,
+            "p(95)": 592.1535
+        },
+        "iterations": {
+            "count": 1,
+            "rate": 1.6880828105903563
+        },
+        "grpc_req_duration": {
+            "max": 119.596666,
+            "p(90)": 119.596666,
+            "p(95)": 119.596666,
+            "avg": 119.596666,
+            "min": 119.596666,
+            "med": 119.596666,
+            "thresholds": {
+                "p(95)<500": false
+            }
+        }
+    },
     "root_group": {
         "name": "",
         "path": "",
@@ -6,50 +44,12 @@
         "groups": {},
         "checks": {
                 "status is OK": {
-                    "fails": 1,
                     "name": "status is OK",
                     "path": "::status is OK",
                     "id": "d83a99fb6db0de09e9f0d32dd8d2e9d5",
-                    "passes": 0
+                    "passes": 1,
+                    "fails": 0
                 }
             }
-    },
-    "metrics": {
-        "data_sent": {
-            "count": 2147,
-            "rate": 3935.88918647902
-        },
-        "data_received": {
-            "count": 4563,
-            "rate": 8364.910273825695
-        },
-        "iteration_duration": {
-            "med": 545.314042,
-            "max": 545.314042,
-            "p(90)": 545.314042,
-            "p(95)": 545.314042,
-            "avg": 545.314042,
-            "min": 545.314042
-        },
-        "iterations": {
-            "count": 1,
-            "rate": 1.8332040924448159
-        },
-        "grpc_req_duration": {
-            "min": 81.329791,
-            "med": 81.329791,
-            "max": 81.329791,
-            "p(90)": 81.329791,
-            "p(95)": 81.329791,
-            "avg": 81.329791,
-            "thresholds": {
-                "p(95)<500": false
-            }
-        },
-        "checks": {
-            "passes": 0,
-            "fails": 1,
-            "value": 0
-        }
     }
 }

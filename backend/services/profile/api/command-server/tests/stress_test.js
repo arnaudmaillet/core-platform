@@ -35,7 +35,7 @@ export default () => {
     const response = client.invoke('profile.v1.ProfileIdentityService/UpdateHandle', payload, {
         metadata: { 'x-region': 'eu' }
     });
-    console.log(`STATUS: ${response.status} | MSG: ${response.message}`);
+    
     check(response, {
         'status is OK': (r) => r && (
             r.status === 0 || 
