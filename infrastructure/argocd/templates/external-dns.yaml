@@ -21,13 +21,18 @@ spec:
         serviceAccount:
           create: true
           name: external-dns
-          {{- if .Values.global.externalDnsRoleArn }}
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.externalDnsRoleArn }}
-          {{- end }}
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
+  ignoreDifferences:
+    - group: ""
+      kind: ServiceAccount
+      name: external-dns
+      namespace: kube-system
+      jsonPointers:
+        - /metadata/annotations/eks.amazonaws.com~1role-arn
   syncPolicy:
     automated:
       prune: true
