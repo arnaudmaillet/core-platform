@@ -8,14 +8,12 @@ metadata:
       external-dns.alpha.kubernetes.io/hostname: api-profile.core-platform.click
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/backend-protocol: GRPC
+      alb.ingress.kubernetes.io/backend-protocol: HTTP 
       alb.ingress.kubernetes.io/backend-protocol-version: GRPC
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
-      alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0
-      alb.ingress.kubernetes.io/healthcheck-protocol: GRPC
+      alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
       alb.ingress.kubernetes.io/healthcheck-port: '50051'
-      alb.ingress.kubernetes.io/healthcheck-path: /grpc.health.v1.Health/Check
-      alb.ingress.kubernetes.io/success-codes: '0'
+      alb.ingress.kubernetes.io/success-codes: '12'
 spec:
   ingressClassName: alb
   rules:

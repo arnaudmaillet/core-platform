@@ -1,32 +1,47 @@
 {
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "status is OK": {
+                    "fails": 1,
+                    "name": "status is OK",
+                    "path": "::status is OK",
+                    "id": "d83a99fb6db0de09e9f0d32dd8d2e9d5",
+                    "passes": 0
+                }
+            }
+    },
     "metrics": {
         "data_sent": {
             "count": 2147,
-            "rate": 3656.6838799340535
+            "rate": 3935.88918647902
         },
         "data_received": {
             "count": 4563,
-            "rate": 7771.5177196735385
+            "rate": 8364.910273825695
         },
         "iteration_duration": {
-            "p(95)": 586.915541,
-            "avg": 586.915541,
-            "min": 586.915541,
-            "med": 586.915541,
-            "max": 586.915541,
-            "p(90)": 586.915541
+            "med": 545.314042,
+            "max": 545.314042,
+            "p(90)": 545.314042,
+            "p(95)": 545.314042,
+            "avg": 545.314042,
+            "min": 545.314042
         },
         "iterations": {
             "count": 1,
-            "rate": 1.7031597018789257
+            "rate": 1.8332040924448159
         },
         "grpc_req_duration": {
-            "avg": 82.37775,
-            "min": 82.37775,
-            "med": 82.37775,
-            "max": 82.37775,
-            "p(90)": 82.37775,
-            "p(95)": 82.37775,
+            "min": 81.329791,
+            "med": 81.329791,
+            "max": 81.329791,
+            "p(90)": 81.329791,
+            "p(95)": 81.329791,
+            "avg": 81.329791,
             "thresholds": {
                 "p(95)<500": false
             }
@@ -36,20 +51,5 @@
             "fails": 1,
             "value": 0
         }
-    },
-    "root_group": {
-        "name": "",
-        "path": "",
-        "id": "d41d8cd98f00b204e9800998ecf8427e",
-        "groups": {},
-        "checks": {
-                "status is OK": {
-                    "name": "status is OK",
-                    "path": "::status is OK",
-                    "id": "d83a99fb6db0de09e9f0d32dd8d2e9d5",
-                    "passes": 0,
-                    "fails": 1
-                }
-            }
     }
 }
