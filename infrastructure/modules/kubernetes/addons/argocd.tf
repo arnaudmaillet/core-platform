@@ -32,7 +32,9 @@ resource "helm_release" "argocd" {
               targetRevision = "HEAD"
               path           = "infrastructure/argocd"
               helm = {
+                // alimente les valeurs de infrastracture/argocd/values.yaml avec des variables Terraform
                 parameters = [
+                  { name = "global.env", value = "dev" },
                   { name = "global.clusterName", value = var.cluster_name },
                   { name = "global.karpenterRoleArn", value = var.karpenter_controller_role_arn },
                   { name = "global.certificateArn", value = var.ssl_certificate_arn },
