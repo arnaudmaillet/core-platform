@@ -1,0 +1,55 @@
+{
+    "metrics": {
+        "data_sent": {
+            "count": 2147,
+            "rate": 3656.6838799340535
+        },
+        "data_received": {
+            "count": 4563,
+            "rate": 7771.5177196735385
+        },
+        "iteration_duration": {
+            "p(95)": 586.915541,
+            "avg": 586.915541,
+            "min": 586.915541,
+            "med": 586.915541,
+            "max": 586.915541,
+            "p(90)": 586.915541
+        },
+        "iterations": {
+            "count": 1,
+            "rate": 1.7031597018789257
+        },
+        "grpc_req_duration": {
+            "avg": 82.37775,
+            "min": 82.37775,
+            "med": 82.37775,
+            "max": 82.37775,
+            "p(90)": 82.37775,
+            "p(95)": 82.37775,
+            "thresholds": {
+                "p(95)<500": false
+            }
+        },
+        "checks": {
+            "passes": 0,
+            "fails": 1,
+            "value": 0
+        }
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "status is OK": {
+                    "name": "status is OK",
+                    "path": "::status is OK",
+                    "id": "d83a99fb6db0de09e9f0d32dd8d2e9d5",
+                    "passes": 0,
+                    "fails": 1
+                }
+            }
+    }
+}
