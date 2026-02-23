@@ -38,7 +38,8 @@ resource "helm_release" "argocd" {
                   { name = "global.clusterName", value = var.cluster_name },
                   { name = "global.karpenterRoleArn", value = var.karpenter_controller_role_arn },
                   { name = "global.certificateArn", value = var.ssl_certificate_arn },
-                  { name = "global.clusterEndpoint", value = var.cluster_endpoint }
+                  { name = "global.clusterEndpoint", value = var.cluster_endpoint },
+                  { name = "global.externalDnsRoleArn", value = var.external_dns_role_arn },
                 ]
               }
             }
