@@ -18,5 +18,4 @@ module "karpenter" {
 
   node_iam_role_name   = var.karpenter_node_role_name
   node_iam_role_arn    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.karpenter_node_role_name}"
-  create_access_entry = false
 }
