@@ -20,7 +20,7 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: dev-default
+        name: default
   limits:
     cpu: "100"
   disruption:
