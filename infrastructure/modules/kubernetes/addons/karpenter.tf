@@ -16,11 +16,7 @@ module "karpenter" {
 
   create_node_iam_role = false
 
-  # On passe le NOM (déjà fait)
   node_iam_role_name   = var.karpenter_node_role_name
-
-  # AJOUTE CETTE LIGNE : On passe l'ARN complet
-  # On le reconstruit dynamiquement pour éviter de modifier les outputs de EKS
   node_iam_role_arn    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.karpenter_node_role_name}"
   create_access_entry = false
 }

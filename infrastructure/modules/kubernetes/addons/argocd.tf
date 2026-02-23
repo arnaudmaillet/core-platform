@@ -8,27 +8,49 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
 
-  set = [
-    {
-      name  = "server.service.type"
-      value = "ClusterIP"
-    },
-    {
-      name  = "server.extraArgs"
-      value = "{--insecure}"
-    },
-    {
-      name  = "server.resources.limits.memory"
-      value = "512Mi"
-    },
-    {
-      name  = "server.configs.params.server\\.insecure"
-      value = "true"
-    },
-    {
-      name  = "global.nodeSelector.intent"
-      value = "system"
-    }
+  values = [
+    yamlencode({
+      server = {
+        extraArgs = ["--insecure"]
+        service   = { type = "ClusterIP" }
+      }
+      configs = {
+        params = { "server.insecure" = "true" }
+      }
+      extraObjects = [
+        {
+          apiVersion = "argoproj.io/v1alpha1"
+          kind       = "Application"
+          metadata = {
+            name      = "root-application"
+            namespace = "argocd"
+          }
+          spec = {
+            project = "default"
+            source = {
+              repoURL        = "https://github.com/arnaudmaillet/core-platform.git"
+              targetRevision = "HEAD"
+              path           = "infrastructure/argocd"
+              helm = {
+                parameters = [
+                  { name = "global.clusterName", value = var.cluster_name },
+                  { name = "global.karpenterRoleArn", value = var.karpenter_controller_role_arn },
+                  { name = "global.certificateArn", value = var.ssl_certificate_arn },
+                  { name = "global.clusterEndpoint", value = var.cluster_endpoint }
+                ]
+              }
+            }
+            destination = {
+              server    = "https://kubernetes.default.svc"
+              namespace = "argocd"
+            }
+            syncPolicy = {
+              automated = { prune = true, selfHeal = true }
+            }
+          }
+        }
+      ]
+    })
   ]
 
   depends_on = [
@@ -105,62 +127,6 @@ resource "kubernetes_ingress_v1" "argocd_server" {
               }
             }
           }
-        }
-      }
-    }
-  }
-
-  depends_on = [helm_release.argocd]
-}
-
-# --- BOOTSTRAP : DÉPLOIEMENT DE LA ROOT APP ---
-resource "kubernetes_manifest" "argocd_root_app" {
-  manifest = {
-    apiVersion = "argoproj.io/v1alpha1"
-    kind       = "Application"
-    metadata = {
-      name      = "root-application"
-      namespace = "argocd"
-    }
-    spec = {
-      project = "default"
-      source = {
-        repoURL        = "https://github.com/arnaudmaillet/core-platform"
-        targetRevision = "HEAD"
-        path           = "infrastructure/argocd"
-        helm = {
-          parameters = [
-            {
-              name  = "global.certificateArn"
-              value = var.ssl_certificate_arn
-            },
-            {
-              name  = "global.clusterEndpoint"
-              value = var.cluster_endpoint
-            },
-            {
-              name  = "global.clusterName"
-              value = var.cluster_name
-            },
-            {
-              name  = "global.externalDnsRoleArn"
-              value = var.external_dns_role_arn
-            },
-            {
-              name  = "global.karpenterRoleArn"
-              value = var.karpenter_controller_role_arn
-            }
-          ]
-        }
-      }
-      destination = {
-        server    = "https://kubernetes.default.svc"
-        namespace = "argocd"
-      }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
         }
       }
     }

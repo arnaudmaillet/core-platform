@@ -70,12 +70,11 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
     Statement = [
       {
         Action = [
-          "iam:GetInstanceProfile",
-          "iam:CreateInstanceProfile",
-          "iam:TagInstanceProfile",
-          "iam:AddRoleToInstanceProfile",
-          "iam:RemoveRoleFromInstanceProfile",
-          "iam:DeleteInstanceProfile"
+          "iam:GetInstanceProfile", "iam:CreateInstanceProfile", "iam:TagInstanceProfile",
+          "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile",
+          "ec2:DescribeSubnets", "ec2:DescribeSecurityGroups", "ec2:DescribeInstances",
+          "ec2:DescribeInstanceTypes", "ec2:DescribeInstanceTypeOfferings",
+          "ec2:DescribeAvailabilityZones", "ssm:GetParameter"
         ]
         Effect   = "Allow"
         Resource = "*"
