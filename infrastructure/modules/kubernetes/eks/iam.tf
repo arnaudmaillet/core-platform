@@ -40,6 +40,22 @@ module "external_dns_irsa_role" {
   }
 }
 
+resource "aws_iam_role_policy" "external_dns_list_zones" {
+  name = "ExternalDNSListZones"
+  role = module.external_dns_irsa_role.iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["route53:ListHostedZones", "route53:ListResourceRecordSets"]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # --- IAM POUR KARPENTER (Controller) ---
 module "karpenter_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
