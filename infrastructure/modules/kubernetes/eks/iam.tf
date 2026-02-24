@@ -90,6 +90,7 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
         # On ajoute RunInstances et CreateFleet qui manquaient cruellement
         Action = [
           "ec2:RunInstances",
+          "ec2:TerminateInstances",
           "ec2:CreateFleet",
           "ec2:CreateLaunchTemplate",
           "ec2:CreateTags",
