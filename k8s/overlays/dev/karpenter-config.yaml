@@ -11,11 +11,14 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: default # Doit matcher le nom de l'EC2NodeClass plus bas
+        name: default
       requirements:
         - key: "role"
           operator: In
           values: ["worker"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
@@ -48,6 +51,9 @@ spec:
           value: database
           effect: NoSchedule
       requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
