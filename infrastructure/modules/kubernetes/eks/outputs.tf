@@ -55,7 +55,7 @@ output "external_dns_role_arn" {
 
 output "karpenter_node_role_name" {
   description = "Nom du rôle IAM utilisé par les futurs nœuds créés par Karpenter"
-  value = module.eks.eks_managed_node_groups["system"].iam_role_name
+  value = values(module.eks.eks_managed_node_groups)[0].iam_role_name
 }
 
 output "karpenter_controller_role_arn" {

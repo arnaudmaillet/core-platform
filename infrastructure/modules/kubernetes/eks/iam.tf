@@ -64,9 +64,11 @@ module "karpenter_irsa_role" {
   role_name                          = "${var.cluster_name}-karpenter-controller-role"
   attach_karpenter_controller_policy = true
 
-  karpenter_controller_cluster_name       = module.eks.cluster_name
+  karpenter_controller_cluster_name = module.eks.cluster_name
+  
+  # DYNAMIQUE : On autorise Karpenter à gérer tous les groupes de nœuds managés existants
   karpenter_controller_node_iam_role_arns = [
-    module.eks.eks_managed_node_groups["system"].iam_role_arn
+    for group in module.eks.eks_managed_node_groups : group.iam_role_arn
   ]
 
   oidc_providers = {
@@ -111,11 +113,14 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
         Resource = "*"
       },
       {
-        # IMPORTANT : Autoriser Karpenter à passer le rôle des nodes
+        # DYNAMIQUE : Autoriser PassRole pour TOUS les rôles de nœuds managés 
+        # + le rôle spécifique Karpenter
         Action   = "iam:PassRole"
         Effect   = "Allow"
-        # Utilise l'ARN du rôle que tu as écrit dans ton YAML (EC2NodeClass)
-        Resource = "arn:aws:iam::724772065879:role/core-platform-dev-node-role"
+        Resource = concat(
+          [for group in module.eks.eks_managed_node_groups : group.iam_role_arn],
+          ["arn:aws:iam::724772065879:role/core-platform-dev-node-role"]
+        )
       }
     ]
   })

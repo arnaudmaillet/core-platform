@@ -21,10 +21,8 @@ inputs = {
   vpc_id             = dependency.vpc.outputs.vpc_id
   private_subnet_ids = dependency.vpc.outputs.private_app_subnet_ids
 
-  # EKS Node Groups
-  system_node_settings = local.env_vars.locals.system_node_settings
-  mgmt_node_settings   = local.env_vars.locals.mgmt_node_settings
-  db_node_settings     = local.env_vars.locals.db_node_settings
+  # injecte la map dynamique définie dans env.hcl
+  node_groups = local.env_vars.locals.node_groups
 
   iam_policy_json_content = file("iam_policy.json")
   project_name            = "core-platform"
