@@ -1,32 +1,60 @@
 # k8s/overlays/dev/karpenter-config.yaml
 
+# 1. NODEPOOL POUR LES WORKERS
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: default
+  name: worker # Kustomize ajoutera 'dev-' devant
 spec:
   template:
     spec:
-      # LES LABELS DOIVENT ÊTRE ICI
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: default
+        name: default # Doit matcher le nom de l'EC2NodeClass plus bas
       requirements:
-        - key: kubernetes.io/arch
+        - key: "role"
           operator: In
-          values: ["amd64"]
+          values: ["worker"]
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
         - key: "karpenter.k8s.aws/instance-category"
           operator: In
-          values: ["c", "m", "r"]
-        - key: "role"
-          operator: In
-          values: ["worker", "storage"]
+          values: ["c", "m"]
   limits:
-    cpu: "100"
+    cpu: "50"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+---
+# 2. NODEPOOL POUR LA DATABASE
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: storage
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      taints:
+        - key: dedicated
+          value: database
+          effect: NoSchedule
+      labels:
+        role: storage
+      requirements:
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["on-demand"]
+        - key: "karpenter.k8s.aws/instance-category"
+          operator: In
+          values: ["r"]
+  limits:
+    cpu: "50"
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
