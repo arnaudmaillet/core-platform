@@ -24,7 +24,7 @@ spec:
           values: ["c", "m", "r"]
         - key: "role"
           operator: In
-          values: ["worker"]
+          values: ["worker", "storage"]
   limits:
     cpu: "100"
   disruption:
@@ -37,7 +37,7 @@ metadata:
   name: default
 spec:
   amiFamily: AL2
-  role: "core-platform-dev-node-role" 
+  role: "core-platform-dev-node-role"
   amiSelectorTerms:
     - alias: al2@latest
   subnetSelectorTerms:
