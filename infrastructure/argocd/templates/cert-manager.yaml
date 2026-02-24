@@ -30,3 +30,5 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true  # Aide énormément pour les CRDs volumineux
+      - SkipDryRunOnMissingResource=true # Évite de bloquer si le CRD n'est pas encore là
