@@ -47,40 +47,9 @@ variable "system_node_settings" {
   }
 }
 
-# --- CONFIGURATION DES NOEUDS MANAGEMENT ---
-
-variable "mgmt_node_settings" {
-  description = "Configuration pour les outils de gestion (ArgoCD) et de monitoring (Prometheus/Grafana). Nécessite plus de RAM."
-  type = object({
-    instance_types = list(string)
-    min_size       = number
-    max_size       = number
-    desired_size   = number
-  })
-  default = {
-    instance_types = ["t3.large"] #8go ram
-    min_size       = 1
-    max_size       = 5
-    desired_size   = 1
-  }
-}
-
-# --- CONFIGURATION DES NOEUDS DATABASE ---
-
-variable "db_node_settings" {
-  description = "Configuration pour les bases de données (Postgres, ScyllaDB). Instances optimisées pour la mémoire et isolées par taints."
-  type = object({
-    instance_types = list(string)
-    min_size       = number
-    max_size       = number
-    desired_size   = number
-  })
-  default = {
-    instance_types = ["r6i.large"]
-    min_size       = 1
-    max_size       = 5
-    desired_size   = 1
-  }
+variable "node_groups" {
+  description = "Map complète des Managed Node Groups (passée par Terragrunt)"
+  type        = any
 }
 
 # --- SÉCURITÉ & IAM ---

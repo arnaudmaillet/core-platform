@@ -5,27 +5,21 @@ locals {
 
   # Networking
   vpc_cidr           = "10.0.0.0/16"
-  single_nat_gateway = true # Une seule NAT pour économiser ~60$/mois
+  single_nat_gateway = true 
 
-  # EKS Node Groups Settings
-  system_node_settings = {
-    instance_types = ["t3.medium"]
-    min_size       = 2
-    max_size       = 3
-    desired_size   = 2
-  }
+  # EKS Node Groups : C'est ici qu'on définit la stratégie de nodes
+  # En DEV : Un seul groupe "system" avec une Taint
+  node_groups = {
+    system = {
+      instance_types = ["t3.medium"]
+      min_size       = 2
+      max_size       = 3
+      desired_size   = 2
+      labels         = { intent = "system" }
+      taints         = [{ key = "CriticalAddonsOnly", value = "true", effect = "NO_SCHEDULE" }]
 
-  mgmt_node_settings = {
-    instance_types = ["t3.large"]
-    min_size       = 1
-    max_size       = 3
-    desired_size   = 1
-  }
-
-  db_node_settings = {
-    instance_types = ["r6i.large"]
-    min_size       = 1
-    max_size       = 3
-    desired_size   = 1
+      iam_role_use_name_prefix = false
+      iam_role_name            = "core-platform-dev-node-role"
+    }
   }
 }

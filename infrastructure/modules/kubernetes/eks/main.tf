@@ -16,46 +16,12 @@ module "eks" {
   enable_cluster_creator_admin_permissions = true
   enable_irsa                              = true
 
-  # Groupes de machines (Managed Node Groups)
-  eks_managed_node_groups = {
-
-    system = {
-      instance_types = var.system_node_settings.instance_types
-      min_size       = var.system_node_settings.min_size
-      max_size       = var.system_node_settings.max_size
-      desired_size   = var.system_node_settings.desired_size
-      labels         = { "intent" = "system" }
-      iam_role_use_name_prefix = false
-      iam_role_name            = "${var.cluster_name}-node-role"
-    }
-
-    management = {
-      instance_types = var.mgmt_node_settings.instance_types
-      min_size       = var.mgmt_node_settings.min_size
-      max_size       = var.mgmt_node_settings.max_size
-      desired_size   = var.mgmt_node_settings.desired_size
-      labels         = { "intent" = "management" }
-    }
-
-    database = {
-      instance_types = var.db_node_settings.instance_types
-      min_size       = var.db_node_settings.min_size
-      max_size       = var.db_node_settings.max_size
-      desired_size   = var.db_node_settings.desired_size
-
-      taints = [{
-        key    = "dedicated"
-        value  = "database"
-        effect = "NO_SCHEDULE"
-      }]
-
-      iam_role_additional_policies = {
-        AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-      }
-      labels = { "role" = "storage" }
-    }
-  }
-
+# --- MANAGED NODE GROUPS DYNAMIQUES ---
+  # Ici, on passe directement la map configurée dans Terragrunt.
+  # Cela permet de varier le nombre et le type de groupes selon l'environnement.
+  eks_managed_node_groups = var.node_groups
+  
+  # Tag crucial pour que Karpenter identifie le Security Group à utiliser pour les nouveaux nodes
   node_security_group_tags = {
     "karpenter.sh/discovery" = var.cluster_name
   }

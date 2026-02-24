@@ -22,5 +22,5 @@ variable "vpc_cidr" {
 
 variable "availability_zones" {
   type    = list(string)
-  default = ["eu-west-3a", "eu-west-3b", "eu-west-3c"]
+  default = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }

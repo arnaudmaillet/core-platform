@@ -7,6 +7,11 @@ metadata:
 spec:
   template:
     spec:
+      # LES LABELS DOIVENT ÊTRE ICI
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
       requirements:
         - key: kubernetes.io/arch
           operator: In
@@ -17,10 +22,9 @@ spec:
         - key: "karpenter.k8s.aws/instance-category"
           operator: In
           values: ["c", "m", "r"]
-      nodeClassRef:
-        group: karpenter.k8s.aws
-        kind: EC2NodeClass
-        name: default
+        - key: "role"
+          operator: In
+          values: ["worker"]
   limits:
     cpu: "100"
   disruption:
@@ -33,7 +37,7 @@ metadata:
   name: default
 spec:
   amiFamily: AL2
-  role: "core-platform-dev-node-role"
+  role: "core-platform-dev-node-role" 
   amiSelectorTerms:
     - alias: al2@latest
   subnetSelectorTerms:
