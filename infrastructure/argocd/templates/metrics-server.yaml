@@ -15,20 +15,25 @@ spec:
     targetRevision: 3.12.1
     helm:
       values: |
-        defaultArgs:
+        args:
           - --cert-dir=/tmp
           - --secure-port=4443
           - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
           - --kubelet-use-node-status-port
           - --metric-resolution=15s
           - --kubelet-insecure-tls
+
+        containerPort: 4443
+        
         apiService:
           create: true
           port: 4443
+
         resources:
           requests:
             cpu: 100m
             memory: 200Mi
+
         tolerations:
           - key: "node-role.kubernetes.io/control-plane"
             operator: "Exists"
