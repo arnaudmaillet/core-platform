@@ -5,16 +5,37 @@ kind: Application
 metadata:
   name: metrics-server
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://kubernetes-sigs.github.io/metrics-server/
     chart: metrics-server
-    targetRevision: 3.12.1 # Vérifie la dernière version stable
+    targetRevision: 3.12.1
     helm:
       values: |
-        args:
-          - --kubelet-insecure-tls # Souvent nécessaire sur certains setups EKS/K3s
+        defaultArgs:
+          - --cert-dir=/tmp
+          - --secure-port=4443
+          - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+          - --kubelet-use-node-status-port
+          - --metric-resolution=15s
+          - --kubelet-insecure-tls
+        apiService:
+          create: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        tolerations:
+          - key: "node-role.kubernetes.io/control-plane"
+            operator: "Exists"
+            effect: "NoSchedule"
+          - key: "node-role.kubernetes.io/master"
+            operator: "Exists"
+            effect: "NoSchedule"
+
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system

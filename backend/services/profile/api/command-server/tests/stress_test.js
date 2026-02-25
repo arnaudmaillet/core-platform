@@ -11,13 +11,18 @@ const profileIds = new SharedArray('profile ids', function () {
 });
 
 export const options = {
-    stages: [
-        { duration: '30s', target: 50 },  // Montée plus rapide
-        { duration: '1m', target: 200 }, // On double la mise à 200 VUs
-        { duration: '30s', target: 0 },
-    ],
+    scenarios: {
+        stress: {
+            executor: 'constant-arrival-rate',
+            duration: '3m',
+            rate: 500,
+            timeUnit: '1s',
+            preAllocatedVUs: 100,
+            maxVUs: 400,
+        },
+    },
     thresholds: {
-        'grpc_req_duration': ['p(95)<500'], // On devient plus exigeant (500ms)
+        'grpc_req_duration': ['p(95)<500'],
     },
 };
 
