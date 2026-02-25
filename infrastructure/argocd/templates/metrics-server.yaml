@@ -15,6 +15,7 @@ spec:
     targetRevision: 3.12.1
     helm:
       values: |
+        # Configuration des arguments pour EKS
         args:
           - --cert-dir=/tmp
           - --secure-port=4443
@@ -23,16 +24,16 @@ spec:
           - --metric-resolution=15s
           - --kubelet-insecure-tls
 
+        # On aligne le nom du port du container avec ce que le Service attend (https)
         containerPort: 4443
-        
+        portName: https
+
+        # L'APIService communique avec le Service sur le port 443
         apiService:
           create: true
-          port: 4443
-
-        service:
           port: 443
-          targetPort: 4443
 
+        # Ressources et tolérances pour la stabilité
         resources:
           requests:
             cpu: 100m
