@@ -45,7 +45,7 @@ inputs = {
 
   image    = "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server:latest"
   port     = 50051
-  replicas = 1
+  replicas = 2
 
   env_vars = {
     RUST_LOG = "info"
