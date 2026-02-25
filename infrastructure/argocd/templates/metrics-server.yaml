@@ -29,6 +29,10 @@ spec:
           create: true
           port: 4443
 
+        service:
+          port: 443
+          targetPort: 4443
+
         resources:
           requests:
             cpu: 100m
