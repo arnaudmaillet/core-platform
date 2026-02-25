@@ -13,11 +13,11 @@ export const options = {
     scenarios: {
         stress: {
             executor: 'constant-arrival-rate',
-            duration: '5m',
-            rate: 200,               // 200 req/s c'est très facile pour ton Mac
+            duration: '5m',           // Un peu plus long pour laisser le temps au HPA
+            rate: 3000,              // On passe de 500 à 3000 requêtes/seconde
             timeUnit: '1s',
-            preAllocatedVUs: 50,     // Peu de VUs pour économiser ta RAM
-            maxVUs: 200,
+            preAllocatedVUs: 500,    // On commence avec plus de monde
+            maxVUs: 2000,            // On s'autorise à monter très haut pour tenir le rate
         },
     },
     thresholds: {
