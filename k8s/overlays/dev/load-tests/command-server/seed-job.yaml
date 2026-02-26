@@ -23,7 +23,6 @@ spec:
         args:
           - |
             apt-get update && apt-get install -y jq
-            # Extraction des IDs du ConfigMap partagé
             VALUES=$(jq -r '.[]' /scripts/data.json | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
             
             psql -h dev-profile-db.default.svc.cluster.local -U postgres -d profile -c "
