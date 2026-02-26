@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: public.ecr.aws/karpenter
     chart: karpenter
-    targetRevision: 1.0.1
+    targetRevision: 1.2.1
     helm:
       values: |
         settings:
