@@ -24,7 +24,7 @@ spec:
           values: ["on-demand"]
         - key: "karpenter.k8s.aws/instance-family"
           operator: In
-          values: ["c", "m"]
+          values: ["m5", "m5d", "m6i", "m6a", "c5", "c6i", "t3"]
   limits:
     cpu: "50"
   disruption:
@@ -59,7 +59,7 @@ spec:
           values: ["on-demand"]
         - key: "karpenter.k8s.aws/instance-family"
           operator: In
-          values: ["r"]
+          values: ["r5", "r5d", "r6i", "r6a"]
   limits:
     cpu: "50"
   disruption:
