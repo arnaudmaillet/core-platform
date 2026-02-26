@@ -71,7 +71,7 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  amiFamily: AL2023
+  amiFamily: AL2
   role: "core-platform-dev-node-role"
   amiSelectorTerms:
     - alias: al2@latest
