@@ -1,0 +1,17 @@
+# k8s/overlays/dev/load-tests/command-server/kustomization.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - scaling-test-run.yaml # On pointe vers le fichier de ressource K6
+  - seed-job.yaml
+
+configMapGenerator:
+- name: command-test-scripts
+  files:
+    # On inclut le JS et le JSON de données
+    - ../../../../../backend/services/profile/api/command-server/load-tests/update-handle-scaling.js
+    - ../../../../../backend/services/profile/api/command-server/load-tests/data.json
+    - profile.proto=../../../../../proto/profile/v1/profile.proto
+    - types.proto=../../../../../proto/profile/v1/types.proto

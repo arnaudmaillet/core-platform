@@ -1,0 +1,42 @@
+# k8s/overlays/dev/load-tests/command-server/scaling-test-run.yaml
+
+apiVersion: k6.io/v1alpha1
+kind: K6
+metadata:
+  name: profile-command-scaling-test
+  namespace: load-tests
+spec:
+  # L'opérateur va créer 4 Pods "runners" pour distribuer la charge. 
+  # Chaque runner fera ses 200 req/s, soit 800 req/s au total.
+  parallelism: 4
+  
+  script:
+    configMap:
+      name: command-test-scripts # Match le nom dans ton kustomization.yaml
+      file: update-handle-scaling.js
+      
+  runner:
+    # On définit des ressources pour k6 afin que Karpenter sache quoi provisionner
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+    
+    # ISOLATION (Best Practice)
+    # On force k6 à tourner sur des nodes dédiés pour ne pas 
+    # fausser les mesures de performance du command-server.
+    nodeSelector:
+      intent: load-tests 
+    tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "load-testing"
+        effect: "NoSchedule"
+
+    # Envoi des métriques vers Prometheus (si tu as un sidecar statsd ou agent)
+    env:
+      - name: K6_STATSD_ENABLE_TAGS
+        value: "true"
