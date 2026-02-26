@@ -15,6 +15,7 @@ spec:
     path: . 
     kustomize:
       path: {{ .path }}
+      loadRestrictor: none
   destination:
     server: https://kubernetes.default.svc
     namespace: load-tests
