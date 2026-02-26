@@ -11,8 +11,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arnaudmaillet/core-platform
-    targetRevision: HEAD
-    path: . 
+    targetRevision: HEAD 
     kustomize:
       path: {{ .path }}
       loadRestrictor: none
