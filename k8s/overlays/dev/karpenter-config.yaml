@@ -22,7 +22,7 @@ spec:
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
-        - key: "karpenter.k8s.aws/instance-category"
+        - key: "karpenter.k8s.aws/instance-family"
           operator: In
           values: ["c", "m"]
   limits:
@@ -57,7 +57,7 @@ spec:
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
-        - key: "karpenter.k8s.aws/instance-category"
+        - key: "karpenter.k8s.aws/instance-family"
           operator: In
           values: ["r"]
   limits:
