@@ -22,7 +22,7 @@ spec:
               cpu: "10m"
               memory: "100Mi"
             limits:
-              cpu: "1000m"     # Plafonne à 1 vCPU
+              cpu: "1000m" # Plafonne à 1 vCPU
               memory: "512Mi"
           envFrom:
             - configMapRef:

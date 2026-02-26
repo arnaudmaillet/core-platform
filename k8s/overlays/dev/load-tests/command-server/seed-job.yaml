@@ -1,0 +1,44 @@
+# k8s/overlays/dev/load-tests/command-server/seed-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-profile-data
+  namespace: load-tests
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    spec:
+      containers:
+      - name: seed
+        image: postgres:15
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dev-profile-db-app
+              key: password
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            apt-get update && apt-get install -y jq
+            # Extraction des IDs du ConfigMap partagé
+            VALUES=$(jq -r '.[]' /scripts/data.json | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
+            
+            psql -h dev-profile-db.default.svc.cluster.local -U postgres -d profile -c "
+            DO \$\$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM user_profiles WHERE display_name = 'LoadTestUser' LIMIT 1) THEN
+                    INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
+                    VALUES $VALUES;
+                END IF;
+            END \$\$;"
+        volumeMounts:
+        - name: scripts-volume
+          mountPath: /scripts
+      volumes:
+      - name: scripts-volume
+        configMap:
+          name: command-test-scripts
+      restartPolicy: OnFailure
