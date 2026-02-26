@@ -19,6 +19,8 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: load-tests
-  syncPolicy: {} 
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
 ---
 {{- end }}
