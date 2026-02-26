@@ -1,0 +1,7 @@
+exclude:
+  - "rust-project.json"
+  - "backend/**/*.json"
+  - "proto/**/*.json"
+  - "**/target/**"
+  - "**/node_modules/**"
+  - "**/bazel-*"
