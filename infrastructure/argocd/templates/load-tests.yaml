@@ -12,10 +12,12 @@ spec:
   source:
     repoURL: https://github.com/arnaudmaillet/core-platform
     targetRevision: HEAD
-    path: {{ .path }}
+    path: . 
+    kustomize:
+      path: {{ .path }}
   destination:
     server: https://kubernetes.default.svc
     namespace: load-tests
-  syncPolicy: {} # Manuel par défaut
+  syncPolicy: {} 
 ---
 {{- end }}
