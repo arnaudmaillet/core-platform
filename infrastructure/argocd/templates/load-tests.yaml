@@ -1,26 +1,26 @@
-# # infrastructure/argocd/templates/load-tests.yaml
+# infrastructure/argocd/templates/load-tests.yaml
 
-# {{- range .Values.loadTests }}
-# ---
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: dev-{{ .name }}-test
-#   namespace: argocd
-# spec:
-#   project: default
-#   source:
-#     repoURL: https://github.com/arnaudmaillet/core-platform
-#     targetRevision: HEAD
-#     path: .
-#     kustomize:
-#       path: {{ .path }}
-#       loadRestrictor: none
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: load-tests
-#   syncPolicy:
-#     syncOptions:
-#       - CreateNamespace=true
-# ---
-# {{- end }}
+{{- range .Values.loadTests }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-{{ .name }}-test
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arnaudmaillet/core-platform
+    targetRevision: HEAD
+    path: .
+    kustomize:
+      path: {{ .path }}
+      loadRestrictor: none
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: load-tests
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+{{- end }}
