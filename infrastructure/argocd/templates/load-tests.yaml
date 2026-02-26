@@ -11,9 +11,9 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arnaudmaillet/core-platform
-    targetRevision: HEAD 
+    targetRevision: HEAD
+    path: {{ .path }}
     kustomize:
-      path: {{ .path }}
       loadRestrictor: none
   destination:
     server: https://kubernetes.default.svc
