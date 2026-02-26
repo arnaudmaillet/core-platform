@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: <ton-repo-git>
+    repoURL: https://github.com/arnaudmaillet/core-platform
     targetRevision: HEAD
     path: {{ .path }}
   destination:
