@@ -100,6 +100,8 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
           "iam:AddRoleToInstanceProfile",
           "iam:RemoveRoleFromInstanceProfile",
           "iam:DeleteInstanceProfile",
+          "ec2:DeleteLaunchTemplate",
+          "ec2:DescribeLaunchTemplates",
           "ec2:DescribeSubnets",
           "ec2:DescribeSecurityGroups",
           "ec2:DescribeInstances",
