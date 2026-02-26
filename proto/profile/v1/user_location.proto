@@ -1,3 +1,5 @@
+// proto/profile/v1/user_location.proto
+
 syntax = "proto3";
 
 package location.v1;
