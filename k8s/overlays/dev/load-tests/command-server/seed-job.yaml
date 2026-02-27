@@ -32,7 +32,7 @@ spec:
             # Si ton image k6 n'a pas psql, on peut garder l'image postgres mais il faut
             # lui passer le data.json différemment (ou le copier en dur dans le script).
             
-            psql -h dev-profile-db.default.svc.cluster.local -U postgres -d profile -c "
+            psql -h dev-profile-db-rw.default.svc.cluster.local -U postgres -d profile -c "
             INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
             VALUES $VALUES ON CONFLICT DO NOTHING;"
       restartPolicy: OnFailure
