@@ -20,11 +20,6 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: load-tests
-  ignoreDifferences:
-    - group: argoproj.io
-      kind: Application
-      jsonPointers:
-        - /spec/source/kustomize/loadRestrictor
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
