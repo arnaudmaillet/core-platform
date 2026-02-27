@@ -9,6 +9,7 @@ on:
       - 'proto/**'
       - 'backend/services/profile/api/command-server/load-tests/**'
       - 'Dockerfile.k6'
+  workflow_dispatch:
 
 jobs:
   build-and-push:
