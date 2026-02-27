@@ -1,0 +1,24 @@
+# Dockerfile.k6
+FROM grafana/k6:latest
+
+# On passe en root pour installer les outils
+USER root
+
+# Installation de postgresql-client (pour psql) et jq (pour parser le data.json)
+# apk est le gestionnaire de paquets d'Alpine Linux
+RUN apk add --no-cache postgresql-client jq
+
+# On crée les dossiers clairs dans l'image
+RUN mkdir -p /test/proto
+
+# 1. On copie les protos (Source of Truth) depuis la racine du monorepo
+COPY ./proto /test/proto
+
+# 2. On copie les fichiers du test de charge
+COPY ./backend/services/profile/api/command-server/load-tests/update-handle-scaling.js /test/script.js
+COPY ./backend/services/profile/api/command-server/load-tests/data.json /test/data.json
+
+WORKDIR /test
+
+# On définit l'entrée par défaut (mais le seed-job pourra l'écraser avec son propre command)
+ENTRYPOINT ["k6"]

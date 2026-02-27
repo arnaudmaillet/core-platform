@@ -6,21 +6,12 @@ import { SharedArray } from 'k6/data';
 
 const client = new grpc.Client();
 
-/**
- * AJUSTEMENT PROTO : 
- * Dans le cluster, le ConfigMapGenerator de Kustomize va mettre les fichiers
- * au même niveau. On pointe donc sur le dossier courant.
- */
 client.load(
-    ['.'], // Dossier courant dans le Pod (ou '/scripts/')
+    ['/test/proto/profile/v1'], // Chemin absolu dans le container Docker
     'profile.proto'
 );
 
 const profileIds = new SharedArray('profile ids', function () {
-    /**
-     * AJUSTEMENT DATA :
-     * Le fichier data.json sera aussi monté au même niveau par le ConfigMap.
-     */
     return JSON.parse(open('./data.json'));
 });
 

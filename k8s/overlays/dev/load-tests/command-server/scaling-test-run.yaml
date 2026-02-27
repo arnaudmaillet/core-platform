@@ -6,17 +6,21 @@ metadata:
   name: profile-command-scaling-test
   namespace: load-tests
 spec:
-  # L'opérateur va créer 4 Pods "runners" pour distribuer la charge. 
-  # Chaque runner fera ses 200 req/s, soit 800 req/s au total.
+  # L'opérateur va créer 4 Pods "runners". 
+  # Chaque runner suit le scenario du script (ex: 200 req/s), 
+  # soit 800 req/s au total sur ton API.
   parallelism: 4
   
   script:
-    configMap:
-      name: command-test-scripts # Match le nom dans ton kustomization.yaml
-      file: update-handle-scaling.js
+    image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
       
   runner:
-    # On définit des ressources pour k6 afin que Karpenter sache quoi provisionner
+    env:
+      - name: K6_SCRIPT
+        value: "/test/script.js"
+      - name: K6_STATSD_ENABLE_TAGS
+        value: "true"
+
     resources:
       requests:
         cpu: "500m"
@@ -25,9 +29,6 @@ spec:
         cpu: "1000m"
         memory: "2Gi"
     
-    # ISOLATION (Best Practice)
-    # On force k6 à tourner sur des nodes dédiés pour ne pas 
-    # fausser les mesures de performance du command-server.
     nodeSelector:
       intent: load-tests 
     tolerations:
@@ -35,8 +36,3 @@ spec:
         operator: "Equal"
         value: "load-testing"
         effect: "NoSchedule"
-
-    # Envoi des métriques vers Prometheus (si tu as un sidecar statsd ou agent)
-    env:
-      - name: K6_STATSD_ENABLE_TAGS
-        value: "true"
