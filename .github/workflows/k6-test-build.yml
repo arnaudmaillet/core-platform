@@ -1,4 +1,4 @@
-# .github/workflows/k6-test-build.yaml
+# .github/workflows/k6-test-build.yml
 
 name: Build and Push k6 Load Test Image
 
