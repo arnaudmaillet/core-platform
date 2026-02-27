@@ -1,4 +1,5 @@
 # k8s/overlays/dev/load-tests/command-server/seed-job.yaml
+
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -12,32 +13,25 @@ spec:
     spec:
       containers:
       - name: seed
-        image: postgres:15
+        # ON UTILISE TON IMAGE DE TEST (qui contient déjà jq et data.json)
+        image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
         env:
         - name: PGPASSWORD
           valueFrom:
             secretKeyRef:
               name: dev-profile-db-app
               key: password
-        command: ["/bin/bash", "-c"]
+        command: ["/bin/sh", "-c"] # Alpine/k6 utilise sh
         args:
           - |
-            apt-get update && apt-get install -y jq
-            VALUES=$(jq -r '.[]' /scripts/data.json | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
+            # Le fichier est dans /test/data.json (voir ton Dockerfile)
+            VALUES=$(cat /test/data.json | tr -d '[]"' | tr ',' '\n' | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
+            
+            # Note: Il faut s'assurer que psql est dispo ou utiliser une image avec psql.
+            # Si ton image k6 n'a pas psql, on peut garder l'image postgres mais il faut
+            # lui passer le data.json différemment (ou le copier en dur dans le script).
             
             psql -h dev-profile-db.default.svc.cluster.local -U postgres -d profile -c "
-            DO \$\$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM user_profiles WHERE display_name = 'LoadTestUser' LIMIT 1) THEN
-                    INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
-                    VALUES $VALUES;
-                END IF;
-            END \$\$;"
-        volumeMounts:
-        - name: scripts-volume
-          mountPath: /scripts
-      volumes:
-      - name: scripts-volume
-        configMap:
-          name: command-test-scripts
+            INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
+            VALUES $VALUES ON CONFLICT DO NOTHING;"
       restartPolicy: OnFailure
