@@ -12,9 +12,10 @@ spec:
   parallelism: 4
   
   script:
-    image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
+    localFile: /test/script.js
       
   runner:
+    image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
     env:
       - name: K6_SCRIPT
         value: "/test/script.js"
