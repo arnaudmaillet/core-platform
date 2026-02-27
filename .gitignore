@@ -42,3 +42,7 @@ rust-project.json
 
 # Fichiers de crash
 crash.log
+
+
+
+public-key.cert
