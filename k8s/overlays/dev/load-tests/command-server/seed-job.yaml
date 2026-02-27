@@ -14,7 +14,6 @@ spec:
     spec:
       containers:
       - name: seed
-        # ON UTILISE TON IMAGE DE TEST (qui contient déjà jq et data.json)
         image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
         env:
         - name: PGPASSWORD
@@ -22,17 +21,16 @@ spec:
             secretKeyRef:
               name: dev-profile-db-app
               key: password
-        command: ["/bin/sh", "-c"] # Alpine/k6 utilise sh
+        - name: PGUSER
+          value: "app"
+        command: ["/bin/sh", "-c"]
         args:
           - |
-            # Le fichier est dans /test/data.json (voir ton Dockerfile)
+            # Transformation du JSON
             VALUES=$(cat /test/data.json | tr -d '[]"' | tr ',' '\n' | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
             
-            # Note: Il faut s'assurer que psql est dispo ou utiliser une image avec psql.
-            # Si ton image k6 n'a pas psql, on peut garder l'image postgres mais il faut
-            # lui passer le data.json différemment (ou le copier en dur dans le script).
-            
-            psql -h dev-profile-db-rw.default.svc.cluster.local -U postgres -d profile -c "
+            # Connexion avec l'utilisateur 'app' (-U app)
+            psql -h dev-profile-db-rw.default.svc.cluster.local -U app -d profile -c "
             INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
             VALUES $VALUES ON CONFLICT DO NOTHING;"
       restartPolicy: OnFailure
