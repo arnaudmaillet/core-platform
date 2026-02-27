@@ -1,4 +1,5 @@
+# k8s/base/services/profile/apps/command-server/kustomization.yaml
+
 resources:
   - deployment.yaml
   - service.yaml
-  - sealed-secret.yaml

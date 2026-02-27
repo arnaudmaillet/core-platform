@@ -6,9 +6,4 @@ kind: Kustomization
 resources:
   - scaling-test-run.yaml # On pointe vers le fichier de ressource K6
   - seed-job.yaml
-
-secretGenerator:
-  - name: dev-profile-db-app
-    type: Opaque
-    literals:
-      - password=${DB_PASSWORD}
+  - sealed-secret.yaml
