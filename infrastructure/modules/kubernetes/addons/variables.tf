@@ -7,6 +7,10 @@ variable "cluster_name" {
   type        = string
 }
 
+variable "aws_region" {
+  type = string
+}
+
 variable "cluster_endpoint" {
   description = "Endpoint de l'API Kubernetes"
   type        = string
