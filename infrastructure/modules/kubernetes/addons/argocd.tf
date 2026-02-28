@@ -84,9 +84,13 @@ resource "kubernetes_ingress_v1" "argocd_server" {
     namespace = "argocd"
     annotations = {
       "kubernetes.io/ingress.class"               = "alb"
+      "external-dns.alpha.kubernetes.io/hostname" = "argocd.core-platform.click"
       "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
       "alb.ingress.kubernetes.io/target-type"     = "ip"
       "alb.ingress.kubernetes.io/certificate-arn" = var.ssl_certificate_arn
+      "alb.ingress.kubernetes.io/healthcheck-path"     = "/healthz"
+      "alb.ingress.kubernetes.io/healthcheck-protocol" = "HTTPS"
+      "alb.ingress.kubernetes.io/backend-protocol"      = "HTTPS"
       "alb.ingress.kubernetes.io/listen-ports"    = "[{\"HTTP\": 80}, {\"HTTPS\": 443}]"
       "alb.ingress.kubernetes.io/actions.ssl-redirect" = "{\"Type\": \"redirect\", \"RedirectConfig\": { \"Protocol\": \"HTTPS\", \"Port\": \"443\", \"StatusCode\": \"HTTP_301\"}}"
     }
@@ -110,12 +114,4 @@ resource "kubernetes_ingress_v1" "argocd_server" {
     }
   }
   depends_on = [helm_release.argocd]
-}
-
-resource "aws_route53_record" "argocd" {
-  zone_id = var.route53_zone_id
-  name    = "argocd.core-platform.click"
-  type    = "CNAME"
-  ttl     = 300
-  records = [try(kubernetes_ingress_v1.argocd_server.status[0].load_balancer[0].ingress[0].hostname, "pending")]
 }
