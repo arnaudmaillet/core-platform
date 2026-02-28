@@ -12,10 +12,15 @@ resource "helm_release" "external_dns" {
       policy   = "sync"
       sources = ["service", "ingress"] 
       txtOwnerId = var.cluster_name
+
+      aws = {
+        region = var.aws_region
+        preferCNAME = false
+      }
       
       serviceAccount = {
         create = true
-        
+        name   = "external-dns"
         annotations = {
           "eks.amazonaws.com/role-arn" = var.external_dns_role_arn
         }

@@ -6,6 +6,11 @@ terraform {
   source = "../../../../../modules/kubernetes/addons"
 }
 
+locals {
+  region_vars = read_terragrunt_config(find_in_parent_folders("region.hcl"))
+  aws_region  = local.region_vars.locals.aws_region
+}
+
 # Dépendance cruciale : Addons a besoin des outputs de EKS
 dependency "eks" {
   config_path = "../eks"
@@ -25,6 +30,7 @@ inputs = {
   cluster_endpoint       = dependency.eks.outputs.cluster_endpoint
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
   vpc_id                 = dependency.vpc.outputs.vpc_id
+  aws_region                = local.aws_region
 
   # Rôles IAM et Certificat
   lb_controller_role_arn   = dependency.eks.outputs.lb_controller_role_arn
