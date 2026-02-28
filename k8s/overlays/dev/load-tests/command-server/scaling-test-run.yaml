@@ -29,11 +29,3 @@ spec:
       limits:
         cpu: "1000m"
         memory: "2Gi"
-    
-    nodeSelector:
-      intent: load-tests 
-    tolerations:
-      - key: "dedicated"
-        operator: "Equal"
-        value: "load-testing"
-        effect: "NoSchedule"
