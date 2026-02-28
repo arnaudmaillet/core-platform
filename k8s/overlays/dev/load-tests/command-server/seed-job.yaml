@@ -26,10 +26,11 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # Transformation du JSON
-            VALUES=$(cat /test/data.json | tr -d '[]"' | tr ',' '\n' | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
+            RAW_DATA=$(cat /test/data.json | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             
-            # Connexion avec l'utilisateur 'app' (-U app)
+            VALUES=$(echo "$RAW_DATA" | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
+            
+            echo "Inserting values..."
             psql -h dev-profile-db-rw.default.svc.cluster.local -U app -d profile -c "
             INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
             VALUES $VALUES ON CONFLICT DO NOTHING;"
