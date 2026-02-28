@@ -2,7 +2,7 @@
 
 resource "helm_release" "karpenter" {
   name                = "karpenter"
-  repository          = "public.ecr.aws/karpenter"
+  repository          = "oci://public.ecr.aws/karpenter"
   chart               = "karpenter"
   version             = "1.2.1"
   namespace           = "kube-system"
@@ -23,7 +23,6 @@ resource "helm_release" "karpenter" {
       }
       controller = {
         clusterEndpoint = var.cluster_endpoint
-        # IMPORTANT : Karpenter doit tourner sur les nœuds "system" existants
         nodeSelector = { intent = "system" }
         tolerations = [{
           key      = "CriticalAddonsOnly"
