@@ -42,7 +42,7 @@ module "external_dns_irsa_role" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:external-dns"]
+      namespace_service_accounts = ["external-dns:external-dns"]
     }
   }
 }
@@ -76,7 +76,7 @@ module "karpenter_irsa_role" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:karpenter"]
+      namespace_service_accounts = ["karpenter:karpenter"]
     }
   }
 }
@@ -154,7 +154,7 @@ module "cert_manager_irsa_role" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:cert-manager"]
+      namespace_service_accounts = ["cert-manager:cert-manager"]
     }
   }
 }
