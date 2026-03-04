@@ -12,6 +12,11 @@ locals {
 
   # Variables par défaut
   aws_region   = local.region_vars.locals.aws_region
+
+  repository_url = "https://github.com/arnaudmaillet/core-platform"
+  repository_path = "infrastructure/argocd"
+  target_revision = "develop"
+
   owner = "no-team"
   project_name = "core-platform"
 
@@ -127,6 +132,9 @@ inputs = {
   aws_region   = local.aws_region
   project_name = local.project_name
   env          = local.environment_vars.locals.env
+  repository_url  = local.repository_url
+  repository_path = local.repository_path
+  target_revision = local.target_revision
 }
 
 # 4. AUTOMATISATION DU LOGIN HELM (ECR PUBLIC)
