@@ -42,7 +42,11 @@ module "external_dns_irsa_role" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
+<<<<<<< HEAD
       namespace_service_accounts = ["external-dns:external-dns"]
+=======
+      namespace_service_accounts = ["kube-system:external-dns"]
+>>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
     }
   }
 }
@@ -76,7 +80,11 @@ module "karpenter_irsa_role" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
+<<<<<<< HEAD
       namespace_service_accounts = ["karpenter:karpenter"]
+=======
+      namespace_service_accounts = ["kube-system:karpenter"]
+>>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
     }
   }
 }

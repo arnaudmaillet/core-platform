@@ -25,6 +25,10 @@ spec:
         - key: "karpenter.k8s.aws/instance-family"
           operator: In
           values: ["t3", "m6i"] # Des instances stables pour le monitoring
+      taints:
+        - key: "CriticalAddonsOnly"
+          value: "true"
+          effect: "NoSchedule"
   limits:
     cpu: "20"
   disruption:

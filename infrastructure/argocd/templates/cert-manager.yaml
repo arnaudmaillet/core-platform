@@ -15,12 +15,18 @@ spec:
       values: |
         installCRDs: true
         serviceAccount:
+<<<<<<< HEAD
           create: true
           name: cert-manager
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.certManagerRoleArn }}
   destination:
   destination:
+=======
+          annotations:
+            eks.amazonaws.com/role-arn: {{ .Values.global.certManagerRoleArn }}
+  destination:
+>>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
     server: https://kubernetes.default.svc
     namespace: cert-manager
   syncPolicy:
