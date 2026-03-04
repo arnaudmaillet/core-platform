@@ -20,7 +20,6 @@ spec:
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.certManagerRoleArn }}
   destination:
-  destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
   syncPolicy:
