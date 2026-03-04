@@ -9,7 +9,7 @@ spec:
   template:
     metadata:
       labels:
-        intent: system  # C'est ce que Prometheus attend !
+        intent: system
     spec:
       nodeClassRef:
         group: karpenter.k8s.aws
@@ -112,3 +112,38 @@ spec:
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: "core-platform-dev"
+---
+# 4. NODEPOOL POUR LE STRESS TEST (Instances Jet)
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: perf-test
+spec:
+  template:
+    metadata:
+      labels:
+        role: infra-test # Label pour cibler ces nœuds dans K6
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      taints:
+        - key: dedicated
+          value: perf-test
+          effect: NoSchedule
+      requirements:
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["on-demand"] # On veut de la stabilité max pour les tests
+        - key: "karpenter.k8s.aws/instance-family"
+          operator: In
+          values: ["c6i", "c5"] # Familles optimisées CPU
+        - key: "karpenter.k8s.aws/instance-size"
+          operator: In
+          values: ["2xlarge", "4xlarge"]
+  limits:
+    cpu: "100"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s # On supprime très vite après le test
