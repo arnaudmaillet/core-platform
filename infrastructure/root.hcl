@@ -132,12 +132,9 @@ inputs = {
   aws_region   = local.aws_region
   project_name = local.project_name
   env          = local.environment_vars.locals.env
-<<<<<<< HEAD
   repository_url  = local.repository_url
   repository_path = local.repository_path
   target_revision = local.target_revision
-=======
->>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
 }
 
 # 4. AUTOMATISATION DU LOGIN HELM (ECR PUBLIC)
