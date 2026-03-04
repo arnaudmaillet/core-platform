@@ -24,6 +24,14 @@ inputs = {
   cluster_name           = dependency.eks.outputs.cluster_name
   cluster_endpoint       = dependency.eks.outputs.cluster_endpoint
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
+<<<<<<< HEAD
+=======
+  
+  # Configuration GitOps
+  repository_url  = "git@github.com:ton-org/ton-repo.git"
+  repository_path = "infrastructure/argocd-root"
+  target_revision = "main"
+>>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
 
   # Injection des rôles IAM provenant du module Identity
   addons_iam_roles = dependency.identity.outputs.iam_role_arns
