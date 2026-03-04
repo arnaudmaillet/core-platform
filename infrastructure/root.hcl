@@ -14,6 +14,8 @@ locals {
   aws_region   = local.region_vars.locals.aws_region
   owner = "no-team"
   project_name = "core-platform"
+
+  is_kubernetes = contains(split("/", path_relative_to_include()), "kubernetes")
 }
 
 # 1. GÉNÉRATION DU BACKEND (S3 + DynamoDB)
@@ -38,22 +40,82 @@ remote_state {
   }
 }
 
-# 2. GÉNÉRATION DU PROVIDER AWS
-# Injecte la configuration du provider dans tous les modules fils
-generate "provider" {
-  path      = "provider.tf"
+# 2. GÉNÉRATION DES PROVIDERS (AWS, K8S, HELM, KUBECTL)
+generate "providers" {
+  path      = "providers.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
 provider "aws" {
   region = "${local.aws_region}"
-
-  # Default tags appliqués à TOUTES les ressources du projet
   default_tags {
     tags = {
       Project     = "${local.project_name}"
       Environment = "${local.environment_vars.locals.env}"
       ManagedBy   = "Terraform/Terragrunt"
     }
+  }
+}
+
+provider "aws" {
+  alias  = "virginia"
+  region = "us-east-1"
+}
+
+%{ if local.is_kubernetes }
+provider "kubernetes" {
+  host                   = var.cluster_endpoint
+  cluster_ca_certificate = base64decode(var.cluster_ca_certificate)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+  }
+}
+
+provider "helm" {
+  kubernetes = { # <--- ICI : Pour certaines versions, l'absence de '=' passe, mais pour la tienne il le faut
+    host                   = var.cluster_endpoint
+    cluster_ca_certificate = base64decode(var.cluster_ca_certificate)
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+    }
+  }
+}
+
+# Note : Si l'erreur persiste après avoir ajouté le '=', 
+# c'est que ta version de Helm attend la syntaxe sans '=' mais avec un bloc nommé différemment.
+# Mais l'erreur "Did you mean to define argument" confirme qu'il attend '='.
+
+provider "kubectl" {
+  host                   = var.cluster_endpoint
+  cluster_ca_certificate = base64decode(var.cluster_ca_certificate)
+  load_config_file       = false
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+  }
+}
+%{ endif }
+EOF
+}
+
+generate "versions" {
+  path      = "versions.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<EOF
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws        = { source = "hashicorp/aws", version = ">= 5.0" }
+%{ if local.is_kubernetes }
+    kubernetes = { source = "hashicorp/kubernetes", version = ">= 2.20" }
+    helm       = { source = "hashicorp/helm", version = ">= 2.10" }
+    kubectl    = { source = "gavinbunney/kubectl", version = ">= 1.14.0" }
+%{ endif }
+    time       = { source = "hashicorp/time", version = ">= 0.9" }
   }
 }
 EOF
@@ -65,4 +127,17 @@ inputs = {
   aws_region   = local.aws_region
   project_name = local.project_name
   env          = local.environment_vars.locals.env
+}
+
+# 4. AUTOMATISATION DU LOGIN HELM (ECR PUBLIC)
+# Évite l'erreur 403 "authorization token has expired" toutes les 12h
+terraform {
+  before_hook "ecr_public_login" {
+    commands = ["apply", "plan"]
+    execute  = [
+      "sh", 
+      "-c", 
+      "aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws"
+    ]
+  }
 }

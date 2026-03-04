@@ -1,0 +1,22 @@
+# infrastructure/argocd/templates/k6-operator.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k6-operator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: k6-operator
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: "3.6.0"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: k6-operator-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
