@@ -16,11 +16,8 @@ spec:
         settings:
           clusterName: {{ .Values.global.clusterName }}
         serviceAccount:
-<<<<<<< HEAD
           create: true
           name: karpenter
-=======
->>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.karpenterRoleArn }}
   destination:
