@@ -3,21 +3,36 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: monitoring
+  name: kube-prometheus-stack
   namespace: argocd
 spec:
   project: default
   source:
     chart: kube-prometheus-stack
     repoURL: https://prometheus-community.github.io/helm-charts
-    targetRevision: "56.0.0"
+    targetRevision: 56.0.0
     helm:
       values: |
         grafana:
-          adminPassword: "admin" # À changer via un Secret ensuite
+          ingress:
+            enabled: true
+            ingressClassName: alb
+            annotations:
+              # Le hostname pour external-dns
+              external-dns.alpha.kubernetes.io/hostname: grafana.core-platform.click
+              alb.ingress.kubernetes.io/scheme: internet-facing
+              alb.ingress.kubernetes.io/target-type: ip
+              alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificateArn | quote }}
+              alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+              # Force la redirection vers HTTPS pour la sécurité
+              alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+            hosts:
+              - grafana.core-platform.click
+          adminPassword: "admin" # Utile pour le premier login
         prometheus:
           prometheusSpec:
             retention: 10d
+            # Configuration du stockage pour ne pas perdre les données du test
             storageSpec:
               volumeClaimTemplate:
                 spec:
@@ -34,3 +49,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
