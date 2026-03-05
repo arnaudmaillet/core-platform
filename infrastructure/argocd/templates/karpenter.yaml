@@ -9,8 +9,8 @@ spec:
   project: default
   source:
     chart: karpenter
-    repoURL: https://charts.karpenter.sh/
-    targetRevision: "0.33.0" # À adapter selon ta version
+    repoURL: public.ecr.aws/karpenter
+    targetRevision: "0.33.0"
     helm:
       values: |
         settings:
