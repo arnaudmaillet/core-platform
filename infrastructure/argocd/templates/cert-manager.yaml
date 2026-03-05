@@ -20,21 +20,6 @@ spec:
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.certManagerRoleArn }}
   destination:
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-  destination:
-<<<<<<< HEAD
-=======
-          annotations:
-            eks.amazonaws.com/role-arn: {{ .Values.global.certManagerRoleArn }}
-  destination:
->>>>>>> 90e26a9 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
->>>>>>> a0e9761 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
-=======
->>>>>>> e3f9dad (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
-=======
->>>>>>> 25de8d7 (feat(infra): implement GitOps load-testing framework with k6-operator and automated seeding)
     server: https://kubernetes.default.svc
     namespace: cert-manager
   syncPolicy:
