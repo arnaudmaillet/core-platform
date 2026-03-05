@@ -3,7 +3,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kube-prometheus-stack
+  name: infra-monitoring-dev
   namespace: argocd
 spec:
   project: default
