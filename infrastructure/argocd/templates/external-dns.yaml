@@ -28,8 +28,6 @@ spec:
           name: external-dns
           annotations:
             eks.amazonaws.com/role-arn: {{ .Values.global.externalDnsRoleArn | quote }}
-        extraArgs:
-          - --log-level=debug
   destination:
     server: https://kubernetes.default.svc
     namespace: external-dns
