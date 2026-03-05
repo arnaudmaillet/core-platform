@@ -1,5 +1,7 @@
 # infrastructure/argocd/templates/monitoring.yaml
 
+# infrastructure/argocd/templates/monitoring.yaml
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -18,13 +20,10 @@ spec:
             enabled: true
             ingressClassName: alb
             annotations:
-              # Le hostname pour external-dns
               external-dns.alpha.kubernetes.io/hostname: grafana.core-platform.click
               alb.ingress.kubernetes.io/scheme: internet-facing
               alb.ingress.kubernetes.io/target-type: ip
-              alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificateArn | quote }}
               alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-              # Force la redirection vers HTTPS pour la sécurité
               alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
             hosts:
               - grafana.core-platform.click
@@ -40,6 +39,12 @@ spec:
                   resources:
                     requests:
                       storage: 20Gi
+      
+      parameters:
+        - name: "grafana.ingress.annotations.alb\.ingress\.kubernetes\.io/certificate-arn"
+          value: {{ .Values.global.certificateArn | quote }}
+          forceString: true
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
