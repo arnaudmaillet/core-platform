@@ -15,7 +15,7 @@ spec:
       values: |
         provider: aws
         domainFilters:
-          - core-platform.click
+          - "core-platform.click"
         policy: upsert-only
         registry: txt
         txtOwnerId: {{ .Values.global.clusterName | quote }}
