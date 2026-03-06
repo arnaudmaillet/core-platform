@@ -1,5 +1,3 @@
-# infrastructure/argocd/templates/ingress.yaml
-
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,16 +10,8 @@ metadata:
     alb.ingress.kubernetes.io/certificate-arn: "{{ .Values.global.certificateArn }}"
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: '443'
-    
-    # Cette annotation autorise l'ALB Controller à ouvrir les ports 
-    # sur le Security Group de tes Nodes EKS automatiquement.
-    alb.ingress.kubernetes.io/manage-backend-security-group-rules: "true"
-    
-    # --- CONFIGURATION DU HEALTH CHECK ---
-    # On dirige l'ALB vers le endpoint de santé interne d'ArgoCD
     alb.ingress.kubernetes.io/healthcheck-path: /healthz
     alb.ingress.kubernetes.io/healthcheck-port: traffic-port
-    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/success-codes: '200'
     
     external-dns.alpha.kubernetes.io/hostname: argocd.core-platform.click

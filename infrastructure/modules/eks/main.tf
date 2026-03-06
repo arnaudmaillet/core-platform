@@ -25,4 +25,16 @@ module "eks" {
   node_security_group_tags = {
     "karpenter.sh/discovery" = var.cluster_name
   }
+
+  node_security_group_additional_rules = {
+    ingress_argocd_8080 = {
+      description = "Allow ALB to reach ArgoCD server pods"
+      protocol    = "tcp"
+      from_port   = 8080
+      to_port     = 8080
+      type        = "ingress"
+      # On autorise le trafic venant de l'ALB (via le CIDR du VPC)
+      cidr_blocks = ["10.0.0.0/16"] # Utilise ton CIDR VPC ici
+    }
+  }
 }
