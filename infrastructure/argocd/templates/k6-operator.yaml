@@ -5,6 +5,8 @@ kind: Application
 metadata:
   name: k6-operator
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:

@@ -135,7 +135,7 @@ resource "aws_iam_role_policy" "external_dns_route53_rw" {
     Statement = [
       {
         Action = [
-          "route53:ChangeResourceRecordSets", # LA permission magique
+          "route53:ChangeResourceRecordSets",
           "route53:ListHostedZones",
           "route53:ListResourceRecordSets"
         ]

@@ -4,10 +4,6 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-terraform {
-  source = "../../../../../modules//kubernetes/argocd-bootstrap" # Module qui contient UNIQUEMENT le kubernetes_manifest
-}
-
 dependency "eks" {
   config_path = "../../eks"
 }
@@ -18,6 +14,10 @@ dependency "identity" {
 
 dependency "argocd_server" {
   config_path = "../01-argocd-server"
+}
+
+terraform {
+  source = "../../../../../modules//kubernetes/argocd-bootstrap"
 }
 
 inputs = {
