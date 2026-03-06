@@ -16,7 +16,7 @@ module "lb_controller_irsa_role" {
   version = "~> 5.0"
 
   role_name = "${var.cluster_name}-lb-controller-role"
-  
+
   # On attache ta policy personnalisée
   role_policy_arns = {
     policy = aws_iam_policy.load_balancer_controller.arn
@@ -126,6 +126,26 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
   })
 }
 
+resource "aws_iam_role_policy" "external_dns_route53_rw" {
+  name = "ExternalDNSRoute53ReadWrite"
+  role = module.external_dns_irsa_role.iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "route53:ChangeResourceRecordSets", # LA permission magique
+          "route53:ListHostedZones",
+          "route53:ListResourceRecordSets"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # --- 4. EBS CSI DRIVER ---
 module "ebs_csi_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
@@ -147,8 +167,8 @@ module "cert_manager_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.0"
 
-  role_name                  = "${var.cluster_name}-cert-manager-role"
-  attach_cert_manager_policy = true
+  role_name                     = "${var.cluster_name}-cert-manager-role"
+  attach_cert_manager_policy    = true
   cert_manager_hosted_zone_arns = ["arn:aws:route53:::hostedzone/*"]
 
   oidc_providers = {
@@ -172,4 +192,11 @@ module "k6_irsa_role" {
       namespace_service_accounts = ["k6-operator-system:k6-operator"]
     }
   }
+}
+
+
+data "aws_acm_certificate" "issued" {
+  domain      = "core-platform.click"
+  statuses    = ["ISSUED"]
+  most_recent = true
 }

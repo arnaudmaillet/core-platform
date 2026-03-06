@@ -24,7 +24,6 @@ inputs = {
   cluster_name           = dependency.eks.outputs.cluster_name
   cluster_endpoint       = dependency.eks.outputs.cluster_endpoint
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
-
-  # Injection des rôles IAM provenant du module Identity
+  ssl_certificate_arn    = dependency.identity.outputs.certificate_arn
   addons_iam_roles = dependency.identity.outputs.iam_role_arns
 }

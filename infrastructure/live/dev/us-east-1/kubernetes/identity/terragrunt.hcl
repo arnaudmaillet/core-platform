@@ -17,7 +17,8 @@ inputs = {
   cluster_name      = dependency.eks.outputs.cluster_name
   oidc_provider_arn = dependency.eks.outputs.oidc_provider_arn
   oidc_provider_url = dependency.eks.outputs.oidc_provider_url
-  
+
+
   # Crucial pour Karpenter : on lui dit quels rôles de nodes il a le droit d'utiliser
   node_iam_role_arns = dependency.eks.outputs.node_iam_role_arns
 

@@ -16,13 +16,13 @@ spec:
         provider: aws
         domainFilters:
           - core-platform.click
-        policy: sync
+        policy: upsert-only
         registry: txt
         txtOwnerId: {{ .Values.global.clusterName | quote }}
         sources:
           - ingress
           - service
-        
+
         serviceAccount:
           create: true
           name: external-dns
