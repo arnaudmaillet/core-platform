@@ -5,11 +5,20 @@ include "root" {
 }
 
 terraform {
-  source = "../../../../../modules//kubernetes/argocd-server" # Module qui contient UNIQUEMENT le helm_release
+  source = "../../../../../modules//kubernetes/argocd-server"
+  
+  before_hook "clean_k8s_resources" {
+    commands     = ["destroy"]
+    execute      = ["/bin/bash", "-c", "kubectl delete ingress --all --all-namespaces --wait=true || true"]
+  }
 }
 
 dependency "eks" {
   config_path = "../../eks"
+}
+
+dependency "identity" {
+  config_path = "../identity"
 }
 
 inputs = {

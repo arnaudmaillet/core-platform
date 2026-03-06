@@ -7,9 +7,11 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
   version          = var.argocd_version
-
+  cleanup_on_fail = true
   wait             = true 
   timeout          = 600
+  force_update    = true
+  
   # Configuration minimale pour ClusterIP (géré ensuite par Ingress via GitOps)
     values = [
     yamlencode({
