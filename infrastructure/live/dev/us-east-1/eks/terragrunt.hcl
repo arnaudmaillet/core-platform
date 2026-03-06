@@ -4,6 +4,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+dependency "vpc" {
+  config_path = "../networking/vpc"
+}
+
 terraform {
   source = "../../../../modules/eks"
 
@@ -22,10 +26,6 @@ terraform {
     execute      = ["/bin/bash", "-c", "echo 'Vérification finale des ressources orphelines...'; sleep 5"]
     run_on_error = false
   }
-}
-
-dependency "vpc" {
-  config_path = "../networking/vpc"
 }
 
 locals {

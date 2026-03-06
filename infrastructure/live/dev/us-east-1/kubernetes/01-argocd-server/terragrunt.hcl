@@ -4,6 +4,14 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+dependency "eks" {
+  config_path = "../../eks"
+}
+
+dependency "identity" {
+  config_path = "../00-identity"
+}
+
 terraform {
   source = "../../../../../modules//kubernetes/argocd-server"
   
@@ -11,14 +19,6 @@ terraform {
     commands     = ["destroy"]
     execute      = ["/bin/bash", "-c", "kubectl delete ingress --all --all-namespaces --wait=true || true"]
   }
-}
-
-dependency "eks" {
-  config_path = "../../eks"
-}
-
-dependency "identity" {
-  config_path = "../identity"
 }
 
 inputs = {
