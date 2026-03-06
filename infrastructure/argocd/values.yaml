@@ -1,7 +1,7 @@
 # infrastructure/argocd/values.yaml
 
 global:
-  env: "dev"
+  env: ""
   certificateArn: ""
   clusterName: ""
   clusterEndpoint: ""
