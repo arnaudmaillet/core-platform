@@ -1,16 +1,15 @@
-# infrastructure/live/dev/us-east-1/kubernetes/identity/terragrunt.hcl
+# infrastructure/live/dev/us-east-1/kubernetes/00-identity/terragrunt.hcl
 
 include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-terraform {
-  # Note le double slash // pour que Terraform trouve bien le module
-  source = "../../../../../modules//kubernetes/identity"
-}
-
 dependency "eks" {
   config_path = "../../eks"
+}
+
+terraform {
+  source = "../../../../../modules//kubernetes/identity"
 }
 
 inputs = {

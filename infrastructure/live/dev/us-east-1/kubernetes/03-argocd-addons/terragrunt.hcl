@@ -4,24 +4,24 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-terraform {
-  source = "../../../../../modules//kubernetes/argocd-addons"
-}
-
 dependency "eks" {
   config_path = "../../eks"
 }
 
 dependency "identity" {
-  config_path = "../identity"
+  config_path = "../00-identity"
 }
 
 dependency "argocd_server" {
   config_path = "../01-argocd-server"
 }
 
-dependency "argocd_server" {
+dependency "argocd_bootstrap" {
   config_path = "../02-argocd-bootstrap"
+}
+
+terraform {
+  source = "../../../../../modules//kubernetes/argocd-addons"
 }
 
 inputs = {

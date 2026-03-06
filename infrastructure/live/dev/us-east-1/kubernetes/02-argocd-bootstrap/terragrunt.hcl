@@ -9,7 +9,7 @@ dependency "eks" {
 }
 
 dependency "identity" {
-  config_path = "../identity"
+  config_path = "../00-identity"
 }
 
 dependency "argocd_server" {
