@@ -1,3 +1,5 @@
+# infrastructure/modules/kubernetes/argocd-server/main.tf
+
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -12,6 +14,9 @@ resource "helm_release" "argocd" {
     values = [
     yamlencode({
       server = {
+        extraArgs = [
+          "--insecure"
+        ]
         service = {
           type = "ClusterIP"
         }
