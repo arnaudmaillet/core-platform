@@ -17,13 +17,12 @@ resource "kubernetes_manifest" "root_application" {
         path           = var.repository_path
         targetRevision = var.target_revision
         helm = {
-          # Ces paramètres seront injectés dans ton Chart de base
-          # Très utile pour passer les ARNs IAM sans les écrire en dur dans Git
           parameters = [
             { name = "global.karpenterRoleArn",   value = var.addons_iam_roles["karpenter"] },
             { name = "global.lbControllerRoleArn", value = var.addons_iam_roles["lb_controller"] },
             { name = "global.externalDnsRoleArn",  value = var.addons_iam_roles["external_dns"] },
             { name = "global.certManagerRoleArn",  value = var.addons_iam_roles["cert_manager"] },
+            { name = "global.certificateArn",      value = var.ssl_certificate_arn },
             { name = "global.clusterName",         value = var.cluster_name }
           ]
         }

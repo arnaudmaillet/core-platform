@@ -24,3 +24,8 @@ variable "addons_iam_roles" {
   description = "Map des ARNs des rôles IAM (output du module identity)"
   type        = map(string)
 }
+
+variable "ssl_certificate_arn" {
+  description = "ARN du certificat ACM pour les Ingress (ALB)"
+  type        = string
+}

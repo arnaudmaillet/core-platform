@@ -23,6 +23,9 @@ output "k6_role_arn" {
 output "ebs_csi_role_arn" {
   value = module.ebs_csi_irsa_role.iam_role_arn
 }
+output "certificate_arn" {
+  value = data.aws_acm_certificate.issued.arn
+}
 
 # La map globale que ton module ArgoCD va adorer consommer
 output "iam_role_arns" {
