@@ -14,7 +14,12 @@ resource "helm_release" "argocd" {
     values = [
     yamlencode({
       server = {
-        insecure = true
+        extraArgs = [
+          "--insecure"
+        ]
+        config = {
+          "server.insecure" = "true"
+        }
         service = {
           type = "ClusterIP"
         }
