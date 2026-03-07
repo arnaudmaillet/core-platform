@@ -9,7 +9,7 @@ dependency "eks" {
 }
 
 terraform {
-  source = "../../../../../modules//kubernetes/identity"
+  source = "../../../../../modules//security/irsa-roles"
 }
 
 inputs = {

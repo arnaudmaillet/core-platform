@@ -1,3 +1,5 @@
+# infrastructure/modules/kubernetes/argocd/server/outputs.tf
+
 output "namespace" {
   description = "Le namespace où ArgoCD est installé"
   value       = helm_release.argocd.namespace

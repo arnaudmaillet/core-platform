@@ -1,4 +1,4 @@
-# infrastructure/modules/kubernetes/argocd-server/main.tf
+# infrastructure/modules/kubernetes/argocd/server/main.tf
 
 resource "helm_release" "argocd" {
   name             = "argocd"

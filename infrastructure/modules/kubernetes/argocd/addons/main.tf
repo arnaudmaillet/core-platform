@@ -1,4 +1,4 @@
-# infrastructure/modules/kubernetes/argocd-addons/main.tf
+# infrastructure/modules/kubernetes/argocd/addons/main.tf
 
 resource "aws_eks_addon" "this" {
   for_each = var.addons

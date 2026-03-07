@@ -1,4 +1,4 @@
-# infrastructure/modules/kubernetes/argocd-bootstrap/variables.tf
+# infrastructure/modules/kubernetes/argocd/bootstrap/variables.tf
 
 variable "cluster_name"           { type = string }
 variable "cluster_endpoint"       { type = string }

@@ -1,4 +1,4 @@
-# infrastructure/modules/kubernetes/argocd-bootstrap/main.tf
+# infrastructure/modules/kubernetes/argocd/bootstrap/main.tf
 
 resource "kubernetes_manifest" "root_application" {
   manifest = {
