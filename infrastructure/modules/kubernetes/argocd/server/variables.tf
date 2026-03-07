@@ -1,4 +1,4 @@
-# infrastructure/modules/kubernetes/argocd-server/variables.tf
+# infrastructure/modules/kubernetes/argocd/server/variables.tf
 
 variable "cluster_name" {
   description = "Nom du cluster EKS"
