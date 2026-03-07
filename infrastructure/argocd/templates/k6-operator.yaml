@@ -18,7 +18,7 @@ spec:
         authProxy:
           image:
             registry: registry.k8s.io
-            repository: registry.k8s.io/kubebuilder/kube-rbac-proxy
+            repository: kubebuilder/kube-rbac-proxy
             tag: v0.16.0
   destination:
     server: https://kubernetes.default.svc
