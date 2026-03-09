@@ -18,6 +18,7 @@ resource "kubernetes_manifest" "root_application" {
         targetRevision = var.target_revision
         helm = {
           parameters = [
+            { name = "global.env",                value = var.env },
             { name = "global.karpenterRoleArn",   value = var.addons_iam_roles["karpenter"] },
             { name = "global.lbControllerRoleArn", value = var.addons_iam_roles["lb_controller"] },
             { name = "global.externalDnsRoleArn",  value = var.addons_iam_roles["external_dns"] },

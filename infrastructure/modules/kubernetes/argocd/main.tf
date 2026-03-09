@@ -14,18 +14,19 @@ module "server" {
 # Ce module ne se lance QUE lorsque le serveur est "Ready"
 module "bootstrap" {
   source     = "./bootstrap"
-  depends_on = [module.server] 
+  depends_on = [module.server]
 
   cluster_name           = var.cluster_name
   cluster_endpoint       = var.cluster_endpoint
   cluster_ca_certificate = var.cluster_ca_certificate
-  
-  repository_url         = var.repository_url
-  repository_path        = var.repository_path
-  target_revision        = var.target_revision
-  
-  addons_iam_roles       = var.addons_iam_roles
-  ssl_certificate_arn    = var.ssl_certificate_arn
+  env                    = var.env
+
+  repository_url  = var.repository_url
+  repository_path = var.repository_path
+  target_revision = var.target_revision
+
+  addons_iam_roles    = var.addons_iam_roles
+  ssl_certificate_arn = var.ssl_certificate_arn
 }
 
 module "addons" {
