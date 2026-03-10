@@ -1,10 +1,12 @@
-# infrastructure/argocd/templates/monitoring.yaml
+# infrastructure/argocd/apps/observability/monitoring/monitoring.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: infra-monitoring-dev
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

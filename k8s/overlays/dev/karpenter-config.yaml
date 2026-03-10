@@ -5,6 +5,8 @@ apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   template:
     metadata:
@@ -35,7 +37,9 @@ spec:
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: worker # Kustomize ajoutera 'dev-' devant
+  name: worker
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   template:
     spec:
@@ -67,6 +71,8 @@ apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   template:
     metadata:
@@ -101,6 +107,8 @@ apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   amiFamily: AL2
   role: "core-platform-dev-node-role"
@@ -118,6 +126,8 @@ apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: perf-test
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   template:
     metadata:

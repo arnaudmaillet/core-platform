@@ -1,10 +1,12 @@
-# infrastructure/argocd/templates/metrics-server.yaml
+# infrastructure/argocd/apps/plateform/metrics-server/metrics-server.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: metrics-server
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
