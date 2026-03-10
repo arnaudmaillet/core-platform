@@ -9,6 +9,7 @@ resources:
   - ../../base/services/profile/apps/command-server
   - ingress.yaml
   - karpenter-config.yaml
+  - hpa.yaml
 namePrefix: dev-
 configurations:
   - karpenter-refs-config.yaml

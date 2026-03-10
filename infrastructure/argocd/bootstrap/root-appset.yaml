@@ -1,0 +1,56 @@
+# infrastructure/argocd/bootstrap/root-appset.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: root-bootstrap
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: '{{ .Values.global.repoUrl }}'
+        revision: '{{ .Values.global.targetRevision | default "HEAD" }}'
+        directories:
+          - path: infrastructure/argocd/apps/**/*
+  
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      sources:
+        # --- SOURCE 1 : Les manifests de l'application (le code des Devs) ---
+        # On pointe dynamiquement vers le dossier k8s/overlays/ de l'app
+        - repoURL: '{{ .Values.global.repoUrl }}'
+          targetRevision: '{{ .Values.global.targetRevision | default "HEAD" }}'
+          path: 'k8s/overlays/{{ .Values.global.env }}'
+
+        # --- SOURCE 2 : Les manifests d'infrastructure (ton Ingress, etc.) ---
+        # On pointe vers le dossier scanné dans 'infrastructure/argocd/apps/'
+        - repoURL: '{{ .Values.global.repoUrl }}'
+          targetRevision: '{{ .Values.global.targetRevision | default "HEAD" }}'
+          path: '{{path}}'
+          helm:
+            values: |
+              global:
+                env: {{ .Values.global.env | quote }}
+                clusterName: {{ .Values.global.clusterName | quote }}
+                certificateArn: {{ .Values.global.certificateArn | quote }}
+                repoUrl: {{ .Values.global.repoUrl | quote }}
+                lbControllerRoleArn: {{ .Values.global.lbControllerRoleArn | quote }}
+                karpenterRoleArn: {{ .Values.global.karpenterRoleArn | quote }}
+                externalDnsRoleArn: {{ .Values.global.externalDnsRoleArn | quote }}
+                certManagerRoleArn: {{ .Values.global.certManagerRoleArn | quote }}
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: default # On déploie l'app métier dans le namespace default
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - RespectIgnoreDifferences=true
+          - ServerSideApply=true

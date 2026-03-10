@@ -1,0 +1,13 @@
+# infrastructure/argocd/apps/workload/core-platform/values.yaml
+
+# Valeurs par défaut (seront surchargées par l'ApplicationSet)
+global:
+  env: ""
+  certificateArn: ""
+  repoUrl: ""
+
+# Configuration spécifique à l'Ingress pour cette application
+ingress:
+  className: "alb"
+  groupName: "core-platform-services"
+  healthcheckPath: "/healthz"

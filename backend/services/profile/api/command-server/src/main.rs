@@ -17,7 +17,7 @@ use profile::application::use_cases::update_handle::UpdateHandleUseCase;
 use profile::infrastructure::api::grpc::SERVICE_DESCRIPTOR_SET;
 
 // Infrastructure - API
-use profile::infrastructure::api::grpc::handlers::{IdentityHandler, MediaHandler, MetadataHandler, };
+use profile::infrastructure::api::grpc::handlers::{IdentityHandler, MediaHandler, MetadataHandler};
 use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_media_service_server::ProfileMediaServiceServer;
 use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_server::ProfileMetadataServiceServer;

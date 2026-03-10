@@ -1,0 +1,6 @@
+# infrastructure/argocd/apps/workload/load-tests/Chart.yaml
+
+apiVersion: v2
+name: k6-load-tests
+description: Helm chart pour les scénarios de tests k6
+version: 1.0.0

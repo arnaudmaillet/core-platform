@@ -1,10 +1,12 @@
-# infrastructure/argocd/templates/external-dns.yaml
+# infrastructure/argocd/apps/security/external-dns/external-dns.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: external-dns
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
