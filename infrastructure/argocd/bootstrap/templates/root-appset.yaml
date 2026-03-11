@@ -3,51 +3,41 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-bootstrap-moteur # On change un peu le nom pour pas confondre avec l'App racine
+  name: root-bootstrap-moteur
   namespace: argocd
 spec:
+  goTemplate: true
   generators:
     - git:
-        repoURL: '{{ .Values.global.repoUrl }}'
-        revision: '{{ .Values.global.targetRevision | default "HEAD" }}'
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        revision: env/dev
         directories:
           - path: infrastructure/argocd/apps/**/*
-  
   template:
     metadata:
-      name: '{{"{{"}}path.basename{{"}}"}}'
+      # Récupère le nom du dossier final (ex: karpenter, external-dns)
+      name: '{{ index .path.segments 3 }}'
     spec:
       project: default
       sources:
-        - repoURL: '{{ .Values.global.repoUrl }}'
-          targetRevision: '{{ .Values.global.targetRevision | default "HEAD" }}'
-          path: 'k8s/overlays/{{ .Values.global.env }}'
+        # Source 1 : Manifestes K8s (Tes services, Ingress, etc.)
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: env/dev
+          path: k8s/overlays/dev
 
-        - repoURL: '{{ .Values.global.repoUrl }}'
-          targetRevision: '{{ .Values.global.targetRevision | default "HEAD" }}'
-          # Pareil ici pour le path généré par l'ApplicationSet
-          path: '{{"{{"}}path{{"}}"}}'
-          helm:
-            values: |
-              global:
-                env: {{ .Values.global.env | quote }}
-                clusterName: {{ .Values.global.clusterName | quote }}
-                certificateArn: {{ .Values.global.certificateArn | quote }}
-                repoUrl: {{ .Values.global.repoUrl | quote }}
-                lbControllerRoleArn: {{ .Values.global.lbControllerRoleArn | quote }}
-                karpenterRoleArn: {{ .Values.global.karpenterRoleArn | quote }}
-                externalDnsRoleArn: {{ .Values.global.externalDnsRoleArn | quote }}
-                certManagerRoleArn: {{ .Values.global.certManagerRoleArn | quote }}
-
+        # Source 2 : Configuration Infrastructure (Helm charts des addons)
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: env/dev
+          path: '{{ .path.path }}'
+      
       destination:
         server: https://kubernetes.default.svc
-        namespace: default # On déploie l'app métier dans le namespace default
-      
+        namespace: argocd # Ajuste ici si tu veux déployer tes apps ailleurs
+
       syncPolicy:
         automated:
           prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-          - RespectIgnoreDifferences=true
           - ServerSideApply=true

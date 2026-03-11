@@ -7,10 +7,29 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
   version          = var.argocd_version
+  cleanup_on_fail  = true
+  wait             = true
+  timeout          = 300
 
   values = [
     yamlencode({
-      # Méthode SRE la plus robuste : Injection directe d'objets Kubernetes via Helm
+      # --- CONFIGURATION SERVEUR ---
+      server = {
+        extraArgs = ["--insecure"]
+        config = {
+          "server.insecure" = "true"
+        }
+        service = {
+          type = "ClusterIP"
+        }
+      }
+
+      # --- REDIS (CACHE) ---
+      redis = {
+        enabled = true
+      }
+
+      # --- INJECTION DE L'APPLICATION RACINE (BOOTSTRAP) ---
       extraObjects = [
         {
           apiVersion = "argoproj.io/v1alpha1"
@@ -25,36 +44,21 @@ resource "helm_release" "argocd" {
               repoURL        = var.repository_url
               targetRevision = var.target_revision
               path           = "infrastructure/argocd/bootstrap"
-              helm = {
-                parameters = [
-                  { name = "global.repoUrl", value = var.repository_url },
-                  { name = "global.env", value = var.env },
-                  { name = "global.clusterName", value = var.cluster_name },
-                  { name = "global.certificateArn", value = var.ssl_certificate_arn },
-                  { name = "global.lbControllerRoleArn", value = var.addons_iam_roles["lb_controller"] },
-                  { name = "global.karpenterRoleArn", value = var.addons_iam_roles["karpenter"] },
-                  { name = "global.externalDnsRoleArn", value = var.addons_iam_roles["external_dns"] },
-                  { name = "global.certManagerRoleArn", value = var.addons_iam_roles["cert_manager"] }
-                ]
-              }
             }
             destination = {
               server    = "https://kubernetes.default.svc"
               namespace = "argocd"
             }
             syncPolicy = {
-              automated = { prune = true, selfHeal = true }
+              automated = {
+                prune    = true
+                selfHeal = true
+              }
+              syncOptions = ["CreateNamespace=true"]
             }
           }
         }
       ]
-
-      server = {
-        extraArgs = ["--insecure"]
-        config    = { "server.insecure" = "true" }
-        service   = { type = "ClusterIP" }
-      }
-      redis = { enabled = true }
     })
   ]
 }
