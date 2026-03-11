@@ -1,8 +1,0 @@
-# infrastructure/argocd/apps/workload/core-platform/Charts.yaml
-
-apiVersion: v2
-name: core-platform-infra
-description: Configuration infrastructure (Ingress) pour core-platform
-type: application
-version: 1.0.0
-appVersion: "1.0.0"
