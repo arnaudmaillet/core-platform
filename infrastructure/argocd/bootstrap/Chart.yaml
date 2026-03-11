@@ -1,4 +1,4 @@
-# infrastructure/argocd/Chart.yaml
+# infrastructure/argocd/bootstrap/Chart.yaml
 
 apiVersion: v2
 name: bootstrap-root
