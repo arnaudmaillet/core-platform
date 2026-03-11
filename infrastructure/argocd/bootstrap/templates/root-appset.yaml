@@ -1,9 +1,9 @@
-# infrastructure/argocd/bootstrap/root-appset.yaml
+# infrastructure/argocd/bootstrap/templates/root-appset.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-bootstrap
+  name: root-bootstrap-moteur # On change un peu le nom pour pas confondre avec l'App racine
   namespace: argocd
 spec:
   generators:
@@ -15,21 +15,18 @@ spec:
   
   template:
     metadata:
-      name: '{{path.basename}}'
+      name: '{{"{{"}}path.basename{{"}}"}}'
     spec:
       project: default
       sources:
-        # --- SOURCE 1 : Les manifests de l'application (le code des Devs) ---
-        # On pointe dynamiquement vers le dossier k8s/overlays/ de l'app
         - repoURL: '{{ .Values.global.repoUrl }}'
           targetRevision: '{{ .Values.global.targetRevision | default "HEAD" }}'
           path: 'k8s/overlays/{{ .Values.global.env }}'
 
-        # --- SOURCE 2 : Les manifests d'infrastructure (ton Ingress, etc.) ---
-        # On pointe vers le dossier scanné dans 'infrastructure/argocd/apps/'
         - repoURL: '{{ .Values.global.repoUrl }}'
           targetRevision: '{{ .Values.global.targetRevision | default "HEAD" }}'
-          path: '{{path}}'
+          # Pareil ici pour le path généré par l'ApplicationSet
+          path: '{{"{{"}}path{{"}}"}}'
           helm:
             values: |
               global:

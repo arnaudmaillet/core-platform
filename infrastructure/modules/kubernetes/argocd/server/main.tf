@@ -7,31 +7,54 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
   version          = var.argocd_version
-  cleanup_on_fail = true
-  wait             = true 
-  timeout          = 600
-  force_update    = true
-  
-  # Configuration minimale pour ClusterIP (géré ensuite par Ingress via GitOps)
-    values = [
+
+  values = [
     yamlencode({
+      # Méthode SRE la plus robuste : Injection directe d'objets Kubernetes via Helm
+      extraObjects = [
+        {
+          apiVersion = "argoproj.io/v1alpha1"
+          kind       = "Application"
+          metadata = {
+            name      = "root-bootstrap"
+            namespace = "argocd"
+          }
+          spec = {
+            project = "default"
+            source = {
+              repoURL        = var.repository_url
+              targetRevision = var.target_revision
+              path           = "infrastructure/argocd/bootstrap"
+              helm = {
+                parameters = [
+                  { name = "global.repoUrl", value = var.repository_url },
+                  { name = "global.env", value = var.env },
+                  { name = "global.clusterName", value = var.cluster_name },
+                  { name = "global.certificateArn", value = var.ssl_certificate_arn },
+                  { name = "global.lbControllerRoleArn", value = var.addons_iam_roles["lb_controller"] },
+                  { name = "global.karpenterRoleArn", value = var.addons_iam_roles["karpenter"] },
+                  { name = "global.externalDnsRoleArn", value = var.addons_iam_roles["external_dns"] },
+                  { name = "global.certManagerRoleArn", value = var.addons_iam_roles["cert_manager"] }
+                ]
+              }
+            }
+            destination = {
+              server    = "https://kubernetes.default.svc"
+              namespace = "argocd"
+            }
+            syncPolicy = {
+              automated = { prune = true, selfHeal = true }
+            }
+          }
+        }
+      ]
+
       server = {
-        extraArgs = [
-          "--insecure"
-        ]
-        config = {
-          "server.insecure" = "true"
-        }
-        service = {
-          type = "ClusterIP"
-        }
+        extraArgs = ["--insecure"]
+        config    = { "server.insecure" = "true" }
+        service   = { type = "ClusterIP" }
       }
-      redis = {
-        enabled = true
-      }
+      redis = { enabled = true }
     })
   ]
-
-  # Optionnel : désactiver l'admin password initial si tu gères le SSO plus tard
-  # Mais pour l'instant, on le laisse par défaut.
 }
