@@ -22,7 +22,6 @@ spec:
                   certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/bbbddd3a-05ae-4ac5-a5cf-5b86e8757be0"
                   karpenterRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-karpenter-controller-role"
                   externalDnsRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role"
-                  # Ajout explicite du rôle LB car il est différent des autres
                   lbRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-aws-load-balancer-controller-role"
   template:
     metadata:
@@ -32,9 +31,11 @@ spec:
     spec:
       project: default
       sources:
+        # Source 1: Tes overlays Kustomize/Raw
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: k8s/overlays/dev
+        # Source 2: Tes dossiers d'apps (qui sont des Charts Helm locaux générant des Applications)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: "{{ .path.path }}"
@@ -44,35 +45,12 @@ spec:
                 clusterName: "{{ .clusterName }}"
                 clusterEndpoint: "{{ .clusterEndpoint }}"
                 certificateArn: "{{ .certificateArn }}"
-
-              {{- if eq .path.basename "aws-load-balancer-controller" }}
-              clusterName: "{{ .clusterName }}"
-              serviceAccount:
-                annotations:
-                  eks.amazonaws.com/role-arn: "{{ .lbRoleArn }}"
-              {{- end }}
-
-              # Mapping spécifique pour ExternalDNS
-              {{- if eq .path.basename "external-dns" }}
-              serviceAccount:
-                annotations:
-                  eks.amazonaws.com/role-arn: "{{ .externalDnsRoleArn }}"
-              {{- end }}
-
-              # Mapping spécifique pour Karpenter
-              {{- if eq .path.basename "karpenter" }}
-              serviceAccount:
-                annotations:
-                  eks.amazonaws.com/role-arn: "{{ .karpenterRoleArn }}"
-              settings:
-                aws:
-                  clusterName: "{{ .clusterName }}"
-                  clusterEndpoint: "{{ .clusterEndpoint }}"
-                  defaultInstanceProfile: "KarpenterNodeInstanceProfile-{{ .clusterName }}"
-              {{- end }}
+                lbRoleArn: "{{ .lbRoleArn }}"
+                externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
+                karpenterRoleArn: "{{ .karpenterRoleArn }}"
       destination:
         server: https://kubernetes.default.svc
-        namespace: default
+        namespace: default # Tes apps internes (les wagons) choisiront leur propre namespace (ex: kube-system)
       syncPolicy:
         automated:
           prune: true
