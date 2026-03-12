@@ -16,7 +16,7 @@ spec:
   template:
     metadata:
       # Utilise basename pour être sûr d'avoir le nom unique du dossier final (ex: karpenter)
-      name: '{{ .path.basename }}'
+      name: "{{ .path.basename }}"
     spec:
       project: default
       sources:
@@ -28,12 +28,12 @@ spec:
         # Source 2 : Configuration Infrastructure (Helm charts des addons)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
-          path: '{{ .path.path }}'
-      
+          path: "{{ .path.path }}"
+
       destination:
         server: https://kubernetes.default.svc
         # On peut laisser l'app définir son namespace ou forcer par défaut
-        namespace: default 
+        namespace: default
 
       syncPolicy:
         automated:
@@ -42,3 +42,4 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          - SkipDryRunOnMissingResource=true
