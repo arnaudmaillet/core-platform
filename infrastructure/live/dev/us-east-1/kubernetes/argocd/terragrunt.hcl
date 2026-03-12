@@ -47,7 +47,6 @@ inputs = {
   # --- Addons EKS (Gérés par le module addons) ---
   addons = {
     "aws-ebs-csi-driver" = {
-      addon_version            = "v1.28.0-eksbuild.1" # Optionnel, ou (known after apply)
       service_account_role_arn = dependency.security.outputs.ebs_csi_role_arn
     }
   }

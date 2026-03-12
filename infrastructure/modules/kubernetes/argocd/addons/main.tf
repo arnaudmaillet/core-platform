@@ -5,10 +5,8 @@ resource "aws_eks_addon" "this" {
 
   cluster_name                = var.cluster_name
   addon_name                  = each.key
-  addon_version               = each.value.addon_version
+  addon_version               = lookup(each.value, "addon_version", null) 
   service_account_role_arn    = each.value.service_account_role_arn
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-
-  tags = var.tags
 }
