@@ -9,7 +9,7 @@ spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ .Values.global.env }}-profile-command-server
+    name: dev-profile-command-server
   minReplicas: 2 # On commence à 2 pour tester le balancing
   maxReplicas: 10 # Limite haute pour forcer Karpenter à créer des Nodes
   metrics:
