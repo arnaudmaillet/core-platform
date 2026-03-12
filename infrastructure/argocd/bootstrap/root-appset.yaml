@@ -10,39 +10,51 @@ spec:
   generators:
     - matrix:
         generators:
-          # Générateur 1 : La liste de tes dossiers (tes apps)
+          # Générateur 1 : Scanne les dossiers du repo pour trouver les apps
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: env/dev
               directories:
                 - path: infrastructure/argocd/apps/**/*
-          # Générateur 2 : Les valeurs injectées par Terraform
+          # Générateur 2 : Récupère les ARNs et noms injectés par Terraform
           - configMap:
               name: argocd-global-config
               namespace: argocd
   template:
     metadata:
       name: "{{ .path.basename }}"
+      annotations:
+        # ORCHESTRATION AUTOMATIQUE :
+        # Wave 1  : Operators (CNPG, Karpenter, etc.)
+        # Wave 5  : Security & Platform (Cert-manager, ExternalDNS)
+        # Wave 10 : Workload (Ton application métier core-platform)
+        argocd.argoproj.io/sync-wave: '{{ if eq (index .path.segments 3) "operators" }}1{{ else if eq (index .path.segments 3) "workload" }}10{{ else }}5{{ end }}'
     spec:
       project: default
       sources:
+        # Source 1 : Manifestes Kubernetes bruts (overlays dev)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: k8s/overlays/dev
+        
+        # Source 2 : Le dossier de l'application elle-même (Helm)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: "{{ .path.path }}"
           helm:
-            # ON INJECTE LES VALEURS DU CONFIGMAP ICI
+            # Injection des valeurs dynamiques provenant du ConfigMap Terraform
             values: |
               global:
                 clusterName: "{{ .clusterName }}"
+                clusterEndpoint: "{{ .clusterEndpoint }}"
                 certificateArn: "{{ .certificateArn }}"
                 karpenterRoleArn: "{{ .karpenterRoleArn }}"
                 externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
+      
       destination:
         server: https://kubernetes.default.svc
         namespace: default
+
       syncPolicy:
         automated:
           prune: true
@@ -50,4 +62,7 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          # PERMET DE LANCER LES WAVES EN PARALLÈLE SANS ERREUR FATALE :
+          # Si l'app Wave 10 contient une ressource dont le CRD est en Wave 1,
+          # ArgoCD n'échouera pas le DryRun et réessaiera jusqu'à succès.
           - SkipDryRunOnMissingResource=true
