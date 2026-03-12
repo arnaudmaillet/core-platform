@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/operators/cnpg-operator/cnpg-operator.yaml
+# infrastructure/argocd/apps/operators/cnpg-operator/templates/cnpg-operator.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application

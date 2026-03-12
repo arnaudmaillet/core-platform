@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/plateform/karpenter/karpenter.yaml
+# infrastructure/argocd/apps/plateform/karpenter/templates/karpenter.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application

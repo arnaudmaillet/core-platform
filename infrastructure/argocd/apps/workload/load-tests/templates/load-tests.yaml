@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/workload/load-tests/load-tests.yaml
+# infrastructure/argocd/apps/workload/load-tests/templates/load-tests.yaml
 
 {{- range .Values.loadTests }}
 ---

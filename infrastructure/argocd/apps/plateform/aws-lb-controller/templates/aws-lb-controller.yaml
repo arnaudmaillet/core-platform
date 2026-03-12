@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/plateform/aws-lb-controller/aws-lb-controller.yaml
+# infrastructure/argocd/apps/plateform/aws-lb-controller/templates/aws-lb-controller.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application

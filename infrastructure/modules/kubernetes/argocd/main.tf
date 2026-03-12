@@ -12,10 +12,14 @@ module "server" {
 
 module "bootstrap" {
   source = "./bootstrap"
+  depends_on = [module.server]
+
   repository_url  = var.repository_url
   target_revision = var.target_revision
-
-  depends_on = [module.server]
+  cluster_name        = var.cluster_name
+  ssl_certificate_arn = var.ssl_certificate_arn
+  addons_iam_roles    = var.addons_iam_roles
+  
 }
 
 # 2. Installation des Addons EKS

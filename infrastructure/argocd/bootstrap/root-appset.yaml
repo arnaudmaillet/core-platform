@@ -8,33 +8,41 @@ metadata:
 spec:
   goTemplate: true
   generators:
-    - git:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: env/dev
-        directories:
-          - path: infrastructure/argocd/apps/**/*
+    - matrix:
+        generators:
+          # Générateur 1 : La liste de tes dossiers (tes apps)
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              directories:
+                - path: infrastructure/argocd/apps/**/*
+          # Générateur 2 : Les valeurs injectées par Terraform
+          - configMap:
+              name: argocd-global-config
+              namespace: argocd
   template:
     metadata:
-      # Utilise basename pour être sûr d'avoir le nom unique du dossier final (ex: karpenter)
       name: "{{ .path.basename }}"
     spec:
       project: default
       sources:
-        # Source 1 : Manifestes K8s (Tes services, Ingress, etc.)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: k8s/overlays/dev
-
-        # Source 2 : Configuration Infrastructure (Helm charts des addons)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: "{{ .path.path }}"
-
+          helm:
+            # ON INJECTE LES VALEURS DU CONFIGMAP ICI
+            values: |
+              global:
+                clusterName: "{{ .clusterName }}"
+                certificateArn: "{{ .certificateArn }}"
+                karpenterRoleArn: "{{ .karpenterRoleArn }}"
+                externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
       destination:
         server: https://kubernetes.default.svc
-        # On peut laisser l'app définir son namespace ou forcer par défaut
         namespace: default
-
       syncPolicy:
         automated:
           prune: true

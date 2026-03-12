@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/observability/monitoring/monitoring.yaml
+# infrastructure/argocd/apps/observability/monitoring/templates/monitoring.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application

@@ -38,3 +38,17 @@ resource "null_resource" "apply_root_app" {
     command = "kubectl delete application root-bootstrap -n argocd --ignore-not-found"
   }
 }
+
+resource "kubernetes_config_map" "argocd_global_config" {
+  metadata {
+    name      = "argocd-global-config"
+    namespace = "argocd"
+  }
+
+  data = {
+    clusterName        = var.cluster_name
+    certificateArn     = var.ssl_certificate_arn
+    karpenterRoleArn   = var.addons_iam_roles["karpenter"]
+    externalDnsRoleArn = var.addons_iam_roles["external_dns"]
+  }
+}
