@@ -17,11 +17,11 @@ spec:
     targetRevision: "1.6.0"
     helm:
       values: |
-        clusterName: {{ .Values.global.clusterName }}
+        clusterName: {{ .Values.global.clusterName | quote }}
         serviceAccount:
           create: true
           annotations:
-            eks.amazonaws.com/role-arn: {{ .Values.global.lbControllerRoleArn }}
+            eks.amazonaws.com/role-arn: {{ .Values.global.lbRoleArn | quote }}
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
