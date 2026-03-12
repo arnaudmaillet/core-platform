@@ -13,18 +13,24 @@ spec:
           # 1. Liste des dossiers "moteurs" à synchroniser
           - list:
               elements:
+                # Group 1: Les composants d'infrastructure (HELM)
                 - folder: infrastructure/operators
                   name: infra-operators
                   wave: "-10"
+                  type: helm
                 - folder: infrastructure/platform
                   name: infra-platform
                   wave: "-5"
+                  type: helm
                 - folder: infrastructure/security
                   name: infra-security
                   wave: "-5"
+                  type: helm
+                # Group 2: Le moteur de déploiement (DIRECTORY/YAML)
                 - folder: deployments/dev
                   name: workload-dev
                   wave: "0"
+                  type: directory
           # 2. Injection des variables globales (provenant de Terraform)
           - list:
               elements:
@@ -45,14 +51,19 @@ spec:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
         path: 'infrastructure/argocd/apps/{{.folder}}'
+        # CONDITION : On n'ajoute le bloc Helm QUE pour l'infra
+        {{- if eq .type "helm" }}
         helm:
           values: |
             global:
               clusterName: "{{ .clusterName }}"
               certificateArn: "{{ .certificateArn }}"
-              lbRoleArn: "{{ .lbRoleArn }}"
-              karpenterRoleArn: "{{ .karpenterRoleArn }}"
-              externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
+        {{- end }}
+        # Si c'est un directory, ArgoCD scannera juste les fichiers YAML (domain-appset.yaml)
+        {{- if eq .type "directory" }}
+        directory:
+          recurse: true
+        {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
