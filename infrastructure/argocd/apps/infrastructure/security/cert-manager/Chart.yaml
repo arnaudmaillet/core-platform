@@ -1,0 +1,6 @@
+# infrastructure/argocd/apps/security/cert-manager/Chart.yaml
+
+apiVersion: v2
+name: cert-manager
+description: Helm chart pour Cert-Manager et les ClusterIssuers
+version: 1.0.0

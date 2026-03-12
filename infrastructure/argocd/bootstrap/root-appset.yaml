@@ -1,56 +1,61 @@
-# infrastructure/argocd/bootstrap/root-appset.yaml
+# infrastructure/argocd-bis/bootstrap/root-appset.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-bootstrap-moteur
+  name: root-bootstrap
   namespace: argocd
 spec:
   goTemplate: true
   generators:
     - matrix:
         generators:
-          - git:
-              repoURL: https://github.com/arnaudmaillet/core-platform
-              revision: env/dev
-              directories:
-                - path: infrastructure/argocd/apps/**/*
+          # 1. Liste des dossiers "moteurs" à synchroniser
+          - list:
+              elements:
+                - folder: infrastructure/operators
+                  name: infra-operators
+                  wave: "-10"
+                - folder: infrastructure/platform
+                  name: infra-platform
+                  wave: "-5"
+                - folder: infrastructure/security
+                  name: infra-security
+                  wave: "-5"
+                - folder: deployments/dev
+                  name: workload-dev
+                  wave: "0"
+          # 2. Injection des variables globales (provenant de Terraform)
           - list:
               elements:
                 - clusterName: "core-platform-dev"
-                  clusterEndpoint: "https://724772065879.gr7.us-east-1.eks.amazonaws.com"
                   certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/bbbddd3a-05ae-4ac5-a5cf-5b86e8757be0"
                   karpenterRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-karpenter-controller-role"
-                  externalDnsRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role"
                   lbRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-aws-load-balancer-controller-role"
+                  externalDnsRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role"
   template:
     metadata:
-      name: "{{ .path.basename }}"
+      name: '{{.name}}'
       annotations:
-        argocd.argoproj.io/sync-wave: '{{ if eq (index .path.segments 3) "operators" }}1{{ else if eq (index .path.segments 3) "workload" }}10{{ else }}5{{ end }}'
+        # Permet de déployer les opérateurs AVANT le workload
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
     spec:
       project: default
-      sources:
-        # Source 1: Tes overlays Kustomize/Raw
-        - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: env/dev
-          path: k8s/overlays/dev
-        # Source 2: Tes dossiers d'apps (qui sont des Charts Helm locaux générant des Applications)
-        - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: env/dev
-          path: "{{ .path.path }}"
-          helm:
-            values: |
-              global:
-                clusterName: "{{ .clusterName }}"
-                clusterEndpoint: "{{ .clusterEndpoint }}"
-                certificateArn: "{{ .certificateArn }}"
-                lbRoleArn: "{{ .lbRoleArn }}"
-                externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
-                karpenterRoleArn: "{{ .karpenterRoleArn }}"
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: env/dev
+        path: 'infrastructure/argocd/apps/{{.folder}}'
+        helm:
+          values: |
+            global:
+              clusterName: "{{ .clusterName }}"
+              certificateArn: "{{ .certificateArn }}"
+              lbRoleArn: "{{ .lbRoleArn }}"
+              karpenterRoleArn: "{{ .karpenterRoleArn }}"
+              externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
       destination:
         server: https://kubernetes.default.svc
-        namespace: default # Tes apps internes (les wagons) choisiront leur propre namespace (ex: kube-system)
+        namespace: argocd
       syncPolicy:
         automated:
           prune: true
@@ -58,4 +63,3 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
-          - SkipDryRunOnMissingResource=true

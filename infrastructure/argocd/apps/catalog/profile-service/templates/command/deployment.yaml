@@ -1,0 +1,37 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/command/deployment.yaml
+
+{{- if .Values.commandServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.commandServer.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: {{ .Values.commandServer.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ .Values.commandServer.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.commandServer.name }}
+    spec:
+      {{- if .Values.commandServer.initContainers.scylla.enabled }}
+      initContainers:
+        - name: init-scylla-keyspace
+          image: {{ .Values.commandServer.initContainers.scylla.image | quote }}
+          command: ["/bin/bash", "-c", {{ .Values.commandServer.initContainers.scylla.command | quote }}]
+      {{- end }}
+      containers:
+        - name: server
+          image: "{{ .Values.commandServer.image.repository }}:{{ .Values.commandServer.image.tag }}"
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.commandServer.configMapName }}
+          env:
+            - name: PROFILE_DB_URL
+              value: {{ .Values.commandServer.dbUrl | quote }}
+          ports:
+            - containerPort: {{ .Values.commandServer.port }}
+{{- end }}

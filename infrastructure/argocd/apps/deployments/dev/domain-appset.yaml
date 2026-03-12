@@ -1,0 +1,40 @@
+# infrastructure/argocd/apps/deployments/dev/domain-appset.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dev-workload
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        revision: env/dev
+        files:
+          - path: "infrastructure/argocd/apps/deployments/dev/values/*.yaml"
+  template:
+    metadata:
+      name: 'dev-{{ .serviceName }}'
+    spec:
+      project: default
+      sources: # <-- On passe en pluriel pour le multi-source
+        # Source 1: Le Catalogue (Le Chart)
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: env/dev
+          path: 'infrastructure/argocd/apps/catalog/{{ .serviceName }}'
+          helm:
+            # Source 2: Le fichier de values (référencé par son chemin absolu dans le repo)
+            valueFiles:
+              - '$values/{{ .path.path }}'
+        # On définit l'alias $values qui pointe vers la racine du repo
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: env/dev
+          ref: values 
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: default
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions:
+          - CreateNamespace=true
