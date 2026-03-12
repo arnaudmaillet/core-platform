@@ -5,3 +5,4 @@ variable "target_revision"  { type = string }
 variable "cluster_name"     { type = string }
 variable "ssl_certificate_arn" { type = string }
 variable "addons_iam_roles" { type = map(string) }
+variable "cluster_endpoint"       { type = string }

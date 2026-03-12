@@ -36,21 +36,20 @@ spec:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: k8s/overlays/dev
-        
+
         # Source 2 : Le dossier de l'application elle-même (Helm)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: "{{ .path.path }}"
           helm:
-            # Injection des valeurs dynamiques provenant du ConfigMap Terraform
             values: |
               global:
-                clusterName: "{{ .clusterName }}"
-                clusterEndpoint: "{{ .clusterEndpoint }}"
-                certificateArn: "{{ .certificateArn }}"
-                karpenterRoleArn: "{{ .karpenterRoleArn }}"
-                externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
-      
+                clusterName: "{{ index . "clusterName" }}"
+                clusterEndpoint: "{{ index . "clusterEndpoint" }}"
+                certificateArn: "{{ index . "certificateArn" }}"
+                karpenterRoleArn: "{{ index . "karpenterRoleArn" }}"
+                externalDnsRoleArn: "{{ index . "externalDnsRoleArn" }}"
+
       destination:
         server: https://kubernetes.default.svc
         namespace: default

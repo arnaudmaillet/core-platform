@@ -48,6 +48,7 @@ resource "kubernetes_config_map" "argocd_global_config" {
   data = {
     clusterName        = var.cluster_name
     certificateArn     = var.ssl_certificate_arn
+    clusterEndpoint    = var.cluster_endpoint
     karpenterRoleArn   = var.addons_iam_roles["karpenter"]
     externalDnsRoleArn = var.addons_iam_roles["external_dns"]
   }

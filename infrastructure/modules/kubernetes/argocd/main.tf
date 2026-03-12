@@ -19,7 +19,7 @@ module "bootstrap" {
   cluster_name        = var.cluster_name
   ssl_certificate_arn = var.ssl_certificate_arn
   addons_iam_roles    = var.addons_iam_roles
-  
+  cluster_endpoint    = var.cluster_endpoint
 }
 
 # 2. Installation des Addons EKS
