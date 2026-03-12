@@ -1,0 +1,6 @@
+# infrastructure/argocd/apps/security/external-dns/Chart.yaml
+
+apiVersion: v2
+name: external-dns
+description: Helm chart pour la synchronisation Route53
+version: 1.0.0
