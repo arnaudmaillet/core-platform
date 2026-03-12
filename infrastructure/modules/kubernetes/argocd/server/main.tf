@@ -13,52 +13,14 @@ resource "helm_release" "argocd" {
 
   values = [
     yamlencode({
-      # --- CONFIGURATION SERVEUR ---
       server = {
         extraArgs = ["--insecure"]
         config = {
           "server.insecure" = "true"
         }
-        service = {
-          type = "ClusterIP"
-        }
+        service = { type = "ClusterIP" }
       }
-
-      # --- REDIS (CACHE) ---
-      redis = {
-        enabled = true
-      }
-
-      # --- INJECTION DE L'APPLICATION RACINE (BOOTSTRAP) ---
-      extraObjects = [
-        {
-          apiVersion = "argoproj.io/v1alpha1"
-          kind       = "Application"
-          metadata = {
-            name      = "root-bootstrap"
-            namespace = "argocd"
-          }
-          spec = {
-            project = "default"
-            source = {
-              repoURL        = var.repository_url
-              targetRevision = var.target_revision
-              path           = "infrastructure/argocd/bootstrap"
-            }
-            destination = {
-              server    = "https://kubernetes.default.svc"
-              namespace = "argocd"
-            }
-            syncPolicy = {
-              automated = {
-                prune    = true
-                selfHeal = true
-              }
-              syncOptions = ["CreateNamespace=true"]
-            }
-          }
-        }
-      ]
+      redis = { enabled = true }
     })
   ]
 }

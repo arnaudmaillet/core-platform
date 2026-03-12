@@ -15,8 +15,8 @@ spec:
           - path: infrastructure/argocd/apps/**/*
   template:
     metadata:
-      # Récupère le nom du dossier final (ex: karpenter, external-dns)
-      name: '{{ index .path.segments 3 }}'
+      # Utilise basename pour être sûr d'avoir le nom unique du dossier final (ex: karpenter)
+      name: '{{ .path.basename }}'
     spec:
       project: default
       sources:
@@ -32,7 +32,8 @@ spec:
       
       destination:
         server: https://kubernetes.default.svc
-        namespace: argocd # Ajuste ici si tu veux déployer tes apps ailleurs
+        # On peut laisser l'app définir son namespace ou forcer par défaut
+        namespace: default 
 
       syncPolicy:
         automated:
