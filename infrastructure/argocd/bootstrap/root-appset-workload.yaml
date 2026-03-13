@@ -1,4 +1,5 @@
 # infrastructure/argocd/bootstrap/root-appset-workload.yaml
+
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -9,7 +10,7 @@ spec:
   generators:
     - list:
         elements:
-          - folder: deployments/dev
+          - folder: infrastructure/argocd/apps/deployments/dev
             name: workload-dev
             wave: "0"
   template:
@@ -22,7 +23,7 @@ spec:
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
-        path: "infrastructure/argocd/apps/{{.folder}}"
+        path: '{{.folder}}'
         directory:
           recurse: true
       destination:

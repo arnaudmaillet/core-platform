@@ -12,13 +12,13 @@ spec:
         generators:
           - list:
               elements:
-                - folder: infrastructure/operators
+                - folder: infrastructure/argocd/apps/infrastructure/operators
                   name: infra-operators
                   wave: "-10"
-                - folder: infrastructure/platform
+                - folder: infrastructure/argocd/apps/infrastructure/plateform
                   name: infra-platform
                   wave: "-5"
-                - folder: infrastructure/security
+                - folder: infrastructure/argocd/apps/infrastructure/security
                   name: infra-security
                   wave: "-5"
           - list:
@@ -38,7 +38,7 @@ spec:
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
-        path: 'infrastructure/argocd/apps/{{.folder}}'
+        path: '{{.folder}}'
         helm:
           values: |
             global:
