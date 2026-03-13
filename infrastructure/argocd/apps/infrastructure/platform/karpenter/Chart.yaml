@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/plateform/karpenter/Chart.yaml
+# infrastructure/argocd/apps/platform/karpenter/Chart.yaml
 
 apiVersion: v2
 name: karpenter-wrapper

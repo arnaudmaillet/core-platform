@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/infrastructure/plateform/karpenter/values.yaml
+# infrastructure/argocd/apps/infrastructure/platform/karpenter/values.yaml
 
 karpenter:
   settings:
