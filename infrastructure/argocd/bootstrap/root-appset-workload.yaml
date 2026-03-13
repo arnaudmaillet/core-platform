@@ -6,6 +6,7 @@ metadata:
   name: root-workloads
   namespace: argocd
 spec:
+  goTemplate: true
   generators:
     - list:
         elements:
@@ -14,7 +15,7 @@ spec:
             wave: "0"
   template:
     metadata:
-      name: '{{folder | base}}'
+      name: '{{.name}}'
       annotations:
         argocd.argoproj.io/sync-wave: '{{wave}}'
     spec:
