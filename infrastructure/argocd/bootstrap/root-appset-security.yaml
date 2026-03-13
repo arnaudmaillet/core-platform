@@ -1,30 +1,36 @@
-# infrastructure/argocd/bootstrap/root-appset-workload.yaml
+# infrastructure/argocd/bootstrap/root-appset-security.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-workloads
+  name: root-security
   namespace: argocd
 spec:
   goTemplate: true
   generators:
     - list:
         elements:
-          - name: workload-dev
-            folder: infrastructure/argocd/apps/deployments/dev
+          - name: cert-manager
+            folder: infrastructure/argocd/apps/infrastructure/security/cert-manager
+          - name: external-dns
+            folder: infrastructure/argocd/apps/infrastructure/security/external-dns
+            roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role"
   template:
     metadata:
       name: '{{.name}}'
       annotations:
-        argocd.argoproj.io/sync-wave: "0"
+        argocd.argoproj.io/sync-wave: "-5"
     spec:
       project: default
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
         path: '{{.folder}}'
-        directory:
-          recurse: true
+        helm:
+          values: |
+            global:
+              clusterName: "core-platform-dev"
+              externalDnsRoleArn: "{{index . "roleArn" | default ""}}"
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd

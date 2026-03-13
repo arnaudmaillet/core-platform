@@ -1,0 +1,44 @@
+# infrastructure/argocd/bootstrap/root-appset-plateform.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: root-plateform
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - name: aws-load-balancer-controller
+            folder: infrastructure/argocd/apps/infrastructure/plateform/aws-lb-controller
+            roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-aws-load-balancer-controller-role"
+          - name: karpenter
+            folder: infrastructure/argocd/apps/infrastructure/plateform/karpenter
+            roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-karpenter-controller-role"
+          - name: metrics-server
+            folder: infrastructure/argocd/apps/infrastructure/plateform/metrics-server
+  template:
+    metadata:
+      name: '{{.name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "-5"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: env/dev
+        path: '{{.folder}}'
+        helm:
+          values: |
+            global:
+              clusterName: "core-platform-dev"
+              lbRoleArn: "{{index . "roleArn" | default ""}}"
+              karpenterRoleArn: "{{index . "roleArn" | default ""}}"
+              certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/bbbddd3a-05ae-4ac5-a5cf-5b86e8757be0"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kube-system
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
