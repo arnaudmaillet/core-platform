@@ -2,5 +2,8 @@
 
 apiVersion: v2
 name: aws-lb-controller
-description: Helm chart pour l'AWS Load Balancer Controller
 version: 1.0.0
+dependencies:
+  - name: aws-load-balancer-controller
+    version: "1.7.2"
+    repository: https://aws.github.io/eks-charts

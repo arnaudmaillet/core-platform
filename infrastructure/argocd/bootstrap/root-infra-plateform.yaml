@@ -1,4 +1,4 @@
-# infrastructure/argocd/bootstrap/root-appset-plateform.yaml
+# infrastructure/argocd/bootstrap/root-infra-plateform.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -13,16 +13,22 @@ spec:
           - name: aws-load-balancer-controller
             folder: infrastructure/argocd/apps/infrastructure/plateform/aws-lb-controller
             roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-aws-load-balancer-controller-role"
+            valuesKey: "aws-load-balancer-controller"
+          
           - name: karpenter
             folder: infrastructure/argocd/apps/infrastructure/plateform/karpenter
             roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-karpenter-controller-role"
+            valuesKey: "karpenter"
+          
           - name: metrics-server
             folder: infrastructure/argocd/apps/infrastructure/plateform/metrics-server
+            roleArn: ""
+            valuesKey: "metrics-server"
   template:
     metadata:
       name: '{{.name}}'
       annotations:
-        argocd.argoproj.io/sync-wave: "-5"
+        argocd.argoproj.io/sync-wave: "-10"
     spec:
       project: default
       source:
@@ -33,12 +39,17 @@ spec:
           values: |
             global:
               clusterName: "core-platform-dev"
-              lbRoleArn: "{{index . "roleArn" | default ""}}"
-              karpenterRoleArn: "{{index . "roleArn" | default ""}}"
-              certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/bbbddd3a-05ae-4ac5-a5cf-5b86e8757be0"
-      destination:
+            {{ .valuesKey }}:
+              serviceAccount:
+                annotations:
+                  eks.amazonaws.com/role-arn: "{{ .roleArn }}"
+    destination:
         server: https://kubernetes.default.svc
         namespace: kube-system
       syncPolicy:
-        automated: {prune: true, selfHeal: true}
-        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        automated: 
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

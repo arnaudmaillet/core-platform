@@ -1,24 +1,22 @@
-# infrastructure/argocd/bootstrap/root-appset-operators.yaml
+# infrastructure/argocd/bootstrap/root-infra-observability.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-operators
+  name: root-observability
   namespace: argocd
 spec:
   goTemplate: true
   generators:
     - list:
         elements:
-          - name: cnpg-operator
-            folder: infrastructure/argocd/apps/infrastructure/operators/cnpg-operator
-          - name: k6-operator
-            folder: infrastructure/argocd/apps/infrastructure/operators/k6-operator
+          - name: monitoring
+            folder: infrastructure/argocd/apps/infrastructure/observability/monitoring
   template:
     metadata:
       name: '{{.name}}'
       annotations:
-        argocd.argoproj.io/sync-wave: "-10"
+        argocd.argoproj.io/sync-wave: "-5"
     spec:
       project: default
       source:
@@ -31,7 +29,7 @@ spec:
               clusterName: "core-platform-dev"
       destination:
         server: https://kubernetes.default.svc
-        namespace: argocd
+        namespace: monitoring
       syncPolicy:
         automated: {prune: true, selfHeal: true}
         syncOptions: [CreateNamespace=true, ServerSideApply=true]

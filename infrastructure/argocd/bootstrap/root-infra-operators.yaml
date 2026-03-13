@@ -1,27 +1,24 @@
-# infrastructure/argocd/bootstrap/root-appset-security.yaml
+# infrastructure/argocd/bootstrap/root-infra-operators.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-security
+  name: root-operators
   namespace: argocd
 spec:
   goTemplate: true
   generators:
     - list:
         elements:
-          - name: cert-manager
-            folder: infrastructure/argocd/apps/infrastructure/security/cert-manager
-          - name: external-dns
-            folder: infrastructure/argocd/apps/infrastructure/security/external-dns
-            roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role"
-          - name: admin-access
-            folder: infrastructure/argocd/apps/infrastructure/security/admin-access
+          - name: cnpg-operator
+            folder: infrastructure/argocd/apps/infrastructure/operators/cnpg-operator
+          - name: k6-operator
+            folder: infrastructure/argocd/apps/infrastructure/operators/k6-operator
   template:
     metadata:
       name: '{{.name}}'
       annotations:
-        argocd.argoproj.io/sync-wave: "-5"
+        argocd.argoproj.io/sync-wave: "-10"
     spec:
       project: default
       source:
@@ -32,7 +29,6 @@ spec:
           values: |
             global:
               clusterName: "core-platform-dev"
-              externalDnsRoleArn: "{{index . "roleArn" | default ""}}"
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd

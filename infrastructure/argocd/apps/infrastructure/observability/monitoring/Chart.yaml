@@ -1,6 +1,9 @@
 # infrastructure/argocd/apps/observability/monitoring/Chart.yaml
 
 apiVersion: v2
-name: observability-stack
-description: Helm chart pour Prometheus et Grafana
+name: monitoring-wrapper
 version: 1.0.0
+dependencies:
+  - name: monitoring
+    version: "56.0.0"
+    repository: https://prometheus-community.github.io/helm-charts

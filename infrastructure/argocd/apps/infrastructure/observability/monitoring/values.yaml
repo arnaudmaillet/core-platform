@@ -1,0 +1,17 @@
+# infrastructure/argocd/apps/infrastructure/observability/monitoring/values.yaml
+
+monitoring:
+  grafana:
+    enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: alb
+      annotations:
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+      hosts:
+        - grafana.core-platform.click
+  prometheus:
+    prometheusSpec:
+      retention: 10d

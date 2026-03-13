@@ -1,0 +1,7 @@
+# infrastructure/argocd/apps/infrastructure/plateform/aws-lb-controller/values.yaml
+
+aws-load-balancer-controller:
+  clusterName: "core-platform-dev"
+  serviceAccount:
+    create: true
+    annotations: {} # Sera injecté par l'AppSet
