@@ -47,13 +47,13 @@ spec:
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ .roleArn }}"
                 {{- end }}
-    destination:
-      server: https://kubernetes.default.svc
-      namespace: kube-system
-    syncPolicy:
-      automated:
-        prune: true
-        selfHeal: true
-      syncOptions:
-        - CreateNamespace=true
-        - ServerSideApply=true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
