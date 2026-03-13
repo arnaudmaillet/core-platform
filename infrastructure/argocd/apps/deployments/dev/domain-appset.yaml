@@ -24,7 +24,7 @@ spec:
           path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"
           helm:
             valueFiles:
-              - "$values/{{path}}"
+              - '$values/infrastructure/argocd/apps/deployments/dev/values/{{ .serviceName }}.yaml'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           ref: values
