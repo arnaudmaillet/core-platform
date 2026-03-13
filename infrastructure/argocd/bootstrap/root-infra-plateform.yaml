@@ -37,9 +37,9 @@ spec:
         path: "{{.folder}}"
         helm:
           values: |
-            global:
-              clusterName: "core-platform-dev"
             {{ .valuesKey }}:
+              global:
+                clusterName: "core-platform-dev"
               serviceAccount:
                 create: true
                 name: {{ .name }}

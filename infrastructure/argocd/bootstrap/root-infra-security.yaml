@@ -33,12 +33,12 @@ spec:
         path: '{{.folder}}'
         helm:
           values: |
-            {{- if .roleArn }}
             {{ .valuesKey }}:
+              {{- if .roleArn }}
               serviceAccount:
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ .roleArn }}"
-            {{- end }}
+              {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
