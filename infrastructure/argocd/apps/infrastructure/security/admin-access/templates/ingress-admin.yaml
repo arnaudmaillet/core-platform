@@ -27,7 +27,7 @@ spec:
                 port:
                   number: 443
     # Route pour Grafana (Monitoring)
-    - host: monitoring.dev.votre-domaine.com
+    - host: argocd.core-platform.click
       http:
         paths:
           - path: /
