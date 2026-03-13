@@ -24,9 +24,7 @@ spec:
         path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"
         helm:
           valueFiles:
-            # On remonte vers la racine puis on redescend vers le fichier précis
-            # .path.path contient déjà "infrastructure/argocd/apps/deployments/dev/values/profile-service.yaml"
-            - "../../../../deployments/dev/{{ .path.path }}"
+            - "../../deployments/dev/values/{{ .serviceName }}.yaml"
       destination:
         server: https://kubernetes.default.svc
         namespace: default
