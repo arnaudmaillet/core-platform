@@ -41,14 +41,6 @@ spec:
         path: "{{.folder}}"
         directory:
           recurse: true
-        helm:
-          values: |
-            global:
-              clusterName: "{{.clusterName}}"
-              certificateArn: "{{.certificateArn}}"
-              karpenterRoleArn: "{{.karpenterRoleArn}}"
-              lbRoleArn: "{{.lbRoleArn}}"
-              externalDnsRoleArn: "{{.externalDnsRoleArn}}"
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
