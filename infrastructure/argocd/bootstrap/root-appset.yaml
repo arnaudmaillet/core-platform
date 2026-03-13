@@ -16,14 +16,6 @@ spec:
                   name: infra-operators
                   wave: "-10"
                   type: helm
-                - folder: infrastructure/platform
-                  name: infra-platform
-                  wave: "-5"
-                  type: helm
-                - folder: infrastructure/security
-                  name: infra-security
-                  wave: "-5"
-                  type: helm
                 - folder: deployments/dev
                   name: workload-dev
                   wave: "0"
@@ -38,28 +30,23 @@ spec:
   template:
     metadata:
       name: '{{.name}}'
-      annotations:
-        argocd.argoproj.io/sync-wave: '{{.wave}}'
     spec:
       project: default
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
         path: 'infrastructure/argocd/apps/{{.folder}}'
-        {{- if eq .type "helm" }}
+{{- if eq .type "helm" }}
         helm:
           values: |
             global:
               clusterName: "{{ .clusterName }}"
               certificateArn: "{{ .certificateArn }}"
-              karpenterRoleArn: "{{ .karpenterRoleArn }}"
-              lbRoleArn: "{{ .lbRoleArn }}"
-              externalDnsRoleArn: "{{ .externalDnsRoleArn }}"
-        {{- end }}
-        {{- if eq .type "directory" }}
+{{- end }}
+{{- if eq .type "directory" }}
         directory:
           recurse: true
-        {{- end }}
+{{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
