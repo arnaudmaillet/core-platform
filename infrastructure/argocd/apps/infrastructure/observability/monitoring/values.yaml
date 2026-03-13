@@ -1,6 +1,6 @@
 # infrastructure/argocd/apps/infrastructure/observability/monitoring/values.yaml
 
-monitoring:
+kube-prometheus-stack:
   grafana:
     enabled: true
     ingress:

@@ -16,7 +16,7 @@ spec:
   ingressClassName: alb
   rules:
     # Route pour ArgoCD
-    - host: argocd.dev.votre-domaine.com
+    - host: argocd.core-platform.click
       http:
         paths:
           - path: /
@@ -27,7 +27,7 @@ spec:
                 port:
                   number: 443
     # Route pour Grafana (Monitoring)
-    - host: argocd.core-platform.click
+    - host: grafana.core-platform.click
       http:
         paths:
           - path: /

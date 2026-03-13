@@ -12,6 +12,7 @@ spec:
         elements:
           - name: monitoring
             folder: infrastructure/argocd/apps/infrastructure/observability/monitoring
+            valuesKey: "kube-prometheus-stack"
   template:
     metadata:
       name: '{{.name}}'
