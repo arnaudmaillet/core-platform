@@ -1,0 +1,22 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/command/service.yaml
+
+{{- if .Values.commandServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.commandServer.name }}
+  annotations:
+    {{- if .Values.commandServer.service.annotations }}
+    {{- toYaml .Values.commandServer.service.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    app: {{ .Values.commandServer.name }}
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: {{ .Values.commandServer.port }}
+      targetPort: {{ .Values.commandServer.port }}
+      appProtocol: grpc
+  type: {{ .Values.commandServer.service.type | default "ClusterIP" }}
+{{- end }}

@@ -1,0 +1,31 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/databases/postgres.yaml
+
+{{- if .Values.databases.postgres.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.databases.postgres.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  instances: {{ .Values.databases.postgres.instances | default 1 }}
+  imageName: {{ .Values.databases.postgres.image }}
+  affinity:
+    nodeSelector:
+      role: storage
+    tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "database"
+        effect: "NoSchedule"
+  bootstrap:
+    initdb:
+      database: {{ .Values.databases.postgres.dbName }}
+      owner: {{ .Values.databases.postgres.owner }}
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis;
+        - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+  storage:
+    size: {{ .Values.databases.postgres.storageSize }}
+    storageClass: gp3
+{{- end }}

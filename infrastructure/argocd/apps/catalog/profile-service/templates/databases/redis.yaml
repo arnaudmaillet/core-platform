@@ -1,0 +1,39 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/databases/redis.yaml
+
+{{- if .Values.databases.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.databases.redis.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.databases.redis.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.databases.redis.name }}
+    spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "database"
+          effect: "NoSchedule"
+      containers:
+        - name: redis
+          image: {{ .Values.databases.redis.image }}
+          ports:
+            - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.databases.redis.name }}
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: {{ .Values.databases.redis.name }}
+{{- end }}

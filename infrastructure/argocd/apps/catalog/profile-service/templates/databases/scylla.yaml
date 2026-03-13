@@ -1,0 +1,40 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/databases/scylla.yaml
+
+{{- if .Values.databases.scylla.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.databases.scylla.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.databases.scylla.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.databases.scylla.name }}
+    spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "database"
+          effect: "NoSchedule"
+      containers:
+        - name: scylla
+          image: {{ .Values.databases.scylla.image }}
+          resources:
+            {{- toYaml .Values.databases.scylla.resources | nindent 12 }}
+          args: {{ .Values.databases.scylla.args | toJson }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.databases.scylla.name }}
+spec:
+  ports:
+    - port: 9042
+  selector:
+    app: {{ .Values.databases.scylla.name }}
+{{- end }}

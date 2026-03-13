@@ -7,31 +7,20 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
   version          = var.argocd_version
-  cleanup_on_fail = true
-  wait             = true 
-  timeout          = 600
-  force_update    = true
-  
-  # Configuration minimale pour ClusterIP (géré ensuite par Ingress via GitOps)
-    values = [
+  cleanup_on_fail  = true
+  wait             = true
+  timeout          = 300
+
+  values = [
     yamlencode({
       server = {
-        extraArgs = [
-          "--insecure"
-        ]
+        extraArgs = ["--insecure"]
         config = {
           "server.insecure" = "true"
         }
-        service = {
-          type = "ClusterIP"
-        }
+        service = { type = "ClusterIP" }
       }
-      redis = {
-        enabled = true
-      }
+      redis = { enabled = true }
     })
   ]
-
-  # Optionnel : désactiver l'admin password initial si tu gères le SSO plus tard
-  # Mais pour l'instant, on le laisse par défaut.
 }
