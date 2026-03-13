@@ -8,6 +8,7 @@ metadata:
 spec:
   goTemplate: true
   generators:
+    # GÉNÉRATEUR 1 : Pour l'infrastructure (HELM)
     - matrix:
         generators:
           - list:
@@ -15,19 +16,9 @@ spec:
                 - folder: infrastructure/operators
                   name: infra-operators
                   wave: "-10"
-                  type: helm
                 - folder: infrastructure/platform
                   name: infra-platform
                   wave: "-5"
-                  type: helm
-                - folder: infrastructure/security
-                  name: infra-security
-                  wave: "-5"
-                  type: helm
-                - folder: deployments/dev
-                  name: workload-dev
-                  wave: "0"
-                  type: directory
           - list:
               elements:
                 - clusterName: "core-platform-dev"
@@ -35,6 +26,12 @@ spec:
                   karpenterRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-karpenter-controller-role"
                   lbRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-aws-load-balancer-controller-role"
                   externalDnsRoleArn: "arn:aws:iam::724772065879:role/core-platform-dev-external-dns-role"
+    # GÉNÉRATEUR 2 : Pour le workload (DIRECTORY)
+    - list:
+        elements:
+          - folder: deployments/dev
+            name: workload-dev
+            wave: "0"
   template:
     metadata:
       name: '{{.name}}'
@@ -46,27 +43,16 @@ spec:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
         path: 'infrastructure/argocd/apps/{{.folder}}'
-        {{- if eq .type "helm" }}
         helm:
           values: |
             global:
-              clusterName: {{ .clusterName | quote }}
-              certificateArn: {{ .certificateArn | quote }}
-              karpenterRoleArn: {{ .karpenterRoleArn | quote }}
-              lbRoleArn: {{ .lbRoleArn | quote }}
-              externalDnsRoleArn: {{ .externalDnsRoleArn | quote }}
-        {{- end }}
-        {{- if eq .type "directory" }}
+              clusterName: "{{.clusterName}}"
+              certificateArn: "{{.certificateArn}}"
         directory:
           recurse: true
-        {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
-          - ServerSideApply=true
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
