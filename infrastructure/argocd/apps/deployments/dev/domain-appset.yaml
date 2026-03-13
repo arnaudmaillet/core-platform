@@ -18,13 +18,16 @@ spec:
       name: "dev-{{ .serviceName }}"
     spec:
       project: default
-      source:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: env/dev
-        path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"
-        helm:
-          valueFiles:
-            - "../../deployments/dev/values/{{ .serviceName }}.yaml"
+      sources: # <-- Pluriel
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: env/dev
+          path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"
+          helm:
+            valueFiles:
+              - '$values/{{ .path.path }}'
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: env/dev
+          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: default
