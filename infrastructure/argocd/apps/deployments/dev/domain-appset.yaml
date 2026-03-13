@@ -18,7 +18,7 @@ spec:
       name: "dev-{{ .serviceName }}"
     spec:
       project: default
-      sources: # <-- Pluriel
+      sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: env/dev
           path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"

@@ -1,0 +1,39 @@
+# infrastructure/argocd/apps/infrastructure/security/admin-access/templates/ingress-admin.yaml
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-tools-ingress
+  namespace: argocd
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: "management-group"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:724772065879:certificate/bbbddd3a-05ae-4ac5-a5cf-5b86e8757be0"
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+spec:
+  ingressClassName: alb
+  rules:
+    # Route pour ArgoCD
+    - host: argocd.dev.votre-domaine.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 443
+    # Route pour Grafana (Monitoring)
+    - host: monitoring.dev.votre-domaine.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: monitoring-grafana
+                port:
+                  number: 80
