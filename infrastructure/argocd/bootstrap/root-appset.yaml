@@ -46,7 +46,6 @@ spec:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
         path: 'infrastructure/argocd/apps/{{.folder}}'
-        # Version ultra-safe : on évite les sauts de lignes complexes
         {{- if eq .type "helm" }}
         helm:
           values: |
