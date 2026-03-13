@@ -15,20 +15,20 @@ spec:
             wave: "0"
   template:
     metadata:
-      name: '{{.name}}'
+      name: "{{.name}}"
       annotations:
-        argocd.argoproj.io/sync-wave: '{{wave}}'
+        argocd.argoproj.io/sync-wave: "{{.wave}}"
     spec:
       project: default
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
-        path: 'infrastructure/argocd/apps/{{folder}}'
+        path: "infrastructure/argocd/apps/{{.folder}}"
         directory:
           recurse: true
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
       syncPolicy:
-        automated: {prune: true, selfHeal: true}
+        automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true, ServerSideApply=true]
