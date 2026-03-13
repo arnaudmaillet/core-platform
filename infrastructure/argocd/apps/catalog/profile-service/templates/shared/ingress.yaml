@@ -9,7 +9,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "5"
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/group.name: "management-group"
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName | default "management-group" | quote }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn | quote }}
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress.host | quote }}
