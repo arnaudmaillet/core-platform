@@ -1,0 +1,33 @@
+# infrastructure/argocd/bootstrap/root-appset-workload.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: root-workloads
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - folder: deployments/dev
+            name: workload-dev
+            wave: "0"
+  template:
+    metadata:
+      name: '{{folder | base}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{wave}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: env/dev
+        path: 'infrastructure/argocd/apps/{{folder}}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]

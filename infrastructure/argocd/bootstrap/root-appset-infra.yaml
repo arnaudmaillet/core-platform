@@ -1,9 +1,9 @@
-# infrastructure/argocd-bis/bootstrap/root-appset.yaml
+# infrastructure/argocd/bootstrap/root-appset-infra.yaml
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: root-bootstrap
+  name: root-infra
   namespace: argocd
 spec:
   goTemplate: true
@@ -15,19 +15,12 @@ spec:
                 - folder: infrastructure/operators
                   name: infra-operators
                   wave: "-10"
-                  sourceType: helm
                 - folder: infrastructure/platform
                   name: infra-platform
                   wave: "-5"
-                  sourceType: helm
                 - folder: infrastructure/security
                   name: infra-security
                   wave: "-5"
-                  sourceType: helm
-                - folder: deployments/dev
-                  name: workload-dev
-                  wave: "0"
-                  sourceType: directory
           - list:
               elements:
                 - clusterName: "core-platform-dev"
@@ -46,7 +39,6 @@ spec:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: env/dev
         path: 'infrastructure/argocd/apps/{{.folder}}'
-        {{- if eq .sourceType "helm" }}
         helm:
           values: |
             global:
@@ -55,11 +47,6 @@ spec:
               karpenterRoleArn: "{{.karpenterRoleArn}}"
               lbRoleArn: "{{.lbRoleArn}}"
               externalDnsRoleArn: "{{.externalDnsRoleArn}}"
-        {{- end }}
-        {{- if eq .sourceType "directory" }}
-        directory:
-          recurse: true
-        {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
