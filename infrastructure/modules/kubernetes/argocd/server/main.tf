@@ -13,6 +13,9 @@ resource "helm_release" "argocd" {
 
   values = [
     yamlencode({
+      commonLabels = {
+        "argocd.argoproj.io/managed-by" = "helm"
+      }
       server = {
         extraArgs = ["--insecure"]
         config = {
