@@ -28,6 +28,7 @@ spec:
                   iamRoleKey: ""
           - configMap:
               name: argocd-global-config
+              namespace: argocd
   template:
     metadata:
       name: "{{.name}}"
