@@ -34,7 +34,6 @@ spec:
         helm:
           values: |
             global:
-              # Valeur dynamique injectée via le JSON
               clusterName: "{{ .clusterName }}"
       destination:
         server: https://kubernetes.default.svc

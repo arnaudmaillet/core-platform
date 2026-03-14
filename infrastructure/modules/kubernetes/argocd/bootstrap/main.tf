@@ -18,10 +18,6 @@ terraform {
   }
 }
 
-provider "github" {
-  owner = "arnaudmaillet"
-}
-
 # --- ROOT APPLICATION ---
 resource "local_file" "root_app_yaml" {
   content  = <<EOF
@@ -36,6 +32,8 @@ spec:
     repoURL: ${var.repository_url}
     targetRevision: ${var.target_revision}
     path: infrastructure/argocd/bootstrap
+    directory:
+      exclude: 'global-params.json'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

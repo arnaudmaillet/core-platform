@@ -43,10 +43,10 @@ spec:
         helm:
           values: |
             {{ .valuesKey }}:
+              certificateArn: "{{ .certificateArn }}"
               {{- if .iamRoleKey }}
               serviceAccount:
                 annotations:
-                  # Récupère l'ARN dynamiquement depuis le JSON
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
               {{- end }}
       destination:
