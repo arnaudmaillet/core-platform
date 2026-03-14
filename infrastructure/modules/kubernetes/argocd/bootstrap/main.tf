@@ -43,6 +43,7 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
 EOF
   filename = "${path.module}/root-app.yaml"
 }
