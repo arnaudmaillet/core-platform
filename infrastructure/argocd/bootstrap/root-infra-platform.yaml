@@ -26,14 +26,10 @@ spec:
                   folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
                   valuesKey: "metrics-server"
                   iamRoleKey: ""
-          - configMap:
-              name: argocd-global-config
-              namespace: argocd
-              values:
-                clusterName: '{{index .data "clusterName"}}'
-                lbControllerRoleArn: '{{index .data "lbControllerRoleArn"}}'
-                karpenterRoleArn: '{{index .data "karpenterRoleArn"}}'
-                externalDnsRoleArn: '{{index .data "externalDnsRoleArn"}}'
+          - clusters:
+              selector:
+                matchLabels:
+                  argocd.argoproj.io/secret-type: cluster
   template:
     metadata:
       name: "{{.name}}"
@@ -49,7 +45,7 @@ spec:
           values: |
             {{ .valuesKey }}:
               global:
-                clusterName: "{{ .clusterName }}"
+                clusterName: "core-platform-dev"
               serviceAccount:
                 create: true
                 name: {{ .name }}
