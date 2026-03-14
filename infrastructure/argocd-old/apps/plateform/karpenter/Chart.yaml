@@ -1,6 +1,0 @@
-# infrastructure/argocd/apps/plateform/karpenter/Chart.yaml
-
-apiVersion: v2
-name: karpenter-provisioner
-description: Configuration des provisionners Karpenter
-version: 1.0.0
