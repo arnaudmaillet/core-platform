@@ -47,3 +47,5 @@ crash.log
 
 public-key.cert
 .aider*
+
+infrastructure/argocd-old
