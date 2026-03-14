@@ -4,4 +4,5 @@ aws-load-balancer-controller:
   clusterName: "core-platform-dev"
   serviceAccount:
     create: true
-    annotations: {} # Sera injecté par l'AppSet
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::724772065879:role/core-platform-dev-lb-controller-role"
