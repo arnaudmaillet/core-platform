@@ -8,12 +8,19 @@ metadata:
 spec:
   goTemplate: true
   generators:
-    - list:
-        elements:
-          - name: cnpg-operator
-            folder: infrastructure/argocd/apps/infrastructure/operators/cnpg-operator
-          - name: k6-operator
-            folder: infrastructure/argocd/apps/infrastructure/operators/k6-operator
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - name: cnpg-operator
+                  folder: infrastructure/argocd/apps/infrastructure/operators/cnpg-operator
+                - name: k6-operator
+                  folder: infrastructure/argocd/apps/infrastructure/operators/k6-operator
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
       name: '{{.name}}'
@@ -28,7 +35,8 @@ spec:
         helm:
           values: |
             global:
-              clusterName: "core-platform-dev"
+              # Maintenant c'est dynamique !
+              clusterName: "{{ .clusterName }}"
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd

@@ -26,10 +26,12 @@ spec:
                   folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
                   valuesKey: "metrics-server"
                   iamRoleKey: ""
-          - clusters:
-              selector:
-                matchLabels:
-                  argocd.argoproj.io/secret-type: cluster
+          
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
       name: "{{.name}}"
@@ -45,12 +47,14 @@ spec:
           values: |
             {{ .valuesKey }}:
               global:
-                clusterName: "core-platform-dev"
+                # clusterName est lu depuis le fichier JSON
+                clusterName: "{{ .clusterName }}"
               serviceAccount:
                 create: true
                 name: {{ .name }}
                 {{- if .iamRoleKey }}
                 annotations:
+                  # L'ARN est récupéré dynamiquement par sa clé dans le JSON
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
                 {{- end }}
       destination:

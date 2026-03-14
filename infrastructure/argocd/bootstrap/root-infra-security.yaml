@@ -24,8 +24,11 @@ spec:
                   folder: infrastructure/argocd/apps/infrastructure/security/admin-access
                   valuesKey: "admin-access"
                   iamRoleKey: ""
-          - configMap:
-              name: argocd-global-config
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
       name: '{{.name}}'
@@ -43,6 +46,7 @@ spec:
               {{- if .iamRoleKey }}
               serviceAccount:
                 annotations:
+                  # Récupère l'ARN dynamiquement depuis le JSON
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
               {{- end }}
       destination:
