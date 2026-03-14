@@ -29,6 +29,11 @@ spec:
           - configMap:
               name: argocd-global-config
               namespace: argocd
+              values:
+                clusterName: '{{index .data "clusterName"}}'
+                lbControllerRoleArn: '{{index .data "lbControllerRoleArn"}}'
+                karpenterRoleArn: '{{index .data "karpenterRoleArn"}}'
+                externalDnsRoleArn: '{{index .data "externalDnsRoleArn"}}'
   template:
     metadata:
       name: "{{.name}}"
