@@ -8,22 +8,26 @@ metadata:
 spec:
   goTemplate: true
   generators:
-    - list:
-        elements:
-          - name: aws-load-balancer-controller
-            folder: infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller
-            roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-aws-load-balancer-controller-role"
-            valuesKey: "aws-load-balancer-controller"
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - name: aws-load-balancer-controller
+                  folder: infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller
+                  valuesKey: "aws-load-balancer-controller"
+                  iamRoleKey: "lbControllerRoleArn"
 
-          - name: karpenter
-            folder: infrastructure/argocd/apps/infrastructure/platform/karpenter
-            roleArn: "arn:aws:iam::724772065879:role/core-platform-dev-karpenter-controller-role"
-            valuesKey: "karpenter"
+                - name: karpenter
+                  folder: infrastructure/argocd/apps/infrastructure/platform/karpenter
+                  valuesKey: "karpenter"
+                  iamRoleKey: "karpenterRoleArn"
 
-          - name: metrics-server
-            folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
-            roleArn: ""
-            valuesKey: "metrics-server"
+                - name: metrics-server
+                  folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
+                  valuesKey: "metrics-server"
+                  iamRoleKey: ""
+          - configMap:
+              name: argocd-global-config
   template:
     metadata:
       name: "{{.name}}"
@@ -39,13 +43,13 @@ spec:
           values: |
             {{ .valuesKey }}:
               global:
-                clusterName: "core-platform-dev"
+                clusterName: "{{ .clusterName }}"
               serviceAccount:
                 create: true
                 name: {{ .name }}
-                {{- if .roleArn }}
+                {{- if .iamRoleKey }}
                 annotations:
-                  eks.amazonaws.com/role-arn: "{{ .roleArn }}"
+                  eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
                 {{- end }}
       destination:
         server: https://kubernetes.default.svc
