@@ -8,11 +8,9 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/group.name:
-      { { .Values.groupName | default "management-group" | quote } }
+    alb.ingress.kubernetes.io/group.name: {{ .Values.groupName | default "management-group" | quote }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/certificate-arn:
-      { { .Values.certificateArn | quote } }
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.certificateArn | quote }}
     alb.ingress.kubernetes.io/backend-protocol: HTTP
     alb.ingress.kubernetes.io/healthcheck-path: /healthz
 spec:
