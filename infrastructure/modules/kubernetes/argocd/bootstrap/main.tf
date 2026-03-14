@@ -54,11 +54,6 @@ resource "null_resource" "apply_root_app" {
   provisioner "local-exec" {
     command = "sleep 10 && kubectl apply -f ${local_file.root_app_yaml.filename} --validate=false"
   }
-
-  provisioner "local-exec" {
-    when    = destroy
-    command = "kubectl delete application root-bootstrap -n argocd --ignore-not-found"
-  }
 }
 
 # --- DYNAMIC PARAMETERS (GIT SOURCE OF TRUTH) ---

@@ -17,7 +17,7 @@ terraform {
 
   before_hook "clean_k8s_resources" {
     commands     = ["destroy"]
-    execute      = ["/bin/bash", "-c", "kubectl delete ingress --all --all-namespaces --wait=true || true"]
+    execute      = ["/bin/bash", "-c", "timeout 60s kubectl delete ingress -n argocd --all --wait=true || echo 'Ingress already gone or timed out'"]
   }
 }
 
