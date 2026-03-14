@@ -1,0 +1,43 @@
+# infrastructure/argocd/bootstrap/root-infra-observability.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: root-observability
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - name: monitoring
+                  folder: infrastructure/argocd/apps/infrastructure/observability/monitoring
+                  valuesKey: "kube-prometheus-stack"
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
+  template:
+    metadata:
+      name: '{{.name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "-5"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: env/dev
+        path: '{{.folder}}'
+        helm:
+          values: |
+            global:
+              clusterName: "{{ .clusterName }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: monitoring
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]

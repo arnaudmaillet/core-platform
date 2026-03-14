@@ -1,0 +1,12 @@
+# infrastructure/argocd/apps/infrastructure/security/external-dns/values.yaml
+
+external-dns:
+  provider: aws
+  domainFilters:
+    - "core-platform.click"
+  policy: upsert-only
+  registry: txt
+  txtOwnerId: "core-platform-dev"
+  sources:
+    - ingress
+    - service

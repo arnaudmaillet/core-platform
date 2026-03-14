@@ -1,0 +1,6 @@
+# infrastructure/argocd/apps/operators/k6-operator/Chart.yaml
+
+apiVersion: v2
+name: k6-operator
+description: Helm chart pour l'opérateur de test de charge K6
+version: 1.0.0

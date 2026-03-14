@@ -1,5 +1,10 @@
 # infrastructure/modules/kubernetes/argocd/main.tf
 
+provider "github" {
+  owner = "arnaudmaillet"
+}
+
+
 # 1. Installation du serveur ArgoCD + Auto-Bootstrap
 # Le serveur s'installe ET déploie l'application racine en une seule étape atomique.
 module "server" {

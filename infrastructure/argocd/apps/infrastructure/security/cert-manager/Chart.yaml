@@ -1,6 +1,9 @@
 # infrastructure/argocd/apps/security/cert-manager/Chart.yaml
 
 apiVersion: v2
-name: cert-manager
-description: Helm chart pour Cert-Manager et les ClusterIssuers
+name: cert-manager-wrapper
 version: 1.0.0
+dependencies:
+  - name: cert-manager
+    version: "v1.12.0"
+    repository: https://charts.jetstack.io

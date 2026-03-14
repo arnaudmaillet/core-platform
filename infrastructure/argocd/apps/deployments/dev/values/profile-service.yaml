@@ -44,7 +44,8 @@ queryServer:
 # --- CONFIGURATION RÉSEAU (INGRESS) ---
 ingress:
   enabled: true
-  host: "api.dev.core-platform.com"
+  host: "api.dev.core-platform.click"
+  groupName: "management-group"
   certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/bbbddd3a-05ae-4ac5-a5cf-5b86e8757be0"
 
 # --- CONFIGURATION SCALING (HPA) ---
