@@ -4,6 +4,3 @@ karpenter:
   settings:
     clusterName: "core-platform-dev"
     interruptionQueue: "core-platform-dev" 
-  serviceAccount:
-    create: true
-    name: karpenter
