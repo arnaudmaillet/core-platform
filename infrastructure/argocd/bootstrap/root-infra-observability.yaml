@@ -35,6 +35,7 @@ spec:
           values: |
             global:
               clusterName: "{{ .clusterName }}"
+              certificateArn: "{{ .certificateArn }}"
       destination:
         server: https://kubernetes.default.svc
         namespace: monitoring
