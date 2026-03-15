@@ -7,10 +7,8 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    # ALB dédié : pas de group.name
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-    # Utilisation de .Values.global.certificateArn (à passer via l'AppSet)
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificateArn | quote }}
     external-dns.alpha.kubernetes.io/hostname: "grafana.core-platform.click"
 spec:
