@@ -1,4 +1,4 @@
-# infrastructure/argocd/apps/platform/karpenter/Chart.yaml
+# infrastructure/argocd/apps/infrastructure/platform/karpenter/Chart.yaml
 
 apiVersion: v2
 name: karpenter-wrapper
@@ -6,4 +6,4 @@ version: 1.0.0
 dependencies:
   - name: karpenter
     version: "1.2.1"
-    repository: public.ecr.aws/karpenter
+    repository: "oci://public.ecr.aws/karpenter"
