@@ -42,8 +42,8 @@ spec:
         path: '{{.folder}}'
         helm:
           values: |
+            certificateArn: "{{ .certificateArn }}"
             {{ .valuesKey }}:
-              certificateArn: "{{ .certificateArn }}"
               {{- if .iamRoleKey }}
               serviceAccount:
                 annotations:
