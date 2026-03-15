@@ -16,14 +16,17 @@ spec:
                   folder: infrastructure/argocd/apps/infrastructure/security/cert-manager
                   valuesKey: "cert-manager"
                   iamRoleKey: ""
+                  destNamespace: "cert-manager"
                 - name: external-dns
                   folder: infrastructure/argocd/apps/infrastructure/security/external-dns
                   valuesKey: "external-dns"
                   iamRoleKey: "externalDnsRoleArn"
+                  destNamespace: "kube-system"
                 - name: admin-access
                   folder: infrastructure/argocd/apps/infrastructure/security/admin-access
                   valuesKey: "admin-access"
                   iamRoleKey: ""
+                  destNamespace: "argocd"
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: env/dev
@@ -51,7 +54,7 @@ spec:
               {{- end }}
       destination:
         server: https://kubernetes.default.svc
-        namespace: argocd
+        namespace: '{{.destNamespace}}'
       syncPolicy:
         automated: 
           prune: false
