@@ -16,16 +16,19 @@ spec:
                   folder: infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller
                   valuesKey: "aws-load-balancer-controller"
                   iamRoleKey: "lbControllerRoleArn"
+                  destNamespace: "kube-system"
 
                 - name: karpenter
                   folder: infrastructure/argocd/apps/infrastructure/platform/karpenter
                   valuesKey: "karpenter"
                   iamRoleKey: "karpenterRoleArn"
+                  destNamespace: "karpenter"
 
                 - name: metrics-server
                   folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
                   valuesKey: "metrics-server"
                   iamRoleKey: ""
+                  destNamespace: "kube-system"
 
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
@@ -57,10 +60,10 @@ spec:
                 {{- end }}
       destination:
         server: https://kubernetes.default.svc
-        namespace: kube-system
+        namespace: "{{.destNamespace}}"
       syncPolicy:
         automated:
-          prune: false
+          prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
