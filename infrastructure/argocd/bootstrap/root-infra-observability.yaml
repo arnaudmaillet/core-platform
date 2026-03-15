@@ -8,11 +8,18 @@ metadata:
 spec:
   goTemplate: true
   generators:
-    - list:
-        elements:
-          - name: monitoring
-            folder: infrastructure/argocd/apps/infrastructure/observability/monitoring
-            valuesKey: "kube-prometheus-stack"
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - name: monitoring
+                  folder: infrastructure/argocd/apps/infrastructure/observability/monitoring
+                  valuesKey: "kube-prometheus-stack"
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
       name: '{{.name}}'
@@ -27,10 +34,14 @@ spec:
         helm:
           values: |
             global:
-              clusterName: "core-platform-dev"
+              clusterName: "{{ .clusterName }}"
       destination:
         server: https://kubernetes.default.svc
         namespace: monitoring
       syncPolicy:
-        automated: {prune: true, selfHeal: true}
-        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        automated: 
+          prune: false
+          selfHeal: true
+        syncOptions: 
+          - CreateNamespace=true
+          - ServerSideApply=true

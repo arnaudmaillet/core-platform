@@ -1,0 +1,67 @@
+# infrastructure/argocd/bootstrap/root-infra-platform.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: root-platform
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - name: aws-load-balancer-controller
+                  folder: infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller
+                  valuesKey: "aws-load-balancer-controller"
+                  iamRoleKey: "lbControllerRoleArn"
+
+                - name: karpenter
+                  folder: infrastructure/argocd/apps/infrastructure/platform/karpenter
+                  valuesKey: "karpenter"
+                  iamRoleKey: "karpenterRoleArn"
+
+                - name: metrics-server
+                  folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
+                  valuesKey: "metrics-server"
+                  iamRoleKey: ""
+
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: env/dev
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
+  template:
+    metadata:
+      name: "{{.name}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "-10"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: env/dev
+        path: "{{.folder}}"
+        helm:
+          values: |
+            {{ .valuesKey }}:
+              global:
+                clusterName: "{{ .clusterName }}"
+              serviceAccount:
+                create: true
+                name: {{ .name }}
+                {{- if .iamRoleKey }}
+                annotations:
+                  eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
+                {{- end }}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

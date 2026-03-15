@@ -20,11 +20,11 @@ locals {
   owner = "no-team"
   project_name = "core-platform"
 
+  # Détection robuste du contexte Kubernetes
   is_kubernetes = contains(split("/", path_relative_to_include()), "kubernetes")
 }
 
 # 1. GÉNÉRATION DU BACKEND (S3 + DynamoDB)
-# Crée automatiquement le bucket et la table de lock si nécessaire
 remote_state {
   backend = "s3"
   generate = {
@@ -78,7 +78,7 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  kubernetes = { # <--- ICI : Pour certaines versions, l'absence de '=' passe, mais pour la tienne il le faut
+  kubernetes = {
     host                   = var.cluster_endpoint
     cluster_ca_certificate = base64decode(var.cluster_ca_certificate)
     exec = {
@@ -88,10 +88,6 @@ provider "helm" {
     }
   }
 }
-
-# Note : Si l'erreur persiste après avoir ajouté le '=', 
-# c'est que ta version de Helm attend la syntaxe sans '=' mais avec un bloc nommé différemment.
-# Mais l'erreur "Did you mean to define argument" confirme qu'il attend '='.
 
 provider "kubectl" {
   host                   = var.cluster_endpoint
@@ -107,6 +103,7 @@ provider "kubectl" {
 EOF
 }
 
+# 3. GÉNÉRATION DES VERSIONS
 generate "versions" {
   path      = "versions.tf"
   if_exists = "overwrite_terragrunt"
@@ -126,20 +123,19 @@ terraform {
 EOF
 }
 
-# 3. INPUTS GLOBAUX
-# Ces variables sont passées à tous les modules sans avoir à les redéfinir
+# 4. INPUTS GLOBAUX
 inputs = {
-  aws_region   = local.aws_region
-  project_name = local.project_name
-  env          = local.environment_vars.locals.env
+  aws_region      = local.aws_region
+  project_name    = local.project_name
+  env             = local.environment_vars.locals.env
   repository_url  = local.repository_url
   repository_path = local.repository_path
   target_revision = local.target_revision
 }
 
-# 4. AUTOMATISATION DU LOGIN HELM (ECR PUBLIC)
-# Évite l'erreur 403 "authorization token has expired" toutes les 12h
+# 5. HOOKS DE MAINTENANCE
 terraform {
+  # Login ECR Public pour éviter les limitations de pull Helm
   before_hook "ecr_public_login" {
     commands = ["apply", "plan"]
     execute  = [
