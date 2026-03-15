@@ -49,6 +49,8 @@ spec:
         helm:
           values: |
             {{ .valuesKey }}:
+              settings:
+                clusterName: "{{ .clusterName }}"
               global:
                 clusterName: "{{ .clusterName }}"
               serviceAccount:
