@@ -35,9 +35,14 @@ spec:
           values: |
             global:
               clusterName: "{{ .clusterName }}"
+              certificateArn: "{{ .certificateArn }}"
       destination:
         server: https://kubernetes.default.svc
         namespace: monitoring
       syncPolicy:
-        automated: {prune: true, selfHeal: true}
-        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        automated: 
+          prune: false
+          selfHeal: true
+        syncOptions: 
+          - CreateNamespace=true
+          - ServerSideApply=true

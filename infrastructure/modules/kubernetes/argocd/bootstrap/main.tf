@@ -39,10 +39,11 @@ spec:
     namespace: argocd
   syncPolicy:
     automated:
-      prune: true
+      prune: false
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
 EOF
   filename = "${path.module}/root-app.yaml"
 }
@@ -52,11 +53,6 @@ resource "null_resource" "apply_root_app" {
 
   provisioner "local-exec" {
     command = "sleep 10 && kubectl apply -f ${local_file.root_app_yaml.filename} --validate=false"
-  }
-
-  provisioner "local-exec" {
-    when    = destroy
-    command = "kubectl delete application root-bootstrap -n argocd --ignore-not-found"
   }
 }
 
