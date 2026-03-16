@@ -34,7 +34,7 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: '{{.name}}'
+      name: "{{.name}}"
       annotations:
         argocd.argoproj.io/sync-wave: "-5"
     spec:
@@ -42,7 +42,7 @@ spec:
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
         targetRevision: develop
-        path: '{{.folder}}'
+        path: "{{.folder}}"
         helm:
           valueFiles:
             - values.yaml
@@ -53,14 +53,16 @@ spec:
               serviceAccount:
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
+              {{- else }}
+              {}
               {{- end }}
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{.destNamespace}}'
+        namespace: "{{.destNamespace}}"
       syncPolicy:
-        automated: 
+        automated:
           prune: false
           selfHeal: true
-        syncOptions: 
+        syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
