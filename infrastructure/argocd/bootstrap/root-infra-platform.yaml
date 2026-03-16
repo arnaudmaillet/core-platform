@@ -51,6 +51,7 @@ spec:
             {{ .valuesKey }}:
               settings:
                 clusterName: "{{ .clusterName }}"
+                clusterEndpoint: "{{ .clusterEndpoint }}"
               global:
                 clusterName: "{{ .clusterName }}"
               serviceAccount:

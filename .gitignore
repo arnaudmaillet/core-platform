@@ -24,6 +24,7 @@ rust-project.json
 
 
 # Fichiers et dossiers générés par Terraform
+.terraform.lock.hcl
 .terraform/
 *.tfstate
 *.tfstate.backup
