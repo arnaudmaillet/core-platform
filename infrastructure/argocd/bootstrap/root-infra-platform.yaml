@@ -32,7 +32,7 @@ spec:
 
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
-              revision: env/dev
+              revision: develop
               files:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
@@ -44,7 +44,7 @@ spec:
       project: default
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: env/dev
+        targetRevision: develop
         path: "{{.folder}}"
         helm:
           values: |

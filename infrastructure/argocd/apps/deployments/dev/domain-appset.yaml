@@ -10,7 +10,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: env/dev
+        revision: develop
         files:
           - path: "infrastructure/argocd/apps/deployments/dev/values/*.yaml"
   template:
@@ -20,13 +20,13 @@ spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: env/dev
+          targetRevision: develop
           path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"
           helm:
             valueFiles:
               - '$values/infrastructure/argocd/apps/deployments/dev/values/{{ .serviceName }}.yaml'
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: env/dev
+          targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
