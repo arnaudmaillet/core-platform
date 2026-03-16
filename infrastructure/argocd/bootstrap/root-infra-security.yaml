@@ -49,13 +49,12 @@ spec:
           values: |
             {{ .valuesKey }}:
               installCRDs: true
-              {{- if .iamRoleKey }}
+            {{- if .iamRoleKey }}
+            {{ .valuesKey }}:
               serviceAccount:
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
-              {{- else }}
-              {}
-              {{- end }}
+            {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{.destNamespace}}"
