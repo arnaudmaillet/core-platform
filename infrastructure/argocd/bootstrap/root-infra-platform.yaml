@@ -24,6 +24,12 @@ spec:
                   iamRoleKey: "karpenterRoleArn"
                   destNamespace: "karpenter"
 
+                - name: karpenter-config
+                  folder: infrastructure/argocd/apps/infrastructure/platform/karpenter-config
+                  valuesKey: "karpenter-config"
+                  iamRoleKey: ""
+                  destNamespace: "karpenter"
+
                 - name: metrics-server
                   folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
                   valuesKey: "metrics-server"

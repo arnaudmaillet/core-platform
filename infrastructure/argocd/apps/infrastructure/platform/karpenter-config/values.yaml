@@ -1,0 +1,9 @@
+# infrastructure/argocd/apps/infrastructure/platform/karpenter-config/values.yaml
+
+global:
+  clusterName: ""
+  env: "dev"
+
+# Configuration par défaut pour le DEV
+capacityType: ["spot"]
+instanceCategories: ["t", "c", "m"]
