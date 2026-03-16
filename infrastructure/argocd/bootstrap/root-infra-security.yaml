@@ -44,9 +44,11 @@ spec:
         targetRevision: env/dev
         path: '{{.folder}}'
         helm:
+          valueFiles:
+            - values.yaml
           values: |
-            certificateArn: "{{ .certificateArn }}"
             {{ .valuesKey }}:
+              installCRDs: true
               {{- if .iamRoleKey }}
               serviceAccount:
                 annotations:
