@@ -21,7 +21,7 @@ spec:
       project: default
       source:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: env/dev
+        targetRevision: develop
         path: '{{.folder}}'
         directory:
           recurse: true

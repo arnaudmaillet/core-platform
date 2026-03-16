@@ -15,7 +15,7 @@ locals {
 
   repository_url = "https://github.com/arnaudmaillet/core-platform"
   repository_path = "infrastructure/argocd"
-  target_revision = "env/dev"
+  target_revision = "develop"
 
   owner = "no-team"
   project_name = "core-platform"

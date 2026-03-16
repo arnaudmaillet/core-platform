@@ -30,7 +30,7 @@ inputs = {
   # --- Paramètres ArgoCD (Nouveau !) ---
   argocd_version  = "7.7.0"
   repository_url  = "https://github.com/arnaudmaillet/core-platform"
-  target_revision = "env/dev"
+  target_revision = "develop"
   env             = "dev"
 
   # --- Sécurité & Certificats ---
