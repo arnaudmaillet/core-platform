@@ -98,6 +98,7 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
           "ec2:CreateTags",
           "iam:GetInstanceProfile",
           "iam:CreateInstanceProfile",
+          "iam:CreateServiceLinkedRole",
           "iam:TagInstanceProfile",
           "iam:AddRoleToInstanceProfile",
           "iam:RemoveRoleFromInstanceProfile",
@@ -199,4 +200,19 @@ data "aws_acm_certificate" "issued" {
   domain      = "core-platform.click"
   statuses    = ["ISSUED"]
   most_recent = true
+}
+
+
+
+# --- 7. AWS SERVICE-LINKED ROLE FOR SPOT ---
+# Ce rôle est obligatoire pour que Karpenter (ou tout service EC2) 
+# puisse demander des instances Spot sur ce compte AWS.
+resource "aws_iam_service_linked_role" "spot" {
+  aws_service_name = "spot.amazonaws.com"
+  
+  # On ajoute un cycle de vie pour éviter les erreurs si le rôle existe déjà 
+  # sur le compte AWS (car ce rôle est global au compte).
+  lifecycle {
+    ignore_changes = all
+  }
 }
