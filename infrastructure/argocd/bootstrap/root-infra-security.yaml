@@ -47,6 +47,9 @@ spec:
           valueFiles:
             - values.yaml
           values: |
+            # Injection des paramètres globaux pour l'Ingress
+            certificateArn: "{{ .ssl_certificate_arn }}"
+            
             {{ .valuesKey }}:
               installCRDs: true
             {{- if .iamRoleKey }}

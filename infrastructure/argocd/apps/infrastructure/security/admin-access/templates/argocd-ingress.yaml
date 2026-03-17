@@ -1,3 +1,4 @@
+# infrastructure/argocd/apps/infrastructure/security/admin-access/templates/argocd-ingress.yaml
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
