@@ -54,6 +54,12 @@ spec:
         path: "{{.folder}}"
         helm:
           values: |
+            # Valeurs "Root" (Aplaties) pour un accès direct via .Values.clusterName
+            clusterName: "{{ .clusterName }}"
+            clusterEndpoint: "{{ .clusterEndpoint }}"
+            env: "dev"
+            
+            # Valeurs scopées pour la compatibilité avec tes Charts existants
             {{ .valuesKey }}:
               settings:
                 clusterName: "{{ .clusterName }}"
@@ -62,7 +68,7 @@ spec:
                 clusterName: "{{ .clusterName }}"
               serviceAccount:
                 create: true
-                name: {{ .name }}
+                name: "{{ .name }}"
                 {{- if .iamRoleKey }}
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"

@@ -1,5 +1,9 @@
 # infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller/values.yaml
 
+clusterName: ""
+clusterEndpoint: ""
+env: ""
+
 aws-load-balancer-controller:
   clusterName: "core-platform-dev"
   serviceAccount:
