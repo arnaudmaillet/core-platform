@@ -1,0 +1,7 @@
+# infrastructure/argocd/apps/infrastructure/security/admin-access/values.yaml
+
+# Configuration par défaut pour l'accès administrateur
+certificateArn: ""
+
+admin-access:
+  installCRDs: false # Pas de CRDs spécifiques ici
