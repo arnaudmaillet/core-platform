@@ -30,4 +30,3 @@ spec:
     cpu: 1000 # Limite de sécurité pour ton budget AWS
   disruption:
     consolidationPolicy: WhenUnderutilized
-    expireAfter: 720h # Rotation des nœuds tous les 30 jours

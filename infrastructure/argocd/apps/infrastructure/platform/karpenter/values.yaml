@@ -1,4 +1,8 @@
 # infrastructure/argocd/apps/infrastructure/platform/karpenter/values.yaml
 
+clusterName: ""
+clusterEndpoint: ""
+env: ""
+
 settings:
   interruptionQueue: "core-platform-dev"

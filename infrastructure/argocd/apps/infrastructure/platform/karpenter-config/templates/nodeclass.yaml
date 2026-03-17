@@ -6,15 +6,16 @@ metadata:
   name: default
 spec:
   amiFamily: AL2
-  # On utilise le rôle créé par Terraform pour les nœuds
-  role: "{{ .Values.global.clusterName }}-karpenter-node-role"
+  amiSelectorTerms:
+    - alias: "al2@latest" 
+  role: "{{ .Values.clusterName }}-karpenter-node-role"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ .Values.global.clusterName }}"
+        karpenter.sh/discovery: "{{ .Values.clusterName }}"
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ .Values.global.clusterName }}"
+        karpenter.sh/discovery: "{{ .Values.clusterName }}"
   tags:
     Intent: apps
     ManagedBy: Karpenter
-    Environment: "{{ .Values.global.env }}"
+    Environment: "{{ .Values.env }}"
