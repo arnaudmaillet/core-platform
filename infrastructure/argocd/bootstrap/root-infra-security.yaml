@@ -47,7 +47,8 @@ spec:
           valueFiles:
             - values.yaml
           values: |
-            certificateArn: "{{ .ssl_certificate_arn }}"
+            global:
+              certificateArn: "{{ .ssl_certificate_arn }}"
             
             {{ .valuesKey }}:
               installCRDs: true
