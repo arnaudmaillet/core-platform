@@ -4,4 +4,4 @@
 certificateArn: ""
 
 admin-access:
-  installCRDs: false # Pas de CRDs spécifiques ici
+  installCRDs: false

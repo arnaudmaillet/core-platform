@@ -47,16 +47,16 @@ spec:
           valueFiles:
             - values.yaml
           values: |
-            # Injection des paramètres globaux pour l'Ingress
             certificateArn: "{{ .ssl_certificate_arn }}"
             
             {{ .valuesKey }}:
               installCRDs: true
-            {{- if .iamRoleKey }}
+              {{- if .iamRoleKey }}
               serviceAccount:
+                create: true
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
-            {{- end }}
+              {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{.destNamespace}}"
