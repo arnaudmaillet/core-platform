@@ -21,7 +21,7 @@ spec:
                   folder: infrastructure/argocd/apps/infrastructure/security/external-dns
                   valuesKey: "external-dns"
                   iamRoleKey: "externalDnsRoleArn"
-                  destNamespace: "kube-system"
+                  destNamespace: "external-dns"
                 - name: admin-access
                   folder: infrastructure/argocd/apps/infrastructure/security/admin-access
                   valuesKey: "admin-access"
@@ -50,7 +50,6 @@ spec:
             {{ .valuesKey }}:
               installCRDs: true
             {{- if .iamRoleKey }}
-            {{ .valuesKey }}:
               serviceAccount:
                 annotations:
                   eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
