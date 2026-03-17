@@ -8,7 +8,7 @@ spec:
   amiFamily: AL2
   amiSelectorTerms:
     - alias: "al2@latest" 
-  role: "{{ .Values.clusterName }}-karpenter-node-role"
+  role: "{{ .Values.clusterName }}-node-role"
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: "{{ .Values.clusterName }}"
