@@ -6,7 +6,8 @@ metadata:
   name: default
 spec:
   amiFamily: AL2
-  # On utilise le rôle créé par Terraform pour les nœuds
+  amiSelectorTerms:
+    - alias: "al2@latest" 
   role: "{{ .Values.clusterName }}-karpenter-node-role"
   subnetSelectorTerms:
     - tags:
