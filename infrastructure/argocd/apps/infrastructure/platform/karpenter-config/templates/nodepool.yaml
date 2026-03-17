@@ -29,4 +29,5 @@ spec:
   limits:
     cpu: 1000 # Limite de sécurité pour ton budget AWS
   disruption:
-    consolidationPolicy: WhenUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
