@@ -1,0 +1,13 @@
+# infrastructure/argocd/apps/catalog/profile-service/values.yaml
+
+serviceName: ""
+envName: ""
+commandServer:
+  enabled: false
+databases:
+  postgres: { enabled: false }
+  redis: { enabled: false }
+  scylla: { enabled: false }
+nodeSelector: {}
+hpa: { enabled: false }
+ingress: { enabled: false }
