@@ -8,11 +8,20 @@ metadata:
 spec:
   goTemplate: true
   generators:
-    - git:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: develop
-        files:
-          - path: "infrastructure/argocd/apps/deployments/dev/values/*.yaml"
+    - matrix:
+        generators:
+          # 1. On boucle sur chaque fichier de service (profile, auth, etc.)
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: develop
+              files:
+                - path: "infrastructure/argocd/apps/deployments/dev/values/*.yaml"
+          # 2. On injecte les paramètres globaux (ton JSON avec l'ARN)
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: develop
+              files:
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
       name: "dev-{{ .serviceName }}"
