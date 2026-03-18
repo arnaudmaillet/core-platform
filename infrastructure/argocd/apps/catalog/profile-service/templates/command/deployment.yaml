@@ -34,14 +34,25 @@ spec:
             - configMapRef:
                 name: {{ .Values.commandServer.configMapName }}
           env:
+            # --- POSTGRES ---
             - name: _DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.commandServer.dbSecretName | default (printf "%s-app" .Values.databases.postgres.name) }}
+                  name: {{ printf "%s-app" .Values.databases.postgres.name }}
                   key: password
-
             - name: PROFILE_DB_URL
               value: {{ printf "postgres://app:$(_DB_PASSWORD)@%s-rw:5432/%s" .Values.databases.postgres.name .Values.databases.postgres.dbName | quote }}
+
+            # --- SCYLLA ---
+            - name: PROFILE_SCYLLA_NODES
+              value: {{ .Values.databases.scylla.name | quote }}
+            - name: PROFILE_SCYLLA_KEYSPACE
+              value: {{ .Values.databases.scylla.keyspace | quote }}
+
+            # --- REDIS ---
+            - name: PROFILE_REDIS_URL
+              value: {{ printf "redis://%s:6379" .Values.databases.redis.name | quote }}
+
           ports:
             - containerPort: {{ .Values.commandServer.port }}
 {{- end }}
