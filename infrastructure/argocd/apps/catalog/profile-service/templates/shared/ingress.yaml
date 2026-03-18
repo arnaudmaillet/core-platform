@@ -1,4 +1,4 @@
-# infrastructure/argocd-bis/apps/catalog/profile-service/templates/shared/ingress.yaml
+# infrastructure/argocd/apps/catalog/profile-service/templates/shared/ingress.yaml
 
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1

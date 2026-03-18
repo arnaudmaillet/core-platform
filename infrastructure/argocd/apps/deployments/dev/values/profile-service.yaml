@@ -55,12 +55,9 @@ hpa:
   maxReplicas: 2
   targetCPU: 80
 
-# --- CONFIGURATION INFRASTRUCTURE (KARPENTER) ---
-karpenter:
-  enabled: true
-  # Utilisation de SPOT en dev pour réduire les coûts
-  capacityType: ["spot"]
-  instanceTypes: ["t3.medium", "t3.large"]
+# --- CONFIGURATION DU PLACEMENT (Standard K8s) ---
+nodeSelector:
+  karpenter.sh/capacity-type: "spot"
 
 # --- CONFIGURATION BDDs ---
 databases:
