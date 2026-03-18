@@ -1,4 +1,4 @@
-# infrastructure/argocd-bis/apps/catalog/profile-service/templates/shared/hpa.yaml
+# infrastructure/argocd/apps/catalog/profile-service/templates/shared/hpa.yaml
 
 {{- if .Values.hpa.enabled }}
 apiVersion: autoscaling/v2

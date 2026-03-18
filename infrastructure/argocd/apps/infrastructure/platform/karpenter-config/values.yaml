@@ -1,9 +1,18 @@
 # infrastructure/argocd/apps/infrastructure/platform/karpenter-config/values.yaml
 
 clusterName: ""
-clusterEndpoint: ""
-env: ""
+env: "dev"
 
-# Configuration par défaut pour le DEV
-capacityType: ["spot"]
-instanceCategories: ["t", "c", "m"]
+# Configuration des Pools de calcul
+nodepools:
+  default:
+    capacityType: ["spot"]
+    categories: ["t", "c", "m"]
+    sizes: ["medium", "large"]
+    cpuLimit: 1000
+  
+  database:
+    capacityType: ["on-demand"]
+    categories: ["m", "r"]
+    sizes: ["large", "xlarge"]
+    cpuLimit: 50

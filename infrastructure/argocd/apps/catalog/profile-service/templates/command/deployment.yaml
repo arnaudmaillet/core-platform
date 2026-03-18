@@ -17,6 +17,10 @@ spec:
       labels:
         app: {{ .Values.commandServer.name }}
     spec:
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if .Values.commandServer.initContainers.scylla.enabled }}
       initContainers:
         - name: init-scylla-keyspace

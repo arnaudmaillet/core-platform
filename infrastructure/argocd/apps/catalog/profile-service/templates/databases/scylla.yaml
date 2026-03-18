@@ -16,6 +16,8 @@ spec:
       labels:
         app: {{ .Values.databases.scylla.name }}
     spec:
+      nodeSelector:
+          karpenter.sh/nodepool: database-pool
       tolerations:
         - key: "dedicated"
           operator: "Equal"
