@@ -1,0 +1,10 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/command/configmap.yaml
+
+{{- if .Values.commandServer.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.commandServer.configMapName }}
+data:
+  LOG_LEVEL: "info"
+{{- end }}
