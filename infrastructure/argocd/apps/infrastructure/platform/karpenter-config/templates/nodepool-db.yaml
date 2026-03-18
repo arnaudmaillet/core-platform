@@ -32,4 +32,4 @@ spec:
     cpu: {{ .Values.nodepools.database.cpuLimit }}
   disruption:
     consolidationPolicy: WhenEmpty
-    # On est moins agressif sur le recyclage des nodes de BDD pour éviter les micro-coupures
+    consolidateAfter: 1m
