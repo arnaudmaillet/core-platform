@@ -77,6 +77,8 @@ databases:
   scylla:
     enabled: true
     name: "dev-profile-nosql"
+    nodes: "dev-profile-nosql"
+    keyspace: "profile_service"
     image: "scylladb/scylla:5.4"
     resources:
       requests:
