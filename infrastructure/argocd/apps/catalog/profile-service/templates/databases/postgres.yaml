@@ -27,5 +27,5 @@ spec:
         - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
   storage:
     size: {{ .Values.databases.postgres.storageSize }}
-    storageClass: gp3
+    storageClass: gp2
 {{- end }}
