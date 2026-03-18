@@ -34,18 +34,14 @@ spec:
             - configMapRef:
                 name: {{ .Values.commandServer.configMapName }}
           env:
-            # 1. On récupère d'abord le mot de passe du secret CNPG
             - name: _DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  # CNPG crée toujours un secret nom-du-cluster-app
                   name: {{ .Values.commandServer.dbSecretName | default (printf "%s-app" .Values.databases.postgres.name) }}
                   key: password
-            
-            # 2. On injecte l'URL en utilisant la variable récupérée juste au-dessus
+
             - name: PROFILE_DB_URL
-              # Note : On utilise $(VAR) pour l'interpolation K8s
-              value: "postgres://app:$(_DB_PASSWORD)@{{ .Values.databases.postgres.name }}-rw:5432/{{ .Values.databases.postgres.dbName }}"
+              value: {{ printf "postgres://app:$(_DB_PASSWORD)@%s-rw:5432/%s" .Values.databases.postgres.name .Values.databases.postgres.dbName | quote }}
           ports:
             - containerPort: {{ .Values.commandServer.port }}
 {{- end }}
