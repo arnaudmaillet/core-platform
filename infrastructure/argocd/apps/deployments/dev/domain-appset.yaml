@@ -23,6 +23,9 @@ spec:
           targetRevision: develop
           path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}"
           helm:
+            values: |
+              global:
+                certificateArn: "{{ .certificateArn }}"
             valueFiles:
               - '$values/infrastructure/argocd/apps/deployments/dev/values/{{ .serviceName }}.yaml'
         - repoURL: https://github.com/arnaudmaillet/core-platform
