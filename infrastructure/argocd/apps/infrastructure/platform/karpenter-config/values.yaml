@@ -9,18 +9,18 @@ nodepools:
     capacityType: ["on-demand"] # Stabilité maximale
     categories: ["t", "c", "m"]
     sizes: ["medium", "large"]
-    cpuLimit: 200
+    cpuLimit: 1000 # 1000 = 1 vCPU.
 
   # (Profile, Auth, etc.)
   apps:
     capacityType: ["spot"]      # Économies (jusqu'à -70%)
     categories: ["t", "c", "m"]
     sizes: ["medium", "large"]
-    cpuLimit: 1000
+    cpuLimit: 5000 # 5000 = 5 vCPUs.
 
   # (Postgres, Scylla, Redis)
   database:
     capacityType: ["on-demand"]
     categories: ["m", "r"]      # Instances optimisées pour la mémoire
     sizes: ["large", "xlarge"]
-    cpuLimit: 50
+    cpuLimit: # 2000 = 2 vCPUs.
