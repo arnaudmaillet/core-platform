@@ -13,6 +13,15 @@ spec:
         kind: EC2NodeClass
         name: default
       requirements:
+        # --- GESTION DE L'ARCHITECTURE ---
+        - key: "kubernetes.io/arch"
+          operator: In
+          {{- if eq $name "database" }}
+          values: ["amd64"] # Force AMD64 pour la compatibilité PostGIS
+          {{- else }}
+          values: ["amd64", "arm64"] # Mixte pour le reste (Karpenter choisira le moins cher)
+          {{- end }}
+        
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: {{ $config.capacityType | toJson }}
@@ -22,12 +31,10 @@ spec:
         - key: "karpenter.k8s.aws/instance-size"
           operator: In
           values: {{ $config.sizes | toJson }}
-        # Ajout du label d'intention pour le ciblage
         - key: "intent"
           operator: In
           values: [{{ $name | quote }}]
       
-      # On ajoute une Taint uniquement pour le pool database
       {{- if eq $name "database" }}
       taints:
         - key: "dedicated"
@@ -35,8 +42,11 @@ spec:
           effect: "NoSchedule"
       {{- end }}
 
+      expireAfter: 720h # Sécurité pour recycler les nœuds tous les 30 jours
+  
   limits:
-    cpu: {{ $config.cpuLimit }}
+    cpu: {{ $config.cpuLimit | default 1000 }} # 1cpu par defaut
+  
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
