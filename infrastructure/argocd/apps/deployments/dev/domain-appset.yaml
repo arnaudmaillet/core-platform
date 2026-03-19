@@ -10,28 +10,33 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: develop
+        # Vérifie bien que tu veux rester sur develop ou revenir sur ta feat branch ici
+        revision: feat/profile/stress-test-clean
         files:
+          # On utilise */*.yaml pour ne matcher QUE les fichiers YAML dans les sous-dossiers
+          # Cela exclut mécaniquement le dossier parent 'profile' lui-même
           - path: "infrastructure/argocd/apps/deployments/dev/*/*.yaml"
   template:
     metadata:
+      # Nom : dev-profile-app
       name: 'dev-{{ .path.basename }}-{{ .path.filename | trimSuffix ".yaml" }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
-          path: "infrastructure/argocd/apps/catalog/{{ .path.basename }}-service"
+          targetRevision: feat/profile/stress-test-clean
+          path: 'infrastructure/argocd/apps/catalog/{{ .path.basename }}-service'
           helm:
             valueFiles:
-              - "$values/infrastructure/argocd/bootstrap/global-params.json"
-              - "$values/{{ .path.path }}"
+              - '$values/infrastructure/argocd/bootstrap/global-params.json'
+              # .path.path sera désormais TOUJOURS un fichier (ex: .../profile/app.yaml)
+              - '$values/{{ .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
+          targetRevision: feat/profile/stress-test-clean
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: "dev-{{ .path.basename }}"
+        namespace: 'dev-{{ .path.basename }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
