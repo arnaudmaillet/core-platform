@@ -10,6 +10,7 @@ spec:
   generators:
     - matrix:
         generators:
+          # 1. Générateur des fichiers de services (app.yaml, storage.yaml)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
