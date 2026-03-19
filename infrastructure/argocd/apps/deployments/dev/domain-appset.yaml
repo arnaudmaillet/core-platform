@@ -15,27 +15,43 @@ spec:
           - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
   template:
     metadata:
-      # On concatène les deux pour voir le résultat dans le message d'erreur
-      name: "debug-{{ .path.basename }}-AND-{{ base .path.path }}"
+      # On force un nom unique ou un nom de "skip" si c'est un dossier
+      name: >-
+        {{- if hasSuffix ".yaml" .path.path -}}
+          dev-{{ .path.basename }}-{{ base .path.path | trimSuffix ".yaml" }}
+        {{- else -}}
+          skip-{{ .path.path | hashSum }}
+        {{- end -}}
     spec:
       project: default
+      {{- if hasSuffix ".yaml" .path.path }}
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: "infrastructure/argocd/apps/catalog/{{ .path.basename }}-service"
+          path: 'infrastructure/argocd/apps/catalog/{{ .path.basename }}-service'
           helm:
             valueFiles:
-              - "$values/infrastructure/argocd/bootstrap/global-params.json"
-              - "$values/infrastructure/argocd/apps/deployments/dev/profile/{{ base .path.path }}"
+              - '$values/infrastructure/argocd/bootstrap/global-params.json'
+              - '$values/infrastructure/argocd/apps/deployments/dev/profile/{{ base .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: "dev-{{ .path.basename }}"
+        namespace: 'dev-{{ .path.basename }}'
       syncPolicy:
         automated:
           prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
+      {{- else }}
+      # Spec minimale pour les dossiers détectés par erreur (sera ignoré car nom commence par skip-)
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: develop
+        path: .
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: default
+      {{- end }}
