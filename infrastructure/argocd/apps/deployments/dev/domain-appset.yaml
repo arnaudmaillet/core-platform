@@ -10,42 +10,46 @@ spec:
   generators:
     - matrix:
         generators:
+          # Générateur A : Les fichiers de config de tes apps
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
                 - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
-              pathParamPrefix: app
+              pathParamPrefix: deployment # On nomme explicitement cette source
+          # Générateur B : Tes paramètres globaux (le JSON)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
+              # Pas de préfixe ici, les clés du JSON (ex: certificateArn) 
+              # monteront directement à la racine du template.
   template:
     metadata:
-      name: 'dev-{{ .appBasenameDir }}-{{ .appFilename }}'
+      # On utilise le préfixe 'deployment' pour accéder aux variables du chemin
+      name: 'dev-{{ .deploymentBasenameDir }}-{{ .deploymentFilename }}'
     spec:
-      destination:
-        namespace: 'dev-{{ .appBasenameDir }}'
-        server: https://kubernetes.default.svc
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .appBasenameDir }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .deploymentBasenameDir }}-service'
           helm:
-            valueFiles:
-              - '$values/{{ .appPath }}'
             values: |
               global:
+                # Vient du JSON (global-params.json)
                 certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .appFilename }}"
+              # Vient du générateur Git A
+              componentType: "{{ .deploymentFilename }}"
+            valueFiles:
+              - '$values/{{ .deploymentPath }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .appPath.basenameDir }}'
+        namespace: 'dev-{{ .deploymentBasenameDir }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
