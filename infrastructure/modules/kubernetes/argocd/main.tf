@@ -4,7 +4,6 @@ provider "github" {
   owner = "arnaudmaillet"
 }
 
-
 # 1. Installation du serveur ArgoCD + Auto-Bootstrap
 # Le serveur s'installe ET déploie l'application racine en une seule étape atomique.
 module "server" {
@@ -25,6 +24,8 @@ module "bootstrap" {
   ssl_certificate_arn = var.ssl_certificate_arn
   addons_iam_roles    = var.addons_iam_roles
   cluster_endpoint    = var.cluster_endpoint
+
+  server_dependency = module.server.argocd_id
 }
 
 # 2. Installation des Addons EKS

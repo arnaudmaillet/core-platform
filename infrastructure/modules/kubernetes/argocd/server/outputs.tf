@@ -9,3 +9,7 @@ output "chart_version" {
   description = "La version du chart installée"
   value       = helm_release.argocd.version
 }
+
+output "argocd_id" {
+  value = helm_release.argocd.id
+}

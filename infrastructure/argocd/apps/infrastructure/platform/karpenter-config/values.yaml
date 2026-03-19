@@ -1,18 +1,26 @@
 # infrastructure/argocd/apps/infrastructure/platform/karpenter-config/values.yaml
 
-clusterName: ""
+clusterName: "core-platform-dev"
 env: "dev"
 
-# Configuration des Pools de calcul
 nodepools:
-  default:
-    capacityType: ["spot"]
+  # (ArgoCD, Monitoring, Controllers)
+  system:
+    capacityType: ["on-demand"] # Stabilité maximale
+    categories: ["t", "c", "m"]
+    sizes: ["medium", "large"]
+    cpuLimit: 200
+
+  # (Profile, Auth, etc.)
+  apps:
+    capacityType: ["spot"]      # Économies (jusqu'à -70%)
     categories: ["t", "c", "m"]
     sizes: ["medium", "large"]
     cpuLimit: 1000
-  
+
+  # (Postgres, Scylla, Redis)
   database:
     capacityType: ["on-demand"]
-    categories: ["m", "r"]
+    categories: ["m", "r"]      # Instances optimisées pour la mémoire
     sizes: ["large", "xlarge"]
     cpuLimit: 50
