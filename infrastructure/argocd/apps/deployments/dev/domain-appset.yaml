@@ -9,13 +9,13 @@ spec:
   generators:
     - matrix:
         generators:
-          # 1. Lit le contenu des fichiers (extrait serviceName et componentType)
+          # 1. Le générateur de fichiers (Source de vérité pour le path)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
-                - path: "infrastructure/argocd/apps/deployments/dev/*/*.yaml"
-          # 2. Lit les paramètres globaux (extrait certificateArn)
+                - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
+          # 2. Le générateur de paramètres globaux
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -23,18 +23,18 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{serviceName}}-{{componentType}}'
+      name: 'dev-{{path.basenameDir}}-{{path.basename}}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{serviceName}}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{path.basenameDir}}-service'
           helm:
             values: |
               global:
                 certificateArn: "{{certificateArn}}"
-              componentType: "{{componentType}}"
+              componentType: "{{path.basename}}"
             valueFiles:
               - '$values/{{path.path}}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
@@ -42,7 +42,7 @@ spec:
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{serviceName}}'
+        namespace: 'dev-{{path.basenameDir}}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions:
