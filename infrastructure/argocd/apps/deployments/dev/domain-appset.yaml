@@ -15,7 +15,7 @@ spec:
           - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
   template:
     metadata:
-      name: 'dev-{{ .path.basename }}-{{ .path.filename | trimSuffix ".yaml" }}'
+      name: 'dev-{{ .path.basename }}-{{ base .path.path | trimSuffix ".yaml" }}'
     spec:
       project: default
       sources:
