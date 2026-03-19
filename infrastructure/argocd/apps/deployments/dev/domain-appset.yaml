@@ -14,34 +14,35 @@ spec:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
-                - path: "infrastructure/argocd/bootstrap/global-params.json"
+                - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
+              pathParamPrefix: app
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
-                - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
+                - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{ .path.basenameDir }}-{{ .path.filename }}'
+      name: 'dev-{{ .appPath.basenameDir }}-{{ .appPath.filename }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .path.basenameDir }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .appPath.basenameDir }}-service'
           helm:
             values: |
               global:
                 certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .path.filename }}"
+              componentType: "{{ .appPath.filename }}"
             valueFiles:
-              - '$values/{{ .path.path }}'
+              - '$values/{{ .appPath.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .path.basenameDir }}'
+        namespace: 'dev-{{ .appPath.basenameDir }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
