@@ -6,17 +6,16 @@ metadata:
   name: dev-workloads
   namespace: argocd
 spec:
-  goTemplate: true
   generators:
     - matrix:
         generators:
-          # 1. On scanne tous les fichiers yaml dans les sous-dossiers (ex: dev/profile/*.yaml)
+          # 1. Lit le contenu des fichiers (extrait serviceName et componentType)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
-                - path: "infrastructure/argocd/apps/deployments/dev/**/[!global]*.yaml"
-          # 2. On injecte l'ARN du certificat
+                - path: "infrastructure/argocd/apps/deployments/dev/*/*.yaml"
+          # 2. Lit les paramètres globaux (extrait certificateArn)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -24,27 +23,26 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: "dev-{{ .path.basenameDir }}-{{ .path.basename }}"
+      name: 'dev-{{serviceName}}-{{componentType}}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          # On pointe toujours vers le catalogue générique du service
-          path: "infrastructure/argocd/apps/catalog/{{ .path.basenameDir }}-service"
+          path: 'infrastructure/argocd/apps/catalog/{{serviceName}}-service'
           helm:
             values: |
               global:
-                certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .path.basename }}"
+                certificateArn: "{{certificateArn}}"
+              componentType: "{{componentType}}"
             valueFiles:
-              - '$values/{{ .path.path }}'
+              - '$values/{{path.path}}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: "dev-{{ .path.basenameDir }}"
+        namespace: 'dev-{{serviceName}}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions:
