@@ -1,0 +1,29 @@
+# infrastructure/argocd/apps/deployments/dev/profile/app.yaml
+serviceName: "profile-service"
+envName: "dev"
+
+app:
+  commandServer:
+    replicas: 2
+    image:
+      repository: "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server"
+      tag: "v1.2.3"
+    resources:
+      requests: { cpu: "10m", memory: "100Mi" }
+      limits: { cpu: "1000m", memory: "512Mi" }
+
+  # Configuration du lien vers les storage.yaml
+  endpoints:
+    postgres: "profile-postgres-rw:5432"
+    scylla: "profile-scylla"
+    redis: "profile-redis:6379"
+
+ingress:
+  enabled: true
+  host: "api.dev.core-platform.click"
+  groupName: "management-group"
+
+hpa:
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPU: 80

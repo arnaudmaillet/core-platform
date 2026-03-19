@@ -1,20 +1,20 @@
 # infrastructure/argocd/apps/catalog/profile-service/templates/databases/scylla.yaml
 
-{{- if .Values.databases.scylla.enabled }}
+{{- if eq .Values.componentType "storage" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.databases.scylla.name }}
+  name: {{ .Values.persistence.nosql.name }}
   annotations:
     argocd.argoproj.io/sync-wave: "-5"
 spec:
   selector:
     matchLabels:
-      app: {{ .Values.databases.scylla.name }}
+      app: {{ .Values.persistence.nosql.name }}
   template:
     metadata:
       labels:
-        app: {{ .Values.databases.scylla.name }}
+        app: {{ .Values.persistence.nosql.name }}
     spec:
       nodeSelector:
           intent: database
@@ -25,18 +25,18 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: scylla
-          image: {{ .Values.databases.scylla.image }}
+          image: {{ .Values.persistence.nosql.image | default "scylladb/scylla:5.4" }}
           resources:
-            {{- toYaml .Values.databases.scylla.resources | nindent 12 }}
-          args: {{ .Values.databases.scylla.args | toJson }}
+            {{- toYaml .Values.persistence.nosql.resources | nindent 12 }}
+          args: {{ .Values.persistence.nosql.args | toJson }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.databases.scylla.name }}
+  name: {{ .Values.persistence.nosql.name }}
 spec:
   ports:
-    - port: 9042
+    - port: 9042  # Port natif CQL
   selector:
-    app: {{ .Values.databases.scylla.name }}
+    app: {{ .Values.persistence.nosql.name }}
 {{- end }}
