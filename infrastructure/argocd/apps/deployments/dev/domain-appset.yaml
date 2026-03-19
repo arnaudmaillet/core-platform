@@ -9,28 +9,29 @@ spec:
   generators:
     - matrix:
         generators:
-          # 1. On préfixe les variables de chemin avec "app"
-          - git:
-              repoURL: https://github.com/arnaudmaillet/core-platform
-              revision: develop
-              files:
-                - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
-              pathParamPrefix: app
-          # 2. Le générateur de paramètres globaux
+          # 1. On charge les params globaux d'abord
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
+          # 2. On scanne les services (le .path vient d'ici)
+          - git:
+              repoURL: https://github.com/arnaudmaillet/core-platform
+              revision: develop
+              files:
+                - path: "infrastructure/argocd/apps/deployments/dev/*/{app,storage}.yaml"
   template:
     metadata:
-      name: 'dev-{{appPath.basenameDir}}-{{appPath.basename}}'
+      name: 'dev-{{serviceName}}-{{componentType}}'
+      # Résultat : dev-profile-app ou dev-profile-storage
+      name: "dev-{{ .path.basenameDir }}-{{ .path.basename }}"
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{appPath.basenameDir}}-service'
+          path: "infrastructure/argocd/apps/catalog/{{ .path.basenameDir }}-service"
           helm:
             values: |
               global:
