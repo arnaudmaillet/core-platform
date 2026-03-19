@@ -1,6 +1,6 @@
 # infrastructure/argocd/apps/catalog/profile-service/templates/shared/ingress.yaml
 
-{{- if .Values.ingress.enabled }}
+{{- if eq .Values.componentType "app" }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -25,7 +25,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ .Values.commandServer.name }}
+                name: {{ .Values.app.commandServer.name | default (printf "%s-command-server" .Values.serviceName) }}
                 port:
-                  number: {{ .Values.commandServer.port }}
+                  number: {{ .Values.app.commandServer.port | default 50051 }}
 {{- end }}

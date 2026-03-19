@@ -1,6 +1,6 @@
 # infrastructure/argocd/apps/catalog/profile-service/templates/shared/hpa.yaml
 
-{{- if .Values.hpa.enabled }}
+{{- if eq .Values.componentType "app" }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -9,7 +9,8 @@ spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ .Values.commandServer.name }}
+    # On pointe vers le nom définit dans la section app de app.yaml
+    name: {{ .Values.app.commandServer.name | default (printf "%s-command-server" .Values.serviceName) }}
   minReplicas: {{ .Values.hpa.minReplicas | default 1 }}
   maxReplicas: {{ .Values.hpa.maxReplicas | default 2 }}
   metrics:
