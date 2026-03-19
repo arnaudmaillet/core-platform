@@ -1,5 +1,6 @@
 # infrastructure/argocd/apps/deployments/dev/profile/app.yaml
-serviceName: "profile-service"
+serviceName: "profile"
+componentType: "app"
 envName: "dev"
 
 app:

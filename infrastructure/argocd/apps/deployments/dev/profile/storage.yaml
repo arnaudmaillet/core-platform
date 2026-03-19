@@ -1,5 +1,8 @@
 # infrastructure/argocd/apps/deployments/dev/profile/storage.yaml
 
+serviceName: "profile"
+componentType: "storage"
+
 persistence:
   postgresql:
     name: "profile-postgres"
