@@ -16,7 +16,7 @@ spec:
           - path: "!infrastructure/argocd/apps/deployments/dev/domain-appset.yaml"
   template:
     metadata:
-      name: 'dev-{{ .path.basename }}-{{ .path.filenameWithoutExt }}'
+      name: 'dev-{{ .path.basename }}-{{ .path.filename | trimSuffix ".yaml" }}'
     spec:
       project: default
       sources:
