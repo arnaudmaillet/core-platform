@@ -35,6 +35,8 @@ spec:
             values: |
               global:
                 certificateArn: "{{ .certificateArn }}"
+              nodeSelector:
+                intent: apps
             valueFiles:
               - '$values/infrastructure/argocd/apps/deployments/dev/values/{{ .serviceName }}.yaml'
         - repoURL: https://github.com/arnaudmaillet/core-platform
@@ -42,7 +44,7 @@ spec:
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: default
+        namespace: "{{ .envName }}-{{ .serviceName }}"
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions:

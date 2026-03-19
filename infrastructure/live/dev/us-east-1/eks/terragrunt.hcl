@@ -11,21 +11,21 @@ dependency "vpc" {
 terraform {
   source = "../../../../modules/eks"
 
-  # --- NETTOYAGE PRÉ-DESTROY ---
-  # On s'assure que les ressources critiques (Ingress/ALB) sont parties
-  # AVANT que Terraform ne commence à supprimer les Nodes EKS.
-  before_hook "k8s_cleanup" {
-    commands     = ["destroy"]
-    # On supprime tous les ingress. Le --wait=true est vital ici.
-    # On ajoute || true pour ne pas bloquer le destroy si le cluster est déjà partiellement cassé.
-    execute      = ["/bin/bash", "-c", "kubectl delete ingress --all --all-namespaces --timeout=5m || true"]
-  }
+  # # --- NETTOYAGE PRÉ-DESTROY ---
+  # # On s'assure que les ressources critiques (Ingress/ALB) sont parties
+  # # AVANT que Terraform ne commence à supprimer les Nodes EKS.
+  # before_hook "k8s_cleanup" {
+  #   commands     = ["destroy"]
+  #   # On supprime tous les ingress. Le --wait=true est vital ici.
+  #   # On ajoute || true pour ne pas bloquer le destroy si le cluster est déjà partiellement cassé.
+  #   execute      = ["/bin/bash", "-c", "kubectl delete ingress --all --all-namespaces --timeout=5m || true"]
+  # }
 
-  after_hook "cleanup_check" {
-    commands     = ["destroy"]
-    execute      = ["/bin/bash", "-c", "echo 'Vérification finale des ressources orphelines...'; sleep 5"]
-    run_on_error = false
-  }
+  # after_hook "cleanup_check" {
+  #   commands     = ["destroy"]
+  #   execute      = ["/bin/bash", "-c", "echo 'Vérification finale des ressources orphelines...'; sleep 5"]
+  #   run_on_error = false
+  # }
 }
 
 locals {

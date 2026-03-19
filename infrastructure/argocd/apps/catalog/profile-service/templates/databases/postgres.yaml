@@ -12,7 +12,7 @@ spec:
   imageName: {{ .Values.databases.postgres.image }}
   affinity:
     nodeSelector:
-      karpenter.sh/nodepool: database-pool
+      intent: database
     tolerations:
       - key: "dedicated"
         operator: "Equal"

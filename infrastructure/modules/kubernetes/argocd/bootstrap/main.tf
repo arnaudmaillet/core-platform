@@ -9,6 +9,10 @@ terraform {
     kubernetes = {
       source = "hashicorp/kubernetes"
     }
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.14.0"
+    }
     local = {
       source = "hashicorp/local"
     }
@@ -18,9 +22,8 @@ terraform {
   }
 }
 
-# --- ROOT APPLICATION ---
-resource "local_file" "root_app_yaml" {
-  content  = <<EOF
+resource "kubectl_manifest" "root_app" {
+  yaml_body = <<YAML
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -39,21 +42,13 @@ spec:
     namespace: argocd
   syncPolicy:
     automated:
-      prune: false
+      prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
-EOF
-  filename = "${path.module}/root-app.yaml"
-}
-
-resource "null_resource" "apply_root_app" {
-  depends_on = [local_file.root_app_yaml]
-
-  provisioner "local-exec" {
-    command = "sleep 10 && kubectl apply -f ${local_file.root_app_yaml.filename} --validate=false"
-  }
+YAML
+  depends_on = [var.server_dependency]
 }
 
 # --- DYNAMIC PARAMETERS (GIT SOURCE OF TRUTH) ---

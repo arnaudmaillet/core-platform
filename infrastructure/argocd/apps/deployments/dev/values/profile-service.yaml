@@ -54,10 +54,6 @@ hpa:
   maxReplicas: 2
   targetCPU: 80
 
-# --- CONFIGURATION DU PLACEMENT (Standard K8s) ---
-nodeSelector:
-  karpenter.sh/capacity-type: "spot"
-
 # --- CONFIGURATION BDDs ---
 databases:
   postgres:
