@@ -10,12 +10,14 @@ spec:
   generators:
     - matrix:
         generators:
+          # 1. On préfixe les variables de chemin avec "app"
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
                 - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
               pathParamPrefix: app
+          # 2. Le générateur de paramètres globaux
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
