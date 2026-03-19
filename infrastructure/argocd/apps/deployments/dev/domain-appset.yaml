@@ -10,28 +10,36 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: feat/profile/stress-test-clean
+        revision: develop
         files:
+          # On reste sur ton Option 2 (fichiers .values.yaml à la racine de /dev/)
           - path: "infrastructure/argocd/apps/deployments/dev/*.values.yaml"
   template:
+    # On filtre pour ignorer les dossiers qui n'ont pas d'extension .yaml
+    {{- if hasSuffix ".yaml" .path.path }}
     metadata:
-      name: 'dev-{{ base .path.path | trimSuffix ".values.yaml" }}'
+      # On utilise .path.filename : c'est JUSTE le nom du fichier (ex: profile-app.values.yaml)
+      # On enlève le suffixe .values.yaml. Résultat : dev-profile-app
+      name: 'dev-{{ .path.filename | trimSuffix ".values.yaml" }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: feat/profile/stress-test-clean
-          path: 'infrastructure/argocd/apps/catalog/{{ index (splitList "-" (base .path.path)) 0 }}-service'
+          targetRevision: develop
+          # Pour le path du catalogue, on prend le premier segment du nom de fichier
+          # ex: "profile-app" -> "profile"
+          path: 'infrastructure/argocd/apps/catalog/{{ index (splitList "-" .path.filename) 0 }}-service'
           helm:
             valueFiles:
               - '$values/infrastructure/argocd/bootstrap/global-params.json'
               - '$values/{{ .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: feat/profile/stress-test-clean
+          targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ index (splitList "-" (base .path.path)) 0 }}'
+        namespace: 'dev-{{ index (splitList "-" .path.filename) 0 }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
+    {{- end }}
