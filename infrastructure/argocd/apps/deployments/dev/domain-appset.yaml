@@ -14,17 +14,11 @@ spec:
         files:
           - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
   template:
+    {{- if hasSuffix ".yaml" .path.path }}
     metadata:
-      # On force un nom unique ou un nom de "skip" si c'est un dossier
-      name: >-
-        {{- if hasSuffix ".yaml" .path.path -}}
-          dev-{{ .path.basename }}-{{ base .path.path | trimSuffix ".yaml" }}
-        {{- else -}}
-          skip-{{ .path.path | hashSum }}
-        {{- end -}}
+      name: 'dev-{{ .path.basename }}-{{ base .path.path | trimSuffix ".yaml" }}'
     spec:
       project: default
-      {{- if hasSuffix ".yaml" .path.path }}
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
@@ -45,13 +39,4 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-      {{- else }}
-      # Spec minimale pour les dossiers détectés par erreur (sera ignoré car nom commence par skip-)
-      source:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: develop
-        path: .
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: default
-      {{- end }}
+    {{- end }}
