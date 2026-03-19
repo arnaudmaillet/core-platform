@@ -12,7 +12,7 @@ metadata:
     alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName | default "management-group" | quote }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
     {{- if .Values.global.certificateArn }}
-    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.certificateArn | quote }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.certificateArn | quote }}
     {{- end }}
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress.host | quote }}
 spec:
