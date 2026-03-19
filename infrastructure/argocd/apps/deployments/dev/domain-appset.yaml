@@ -10,12 +10,14 @@ spec:
   generators:
     - matrix:
         generators:
+          # 1. Générateur des fichiers de services (app.yaml, storage.yaml)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
                 - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
-              pathParamPrefix: app
+              pathParamPrefix: app 
+          # 2. Générateur des paramètres globaux
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -23,27 +25,29 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{ .appPath.basenameDir }}-{{ .appPath.basename }}'
+      name: 'dev-{{ .app.basenameDir }}-{{ .app.filename }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .appPath.basenameDir }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .app.basenameDir }}-service'
           helm:
             values: |
               global:
                 certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .appPath.basename }}"
+              componentType: "{{ .app.filename }}"
             valueFiles:
-              - '$values/{{ .appPath.path }}'
+              - '$values/{{ .app.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .appPath.basenameDir }}'
+        namespace: 'dev-{{ .app.basenameDir }}'
       syncPolicy:
-        automated: { prune: true, selfHeal: true }
+        automated: 
+          prune: true
+          selfHeal: true
         syncOptions:
           - CreateNamespace=true
