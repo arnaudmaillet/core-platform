@@ -9,13 +9,12 @@ spec:
   generators:
     - matrix:
         generators:
-          # 1. Lit le contenu des fichiers (extrait serviceName et componentType)
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
-                - path: "infrastructure/argocd/apps/deployments/dev/*/*.yaml"
-          # 2. Lit les paramètres globaux (extrait certificateArn)
+                - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
+              pathParamPrefix: app
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -23,26 +22,26 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{serviceName}}-{{componentType}}'
+      name: 'dev-{{appPath.basenameDir}}-{{appPath.basename}}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{serviceName}}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{appPath.basenameDir}}-service'
           helm:
             values: |
               global:
                 certificateArn: "{{certificateArn}}"
-              componentType: "{{path.basename}}"
+              componentType: "{{appPath.basename}}"
             valueFiles:
-              - '$values/{{path.path}}'
+              - '$values/{{appPath.path}}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{path.basenameDir}}'
+        namespace: 'dev-{{appPath.basenameDir}}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions:
