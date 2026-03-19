@@ -23,4 +23,4 @@ nodepools:
     capacityType: ["on-demand"]
     categories: ["m", "r"]      # Instances optimisées pour la mémoire
     sizes: ["large", "xlarge"]
-    cpuLimit: # 2000 = 2 vCPUs.
+    cpuLimit: 2000 # 2000 = 2 vCPUs.
