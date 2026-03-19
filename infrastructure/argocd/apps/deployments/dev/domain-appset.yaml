@@ -9,12 +9,13 @@ spec:
   generators:
     - matrix:
         generators:
-          # 1. Le générateur de fichiers (Source de vérité pour le path)
+          # 1. On préfixe les variables de chemin avec "app"
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
                 - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
+              pathParamPrefix: app
           # 2. Le générateur de paramètres globaux
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
@@ -23,26 +24,26 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{path.basenameDir}}-{{path.basename}}'
+      name: 'dev-{{appPath.basenameDir}}-{{appPath.basename}}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{path.basenameDir}}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{appPath.basenameDir}}-service'
           helm:
             values: |
               global:
                 certificateArn: "{{certificateArn}}"
-              componentType: "{{path.basename}}"
+              componentType: "{{appPath.basename}}"
             valueFiles:
-              - '$values/{{path.path}}'
+              - '$values/{{appPath.path}}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{path.basenameDir}}'
+        namespace: 'dev-{{appPath.basenameDir}}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions:
