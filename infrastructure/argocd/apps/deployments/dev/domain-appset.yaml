@@ -23,20 +23,23 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{ .appPath.basenameDir }}-{{ .appPath.filename }}'
+      name: 'dev-{{ .appBasenameDir }}-{{ .appFilename }}'
     spec:
+      destination:
+        namespace: 'dev-{{ .appBasenameDir }}'
+        server: https://kubernetes.default.svc
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .appPath.basenameDir }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .appBasenameDir }}-service'
           helm:
+            valueFiles:
+              - '$values/{{ .appPath }}'
             values: |
               global:
                 certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .appPath.filename }}"
-            valueFiles:
-              - '$values/{{ .appPath.path }}'
+              componentType: "{{ .appFilename }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
