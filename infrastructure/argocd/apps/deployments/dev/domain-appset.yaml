@@ -10,31 +10,27 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: develop
+        revision: feat/profile/stress-test-clean
         files:
-          # On reste sur ton Option 2 (fichiers .values.yaml à la racine de /dev/)
           - path: "infrastructure/argocd/apps/deployments/dev/*.values.yaml"
   template:
-    # On filtre pour ignorer les dossiers qui n'ont pas d'extension .yaml
-    {{- if hasSuffix ".yaml" .path.path }}
     metadata:
-      # On utilise .path.filename : c'est JUSTE le nom du fichier (ex: profile-app.values.yaml)
-      # On enlève le suffixe .values.yaml. Résultat : dev-profile-app
+      # On met le nom dans une string. Si c'est un dossier (pas de .yaml), le nom sera "invalid"
+      # mais comme on filtre les fichiers dans le générateur, ça ne devrait pas arriver.
       name: 'dev-{{ .path.filename | trimSuffix ".values.yaml" }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
-          # Pour le path du catalogue, on prend le premier segment du nom de fichier
-          # ex: "profile-app" -> "profile"
+          targetRevision: feat/profile/stress-test-clean
+          # On calcule le path du catalogue dynamiquement
           path: 'infrastructure/argocd/apps/catalog/{{ index (splitList "-" .path.filename) 0 }}-service'
           helm:
             valueFiles:
               - '$values/infrastructure/argocd/bootstrap/global-params.json'
               - '$values/{{ .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
+          targetRevision: feat/profile/stress-test-clean
           ref: values
       destination:
         server: https://kubernetes.default.svc
@@ -42,4 +38,3 @@ spec:
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
-    {{- end }}
