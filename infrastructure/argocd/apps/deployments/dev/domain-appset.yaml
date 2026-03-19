@@ -8,48 +8,34 @@ metadata:
 spec:
   goTemplate: true
   generators:
-    - matrix:
-        generators:
-          # Générateur A : Les fichiers de config de tes apps
-          - git:
-              repoURL: https://github.com/arnaudmaillet/core-platform
-              revision: develop
-              files:
-                - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
-              pathParamPrefix: deployment # On nomme explicitement cette source
-          # Générateur B : Tes paramètres globaux (le JSON)
-          - git:
-              repoURL: https://github.com/arnaudmaillet/core-platform
-              revision: develop
-              files:
-                - path: "infrastructure/argocd/bootstrap/global-params.json"
-              # Pas de préfixe ici, les clés du JSON (ex: certificateArn) 
-              # monteront directement à la racine du template.
+    - git:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        revision: develop
+        files:
+          - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
   template:
     metadata:
-      # On utilise le préfixe 'deployment' pour accéder aux variables du chemin
-      name: 'dev-{{ .deploymentBasenameDir }}-{{ .deploymentFilename }}'
+      name: 'dev-{{ .path.basenameDir }}-{{ .path.filename }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .deploymentBasenameDir }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .path.basenameDir }}-service'
           helm:
             values: |
               global:
-                # Vient du JSON (global-params.json)
-                certificateArn: "{{ .certificateArn }}"
-              # Vient du générateur Git A
-              componentType: "{{ .deploymentFilename }}"
+                  certificateArn: "{{ .certificateArn }}"
+              componentType: "{{ .path.filename }}"
             valueFiles:
-              - '$values/{{ .deploymentPath }}'
+              - '$values/infrastructure/argocd/bootstrap/global-params.json'
+              - '$values/{{ .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .deploymentBasenameDir }}'
+        namespace: 'dev-{{ .path.basenameDir }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
