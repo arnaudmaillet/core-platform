@@ -12,19 +12,17 @@ spec:
         repoURL: https://github.com/arnaudmaillet/core-platform
         revision: feat/profile/stress-test-clean
         files:
-          - path: "infrastructure/argocd/apps/deployments/dev/*.values.yaml"
+          - path: "infrastructure/argocd/apps/deployments/dev/**/*.yaml"
+          - path: "!infrastructure/argocd/apps/deployments/dev/domain-appset.yaml"
   template:
     metadata:
-      # On met le nom dans une string. Si c'est un dossier (pas de .yaml), le nom sera "invalid"
-      # mais comme on filtre les fichiers dans le générateur, ça ne devrait pas arriver.
-      name: 'dev-{{ .path.filename | trimSuffix ".values.yaml" }}'
+      name: 'dev-{{ .path.basename }}-{{ .path.filenameWithoutExt }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: feat/profile/stress-test-clean
-          # On calcule le path du catalogue dynamiquement
-          path: 'infrastructure/argocd/apps/catalog/{{ index (splitList "-" .path.filename) 0 }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .path.basename }}-service'
           helm:
             valueFiles:
               - '$values/infrastructure/argocd/bootstrap/global-params.json'
@@ -34,7 +32,7 @@ spec:
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ index (splitList "-" .path.filename) 0 }}'
+        namespace: 'dev-{{ .path.basename }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
