@@ -10,7 +10,7 @@ spec:
   generators:
     - list:
         elements:
-          - name: workload-dev
+          - name: workloads-dev
             folder: infrastructure/argocd/apps/deployments/dev
   template:
     metadata:
