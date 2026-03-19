@@ -3,7 +3,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: dev-workloads
+  name: dev-workloads # Changé en pluriel pour éviter le conflit avec l'ancien
   namespace: argocd
 spec:
   goTemplate: true
@@ -15,9 +15,10 @@ spec:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
               files:
+                # On scanne récursivement pour trouver app.yaml et storage.yaml
                 - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
+              # ON AJOUTE ÇA pour régler le message "duplicate key path[2]"
               pathParamPrefix: app 
-          # 2. Générateur des paramètres globaux
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -25,29 +26,30 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: 'dev-{{ .app.basenameDir }}-{{ .app.filename }}'
+      # ON AJOUTE componentType pour différencier dev-profile-app et dev-profile-storage
+      name: "dev-{{ .serviceName }}-{{ .componentType }}"
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .app.basenameDir }}-service'
+          # On garde ton pointeur vers le catalogue
+          path: "infrastructure/argocd/apps/catalog/{{ .serviceName }}-service"
           helm:
             values: |
               global:
                 certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .app.filename }}"
+              # On passe le type au Helm pour le if/else (app ou storage)
+              componentType: "{{ .componentType }}"
             valueFiles:
-              - '$values/{{ .app.path }}'
+              # On utilise la variable appPath (grâce au prefix) pour pointer le bon fichier
+              - '$values/{{ .appPath.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .app.basenameDir }}'
+        namespace: "{{ .envName }}-{{ .serviceName }}"
       syncPolicy:
-        automated: 
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true]

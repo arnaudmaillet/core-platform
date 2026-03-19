@@ -2,13 +2,14 @@
 
 serviceName: "profile"
 componentType: "storage"
+envName: "dev"
 
 persistence:
   postgresql:
     name: "profile-postgres"
     storage: "10Gi"
     version: "16-3.5" # PostGIS
-  
+
   nosql:
     name: "profile-scylla"
     image: "scylladb/scylla:5.4"
@@ -20,7 +21,7 @@ persistence:
         cpu: "500m"
         memory: "512Mi"
     args: ["--smp", "1", "--memory", "512M", "--overprovisioned", "1"]
-    
+
   cache:
     name: "profile-redis"
     version: "7-alpine"
