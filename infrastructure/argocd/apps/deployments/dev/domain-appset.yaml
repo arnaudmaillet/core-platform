@@ -15,18 +15,14 @@ spec:
           - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
   template:
     metadata:
-      name: 'dev-{{ .path.basenameDir }}-{{ .path.filename }}'
+      name: 'dev-{{ .path.basename }}-{{ .path.filenameWithoutExtension }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
-          path: 'infrastructure/argocd/apps/catalog/{{ .path.basenameDir }}-service'
+          path: 'infrastructure/argocd/apps/catalog/{{ .path.basename }}-service'
           helm:
-            values: |
-              global:
-                  certificateArn: "{{ .certificateArn }}"
-              componentType: "{{ .path.filename }}"
             valueFiles:
               - '$values/infrastructure/argocd/bootstrap/global-params.json'
               - '$values/{{ .path.path }}'
@@ -35,7 +31,7 @@ spec:
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .path.basenameDir }}'
+        namespace: 'dev-{{ .path.basename }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
