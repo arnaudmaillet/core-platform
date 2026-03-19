@@ -10,33 +10,38 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: develop
+        revision: feat/profile/stress-test-clean
         files:
           - path: "infrastructure/argocd/apps/deployments/dev/profile/*.yaml"
   template:
-    {{- if hasSuffix ".yaml" .path.path }}
     metadata:
-      name: 'dev-{{ .path.basename }}-{{ base .path.path | trimSuffix ".yaml" }}'
+      name: '{{ if hasSuffix ".yaml" .path.path }}dev-{{ .path.basename }}-{{ base .path.path | trimSuffix ".yaml" }}{{ else }}ignored-{{ .path.path | replace "/" "-" }}{{ end }}'
     spec:
       project: default
+      {{- if hasSuffix ".yaml" .path.path }}
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
+          targetRevision: feat/profile/stress-test-clean
           path: 'infrastructure/argocd/apps/catalog/{{ .path.basename }}-service'
           helm:
             valueFiles:
               - '$values/infrastructure/argocd/bootstrap/global-params.json'
               - '$values/infrastructure/argocd/apps/deployments/dev/profile/{{ base .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
+          targetRevision: feat/profile/stress-test-clean
           ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: 'dev-{{ .path.basename }}'
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
-    {{- end }}
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true]
+      {{- else }}
+      source:
+        repoURL: https://github.com/arnaudmaillet/core-platform
+        targetRevision: feat/profile/stress-test-clean
+        path: .
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: default
+      {{- end }}
