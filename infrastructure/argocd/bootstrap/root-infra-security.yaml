@@ -46,17 +46,14 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
-            values: |
-              # Bridge pour les variables globales
-              clusterName: "{{"{{ .Values.global.clusterName }}"}}"
-
-              {{ .valuesKey }}:
-                # Mapping dynamique du rôle IAM (pour External-DNS)
-                {{- if .iamRoleKey }}
-                serviceAccount:
-                  annotations:
-                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global "}}}}{{.iamRoleKey}}{{" }}"}}"
-                {{- end }}
+            parameters:
+              - name: "clusterName"
+                value: "{{ .global.clusterName }}"
+              
+              {{- if .iamRoleKey }}
+              - name: "{{ .valuesKey }}.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ index . .iamRoleKey }}"
+              {{- end }}
 
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
