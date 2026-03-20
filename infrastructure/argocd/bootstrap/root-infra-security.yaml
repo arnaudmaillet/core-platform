@@ -49,12 +49,8 @@ spec:
             parameters:
               - name: "clusterName"
                 value: "{{ .global.clusterName }}"
-              
-              {{- if .iamRoleKey }}
-              - name: "{{ .valuesKey }}.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ index . .iamRoleKey }}"
-              {{- end }}
-
+              - name: "external-dns.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.externalDnsRoleArn }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
