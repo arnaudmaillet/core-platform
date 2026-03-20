@@ -10,7 +10,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: feat/profile/stress-test-clean
+        revision: develop
         files:
           - path: "infrastructure/argocd/apps/deployments/dev/*.values.yaml"
   template:
@@ -20,14 +20,14 @@ spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: feat/profile/stress-test-clean
+          targetRevision: develop
           path: 'infrastructure/argocd/apps/catalog/{{ index (splitList "-" .path.filename) 0 }}-service'
           helm:
             valueFiles:
               - "$values/infrastructure/argocd/bootstrap/global-params.json"
               - "$values/infrastructure/argocd/apps/deployments/dev/{{ .path.filename }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: feat/profile/stress-test-clean
+          targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
