@@ -65,7 +65,7 @@ spec:
                 serviceAccount:
                   annotations:
                     {{- if .iamRoleKey }}
-                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global .iamRoleKey }}"}}"
+                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global "}}}}{{.iamRoleKey}}{{" }}"}}"
                     {{- end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
