@@ -5,8 +5,8 @@ clusterEndpoint: ""
 env: ""
 
 aws-load-balancer-controller:
-  clusterName: "{{ .Values.global.clusterName }}"
+  clusterName: ""
   serviceAccount:
     create: true
     annotations:
-      eks.amazonaws.com/role-arn: "{{ .Values.global.lbControllerRoleArn }}"
+      eks.amazonaws.com/role-arn: ""
