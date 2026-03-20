@@ -1,5 +1,4 @@
 # infrastructure/argocd/bootstrap/root-infra-platform.yaml
-
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -43,6 +42,27 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
+            # Injection forcée pour bypasser le bug des moustaches du Chart .tgz
+            parameters:
+              # {{ if eq .name "karpenter" }}
+              - name: "karpenter.settings.clusterName"
+                value: "{{ .global.clusterName }}"
+              - name: "karpenter.settings.clusterEndpoint"
+                value: "{{ .global.clusterEndpoint }}"
+              - name: "karpenter.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.karpenterRoleArn }}"
+              - name: "karpenter.settings.interruptionQueue"
+                value: ""
+              # {{ end }}
+
+              # {{ if eq .name "aws-load-balancer-controller" }}
+              - name: "aws-load-balancer-controller.clusterName"
+                value: "{{ .global.clusterName }}"
+              - name: "aws-load-balancer-controller.region"
+                value: "{{ .global.region }}"
+              - name: "aws-load-balancer-controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.lbControllerRoleArn }}"
+              # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
