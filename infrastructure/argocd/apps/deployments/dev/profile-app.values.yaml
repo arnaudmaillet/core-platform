@@ -7,12 +7,10 @@ componentType: "app"
 envName: "dev"
 
 nodeSelector:
-      kubernetes.io/arch: amd64
+  kubernetes.io/arch: amd64
 
 app:
   commandServer:
-    nodeSelector:
-      kubernetes.io/arch: amd64
     replicas: 1
     image:
       repository: "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server"
