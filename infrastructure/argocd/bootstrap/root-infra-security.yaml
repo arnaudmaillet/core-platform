@@ -49,15 +49,15 @@ spec:
             values: |
               # Bridge pour les variables globales
               clusterName: "{{"{{ .Values.global.clusterName }}"}}"
-              
+
               {{ .valuesKey }}:
                 # Mapping dynamique du rôle IAM (pour External-DNS)
                 {{- if .iamRoleKey }}
                 serviceAccount:
                   annotations:
-                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global .iamRoleKey }}"}}"
+                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global "}}}}{{.iamRoleKey}}{{" }}"}}"
                 {{- end }}
-        
+
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
