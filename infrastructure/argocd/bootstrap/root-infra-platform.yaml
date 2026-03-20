@@ -62,9 +62,7 @@ spec:
                 value: "{{ .global.clusterName }}"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.lbControllerRoleArn }}"
-              - name: "vpcId"
-                value: "{{ .global.vpcId }}" # Vérifie si tu as cette variable, sinon enlève cette ligne
-              {{- end }}
+              # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
