@@ -10,28 +10,28 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/arnaudmaillet/core-platform
-        revision: develop
+        revision: feat/profile/stress-test-clean
         files:
-          - path: "infrastructure/argocd/apps/deployments/dev/*/*.yaml"
+          - path: "infrastructure/argocd/apps/deployments/dev/*.values.yaml"
   template:
     metadata:
-      name: 'dev-{{ .path.basename }}-{{ .path.filename | trimSuffix ".yaml" }}'
+      name: 'dev-{{ .path.filename | trimSuffix ".values.yaml" }}'
     spec:
       project: default
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
-          path: "infrastructure/argocd/apps/catalog/{{ .path.basename }}-service"
+          targetRevision: feat/profile/stress-test-clean
+          path: 'infrastructure/argocd/apps/catalog/{{ index (splitList "-" .path.filename) 0 }}-service'
           helm:
             valueFiles:
-              - "$values/infrastructure/argocd/bootstrap/global-params.json"
-              - "$values/{{ .path.path }}"
+              - '$values/infrastructure/argocd/bootstrap/global-params.json'
+              - '$values/{{ .path.path }}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
+          targetRevision: feat/profile/stress-test-clean
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: "dev-{{ .path.basename }}"
+        namespace: 'dev-{{ index (splitList "-" .path.filename) 0 }}'
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
