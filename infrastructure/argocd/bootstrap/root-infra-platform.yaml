@@ -59,11 +59,17 @@ spec:
               - name: "aws-load-balancer-controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.lbControllerRoleArn }}"
               
-              - name: "karpenter.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.karpenterRoleArn }}"
-              
               - name: "aws-load-balancer-controller.clusterName"
                 value: "{{ .global.clusterName }}"
+
+              - name: "karpenter.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.karpenterRoleArn }}"
+
+              - name: "karpenter.settings.clusterName"
+                value: "{{ .global.clusterName }}"
+                
+              - name: "karpenter.settings.clusterEndpoint"
+                value: "{{ .global.clusterEndpoint }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
