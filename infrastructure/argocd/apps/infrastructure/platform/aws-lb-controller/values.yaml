@@ -1,12 +1,11 @@
 # infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller/values.yaml
 
-clusterName: ""
-clusterEndpoint: ""
-env: ""
+clusterName: "{{ .Values.global.clusterName }}"
+region: "{{ .Values.global.region }}"
+vpcId: "{{ .Values.global.vpcId }}"
 
-aws-load-balancer-controller:
-  clusterName: ""
-  serviceAccount:
-    create: true
-    annotations:
-      eks.amazonaws.com/role-arn: ""
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+  annotations:
+    eks.amazonaws.com/role-arn: "{{ .Values.global.lbControllerRoleArn }}"
