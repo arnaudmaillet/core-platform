@@ -43,25 +43,27 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
-            parameters:
+            # Utilisation d'un bloc values YAML pour une injection propre
+            values: |
               # {{ if eq .name "karpenter" }}
-              - name: "settings.clusterName"
-                value: "{{ .global.clusterName }}"
-              - name: "settings.clusterEndpoint"
-                value: "{{ .global.clusterEndpoint }}"
-              - name: "controller.clusterName"
-                value: "{{ .global.clusterName }}"
-              - name: "controller.clusterEndpoint"
-                value: "{{ .global.clusterEndpoint }}"
-              - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.karpenterRoleArn }}"
+              settings:
+                clusterName: "{{ .global.clusterName }}"
+                clusterEndpoint: "{{ .global.clusterEndpoint }}"
+              controller:
+                clusterName: "{{ .global.clusterName }}"
+                clusterEndpoint: "{{ .global.clusterEndpoint }}"
+              serviceAccount:
+                annotations:
+                  eks.amazonaws.com/role-arn: "{{ .global.karpenterRoleArn }}"
               # {{ end }}
 
               # {{ if eq .name "aws-load-balancer-controller" }}
-              - name: "clusterName"
-                value: "{{ .global.clusterName }}"
-              - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.lbControllerRoleArn }}"
+              clusterName: "{{ .global.clusterName }}"
+              serviceAccount:
+                annotations:
+                  eks.amazonaws.com/role-arn: "{{ .global.lbControllerRoleArn }}"
+              region: "{{ .global.region }}"
+              # vpcId: "{{ .global.vpcId }}"
               # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
