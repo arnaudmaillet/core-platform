@@ -3,7 +3,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: dev-workloads
+  name: dev-workloads-v2
   namespace: argocd
 spec:
   goTemplate: true
@@ -25,18 +25,18 @@ spec:
       sources:
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: feat/profile/stress-test-clean
-          path: 'infrastructure/argocd/apps/catalog/{{ .path.basename }}-service'
+          path: "infrastructure/argocd/apps/catalog/{{ .path.basename }}-service"
           helm:
             valueFiles:
-              - '$values/infrastructure/argocd/bootstrap/global-params.json'
+              - "$values/infrastructure/argocd/bootstrap/global-params.json"
               # .path.path sera désormais TOUJOURS un fichier (ex: .../profile/app.yaml)
-              - '$values/{{ .path.path }}'
+              - "$values/{{ .path.path }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: feat/profile/stress-test-clean
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: 'dev-{{ .path.basename }}'
+        namespace: "dev-{{ .path.basename }}"
       syncPolicy:
         automated: { prune: true, selfHeal: true }
         syncOptions: [CreateNamespace=true]
