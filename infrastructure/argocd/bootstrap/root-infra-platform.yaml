@@ -14,28 +14,16 @@ spec:
               elements:
                 - name: aws-load-balancer-controller
                   folder: infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller
-                  valuesKey: "aws-load-balancer-controller"
-                  iamRoleKey: "lbControllerRoleArn"
                   destNamespace: "kube-system"
-
                 - name: karpenter
                   folder: infrastructure/argocd/apps/infrastructure/platform/karpenter
-                  valuesKey: "karpenter"
-                  iamRoleKey: "karpenterRoleArn"
                   destNamespace: "karpenter"
-
                 - name: karpenter-config
                   folder: infrastructure/argocd/apps/infrastructure/platform/karpenter-config
-                  valuesKey: "karpenter-config"
-                  iamRoleKey: ""
                   destNamespace: "karpenter"
-
                 - name: metrics-server
                   folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
-                  valuesKey: "metrics-server"
-                  iamRoleKey: ""
                   destNamespace: "kube-system"
-
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -56,21 +44,20 @@ spec:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             parameters:
-              {{- if eq .name "karpenter" }}
+              # {{ if eq .name "karpenter" }}
               - name: "settings.clusterName"
                 value: "{{ .global.clusterName }}"
               - name: "settings.clusterEndpoint"
                 value: "{{ .global.clusterEndpoint }}"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.karpenterRoleArn }}"
-              {{- end }}
-
-              {{- if eq .name "aws-load-balancer-controller" }}
+              # {{ end }}
+              # {{ if eq .name "aws-load-balancer-controller" }}
               - name: "clusterName"
                 value: "{{ .global.clusterName }}"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.lbControllerRoleArn }}"
-              {{- end }}
+              # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
