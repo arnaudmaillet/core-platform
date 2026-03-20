@@ -14,19 +14,13 @@ spec:
               elements:
                 - name: cert-manager
                   folder: infrastructure/argocd/apps/infrastructure/security/cert-manager
-                  valuesKey: "cert-manager"
-                  iamRoleKey: ""
-                  destNamespace: "cert-manager"
+                  destNamespace: cert-manager
                 - name: external-dns
                   folder: infrastructure/argocd/apps/infrastructure/security/external-dns
-                  valuesKey: "external-dns"
-                  iamRoleKey: "externalDnsRoleArn"
-                  destNamespace: "external-dns"
+                  destNamespace: external-dns
                 - name: admin-access
                   folder: infrastructure/argocd/apps/infrastructure/security/admin-access
-                  valuesKey: "admin-access"
-                  iamRoleKey: ""
-                  destNamespace: "argocd"
+                  destNamespace: argocd
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop
@@ -46,11 +40,6 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
-            parameters:
-              - name: "clusterName"
-                value: "{{ .global.clusterName }}"
-              - name: "external-dns.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.externalDnsRoleArn }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values

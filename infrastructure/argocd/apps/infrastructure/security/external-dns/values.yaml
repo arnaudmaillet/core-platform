@@ -4,6 +4,9 @@ external-dns:
   provider: aws
   domainFilters:
     - "core-platform.click"
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "{{ .Values.global.externalDnsRoleArn }}"
   policy: upsert-only
   registry: txt
   txtOwnerId: "core-platform-dev"
