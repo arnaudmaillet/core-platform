@@ -2,7 +2,6 @@
 
 global:
   certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/dff68fbe-02a5-4c9c-9a6b-41c71de34522"
-
 serviceName: "profile"
 componentType: "app"
 envName: "dev"
