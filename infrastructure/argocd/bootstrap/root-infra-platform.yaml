@@ -49,15 +49,22 @@ spec:
                 value: "{{ .global.clusterName }}"
               - name: "settings.clusterEndpoint"
                 value: "{{ .global.clusterEndpoint }}"
+              - name: "controller.clusterName"
+                value: "{{ .global.clusterName }}"
+              - name: "controller.clusterEndpoint"
+                value: "{{ .global.clusterEndpoint }}"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.karpenterRoleArn }}"
               # {{ end }}
+
               # {{ if eq .name "aws-load-balancer-controller" }}
               - name: "clusterName"
                 value: "{{ .global.clusterName }}"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.lbControllerRoleArn }}"
-              # {{ end }}
+              - name: "vpcId"
+                value: "{{ .global.vpcId }}" # Vérifie si tu as cette variable, sinon enlève cette ligne
+              {{- end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
