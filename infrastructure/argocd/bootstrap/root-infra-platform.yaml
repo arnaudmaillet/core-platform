@@ -1,5 +1,4 @@
 # infrastructure/argocd/bootstrap/root-infra-platform.yaml
-
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -41,7 +40,6 @@ spec:
           targetRevision: develop
           path: "{{.folder}}"
           helm:
-            # On garde le fichier pour les apps qui n'ont pas besoin d'injection forcée
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             # Injection forcée pour bypasser le bug des moustaches du Chart .tgz
