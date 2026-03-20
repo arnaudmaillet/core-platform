@@ -2,7 +2,6 @@
 
 global:
   certificateArn: "arn:aws:acm:us-east-1:724772065879:certificate/dff68fbe-02a5-4c9c-9a6b-41c71de34522"
-  
 serviceName: "profile"
 componentType: "app"
 envName: "dev"
@@ -12,7 +11,7 @@ app:
     replicas: 2
     image:
       repository: "724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server"
-      tag: "v1.2.3"
+      tag: "latest"
     resources:
       requests: { cpu: "10m", memory: "100Mi" }
       limits: { cpu: "1000m", memory: "512Mi" }
