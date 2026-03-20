@@ -61,14 +61,12 @@ spec:
                 value: "{{ .global.clusterName }}"
               - name: "settings.clusterEndpoint"
                 value: "{{ .global.clusterEndpoint }}"
-              # AJOUTE CETTE LIGNE (Le nom de ta queue SQS)
               - name: "settings.interruptionQueue"
-                value: "{{ .global.clusterName }}" # Généralement le même nom que le cluster dans ton Terraform
+                value: "" 
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.karpenterRoleArn }}"
               {{- end }}
 
-              # --- Paramètres spécifiques au Load Balancer Controller ---
               {{- if eq .name "aws-load-balancer-controller" }}
               - name: "clusterName"
                 value: "{{ .global.clusterName }}"
