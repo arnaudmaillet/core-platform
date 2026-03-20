@@ -1,5 +1,4 @@
 # infrastructure/argocd/bootstrap/root-infra-platform.yaml
-
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -41,30 +40,29 @@ spec:
           targetRevision: develop
           path: "{{.folder}}"
           helm:
-            # On garde le fichier pour les apps qui n'ont pas besoin d'injection forcée
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
-            # Injection directe via le bloc values d'ArgoCD
-            values: |
-              {{ if eq .name "karpenter" }}
-              karpenter:
-                settings:
-                  clusterName: "{{ .global.clusterName }}"
-                  clusterEndpoint: "{{ .global.clusterEndpoint }}"
-                  interruptionQueue: ""
-                serviceAccount:
-                  annotations:
-                    eks.amazonaws.com/role-arn: "{{ .global.karpenterRoleArn }}"
-              {{ end }}
-              
-              {{ if eq .name "aws-load-balancer-controller" }}
-              aws-load-balancer-controller:
-                clusterName: "{{ .global.clusterName }}"
-                region: "{{ .global.region }}"
-                serviceAccount:
-                  annotations:
-                    eks.amazonaws.com/role-arn: "{{ .global.lbControllerRoleArn }}"
-              {{ end }}
+            # Injection forcée pour bypasser le bug des moustaches du Chart .tgz
+            parameters:
+              # {{ if eq .name "karpenter" }}
+              - name: "karpenter.settings.clusterName"
+                value: "{{ .global.clusterName }}"
+              - name: "karpenter.settings.clusterEndpoint"
+                value: "{{ .global.clusterEndpoint }}"
+              - name: "karpenter.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.karpenterRoleArn }}"
+              - name: "karpenter.settings.interruptionQueue"
+                value: ""
+              # {{ end }}
+
+              # {{ if eq .name "aws-load-balancer-controller" }}
+              - name: "aws-load-balancer-controller.clusterName"
+                value: "{{ .global.clusterName }}"
+              - name: "aws-load-balancer-controller.region"
+                value: "{{ .global.region }}"
+              - name: "aws-load-balancer-controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.lbControllerRoleArn }}"
+              # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
