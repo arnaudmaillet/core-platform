@@ -56,22 +56,24 @@ spec:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             parameters:
+              # Configuration dynamique pour Karpenter
               {{- if eq .name "karpenter" }}
               - name: "settings.clusterName"
-                value: "{{ .global.clusterName }}"
+                value: {{ .global.clusterName }}
               - name: "settings.clusterEndpoint"
-                value: "{{ .global.clusterEndpoint }}"
+                value: {{ .global.clusterEndpoint }}
               - name: "settings.interruptionQueue"
                 value: "" 
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.karpenterRoleArn }}"
+                value: {{ .global.karpenterRoleArn }}
               {{- end }}
 
+              # Configuration dynamique pour AWS Load Balancer Controller
               {{- if eq .name "aws-load-balancer-controller" }}
               - name: "clusterName"
-                value: "{{ .global.clusterName }}"
+                value: {{ .global.clusterName }}
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.lbControllerRoleArn }}"
+                value: {{ .global.lbControllerRoleArn }}
               {{- end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
