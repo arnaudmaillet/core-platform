@@ -27,7 +27,6 @@ inputs = {
   cluster_endpoint       = dependency.eks.outputs.cluster_endpoint
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
 
-  # --- Paramètres ArgoCD (Nouveau !) ---
   argocd_version  = "7.7.0"
   repository_url  = "https://github.com/arnaudmaillet/core-platform"
   target_revision = "develop"

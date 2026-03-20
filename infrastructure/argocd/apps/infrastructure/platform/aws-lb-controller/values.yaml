@@ -5,8 +5,8 @@ clusterEndpoint: ""
 env: ""
 
 aws-load-balancer-controller:
-  clusterName: "core-platform-dev"
+  clusterName: ""
   serviceAccount:
     create: true
     annotations:
-      eks.amazonaws.com/role-arn: "arn:aws:iam::724772065879:role/core-platform-dev-lb-controller-role"
+      eks.amazonaws.com/role-arn: ""
