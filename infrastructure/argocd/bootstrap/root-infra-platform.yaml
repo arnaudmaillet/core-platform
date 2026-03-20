@@ -56,12 +56,14 @@ spec:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             parameters:
-              # --- Paramètres spécifiques à Karpenter ---
               {{- if eq .name "karpenter" }}
               - name: "settings.clusterName"
                 value: "{{ .global.clusterName }}"
               - name: "settings.clusterEndpoint"
                 value: "{{ .global.clusterEndpoint }}"
+              # AJOUTE CETTE LIGNE (Le nom de ta queue SQS)
+              - name: "settings.interruptionQueue"
+                value: "{{ .global.clusterName }}" # Généralement le même nom que le cluster dans ton Terraform
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.karpenterRoleArn }}"
               {{- end }}
