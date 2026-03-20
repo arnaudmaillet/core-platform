@@ -48,31 +48,28 @@ spec:
         argocd.argoproj.io/sync-wave: "-10"
     spec:
       project: default
-      source:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: develop
-        path: "{{.folder}}"
-        helm:
-          values: |
-            # Valeurs "Root" (Aplaties) pour un accès direct via .Values.clusterName
-            clusterName: "{{ .clusterName }}"
-            clusterEndpoint: "{{ .clusterEndpoint }}"
-            env: "dev"
-            
-            # Valeurs scopées pour la compatibilité avec tes Charts existants
-            {{ .valuesKey }}:
-              settings:
-                clusterName: "{{ .clusterName }}"
-                clusterEndpoint: "{{ .clusterEndpoint }}"
-              global:
-                clusterName: "{{ .clusterName }}"
-              serviceAccount:
-                create: true
-                name: "{{ .name }}"
-                {{- if .iamRoleKey }}
-                annotations:
-                  eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
-                {{- end }}
+      sources:
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: develop
+          path: "{{.folder}}"
+          helm:
+            valueFiles:
+              - $values/infrastructure/argocd/bootstrap/global-params.json
+            values: |
+              # Bridge for community Helm
+              clusterName: "{{"{{ .Values.global.clusterName }}"}}"
+              clusterEndpoint: "{{"{{ .Values.global.clusterEndpoint }}"}}"
+              
+              {{ .valuesKey }}:
+                clusterName: "{{"{{ .Values.global.clusterName }}"}}"
+                serviceAccount:
+                  annotations:
+                    {{- if .iamRoleKey }}
+                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global .iamRoleKey }}"}}"
+                    {{- end }}
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: develop
+          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{.destNamespace}}"

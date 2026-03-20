@@ -39,31 +39,34 @@ spec:
         argocd.argoproj.io/sync-wave: "-5"
     spec:
       project: default
-      source:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: develop
-        path: "{{.folder}}"
-        helm:
-          valueFiles:
-            - values.yaml
-          values: |
-            global:
-              certificateArn: "{{ .certificateArn }}"
-            
-            {{ .valuesKey }}:
-              installCRDs: true
-              {{- if .iamRoleKey }}
-              serviceAccount:
-                create: true
-                annotations:
-                  eks.amazonaws.com/role-arn: "{{ index . .iamRoleKey }}"
-              {{- end }}
+      sources:
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: develop
+          path: "{{.folder}}"
+          helm:
+            valueFiles:
+              - $values/infrastructure/argocd/bootstrap/global-params.json
+            values: |
+              # Bridge pour les variables globales
+              clusterName: "{{"{{ .Values.global.clusterName }}"}}"
+              
+              {{ .valuesKey }}:
+                # Mapping dynamique du rôle IAM (pour External-DNS)
+                {{- if .iamRoleKey }}
+                serviceAccount:
+                  annotations:
+                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global .iamRoleKey }}"}}"
+                {{- end }}
+        
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: develop
+          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{.destNamespace}}"
       syncPolicy:
         automated:
-          prune: false
+          prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true

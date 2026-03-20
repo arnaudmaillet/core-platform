@@ -8,14 +8,14 @@ spec:
   amiFamily: AL2
   amiSelectorTerms:
     - alias: "al2@latest" 
-  role: "{{ .Values.clusterName }}-node-role"
+  role: "{{ .Values.global.clusterName }}-node-role"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ .Values.clusterName }}"
+        karpenter.sh/discovery: "{{ .Values.global.clusterName }}"
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "{{ .Values.clusterName }}"
+        karpenter.sh/discovery: "{{ .Values.global.clusterName }}"
   tags:
     Intent: apps
     ManagedBy: Karpenter
-    Environment: "{{ .Values.env }}"
+    Environment: "{{ .Values.global.env }}"

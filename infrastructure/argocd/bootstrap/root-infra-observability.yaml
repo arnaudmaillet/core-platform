@@ -27,21 +27,22 @@ spec:
         argocd.argoproj.io/sync-wave: "-5"
     spec:
       project: default
-      source:
-        repoURL: https://github.com/arnaudmaillet/core-platform
-        targetRevision: develop
-        path: '{{.folder}}'
-        helm:
-          values: |
-            global:
-              clusterName: "{{ .clusterName }}"
-              certificateArn: "{{ .certificateArn }}"
+      sources:
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: develop
+          path: '{{.folder}}'
+          helm:
+            valueFiles:
+              - $values/infrastructure/argocd/bootstrap/global-params.json
+        - repoURL: https://github.com/arnaudmaillet/core-platform
+          targetRevision: develop
+          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: monitoring
       syncPolicy:
         automated: 
-          prune: false
+          prune: true
           selfHeal: true
         syncOptions: 
           - CreateNamespace=true
