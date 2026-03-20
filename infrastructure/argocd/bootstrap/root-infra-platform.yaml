@@ -56,20 +56,23 @@ spec:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             parameters:
-              - name: "aws-load-balancer-controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.lbControllerRoleArn }}"
-              
-              - name: "aws-load-balancer-controller.clusterName"
+              # --- Paramètres spécifiques à Karpenter ---
+              {{- if eq .name "karpenter" }}
+              - name: "settings.clusterName"
                 value: "{{ .global.clusterName }}"
-
-              - name: "karpenter.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.karpenterRoleArn }}"
-
-              - name: "karpenter.settings.clusterName"
-                value: "{{ .global.clusterName }}"
-                
-              - name: "karpenter.settings.clusterEndpoint"
+              - name: "settings.clusterEndpoint"
                 value: "{{ .global.clusterEndpoint }}"
+              - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.karpenterRoleArn }}"
+              {{- end }}
+
+              # --- Paramètres spécifiques au Load Balancer Controller ---
+              {{- if eq .name "aws-load-balancer-controller" }}
+              - name: "clusterName"
+                value: "{{ .global.clusterName }}"
+              - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.lbControllerRoleArn }}"
+              {{- end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
