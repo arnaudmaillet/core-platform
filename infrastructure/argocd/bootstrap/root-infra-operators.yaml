@@ -33,7 +33,6 @@ spec:
           targetRevision: develop
           path: '{{.folder}}'
           helm:
-            # Helm chargera clusterName tout seul depuis global-params.json
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
         - repoURL: https://github.com/arnaudmaillet/core-platform
