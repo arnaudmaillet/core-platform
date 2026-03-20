@@ -1,8 +1,10 @@
 # infrastructure/argocd/apps/infrastructure/platform/karpenter/values.yaml
 
-clusterName: ""
-clusterEndpoint: ""
-env: ""
-
-settings:
-  interruptionQueue: "core-platform-dev"
+karpenter:
+  settings:
+    clusterName: "{{ .Values.global.clusterName }}"
+    clusterEndpoint: "{{ .Values.global.clusterEndpoint }}"
+    interruptionQueue: "core-platform-dev"
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "{{ .Values.global.karpenterRoleArn }}"

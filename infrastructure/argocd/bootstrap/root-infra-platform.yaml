@@ -55,18 +55,6 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
-            values: |
-              # Bridge for community Helm
-              clusterName: "{{"{{ .Values.global.clusterName }}"}}"
-              clusterEndpoint: "{{"{{ .Values.global.clusterEndpoint }}"}}"
-              
-              {{ .valuesKey }}:
-                clusterName: "{{"{{ .Values.global.clusterName }}"}}"
-                serviceAccount:
-                  annotations:
-                    {{- if .iamRoleKey }}
-                    eks.amazonaws.com/role-arn: "{{"{{ index .Values.global "}}}}{{.iamRoleKey}}{{" }}"}}"
-                    {{- end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
