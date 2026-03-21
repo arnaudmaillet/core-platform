@@ -25,6 +25,7 @@ app:
 
 ingress:
   enabled: true
+  useCertManager: true
   host: "api.dev.core-platform.click"
   groupName: "management-group"
 
