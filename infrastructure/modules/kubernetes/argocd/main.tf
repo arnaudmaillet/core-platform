@@ -19,6 +19,7 @@ module "bootstrap" {
   depends_on = [module.server]
 
   env                 = var.env
+  vpc_id = var.vpc_id
   repository_url      = var.repository_url
   target_revision     = var.target_revision
   cluster_name        = var.cluster_name
