@@ -42,6 +42,8 @@ spec:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             parameters:
               # {{ if eq .name "cert-manager" }}
+              - name: "cert-manager.installCRDs"
+                value: "true"
               - name: "cert-manager.cainjector.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.cert_manager_role_arn }}"
               - name: "cert-manager.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
