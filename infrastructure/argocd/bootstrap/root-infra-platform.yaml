@@ -60,6 +60,8 @@ spec:
                 value: "{{ .global.clusterName }}"
               - name: "aws-load-balancer-controller.region"
                 value: "{{ .global.region }}"
+              - name: "aws-load-balancer-controller.vpcId"
+                value: "{{ .global.vpcId }}"
               - name: "aws-load-balancer-controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.lbControllerRoleArn }}"
               # {{ end }}
