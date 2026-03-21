@@ -175,7 +175,11 @@ module "cert_manager_irsa_role" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
-      namespace_service_accounts = ["cert-manager:cert-manager"]
+      namespace_service_accounts = [
+        "cert-manager:cert-manager",
+        "cert-manager:cert-manager-cainjector",
+        "cert-manager:cert-manager-webhook"
+      ]
     }
   }
 }
