@@ -13,12 +13,17 @@ spec:
           - list:
               elements:
                 - name: cert-manager
-                  folder: infrastructure/argocd/apps/infrastructure/security/cert-manager
+                  # On utilise le repo officiel ici
+                  repoURL: https://charts.jetstack.io
+                  chart: cert-manager
+                  targetRevision: v1.12.0
                   destNamespace: cert-manager
                 - name: external-dns
+                  repoURL: https://github.com/arnaudmaillet/core-platform
                   folder: infrastructure/argocd/apps/infrastructure/security/external-dns
                   destNamespace: external-dns
                 - name: admin-access
+                  repoURL: https://github.com/arnaudmaillet/core-platform
                   folder: infrastructure/argocd/apps/infrastructure/security/admin-access
                   destNamespace: argocd
           - git:
@@ -34,23 +39,32 @@ spec:
     spec:
       project: default
       sources:
-        - repoURL: https://github.com/arnaudmaillet/core-platform
-          targetRevision: develop
+        # SOURCE 1: Le Chart (Local ou distant selon le générateur)
+        - repoURL: "{{.repoURL}}"
+          {{- if eq .name "cert-manager" }}
+          chart: cert-manager
+          targetRevision: "{{.targetRevision}}"
+          {{- else }}
           path: "{{.folder}}"
+          targetRevision: develop
+          {{- end }}
           helm:
+            # On injecte les valeurs globales via $values
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
             parameters:
-              # {{ if eq .name "cert-manager" }}
-              - name: "cert-manager.installCRDs"
+              {{- if eq .name "cert-manager" }}
+              - name: "installCRDs"
                 value: "true"
-              - name: "cert-manager.cainjector.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+              - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.cert_manager_role_arn }}"
-              - name: "cert-manager.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+              - name: "cainjector.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.cert_manager_role_arn }}"
-              - name: "cert-manager.webhook.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+              - name: "webhook.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.cert_manager_role_arn }}"
-              # {{ end }}
+              {{- end }}
+        
+        # SOURCE 2: Ton repo Git pour les fichiers de valeurs ($values)
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
