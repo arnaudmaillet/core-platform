@@ -36,44 +36,32 @@ spec:
                 - path: "infrastructure/argocd/bootstrap/global-params.json"
   template:
     metadata:
-      name: "{{.name}}"
+      name: '{{.name}}'
       annotations:
         argocd.argoproj.io/sync-wave: "-5"
     spec:
       project: default
       sources:
-        # SOURCE 1: Le Chart (Local ou distant selon le générateur)
-        - repoURL: "{{.repoURL}}"
-          {{- if eq .name "cert-manager" }}
-          chart: cert-manager
-          targetRevision: "{{.targetRevision}}"
-          {{- else }}
-          path: "{{.folder}}"
-          targetRevision: develop
-          {{- end }}
+        - repoURL: '{{.repoURL}}'
+          # On utilise des placeholders que le YAML accepte
+          chart: '{{index . "chart"}}'
+          path: '{{index . "folder"}}'
+          targetRevision: '{{if index . "targetRevision"}}{{index . "targetRevision"}}{{else}}develop{{end}}'
           helm:
-            # On injecte les valeurs globales via $values
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
+            # On ne met pas de IF/ELSE ici pour le moment, on laisse ArgoCD ignorer les paramètres vides
             parameters:
-              {{- if eq .name "cert-manager" }}
               - name: "installCRDs"
                 value: "true"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.cert_manager_role_arn }}"
-              - name: "cainjector.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.cert_manager_role_arn }}"
-              - name: "webhook.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-                value: "{{ .global.cert_manager_role_arn }}"
-              {{- end }}
-        
-        # SOURCE 2: Ton repo Git pour les fichiers de valeurs ($values)
+                value: '{{index . "global" "cert_manager_role_arn"}}'
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: "{{.destNamespace}}"
+        namespace: '{{.destNamespace}}'
       syncPolicy:
         automated:
           prune: true
