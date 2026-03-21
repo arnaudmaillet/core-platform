@@ -65,7 +65,8 @@ resource "github_repository_file" "argocd_params" {
       target_revision     = var.target_revision
       repository_url      = var.repository_url
       env                 = var.env
-      cert_manager_role_arn = var.addons_iam_roles["cert_manager"]
+      vpcId                = var.vpc_id
+      certManagerRoleArn  = var.addons_iam_roles["cert_manager"]
       karpenterRoleArn    = var.addons_iam_roles["karpenter"]
       lbControllerRoleArn = var.addons_iam_roles["lb_controller"]
       externalDnsRoleArn  = var.addons_iam_roles["external_dns"]

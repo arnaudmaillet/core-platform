@@ -4,6 +4,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+dependency "vpc" {
+  config_path = "../../networking/vpc"
+}
+
 dependency "eks" {
   config_path = "../../eks"
 }
@@ -27,6 +31,7 @@ inputs = {
   cluster_endpoint       = dependency.eks.outputs.cluster_endpoint
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
 
+  vpc_id                 = dependency.vpc.outputs.vpc_id
   argocd_version  = "7.7.0"
   repository_url  = "https://github.com/arnaudmaillet/core-platform"
   target_revision = "develop"

@@ -8,6 +8,7 @@ variable "argocd_version"         { type = string }
 variable "repository_url"         { type = string }
 variable "target_revision"        { type = string }
 variable "env"                     { type = string }
+variable "vpc_id"                 { type = string }
 variable "addons_iam_roles"        { type = map(string) }
 variable "ssl_certificate_arn"     { type = string }
 variable "addons"                  { type = any }
