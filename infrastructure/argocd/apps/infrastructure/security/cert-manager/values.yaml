@@ -1,5 +1,4 @@
 # infrastructure/argocd/apps/infrastructure/security/cert-manager/values.yaml
-
 installCRDs: true
 
 serviceAccount:
@@ -8,3 +7,12 @@ serviceAccount:
 
 cainjector:
   enabled: true
+  serviceAccount:
+    create: true
+    name: cert-manager-cainjector
+
+webhook:
+  enabled: true
+  serviceAccount:
+    create: true
+    name: cert-manager-webhook

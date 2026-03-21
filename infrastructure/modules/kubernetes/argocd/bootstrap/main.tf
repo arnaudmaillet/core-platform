@@ -62,12 +62,13 @@ resource "github_repository_file" "argocd_params" {
       clusterName         = var.cluster_name
       certificateArn      = var.ssl_certificate_arn
       clusterEndpoint     = var.cluster_endpoint
-      karpenterRoleArn    = var.addons_iam_roles["karpenter"]
-      lbControllerRoleArn = var.addons_iam_roles["lb_controller"]
-      externalDnsRoleArn  = var.addons_iam_roles["external_dns"]
       target_revision     = var.target_revision
       repository_url      = var.repository_url
       env                 = var.env
+      cert_manager_role_arn = var.addons_iam_roles["cert_manager"]
+      karpenterRoleArn    = var.addons_iam_roles["karpenter"]
+      lbControllerRoleArn = var.addons_iam_roles["lb_controller"]
+      externalDnsRoleArn  = var.addons_iam_roles["external_dns"]
     }
   })
 

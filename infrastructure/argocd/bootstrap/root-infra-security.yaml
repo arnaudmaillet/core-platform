@@ -40,6 +40,15 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
+            parameters:
+              # {{ if eq .name "cert-manager" }}
+              - name: "cert-manager.cainjector.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.cert_manager_role_arn }}"
+              - name: "cert-manager.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.cert_manager_role_arn }}"
+              - name: "cert-manager.webhook.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+                value: "{{ .global.cert_manager_role_arn }}"
+              # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
