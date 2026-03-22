@@ -64,20 +64,20 @@ spec:
               - name: "installCRDs"
                 value: "true"
                 
-              {{- if eq .name "cert-manager" }}
+              # {{ if eq .name "cert-manager" }}
               - name: "cert-manager.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.certManagerRoleArn }}"
-              {{- end }}
+              # {{ end }}
 
-              {{- if eq .name "external-dns" }}
+              # {{ if eq .name "external-dns" }}
               - name: "external-dns.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.externalDnsRoleArn }}"
-              {{- end }}
+              # {{ end }}
 
-              {{- if eq .name "admin-access" }}
+              # {{ if eq .name "admin-access" }}
               - name: "certificateArn"
                 value: "{{ .global.certificateArn }}"
-              {{- end }}
+              # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
