@@ -34,6 +34,9 @@ spec:
           helm:
             valueFiles:
               - $values/infrastructure/argocd/bootstrap/global-params.json
+            parameters:
+              - name: "certificateArn"
+                value: "{{ .global.certificateArn }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values
