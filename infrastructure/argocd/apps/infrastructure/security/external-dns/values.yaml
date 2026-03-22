@@ -6,7 +6,7 @@ external-dns:
     - "core-platform.click"
   serviceAccount:
     annotations:
-      eks.amazonaws.com/role-arn: "{{ .Values.global.externalDnsRoleArn }}"
+      eks.amazonaws.com/role-arn: ""
   policy: upsert-only
   registry: txt
   txtOwnerId: "core-platform-dev"
