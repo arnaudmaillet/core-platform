@@ -10,8 +10,7 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-    alb.ingress.kubernetes.io/certificate-arn:
-      { { .Values.certificateArn | quote } }
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.certificateArn | quote }}
     external-dns.alpha.kubernetes.io/hostname: "grafana.core-platform.click"
 spec:
   ingressClassName: alb
