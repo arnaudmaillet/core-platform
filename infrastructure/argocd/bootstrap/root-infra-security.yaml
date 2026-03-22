@@ -67,7 +67,7 @@ spec:
                 value: "true"
               - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: '{{index . "global" "certManagerRoleArn"}}'
-              - name: "admin-access.global.certificateArn"
+              - name: "global.certificateArn"
                 value: "{{ .global.certificateArn }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
