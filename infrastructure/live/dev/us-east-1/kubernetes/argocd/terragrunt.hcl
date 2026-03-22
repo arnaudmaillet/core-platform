@@ -4,6 +4,11 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+locals {
+  region_vars = read_terragrunt_config(find_in_parent_folders("region.hcl"))
+  aws_region = local.region_vars.locals.aws_region
+}
+
 dependency "vpc" {
   config_path = "../../networking/vpc"
 }
@@ -26,16 +31,18 @@ terraform {
 }
 
 inputs = {
+  region          = local.aws_region
+  env             = "dev"
+  argocd_version  = "7.7.0"
+  repository_url  = "https://github.com/arnaudmaillet/core-platform"
+  target_revision = "develop"
+
   # --- Paramètres du Cluster ---
+  vpc_id                 = dependency.vpc.outputs.vpc_id
   cluster_name           = dependency.eks.outputs.cluster_name
   cluster_endpoint       = dependency.eks.outputs.cluster_endpoint
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
 
-  vpc_id                 = dependency.vpc.outputs.vpc_id
-  argocd_version  = "7.7.0"
-  repository_url  = "https://github.com/arnaudmaillet/core-platform"
-  target_revision = "develop"
-  env             = "dev"
 
   # --- Sécurité & Certificats ---
   ssl_certificate_arn = dependency.security.outputs.certificate_arn

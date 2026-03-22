@@ -19,15 +19,15 @@ module "bootstrap" {
   depends_on = [module.server]
 
   env                 = var.env
-  vpc_id = var.vpc_id
+  region              = var.region
   repository_url      = var.repository_url
   target_revision     = var.target_revision
   cluster_name        = var.cluster_name
+  cluster_endpoint    = var.cluster_endpoint
+  vpc_id              = var.vpc_id
   ssl_certificate_arn = var.ssl_certificate_arn
   addons_iam_roles    = var.addons_iam_roles
-  cluster_endpoint    = var.cluster_endpoint
-
-  server_dependency = module.server.argocd_id
+  server_dependency   = module.server.argocd_id
 }
 
 # 2. Installation des Addons EKS

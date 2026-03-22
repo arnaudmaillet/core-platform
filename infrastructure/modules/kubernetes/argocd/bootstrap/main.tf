@@ -23,7 +23,7 @@ terraform {
 }
 
 resource "kubectl_manifest" "root_app" {
-  yaml_body = <<YAML
+  yaml_body  = <<YAML
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -56,16 +56,17 @@ resource "github_repository_file" "argocd_params" {
   repository = "core-platform"
   branch     = var.target_revision
   file       = "infrastructure/argocd/bootstrap/global-params.json"
-  
+
   content = jsonencode({
     global = {
-      clusterName         = var.cluster_name
-      certificateArn      = var.ssl_certificate_arn
-      clusterEndpoint     = var.cluster_endpoint
-      target_revision     = var.target_revision
-      repository_url      = var.repository_url
+      region              = var.region
       env                 = var.env
-      vpcId                = var.vpc_id
+      repository_url      = var.repository_url
+      target_revision     = var.target_revision
+      clusterName         = var.cluster_name
+      clusterEndpoint     = var.cluster_endpoint
+      vpcId               = var.vpc_id
+      certificateArn      = var.ssl_certificate_arn
       certManagerRoleArn  = var.addons_iam_roles["cert_manager"]
       karpenterRoleArn    = var.addons_iam_roles["karpenter"]
       lbControllerRoleArn = var.addons_iam_roles["lb_controller"]
