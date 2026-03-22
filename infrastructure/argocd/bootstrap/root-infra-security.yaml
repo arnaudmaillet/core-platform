@@ -12,28 +12,28 @@ spec:
         generators:
           - list:
               elements:
-                # 1. Le moteur cert-manager (Source HELM distante)
+                # 1. Cert-manager
                 - name: cert-manager
-                  repoURL: https://charts.jetstack.io
-                  chart: cert-manager
-                  targetRevision: v1.12.0
-                  folder: ""
+                  repoURL: https://github.com/arnaudmaillet/core-platform
+                  chart: ""
+                  folder: infrastructure/argocd/apps/infrastructure/security/cert-manager
+                  targetRevision: develop
                   destNamespace: cert-manager
-                # 2. Ta config Issuer (Source GIT locale)
+                # 2. Config Issuer
                 - name: cert-manager-config
                   repoURL: https://github.com/arnaudmaillet/core-platform
                   chart: ""
                   folder: infrastructure/argocd/apps/infrastructure/security/cert-manager-config
                   targetRevision: develop
                   destNamespace: cert-manager
-                # 3. External DNS (Source GIT locale)
+                # 3. External DNS
                 - name: external-dns
                   repoURL: https://github.com/arnaudmaillet/core-platform
                   chart: ""
                   folder: infrastructure/argocd/apps/infrastructure/security/external-dns
                   targetRevision: develop
                   destNamespace: external-dns
-                # 4. Admin Access (Source GIT locale)
+                # 4. Admin Access
                 - name: admin-access
                   repoURL: https://github.com/arnaudmaillet/core-platform
                   chart: ""
@@ -55,7 +55,6 @@ spec:
       sources:
         - repoURL: "{{.repoURL}}"
           targetRevision: "{{.targetRevision}}"
-          # On utilise index pour que YAML accepte la ligne même si la valeur est vide
           chart: '{{index . "chart"}}'
           path: '{{index . "folder"}}'
           helm:
@@ -66,7 +65,7 @@ spec:
                 value: "true"
                 
               # {{ if eq .name "cert-manager" }}
-              - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+              - name: "cert-manager.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.certManagerRoleArn }}"
               # {{ end }}
 
