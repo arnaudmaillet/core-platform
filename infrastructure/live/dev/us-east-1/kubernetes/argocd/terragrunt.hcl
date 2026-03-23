@@ -28,18 +28,28 @@ terraform {
     commands     = ["destroy"]
     execute      = ["/bin/bash", "-c", <<-EOT
       echo "--- Graceful Cleanup Start ---"
-      # 1. Désactiver le self-heal sur la root-app pour éviter les recréations
+      
+      # 1. Bloquer la réconciliation pour éviter les "zombies"
       kubectl patch app root-bootstrap -n argocd --type merge -p '{"spec":{"syncPolicy":null}}' || true
       
-      # 2. Supprimer les Ingress de tout le cluster (pour libérer les Load Balancers AWS)
-      # On attend qu'ils soient vraiment supprimés côté AWS
-      kubectl delete ingress --all -A --timeout=90s || echo "Ingress deletion timed out, continuing..."
+      # 2. Supprimer les Ingress EN PREMIER (Crucial pour libérer les ALB)
+      # On attend que l'AWS Load Balancer Controller fasse son job
+      echo "Deleting all Ingresses..."
+      kubectl delete ingress --all -A --timeout=120s || echo "Ingress deletion timed out, continuing..."
       
-      # 3. Supprimer les ApplicationSets (pour arrêter de générer de nouvelles apps)
+      # 3. Supprimer les ApplicationSets
       kubectl delete appsets --all -A || true
       
-      # 4. Supprimer les Apps enfants avec cascade pour nettoyer les ressources cloud
-      kubectl delete app -n argocd -l argocd.argoproj.io/instance!=root-bootstrap --cascade=foreground --timeout=120s || true
+      # 4. Supprimer les Apps enfants avec cascade FOREGROUND
+      # On exclut le bootstrap et KARPENTER. Pourquoi ? 
+      # On a besoin que Karpenter soit vivant pour terminer la suppression des noeuds.
+      echo "Deleting Apps (excluding core controllers)..."
+      kubectl delete app -n argocd -l "argocd.argoproj.io/instance!=root-bootstrap,app.kubernetes.io/name!=karpenter" --cascade=foreground --timeout=180s || true
+      
+      # 5. Enfin, supprimer les nodes Karpenter proprement
+      # Cela force Karpenter à appeler l'API EC2 pour terminer les instances
+      echo "Draining Karpenter nodes..."
+      kubectl delete nodes -l karpenter.sh/nodepool --timeout=120s || true
       
       echo "--- Cleanup finished, proceeding to Terraform Destroy ---"
     EOT
