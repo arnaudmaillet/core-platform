@@ -2,14 +2,10 @@
 
 karpenter:
   settings:
-    clusterName: "{{ .Values.global.clusterName }}"
-    clusterEndpoint: "{{ .Values.global.clusterEndpoint }}"
+    clusterName: ""
+    clusterEndpoint: ""
     interruptionQueue: ""
-  
-  controller:
-    clusterName: "{{ .Values.global.clusterName }}"
-    clusterEndpoint: "{{ .Values.global.clusterEndpoint }}"
   
   serviceAccount:
     annotations:
-      eks.amazonaws.com/role-arn: "{{ .Values.global.karpenterRoleArn }}"
+      eks.amazonaws.com/role-arn: ""

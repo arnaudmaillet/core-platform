@@ -24,9 +24,26 @@ dependency "security" {
 terraform {
   source = "../../../../../modules//kubernetes/argocd"
 
-  before_hook "clean_k8s_resources" {
+  before_hook "graceful_cleanup" {
     commands     = ["destroy"]
-    execute      = ["/bin/bash", "-c", "timeout 60s kubectl delete ingress -n argocd --all --wait=true || echo 'Ingress already gone or timed out'"]
+    execute      = ["/bin/bash", "-c", <<-EOT
+      echo "--- Graceful Cleanup Start ---"
+      # 1. Désactiver le self-heal sur la root-app pour éviter les recréations
+      kubectl patch app root-bootstrap -n argocd --type merge -p '{"spec":{"syncPolicy":null}}' || true
+      
+      # 2. Supprimer les Ingress de tout le cluster (pour libérer les Load Balancers AWS)
+      # On attend qu'ils soient vraiment supprimés côté AWS
+      kubectl delete ingress --all -A --timeout=90s || echo "Ingress deletion timed out, continuing..."
+      
+      # 3. Supprimer les ApplicationSets (pour arrêter de générer de nouvelles apps)
+      kubectl delete appsets --all -A || true
+      
+      # 4. Supprimer les Apps enfants avec cascade pour nettoyer les ressources cloud
+      kubectl delete app -n argocd -l argocd.argoproj.io/instance!=root-bootstrap --cascade=foreground --timeout=120s || true
+      
+      echo "--- Cleanup finished, proceeding to Terraform Destroy ---"
+    EOT
+    ]
   }
 }
 
