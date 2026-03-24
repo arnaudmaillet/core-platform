@@ -1,0 +1,737 @@
+{
+  "configuration" : {
+    "scope" : "SoftwareSystem"
+  },
+  "description" : "Event-driven architecture",
+  "documentation" : { },
+  "id" : 1,
+  "lastModifiedDate" : "2026-03-24T02:04:56Z",
+  "model" : {
+    "people" : [ {
+      "description" : "Utilisateur final",
+      "id" : "1",
+      "name" : "User",
+      "properties" : {
+        "structurizr.dsl.identifier" : "user"
+      },
+      "relationships" : [ {
+        "description" : "Demande des données",
+        "destinationId" : "3",
+        "id" : "16",
+        "sourceId" : "1",
+        "tags" : "Relationship",
+        "technology" : "HTTPS"
+      }, {
+        "description" : "Demande des données",
+        "destinationId" : "2",
+        "id" : "17",
+        "linkedRelationshipId" : "16",
+        "sourceId" : "1",
+        "technology" : "HTTPS"
+      }, {
+        "description" : "Utilise",
+        "destinationId" : "2",
+        "id" : "18",
+        "sourceId" : "1",
+        "tags" : "Relationship",
+        "technology" : "HTTPS"
+      } ],
+      "tags" : "Element,Person,User"
+    } ],
+    "softwareSystems" : [ {
+      "containers" : [ {
+        "description" : "Agrégateur API",
+        "documentation" : { },
+        "group" : "Edge Layer",
+        "id" : "3",
+        "name" : "BFF Service",
+        "properties" : {
+          "structurizr.dsl.identifier" : "bff"
+        },
+        "relationships" : [ {
+          "description" : "Accède au cache L1",
+          "destinationId" : "4",
+          "id" : "19",
+          "sourceId" : "3",
+          "tags" : "Relationship",
+          "technology" : "Redis Protocol"
+        }, {
+          "description" : "Appel gRPC",
+          "destinationId" : "8",
+          "id" : "20",
+          "sourceId" : "3",
+          "tags" : "Relationship",
+          "technology" : "gRPC"
+        }, {
+          "description" : "Appel gRPC",
+          "destinationId" : "11",
+          "id" : "21",
+          "sourceId" : "3",
+          "tags" : "Relationship",
+          "technology" : "gRPC"
+        }, {
+          "description" : "Appel gRPC",
+          "destinationId" : "5",
+          "id" : "22",
+          "sourceId" : "3",
+          "tags" : "Relationship",
+          "technology" : "gRPC"
+        } ],
+        "tags" : "Element,Container,BFF",
+        "technology" : "Rust/Axum"
+      }, {
+        "description" : "Cache d'agrégation",
+        "documentation" : { },
+        "group" : "Edge Layer",
+        "id" : "4",
+        "name" : "BFF Cache",
+        "properties" : {
+          "structurizr.dsl.identifier" : "redisBff"
+        },
+        "tags" : "Element,Container,Cache",
+        "technology" : "Redis"
+      }, {
+        "description" : "Profils & Auth",
+        "documentation" : { },
+        "group" : "User Domain",
+        "id" : "5",
+        "name" : "User Service",
+        "properties" : {
+          "structurizr.dsl.identifier" : "userService"
+        },
+        "relationships" : [ {
+          "description" : "Lit/Écrit",
+          "destinationId" : "6",
+          "id" : "23",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "SQL"
+        }, {
+          "description" : "Cache de session",
+          "destinationId" : "7",
+          "id" : "24",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "Redis Protocol"
+        }, {
+          "description" : "Publie des événements",
+          "destinationId" : "14",
+          "id" : "25",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        } ],
+        "tags" : "Element,Container,Service",
+        "technology" : "Rust/Axum"
+      }, {
+        "description" : "PostgreSQL",
+        "documentation" : { },
+        "group" : "User Domain",
+        "id" : "6",
+        "name" : "User DB",
+        "properties" : {
+          "structurizr.dsl.identifier" : "userDb"
+        },
+        "tags" : "Element,Container,Database",
+        "technology" : "PostgreSQL"
+      }, {
+        "description" : "Sessions",
+        "documentation" : { },
+        "group" : "User Domain",
+        "id" : "7",
+        "name" : "User Cache",
+        "properties" : {
+          "structurizr.dsl.identifier" : "redisUser"
+        },
+        "tags" : "Element,Container,Cache",
+        "technology" : "Redis"
+      }, {
+        "description" : "Gestion des contenus",
+        "documentation" : { },
+        "group" : "Post Domain",
+        "id" : "8",
+        "name" : "Post Service",
+        "properties" : {
+          "structurizr.dsl.identifier" : "postService"
+        },
+        "relationships" : [ {
+          "description" : "Accède au cache L2",
+          "destinationId" : "9",
+          "id" : "26",
+          "sourceId" : "8",
+          "tags" : "Relationship",
+          "technology" : "Redis Protocol"
+        }, {
+          "description" : "Lit/Écrit Posts",
+          "destinationId" : "10",
+          "id" : "27",
+          "sourceId" : "8",
+          "tags" : "Relationship",
+          "technology" : "CQL"
+        }, {
+          "description" : "Publie des événements",
+          "destinationId" : "14",
+          "id" : "28",
+          "sourceId" : "8",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        } ],
+        "tags" : "Element,Container,Service",
+        "technology" : "Rust/Axum"
+      }, {
+        "description" : "Cache d'entités",
+        "documentation" : { },
+        "group" : "Post Domain",
+        "id" : "9",
+        "name" : "Post Cache",
+        "properties" : {
+          "structurizr.dsl.identifier" : "redisPost"
+        },
+        "tags" : "Element,Container,Cache",
+        "technology" : "Redis"
+      }, {
+        "description" : "Stockage Posts & UserCache",
+        "documentation" : { },
+        "group" : "Post Domain",
+        "id" : "10",
+        "name" : "ScyllaDB",
+        "properties" : {
+          "structurizr.dsl.identifier" : "scyllaDb"
+        },
+        "tags" : "Element,Container,Database",
+        "technology" : "ScyllaDB"
+      }, {
+        "description" : "Likes",
+        "documentation" : { },
+        "group" : "Engagement Domain",
+        "id" : "11",
+        "name" : "Engagement Service",
+        "properties" : {
+          "structurizr.dsl.identifier" : "engagementService"
+        },
+        "relationships" : [ {
+          "description" : "Compteurs atomiques",
+          "destinationId" : "12",
+          "id" : "29",
+          "sourceId" : "11",
+          "tags" : "Relationship",
+          "technology" : "Redis Protocol"
+        }, {
+          "description" : "Persistence",
+          "destinationId" : "13",
+          "id" : "30",
+          "sourceId" : "11",
+          "tags" : "Relationship",
+          "technology" : "SQL"
+        }, {
+          "description" : "Publie des événements",
+          "destinationId" : "14",
+          "id" : "31",
+          "sourceId" : "11",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        } ],
+        "tags" : "Element,Container,Service",
+        "technology" : "Rust/Axum"
+      }, {
+        "description" : "Counters",
+        "documentation" : { },
+        "group" : "Engagement Domain",
+        "id" : "12",
+        "name" : "Engagement Cache",
+        "properties" : {
+          "structurizr.dsl.identifier" : "redisEngagement"
+        },
+        "tags" : "Element,Container,Cache",
+        "technology" : "Redis"
+      }, {
+        "description" : "PostgreSQL",
+        "documentation" : { },
+        "group" : "Engagement Domain",
+        "id" : "13",
+        "name" : "Engagement DB",
+        "properties" : {
+          "structurizr.dsl.identifier" : "engagementDb"
+        },
+        "tags" : "Element,Container,Database",
+        "technology" : "PostgreSQL"
+      }, {
+        "description" : "Event Bus",
+        "documentation" : { },
+        "id" : "14",
+        "name" : "Kafka",
+        "properties" : {
+          "structurizr.dsl.identifier" : "kafka"
+        },
+        "relationships" : [ {
+          "description" : "Synchronise UserCache",
+          "destinationId" : "8",
+          "id" : "32",
+          "sourceId" : "14",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Invalide le cache",
+          "destinationId" : "3",
+          "id" : "33",
+          "sourceId" : "14",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Envoie pour indexation",
+          "destinationId" : "15",
+          "id" : "34",
+          "sourceId" : "14",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        } ],
+        "tags" : "Element,Container,MessageBroker",
+        "technology" : "Kafka"
+      }, {
+        "description" : "Indexing",
+        "documentation" : { },
+        "id" : "15",
+        "name" : "Search Worker",
+        "properties" : {
+          "structurizr.dsl.identifier" : "searchWorker"
+        },
+        "relationships" : [ {
+          "description" : "Consomme les flux",
+          "destinationId" : "14",
+          "id" : "35",
+          "sourceId" : "15",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Rust/Axum"
+      } ],
+      "description" : "Social Network Infrastructure",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "Backend",
+      "properties" : {
+        "structurizr.dsl.identifier" : "backend"
+      },
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Core-platform",
+  "properties" : {
+    "structurizr.inspection.error" : "2",
+    "structurizr.dsl" : "d29ya3NwYWNlICJDb3JlLXBsYXRmb3JtIiAiRXZlbnQtZHJpdmVuIGFyY2hpdGVjdHVyZSIgewoKICAgIG1vZGVsIHsKICAgICAgICB1c2VyID0gcGVyc29uICJVc2VyIiAiVXRpbGlzYXRldXIgZmluYWwiICJVc2VyIgogICAgICAgIAogICAgICAgIGJhY2tlbmQgPSBzb2Z0d2FyZVN5c3RlbSAiQmFja2VuZCIgIlNvY2lhbCBOZXR3b3JrIEluZnJhc3RydWN0dXJlIiB7CiAgICAgICAgICAgICMgLS0tIEdyb3VwZSBQb2ludCBkJ0VudHLDqWUgLS0tCiAgICAgICAgICAgIGdyb3VwICJFZGdlIExheWVyIiB7CiAgICAgICAgICAgICAgICBiZmYgPSBjb250YWluZXIgIkJGRiBTZXJ2aWNlIiAiQWdyw6lnYXRldXIgQVBJIiAiUnVzdC9BeHVtIiAiQkZGIgogICAgICAgICAgICAgICAgcmVkaXNCZmYgPSBjb250YWluZXIgIkJGRiBDYWNoZSIgIkNhY2hlIGQnYWdyw6lnYXRpb24iICJSZWRpcyIgIkNhY2hlIgogICAgICAgICAgICB9CgogICAgICAgICAgICAjIC0tLSBHcm91cGUgRG9tYWluZSBVc2VycyAtLS0KICAgICAgICAgICAgZ3JvdXAgIlVzZXIgRG9tYWluIiB7CiAgICAgICAgICAgICAgICB1c2VyU2VydmljZSA9IGNvbnRhaW5lciAiVXNlciBTZXJ2aWNlIiAiUHJvZmlscyAmIEF1dGgiICJSdXN0L0F4dW0iICJTZXJ2aWNlIgogICAgICAgICAgICAgICAgdXNlckRiID0gY29udGFpbmVyICJVc2VyIERCIiAiUG9zdGdyZVNRTCIgIlBvc3RncmVTUUwiICJEYXRhYmFzZSIgCiAgICAgICAgICAgICAgICByZWRpc1VzZXIgPSBjb250YWluZXIgIlVzZXIgQ2FjaGUiICJTZXNzaW9ucyIgIlJlZGlzIiAiQ2FjaGUiCiAgICAgICAgICAgIH0KCiAgICAgICAgICAgICMgLS0tIEdyb3VwZSBEb21haW5lIFBvc3RzIC0tLQogICAgICAgICAgICBncm91cCAiUG9zdCBEb21haW4iIHsKICAgICAgICAgICAgICAgIHBvc3RTZXJ2aWNlID0gY29udGFpbmVyICJQb3N0IFNlcnZpY2UiICJHZXN0aW9uIGRlcyBjb250ZW51cyIgIlJ1c3QvQXh1bSIgIlNlcnZpY2UiCiAgICAgICAgICAgICAgICByZWRpc1Bvc3QgPSBjb250YWluZXIgIlBvc3QgQ2FjaGUiICJDYWNoZSBkJ2VudGl0w6lzIiAiUmVkaXMiICJDYWNoZSIKICAgICAgICAgICAgICAgIHNjeWxsYURiID0gY29udGFpbmVyICJTY3lsbGFEQiIgIlN0b2NrYWdlIFBvc3RzICYgVXNlckNhY2hlIiAiU2N5bGxhREIiICJEYXRhYmFzZSIKICAgICAgICAgICAgfQoKICAgICAgICAgICAgIyAtLS0gR3JvdXBlIERvbWFpbmUgRW5nYWdlbWVudCAtLS0KICAgICAgICAgICAgZ3JvdXAgIkVuZ2FnZW1lbnQgRG9tYWluIiB7CiAgICAgICAgICAgICAgICBlbmdhZ2VtZW50U2VydmljZSA9IGNvbnRhaW5lciAiRW5nYWdlbWVudCBTZXJ2aWNlIiAiTGlrZXMiICJSdXN0L0F4dW0iICJTZXJ2aWNlIgogICAgICAgICAgICAgICAgcmVkaXNFbmdhZ2VtZW50ID0gY29udGFpbmVyICJFbmdhZ2VtZW50IENhY2hlIiAiQ291bnRlcnMiICJSZWRpcyIgIkNhY2hlIgogICAgICAgICAgICAgICAgZW5nYWdlbWVudERiID0gY29udGFpbmVyICJFbmdhZ2VtZW50IERCIiAiUG9zdGdyZVNRTCIgIlBvc3RncmVTUUwiICJEYXRhYmFzZSIKICAgICAgICAgICAgfQoKICAgICAgICAgICAgIyAtLS0gSW5mcmFzdHJ1Y3R1cmUgQ29tbXVuZSAtLS0KICAgICAgICAgICAga2Fma2EgPSBjb250YWluZXIgIkthZmthIiAiRXZlbnQgQnVzIiAiS2Fma2EiICJNZXNzYWdlQnJva2VyIgogICAgICAgICAgICBzZWFyY2hXb3JrZXIgPSBjb250YWluZXIgIlNlYXJjaCBXb3JrZXIiICJJbmRleGluZyIgIlJ1c3QvQXh1bSIKICAgICAgICAgICAgCiAgICAgICAgICAgICMgLS0tIFJlbGF0aW9ucyBTdGF0aXF1ZXMgKENPUlJJR8OJRVMgQVZFQyBURUNITk9MT0dJRVMpIC0tLQogICAgICAgICAgICB1c2VyIC0+IGJmZiAiRGVtYW5kZSBkZXMgZG9ubsOpZXMiICJIVFRQUyIKICAgICAgICAgICAgdXNlciAtPiBiYWNrZW5kICJVdGlsaXNlIiAiSFRUUFMiCiAgICAgICAgICAgIAogICAgICAgICAgICBiZmYgLT4gcmVkaXNCZmYgIkFjY8OoZGUgYXUgY2FjaGUgTDEiICJSZWRpcyBQcm90b2NvbCIKICAgICAgICAgICAgYmZmIC0+IHBvc3RTZXJ2aWNlICJBcHBlbCBnUlBDIiAiZ1JQQyIKICAgICAgICAgICAgYmZmIC0+IGVuZ2FnZW1lbnRTZXJ2aWNlICJBcHBlbCBnUlBDIiAiZ1JQQyIKICAgICAgICAgICAgYmZmIC0+IHVzZXJTZXJ2aWNlICJBcHBlbCBnUlBDIiAiZ1JQQyIKICAgICAgICAgICAgCiAgICAgICAgICAgIHVzZXJTZXJ2aWNlIC0+IHVzZXJEYiAiTGl0L8OJY3JpdCIgIlNRTCIKICAgICAgICAgICAgdXNlclNlcnZpY2UgLT4gcmVkaXNVc2VyICJDYWNoZSBkZSBzZXNzaW9uIiAiUmVkaXMgUHJvdG9jb2wiCiAgICAgICAgICAgIHVzZXJTZXJ2aWNlIC0+IGthZmthICJQdWJsaWUgZGVzIMOpdsOpbmVtZW50cyIgIkthZmthIFByb3RvY29sIgogICAgICAgICAgICAKICAgICAgICAgICAgcG9zdFNlcnZpY2UgLT4gcmVkaXNQb3N0ICJBY2PDqGRlIGF1IGNhY2hlIEwyIiAiUmVkaXMgUHJvdG9jb2wiCiAgICAgICAgICAgIHBvc3RTZXJ2aWNlIC0+IHNjeWxsYURiICJMaXQvw4ljcml0IFBvc3RzIiAiQ1FMIgogICAgICAgICAgICBwb3N0U2VydmljZSAtPiBrYWZrYSAiUHVibGllIGRlcyDDqXbDqW5lbWVudHMiICJLYWZrYSBQcm90b2NvbCIKICAgICAgICAgICAgCiAgICAgICAgICAgIGVuZ2FnZW1lbnRTZXJ2aWNlIC0+IHJlZGlzRW5nYWdlbWVudCAiQ29tcHRldXJzIGF0b21pcXVlcyIgIlJlZGlzIFByb3RvY29sIgogICAgICAgICAgICBlbmdhZ2VtZW50U2VydmljZSAtPiBlbmdhZ2VtZW50RGIgIlBlcnNpc3RlbmNlIiAiU1FMIgogICAgICAgICAgICBlbmdhZ2VtZW50U2VydmljZSAtPiBrYWZrYSAiUHVibGllIGRlcyDDqXbDqW5lbWVudHMiICJLYWZrYSBQcm90b2NvbCIKICAgICAgICAgICAgCiAgICAgICAgICAgIGthZmthIC0+IHBvc3RTZXJ2aWNlICJTeW5jaHJvbmlzZSBVc2VyQ2FjaGUiICJLYWZrYSBQcm90b2NvbCIKICAgICAgICAgICAga2Fma2EgLT4gYmZmICJJbnZhbGlkZSBsZSBjYWNoZSIgIkthZmthIFByb3RvY29sIgogICAgICAgICAgICBrYWZrYSAtPiBzZWFyY2hXb3JrZXIgIkVudm9pZSBwb3VyIGluZGV4YXRpb24iICJLYWZrYSBQcm90b2NvbCIKICAgICAgICAgICAgCiAgICAgICAgICAgIHNlYXJjaFdvcmtlciAtPiBrYWZrYSAiQ29uc29tbWUgbGVzIGZsdXgiICJLYWZrYSBQcm90b2NvbCIKICAgICAgICB9CiAgICB9CgogICAgdmlld3MgewogICAgICAgIHN5c3RlbUNvbnRleHQgYmFja2VuZCAiU3lzdGVtQ29udGV4dCIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b2xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgY29udGFpbmVyIGJhY2tlbmQgIjAxX0FyY2hpdGVjdHVyZV9PdmVydmlldyIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b2xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgZHluYW1pYyBiYWNrZW5kICJTdGFuZGFyZF9SZWFkX1BhdHRlcm4iICJGbHV4IGRlIGxlY3R1cmUgbXVsdGluaXZlYXUiIHsKICAgICAgICAgICAgdXNlciAtPiBiZmYgIkRlbWFuZGUgdW4gUG9zdCIKICAgICAgICAgICAgYmZmIC0+IHJlZGlzQmZmICIxLiBbUkVBRF0gQ2hlY2sgY2FjaGUgZCdhZ3LDqWdhdGlvbiIKICAgICAgICAgICAgYmZmIC0+IHBvc3RTZXJ2aWNlICIyYS4gW2dSUENdIEdldCBQb3N0ICsgQXV0aG9yIERhdGEiCiAgICAgICAgICAgIGJmZiAtPiBlbmdhZ2VtZW50U2VydmljZSAiMmIuIFtnUlBDXSBHZXQgTGl2ZSBDb3VudGVycyIKICAgICAgICAgICAgcG9zdFNlcnZpY2UgLT4gcmVkaXNQb3N0ICIzLiBbUkVBRF0gQ2hlY2sgY2FjaGUgZW50aXTDqSBlbnJpY2hpZSIKICAgICAgICAgICAgcG9zdFNlcnZpY2UgLT4gc2N5bGxhRGIgIjQuIFtNSVNTXSBSZWFkICdwb3N0cycgJiAndXNlcl9jYWNoZSciCiAgICAgICAgICAgIGVuZ2FnZW1lbnRTZXJ2aWNlIC0+IHJlZGlzRW5nYWdlbWVudCAiNS4gW1JFQURdIENoZWNrIGhvdCBjb3VudGVycyIKICAgICAgICAgICAgZW5nYWdlbWVudFNlcnZpY2UgLT4gZW5nYWdlbWVudERiICI2LiBbTUlTU10gUmVhZCBjb3VudGVycyBmcm9tIFBvc3RncmVTUUwiCiAgICAgICAgICAgIGJmZiAtPiByZWRpc0JmZiAiNy4gW1dSSVRFXSBGdXNpb25uZSBsZXMgcmV0b3VycyBldCBtZXQgZW4gY2FjaGUiCiAgICAgICAgfQoKICAgICAgICBkeW5hbWljIGJhY2tlbmQgIlVzZXJfUHJvZmlsZV9TeW5jX1NhZ2EiICJTeW5jaHJvbmlzYXRpb24gcHJvZmlsIHZlcnMgUG9zdCBTZXJ2aWNlIiB7CiAgICAgICAgICAgIHVzZXIgLT4gYmZmICJDaGFuZ2Ugc29uIGF2YXRhciIKICAgICAgICAgICAgYmZmIC0+IHVzZXJTZXJ2aWNlICIxLiBVcGRhdGUgUHJvZmlsZSAoZ1JQQykiCiAgICAgICAgICAgIHVzZXJTZXJ2aWNlIC0+IHVzZXJEYiAiMi4gW1BFUlNJU1RdIFVwZGF0ZSBQb3N0Z3JlU1FMIgogICAgICAgICAgICB1c2VyU2VydmljZSAtPiBrYWZrYSAiMy4gW05PVElGWV0gRXZlbnQ6IFVzZXJVcGRhdGVkIgogICAgICAgICAgICBrYWZrYSAtPiBwb3N0U2VydmljZSAiNC4gW0NPTlNVTUVdIFJlw6dvaXQgbGEgbWlzZSDDoCBqb3VyIgogICAgICAgICAgICBwb3N0U2VydmljZSAtPiBzY3lsbGFEYiAiNS4gW1VQREFURV0gTWV0IMOgIGpvdXIgbGEgdGFibGUgJ3VzZXJfY2FjaGUnIgogICAgICAgICAgICBwb3N0U2VydmljZSAtPiByZWRpc1Bvc3QgIjYuIFtJTlZBTElEQVRFXSBTdXBwcmltZSBjYWNoZSIKICAgICAgICB9CgogICAgICAgIGR5bmFtaWMgYmFja2VuZCAiTGlrZV9JbnRlcmFjdGlvbl9QYXR0ZXJuIiAiRmx1eCBkJ8OpY3JpdHVyZSBvcHRpbWlzw6kgY29tcHRldXJzIiB7CiAgICAgICAgICAgIHVzZXIgLT4gYmZmICJDbGlxdWUgc3VyICdMaWtlJyIKICAgICAgICAgICAgYmZmIC0+IGVuZ2FnZW1lbnRTZXJ2aWNlICIxLiBFbnZvaSBkZSBsJ2ludGVyYWN0aW9uIChnUlBDKSIKICAgICAgICAgICAgZW5nYWdlbWVudFNlcnZpY2UgLT4gcmVkaXNFbmdhZ2VtZW50ICIyLiBbQVRPTUlDIElOQ1JdIEluY3LDqW1lbnRlIGVuIG3DqW1vaXJlIgogICAgICAgICAgICBlbmdhZ2VtZW50U2VydmljZSAtPiBlbmdhZ2VtZW50RGIgIjMuIFtBU1lOQyBXUklURV0gVHJhbnNhY3Rpb24gU1FMIgogICAgICAgICAgICBlbmdhZ2VtZW50U2VydmljZSAtPiBrYWZrYSAiNC4gW0VWRU5UXSBQdWJsaWUgJ0xpa2VBZGRlZCciCiAgICAgICAgICAgIGthZmthIC0+IGJmZiAiNS4gW0VWSUNUXSBSZWZyZXNoIGNhY2hlIEJGRiIKICAgICAgICB9CiAgICAgICAgCiAgICAgICAgc3R5bGVzIHsKICAgICAgICAgICAgZWxlbWVudCAiRWxlbWVudCIgewogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMmQyZDJkCiAgICAgICAgICAgIH0KICAgICAgICAKICAgICAgICAgICAgZWxlbWVudCAiUGVyc29uIiB7CiAgICAgICAgICAgICAgICBzaGFwZSBQZXJzb24KICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzA4NDI3YgogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkNvbnRhaW5lciIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMTE2OGJkCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiQ29tcG9uZW50IiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMxMTY4YmQKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJEYXRhYmFzZSIgewogICAgICAgICAgICAgICAgc2hhcGUgQ3lsaW5kZXIKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2Y1ZGE4MQogICAgICAgICAgICAgICAgY29sb3IgIzAwMDAwMAogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIk1lc3NhZ2VCcm9rZXIiIHsKICAgICAgICAgICAgICAgIHNoYXBlIFBpcGUKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzg1YmI2NQogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlNlYXJjaEVuZ2luZSIgewogICAgICAgICAgICAgICAgc2hhcGUgQ29tcG9uZW50CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICNmZWIxNDQKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJCRkYiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzA4NDI3YgogICAgICAgICAgICB9CgogICAgICAgICAgICBlbGVtZW50ICJDYWNoZSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjZDQzYjMzCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgICAgICBzaGFwZSBDeWxpbmRlcgogICAgICAgICAgICB9CiAgICAgICAgfQogICAgfQoKICAgIGNvbmZpZ3VyYXRpb24gewogICAgICAgIHNjb3BlIHNvZnR3YXJlU3lzdGVtCiAgICB9Cn0=",
+    "structurizr.inspection.info" : "0",
+    "structurizr.inspection.ignore" : "0",
+    "structurizr.inspection.warning" : "0"
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : {
+        "elements" : [ {
+          "background" : "#08427b",
+          "tag" : "BFF"
+        }, {
+          "background" : "#d43b33",
+          "color" : "#ffffff",
+          "shape" : "Cylinder",
+          "tag" : "Cache"
+        }, {
+          "background" : "#1168bd",
+          "tag" : "Component"
+        }, {
+          "background" : "#1168bd",
+          "tag" : "Container"
+        }, {
+          "background" : "#f5da81",
+          "color" : "#000000",
+          "shape" : "Cylinder",
+          "tag" : "Database"
+        }, {
+          "background" : "#2d2d2d",
+          "color" : "#ffffff",
+          "tag" : "Element"
+        }, {
+          "background" : "#85bb65",
+          "shape" : "Pipe",
+          "tag" : "MessageBroker"
+        }, {
+          "background" : "#08427b",
+          "color" : "#ffffff",
+          "shape" : "Person",
+          "tag" : "Person"
+        }, {
+          "background" : "#feb144",
+          "shape" : "Component",
+          "tag" : "SearchEngine"
+        } ]
+      },
+      "terminology" : { }
+    },
+    "containerViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "4",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "7",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "9",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "10",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "11",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "12",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "15",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "key" : "01_Architecture_Overview",
+      "name" : "Container View: Backend",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "16"
+      }, {
+        "id" : "19"
+      }, {
+        "id" : "20"
+      }, {
+        "id" : "21"
+      }, {
+        "id" : "22"
+      }, {
+        "id" : "23"
+      }, {
+        "id" : "24"
+      }, {
+        "id" : "25"
+      }, {
+        "id" : "26"
+      }, {
+        "id" : "27"
+      }, {
+        "id" : "28"
+      }, {
+        "id" : "29"
+      }, {
+        "id" : "30"
+      }, {
+        "id" : "31"
+      }, {
+        "id" : "32"
+      }, {
+        "id" : "33"
+      }, {
+        "id" : "34"
+      }, {
+        "id" : "35"
+      } ],
+      "softwareSystemId" : "2"
+    } ],
+    "dynamicViews" : [ {
+      "description" : "Flux de lecture multiniveau",
+      "elementId" : "2",
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "4",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "9",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "10",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "11",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "12",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalBoundariesVisible" : false,
+      "key" : "Standard_Read_Pattern",
+      "name" : "Dynamic View: Backend",
+      "order" : 3,
+      "relationships" : [ {
+        "description" : "Demande un Post",
+        "id" : "16",
+        "order" : "1",
+        "response" : false
+      }, {
+        "description" : "1. [READ] Check cache d'agrégation",
+        "id" : "19",
+        "order" : "2",
+        "response" : false
+      }, {
+        "description" : "2a. [gRPC] Get Post + Author Data",
+        "id" : "20",
+        "order" : "3",
+        "response" : false
+      }, {
+        "description" : "2b. [gRPC] Get Live Counters",
+        "id" : "21",
+        "order" : "4",
+        "response" : false
+      }, {
+        "description" : "3. [READ] Check cache entité enrichie",
+        "id" : "26",
+        "order" : "5",
+        "response" : false
+      }, {
+        "description" : "4. [MISS] Read 'posts' & 'user_cache'",
+        "id" : "27",
+        "order" : "6",
+        "response" : false
+      }, {
+        "description" : "5. [READ] Check hot counters",
+        "id" : "29",
+        "order" : "7",
+        "response" : false
+      }, {
+        "description" : "6. [MISS] Read counters from PostgreSQL",
+        "id" : "30",
+        "order" : "8",
+        "response" : false
+      }, {
+        "description" : "7. [WRITE] Fusionne les retours et met en cache",
+        "id" : "19",
+        "order" : "9",
+        "response" : false
+      } ]
+    }, {
+      "description" : "Synchronisation profil vers Post Service",
+      "elementId" : "2",
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "9",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "10",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalBoundariesVisible" : false,
+      "key" : "User_Profile_Sync_Saga",
+      "name" : "Dynamic View: Backend",
+      "order" : 4,
+      "relationships" : [ {
+        "description" : "Change son avatar",
+        "id" : "16",
+        "order" : "1",
+        "response" : false
+      }, {
+        "description" : "1. Update Profile (gRPC)",
+        "id" : "22",
+        "order" : "2",
+        "response" : false
+      }, {
+        "description" : "2. [PERSIST] Update PostgreSQL",
+        "id" : "23",
+        "order" : "3",
+        "response" : false
+      }, {
+        "description" : "3. [NOTIFY] Event: UserUpdated",
+        "id" : "25",
+        "order" : "4",
+        "response" : false
+      }, {
+        "description" : "4. [CONSUME] Reçoit la mise à jour",
+        "id" : "32",
+        "order" : "5",
+        "response" : false
+      }, {
+        "description" : "5. [UPDATE] Met à jour la table 'user_cache'",
+        "id" : "27",
+        "order" : "6",
+        "response" : false
+      }, {
+        "description" : "6. [INVALIDATE] Supprime cache",
+        "id" : "26",
+        "order" : "7",
+        "response" : false
+      } ]
+    }, {
+      "description" : "Flux d'écriture optimisé compteurs",
+      "elementId" : "2",
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "11",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "12",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalBoundariesVisible" : false,
+      "key" : "Like_Interaction_Pattern",
+      "name" : "Dynamic View: Backend",
+      "order" : 5,
+      "relationships" : [ {
+        "description" : "Clique sur 'Like'",
+        "id" : "16",
+        "order" : "1",
+        "response" : false
+      }, {
+        "description" : "1. Envoi de l'interaction (gRPC)",
+        "id" : "21",
+        "order" : "2",
+        "response" : false
+      }, {
+        "description" : "2. [ATOMIC INCR] Incrémente en mémoire",
+        "id" : "29",
+        "order" : "3",
+        "response" : false
+      }, {
+        "description" : "3. [ASYNC WRITE] Transaction SQL",
+        "id" : "30",
+        "order" : "4",
+        "response" : false
+      }, {
+        "description" : "4. [EVENT] Publie 'LikeAdded'",
+        "id" : "31",
+        "order" : "5",
+        "response" : false
+      }, {
+        "description" : "5. [EVICT] Refresh cache BFF",
+        "id" : "33",
+        "order" : "6",
+        "response" : false
+      } ]
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "SystemContext",
+      "name" : "System Context View: Backend",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "17"
+      }, {
+        "id" : "18"
+      } ],
+      "softwareSystemId" : "2"
+    } ]
+  }
+}
