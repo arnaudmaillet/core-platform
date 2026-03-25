@@ -18,7 +18,8 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
             
             # --- 1. EDGE LAYER ---
             group "Edge Layer" {
-                bff = container "BFF Service" "Passerelle API, agrégation de données et orchestration." "Rust/Axum" "BFF"
+                apiBff = container "API BFF" "Agrégateur pour le trafic HTTP standard." "Rust/Axum" "BFF"
+                liveBff = container "Real-time BFF" "Passerelle WebSockets pour le contenu Live." "Rust/Axum/Tokio" "BFF"
                 redisBff = container "Redis (BFF)" "Cache de sessions et agrégation d'objets JSON." "Redis" "Cache"
             }
 
@@ -58,6 +59,20 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
                 postService = container "Post Service" "Gestion du cycle de vie des contenus (Posts)." "Rust/Axum" "Service"
                 postDb = container "ScyllaDB (Post)" "Stockage distribué des publications." "ScyllaDB" "Database"
                 redisPost = container "Redis (Post)" "Cache d'entités de contenu (L2)." "Redis" "Cache"
+            }
+
+            # --- 6.1 COMMENT DOMAIN ---
+            # group "Comment Domain" {
+            #     commentService = container "Comment Service" "Gestion des fils de discussion et réponses." "Rust/Axum" "Service"
+            #     commentDb = container "ScyllaDB (Comment)" "Stockage des hiérarchies de commentaires." "ScyllaDB" "Database"
+            #     redisComment = container "Redis (Comment)" "Cache des commentaires chauds (Top Level)." "Redis" "Cache"
+            # }
+
+            group "Comment Domain" {
+                commentService = container "Comment Service" "Gestion des fils de discussion et réponses." "Rust/Axum" "Service"
+                commentDb = container "ScyllaDB (Comment)" "Stockage des hiérarchies de commentaires." "ScyllaDB" "Database"
+                redisComment = container "Redis (Comment)" "Cache des commentaires chauds." "Redis" "Cache"
+                redisPubSub = container "Redis (Pub/Sub)" "Bus de messages éphémères pour le Live." "Redis" "Cache"
             }
 
             # --- 7. ENGAGEMENT DOMAIN ---
@@ -102,25 +117,31 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
             }
 
             # --- RELATIONS STATIQUES (MODÈLE) ---
-            user -> bff "Requêtes API" "HTTPS/JSON"
+            user -> apiBff "Requêtes API" "HTTPS/JSON"
+            user -> liveBff "WebSocket pour contenu Live" "WSS/JSON"
             user -> keycloak "Authentification" "HTTPS"
             user -> objectStorage "Upload via Presigned URL" "HTTPS/S3"
             user -> cdn "Consomme les médias" "HTTPS"
             user -> analyticsCollector "Émet des événements" "HTTPS/JSON"
 
-            bff -> redisBff "Mise en cache" "RESP"
-            bff -> keycloak "Validation JWKS" "HTTPS"
-            bff -> accountService "Profil privé" "gRPC/Protobuf"
-            bff -> profileService "Profil public" "gRPC/Protobuf"
-            bff -> postService "Contenu" "gRPC/Protobuf"
-            bff -> searchService "Recherche & Géo" "gRPC/Protobuf"
-            bff -> recommendationService "Discovery" "gRPC/Protobuf"
-            bff -> engagementService "Compteurs" "gRPC/Protobuf"
-            bff -> graphService "Relations" "gRPC/Protobuf"
-            bff -> feedService "Timelines" "gRPC/Protobuf"
-            bff -> mediaService "Uploads" "gRPC/Protobuf"
-            bff -> moderationService "Signalements" "gRPC/Protobuf"
-            bff -> clickhouse "Lecture statistiques" "HTTPS"
+            apiBff -> redisBff "Mise en cache" "RESP"
+            apiBff -> keycloak "Validation JWKS" "HTTPS"
+            apiBff -> accountService "Profil privé" "gRPC/Protobuf"
+            apiBff -> profileService "Profil public" "gRPC/Protobuf"
+            apiBff -> postService "Contenu" "gRPC/Protobuf"
+            apiBff -> commentService "Gestion des commentaires" "gRPC/Protobuf"
+            apiBff -> searchService "Recherche & Géo" "gRPC/Protobuf"
+            apiBff -> recommendationService "Discovery" "gRPC/Protobuf"
+            apiBff -> engagementService "Compteurs" "gRPC/Protobuf"
+            apiBff -> graphService "Relations" "gRPC/Protobuf"
+            apiBff -> feedService "Timelines" "gRPC/Protobuf"
+            apiBff -> mediaService "Uploads" "gRPC/Protobuf"
+            apiBff -> moderationService "Signalements" "gRPC/Protobuf"
+            apiBff -> clickhouse "Lecture statistiques" "HTTPS"
+
+            liveBff -> redisPubSub "Souscrit aux événements" "RESP"
+            liveBff -> commentService "Envoie les nouveaux commentaires en direct" "gRPC/Protobuf"
+            liveBff -> engagementService "Signale la présence et les heartbeats des utilisateurs" "gRPC/Protobuf"
 
             accountService -> accountDb "Lecture/Écriture" "PostgreSQL Protocol"
             accountService -> redisUser "Sessions" "RESP"
@@ -151,6 +172,14 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
             postService -> kafka "Émet [Post_Created]" "Kafka Protocol"
             kafka -> postService "Update statut post" "Kafka Protocol"
 
+            commentService -> commentDb "Persistance" "CQL"
+            commentService -> redisComment "Cache L1" "RESP"
+            commentService -> redisPubSub "Publie les nouveaux commentaires en temps-réel" "RESP / PubSub"
+            commentService -> kafka "Émet [Comment_Created]" "Kafka Protocol"
+            redisPubSub -> liveBff "Diffuse les messages aux instances connectées" "RESP / PubSub"
+            kafka -> commentService "Consomme [Content_Banned]" "Kafka Protocol"
+            kafka -> notificationService "Consomme [Comment_Created]" "Kafka Protocol"
+
             feedService -> feedCache "Stockage Timelines" "RESP"
             feedService -> graphService "Get Following" "gRPC/Protobuf"
             feedService -> postService "Get Posts" "gRPC/Protobuf"
@@ -161,6 +190,7 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
             engagementService -> redisEngagement "Compteurs atomiques" "RESP"
             engagementService -> engagementDb "Persistence" "CQL"
             engagementService -> kafka "Émet [Like_Added]" "Kafka Protocol"
+            engagementService -> redisPubSub "Publie les mises à jour des compteurs (Likes, Viewers) en temps réel" "RESP / PubSub"
 
             mediaService -> kafka "Émet [Media_Uploaded]" "Kafka Protocol"
             mediaWorker -> objectStorage "Lecture/Écriture" "S3 Protocol"
@@ -206,44 +236,60 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
         dynamic backend "Keycloak_Login_Flow" "Authentification via Keycloak (OIDC)" {
             user -> keycloak "1. Login/MFA"
             keycloak -> user "2. Authorization Code"
-            user -> bff "3. Exchange Code"
-            bff -> keycloak "4. Backchannel Exchange"
-            keycloak -> bff "5. Returns JWT"
-            bff -> accountService "6. EnsureUserExists"
-            bff -> user "7. Session Active"
+            user -> apiBff "3. Exchange Code"
+            apiBff -> keycloak "4. Backchannel Exchange"
+            keycloak -> apiBff "5. Returns JWT"
+            apiBff -> accountService "6. EnsureUserExists"
+            apiBff -> user "7. Session Active"
         }
 
         dynamic backend "Keycloak_Refresh_Flow_With_Ban_Check" "Refresh sécurisé avec vérification de bannissement" {
-            user -> bff "1. Token expiré, Refresh Request"
-            bff -> moderationService "2. IsUserBanned"
+            user -> apiBff "1. Token expiré, Refresh Request"
+            apiBff -> moderationService "2. IsUserBanned"
             moderationService -> moderationDb "3. Check sanctions"
-            bff -> keycloak "4. Request New Token"
-            keycloak -> bff "5. Returns New JWT"
-            bff -> user "6. Session prolongée"
+            apiBff -> keycloak "4. Request New Token"
+            keycloak -> apiBff "5. Returns New JWT"
+            apiBff -> user "6. Session prolongée"
         }
 
         dynamic backend "Account_Profile_Saga" "Cycle de vie : Création de compte et profil" {
-            user -> bff "1. Register"
-            bff -> accountService "2. Create Account"
+            user -> apiBff "1. Register"
+            apiBff -> accountService "2. Create Account"
             accountService -> accountDb "3. Persist"
             accountService -> kafka "4. AccountCreated Event"
             kafka -> profileService "5. Auto-create profile"
             profileService -> profileDb "6. Persist"
         }
 
-        dynamic backend "Post_Read_Flow" "Lecture d'un post avec hydratation distribuée" {
-            user -> bff "1. Request Post"
-            bff -> redisBff "2. Check Global Cache"
-            bff -> postService "3. Get Post Content"
-            postService -> redisPost "4. Check Post Cache"
-            bff -> engagementService "5. Get Live Counters"
-            engagementService -> redisEngagement "6. Get Hot Counters"
-            bff -> redisBff "7. Aggregate & Cache"
+        dynamic backend "Post_Read_Flow" "Lecture d'un post avec hydratation distribuée et commentaires" {
+            user -> apiBff "1. Request Post Detail (ID: post_123)"
+            apiBff -> redisBff "2. [READ] Check Global Aggregated Cache"
+
+            # --- PHASE 1 : RÉCUPÉRATION DU CONTENU ---
+            apiBff -> postService "3. [gRPC] Get Post Content"
+            postService -> redisPost "4. [READ] Check Local Post Cache"
+            
+            # --- PHASE 2 : RÉCUPÉRATION DE L'ENGAGEMENT (LIKES) ---
+            apiBff -> engagementService "5. [gRPC] Get Live Counters (Post + Authors + Viewers)"
+            engagementService -> redisEngagement "6. [READ] Get Hot Counters"
+            
+            # --- PHASE 3 : RÉCUPÉRATION DES COMMENTAIRES (NOUVEAU) ---
+            apiBff -> commentService "7. [gRPC] Get Top Comments (Limit 5, Sorted by Relevance)"
+            commentService -> redisComment "8. [READ] Check Hot Thread Cache"
+            
+            # --- PHASE 4 : HYDRATATION DES AUTEURS ---
+            # Le BFF extrait tous les IDs d'auteurs (Post + Commentaires)
+            apiBff -> profileService "9. [gRPC BatchGet] Hydrate All Unique Profiles"
+            profileService -> redisProfile "10. [READ] Check Profile Cache"
+            
+            # --- PHASE 5 : FINALISATION ---
+            apiBff -> redisBff "11. [WRITE] Cache Aggregated JSON (TTL 30s)"
+            apiBff -> user "12. Return Full View (Contenu + Likes + Viewers + Coms)"
         }
 
         dynamic backend "Social_Graph_Follow" "Flux de follow et propagation asynchrone" {
-            user -> bff "1. Click Follow"
-            bff -> graphService "2. Request Follow"
+            user -> apiBff "1. Click Follow"
+            apiBff -> graphService "2. Request Follow"
             graphService -> graphDb "3. Persist Relation"
             graphService -> redisGraph "4. Update Cache"
             graphService -> kafka "5. UserFollowed Event"
@@ -252,8 +298,8 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
         }
 
         dynamic backend "Friend_Recommendation_Engine" "Flux de recommandation haute performance" {
-            user -> bff "1. Request Suggestions"
-            bff -> recommendationService "2. GetRecommendations"
+            user -> apiBff "1. Request Suggestions"
+            apiBff -> recommendationService "2. GetRecommendations"
             recommendationService -> recoCache "3. Check pre-calculated results"
             recommendationService -> graphService "4. Get Candidates"
             graphService -> nebulaGraph "5. Find k-hop neighbors"
@@ -264,12 +310,12 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
         }
 
         dynamic backend "Geo_Map_Flow" "Cycle de vie des Pins intelligents sur la carte" {
-            user -> bff "1. Open Map (Viewport)"
-            bff -> searchService "2. GetGeoPins"
+            user -> apiBff "1. Open Map (Viewport)"
+            apiBff -> searchService "2. GetGeoPins"
             searchService -> elasticsearch "3. Geo_Tile_Grid Aggregation"
             elasticsearch -> searchService "4. Top Posts per Tile"
-            searchService -> bff "5. Return Clusters"
-            bff -> postService "6. Batch Get Thumbnails"
+            searchService -> apiBff "5. Return Clusters"
+            apiBff -> postService "6. Batch Get Thumbnails"
         }
 
         dynamic backend "Feed_Push_Fanout" "Propagation asynchrone (Fan-out)" {
@@ -281,8 +327,8 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
         }
 
         dynamic backend "Feed_Read_Engine" "Lecture du Feed : Modèle Hybride & Auto-Reconstruction" {
-            user -> bff "1. Demande le Fil d'actualité (Page 1)"
-            bff -> feedService "2. [gRPC] GetFeed(user_id, page_size)"
+            user -> apiBff "1. Demande le Fil d'actualité (Page 1)"
+            apiBff -> feedService "2. [gRPC] GetFeed(user_id, page_size)"
             
             # --- PHASE 1 : RÉCUPÉRATION DU FLUX STANDARD (PUSH) ---
             feedService -> feedCache "3. [LRANGE] Récupère les IDs pré-calculés (Timeline des amis 'normaux')"
@@ -303,13 +349,71 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
             feedService -> postService "10. [gRPC Batch] Hydrate le contenu des posts"
             feedService -> profileService "11. [gRPC Batch] Hydrate les auteurs (Avatar, Badge VIP)"
             
-            feedService -> bff "12. Retourne le Feed hybride agrégé"
-            bff -> user "13. Rendu de la Timeline"
+            feedService -> apiBff "12. Retourne le Feed hybride agrégé"
+            apiBff -> user "13. Rendu de la Timeline"
+        }
+
+        dynamic backend "Presence_Update_Flow" "Alimentation du compteur de viewers (Heartbeat)" {
+            # --- ÉTAPE 1 : CONNEXION ---
+            user -> liveBff "1. Ouvre WebSocket (post_123)"
+            
+            # --- ÉTAPE 2 : SIGNAL D'ENTRÉE ---
+            liveBff -> engagementService "2. [gRPC] NotifyPresence(user_id, post_123)"
+            engagementService -> redisEngagement "3. [PFADD] presence:post_123 (HyperLogLog)"
+            
+            # --- ÉTAPE 3 : MAINTIEN (HEARTBEAT) ---
+            # Le mobile envoie un "ping" toutes les 20s pour rester dans le compteur
+            user -> liveBff "4. [WS] Keep-alive / Ping"
+            liveBff -> engagementService "5. [gRPC] TouchPresence(user_id, post_123)"
+            engagementService -> redisEngagement "6. [PEXPIRE] Reset TTL sur la présence"
+            
+            # --- ÉTAPE 4 : DIFFUSION DU NOUVEAU COMPTE ---
+            # Si le nombre change significativement, on prévient tout le monde
+            engagementService -> redisPubSub "7. [PUBLISH] channel:post_123 {type: 'VIEWER_COUNT', count: 4250}"
+            redisPubSub -> liveBff "8. [SUBSCRIBE]"
+            liveBff -> user "9. [WS PUSH] Mise à jour du compteur sur l'écran"
+        }
+
+        dynamic backend "Live_Comment_Flow" "Flux Live : Diffusion instantanée et Modération asynchrone" {
+            # --- PHASE 1 : RÉCEPTION & PERSISTANCE ---
+            user -> liveBff "1. Envoie un message (WebSocket)"
+            liveBff -> commentService "2. [gRPC] CreateLiveComment"
+            commentService -> commentDb "3. [WRITE] ScyllaDB (Status: LIVE)"
+            
+            # --- PHASE 2 : DIFFUSION INSTANTANÉE (CHEMIN COURT) ---
+            # Le message s'affiche sur tous les écrans en <100ms
+            commentService -> redisPubSub "4. [PUBLISH] channel:post_123"
+            redisPubSub -> liveBff "5. [SUBSCRIBE]"
+            liveBff -> user "6. [WS PUSH] Message affiché (Optimistic)"
+            
+            # --- PHASE 3 : PIPELINE DE FIABILITÉ (CHEMIN LONG) ---
+            commentService -> kafka "7. [EVENT] CommentCreated"
+            
+            # La modération travaille en arrière-plan
+            kafka -> moderationService "8. [CONSUME] Analyse NLP / Toxicité"
+            moderationService -> aiService "9. Scan IA"
+            
+            # --- PHASE 4 : RÉACTIONS (CORRECTION SI BESOIN) ---
+            # SCÉNARIO : LE MESSAGE EST TOXIQUE
+            moderationService -> kafka "10. [EVENT] ContentBanned"
+            
+            # 1. Le Comment Service le supprime en DB
+            kafka -> commentService "11. [CONSUME] Delete / Hide in DB"
+            
+            # 2. On envoie un signal de suppression en Temps Réel !
+            commentService -> redisPubSub "12. [PUBLISH] channel:post_123 {type: 'DELETE', id: 'msg_99'}"
+            redisPubSub -> liveBff "13. [WS PUSH] L'UI retire le message de l'écran"
+            
+            # SCÉNARIO : LE MESSAGE EST OK
+            # On déclenche les services "lents" (Search, Engagement, Notification)
+            kafka -> engagementService "14. [CONSUME] Incrémente les compteurs globaux"
+            kafka -> searchWorker "15. [CONSUME] Indexation"
+            kafka -> notificationService "16. [CONSUME] Notify Post Owner"
         }
 
         dynamic backend "Create_Post_Choreography" "Cycle de vie du contenu (Event-Driven)" {
-            user -> bff "1. Submit Metadata"
-            bff -> postService "2. Create (PROCESSING)"
+            user -> apiBff "1. Submit Metadata"
+            apiBff -> postService "2. Create (PROCESSING)"
             postService -> kafka "3. PostCreated Event"
             kafka -> mediaWorker "4. Transcode Media"
             mediaWorker -> aiService "5. Scan AI"
@@ -321,8 +425,8 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
 
         dynamic backend "User_Avatar_Lifecycle" "Mise à jour d'avatar et modération" {
             user -> objectStorage "1. Upload direct"
-            user -> bff "2. Confirm Upload"
-            bff -> profileService "3. UpdateAvatar"
+            user -> apiBff "2. Confirm Upload"
+            apiBff -> profileService "3. UpdateAvatar"
             profileService -> kafka "4. AvatarChanged Event"
             kafka -> mediaWorker "5. Resize"
             mediaWorker -> aiService "6. Scan NSFW"
@@ -331,8 +435,8 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
         }
 
         dynamic backend "User_Report_Flow" "Signalement et sanction automatique" {
-            user -> bff "1. Report Post"
-            bff -> moderationService "2. CreateReport"
+            user -> apiBff "1. Report Post"
+            apiBff -> moderationService "2. CreateReport"
             moderationService -> moderationDb "3. SQL Persist"
             moderationService -> aiService "4. Content Analysis"
             moderationService -> kafka "5. ContentBanned Event"
@@ -356,7 +460,7 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
             kafka -> analyticsWorker "3. Enrichment"
             analyticsWorker -> clickhouse "4. Insert OLAP"
             analyticsWorker -> dataLake "5. Archive"
-            bff -> clickhouse "6. Query Stats"
+            apiBff -> clickhouse "6. Query Stats"
         }
         
         styles {
