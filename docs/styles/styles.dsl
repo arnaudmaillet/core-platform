@@ -3,7 +3,11 @@
 styles {
     element "Element" {
         color #ffffff
+<<<<<<< HEAD
         background #545454
+=======
+        background #2d2d2d
+>>>>>>> 976c582 (docs: refactoring to mutiple files)
     }
     element "Person" {
         shape Person
