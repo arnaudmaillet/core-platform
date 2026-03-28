@@ -14,9 +14,6 @@ workspace "Core-platform" "Social Network - Full Scale Production Architecture" 
 
         # --- RELATIONS STATIQUES ---
         !include architecture/relations.dsl
-        
-        # --- INFRASTRUCTURE CLOUD ---
-        # !include infrastructure/aws_production.dsl
     }
 
     views {

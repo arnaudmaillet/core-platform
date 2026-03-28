@@ -3,7 +3,7 @@
 styles {
     element "Element" {
         color #ffffff
-        background #2d2d2d
+        background #545454
     }
     element "Person" {
         shape Person

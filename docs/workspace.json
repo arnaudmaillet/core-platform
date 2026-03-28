@@ -5,7 +5,7 @@
   "description" : "Social Network - Full Scale Production Architecture",
   "documentation" : { },
   "id" : 1,
-  "lastModifiedDate" : "2026-03-26T01:10:20Z",
+  "lastModifiedDate" : "2026-03-26T02:16:29Z",
   "model" : {
     "people" : [ {
       "description" : "Utilisateur final accédant aux services via Mobile ou Web.",
@@ -1230,7 +1230,6 @@
   },
   "views" : {
     "configuration" : {
-      "lastSavedView" : "User_Avatar_Full_Lifecycle",
       "styles" : {
         "elements" : [ {
           "background" : "#08427b",
@@ -1252,7 +1251,7 @@
           "shape" : "Cylinder",
           "tag" : "Database"
         }, {
-          "background" : "#2d2d2d",
+          "background" : "#545454",
           "color" : "#ffffff",
           "tag" : "Element"
         }, {
