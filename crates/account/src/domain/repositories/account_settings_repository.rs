@@ -11,7 +11,7 @@ use shared_kernel::errors::Result;
 pub trait AccountSettingsRepository: Send + Sync {
     /// Récupère les réglages d'un utilisateur.
     /// Retourne `None` si l'utilisateur n'a pas encore de réglages personnalisés (on utilisera alors les Defaults).
-    async fn find_by_account_id(
+    async fn fetch_by_account_id(
         &self,
         account_id: &AccountId,
         tx: Option<&mut dyn Transaction>,
@@ -23,6 +23,7 @@ pub trait AccountSettingsRepository: Send + Sync {
     async fn save(
         &self,
         settings: &AccountSettings,
+        original: Option<&AccountSettings>,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
 

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use uuid::Uuid;
     use crate::domain::entities::AccountMetadata;
@@ -26,20 +25,26 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Initialisation (score par défaut à 50)
+        // 1. Arrange : Score par défaut (ex: 50)
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
 
         let cmd = IncreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
+            action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
             region_code: region,
             amount: 20, // 50 + 20 = 70
             reason: "Email verified".into(),
         };
 
-        // Act: doit renvoyer Ok(true)
+        // 2. Act
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(true)));
+        
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+
+        // 3. Assert
+        assert_eq!(updated.trust_score(), 70);
+        assert_eq!(updated.version(), 2);
 
         let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.trust_score(), 70);
@@ -52,22 +57,28 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // On part d'un score déjà élevé (90)
+        // 1. Arrange : On monte manuellement à 90
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        metadata.increase_trust_score(&region, Uuid::now_v7(), 40, "bump".into()).unwrap();
+        metadata.increase_trust_score(&region, uuid::Uuid::now_v7(), 40, "bump".into()).unwrap();
         metadata_repo.add_metadata(metadata);
 
         let cmd = IncreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
+            action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
             region_code: region,
-            amount: 50, // 90 + 50 -> Clamp à 100
+            amount: 50, // 90 + 50 -> Doit saturer à 100
             reason: "High activity".into(),
         };
 
-        // Act: Le score change (90 -> 100), donc Ok(true)
+        // 2. Act
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(true)));
+        
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+
+        // 3. Assert
+        assert_eq!(updated.trust_score(), 100, "Le score ne doit pas dépasser 100");
+        assert_eq!(updated.version(), 3, "La version doit avoir augmenté (90 -> 100 est un changement)");
 
         let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.trust_score(), 100);
@@ -79,25 +90,35 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Déjà au max (100)
+        // 1. Arrange : Déjà au max (100)
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        metadata.increase_trust_score(&region, Uuid::now_v7(), 100, "max out".into()).unwrap();
-        metadata.pull_events();
+        metadata.increase_trust_score(&region, uuid::Uuid::now_v7(), 100, "max out".into()).unwrap();
+        metadata.pull_events(); // On vide les événements du setup
+        let version_at_max = metadata.version();
+        
         metadata_repo.add_metadata(metadata);
 
         let cmd = IncreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
+            action_id: uuid::Uuid::now_v7(),
             account_id,
             region_code: region,
             amount: 10,
             reason: "Should do nothing".into(),
         };
 
-        // Act: Le score ne peut pas bouger, donc Ok(false)
+        // 2. Act
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(false)));
+        
+        assert!(result.is_ok());
+        let returned = result.unwrap();
 
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // 3. Assert
+        assert_eq!(returned.trust_score(), 100);
+        assert_eq!(returned.version(), version_at_max, "La version ne doit pas bouger");
+
+        // 4. Assert : Aucun événement produit
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0, "Pas d'événement produit quand on est déjà au max");
     }
 
     #[tokio::test]

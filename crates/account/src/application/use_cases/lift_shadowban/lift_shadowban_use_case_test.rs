@@ -24,11 +24,12 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : On crée un compte déjà shadowbanned
+        // 1. Arrange : On crée un compte et on le bannit manuellement
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        // On utilise la nouvelle signature avec région
         metadata.shadowban(&region, "Initial ban".into()).unwrap();
-        metadata.pull_events(); // On vide les events du ban
+        metadata.pull_events(); // On vide les events du ban initial
+        let version_after_ban = metadata.version(); // Devrait être 2
+        
         metadata_repo.add_metadata(metadata);
 
         let cmd = LiftShadowbanCommand {
@@ -37,15 +38,26 @@ mod tests {
             reason: "Appeal accepted".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
-        let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        // 3. Assert
+        assert!(result.is_ok(), "La levée du shadowban devrait réussir");
+        let updated = result.unwrap();
+
+        assert!(!updated.is_shadowbanned(), "Le flag shadowban doit être à false");
+        assert!(updated.moderation_notes().unwrap().contains("Appeal accepted"));
+        assert_eq!(updated.version(), version_after_ban + 1);
+
+        // 4. Persistence
+        let saved = metadata_repo.metadata_map.lock().unwrap()
+            .get(&account_id)
+            .cloned()
+            .expect("Metadata devrait être en base");
         assert!(!saved.is_shadowbanned());
-        assert!(saved.moderation_notes().unwrap().contains("Appeal accepted"));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement ShadowbanLifted doit être produit");
     }
 
     #[tokio::test]
@@ -54,8 +66,9 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Le compte n'est PAS shadowbanned par défaut
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
+        // 1. Arrange : Compte sain par défaut (Version 1)
+        let initial_metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
+        metadata_repo.add_metadata(initial_metadata);
 
         let cmd = LiftShadowbanCommand {
             account_id,
@@ -63,12 +76,19 @@ mod tests {
             reason: "Accidental click".into(),
         };
 
-        // Act : Doit renvoyer Ok(false) car déjà "libre"
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Aucun event si déjà libre");
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert!(!returned.is_shadowbanned());
+        assert_eq!(returned.version(), 1, "La version ne doit pas augmenter si aucun changement");
+
+        // 4. Outbox
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0, "Aucun événement si le compte était déjà libre");
     }
 
     #[tokio::test]

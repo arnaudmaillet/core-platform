@@ -7,6 +7,7 @@ edition.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true, features = ["postgres", "runtime", "test-utils"] }
+shared-proto = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -18,8 +19,15 @@ regex = { workspace = true }
 unicode-normalization = { workspace = true }
 idna = { workspace = true }
 seahash = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+prost-types = { workspace = true }
+tonic-prost = { workspace = true }
 
 
 [dev-dependencies]
 testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }

@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{Email, ExternalId, PhoneNumber};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -25,17 +24,17 @@ mod tests {
         let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
+        let phone = PhoneNumber::try_new("+33612345678").unwrap();
 
-        // ✅ Arrange : Compte avec un téléphone non vérifié
+        // 1. Arrange : Compte avec téléphone non vérifié (Version 1)
         let account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("alex_phone").unwrap(),
             Email::try_new("alex@test.com").unwrap(),
             ExternalId::from_raw("ext_555")
         )
-            .with_phone(PhoneNumber::try_new("+33612345678").unwrap())
-            .build();
+        .with_phone(phone)
+        .build();
 
         assert!(!account.is_phone_verified());
         account_repo.add_account(account);
@@ -46,14 +45,22 @@ mod tests {
             code: "123456".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On récupère l'Account mis à jour
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
+        // 3. Assert
+        assert!(result.is_ok(), "La vérification du téléphone devrait réussir");
+        let updated = result.unwrap();
+
+        assert!(updated.is_phone_verified());
+        assert_eq!(updated.version(), 2, "La version doit être passée à 2");
+
+        // 4. Persistence réelle
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert!(saved.is_phone_verified());
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement PhoneVerified attendu");
     }
 
     #[tokio::test]
@@ -62,19 +69,20 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // ✅ Arrange : Compte déjà vérifié via le contrat Result<bool>
+        // 1. Arrange : On simule un téléphone déjà vérifié (Version 2)
         let mut account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("secure_user").unwrap(),
             Email::try_new("s@test.com").unwrap(),
             ExternalId::from_raw("ext")
         )
-            .with_phone(PhoneNumber::try_new("+33600000000").unwrap())
-            .build();
+        .with_phone(PhoneNumber::try_new("+33600000000").unwrap())
+        .build();
 
         account.verify_phone(&region).unwrap();
-        account.pull_events();
+        account.pull_events(); // On vide les événements du setup
+        let version_verified = account.version();
+        
         account_repo.add_account(account);
 
         let cmd = VerifyPhoneNumberCommand {
@@ -83,12 +91,18 @@ mod tests {
             code: "000000".into(),
         };
 
-        // Act : Doit renvoyer Ok(false) car déjà vérifié
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert!(returned.is_phone_verified());
+        assert_eq!(returned.version(), version_verified, "La version ne doit pas augmenter");
+
+        // 4. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Idempotence : aucun événement généré");
     }
 
     #[tokio::test]
@@ -100,7 +114,6 @@ mod tests {
         account_repo.add_account(Account::builder(
             account_id.clone(),
             actual_region,
-            Username::try_new("user").unwrap(),
             Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());

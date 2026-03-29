@@ -40,6 +40,7 @@ crate.from_cargo(
         "//crates/account:Cargo.toml",
         "//crates/profile:Cargo.toml",
         "//crates/gamification:Cargo.toml",
+        "//common/rust/shared-proto/Cargo.toml",
         "//backend/services/account/outbox-processor:Cargo.toml",
         "//backend/services/account/cache-invalidator:Cargo.toml",
         "//backend/services/profile/workers/outbox-processor:Cargo.toml",

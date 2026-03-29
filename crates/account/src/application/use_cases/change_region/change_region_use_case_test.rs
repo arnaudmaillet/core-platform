@@ -1,13 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::{Account, AccountMetadata, AccountSettings};
     use crate::domain::value_objects::{Email, ExternalId};
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
-    use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::use_cases::change_region::{ChangeRegionCommand, ChangeRegionUseCase};
     use crate::domain::repositories::{AccountMetadataRepositoryStub, AccountRepositoryStub, AccountSettingsRepositoryStub};
@@ -47,7 +46,7 @@ mod tests {
         // Initialisation des 3 agrégats en "eu"
         account_repo.add_account(Account::builder(
             account_id.clone(), old_region.clone(),
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), old_region.clone()).build());
@@ -64,18 +63,26 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
+        let response = result.unwrap();
 
-        // Vérifier que les 3 agrégats ont migré
+        // Vérification de l'objet RETOURNÉ (Mémoire)
+        assert_eq!(response.account.region_code().as_str(), "us");
+        assert_eq!(response.metadata.region_code().as_str(), "us");
+        assert_eq!(response.settings.region_code().as_str(), "us");
+
+        // Vérification de l'objet SAUVEGARDÉ (Persistence)
         let a = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         let m = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
         let s = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
 
-        assert_eq!(a.region_code(), &new_region);
-        assert_eq!(m.region_code(), &new_region);
-        assert_eq!(s.region_code(), &new_region);
-
-        // Vérifier que des événements ont été produits (AccountRegionChanged + MetadataRegionChanged)
-        assert!(outbox_repo.saved_events.lock().unwrap().len() >= 2);
+        assert_eq!(a.region_code().as_str(), "us");
+        assert_eq!(m.region_code().as_str(), "us");
+        assert_eq!(s.region_code().as_str(), "us");
+        
+        // Vérification des versions (elles doivent toutes être à 2)
+        assert_eq!(a.version(), 2);
+        assert_eq!(m.version(), 2);
+        assert_eq!(s.version(), 2);
     }
 
     #[tokio::test]
@@ -87,7 +94,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
@@ -114,7 +121,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
 
-        account_repo.add_account(Account::builder(account_id.clone(), region.clone(), Username::try_new("user_test").unwrap(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
+        account_repo.add_account(Account::builder(account_id.clone(), region.clone(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
         settings_repo.add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
 

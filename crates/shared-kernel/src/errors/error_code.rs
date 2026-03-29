@@ -13,4 +13,5 @@ pub enum ErrorCode {
     InternalError,
     InfrastructureFailure,
     ServiceUnavailable,
+    PreconditionFailed,
 }

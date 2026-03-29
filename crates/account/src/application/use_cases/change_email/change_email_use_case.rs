@@ -5,71 +5,77 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
 
 use crate::application::use_cases::change_email::ChangeEmailCommand;
+use crate::domain::entities::Account;
 use crate::domain::repositories::AccountRepository;
 
 pub struct ChangeEmailUseCase {
-    account_repo: Arc<dyn AccountRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
+    repo: Arc<dyn AccountRepository>,
+    outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl ChangeEmailUseCase {
     pub fn new(
-        account_repo: Arc<dyn AccountRepository>,
-        outbox_repo: Arc<dyn OutboxRepository>,
+        repo: Arc<dyn AccountRepository>,
+        outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            account_repo,
-            outbox_repo,
+            repo,
+            outbox,
             tx_manager,
         }
     }
 
-    pub async fn execute(&self, command: ChangeEmailCommand) -> Result<bool> {
+    pub async fn execute(&self, command: ChangeEmailCommand) -> Result<Account> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ChangeEmailCommand) -> Result<bool> {
-        // 1. LECTURE OPTIMISTE (Hors transaction)
-        let mut account = self
-            .account_repo
-            .find_account_by_id(&cmd.account_id, None)
+    async fn try_execute_once(&self, cmd: &ChangeEmailCommand) -> Result<Account> {
+        let original_account = self
+            .repo
+            .fetch_by_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
+        let mut account = original_account.clone();
 
-        // 2. MUTATION DU MODÈLE RICHE
         if !account.change_email(&cmd.region_code, cmd.new_email.clone())? {
-            return Ok(false);
+            return Ok(original_account);
         }
 
-        // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = account.pull_events();
-        let account_cloned = account.clone();
 
-        // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
+        if events.is_empty() {
+            return Ok(account);
+        }
+
+        let updated_account = account.clone();
+        let repo = Arc::clone(&self.repo);
+        let outbox = Arc::clone(&self.outbox);
+
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = self.account_repo.clone();
-                let outbox = self.outbox_repo.clone();
-                let u = account_cloned.clone();
-                let events_to_process = events;
+                let repo = Arc::clone(&repo);
+                let outbox = Arc::clone(&outbox);
+
+                let original_for_tx = original_account.clone();
+                let updated_for_tx = account.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    // Sauvegarde avec vérification de version (Optimistic Lock)
-                    repo.save(&u, Some(&mut *tx)).await?;
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                        .await?;
 
-                    // Enregistrement des événements (EmailChanged, etc.)
-                    for event in events_to_process {
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
@@ -78,6 +84,6 @@ impl ChangeEmailUseCase {
             })
             .await?;
 
-        Ok(true)
+        Ok(updated_account)
     }
 }

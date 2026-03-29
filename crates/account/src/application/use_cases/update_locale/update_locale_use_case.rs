@@ -10,62 +10,71 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::update_locale::UpdateLocaleCommand;
+use crate::domain::entities::Account;
 use crate::domain::repositories::AccountRepository;
 
 pub struct UpdateLocaleUseCase {
-    account_repo: Arc<dyn AccountRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
+    repo: Arc<dyn AccountRepository>,
+    outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl UpdateLocaleUseCase {
     pub fn new(
-        account_repo: Arc<dyn AccountRepository>,
-        outbox_repo: Arc<dyn OutboxRepository>,
+        repo: Arc<dyn AccountRepository>,
+        outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            account_repo,
-            outbox_repo,
+            repo,
+            outbox,
             tx_manager,
         }
     }
 
-    pub async fn execute(&self, command: UpdateLocaleCommand) -> Result<bool> {
+    pub async fn execute(&self, command: UpdateLocaleCommand) -> Result<Account> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpdateLocaleCommand) -> Result<bool> {
-        // 1. LECTURE OPTIMISTE (Hors transaction)
-        let mut account = self
-            .account_repo
-            .find_account_by_id(&cmd.account_id, None)
+    async fn try_execute_once(&self, cmd: &UpdateLocaleCommand) -> Result<Account> {
+        let original_account = self
+            .repo
+            .fetch_by_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        // 2. MUTATION DU MODÈLE RICHE
+        let mut account = original_account.clone();
+
         if !account.update_locale(&cmd.region_code, cmd.locale.clone())? {
-            return Ok(false);
+            return Ok(original_account);
         }
 
-        // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = account.pull_events();
-        let account_to_save = account.clone();
+        
+        if events.is_empty() {
+            return Ok(account);
+        }
 
-        // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
+        let updated_account = account.clone();
+        let repo = Arc::clone(&self.repo);
+        let outbox = Arc::clone(&self.outbox);
+
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = self.account_repo.clone();
-                let outbox = self.outbox_repo.clone();
-                let u = account_to_save.clone();
-                let events_to_process = events;
+                let repo = Arc::clone(&repo);
+                let outbox = Arc::clone(&outbox);
+                
+                let original_for_tx = original_account.clone();
+                let updated_for_tx = account.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&u, Some(&mut *tx)).await?;
-                    for event in events_to_process {
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
@@ -74,6 +83,6 @@ impl UpdateLocaleUseCase {
             })
             .await?;
 
-        Ok(false)
+        Ok(updated_account)
     }
 }

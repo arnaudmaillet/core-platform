@@ -36,6 +36,7 @@ message NotificationSettings {
 message AppearanceSettings {
   ThemeMode theme = 1;
   bool high_contrast = 2;
+  string locale = 3;
 }
 
 // ==========================================
@@ -45,16 +46,17 @@ message AppearanceSettings {
 message AccountSettings {
   string account_id = 1;
   string region_code = 2;
+  string locale = 3;
 
-  PrivacySettings privacy = 3;
-  NotificationSettings notifications = 4;
-  AppearanceSettings appearance = 5;
+  PrivacySettings privacy = 4;
+  NotificationSettings notifications = 5;
+  AppearanceSettings appearance = 6;
 
-  string timezone = 6;
-  repeated string push_tokens = 7; // Vec<PushToken> -> repeated
+  string timezone = 7;
+  repeated string push_tokens = 8; // Vec<PushToken> -> repeated
 
-  google.protobuf.Timestamp updated_at = 8;
-  int64 version = 9; // OCC
+  google.protobuf.Timestamp updated_at = 9;
+  int64 version = 10; // OCC
 }
 
 // ==========================================
@@ -63,6 +65,7 @@ message AccountSettings {
 
 service AccountSettingsService {
   rpc GetSettings(GetSettingsRequest) returns (AccountSettings);
+  rpc ChangeLocale(ChangeLocaleRequest) returns (AccountSettings);
 
   // Mise à jour de la Timezone (avec validation régionale)
   rpc UpdateTimezone(UpdateTimezoneRequest) returns (AccountSettings);
@@ -78,6 +81,11 @@ service AccountSettingsService {
 // ==========================================
 // MESSAGES DE REQUÊTES
 // ==========================================
+
+message ChangeLocaleRequest {
+  string id = 1;
+  string new_locale = 2;
+}
 
 message GetSettingsRequest {
   string account_id = 1;

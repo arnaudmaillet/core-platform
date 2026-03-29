@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::AccountSettings;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;

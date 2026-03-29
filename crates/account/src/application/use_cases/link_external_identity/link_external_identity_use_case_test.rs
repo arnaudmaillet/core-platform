@@ -5,7 +5,7 @@ mod tests {
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::use_cases::link_external_identity::{LinkExternalIdentityCommand, LinkExternalIdentityUseCase};
@@ -28,7 +28,6 @@ mod tests {
         // ✅ Initialisation avec un ID vide pour autoriser le premier linkage
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("alex").unwrap(),
             Email::try_new("alex@test.com").unwrap(),
             ExternalId::from_raw("")
         ).build());
@@ -58,7 +57,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             alice_id.clone(), region.clone(),
-            Username::try_new("alice").unwrap(), Email::try_new("alice@test.com").unwrap(),
+            Email::try_new("alice@test.com").unwrap(),
             shared_ext.clone()
         ).build());
 
@@ -66,7 +65,7 @@ mod tests {
         let bob_id = AccountId::new();
         account_repo.add_account(Account::builder(
             bob_id.clone(), region.clone(),
-            Username::try_new("bob").unwrap(), Email::try_new("bob@test.com").unwrap(),
+            Email::try_new("bob@test.com").unwrap(),
             ExternalId::from_raw("bob_ext")
         ).build());
 
@@ -93,7 +92,7 @@ mod tests {
         // Arrange: Le compte a déjà cet ID externe
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("gamer").unwrap(), Email::try_new("g@m.com").unwrap(),
+            Email::try_new("g@m.com").unwrap(),
             ext_id.clone()
         ).build());
 
@@ -118,7 +117,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), RegionCode::from_raw("eu"),
-            Username::try_new("user").unwrap(), Email::try_new("u@t.com").unwrap(),
+            Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 

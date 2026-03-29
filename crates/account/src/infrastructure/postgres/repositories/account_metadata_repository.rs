@@ -27,11 +27,8 @@ impl PostgresAccountMetadataRepository {
 
 #[async_trait]
 impl AccountMetadataRepository for PostgresAccountMetadataRepository {
-    /// Récupère les métadonnées d'un compte.
-    /// Charge également la colonne 'version' pour l'idempotence technique.
-    async fn find_by_account_id(&self, account_id: &AccountId) -> Result<Option<AccountMetadata>> {
+    async fn fetch_by_account_id(&self, account_id: &AccountId) -> Result<Option<AccountMetadata>> {
         let uid = account_id.as_uuid();
-
         let row = <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
                 let sql = "SELECT * FROM account_metadata WHERE account_id = $1";
@@ -39,66 +36,21 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .bind(uid)
                     .fetch_optional(conn)
                     .await
-                    .map_domain::<AccountMetadata>()
+                    .map_domain_infra("AccountMetadata: fetch")
             })
         })
-            .await?;
+        .await?;
 
-        row.map(|r| AccountMetadata::try_from(r)).transpose()
+        row.map(AccountMetadata::try_from).transpose()
     }
 
-    /// Insertion initiale. La version est fixée à 1 (via metadata.version()).
-    async fn insert(&self, metadata: &AccountMetadata, tx: &mut dyn Transaction) -> Result<()> {
-        // 1. On prépare des versions "Owned" (Clonées ou copiées) de toutes les données
-        let uid = metadata.account_id().as_uuid();
-        let region = metadata.region_code().to_string();
-        let role = PostgresAccountRole::from(metadata.role());
-        let is_beta = metadata.is_beta_tester();
-        let is_shadow = metadata.is_shadowbanned();
-        let trust = metadata.trust_score();
-        let notes = metadata.moderation_notes().map(|s| s.to_string());
-        let ip = metadata.estimated_ip().map(|s| s.to_string());
-        let updated = metadata.updated_at();
-        let version_i64 = metadata.version_i64()?;
-
-        <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
-            // 2. On utilise 'async move' pour transférer la propriété des variables ci-dessus
-            Box::pin(async move {
-                let sql = r#"
-                INSERT INTO account_metadata (
-                    account_id, region_code, role, is_beta_tester,
-                    is_shadowbanned, trust_score, moderation_notes,
-                    estimated_ip, version, updated_at
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            "#;
-
-                query(sql)
-                    .bind(uid)
-                    .bind(region)
-                    .bind(role)
-                    .bind(is_beta)
-                    .bind(is_shadow)
-                    .bind(trust)
-                    .bind(notes)
-                    .bind(ip)
-                    .bind(version_i64)
-                    .bind(updated)
-                    .execute(conn)
-                    .await
-                    .map_domain::<AccountMetadata>()
-            })
-        })
-            .await?;
-
-        Ok(())
-    }
-
-    async fn save(
+   async fn save(
         &self,
         metadata: &AccountMetadata,
+        original: Option<&AccountMetadata>,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
+        // --- 1. EXTRACTION DES DONNÉES (Propriété complète / Owned types) ---
         let uid = metadata.account_id().as_uuid();
         let region = metadata.region_code().to_string();
         let role = PostgresAccountRole::from(metadata.role());
@@ -107,42 +59,68 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let trust = metadata.trust_score();
         let notes = metadata.moderation_notes().map(|s| s.to_string());
         let ip = metadata.estimated_ip().map(|s| s.to_string());
+        let last_mod = metadata.last_moderation_at();
         let updated = metadata.updated_at();
-        let new_version_i64 = metadata.version_i64()?;
+        let new_version = metadata.version_i64()?;
+
+        let old_region = original.map(|o| o.region_code().to_string());
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
+                // --- ÉTAPE 1 : GESTION DU CHANGEMENT DE RÉGION ---
+                if let Some(old_reg) = old_region {
+                    if old_reg != region {
+                        query("DELETE FROM account_metadata WHERE account_id = $1 AND region_code = $2")
+                            .bind(uid)
+                            .bind(old_reg)
+                            .execute(&mut *conn)
+                            .await
+                            .map_domain_infra("AccountMetadata: delete old region")?;
+                    }
+                }
+
+                // --- ÉTAPE 2 : UPSERT ATOMIQUE ---
                 let sql = r#"
-                UPDATE account_metadata
-                SET
-                    role = $1, is_beta_tester = $2, is_shadowbanned = $3,
-                    trust_score = $4, moderation_notes = $5, estimated_ip = $6,
-                    updated_at = $7, version = $8,
-                    region_code = $9  -- Mise à jour de la région pour le sharding
-                WHERE account_id = $10
-                  AND version < $8
-            "#;
+                    INSERT INTO account_metadata (
+                        account_id, region_code, role, is_beta_tester, is_shadowbanned,
+                        trust_score, moderation_notes, estimated_ip, last_moderation_at,
+                        version, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    ON CONFLICT (account_id, region_code) DO UPDATE SET
+                        role = EXCLUDED.role,
+                        is_beta_tester = EXCLUDED.is_beta_tester,
+                        is_shadowbanned = EXCLUDED.is_shadowbanned,
+                        trust_score = EXCLUDED.trust_score,
+                        moderation_notes = EXCLUDED.moderation_notes,
+                        estimated_ip = EXCLUDED.estimated_ip,
+                        last_moderation_at = EXCLUDED.last_moderation_at,
+                        version = EXCLUDED.version,
+                        updated_at = EXCLUDED.updated_at
+                    WHERE account_metadata.version < EXCLUDED.version
+                "#;
 
                 let result = query(sql)
-                    .bind(role)
-                    .bind(is_beta)
-                    .bind(is_shadow)
-                    .bind(trust)
-                    .bind(notes)
-                    .bind(ip)
-                    .bind(updated)
-                    .bind(new_version_i64)
-                    .bind(region)
-                    .bind(uid)
+                    .bind(uid)              // $1
+                    .bind(&region)          // $2
+                    .bind(role)             // $3
+                    .bind(is_beta)          // $4
+                    .bind(is_shadow)        // $5
+                    .bind(trust)            // $6
+                    .bind(notes)            // $7
+                    .bind(ip)               // $8
+                    .bind(last_mod)         // $9
+                    .bind(new_version)      // $10
+                    .bind(updated)          // $11
                     .execute(conn)
                     .await
-                    .map_domain::<AccountMetadata>()?;
+                    .map_domain_infra("AccountMetadata: save upsert")?;
 
                 if result.rows_affected() == 0 {
                     return Err(DomainError::ConcurrencyConflict {
-                        reason: format!("Metadata version mismatch for {}", uid),
+                        reason: format!("OCC Conflict for {}: version in DB is already >= v{}", uid, new_version),
                     });
                 }
+
                 Ok(())
             })
         }).await

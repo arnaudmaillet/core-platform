@@ -63,6 +63,11 @@ impl From<DomainError> for AppError {
             // 6. Cas : Droits insuffisants (403)
             DomainError::Forbidden { reason } => Self::new(ErrorCode::Forbidden, reason),
 
+            // Condition préalable non remplie (412 / FAILED_PRECONDITION)
+            DomainError::PreconditionFailed { reason } => {
+                Self::new(ErrorCode::PreconditionFailed, reason)
+            }
+
             // 7. Cas : Erreurs techniques (500)
             // On utilise (_) car ce sont des variantes Tuples et on masque le détail au client
             DomainError::Infrastructure(_)

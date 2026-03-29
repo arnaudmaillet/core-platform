@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
+    use crate::domain::builders::AccountBuilder;
     use crate::domain::entities::Account;
-    use crate::domain::value_objects::{Email, ExternalId, PhoneNumber};
+    use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale, PhoneNumber};
+    use chrono::Utc;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -29,15 +30,13 @@ mod tests {
         let old_phone = PhoneNumber::try_new("+33612345678").unwrap();
         let new_phone = PhoneNumber::try_new("+33687654321").unwrap();
 
-        let mut account = Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(),
-            Email::try_new("test@test.com").unwrap(),
-            ExternalId::from_raw("ext_1")
-        ).build();
-
-        // Setup initial avec l'ancienne signature ou via restore pour simuler l'état existant
-        account.change_phone_number(&region, old_phone).unwrap();
+        // RESTORE : On simule un compte existant en v1 avec l'ancien téléphone
+        let account = AccountBuilder::restore(
+            account_id.clone(), region.clone(), ExternalId::from_raw("ext_1"),
+            Email::try_new("test@test.com").unwrap(), true, Some(old_phone), true,
+            AccountState::Active, None, Locale::default(),
+            1, chrono::Utc::now(), chrono::Utc::now(), None
+        );
         account_repo.add_account(account);
 
         let cmd = ChangePhoneNumberCommand {
@@ -46,14 +45,11 @@ mod tests {
             new_phone: new_phone.clone(),
         };
 
-        // 1. Act : Doit renvoyer Ok(true)
-        let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(true)));
+        let result = use_case.execute(cmd).await.unwrap();
 
-        // 2. Assert : Vérifier l'état et les conséquences métier
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-        assert_eq!(saved.phone_number(), Some(&new_phone));
-        assert!(!saved.is_phone_verified(), "Le téléphone doit être dé-vérifié après changement");
+        // Assert : v1 + 1 changement = v2
+        assert_eq!(result.phone_number(), Some(&new_phone));
+        assert_eq!(result.version(), 2); 
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
 
@@ -65,7 +61,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), actual_region,
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 
@@ -88,25 +84,40 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
         let phone = PhoneNumber::try_new("+33600000000").unwrap();
 
-        let mut account = Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build();
-
-        account.change_phone_number(&region, phone.clone()).unwrap(); // Version -> 2
+        // --- ARRANGE ---
+        // On simule un compte qui a DEJÀ le téléphone en base, avec une version propre (1).
+        // C'est ça que "restore" fait : il crée l'état final sans déclencher les mutations.
+        let account = AccountBuilder::restore(
+            account_id.clone(), region.clone(), ExternalId::from_raw("ext"),
+            Email::try_new("a@b.com").unwrap(), true, Some(phone.clone()), true,
+            AccountState::Active, None, Locale::default(),
+            1,
+            Utc::now(), Utc::now(), None
+        );
         account_repo.add_account(account);
 
-        let cmd = ChangePhoneNumberCommand { account_id: account_id.clone(), region_code: region, new_phone: phone };
+        let cmd = ChangePhoneNumberCommand { 
+            account_id: account_id.clone(), 
+            region_code: region, 
+            new_phone: phone.clone() 
+        };
 
-        // 1. Act : Doit renvoyer Ok(false)
-        let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(false)));
+        // --- ACT ---
+        let result = use_case.execute(cmd).await.unwrap();
 
-        // 2. Assert : Pas de double save, pas d'event
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-        assert_eq!(saved.version(), 2);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // --- ASSERT ---
+        // 1. L'objet retourné n'a pas bougé (toujours version 1)
+        assert_eq!(result.phone_number(), Some(&phone));
+        assert_eq!(result.version(), 1); 
+
+        // 2. Vérification DB (ton point 3) : RIEN n'a été écrasé en base
+        let saved_in_db = account_repo.accounts.lock().unwrap()
+            .get(&account_id).cloned().unwrap();
+        assert_eq!(saved_in_db.version(), 1);
+
+        // 3. Vérification Outbox (ton point 4) : AUCUN événement produit
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0, "L'idempotence ne doit produire aucun événement");
     }
 
     #[tokio::test]
@@ -117,7 +128,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 

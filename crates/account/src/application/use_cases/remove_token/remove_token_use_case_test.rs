@@ -24,15 +24,16 @@ mod tests {
         let (use_case, settings_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
-        let token_to_add = PushToken::try_new("valid_token_456").unwrap();
-        let token_to_remove =  PushToken::try_new("valid_token_123").unwrap();
+        let token_to_keep = PushToken::try_new("token_keep_456").unwrap();
+        let token_to_remove = PushToken::try_new("token_remove_123").unwrap();
 
-        // Arrange : On crée des settings avec deux tokens
+        // 1. Arrange : On prépare des settings avec DEUX tokens
         let mut settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
-        // On utilise la nouvelle signature avec région
         settings.add_push_token(&region, token_to_remove.clone()).unwrap();
-        settings.add_push_token(&region, token_to_add.clone()).unwrap();
-        settings.pull_events(); // On vide les events d'ajout
+        settings.add_push_token(&region, token_to_keep.clone()).unwrap();
+        settings.pull_events(); // On vide les events d'ajout initiaux
+        let version_after_setup = settings.version(); // Devrait être 3 (Init + Add + Add)
+        
         settings_repo.add_settings(settings);
 
         let cmd = RemovePushTokenCommand {
@@ -41,15 +42,24 @@ mod tests {
             token: token_to_remove.clone(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On s'attend à recevoir les AccountSettings mis à jour
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
+        // 3. Assert
+        assert!(result.is_ok(), "La suppression du token devrait réussir");
+        let updated = result.unwrap();
+
+        // Vérification de l'état mémoire
+        assert!(!updated.push_tokens().contains(&token_to_remove), "Le token doit être supprimé");
+        assert!(updated.push_tokens().contains(&token_to_keep), "Le token à garder doit toujours être là");
+        assert_eq!(updated.version(), version_after_setup + 1);
+
+        // 4. Persistence
         let saved = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert!(!saved.push_tokens().contains(&token_to_remove));
-        assert!(saved.push_tokens().contains(&token_to_add));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement PushTokenRemoved attendu");
     }
 
     #[tokio::test]
@@ -59,7 +69,7 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
         let non_existent_token = PushToken::try_new("valid_but_missing_token").unwrap();
 
-        // Arrange : Settings vides
+        // 1. Arrange : Settings avec une liste de tokens vide (Version 1)
         let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
         settings_repo.add_settings(settings);
 
@@ -69,12 +79,19 @@ mod tests {
             token: non_existent_token,
         };
 
-        // Act : Doit renvoyer Ok(false) car rien n'a été supprimé
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Idempotence : aucun event si le token n'existait pas");
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert_eq!(returned.version(), 1, "La version ne doit pas augmenter pour une suppression inexistante");
+        assert!(returned.push_tokens().is_empty());
+
+        // 4. Outbox
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0, "Idempotence : aucun événement généré");
     }
 
     #[tokio::test]

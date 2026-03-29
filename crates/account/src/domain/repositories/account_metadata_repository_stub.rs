@@ -1,7 +1,10 @@
+// crates/account/src/domain/repositories/stubs/account_metadata_repository_stub.rs
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use shared_kernel::domain::Identifier;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
@@ -11,9 +14,7 @@ use crate::domain::repositories::AccountMetadataRepository;
 
 #[derive(Default)]
 pub struct AccountMetadataRepositoryStub {
-    /// Stockage en mémoire : AccountId -> AccountMetadata
     pub metadata_map: Arc<Mutex<HashMap<AccountId, AccountMetadata>>>,
-    /// Simulation d'erreur forcée
     pub error_to_return: Arc<Mutex<Option<DomainError>>>,
 }
 
@@ -22,7 +23,7 @@ impl AccountMetadataRepositoryStub {
         Self::default()
     }
 
-    /// Helper pour injecter des data avant un test
+    /// Helper pour injecter des données initiales dans les tests
     pub fn add_metadata(&self, metadata: AccountMetadata) {
         self.metadata_map.lock().unwrap().insert(metadata.account_id().clone(), metadata);
     }
@@ -33,43 +34,48 @@ impl AccountMetadataRepositoryStub {
         }
         Ok(())
     }
-
-    fn not_found(&self, id: String) -> DomainError {
-        DomainError::NotFound {
-            entity: "AccountMetadata",
-            id,
-        }
-    }
 }
 
 #[async_trait]
 impl AccountMetadataRepository for AccountMetadataRepositoryStub {
-    async fn find_by_account_id(&self, account_id: &AccountId) -> Result<Option<AccountMetadata>> {
+    async fn fetch_by_account_id(&self, id: &AccountId) -> Result<Option<AccountMetadata>> {
         self.check_error()?;
-        Ok(self.metadata_map.lock().unwrap().get(account_id).cloned())
-    }
-
-    async fn insert(&self, metadata: &AccountMetadata, _tx: &mut dyn Transaction) -> Result<()> {
-        self.check_error()?;
-        self.metadata_map.lock().unwrap().insert(metadata.account_id().clone(), metadata.clone());
-        Ok(())
+        Ok(self.metadata_map.lock().unwrap().get(id).cloned())
     }
 
     async fn save(
         &self,
         metadata: &AccountMetadata,
+        original: Option<&AccountMetadata>,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
 
-        // Optionnel : simuler une erreur si on tente de save un truc qui n'existe pas
-        // (comportement cohérent avec un UPDATE SQL qui ne toucherait aucune ligne)
         let mut map = self.metadata_map.lock().unwrap();
-        if !map.contains_key(metadata.account_id()) {
-            return Err(self.not_found(metadata.account_id().as_string()));
+        let account_id = metadata.account_id();
+
+        // SIMULATION DU VERROUILLAGE OPTIMISTE (Optimistic Concurrency Control)
+        if let Some(orig) = original {
+            let current_in_map = map.get(account_id).ok_or_else(|| DomainError::NotFound {
+                entity: "AccountMetadata",
+                id: account_id.as_string(),
+            })?;
+
+            // Si la version en "base" (le stub) est différente de celle qu'on pensait avoir (original)
+            if current_in_map.version() != orig.version() {
+                return Err(DomainError::ConcurrencyConflict {
+                    reason: format!(
+                        "AccountMetadata {}: version mismatch (stub has {}, cmd had {})",
+                        account_id.as_string(),
+                        current_in_map.version(),
+                        orig.version()
+                    ),
+                });
+            }
         }
 
-        map.insert(metadata.account_id().clone(), metadata.clone());
+        // On insère ou on met à jour
+        map.insert(account_id.clone(), metadata.clone());
         Ok(())
     }
 }

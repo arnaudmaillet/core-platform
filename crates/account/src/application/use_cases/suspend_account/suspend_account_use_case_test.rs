@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -26,10 +25,10 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Un compte actif normal
+        // 1. Arrange : Compte actif (Version 1)
         account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("investigated_user").unwrap(),
+            account_id.clone(), 
+            region.clone(),
             Email::try_new("check@test.com").unwrap(),
             ExternalId::from_raw("ext_789")
         ).build());
@@ -40,14 +39,22 @@ mod tests {
             reason: "Under investigation for fraud".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On s'attend à recevoir l'Account mis à jour
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
+        // 3. Assert
+        assert!(result.is_ok(), "La suspension devrait réussir");
+        let updated = result.unwrap();
+
+        assert_eq!(*updated.state(), AccountState::Suspended);
+        assert_eq!(updated.version(), 2, "La version doit être passée à 2");
+
+        // 4. Persistence réelle
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(*saved.state(), AccountState::Suspended);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement AccountSuspended attendu");
     }
 
     #[tokio::test]
@@ -56,17 +63,18 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Déjà suspendu
+        // 1. Arrange : On crée et on suspend manuellement
         let mut account = Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("already_paused").unwrap(),
+            account_id.clone(), 
+            region.clone(),
             Email::try_new("p@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
 
-        // On suspend une première fois avec la nouvelle signature
         account.suspend(&region, "Original reason".into()).unwrap();
         account.pull_events();
+        let version_at_suspension = account.version();
+        
         account_repo.add_account(account);
 
         let cmd = SuspendAccountCommand {
@@ -75,12 +83,18 @@ mod tests {
             reason: "Second call".into(),
         };
 
-        // Act : Doit renvoyer Ok(false)
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Pas d'event si déjà suspendu");
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert_eq!(*returned.state(), AccountState::Suspended);
+        assert_eq!(returned.version(), version_at_suspension, "La version ne doit pas augmenter");
+
+        // 4. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Idempotence : aucun événement produit");
     }
 
     #[tokio::test]
@@ -91,7 +105,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), actual_region,
-            Username::try_new("user").unwrap(), Email::try_new("u@t.com").unwrap(),
+            Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 

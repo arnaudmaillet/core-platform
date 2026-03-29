@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -28,9 +27,11 @@ mod tests {
         let new_email = Email::try_new("new@test.com").unwrap();
         let region = RegionCode::from_raw("eu");
 
+        // On prépare le compte existant
         account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), old_email,
+            account_id.clone(), 
+            region.clone(),
+            old_email.clone(),
             ExternalId::from_raw("ext_1")
         ).build());
 
@@ -40,15 +41,29 @@ mod tests {
             new_email: new_email.clone(),
         };
 
-        // 1. Act : Execute doit renvoyer Ok(true)
+        // 1. Act : On récupère l'Account retourné par le Use Case
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(true)));
+        
+        // On vérifie que c'est un succès
+        assert!(result.is_ok());
+        let updated_account = result.unwrap();
 
-        // 2. Assert : Vérifier la mutation de l'état
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        // 2. Assert : Vérifier l'objet retourné (Mémoire)
+        assert_eq!(updated_account.email(), &new_email);
+        assert!(!updated_account.is_email_verified());
+
+        // 3. Assert : Vérifier la persistence (Mock Repo)
+        let saved = account_repo.accounts.lock().unwrap()
+            .get(&account_id)
+            .cloned()
+            .unwrap();
+            
         assert_eq!(saved.email(), &new_email);
-        assert!(!saved.is_email_verified(), "L'email doit repasser en non-vérifié après changement");
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        assert_eq!(saved.version(), 2);
+        
+        // 4. Assert : Vérifier l'Outbox (Événements)
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 1);
     }
 
     #[tokio::test]
@@ -58,26 +73,40 @@ mod tests {
         let email = Email::try_new("same@test.com").unwrap();
         let region = RegionCode::from_raw("eu");
 
-        account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), email.clone(),
+        // On insère un compte avec la version 1
+        let initial_account = Account::builder(
+            account_id.clone(), 
+            region.clone(),
+            email.clone(),
             ExternalId::from_raw("ext_1")
-        ).build());
+        ).build();
+        
+        account_repo.add_account(initial_account.clone());
 
         let cmd = ChangeEmailCommand {
             account_id: account_id.clone(),
             region_code: region,
-            new_email: email
+            new_email: email.clone()
         };
 
-        // 1. Act : Doit renvoyer Ok(false)
+        // 1. Act : L'exécution doit réussir mais ne rien modifier
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(false)));
+        
+        assert!(result.is_ok());
+        let returned_account = result.unwrap();
 
-        // 2. Assert : Rien ne doit bouger
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-        assert_eq!(saved.version(), 1);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // 2. Assert : L'objet retourné doit être identique à l'initial
+        assert_eq!(returned_account.email(), &email);
+        assert_eq!(returned_account.version(), 1);
+
+        // 3. Assert : Rien ne doit avoir été persisté (pas d'appel à save inutile)
+        let saved_in_db = account_repo.accounts.lock().unwrap()
+            .get(&account_id).cloned().unwrap();
+        assert_eq!(saved_in_db.version(), 1);
+
+        // 4. Assert : Crucial - Aucun événement ne doit être produit
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0);
     }
 
     #[tokio::test]
@@ -89,7 +118,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), actual_region,
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build());
 
@@ -113,7 +142,7 @@ mod tests {
 
         let mut account = Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build();
 
@@ -139,7 +168,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("user1").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build());
 

@@ -6,13 +6,12 @@ use crate::domain::value_objects::{
 };
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 pub struct AccountBuilder {
     id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
-    username: Username,
     email: Email,
     locale: Option<Locale>,
     phone: Option<PhoneNumber>,
@@ -26,14 +25,12 @@ impl AccountBuilder {
     pub(crate) fn new(
         id: AccountId,
         region_code: RegionCode,
-        username: Username,
         email: Email,
         external_id: ExternalId,
     ) -> Self {
         Self {
             id,
             region_code,
-            username,
             email,
             external_id,
             locale: None,
@@ -51,7 +48,6 @@ impl AccountBuilder {
         id: AccountId,
         region_code: RegionCode,
         external_id: ExternalId,
-        username: Username,
         email: Email,
         email_verified: bool,
         phone_number: Option<PhoneNumber>,
@@ -69,7 +65,6 @@ impl AccountBuilder {
             id,
             region_code,
             external_id,
-            username,
             email,
             email_verified,
             phone_number,
@@ -132,7 +127,6 @@ impl AccountBuilder {
             self.id,
             self.region_code,
             self.external_id,
-            self.username,
             self.email,
             false,
             self.phone,

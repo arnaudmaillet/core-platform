@@ -1,7 +1,6 @@
 pub mod add_push_token;
 pub mod ban_account;
 pub mod change_phone_number;
-pub mod change_username;
 pub mod change_email;
 pub mod change_region;
 pub mod change_birth_date;
