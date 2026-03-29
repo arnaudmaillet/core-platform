@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{Email, ExternalId, Locale};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -30,7 +29,6 @@ mod tests {
         let account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("john_doe").unwrap(),
             Email::try_new("john@example.com").unwrap(),
             ExternalId::from_raw("ext_123")
         )
@@ -67,7 +65,6 @@ mod tests {
         let mut account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("hans").unwrap(),
             Email::try_new("hans@test.de").unwrap(),
             ExternalId::from_raw("ext_456")
         )
@@ -101,7 +98,6 @@ mod tests {
         account_repo.add_account(Account::builder(
             account_id.clone(),
             RegionCode::from_raw("eu"),
-            Username::try_new("traveler").unwrap(),
             Email::try_new("t@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());

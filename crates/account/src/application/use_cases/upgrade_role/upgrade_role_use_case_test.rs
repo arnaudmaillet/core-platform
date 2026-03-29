@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::AccountMetadata;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -26,8 +25,10 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Nouveau compte avec rôle User par défaut
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
+        // 1. Arrange : Nouveau compte (Rôle User par défaut, Version 1)
+        metadata_repo.add_metadata(
+            AccountMetadata::builder(account_id.clone(), region.clone()).build()
+        );
 
         let cmd = UpgradeRoleCommand {
             account_id: account_id.clone(),
@@ -36,15 +37,24 @@ mod tests {
             reason: "Joined the safety team".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On récupère l'entité Metadata mise à jour
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
-        let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        // 3. Assert
+        assert!(result.is_ok(), "L'upgrade de rôle devrait réussir");
+        let updated = result.unwrap();
+
+        assert_eq!(updated.role(), AccountRole::Moderator);
+        assert!(updated.moderation_notes().unwrap().contains("Joined the safety team"));
+        assert_eq!(updated.version(), 2, "La version doit passer à 2");
+
+        // 4. Persistence
+        let saved = metadata_repo.metadata_map.lock().unwrap()
+            .get(&account_id).cloned().unwrap();
         assert_eq!(saved.role(), AccountRole::Moderator);
-        assert!(saved.moderation_notes().unwrap().contains("Joined the safety team"));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement RoleUpgraded attendu");
     }
 
     #[tokio::test]
@@ -53,25 +63,34 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Déjà modérateur
+        // 1. Arrange : Déjà modérateur (Version passe à 2 lors du setup)
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
         metadata.upgrade_role(&region, AccountRole::Moderator, "init".into()).unwrap();
-        metadata.pull_events();
+        metadata.pull_events(); // Clear events du setup
+        let version_after_setup = metadata.version();
+        
         metadata_repo.add_metadata(metadata);
 
         let cmd = UpgradeRoleCommand {
             account_id: account_id.clone(),
             region_code: region,
-            new_role: AccountRole::Moderator,
+            new_role: AccountRole::Moderator, // On redemande Moderator
             reason: "Duplicate promotion".into(),
         };
 
-        // Act : Doit renvoyer Ok(false) car le rôle est déjà identique
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert_eq!(returned.role(), AccountRole::Moderator);
+        assert_eq!(returned.version(), version_after_setup, "La version ne doit pas augmenter");
+
+        // 4. Outbox
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0, "Aucun événement produit si le rôle est identique");
     }
 
     #[tokio::test]

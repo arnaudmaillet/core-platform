@@ -1,0 +1,30 @@
+// proto/account/v1/enums.proto
+
+syntax = "proto3";
+
+package account.v1;
+
+option go_package = "github.com/core-platform/proto/account/v1;accountv1";
+
+enum AccountState {
+  ACCOUNT_STATE_UNSPECIFIED = 0;
+  ACCOUNT_STATE_PENDING = 1;
+  ACCOUNT_STATE_ACTIVE = 2;
+  ACCOUNT_STATE_DEACTIVATED = 3;
+  ACCOUNT_STATE_SUSPENDED = 4;
+  ACCOUNT_STATE_BANNED = 5;
+}
+
+enum AccountRole {
+  ACCOUNT_ROLE_UNSPECIFIED = 0;
+  ACCOUNT_ROLE_USER = 1;
+  ACCOUNT_ROLE_STAFF = 2;
+  ACCOUNT_ROLE_MODERATOR = 3;
+  ACCOUNT_ROLE_ADMIN = 4;
+}
+
+enum ThemeMode {
+  THEME_MODE_SYSTEM = 0;
+  THEME_MODE_LIGHT = 1;
+  THEME_MODE_DARK = 2;
+}

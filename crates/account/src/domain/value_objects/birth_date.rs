@@ -1,6 +1,6 @@
 // crates/account/src/domain/value_objects/birth_date.rs
 
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
@@ -26,6 +26,13 @@ impl BirthDate {
 
     pub fn value(&self) -> NaiveDate {
         self.0
+    }
+
+    pub fn to_utc_datetime(&self) -> DateTime<Utc> {
+        self.0
+            .and_hms_opt(0, 0, 0)
+            .expect("Invalid time for NaiveDate")
+            .and_utc()
     }
 
     /// Calcule l'âge (gère les années bissextiles)

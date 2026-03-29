@@ -4,7 +4,7 @@ mod tests {
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -29,7 +29,6 @@ mod tests {
         let account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("bad_user").unwrap(),
             Email::try_new("user@example.com").unwrap(),
             ExternalId::from_raw("ext_123")
         ).build();
@@ -56,8 +55,7 @@ mod tests {
 
         let account = Account::builder(
             account_id.clone(),
-            RegionCode::from_raw("eu"), // Compte en EU
-            Username::try_new("user").unwrap(),
+            RegionCode::from_raw("eu"),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
@@ -84,7 +82,6 @@ mod tests {
         let mut account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("user").unwrap(),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
@@ -117,7 +114,6 @@ mod tests {
         // Arrange: Compte existant
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("troll").unwrap(),
             Email::try_new("troll@internet.com").unwrap(),
             ExternalId::from_raw("ext_1")
         ).build());
@@ -162,7 +158,6 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("user").unwrap(),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
@@ -188,7 +183,6 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("user").unwrap(),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());

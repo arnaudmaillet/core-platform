@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
+    use crate::domain::builders::AccountBuilder;
     use crate::domain::entities::Account;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId};
+    use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
+    use chrono::Utc;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -26,17 +27,18 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : On crée un compte banni
+        // 1. Arrange : On crée un compte et on le bannit (Version passe à 2)
         let mut account = Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("rehabilitated_user").unwrap(),
+            account_id.clone(), 
+            region.clone(),
             Email::try_new("clean@test.com").unwrap(),
             ExternalId::from_raw("ext_000")
         ).build();
 
-        // On utilise la nouvelle signature avec région
         account.ban(&region, "Past violation".into()).unwrap();
-        account.pull_events();
+        account.pull_events(); // On nettoie les events du setup
+        let version_banned = account.version();
+        
         account_repo.add_account(account);
 
         let cmd = UnbanAccountCommand {
@@ -44,14 +46,22 @@ mod tests {
             region_code: region,
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On s'attend à recevoir l'Account réactivé
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
+        // 3. Assert
+        assert!(result.is_ok(), "Le débannissement devrait réussir");
+        let updated = result.unwrap();
+
+        assert_eq!(*updated.state(), AccountState::Active);
+        assert_eq!(updated.version(), version_banned + 1, "La version doit être incrémentée");
+
+        // 4. Persistence réelle
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(*saved.state(), AccountState::Active);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement AccountUnbanned attendu");
     }
 
     #[tokio::test]
@@ -60,22 +70,32 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Compte déjà actif (donc pas banni)
-        account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("active_user").unwrap(),
-            Email::try_new("active@test.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
+        // --- ARRANGE ---
+        // Important : On restaure en état ACTIVE (pas Pending)
+        let account = AccountBuilder::restore(
+            account_id.clone(), region.clone(), ExternalId::from_raw("ext"),
+            Email::try_new("active@test.com").unwrap(), true, None, false,
+            AccountState::Active, // État cible déjà atteint
+            None, Locale::default(),
+            1, chrono::Utc::now(), chrono::Utc::now(), None
+        );
+        account_repo.add_account(account);
 
         let cmd = UnbanAccountCommand { account_id: account_id.clone(), region_code: region };
 
-        // Act : Doit renvoyer Ok(false)
-        let result = use_case.execute(cmd).await;
+        // --- ACT ---
+        let result = use_case.execute(cmd).await.unwrap();
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Pas d'event si le compte n'était pas banni");
+        // --- ASSERT ---
+        assert_eq!(*result.state(), AccountState::Active);
+        assert_eq!(result.version(), 1);
+
+        // Vérification DB
+        let in_db = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        assert_eq!(in_db.version(), 1);
+
+        // Vérification Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
     #[tokio::test]
@@ -86,7 +106,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), actual_region,
-            Username::try_new("user_eu").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 

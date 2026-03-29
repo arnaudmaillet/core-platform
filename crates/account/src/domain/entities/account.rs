@@ -9,7 +9,7 @@ use chrono::{DateTime, Duration, Utc};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::{DomainError, Result};
 
 /// Agrégat Racine User
@@ -21,7 +21,6 @@ pub struct Account {
     id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
-    username: Username,
     email: Email,
     email_verified: bool,
     phone_number: Option<PhoneNumber>,
@@ -39,11 +38,10 @@ impl Account {
     pub fn builder(
         id: AccountId,
         region_code: RegionCode,
-        username: Username,
         email: Email,
         external_id: ExternalId,
     ) -> AccountBuilder {
-        AccountBuilder::new(id, region_code, username, email, external_id)
+        AccountBuilder::new(id, region_code, email, external_id)
     }
 
     /// Utilisé par le Builder ou le Repository pour restaurer l'état
@@ -52,7 +50,6 @@ impl Account {
         id: AccountId,
         region_code: RegionCode,
         external_id: ExternalId,
-        username: Username,
         email: Email,
         email_verified: bool,
         phone_number: Option<PhoneNumber>,
@@ -69,7 +66,6 @@ impl Account {
             id,
             region_code,
             external_id,
-            username,
             email,
             email_verified,
             phone_number,
@@ -89,7 +85,6 @@ impl Account {
     pub fn id(&self) -> &AccountId { &self.id }
     pub fn region_code(&self) -> &RegionCode { &self.region_code }
     pub fn external_id(&self) -> &ExternalId { &self.external_id }
-    pub fn username(&self) -> &Username { &self.username }
     pub fn email(&self) -> &Email { &self.email }
     pub fn is_email_verified(&self) -> bool { self.email_verified }
     pub fn phone_number(&self) -> Option<&PhoneNumber> { self.phone_number.as_ref() }
@@ -229,32 +224,6 @@ impl Account {
     // ==========================================
     // GESTION DU PROFIL & CONFORMITÉ
     // ==========================================
-
-    pub fn change_username(&mut self, region: &RegionCode, new_username: Username) -> Result<bool> {
-        self.ensure_region_match(region)?;
-        if self.username == new_username {
-            return Ok(false);
-        }
-
-        if self.is_blocked() {
-            return Err(DomainError::Forbidden {
-                reason: "Cannot change username of a restricted account".into(),
-            });
-        }
-
-        let old_username = std::mem::replace(&mut self.username, new_username);
-        self.apply_change();
-
-        self.add_event(Box::new(AccountEvent::UsernameChanged {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
-            old_username,
-            new_username: self.username.clone(),
-            occurred_at: self.updated_at,
-        }));
-
-        Ok(true)
-    }
 
     pub fn change_birth_date(&mut self, region: &RegionCode, new_date: BirthDate) -> Result<bool> {
         self.ensure_region_match(region)?;
@@ -502,7 +471,6 @@ impl EntityMetadata for Account {
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
             "account_email_key" => "email",
-            "account_username_key" => "username",
             "account_phone_number_key" => "phone_number",
             "account_external_id_key" => "external_id",
             _ => "unique_constraint",

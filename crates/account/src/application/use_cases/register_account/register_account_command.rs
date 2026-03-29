@@ -6,7 +6,6 @@ use shared_kernel::domain::value_objects::{RegionCode, Username};
 #[derive(Debug, Clone)]
 pub struct RegisterAccountCommand {
     pub external_id: ExternalId,
-    pub username: Username,
     pub email: Email,
     pub region: RegionCode,
     pub locale: Locale,

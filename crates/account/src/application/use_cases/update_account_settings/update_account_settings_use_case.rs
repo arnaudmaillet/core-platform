@@ -1,6 +1,7 @@
 // crates/account/src/application/update_settings/mod.rs
 
 use crate::application::use_cases::update_account_settings::UpdateAccountSettingsCommand;
+use crate::domain::entities::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;
@@ -12,38 +13,39 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 pub struct UpdateAccountSettingsUseCase {
-    settings_repo: Arc<dyn AccountSettingsRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
+    repo: Arc<dyn AccountSettingsRepository>,
+    outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl UpdateAccountSettingsUseCase {
     pub fn new(
-        settings_repo: Arc<dyn AccountSettingsRepository>,
-        outbox_repo: Arc<dyn OutboxRepository>,
+        repo: Arc<dyn AccountSettingsRepository>,
+        outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            settings_repo,
-            outbox_repo,
+            repo,
+            outbox,
             tx_manager,
         }
     }
 
-    pub async fn execute(&self, command: UpdateAccountSettingsCommand) -> Result<bool> {
+    pub async fn execute(&self, command: UpdateAccountSettingsCommand) -> Result<AccountSettings> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpdateAccountSettingsCommand) -> Result<bool> {
-        // 1. LECTURE OPTIMISTE (Hors transaction)
-        let mut settings = self
-            .settings_repo
-            .find_by_account_id(&cmd.account_id, None)
+    async fn try_execute_once(&self, cmd: &UpdateAccountSettingsCommand) -> Result<AccountSettings> {
+        let original_settings = self
+            .repo
+            .fetch_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
+
+        let mut settings = original_settings.clone();
         
         // 2. MUTATION DU MODÈLE RICHE
         if !settings.update_preferences(
@@ -52,25 +54,28 @@ impl UpdateAccountSettingsUseCase {
             cmd.notifications.clone(),
             cmd.appearance.clone(),
         )? {
-            return Ok(false);
+            return Ok(original_settings);
         }
-
-
-        // 3. EXTRACTION DES ÉVÉNEMENTS
+        
         let events = settings.pull_events();
-        let settings_to_save = settings.clone();
 
-        // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
+        let updated_settings = settings.clone();
+        let repo = Arc::clone(&self.repo);
+        let outbox = Arc::clone(&self.outbox);
+
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = self.settings_repo.clone();
-                let outbox = self.outbox_repo.clone();
-                let s = settings_to_save.clone();
-                let events_to_process = events;
+                let repo = Arc::clone(&repo);
+                let outbox = Arc::clone(&outbox);
+                
+                let original_for_tx = original_settings.clone();
+                let updated_for_tx = settings.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&s, Some(&mut *tx)).await?;
-                    for event in events_to_process {
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
@@ -79,6 +84,6 @@ impl UpdateAccountSettingsUseCase {
             })
             .await?;
 
-        Ok(true)
+        Ok(updated_settings)
     }
 }

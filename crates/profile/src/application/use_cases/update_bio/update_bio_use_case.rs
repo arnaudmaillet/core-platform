@@ -63,7 +63,7 @@ impl UpdateBioUseCase {
         }
 
         let updated_profile = profile_to_update.clone();
-        let repo = Arc::clone(&self.repo);
+        let repo: Arc<dyn ProfileRepository> = Arc::clone(&self.repo);
         let outbox = Arc::clone(&self.outbox_repo);
 
         // 4. Persistence Transactionnelle

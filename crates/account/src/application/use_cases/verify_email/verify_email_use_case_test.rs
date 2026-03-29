@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -26,15 +25,13 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Compte Pending
-        let account = Account::builder(
+        // 1. Arrange : Compte initial (Non vérifié, Version 1)
+        account_repo.add_account(Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("new_user").unwrap(),
             Email::try_new("verify@test.com").unwrap(),
             ExternalId::from_raw("ext_999")
-        ).build();
-        account_repo.add_account(account);
+        ).build());
 
         let cmd = VerifyEmailCommand {
             account_id: account_id.clone(),
@@ -42,15 +39,23 @@ mod tests {
             token: "valid_secure_token_123".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On s'attend à recevoir l'Account mis à jour
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(true)));
 
-        // Assert
+        // 3. Assert
+        assert!(result.is_ok(), "La vérification d'email devrait réussir");
+        let updated = result.unwrap();
+
+        assert!(updated.is_email_verified());
+        assert_eq!(*updated.state(), AccountState::Active, "Le compte doit devenir actif après vérification");
+        assert_eq!(updated.version(), 2, "La version doit passer à 2");
+
+        // 4. Persistence réelle
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert!(saved.is_email_verified());
-        assert_eq!(*saved.state(), AccountState::Active);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement EmailVerified attendu");
     }
 
     #[tokio::test]
@@ -59,18 +64,18 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Compte déjà vérifié
+        // 1. Arrange : On prépare un compte déjà vérifié (Version 2)
         let mut account = Account::builder(
             account_id.clone(),
             region.clone(),
-            Username::try_new("already_verified").unwrap(),
             Email::try_new("ok@test.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
 
-        // On simule une vérification passée avec le nouveau contrat
         account.verify_email(&region).unwrap();
-        account.pull_events();
+        account.pull_events(); // Clear setup events
+        let version_verified = account.version();
+        
         account_repo.add_account(account);
 
         let cmd = VerifyEmailCommand {
@@ -79,12 +84,18 @@ mod tests {
             token: "any_token".into(),
         };
 
-        // Act : Doit renvoyer Ok(false) car déjà vérifié
+        // 2. Act
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Ok(false)));
 
-        // Assert : Pas de double event
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert!(returned.is_email_verified());
+        assert_eq!(returned.version(), version_verified, "La version ne doit pas augmenter");
+
+        // 4. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Idempotence : pas de double événement");
     }
 
     #[tokio::test]
@@ -96,7 +107,6 @@ mod tests {
         account_repo.add_account(Account::builder(
             account_id.clone(),
             actual_region,
-            Username::try_new("user").unwrap(),
             Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());

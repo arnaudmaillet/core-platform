@@ -2,7 +2,7 @@
 mod tests {
     use super::*;
     use crate::domain::value_objects::*;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use chrono::{Duration, Utc};
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
     use shared_kernel::errors::DomainError;
@@ -12,11 +12,10 @@ mod tests {
     fn create_test_account() -> Account {
         let id = AccountId::new();
         let region = RegionCode::try_new("eu").expect("Failed to create region_code");
-        let username = Username::try_new("john_doe").unwrap();
         let email = Email::try_new("john@example.com").unwrap();
         let external_id = ExternalId::try_new("auth0|123").unwrap();
 
-        Account::builder(id, region, username, email, external_id)
+        Account::builder(id, region, email, external_id)
             .with_last_active_at(Utc::now() - Duration::hours(1))
             .build()
     }
@@ -131,26 +130,5 @@ mod tests {
         // Le second log est immédiat, donc throttle -> false
         let second_log = account.record_activity(&region).unwrap();
         assert!(!second_log, "Should be throttled and return false on immediate subsequent call");
-    }
-
-    #[test]
-    fn test_username_change_with_idempotency() {
-        let mut account = create_test_account();
-        let region = account.region_code().clone();
-        let new_name = Username::try_new("new_john").unwrap();
-
-        // 1. Changement réel : true
-        let changed = account.change_username(&region, new_name.clone()).unwrap();
-        assert!(changed);
-        assert_eq!(account.username().as_str(), "new_john");
-
-        // 2. Même nom : false
-        let changed = account.change_username(&region, new_name).unwrap();
-        assert!(!changed);
-
-        // 3. Bloqué si banni
-        account.ban(&region, "Bye".into()).unwrap();
-        let res = account.change_username(&region, Username::try_new("hacker").unwrap());
-        assert!(res.is_err());
     }
 }

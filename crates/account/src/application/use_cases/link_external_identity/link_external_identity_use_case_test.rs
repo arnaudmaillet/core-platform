@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::use_cases::link_external_identity::{LinkExternalIdentityCommand, LinkExternalIdentityUseCase};
@@ -28,14 +27,13 @@ mod tests {
         // ✅ Initialisation avec un ID vide pour autoriser le premier linkage
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("alex").unwrap(),
             Email::try_new("alex@test.com").unwrap(),
             ExternalId::from_raw("")
         ).build());
 
         let new_ext = ExternalId::from_raw("google_123");
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: account_id.clone(),
+            account_id: account_id.clone(),
             region_code: region,
             external_id: new_ext.clone(),
         };
@@ -58,7 +56,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             alice_id.clone(), region.clone(),
-            Username::try_new("alice").unwrap(), Email::try_new("alice@test.com").unwrap(),
+            Email::try_new("alice@test.com").unwrap(),
             shared_ext.clone()
         ).build());
 
@@ -66,12 +64,12 @@ mod tests {
         let bob_id = AccountId::new();
         account_repo.add_account(Account::builder(
             bob_id.clone(), region.clone(),
-            Username::try_new("bob").unwrap(), Email::try_new("bob@test.com").unwrap(),
+            Email::try_new("bob@test.com").unwrap(),
             ExternalId::from_raw("bob_ext")
         ).build());
 
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: bob_id,
+            account_id: bob_id,
             region_code: region,
             external_id: shared_ext,
         };
@@ -93,12 +91,12 @@ mod tests {
         // Arrange: Le compte a déjà cet ID externe
         account_repo.add_account(Account::builder(
             account_id.clone(), region.clone(),
-            Username::try_new("gamer").unwrap(), Email::try_new("g@m.com").unwrap(),
+            Email::try_new("g@m.com").unwrap(),
             ext_id.clone()
         ).build());
 
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: account_id,
+            account_id: account_id,
             region_code: region,
             external_id: ext_id,
         };
@@ -118,12 +116,12 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), RegionCode::from_raw("eu"),
-            Username::try_new("user").unwrap(), Email::try_new("u@t.com").unwrap(),
+            Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: account_id,
+            account_id: account_id,
             region_code: RegionCode::from_raw("us"), // Region mismatch
             external_id: ExternalId::from_raw("new_ext"),
         };

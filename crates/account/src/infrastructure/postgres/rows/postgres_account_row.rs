@@ -6,7 +6,7 @@ use crate::domain::value_objects::{
 use chrono::{DateTime, NaiveDate, Utc};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use uuid::Uuid;
 
 use crate::domain::builders::AccountBuilder;
@@ -19,7 +19,6 @@ pub struct PostgresAccountRow {
     pub id: Uuid,
     pub region_code: String,
     pub external_id: String,
-    pub username: String,
     pub email: String,
     pub email_verified: bool,
     pub phone_number: Option<String>,
@@ -42,7 +41,6 @@ impl TryFrom<&Account> for PostgresAccountRow {
             id: a.id().as_uuid(),
             region_code: a.region_code().to_string(),
             external_id: a.external_id().to_string(),
-            username: a.username().to_string(),
             email: a.email().to_string(),
             email_verified: a.is_email_verified(),
             phone_number: a.phone_number().as_ref().map(|p| p.to_string()),
@@ -68,7 +66,6 @@ impl TryFrom<PostgresAccountRow> for Account {
             AccountId::from_uuid(row.id),
             RegionCode::from_raw(row.region_code),
             ExternalId::from_raw(row.external_id),
-            Username::from_raw(row.username),
             Email::from_raw(row.email),
             row.email_verified,
             row.phone_number.map(PhoneNumber::from_raw),

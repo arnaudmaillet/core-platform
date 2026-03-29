@@ -41,6 +41,9 @@ pub enum DomainError {
     /// Erreur générique du domaine Identity (ex: erreur interne d'agrégat)
     #[error("Internal domain error: {0}")]
     Internal(String),
+
+    #[error("Precondition failed: {reason}")]
+    PreconditionFailed { reason: String },
 }
 
 impl DomainError {

@@ -1,0 +1,10 @@
+// common/rust/shared-proto/src/lib.rs
+
+pub mod account {
+    pub mod v1 {
+        tonic::include_proto!("account.v1");
+    }
+}
+
+pub const SERVICE_DESCRIPTOR_SET: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/service_descriptor.bin"));

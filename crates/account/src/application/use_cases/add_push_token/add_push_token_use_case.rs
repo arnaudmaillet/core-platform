@@ -1,6 +1,7 @@
 // crates/account/src/application/add_push_token/add_push_token_use_case.rs
 
 use crate::application::use_cases::add_push_token::AddPushTokenCommand;
+use crate::domain::entities::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;
@@ -12,25 +13,25 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 pub struct AddPushTokenUseCase {
-    settings_repo: Arc<dyn AccountSettingsRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
+    repo: Arc<dyn AccountSettingsRepository>,
+    outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl AddPushTokenUseCase {
     pub fn new(
-        settings_repo: Arc<dyn AccountSettingsRepository>,
-        outbox_repo: Arc<dyn OutboxRepository>,
+        repo: Arc<dyn AccountSettingsRepository>,
+        outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            settings_repo,
-            outbox_repo,
+            repo,
+            outbox,
             tx_manager,
         }
     }
 
-    pub async fn execute(&self, command: AddPushTokenCommand) -> Result<bool> {
+    pub async fn execute(&self, command: AddPushTokenCommand) -> Result<AccountSettings> {
         // En Hyperscale, les conflits de tokens sont rares mais possibles si
         // l'utilisateur se connecte sur deux devices en même temps.
         with_retry(RetryConfig::default(), || async {
@@ -39,42 +40,46 @@ impl AddPushTokenUseCase {
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &AddPushTokenCommand) -> Result<bool> {
-        // 1. Récupération (Lecture hors transaction pour ne pas bloquer de lignes inutilement)
-        let mut settings = self
-            .settings_repo
-            .find_by_account_id(&cmd.account_id, None)
+    async fn try_execute_once(&self, cmd: &AddPushTokenCommand) -> Result<AccountSettings> {
+        let original_settings = self
+            .repo
+            .fetch_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        // 2. Application de la logique métier
+        let mut settings = original_settings.clone();
+
         if !settings.add_push_token(&cmd.region_code, cmd.token.clone())? {
-            return Ok(false);
+            return Ok(original_settings);
         };
 
-        // 4. Extraction des faits
         let events = settings.pull_events();
-        let settings_to_save = settings.clone();
 
-        // 5. Persistance Transactionnelle Atomique
+        let updated_settings = settings.clone();
+        let repo = Arc::clone(&self.repo);
+        let outbox = Arc::clone(&self.outbox);
+
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = self.settings_repo.clone();
-                let outbox = self.outbox_repo.clone();
-                let s = settings_to_save.clone();
-                let events_to_process = events;
+                let repo = Arc::clone(&repo);
+                let outbox = Arc::clone(&outbox);
+                
+                let original_for_tx = original_settings.clone();
+                let updated_for_tx = settings.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&s, Some(&mut *tx)).await?;
-                    for event in events_to_process {
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
-
+                    tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(true)
+        Ok(updated_settings)
     }
 }

@@ -1,7 +1,10 @@
+// crates/account/src/domain/repositories/stubs/account_settings_repository_stub.rs
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use shared_kernel::domain::Identifier;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::domain::value_objects::{PushToken, Timezone};
@@ -12,9 +15,7 @@ use crate::domain::repositories::AccountSettingsRepository;
 
 #[derive(Default)]
 pub struct AccountSettingsRepositoryStub {
-    /// Stockage en mémoire : AccountId -> AccountSettings
     pub settings_map: Arc<Mutex<HashMap<AccountId, AccountSettings>>>,
-    /// Simulation d'erreur forcée
     pub error_to_return: Arc<Mutex<Option<DomainError>>>,
 }
 
@@ -23,7 +24,6 @@ impl AccountSettingsRepositoryStub {
         Self::default()
     }
 
-    /// Helper pour injecter des réglages avant un test
     pub fn add_settings(&self, settings: AccountSettings) {
         self.settings_map.lock().unwrap().insert(settings.account_id().clone(), settings);
     }
@@ -45,7 +45,7 @@ impl AccountSettingsRepositoryStub {
 
 #[async_trait]
 impl AccountSettingsRepository for AccountSettingsRepositoryStub {
-    async fn find_by_account_id(
+    async fn fetch_by_account_id(
         &self,
         account_id: &AccountId,
         _tx: Option<&mut dyn Transaction>,
@@ -57,10 +57,25 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
     async fn save(
         &self,
         settings: &AccountSettings,
+        original: Option<&AccountSettings>,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
-        self.settings_map.lock().unwrap().insert(settings.account_id().clone(), settings.clone());
+        let mut map = self.settings_map.lock().unwrap();
+        let account_id = settings.account_id();
+
+        // SIMULATION DU VERROUILLAGE OPTIMISTE
+        if let Some(orig) = original {
+            let current = map.get(account_id).ok_or_else(|| self.not_found(account_id.as_string()))?;
+            
+            if current.version() != orig.version() {
+                return Err(DomainError::ConcurrencyConflict {
+                    reason: format!("AccountSettings {}: version mismatch", account_id.as_string())
+                });
+            }
+        }
+
+        map.insert(account_id.clone(), settings.clone());
         Ok(())
     }
 

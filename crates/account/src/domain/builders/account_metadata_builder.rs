@@ -22,7 +22,7 @@ impl AccountMetadataBuilder {
             account_id,
             region_code,
             role: AccountRole::User,
-            trust_score: 50,
+            trust_score: 100,
             estimated_ip: None,
             version: 1,
         }
@@ -92,7 +92,7 @@ impl AccountMetadataBuilder {
             false, // is_beta_tester
             false, // is_shadowbanned
             self.trust_score,
-            None,  // last_moderation_at
+            None, // last_moderation_at
             Some(format!(
                 "[{}] Account metadata initialized.",
                 now.format("%Y-%m-%d %H:%M:%S")

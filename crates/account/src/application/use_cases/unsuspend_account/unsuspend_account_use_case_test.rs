@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
+    use crate::domain::builders::AccountBuilder;
     use crate::domain::entities::Account;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId};
+    use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -26,17 +26,18 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : On crée un compte et on le suspend
+        // 1. Arrange : On crée un compte et on le suspend (Version passe à 2)
         let mut account = Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("temp_user").unwrap(),
+            account_id.clone(), 
+            region.clone(),
             Email::try_new("temp@test.com").unwrap(),
             ExternalId::from_raw("ext_unsuspend")
         ).build();
 
-        // Nouvelle signature avec région
         account.suspend(&region, "Suspicious activity".into()).unwrap();
-        account.pull_events();
+        account.pull_events(); // On vide les events du setup
+        let version_suspended = account.version();
+        
         account_repo.add_account(account);
 
         let cmd = UnsuspendAccountCommand {
@@ -44,14 +45,22 @@ mod tests {
             region_code: region,
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On s'attend à recevoir l'Account réactivé
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
+        // 3. Assert
+        assert!(result.is_ok(), "La levée de suspension devrait réussir");
+        let updated = result.unwrap();
+
+        assert_eq!(*updated.state(), AccountState::Active);
+        assert_eq!(updated.version(), version_suspended + 1, "La version doit être incrémentée");
+
+        // 4. Persistence réelle
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(*saved.state(), AccountState::Active);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        
+        // 5. Outbox
+        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement AccountUnsuspended attendu");
     }
 
     #[tokio::test]
@@ -60,21 +69,20 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Le compte est déjà actif
-        account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("active_user").unwrap(),
-            Email::try_new("active@test.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
+        let account = AccountBuilder::restore(
+            account_id.clone(), region.clone(), ExternalId::from_raw("ext"),
+            Email::try_new("active@test.com").unwrap(), true, None, false,
+            AccountState::Active,
+            None, Locale::default(),
+            1, chrono::Utc::now(), chrono::Utc::now(), None
+        );
+        account_repo.add_account(account);
 
         let cmd = UnsuspendAccountCommand { account_id: account_id.clone(), region_code: region };
 
-        // Act : Doit renvoyer Ok(false)
-        let result = use_case.execute(cmd).await;
+        let result = use_case.execute(cmd).await.unwrap();
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
+        assert_eq!(result.version(), 1);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
@@ -86,7 +94,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), actual_region,
-            Username::try_new("user_eu").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 

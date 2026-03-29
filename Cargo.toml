@@ -7,11 +7,13 @@ members = [
     "backend/services/profile/workers/outbox-processor",
     "backend/services/profile/workers/cache-invalidator",
     "backend/services/profile/api/command-server",
+    "common/rust/shared-proto",
     "crates/account",
     "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
-    "backend/gateway/graphql-bff"]
+    "backend/gateway/graphql-bff",
+]
 resolver = "2"
 
 [workspace.package]
@@ -25,11 +27,19 @@ description = "core-platform repo"
 [workspace.dependencies]
 # Internes
 shared-kernel = { path = "crates/shared-kernel" }
+shared-proto = { path = "common/rust/shared-proto" }
 account = { path = "crates/account" }
 profile = { path = "crates/profile" }
 
 # Communs
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
+tokio = { version = "1.40", features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "sync",
+    "net",
+    "signal",
+] }
 tokio-util = { version = "0.7.18" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -52,7 +62,15 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 log = "0.4"
 
 # Infrastructure
-sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "macros", "migrate"] }
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+    "macros",
+    "migrate",
+] }
 fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool"] }
 rdkafka = "0.38.0"
 dashmap = "7.0.0-rc2"
@@ -68,7 +86,11 @@ idna = "1.1.0"
 
 # Proto / gRPC
 tonic-health = "0.14.3"
-tonic = { version = "0.14.2", features = ["codegen", "transport", "tls-webpki-roots"] }
+tonic = { version = "0.14.2", features = [
+    "codegen",
+    "transport",
+    "tls-webpki-roots",
+] }
 tonic-prost = "0.14.2"
 tonic-build = "0.14.2"
 tonic-reflection = "0.14.3"
@@ -78,7 +100,13 @@ prost-types = "0.14.3"
 
 # Graphql
 tower-http = { version = "=0.5.2", features = ["cors", "trace"] }
-async-graphql = { version = "8.0.0-rc.1", features = ["dataloader", "dynamic-schema", "tracing", "uuid", "chrono"] }
+async-graphql = { version = "8.0.0-rc.1", features = [
+    "dataloader",
+    "dynamic-schema",
+    "tracing",
+    "uuid",
+    "chrono",
+] }
 async-graphql-axum = "8.0.0-rc.1"
 axum = "0.8.8"
 

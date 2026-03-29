@@ -27,13 +27,6 @@ pub enum AccountEvent {
         new_external_id: ExternalId,
         occurred_at: DateTime<Utc>,
     },
-    UsernameChanged {
-        account_id: AccountId,
-        region: RegionCode,
-        old_username: Username,
-        new_username: Username,
-        occurred_at: DateTime<Utc>,
-    },
     EmailChanged {
         account_id: AccountId,
         region: RegionCode,
@@ -186,7 +179,6 @@ impl DomainEvent for AccountEvent {
         let s = match self {
             Self::AccountCreated { .. } => "account.created",
             Self::ExternalIdentityLinked { .. } => "account.external_linked",
-            Self::UsernameChanged { .. } => "account.username_changed",
             Self::EmailChanged { .. } => "account.email_changed",
             Self::PhoneNumberChanged { .. } => "account.phone_number_changed",
             Self::EmailVerified { .. } => "account.email_verified",
@@ -216,7 +208,6 @@ impl DomainEvent for AccountEvent {
         match self {
             Self::AccountCreated { region, .. }
             | Self::ExternalIdentityLinked { region, .. }
-            | Self::UsernameChanged { region, .. }
             | Self::EmailChanged { region, .. }
             | Self::PhoneNumberChanged { region, .. }
             | Self::EmailVerified { region, .. }
@@ -250,7 +241,6 @@ impl DomainEvent for AccountEvent {
         match self {
             Self::AccountCreated { account_id, .. }
             | Self::ExternalIdentityLinked { account_id, .. }
-            | Self::UsernameChanged { account_id, .. }
             | Self::EmailChanged { account_id, .. }
             | Self::PhoneNumberChanged { account_id, .. }
             | Self::EmailVerified { account_id, .. }
@@ -279,7 +269,6 @@ impl DomainEvent for AccountEvent {
         match self {
             Self::AccountCreated { occurred_at, .. }
             | Self::ExternalIdentityLinked { occurred_at, .. }
-            | Self::UsernameChanged { occurred_at, .. }
             | Self::EmailChanged { occurred_at, .. }
             | Self::PhoneNumberChanged { occurred_at, .. }
             | Self::EmailVerified { occurred_at, .. }

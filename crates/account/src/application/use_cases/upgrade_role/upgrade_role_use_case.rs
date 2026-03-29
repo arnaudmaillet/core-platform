@@ -10,63 +10,67 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::upgrade_role::UpgradeRoleCommand;
+use crate::domain::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
 pub struct UpgradeRoleUseCase {
-    metadata_repo: Arc<dyn AccountMetadataRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
+    repo: Arc<dyn AccountMetadataRepository>,
+    outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl UpgradeRoleUseCase {
     pub fn new(
-        metadata_repo: Arc<dyn AccountMetadataRepository>,
-        outbox_repo: Arc<dyn OutboxRepository>,
+        repo: Arc<dyn AccountMetadataRepository>,
+        outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            metadata_repo,
-            outbox_repo,
+            repo,
+            outbox,
             tx_manager,
         }
     }
 
-    pub async fn execute(&self, command: UpgradeRoleCommand) -> Result<bool> {
+    pub async fn execute(&self, command: UpgradeRoleCommand) -> Result<AccountMetadata> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpgradeRoleCommand) -> Result<bool> {
-        // 1. LECTURE OPTIMISTE (Hors transaction)
-        let mut metadata = self
-            .metadata_repo
-            .find_by_account_id(&cmd.account_id)
+    async fn try_execute_once(&self, cmd: &UpgradeRoleCommand) -> Result<AccountMetadata> {
+        let original_metadata = self
+            .repo
+            .fetch_by_account_id(&cmd.account_id)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        // 2. MUTATION DU MODÈLE RICHE
+        let mut metadata = original_metadata.clone();
+
         if !metadata.upgrade_role(&cmd.region_code, cmd.new_role.into(), cmd.reason.clone())? {
-            return Ok(false);
+            return Ok(original_metadata);
         }
 
-
-        // 3. EXTRACTION DES ÉVÉNEMENTS
         let events = metadata.pull_events();
-        let metadata_cloned = metadata.clone();
 
-        // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
+        let updated_metadata = metadata.clone();
+        let repo = Arc::clone(&self.repo);
+        let outbox = Arc::clone(&self.outbox);
+
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = self.metadata_repo.clone();
-                let outbox = self.outbox_repo.clone();
-                let m = metadata_cloned.clone();
-                let events_to_process = events;
+                let repo = Arc::clone(&repo);
+                let outbox = Arc::clone(&outbox);
+                
+                let original_for_tx = original_metadata.clone();
+                let updated_for_tx = metadata.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&m, Some(&mut *tx)).await?;
-                    for event in events_to_process {
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+
+                    for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
@@ -75,6 +79,6 @@ impl UpgradeRoleUseCase {
             })
             .await?;
 
-        Ok(true)
+        Ok(updated_metadata)
     }
 }

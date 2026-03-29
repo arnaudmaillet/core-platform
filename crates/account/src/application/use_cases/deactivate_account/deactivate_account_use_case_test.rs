@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, Username, RegionCode};
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
@@ -26,10 +25,10 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Compte actif (Pending par défaut via builder)
+        // 1. Arrange : Compte initial (Version 1 par défaut)
         account_repo.add_account(Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("user_to_quit").unwrap(),
+            account_id.clone(), 
+            region.clone(),
             Email::try_new("bye@test.com").unwrap(),
             ExternalId::from_raw("ext_123")
         ).build());
@@ -39,14 +38,18 @@ mod tests {
             region_code: region,
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On récupère l'Account
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-        assert_eq!(*saved.state(), AccountState::Deactivated);
-        assert_eq!(saved.version(), 2);
+        // 3. Assert
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+        
+        assert_eq!(*updated.state(), AccountState::Deactivated);
+        assert_eq!(updated.version(), 2);
+
+        let saved_in_db = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        assert_eq!(saved_in_db.version(), 2);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
 
@@ -57,25 +60,35 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         let mut account = Account::builder(
-            account_id.clone(), region.clone(),
-            Username::try_new("already_gone").unwrap(),
+            account_id.clone(), 
+            region.clone(),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build();
 
-        // On le désactive une première fois
-        account.deactivate(&region).unwrap();
+        // On le désactive MANUELLEMENT : la version passe à 2 (si ton entité gère l'auto-incrément)
+        account.deactivate(&region).unwrap(); 
         account_repo.add_account(account);
 
-        let cmd = DeactivateAccountCommand { account_id: account_id.clone(), region_code: region };
+        let cmd = DeactivateAccountCommand { 
+            account_id: account_id.clone(), 
+            region_code: region 
+        };
 
-        // Act : Doit renvoyer Ok(false)
+        // 1. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
+        // 2. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        // On vérifie que la version est restée la même que celle insérée (2)
+        assert_eq!(returned.version(), 2);
+        
         let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
-        assert_eq!(saved.version(), 2, "La version ne doit pas changer si déjà désactivé");
+        assert_eq!(saved.version(), 2);
+        
+        // Aucun événement supplémentaire
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
@@ -87,7 +100,7 @@ mod tests {
 
         account_repo.add_account(Account::builder(
             account_id.clone(), actual_region,
-            Username::try_new("user_eu").unwrap(), Email::try_new("a@b.com").unwrap(),
+            Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
 

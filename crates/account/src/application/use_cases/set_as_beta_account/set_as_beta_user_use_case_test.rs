@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::AccountMetadata;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -25,7 +24,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Nouveau compte (beta_tester = false par défaut)
+        // 1. Arrange : Nouveau compte (beta_tester = false par défaut, version 1)
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
 
         let cmd = SetAsBetaAccountCommand {
@@ -35,14 +34,23 @@ mod tests {
             reason: "Early adopter program".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On s'attend à recevoir l'entité mise à jour
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
-        let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        // 3. Assert
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+
+        assert!(updated.is_beta_tester());
+        assert!(updated.moderation_notes().unwrap().contains("Early adopter program"));
+        assert_eq!(updated.version(), 2);
+
+        // 4. Persistence
+        let saved = metadata_repo.metadata_map.lock().unwrap()
+            .get(&account_id).cloned().unwrap();
         assert!(saved.is_beta_tester());
-        assert!(saved.moderation_notes().unwrap().contains("Beta tester mode enabled"));
+        
+        // 5. Outbox
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
 
@@ -52,25 +60,34 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Déjà beta tester
+        // 1. Arrange : On le passe beta manuellement (Version passe à 2)
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        metadata.set_beta_status(&region, true, "init".into()).unwrap();
-        metadata.pull_events();
+        metadata.set_beta_status(&region, true, "initial activation".into()).unwrap();
+        metadata.pull_events(); // On vide les events de l'initialisation
+        let version_after_setup = metadata.version();
+        
         metadata_repo.add_metadata(metadata);
 
         let cmd = SetAsBetaAccountCommand {
             account_id: account_id.clone(),
             region_code: region,
-            status: true,
+            status: true, // On demande encore true
             reason: "Double call".into(),
         };
 
-        // Act : Doit renvoyer Ok(false) car le statut ne change pas
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert!(returned.is_beta_tester());
+        assert_eq!(returned.version(), version_after_setup);
+
+        // 4. Outbox
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0);
     }
 
     #[tokio::test]

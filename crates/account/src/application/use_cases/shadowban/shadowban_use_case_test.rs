@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::AccountMetadata;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -25,7 +24,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Compte sain
+        // 1. Arrange : Compte sain (Version 1)
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
 
         let cmd = ShadowbanAccountCommand {
@@ -34,14 +33,23 @@ mod tests {
             reason: "Spam behavior detected".into(),
         };
 
-        // Act : Doit renvoyer Ok(true)
+        // 2. Act : On récupère l'entité mise à jour
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(true)));
-        let saved = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        // 3. Assert
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+
+        assert!(updated.is_shadowbanned());
+        assert!(updated.moderation_notes().unwrap().contains("Spam behavior detected"));
+        assert_eq!(updated.version(), 2);
+
+        // 4. Persistence
+        let saved = metadata_repo.metadata_map.lock().unwrap()
+            .get(&account_id).cloned().unwrap();
         assert!(saved.is_shadowbanned());
-        assert!(saved.moderation_notes().unwrap().contains("Shadowbanned: Spam behavior detected"));
+        
+        // 5. Outbox
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
 
@@ -51,10 +59,12 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        // Arrange : Le compte est déjà shadowbanned
+        // 1. Arrange : Déjà banni (Version 2)
         let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
         metadata.shadowban(&region, "First ban".into()).unwrap();
-        metadata.pull_events();
+        metadata.pull_events(); // Clear events
+        let version_after_ban = metadata.version();
+        
         metadata_repo.add_metadata(metadata);
 
         let cmd = ShadowbanAccountCommand {
@@ -63,12 +73,19 @@ mod tests {
             reason: "Second report".into(),
         };
 
-        // Act : Doit renvoyer Ok(false)
+        // 2. Act
         let result = use_case.execute(cmd).await;
 
-        // Assert
-        assert!(matches!(result, Ok(false)));
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Pas d'event si déjà banni");
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert!(returned.is_shadowbanned());
+        assert_eq!(returned.version(), version_after_ban);
+
+        // 4. Outbox
+        let events = outbox_repo.saved_events.lock().unwrap();
+        assert_eq!(events.len(), 0);
     }
 
     #[tokio::test]
