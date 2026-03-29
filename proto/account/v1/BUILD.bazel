@@ -6,6 +6,10 @@ core_rust_proto_library(
         "account.proto",
         "account_metadata.proto",
         "account_settings.proto",
+        "enums.proto",
+        "models.proto",
+        "services.proto",
+        "admin.proto",
     ],
     visibility = ["//visibility:public"],
 )

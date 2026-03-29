@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
     use crate::domain::entities::Account;
     use crate::domain::value_objects::{Email, ExternalId};
@@ -34,7 +33,7 @@ mod tests {
 
         let new_ext = ExternalId::from_raw("google_123");
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: account_id.clone(),
+            account_id: account_id.clone(),
             region_code: region,
             external_id: new_ext.clone(),
         };
@@ -70,7 +69,7 @@ mod tests {
         ).build());
 
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: bob_id,
+            account_id: bob_id,
             region_code: region,
             external_id: shared_ext,
         };
@@ -97,7 +96,7 @@ mod tests {
         ).build());
 
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: account_id,
+            account_id: account_id,
             region_code: region,
             external_id: ext_id,
         };
@@ -122,7 +121,7 @@ mod tests {
         ).build());
 
         let cmd = LinkExternalIdentityCommand {
-            internal_account_id: account_id,
+            account_id: account_id,
             region_code: RegionCode::from_raw("us"), // Region mismatch
             external_id: ExternalId::from_raw("new_ext"),
         };

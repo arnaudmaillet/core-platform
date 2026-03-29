@@ -1,0 +1,73 @@
+// proto/account/v1/admin.proto
+
+syntax = "proto3";
+
+package account.v1;
+
+import "account/v1/models.proto";
+import "account/v1/enums.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1;accountv1";
+
+// --- MODERATION ---
+service AccountModerationService {
+  rpc SuspendAccount(SuspendAccountRequest) returns (Account);
+  rpc UnsuspendAccount(UnsuspendAccountRequest) returns (Account);
+  rpc Shadowban(ShadowbanRequest) returns (Account);
+  rpc LiftShadowban(LiftShadowbanRequest) returns (Account);
+  rpc BanAccount(BanAccountRequest) returns (Account);
+  rpc UnbanAccount(UnbanAccountRequest) returns (Account);
+  rpc IncreaseTrustScore(IncreaseTrustScoreRequest) returns (Account);
+  rpc DecreaseTrustScore(DecreaseTrustScoreRequest) returns (Account);
+}
+
+// --- METADATA ---
+service AccountMetadataService {
+  rpc GetAccountMetadata(GetAccountMetadataRequest) returns (AccountMetadata);
+  rpc SetBetaStatus(SetBetaStatusRequest) returns (AccountMetadata);
+  rpc SetShadowbanStatus(SetShadowbanStatusRequest) returns (AccountMetadata);
+  rpc UpdateAccountRole(UpdateAccountRoleRequest) returns (AccountMetadata);
+}
+
+// --- SETTINGS ---
+service AccountSettingsService {
+  rpc GetSettings(GetSettingsRequest) returns (AccountSettings);
+  rpc UpdateTimezone(UpdateTimezoneRequest) returns (AccountSettings);
+  rpc AddPushToken(AddPushTokenRequest) returns (AccountSettings);
+  rpc RemovePushToken(RemovePushTokenRequest) returns (AccountSettings);
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (AccountSettings);
+}
+
+// --- MESSAGES ---
+message SuspendAccountRequest { string id = 1; string reason = 2; }
+message UnsuspendAccountRequest { string id = 1; }
+message ShadowbanRequest { string id = 1; string reason = 2; }
+message LiftShadowbanRequest { string id = 1; }
+message BanAccountRequest { string id = 1; string reason = 2; }
+message UnbanAccountRequest { string id = 1; }
+message GetAccountMetadataRequest { string account_id = 1; }
+message SetBetaStatusRequest { string account_id = 1; bool is_beta_tester = 2; string reason = 3; }
+message SetShadowbanStatusRequest { string account_id = 1; bool is_shadowbanned = 2; string reason = 3; }
+message UpdateAccountRoleRequest { string account_id = 1; AccountRole new_role = 2; string reason = 3; }
+message GetSettingsRequest { string account_id = 1; }
+message UpdateTimezoneRequest { string account_id = 1; string timezone = 2; }
+message AddPushTokenRequest { string account_id = 1; string token = 2; }
+message RemovePushTokenRequest { string account_id = 1; string token = 2; }
+message UpdatePreferencesRequest { 
+  string account_id = 1; 
+  AccountSettings.Privacy privacy = 2;
+  AccountSettings.Notifications notifications = 3;
+  AccountSettings.Appearance appearance = 4;
+}
+message IncreaseTrustScoreRequest {
+  string account_id = 1;
+  string action_id = 2;
+  uint32 amount = 3;
+  string reason = 4;
+}
+message DecreaseTrustScoreRequest {
+  string account_id = 1;
+  string action_id = 2;
+  uint32 amount = 3;
+  string reason = 4;
+}

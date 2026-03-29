@@ -50,7 +50,7 @@ impl LinkExternalIdentityUseCase {
             .await?
         {
             // Si l'ID appartient à un AUTRE compte : Erreur
-            if existing_account_id != cmd.internal_account_id {
+            if existing_account_id != cmd.account_id {
                 return Err(DomainError::AlreadyExists {
                     entity: "Account",
                     field: "external_id",
@@ -60,17 +60,17 @@ impl LinkExternalIdentityUseCase {
             
             // Idempotence : si c'est déjà lié à CE compte, on renvoie simplement l'état actuel
             return self.repo
-                .fetch_by_id(&cmd.internal_account_id, None)
+                .fetch_by_id(&cmd.account_id, None)
                 .await?
-                .ok_or_not_found(&cmd.internal_account_id);
+                .ok_or_not_found(&cmd.account_id);
         }
 
         // On récupère le compte original pour la mutation et le verrouillage optimiste
         let original_account = self
             .repo
-            .fetch_by_id(&cmd.internal_account_id, None)
+            .fetch_by_id(&cmd.account_id, None)
             .await?
-            .ok_or_not_found(&cmd.internal_account_id)?;
+            .ok_or_not_found(&cmd.account_id)?;
 
         let mut account = original_account.clone();
 

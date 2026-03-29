@@ -1,0 +1,73 @@
+// proto/account/v1/models.proto
+
+syntax = "proto3";
+
+package account.v1;
+
+import "account/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1;accountv1";
+
+message Account {
+  string id = 1;
+  string region_code = 2;
+  string external_id = 3;
+  string email = 4;
+  bool email_verified = 5;
+  google.protobuf.StringValue phone_number = 6;
+  bool phone_verified = 7;
+  AccountState state = 8;
+  google.protobuf.Timestamp birth_date = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  google.protobuf.Timestamp last_active_at = 12;
+  int64 version = 13;
+}
+
+message AccountMetadata {
+  string account_id = 1;
+  string region_code = 2;
+  AccountRole role = 3;
+  bool is_beta_tester = 4;
+  bool is_shadowbanned = 5;
+  int32 trust_score = 6;
+  google.protobuf.Timestamp last_moderation_at = 7;
+  google.protobuf.StringValue moderation_notes = 8;
+  google.protobuf.StringValue estimated_ip = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  int64 version = 11;
+}
+
+message AccountSettings {
+  string account_id = 1;
+  string region_code = 2;
+  string locale = 3;
+  string timezone = 4;
+  repeated string push_tokens = 5;
+  
+  message Privacy {
+    bool profile_visible_to_public = 1;
+    bool show_last_active = 2;
+    bool allow_indexing = 3;
+  }
+  
+  message Notifications {
+    bool email_enabled = 1;
+    bool push_enabled = 2;
+    bool marketing_opt_in = 3;
+    bool security_alerts_only = 4;
+  }
+  
+  message Appearance {
+    ThemeMode theme = 1;
+    bool high_contrast = 2;
+  }
+
+  Privacy privacy = 6;
+  Notifications notifications = 7;
+  Appearance appearance = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  int64 version = 10;
+}
