@@ -1,6 +1,5 @@
 pub mod builders;
 pub mod entities;
 pub mod events;
-pub mod params;
 pub mod repositories;
 pub mod value_objects;
