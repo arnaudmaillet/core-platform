@@ -78,7 +78,7 @@ use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, Username};
 use shared_kernel::errors::Result;
 
-use crate::domain::entities::Account;
+use crate::domain::entities::account::Account;
 use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber};
 
 #[async_trait]
