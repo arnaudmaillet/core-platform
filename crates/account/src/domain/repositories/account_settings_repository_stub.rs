@@ -10,7 +10,7 @@ use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::domain::value_objects::{PushToken, Timezone};
 use shared_kernel::errors::{DomainError, Result};
 
-use crate::domain::entities::AccountSettings;
+use crate::domain::entities::account::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 
 #[derive(Default)]

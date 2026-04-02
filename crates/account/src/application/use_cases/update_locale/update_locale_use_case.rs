@@ -10,7 +10,7 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::update_locale::UpdateLocaleCommand;
-use crate::domain::entities::Account;
+use crate::domain::entities::account::Account;
 use crate::domain::repositories::AccountRepository;
 
 pub struct UpdateLocaleUseCase {

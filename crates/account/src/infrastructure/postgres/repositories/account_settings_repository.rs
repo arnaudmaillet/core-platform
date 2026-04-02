@@ -1,6 +1,6 @@
 // crates/account/src/infrastructure/postgres/repositories/account_settings_repository.rs
 
-use crate::domain::entities::{AccountSettings, SettingsBlob};
+use crate::domain::entities::account::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use crate::infrastructure::postgres::rows::PostgresAccountSettingsRow;
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
 
         let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
-                let query = "SELECT account_id, region_code, settings, timezone, push_tokens, version, updated_at
+                let query = "SELECT account_id, region_code, preferences, timezone, push_tokens, version, updated_at
              FROM account_settings WHERE account_id = $1";
 
                 let res: Option<PostgresAccountSettingsRow> = sqlx::query_as(query)
@@ -56,14 +56,8 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         original: Option<&AccountSettings>,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
-        let blob = SettingsBlob {
-            privacy: settings.privacy().clone(),
-            notifications: settings.notifications().clone(),
-            appearance: settings.appearance().clone(),
-        };
-
-        let settings_json =
-            serde_json::to_value(blob).map_err(|e| DomainError::Internal(e.to_string()))?;
+        let settings_json = serde_json::to_value(settings.preferences())
+            .map_err(|e| DomainError::Internal(format!("Serialization failed: {}", e)))?;
 
         let push_tokens: Vec<String> = settings
             .push_tokens()
@@ -87,10 +81,10 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
             let query = "
-                INSERT INTO account_settings (account_id, region_code, settings, timezone, push_tokens, version, updated_at)
+                INSERT INTO account_settings (account_id, region_code, preferences, timezone, push_tokens, version, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (account_id, region_code) DO UPDATE SET
-                    settings = EXCLUDED.settings,
+                    preferences = EXCLUDED.preferences,
                     timezone = EXCLUDED.timezone,
                     push_tokens = EXCLUDED.push_tokens,
                     version = EXCLUDED.version,

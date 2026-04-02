@@ -1,8 +1,8 @@
+use crate::domain::entities::account::Account;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::infrastructure::grpc::ChronoTimestampExt;
 use shared_proto::account::v1::Account as ProtoAccount;
 use shared_proto::account::v1::AccountState as ProtoState;
-use crate::domain::entities::Account;
 
 impl From<Account> for ProtoAccount {
     fn from(a: Account) -> Self {
@@ -19,7 +19,10 @@ impl From<Account> for ProtoAccount {
             created_at: Some(a.created_at().to_proto()),
             updated_at: Some(a.updated_at().to_proto()),
             last_active_at: a.last_active_at().map(|dt| dt.to_proto()),
-            birth_date: a.birth_date().as_ref().map(|d| d.to_utc_datetime().to_proto()),
+            birth_date: a
+                .birth_date()
+                .as_ref()
+                .map(|d| d.to_utc_datetime().to_proto()),
         }
     }
 }

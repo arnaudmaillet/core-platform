@@ -10,7 +10,7 @@ use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
-use crate::domain::entities::AccountMetadata;
+use crate::domain::entities::account::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 use crate::infrastructure::postgres::models::PostgresAccountRole;
 use crate::infrastructure::postgres::rows::PostgresAccountMetadataRow;

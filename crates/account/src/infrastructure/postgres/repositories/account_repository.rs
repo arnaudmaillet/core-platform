@@ -1,6 +1,6 @@
 // crates/account/src/infrastructure/postgres/repositories/account_repository
 
-use crate::domain::entities::Account;
+use crate::domain::entities::account::Account;
 use crate::domain::repositories::AccountRepository;
 use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber};
 use crate::infrastructure::postgres::rows::PostgresAccountRow;

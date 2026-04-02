@@ -1,4 +1,5 @@
 use crate::domain::builders::AccountSettingsBuilder;
+use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use crate::domain::events::AccountEvent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -9,54 +10,78 @@ use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Tim
 use shared_kernel::errors::{DomainError, Result};
 
 /// Cette struct représente exactement le contenu de la colonne JSONB 'settings'
-#[derive(Serialize, Deserialize)]
-pub struct SettingsBlob {
-    pub privacy: PrivacySettings,
-    pub notifications: NotificationSettings,
-    pub appearance: AppearanceSettings,
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct AccountPreferences {
+    privacy: PrivacyPreferences,
+    notifications: NotificationPreferences,
+    appearance: AppearancePreferences,
+}
+
+impl AccountPreferences {
+    /// Constructeur explicite
+    pub fn new(
+        privacy: PrivacyPreferences,
+        notifications: NotificationPreferences,
+        appearance: AppearancePreferences,
+    ) -> Self {
+        Self {
+            privacy,
+            notifications,
+            appearance,
+        }
+    }
+
+    // --- GETTERS (Accès en lecture seule) ---
+
+    pub fn privacy(&self) -> &PrivacyPreferences {
+        &self.privacy
+    }
+
+    pub fn notifications(&self) -> &NotificationPreferences {
+        &self.notifications
+    }
+
+    pub fn appearance(&self) -> &AppearancePreferences {
+        &self.appearance
+    }
+
+    // --- SETTERS / UPDATERS (Accès en écriture avec logique) ---
+    
+    /// Met à jour la confidentialité et retourne true si une modification a eu lieu
+    pub fn update_privacy(&mut self, new_privacy: PrivacyPreferences) -> bool {
+        if self.privacy == new_privacy {
+            return false;
+        }
+        self.privacy = new_privacy;
+        true
+    }
+
+    pub fn update_notifications(&mut self, new_notifications: NotificationPreferences) -> bool {
+        if self.notifications == new_notifications {
+            return false;
+        }
+        self.notifications = new_notifications;
+        true
+    }
+
+    pub fn update_appearance(&mut self, new_appearance: AppearancePreferences) -> bool {
+        if self.appearance == new_appearance {
+            return false;
+        }
+        self.appearance = new_appearance;
+        true
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct AccountSettings {
     account_id: AccountId,
     region_code: RegionCode,
-    privacy: PrivacySettings,
-    notifications: NotificationSettings,
-    appearance: AppearanceSettings,
+    preferences: AccountPreferences,
     timezone: Timezone,
     push_tokens: Vec<PushToken>,
     updated_at: DateTime<Utc>,
     metadata: AggregateMetadata,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PrivacySettings {
-    pub profile_visible_to_public: bool,
-    pub show_last_active: bool,
-    pub allow_indexing: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NotificationSettings {
-    pub email_enabled: bool,
-    pub push_enabled: bool,
-    pub marketing_opt_in: bool,
-    pub security_alerts_only: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AppearanceSettings {
-    pub theme: ThemeMode,
-    pub high_contrast: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ThemeMode {
-    Light,
-    Dark,
-
-    #[default]
-    System,
 }
 
 impl AccountSettings {
@@ -69,9 +94,7 @@ impl AccountSettings {
     pub(crate) fn restore(
         account_id: AccountId,
         region_code: RegionCode,
-        privacy: PrivacySettings,
-        notifications: NotificationSettings,
-        appearance: AppearanceSettings,
+        preferences: AccountPreferences,
         timezone: Timezone,
         push_tokens: Vec<PushToken>,
         updated_at: DateTime<Utc>,
@@ -80,9 +103,7 @@ impl AccountSettings {
         Self {
             account_id,
             region_code,
-            privacy,
-            notifications,
-            appearance,
+            preferences,
             timezone,
             push_tokens,
             updated_at,
@@ -92,15 +113,24 @@ impl AccountSettings {
 
     // --- GETTERS PUBLICS ---
 
-    pub fn account_id(&self) -> &AccountId { &self.account_id }
-    pub fn region_code(&self) -> &RegionCode { &self.region_code }
-    pub fn privacy(&self) -> &PrivacySettings { &self.privacy }
-    pub fn notifications(&self) -> &NotificationSettings { &self.notifications }
-    pub fn appearance(&self) -> &AppearanceSettings { &self.appearance }
-    pub fn timezone(&self) -> &Timezone { &self.timezone }
-    pub fn push_tokens(&self) -> &[PushToken] { &self.push_tokens }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
-
+    pub fn account_id(&self) -> &AccountId {
+        &self.account_id
+    }
+    pub fn region_code(&self) -> &RegionCode {
+        &self.region_code
+    }
+    pub fn preferences(&self) -> &AccountPreferences {
+        &self.preferences
+    }
+    pub fn timezone(&self) -> &Timezone {
+        &self.timezone
+    }
+    pub fn push_tokens(&self) -> &[PushToken] {
+        &self.push_tokens
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 
     /// Change la région des paramètres (nécessaire pour la cohérence du sharding)
     pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
@@ -188,49 +218,70 @@ impl AccountSettings {
         Ok(true)
     }
 
-    /// Mise à jour globale
-    pub fn update_preferences(
+    
+    pub fn update_notifications_preferences(
         &mut self,
         region: &RegionCode,
-        privacy: Option<PrivacySettings>,
-        notifications: Option<NotificationSettings>,
-        appearance: Option<AppearanceSettings>,
+        new_prefs: NotificationPreferences,
     ) -> Result<bool> {
         self.ensure_region_match(region)?;
 
-        let mut changed = false;
+        if !self.preferences.update_notifications(new_prefs.clone()) {
+            return Ok(false);
+        }
+        self.apply_change();
 
-        if let Some(p) = privacy {
-            if self.privacy != p {
-                self.privacy = p;
-                changed = true;
-            }
-        }
-        if let Some(n) = notifications {
-            if self.notifications != n {
-                self.notifications = n;
-                changed = true;
-            }
-        }
-        if let Some(a) = appearance {
-            if self.appearance != a {
-                self.appearance = a;
-                changed = true;
-            }
-        }
+        self.add_event(Box::new(AccountEvent::NotificationsPreferencesChanged {
+            account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
+            new_preferences: new_prefs,
+            occurred_at: self.updated_at,
+        }));
 
-        if changed {
-            self.apply_change();
-            self.add_event(Box::new(AccountEvent::AccountSettingsUpdated {
-                account_id: self.account_id.clone(),
-                region: self.region_code.clone(),
-                occurred_at: self.updated_at,
-            }));
-        }
-
-        Ok(changed)
+        Ok(true)
     }
 
+    pub fn update_appearance_preferences(
+        &mut self,
+        region: &RegionCode,
+        new_prefs: AppearancePreferences,
+    ) -> Result<bool> {
+        self.ensure_region_match(region)?;
+        if !self.preferences.update_appearance(new_prefs.clone()) {
+            return Ok(false);
+        }
+        self.apply_change();
+
+        self.add_event(Box::new(AccountEvent::AppearancePreferencesChanged {
+            account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
+            new_preferences: new_prefs,
+            occurred_at: self.updated_at,
+        }));
+
+        Ok(true)
+    }
+
+    pub fn update_privacy_preferences(
+        &mut self,
+        region: &RegionCode,
+        new_prefs: PrivacyPreferences,
+    ) -> Result<bool> {
+        self.ensure_region_match(region)?;
+        if !self.preferences.update_privacy(new_prefs.clone()) {
+            return Ok(false);
+        }
+        self.apply_change();
+
+        self.add_event(Box::new(AccountEvent::PrivacyPreferencesChanged {
+            account_id: self.account_id.clone(),
+            region: self.region_code.clone(),
+            new_preferences: new_prefs,
+            occurred_at: self.updated_at,
+        }));
+
+        Ok(true)
+    }
 
     // --- LOGIQUE DE VERSIONING ---
 

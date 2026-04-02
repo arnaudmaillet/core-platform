@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::domain::value_objects::*;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use chrono::{Duration, Utc};
-    use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
+    use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::errors::DomainError;
-    use crate::domain::entities::Account;
+    use crate::domain::entities::account::Account;
 
     // Helper pour créer un compte de base rapidement
     fn create_test_account() -> Account {

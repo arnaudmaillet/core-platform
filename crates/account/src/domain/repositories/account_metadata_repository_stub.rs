@@ -9,7 +9,7 @@ use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 
-use crate::domain::entities::AccountMetadata;
+use crate::domain::entities::account::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
 #[derive(Default)]

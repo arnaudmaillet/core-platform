@@ -1,6 +1,6 @@
 // crates/account/src/domain/repositories/account_settings_repository.rs
 
-use crate::domain::entities::AccountSettings;
+use crate::domain::entities::account::AccountSettings;
 use async_trait::async_trait;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;

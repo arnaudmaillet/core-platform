@@ -9,8 +9,8 @@ use shared_proto::account::v1::{
     VerifyPhoneNumberRequest, 
     ChangeBirthDateRequest, 
     ChangeRegionRequest,
-    RegisterAccountRequest,
-    ResolveIdentityRequest,
+    // RegisterAccountRequest,
+    // ResolveIdentityRequest,
     LinkExternalIdentityRequest,
     DeactivateAccountRequest,
     ReactivateAccountRequest,
@@ -136,12 +136,12 @@ impl AccountIdentityService for IdentityHandler {
     //     Ok(Response::new(account.into()))
     // }
 
-    async fn resolve_identity(&self, request: Request<ResolveIdentityRequest>) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ResolveIdentityCommand::try_from_proto(request.into_inner())?;
-        let account = self.resolve_identity_use_case.execute(command).await.map_grpc()?;
-        Ok(Response::new(account.into()))
-    }
+    // async fn resolve_identity(&self, request: Request<ResolveIdentityRequest>) -> Result<Response<Account>, Status> {
+    //     let region = self.get_region(&request)?;
+    //     let command = ResolveIdentityCommand::try_from_proto(request.into_inner())?;
+    //     let account = self.resolve_identity_use_case.execute(command).await.map_grpc()?;
+    //     Ok(Response::new(account.into()))
+    // }
 
     async fn link_external_identity(&self, request: Request<LinkExternalIdentityRequest>) -> Result<Response<Account>, Status> {
         let region = self.get_region(&request)?;
