@@ -1,7 +1,7 @@
 // crates/account/src/application/update_timezone/mod.rs
 
 use crate::application::use_cases::update_timezone::update_timezone_command::UpdateTimezoneCommand;
-use crate::domain::entities::AccountSettings;
+use crate::domain::entities::account::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;

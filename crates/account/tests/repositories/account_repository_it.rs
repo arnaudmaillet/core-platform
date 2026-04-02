@@ -1,7 +1,7 @@
 // crates/account/tests/repositories/account_repository_it.rs
 
 
-use account::domain::entities::Account;
+use account::domain::entities::account::Account;
 use account::domain::repositories::AccountRepository;
 use account::infrastructure::postgres::repositories::PostgresAccountRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};

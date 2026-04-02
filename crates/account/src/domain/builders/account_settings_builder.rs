@@ -1,8 +1,9 @@
 // crates/account/src/domain/builders/account_settings_builder.rs
 
-use crate::domain::entities::{
-    AccountSettings, AppearanceSettings, NotificationSettings, PrivacySettings,
-};
+use std::time;
+
+use crate::domain::entities::account::{AccountSettings, AccountPreferences};
+use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
@@ -11,9 +12,9 @@ pub struct AccountSettingsBuilder {
     account_id: AccountId,
     region_code: RegionCode,
     timezone: Option<Timezone>,
-    privacy: Option<PrivacySettings>,
-    notifications: Option<NotificationSettings>,
-    appearance: Option<AppearanceSettings>,
+    privacy: Option<PrivacyPreferences>,
+    notifications: Option<NotificationPreferences>,
+    appearance: Option<AppearancePreferences>,
     push_tokens: Vec<PushToken>,
     version: u64,
 }
@@ -37,9 +38,7 @@ impl AccountSettingsBuilder {
     pub fn restore(
         account_id: AccountId,
         region_code: RegionCode,
-        privacy: PrivacySettings,
-        notifications: NotificationSettings,
-        appearance: AppearanceSettings,
+        preferences: AccountPreferences,
         timezone: Timezone,
         push_tokens: Vec<PushToken>,
         updated_at: DateTime<Utc>,
@@ -48,9 +47,7 @@ impl AccountSettingsBuilder {
         AccountSettings::restore(
             account_id,
             region_code,
-            privacy,
-            notifications,
-            appearance,
+            preferences,
             timezone,
             push_tokens,
             updated_at,
@@ -70,32 +67,35 @@ impl AccountSettingsBuilder {
         self
     }
 
-    pub fn with_privacy(mut self, privacy: PrivacySettings) -> Self {
+    pub fn with_privacy(mut self, privacy: PrivacyPreferences) -> Self {
         self.privacy = Some(privacy);
         self
     }
 
-    pub fn with_optional_privacy(mut self, privacy: Option<PrivacySettings>) -> Self {
+    pub fn with_optional_privacy(mut self, privacy: Option<PrivacyPreferences>) -> Self {
         self.privacy = privacy;
         self
     }
 
-    pub fn with_notifications(mut self, notifications: NotificationSettings) -> Self {
+    pub fn with_notifications(mut self, notifications: NotificationPreferences) -> Self {
         self.notifications = Some(notifications);
         self
     }
 
-    pub fn with_optional_notifications(mut self, notifications: Option<NotificationSettings>) -> Self {
+    pub fn with_optional_notifications(
+        mut self,
+        notifications: Option<NotificationPreferences>,
+    ) -> Self {
         self.notifications = notifications;
         self
     }
 
-    pub fn with_appearance(mut self, appearance: AppearanceSettings) -> Self {
+    pub fn with_appearance(mut self, appearance: AppearancePreferences) -> Self {
         self.appearance = Some(appearance);
         self
     }
 
-    pub fn with_optional_appearance(mut self, appearance: Option<AppearanceSettings>) -> Self {
+    pub fn with_optional_appearance(mut self, appearance: Option<AppearancePreferences>) -> Self {
         self.appearance = appearance;
         self
     }
@@ -108,15 +108,20 @@ impl AccountSettingsBuilder {
     /// Finalise pour une CRÉATION
     pub fn build(self) -> AccountSettings {
         let now = Utc::now();
+        let timezone = self.timezone.unwrap_or_else(|| Timezone::from_raw("UTC"));
+
+        let preferences = AccountPreferences::new(
+            self.privacy.unwrap_or_default(),
+            self.notifications.unwrap_or_default(),
+            self.appearance.unwrap_or_default(),
+        );
 
         // Centralisation via restore
         AccountSettings::restore(
             self.account_id,
             self.region_code,
-            self.privacy.unwrap_or_default(),
-            self.notifications.unwrap_or_default(),
-            self.appearance.unwrap_or_default(),
-            self.timezone.unwrap_or_else(|| Timezone::from_raw("UTC")),
+            preferences,
+            timezone,
             self.push_tokens,
             now,
             AggregateMetadata::new(self.version),

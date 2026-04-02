@@ -1,7 +1,7 @@
 // crates/account/src/application/add_push_token/add_push_token_use_case.rs
 
 use crate::application::use_cases::add_push_token::AddPushTokenCommand;
-use crate::domain::entities::AccountSettings;
+use crate::domain::entities::account::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;

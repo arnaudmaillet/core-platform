@@ -1,8 +1,7 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
 
 use crate::domain::builders::AccountSettingsBuilder;
-use crate::domain::entities::{AccountSettings, SettingsBlob};
-use serde::{Deserialize, Serialize};
+use crate::domain::entities::account::{AccountSettings, AccountPreferences};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
@@ -12,7 +11,7 @@ use shared_kernel::errors::{DomainError, Result};
 pub struct PostgresAccountSettingsRow {
     pub account_id: uuid::Uuid,
     pub region_code: String,
-    pub settings: serde_json::Value,
+    pub preferences: serde_json::Value,
     pub timezone: String,
     pub push_tokens: Vec<String>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -24,7 +23,7 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
 
     fn try_from(row: PostgresAccountSettingsRow) -> Result<Self> {
         // 1. Extraire les données du JSONB (Privacy, Notifications, Appearance)
-        let blob: SettingsBlob = serde_json::from_value(row.settings)
+        let preferences: AccountPreferences = serde_json::from_value(row.preferences)
             .map_err(|e| DomainError::Internal(format!("Désérialisation JSON échouée: {}", e)))?;
 
         let metadata = AggregateMetadata::try_from(row.version)?;
@@ -40,9 +39,7 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
         Ok(AccountSettingsBuilder::restore(
             AccountId::from_uuid(row.account_id),
             RegionCode::from_raw(row.region_code),
-            blob.privacy,
-            blob.notifications,
-            blob.appearance,
+            preferences,
             Timezone::from_raw(row.timezone),
             push_tokens,
             row.updated_at,

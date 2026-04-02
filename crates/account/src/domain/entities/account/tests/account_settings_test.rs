@@ -1,23 +1,28 @@
 #[cfg(test)]
 mod tests {
+    use crate::domain::entities::account::{AccountSettings, AccountPreferences};
+    use crate::domain::entities::preferences::{
+        AppearancePreferences, NotificationPreferences,
+        PrivacyPreferences, ThemeMode,
+    };
     use chrono::Utc;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, PushToken, Timezone};
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-    use shared_kernel::errors::DomainError;
-    use crate::domain::entities::{AccountSettings, AppearanceSettings, NotificationSettings, PrivacySettings};
-    use crate::domain::entities::account_settings::ThemeMode;
+    use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
 
     // Helper pour initialiser un AccountSettings de test
     fn create_test_settings() -> AccountSettings {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
+        let preferences = AccountPreferences::new(
+            PrivacyPreferences::default(),
+            NotificationPreferences::default(),
+            AppearancePreferences::default(),
+        );
 
         AccountSettings::restore(
             account_id,
             region,
-            PrivacySettings::default(),
-            NotificationSettings::default(),
-            AppearanceSettings::default(),
+            preferences, // On passe l'objet groupé ici
             Timezone::try_new("UTC").unwrap(),
             vec![],
             Utc::now(),
@@ -38,8 +43,8 @@ mod tests {
 
         // 2. Deuxième changement (même valeur) : Doit être FALSE
         let changed_again = settings.update_timezone(&region, new_tz).unwrap();
-        assert!(!changed_again, "Redundant update should return false"); // FIX ICI
-        assert_eq!(settings.metadata_mut().pull_events().len(), 0); // FIX ICI
+        assert!(!changed_again, "Redundant update should return false");
+        assert_eq!(settings.metadata_mut().pull_events().len(), 0);
     }
 
     #[test]
@@ -90,26 +95,24 @@ mod tests {
     }
 
     #[test]
-    fn test_update_preferences_partial_and_idempotency() {
-        let mut settings = create_test_settings();
+    fn test_update_appearance_preferences_idempotency() {
+        let mut settings = create_test_settings(); // Ici c'est System/false par défaut
         let region = settings.region_code().clone();
 
-        let new_appearance = AppearanceSettings {
-            theme: ThemeMode::Dark,
-            high_contrast: true,
-        };
+        let identical_appearance = AppearancePreferences::builder()
+            .with_theme(ThemeMode::System)
+            .build();
+        let _ = settings.pull_events();
 
-        // 1. Update partielle : true
-        let changed = settings.update_preferences(&region, None, None, Some(new_appearance.clone())).unwrap();
-        assert!(changed);
-        assert_eq!(settings.appearance(), &new_appearance);
+        let changed = settings
+            .update_appearance_preferences(&region, identical_appearance)
+            .unwrap();
 
-        let _ = settings.metadata_mut().pull_events();
-
-        // 2. Update avec les mêmes valeurs (Idempotence) : false
-        let changed = settings.update_preferences(&region, None, None, Some(new_appearance)).unwrap();
-        assert!(!changed);
-        assert_eq!(settings.metadata_mut().pull_events().len(), 0);
+        assert!(
+            !changed,
+            "L'update avec des données identiques doit retourner false"
+        );
+        assert_eq!(settings.pull_events().len(), 0);
     }
 
     #[test]

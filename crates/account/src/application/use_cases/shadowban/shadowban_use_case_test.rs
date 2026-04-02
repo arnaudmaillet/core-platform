@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::entities::AccountMetadata;
+    use crate::domain::entities::account::AccountMetadata;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;

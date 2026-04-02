@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS account_settings (
     account_id UUID NOT NULL,
     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
-    settings JSONB NOT NULL DEFAULT '{}',
+    preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
     version BIGINT NOT NULL DEFAULT 1,

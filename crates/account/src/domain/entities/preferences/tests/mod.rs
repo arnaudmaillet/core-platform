@@ -1,0 +1,3 @@
+mod appearance_preferences_test;
+mod privacy_preferences_test;
+mod notification_preferences_test;

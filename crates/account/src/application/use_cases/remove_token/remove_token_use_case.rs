@@ -1,7 +1,7 @@
 // crates/account/src/application/remove_push_token/remove_push_token_use_case.rs
 
 use crate::application::use_cases::remove_token::RemovePushTokenCommand;
-use crate::domain::entities::AccountSettings;
+use crate::domain::entities::account::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;

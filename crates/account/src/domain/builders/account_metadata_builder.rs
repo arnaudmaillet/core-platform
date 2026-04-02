@@ -1,6 +1,6 @@
 // crates/account/src/domain/builders/account_metadata_builder.rs
 
-use crate::domain::entities::AccountMetadata;
+use crate::domain::entities::account::AccountMetadata;
 use crate::domain::value_objects::AccountRole;
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;

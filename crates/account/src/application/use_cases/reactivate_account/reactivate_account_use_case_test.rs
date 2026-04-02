@@ -3,7 +3,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use chrono::Utc;
-    use crate::domain::entities::Account;
+    use crate::domain::entities::account::Account;
     use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};

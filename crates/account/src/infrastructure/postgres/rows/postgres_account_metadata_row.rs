@@ -1,5 +1,5 @@
 use crate::domain::builders::AccountMetadataBuilder;
-use crate::domain::entities::AccountMetadata;
+use crate::domain::entities::account::AccountMetadata;
 use crate::domain::value_objects::AccountRole;
 use crate::infrastructure::postgres::models::PostgresAccountRole;
 use chrono::{DateTime, Utc};

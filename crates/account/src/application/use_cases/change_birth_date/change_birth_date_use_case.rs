@@ -10,7 +10,7 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::change_birth_date::ChangeBirthDateCommand;
-use crate::domain::entities::Account;
+use crate::domain::entities::account::Account;
 use crate::domain::repositories::AccountRepository;
 
 pub struct ChangeBirthDateUseCase {

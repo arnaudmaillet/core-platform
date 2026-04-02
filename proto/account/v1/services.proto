@@ -5,6 +5,7 @@ syntax = "proto3";
 package account.v1;
 
 import "account/v1/models.proto";
+import "account/v1/enums.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
@@ -13,7 +14,7 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 service AccountIdentityService {
   // Registration & Search
   // rpc RegisterAccount(RegisterAccountRequest) returns (Account);
-  rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
+  // rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
   rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (Account);
 
   // Identity Updates
@@ -47,7 +48,7 @@ message GetAccountRequest { string id = 1; }
 //   string locale = 5;
 //   string ip_address = 6;
 // }
-message ResolveIdentityRequest { string external_id = 1; }
+// message ResolveIdentityRequest { string external_id = 1; }
 message LinkExternalIdentityRequest { string id = 1; string external_id = 2; }
 message ChangeEmailRequest { string id = 1; string new_email = 2; }
 message VerifyEmailRequest { string id = 1; string token = 2; }

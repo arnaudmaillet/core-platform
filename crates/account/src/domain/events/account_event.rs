@@ -1,5 +1,6 @@
 // crates/account/src/domain/entities/account_event.rs
 
+use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use crate::domain::value_objects::{AccountRole, Email, ExternalId, Locale, PhoneNumber};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -138,9 +139,22 @@ pub enum AccountEvent {
     },
 
     // --- SETTINGS EVENTS ---
-    AccountSettingsUpdated {
+    NotificationsPreferencesChanged {
         account_id: AccountId,
         region: RegionCode,
+        new_preferences: NotificationPreferences,
+        occurred_at: DateTime<Utc>,
+    },
+    AppearancePreferencesChanged {
+        account_id: AccountId,
+        region: RegionCode,
+        new_preferences: AppearancePreferences,
+        occurred_at: DateTime<Utc>,
+    },
+    PrivacyPreferencesChanged {
+        account_id: AccountId,
+        region: RegionCode,
+        new_preferences: PrivacyPreferences,
         occurred_at: DateTime<Utc>,
     },
 
@@ -196,7 +210,9 @@ impl DomainEvent for AccountEvent {
             Self::AccountUnbanned { .. } => "account.unbanned",
             Self::AccountSuspended { .. } => "account.suspended",
             Self::AccountUnsuspended { .. } => "account.unsuspended",
-            Self::AccountSettingsUpdated { .. } => "account.settings.updated",
+            Self::NotificationsPreferencesChanged { .. } => "account.settings.notifications_preferences_changed",
+            Self::AppearancePreferencesChanged { .. } => "account.settings.appearance_preferences_changed",
+            Self::PrivacyPreferencesChanged { .. } => "account.settings.privacy_preferences_changed",
             Self::PushTokenAdded { .. } => "account.settings.push_token_added",
             Self::PushTokenRemoved { .. } => "account.settings.push_token_removed",
             Self::TimezoneChanged { .. } => "account.settings.timezone_changed",
@@ -224,7 +240,9 @@ impl DomainEvent for AccountEvent {
             | Self::AccountUnbanned { region, .. }
             | Self::AccountSuspended { region, .. }
             | Self::AccountUnsuspended { region, .. }
-            | Self::AccountSettingsUpdated { region, .. }
+            | Self::NotificationsPreferencesChanged { region, .. }
+            | Self::AppearancePreferencesChanged { region, .. }
+            | Self::PrivacyPreferencesChanged { region, .. }
             | Self::PushTokenAdded { region, .. }
             | Self::PushTokenRemoved { region, .. }
             | Self::TimezoneChanged { region, .. } => region.clone(),
@@ -258,7 +276,9 @@ impl DomainEvent for AccountEvent {
             | Self::AccountUnbanned { account_id, .. }
             | Self::AccountSuspended { account_id, .. }
             | Self::AccountUnsuspended { account_id, .. }
-            | Self::AccountSettingsUpdated { account_id, .. }
+            | Self::NotificationsPreferencesChanged { account_id, .. }
+            | Self::AppearancePreferencesChanged { account_id, .. }
+            | Self::PrivacyPreferencesChanged { account_id, .. }
             | Self::PushTokenAdded { account_id, .. }
             | Self::PushTokenRemoved { account_id, .. }
             | Self::TimezoneChanged { account_id, .. } => account_id.to_string(),
@@ -286,7 +306,9 @@ impl DomainEvent for AccountEvent {
             | Self::AccountUnbanned { occurred_at, .. }
             | Self::AccountSuspended { occurred_at, .. }
             | Self::AccountUnsuspended { occurred_at, .. }
-            | Self::AccountSettingsUpdated { occurred_at, .. }
+            | Self::NotificationsPreferencesChanged { occurred_at, .. }
+            | Self::AppearancePreferencesChanged { occurred_at, .. }
+            | Self::PrivacyPreferencesChanged { occurred_at, .. }
             | Self::PushTokenAdded { occurred_at, .. }
             | Self::PushTokenRemoved { occurred_at, .. }
             | Self::TimezoneChanged { occurred_at, .. } => *occurred_at,

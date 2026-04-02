@@ -3,7 +3,7 @@ mod tests {
     use crate::application::use_cases::increase_trust_score::{
         IncreaseTrustScoreCommand, IncreaseTrustScoreUseCase,
     };
-    use crate::domain::entities::AccountMetadata;
+    use crate::domain::entities::account::AccountMetadata;
     use crate::domain::repositories::AccountMetadataRepositoryStub;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;

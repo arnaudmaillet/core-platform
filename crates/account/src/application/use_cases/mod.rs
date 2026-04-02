@@ -20,7 +20,7 @@ pub mod unban_account;
 pub mod unsuspend_account;
 pub mod update_timezone;
 pub mod update_locale;
-pub mod update_account_settings;
+pub mod update_preferences;
 pub mod upgrade_role;
 pub mod verify_email;
 pub mod verify_phone_number;

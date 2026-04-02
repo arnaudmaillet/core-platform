@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use super::*;
     use crate::domain::value_objects::AccountRole;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
     use uuid::Uuid;
-    use crate::domain::entities::AccountMetadata;
+    use crate::domain::entities::account::AccountMetadata;
 
     // Helper pour initialiser un metadata de test
     fn create_test_metadata() -> AccountMetadata {

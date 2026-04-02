@@ -1,21 +1,28 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use crate::domain::entities::AccountSettings;
+    use crate::application::use_cases::remove_token::{
+        RemovePushTokenCommand, RemovePushTokenUseCase,
+    };
+    use crate::domain::entities::account::AccountSettings;
+    use crate::domain::repositories::AccountSettingsRepositoryStub;
+    use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
     use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode};
     use shared_kernel::errors::DomainError;
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use crate::application::use_cases::remove_token::{RemovePushTokenCommand, RemovePushTokenUseCase};
-    use crate::domain::repositories::AccountSettingsRepositoryStub;
+    use std::sync::Arc;
 
-    fn setup() -> (RemovePushTokenUseCase, Arc<AccountSettingsRepositoryStub>, Arc<OutboxRepositoryStub>) {
+    fn setup() -> (
+        RemovePushTokenUseCase,
+        Arc<AccountSettingsRepositoryStub>,
+        Arc<OutboxRepositoryStub>,
+    ) {
         let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
-        let use_case = RemovePushTokenUseCase::new(settings_repo.clone(), outbox_repo.clone(), tx_manager);
+        let use_case =
+            RemovePushTokenUseCase::new(settings_repo.clone(), outbox_repo.clone(), tx_manager);
         (use_case, settings_repo, outbox_repo)
     }
 
@@ -29,11 +36,15 @@ mod tests {
 
         // 1. Arrange : On prépare des settings avec DEUX tokens
         let mut settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
-        settings.add_push_token(&region, token_to_remove.clone()).unwrap();
-        settings.add_push_token(&region, token_to_keep.clone()).unwrap();
+        settings
+            .add_push_token(&region, token_to_remove.clone())
+            .unwrap();
+        settings
+            .add_push_token(&region, token_to_keep.clone())
+            .unwrap();
         settings.pull_events(); // On vide les events d'ajout initiaux
         let version_after_setup = settings.version(); // Devrait être 3 (Init + Add + Add)
-        
+
         settings_repo.add_settings(settings);
 
         let cmd = RemovePushTokenCommand {
@@ -50,16 +61,32 @@ mod tests {
         let updated = result.unwrap();
 
         // Vérification de l'état mémoire
-        assert!(!updated.push_tokens().contains(&token_to_remove), "Le token doit être supprimé");
-        assert!(updated.push_tokens().contains(&token_to_keep), "Le token à garder doit toujours être là");
+        assert!(
+            !updated.push_tokens().contains(&token_to_remove),
+            "Le token doit être supprimé"
+        );
+        assert!(
+            updated.push_tokens().contains(&token_to_keep),
+            "Le token à garder doit toujours être là"
+        );
         assert_eq!(updated.version(), version_after_setup + 1);
 
         // 4. Persistence
-        let saved = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = settings_repo
+            .settings_map
+            .lock()
+            .unwrap()
+            .get(&account_id)
+            .cloned()
+            .unwrap();
         assert!(!saved.push_tokens().contains(&token_to_remove));
-        
+
         // 5. Outbox
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement PushTokenRemoved attendu");
+        assert_eq!(
+            outbox_repo.saved_events.lock().unwrap().len(),
+            1,
+            "Un événement PushTokenRemoved attendu"
+        );
     }
 
     #[tokio::test]
@@ -86,7 +113,11 @@ mod tests {
         assert!(result.is_ok());
         let returned = result.unwrap();
 
-        assert_eq!(returned.version(), 1, "La version ne doit pas augmenter pour une suppression inexistante");
+        assert_eq!(
+            returned.version(),
+            1,
+            "La version ne doit pas augmenter pour une suppression inexistante"
+        );
         assert!(returned.push_tokens().is_empty());
 
         // 4. Outbox
@@ -101,7 +132,10 @@ mod tests {
         let any_token = PushToken::try_new("valid_token_abc_123").unwrap();
 
         // Settings en EU
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), RegionCode::try_new("eu").unwrap()).build());
+        settings_repo.add_settings(
+            AccountSettings::builder(account_id.clone(), RegionCode::try_new("eu").unwrap())
+                .build(),
+        );
 
         let cmd = RemovePushTokenCommand {
             account_id,

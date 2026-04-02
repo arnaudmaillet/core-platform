@@ -1,6 +1,7 @@
 // crates/account/tests/repositories/account_settings_repository_it.rs
 
-use account::domain::entities::AccountSettings;
+use account::domain::entities::account::{AccountSettings};
+use account::domain::entities::preferences::{AppearancePreferences, ThemeMode};
 use account::domain::repositories::AccountSettingsRepository;
 use account::infrastructure::postgres::repositories::PostgresAccountSettingsRepository;
 use shared_kernel::domain::events::AggregateRoot;
@@ -25,28 +26,61 @@ async fn test_settings_lifecycle_and_upsert() {
     let account_id = AccountId::new();
     let region = RegionCode::try_new("eu").unwrap();
 
-    // 1. Création initiale (v1) - Pas d'original car c'est un insert
+    // 1. Création avec des préférences spécifiques
+    let appearance = AppearancePreferences::builder()
+        .with_theme(ThemeMode::Light)
+        .with_high_contrast(true)
+        .build();
     let settings = AccountSettings::builder(account_id.clone(), region.clone())
         .with_timezone(Timezone::try_new("Europe/Paris").unwrap())
+        .with_appearance(appearance.clone())
         .build();
 
     repo.save(&settings, None, None).await.expect("Should save initial settings");
 
-    // 2. Vérification fetch_by_id (anciennement find_by_account_id)
+    // 2. Vérification du fetch et du contenu du JSONB
     let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().expect("Should find settings");
     assert_eq!(found.timezone().as_str(), "Europe/Paris");
+    assert_eq!(found.preferences().appearance(), &appearance); // Vérifie le bloc JSONB
     assert_eq!(found.version(), 1);
 
-    // 3. Mise à jour via le domaine (v1 -> v2)
+    // 3. Mise à jour via une méthode granulaire (v1 -> v2)
     let mut updated_settings = found.clone();
     updated_settings.update_timezone(&region, Timezone::try_new("UTC").unwrap()).unwrap();
 
-    // On passe 'found' comme original pour tester la montée de version
+    // On passe 'found' comme original pour le lock optimiste (version check)
     repo.save(&updated_settings, Some(&found), None).await.expect("Should update settings");
 
     let final_check = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
     assert_eq!(final_check.timezone().as_str(), "UTC");
     assert_eq!(final_check.version(), 2);
+}
+
+
+#[tokio::test]
+async fn test_update_preferences_persistence() {
+    let (repo, _ctx) = get_test_context().await;
+    let account_id = AccountId::new();
+    let region = RegionCode::try_new("eu").unwrap();
+
+    let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+    repo.save(&settings, None, None).await.unwrap();
+
+    let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let mut updated_settings = found.clone();
+
+    // Modification du bloc Appearance dans le domaine
+    let new_appearance = AppearancePreferences::builder()
+        .with_theme(ThemeMode::Dark)
+        .with_high_contrast(false)
+        .build();
+    updated_settings.update_appearance_preferences(&region, new_appearance.clone()).unwrap();
+
+    repo.save(&updated_settings, Some(&found), None).await.unwrap();
+
+    // Vérification que le JSONB a bien été mis à jour en base
+    let final_check = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert_eq!(final_check.preferences().appearance(), &new_appearance);
 }
 
 #[tokio::test]
