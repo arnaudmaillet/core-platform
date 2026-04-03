@@ -1,15 +1,15 @@
 // crates/account/src/domain/repositories/stubs/account_metadata_repository_stub.rs
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-use crate::domain::entities::account::AccountMetadata;
+use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
 #[derive(Default)]
@@ -25,7 +25,10 @@ impl AccountMetadataRepositoryStub {
 
     /// Helper pour injecter des données initiales dans les tests
     pub fn add_metadata(&self, metadata: AccountMetadata) {
-        self.metadata_map.lock().unwrap().insert(metadata.account_id().clone(), metadata);
+        self.metadata_map
+            .lock()
+            .unwrap()
+            .insert(metadata.account_id().clone(), metadata);
     }
 
     fn check_error(&self) -> Result<()> {

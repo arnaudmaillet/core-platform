@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::entities::preferences::{AppearancePreferences, ThemeMode};
+    use crate::domain::preferences::models::{AppearancePreferences, ThemeMode};
 
     #[test]
     fn test_appearance_default_is_system() {

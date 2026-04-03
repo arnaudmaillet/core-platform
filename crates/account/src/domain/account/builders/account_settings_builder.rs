@@ -1,9 +1,8 @@
 // crates/account/src/domain/builders/account_settings_builder.rs
 
-use std::time;
 
-use crate::domain::entities::account::{AccountSettings, AccountPreferences};
-use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
+use crate::domain::account::entities::{AccountSettings, AccountPreferences};
+use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
@@ -35,7 +34,7 @@ impl AccountSettingsBuilder {
 
     /// CHEMIN 2 : RESTAURATION (Depuis la DB)
     #[allow(clippy::too_many_arguments)]
-    pub fn restore(
+    pub(crate) fn restore(
         account_id: AccountId,
         region_code: RegionCode,
         preferences: AccountPreferences,

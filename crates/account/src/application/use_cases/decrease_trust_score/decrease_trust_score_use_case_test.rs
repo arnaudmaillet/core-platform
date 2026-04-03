@@ -3,7 +3,7 @@ mod tests {
     use crate::application::use_cases::decrease_trust_score::{
         DecreaseTrustScoreCommand, DecreaseTrustScoreUseCase,
     };
-    use crate::domain::entities::account::AccountMetadata;
+    use crate::domain::account::entities::AccountMetadata;
     use crate::domain::repositories::AccountMetadataRepositoryStub;
     use crate::domain::value_objects::AccountRole;
     use shared_kernel::domain::events::AggregateRoot;

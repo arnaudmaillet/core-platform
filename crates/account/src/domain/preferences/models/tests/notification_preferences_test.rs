@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::entities::preferences::NotificationPreferences;
+    use crate::domain::preferences::models::NotificationPreferences;
 
     #[test]
     fn test_notifications_default_state() {

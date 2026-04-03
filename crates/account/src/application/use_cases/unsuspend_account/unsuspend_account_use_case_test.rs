@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::builders::AccountBuilder;
-    use crate::domain::entities::account::Account;
+    use crate::domain::account::builders::AccountBuilder;
+    use crate::domain::account::entities::Account;
     use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};

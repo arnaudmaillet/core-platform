@@ -1,7 +1,7 @@
 // crates/account/src/application/add_push_token/add_push_token_use_case.rs
 
 use crate::application::use_cases::add_push_token::AddPushTokenCommand;
-use crate::domain::entities::account::AccountSettings;
+use crate::domain::account::entities::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;
@@ -63,13 +63,14 @@ impl AddPushTokenUseCase {
             .run_in_transaction(move |mut tx| {
                 let repo = Arc::clone(&repo);
                 let outbox = Arc::clone(&outbox);
-                
+
                 let original_for_tx = original_settings.clone();
                 let updated_for_tx = settings.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                        .await?;
 
                     for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;

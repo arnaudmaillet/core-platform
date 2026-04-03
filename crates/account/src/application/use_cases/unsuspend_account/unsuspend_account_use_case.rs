@@ -10,7 +10,7 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::unsuspend_account::UnsuspendAccountCommand;
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
 
 pub struct UnsuspendAccountUseCase {

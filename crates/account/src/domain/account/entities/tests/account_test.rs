@@ -5,7 +5,7 @@ mod tests {
     use chrono::{Duration, Utc};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::errors::DomainError;
-    use crate::domain::entities::account::Account;
+    use crate::domain::account::entities::Account;
 
     // Helper pour créer un compte de base rapidement
     fn create_test_account() -> Account {

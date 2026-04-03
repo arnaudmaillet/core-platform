@@ -4,7 +4,7 @@ mod tests {
     use crate::application::use_cases::remove_token::{
         RemovePushTokenCommand, RemovePushTokenUseCase,
     };
-    use crate::domain::entities::account::AccountSettings;
+    use crate::domain::account::entities::AccountSettings;
     use crate::domain::repositories::AccountSettingsRepositoryStub;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;

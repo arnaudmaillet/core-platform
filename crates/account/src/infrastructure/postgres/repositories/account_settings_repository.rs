@@ -1,6 +1,6 @@
 // crates/account/src/infrastructure/postgres/repositories/account_settings_repository.rs
 
-use crate::domain::entities::account::AccountSettings;
+use crate::domain::account::entities::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use crate::infrastructure::postgres::rows::PostgresAccountSettingsRow;
 use async_trait::async_trait;

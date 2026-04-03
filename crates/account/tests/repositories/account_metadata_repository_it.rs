@@ -1,6 +1,6 @@
 // crates/account/tests/repositories/account_metadata_repository_it.rs
 
-use account::domain::entities::account::AccountMetadata;
+use account::domain::account::entities::AccountMetadata;
 use account::domain::repositories::AccountMetadataRepository;
 use account::domain::value_objects::AccountRole;
 use account::infrastructure::postgres::repositories::PostgresAccountMetadataRepository;
