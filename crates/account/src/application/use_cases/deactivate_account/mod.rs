@@ -1,6 +1,0 @@
-mod deactivate_account_command;
-mod deactivate_account_use_case;
-mod deactivate_account_use_case_test;
-
-pub use deactivate_account_command::DeactivateAccountCommand;
-pub use deactivate_account_use_case::DeactivateAccountUseCase;
