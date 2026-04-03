@@ -1,4 +1,4 @@
-use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
+use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use serde::Deserialize;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 

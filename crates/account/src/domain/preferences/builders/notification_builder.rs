@@ -1,24 +1,6 @@
-use serde::{Deserialize, Serialize};
+// crates/account/src/domain/preferences/builders/notification_builder.rs
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NotificationPreferences {
-    email_enabled: bool,
-    push_enabled: bool,
-    marketing_opt_in: bool,
-    security_alerts_only: bool,
-}
-
-impl NotificationPreferences {
-    pub fn builder() -> NotificationPreferencesBuilder {
-        NotificationPreferencesBuilder::default()
-    }
-
-    // Getters
-    pub fn email_enabled(&self) -> bool { self.email_enabled }
-    pub fn push_enabled(&self) -> bool { self.push_enabled }
-    pub fn marketing_opt_in(&self) -> bool { self.marketing_opt_in }
-    pub fn security_alerts_only(&self) -> bool { self.security_alerts_only }
-}
+use crate::domain::preferences::models::NotificationPreferences;
 
 pub struct NotificationPreferencesBuilder {
     email_enabled: bool,
@@ -39,6 +21,10 @@ impl Default for NotificationPreferencesBuilder {
 }
 
 impl NotificationPreferencesBuilder {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
     pub fn with_email(mut self, enabled: bool) -> Self {
         self.email_enabled = enabled;
         self
@@ -60,11 +46,11 @@ impl NotificationPreferencesBuilder {
     }
 
     pub fn build(self) -> NotificationPreferences {
-        NotificationPreferences {
-            email_enabled: self.email_enabled,
-            push_enabled: self.push_enabled,
-            marketing_opt_in: self.marketing_opt_in,
-            security_alerts_only: self.security_alerts_only,
-        }
+        NotificationPreferences::restore(
+            self.email_enabled,
+            self.push_enabled,
+            self.marketing_opt_in,
+            self.security_alerts_only,
+        )
     }
 }

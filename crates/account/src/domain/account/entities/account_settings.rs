@@ -1,5 +1,5 @@
-use crate::domain::builders::AccountSettingsBuilder;
-use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
+use crate::domain::account::builders::AccountSettingsBuilder;
+use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use crate::domain::events::AccountEvent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

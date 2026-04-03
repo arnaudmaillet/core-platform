@@ -10,7 +10,7 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::decrease_trust_score::DecreaseTrustScoreCommand;
-use crate::domain::entities::account::AccountMetadata;
+use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
 pub struct DecreaseTrustScoreUseCase {

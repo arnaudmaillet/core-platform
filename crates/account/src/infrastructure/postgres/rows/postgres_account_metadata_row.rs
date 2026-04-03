@@ -1,14 +1,14 @@
-use crate::domain::builders::AccountMetadataBuilder;
-use crate::domain::entities::account::AccountMetadata;
+use crate::domain::account::entities::AccountMetadata;
+use crate::domain::account::builders::AccountMetadataBuilder;
 use crate::domain::value_objects::AccountRole;
 use crate::infrastructure::postgres::models::PostgresAccountRole;
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::Identifier;
+use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::{DomainError, Result};
 use sqlx::FromRow;
 use uuid::Uuid;
-use shared_kernel::domain::events::AggregateMetadata;
 
 #[derive(Debug, FromRow)]
 pub struct PostgresAccountMetadataRow {
@@ -24,7 +24,6 @@ pub struct PostgresAccountMetadataRow {
     pub updated_at: DateTime<Utc>,
     pub version: i64,
 }
-
 
 impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
     type Error = DomainError;

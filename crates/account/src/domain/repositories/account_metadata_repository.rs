@@ -5,7 +5,7 @@ use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::Result;
 
-use crate::domain::entities::account::AccountMetadata;
+use crate::domain::account::entities::AccountMetadata;
 
 #[async_trait]
 pub trait AccountMetadataRepository: Send + Sync {

@@ -1,6 +1,6 @@
 // crates/account/src/infrastructure/postgres/rows/postgres_account_row
 
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
 };
@@ -10,7 +10,7 @@ use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use uuid::Uuid;
 
-use crate::domain::builders::AccountBuilder;
+use crate::domain::account::builders::AccountBuilder;
 use crate::infrastructure::postgres::models::PostgresAccountState;
 use shared_kernel::errors::{DomainError, Result};
 
@@ -31,7 +31,6 @@ pub struct PostgresAccountRow {
     pub updated_at: DateTime<Utc>,
     pub last_active_at: Option<DateTime<Utc>>,
 }
-
 
 impl TryFrom<&Account> for PostgresAccountRow {
     type Error = DomainError;

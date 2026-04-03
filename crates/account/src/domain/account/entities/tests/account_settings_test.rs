@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::entities::account::{AccountSettings, AccountPreferences};
-    use crate::domain::entities::preferences::{
+    use crate::domain::account::entities::{AccountSettings, AccountPreferences};
+    use crate::domain::preferences::models::{
         AppearancePreferences, NotificationPreferences,
         PrivacyPreferences, ThemeMode,
     };

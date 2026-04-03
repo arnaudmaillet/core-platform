@@ -1,7 +1,7 @@
 // crates/account/tests/repositories/account_settings_repository_it.rs
 
-use account::domain::entities::account::{AccountSettings};
-use account::domain::entities::preferences::{AppearancePreferences, ThemeMode};
+use account::domain::account::entities::{AccountSettings};
+use account::domain::preferences::models::{AppearancePreferences, ThemeMode};
 use account::domain::repositories::AccountSettingsRepository;
 use account::infrastructure::postgres::repositories::PostgresAccountSettingsRepository;
 use shared_kernel::domain::events::AggregateRoot;

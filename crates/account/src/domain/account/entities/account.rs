@@ -1,6 +1,6 @@
 // crates/account/src/domain/entities/account
 
-use crate::domain::builders::AccountBuilder;
+use crate::domain::account::builders::AccountBuilder;
 use crate::domain::events::AccountEvent;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,

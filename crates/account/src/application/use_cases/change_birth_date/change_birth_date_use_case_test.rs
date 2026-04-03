@@ -3,7 +3,7 @@ mod tests {
     use crate::application::use_cases::change_birth_date::{
         ChangeBirthDateCommand, ChangeBirthDateUseCase,
     };
-    use crate::domain::entities::account::Account;
+    use crate::domain::account::entities::Account;
     use crate::domain::repositories::AccountRepositoryStub;
     use crate::domain::value_objects::{BirthDate, Email, ExternalId};
     use chrono::{TimeZone, Utc};

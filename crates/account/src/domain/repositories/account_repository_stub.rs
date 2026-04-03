@@ -9,7 +9,7 @@ use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
 use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber};
 

@@ -1,7 +1,7 @@
 // crates/account/src/application/update_settings/mod.rs
 
 use crate::application::use_cases::update_preferences::UpdatePreferencesCommand;
-use crate::domain::entities::account::AccountSettings;
+use crate::domain::account::entities::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;

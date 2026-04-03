@@ -1,6 +1,6 @@
 // crates/account/src/domain/entities/account_event.rs
 
-use crate::domain::entities::preferences::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
+use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use crate::domain::value_objects::{AccountRole, Email, ExternalId, Locale, PhoneNumber};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

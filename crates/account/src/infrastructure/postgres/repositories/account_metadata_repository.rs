@@ -10,7 +10,7 @@ use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
-use crate::domain::entities::account::AccountMetadata;
+use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 use crate::infrastructure::postgres::models::PostgresAccountRole;
 use crate::infrastructure::postgres::rows::PostgresAccountMetadataRow;
@@ -44,7 +44,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         row.map(AccountMetadata::try_from).transpose()
     }
 
-   async fn save(
+    async fn save(
         &self,
         metadata: &AccountMetadata,
         original: Option<&AccountMetadata>,

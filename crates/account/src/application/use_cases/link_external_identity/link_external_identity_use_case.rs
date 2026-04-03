@@ -3,7 +3,7 @@
 // crates/account/src/application/link_external_identity/link_external_identity_use_case.rs
 
 use crate::application::use_cases::link_external_identity::LinkExternalIdentityCommand;
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;

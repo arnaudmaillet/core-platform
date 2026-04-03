@@ -3,8 +3,8 @@ mod tests {
     use crate::application::use_cases::update_preferences::{
         UpdatePreferencesCommand, UpdatePreferencesUseCase,
     };
-    use crate::domain::entities::account::AccountSettings;
-    use crate::domain::entities::preferences::{AppearancePreferences, ThemeMode};
+    use crate::domain::account::entities::AccountSettings;
+    use crate::domain::preferences::models::{AppearancePreferences, ThemeMode};
     use crate::domain::repositories::AccountSettingsRepositoryStub;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -74,11 +74,11 @@ mod tests {
             .build();
         // 2. On injecte cette config via le builder pour être SUR de l'état de départ
         let mut settings = AccountSettings::builder(account_id, region.clone())
-            .with_appearance(initial_appearance.clone()) 
+            .with_appearance(initial_appearance.clone())
             .build();
 
         // 3. On purge les événements créés par le build/restore initial
-        let _ = settings.pull_events(); 
+        let _ = settings.pull_events();
 
         // 4. On tente de mettre à jour avec EXACTEMENT la même config
         let changed = settings
@@ -88,8 +88,8 @@ mod tests {
         // 5. Assertions
         assert!(!changed, "Update with identical data should return false");
         assert_eq!(
-            settings.pull_events().len(), 
-            0, 
+            settings.pull_events().len(),
+            0,
             "No events should be emitted for idempotent update"
         );
     }

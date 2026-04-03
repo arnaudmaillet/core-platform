@@ -1,7 +1,7 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
 
-use crate::domain::builders::AccountSettingsBuilder;
-use crate::domain::entities::account::{AccountSettings, AccountPreferences};
+use crate::domain::account::builders::AccountSettingsBuilder;
+use crate::domain::account::entities::{AccountSettings, AccountPreferences};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};

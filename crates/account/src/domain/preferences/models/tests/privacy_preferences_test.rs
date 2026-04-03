@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::entities::preferences::PrivacyPreferences;
+    use crate::domain::preferences::models::PrivacyPreferences;
 
     #[test]
     fn test_privacy_default_values() {

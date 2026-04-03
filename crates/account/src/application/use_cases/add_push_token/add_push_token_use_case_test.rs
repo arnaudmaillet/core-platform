@@ -1,26 +1,27 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use crate::domain::entities::account::AccountSettings;
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, PushToken};
-    use shared_kernel::errors::DomainError;
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::use_cases::add_push_token::{AddPushTokenCommand, AddPushTokenUseCase};
+    use crate::domain::account::entities::AccountSettings;
     use crate::domain::repositories::AccountSettingsRepositoryStub;
+    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode};
+    use shared_kernel::errors::DomainError;
+    use std::sync::Arc;
 
     // Helper pour initialiser le Use Case
-    fn setup() -> (AddPushTokenUseCase, Arc<AccountSettingsRepositoryStub>, Arc<OutboxRepositoryStub>) {
+    fn setup() -> (
+        AddPushTokenUseCase,
+        Arc<AccountSettingsRepositoryStub>,
+        Arc<OutboxRepositoryStub>,
+    ) {
         let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
 
-        let use_case = AddPushTokenUseCase::new(
-            settings_repo.clone(),
-            outbox_repo.clone(),
-            tx_manager,
-        );
+        let use_case =
+            AddPushTokenUseCase::new(settings_repo.clone(), outbox_repo.clone(), tx_manager);
 
         (use_case, settings_repo, outbox_repo)
     }
@@ -38,7 +39,7 @@ mod tests {
         let cmd = AddPushTokenCommand {
             account_id: account_id.clone(),
             region_code: region, // Ajout de la région dans la commande
-            token: token.clone()
+            token: token.clone(),
         };
 
         let result = use_case.execute(cmd).await;
@@ -46,7 +47,13 @@ mod tests {
         assert!(result.is_ok());
 
         // Vérifier la persistance
-        let saved = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = settings_repo
+            .settings_map
+            .lock()
+            .unwrap()
+            .get(&account_id)
+            .cloned()
+            .unwrap();
         assert!(saved.push_tokens().contains(&token));
         assert_eq!(saved.version(), 2);
 
@@ -70,7 +77,7 @@ mod tests {
         let cmd = AddPushTokenCommand {
             account_id,
             region_code: region,
-            token
+            token,
         };
 
         let result = use_case.execute(cmd).await;
@@ -79,7 +86,11 @@ mod tests {
 
         // Grace au retour `false` de l'entité, le Use Case ne doit pas avoir
         // persisté d'événements dans l'outbox
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "L'idempotence aurait dû stopper le Use Case");
+        assert_eq!(
+            outbox_repo.saved_events.lock().unwrap().len(),
+            0,
+            "L'idempotence aurait dû stopper le Use Case"
+        );
     }
 
     #[tokio::test]
@@ -90,7 +101,8 @@ mod tests {
         let malicious_region = RegionCode::try_new("us").unwrap();
 
         // Le compte est en EU
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), actual_region).build());
+        settings_repo
+            .add_settings(AccountSettings::builder(account_id.clone(), actual_region).build());
 
         // La commande prétend être en US
         let cmd = AddPushTokenCommand {
@@ -111,7 +123,8 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
+        settings_repo
+            .add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
 
         *settings_repo.error_to_return.lock().unwrap() = Some(DomainError::ConcurrencyConflict {
             reason: "Database high pressure".into(),
@@ -124,7 +137,10 @@ mod tests {
         };
 
         let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(DomainError::ConcurrencyConflict { .. })
+        ));
     }
 
     #[tokio::test]
@@ -133,7 +149,8 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
+        settings_repo
+            .add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
 
         let error_msg = "Kafka/Outbox DB Error";
         *outbox_repo.force_error.lock().unwrap() = Some(DomainError::Internal(error_msg.into()));

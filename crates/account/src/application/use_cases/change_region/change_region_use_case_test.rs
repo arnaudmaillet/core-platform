@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::entities::account::{Account, AccountMetadata, AccountSettings};
+    use crate::domain::account::entities::{Account, AccountMetadata, AccountSettings};
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;

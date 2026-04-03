@@ -10,7 +10,7 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::use_cases::change_phone_number::change_phone_number_command::ChangePhoneNumberCommand;
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
 
 pub struct ChangePhoneNumberUseCase {

@@ -1,6 +1,6 @@
 // crates/account/src/domain/builders/account_builder.rs
 
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
 };
@@ -44,7 +44,7 @@ impl AccountBuilder {
     /// Chemin 2 : RESTAURATION (Via Repository)
     /// Utilise la méthode statique de Account pour reconstruire l'agrégat.
     #[allow(clippy::too_many_arguments)]
-    pub fn restore(
+    pub(crate) fn restore(
         id: AccountId,
         region_code: RegionCode,
         external_id: ExternalId,

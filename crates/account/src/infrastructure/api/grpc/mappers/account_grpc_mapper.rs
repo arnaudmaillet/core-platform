@@ -1,4 +1,4 @@
-use crate::domain::entities::account::Account;
+use crate::domain::account::entities::Account;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::infrastructure::grpc::ChronoTimestampExt;
 use shared_proto::account::v1::Account as ProtoAccount;

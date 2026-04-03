@@ -1,6 +1,6 @@
 // crates/account/src/domain/builders/account_metadata_builder.rs
 
-use crate::domain::entities::account::AccountMetadata;
+use crate::domain::account::entities::AccountMetadata;
 use crate::domain::value_objects::AccountRole;
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
@@ -30,7 +30,7 @@ impl AccountMetadataBuilder {
 
     /// CHEMIN 2 : RESTAURATION (Via Repository)
     #[allow(clippy::too_many_arguments)]
-    pub fn restore(
+    pub(crate) fn restore(
         account_id: AccountId,
         region_code: RegionCode,
         role: AccountRole,
