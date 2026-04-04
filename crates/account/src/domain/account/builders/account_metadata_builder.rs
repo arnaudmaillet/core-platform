@@ -11,7 +11,7 @@ pub struct AccountMetadataBuilder {
     region_code: RegionCode,
     role: AccountRole,
     trust_score: i32,
-    estimated_ip: Option<String>,
+    last_ip_addr: Option<String>,
     version: u64,
 }
 
@@ -23,7 +23,7 @@ impl AccountMetadataBuilder {
             region_code,
             role: AccountRole::User,
             trust_score: 100,
-            estimated_ip: None,
+            last_ip_addr: None,
             version: 1,
         }
     }
@@ -39,7 +39,7 @@ impl AccountMetadataBuilder {
         trust_score: i32,
         last_moderation_at: Option<DateTime<Utc>>,
         moderation_notes: Option<String>,
-        estimated_ip: Option<String>,
+        last_ip_addr: Option<String>,
         updated_at: DateTime<Utc>,
         version: u64,
     ) -> AccountMetadata {
@@ -52,7 +52,7 @@ impl AccountMetadataBuilder {
             trust_score,
             last_moderation_at,
             moderation_notes,
-            estimated_ip,
+            last_ip_addr,
             updated_at,
             AggregateMetadata::restore(version),
         )
@@ -66,12 +66,12 @@ impl AccountMetadataBuilder {
     }
 
     pub fn with_estimated_ip(mut self, ip: String) -> Self {
-        self.estimated_ip = Some(ip);
+        self.last_ip_addr = Some(ip);
         self
     }
 
     pub fn with_optional_estimated_ip(mut self, ip: Option<String>) -> Self {
-        self.estimated_ip = ip;
+        self.last_ip_addr = ip;
         self
     }
 
@@ -97,7 +97,7 @@ impl AccountMetadataBuilder {
                 "[{}] Account metadata initialized.",
                 now.format("%Y-%m-%d %H:%M:%S")
             )),
-            self.estimated_ip,
+            self.last_ip_addr,
             now,
             AggregateMetadata::new(self.version),
         )

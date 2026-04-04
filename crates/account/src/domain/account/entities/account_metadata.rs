@@ -21,7 +21,7 @@ pub struct AccountMetadata {
     trust_score: i32,
     last_moderation_at: Option<DateTime<Utc>>,
     moderation_notes: Option<String>,
-    estimated_ip: Option<String>,
+    last_ip_addr: Option<String>,
     updated_at: DateTime<Utc>,
     metadata: AggregateMetadata,
 }
@@ -41,7 +41,7 @@ impl AccountMetadata {
         trust_score: i32,
         last_moderation_at: Option<DateTime<Utc>>,
         moderation_notes: Option<String>,
-        estimated_ip: Option<String>,
+        last_ip_addr: Option<String>,
         updated_at: DateTime<Utc>,
         metadata: AggregateMetadata,
     ) -> Self {
@@ -54,7 +54,7 @@ impl AccountMetadata {
             trust_score,
             last_moderation_at,
             moderation_notes,
-            estimated_ip,
+            last_ip_addr: last_ip_addr,
             updated_at,
             metadata,
         }
@@ -70,7 +70,7 @@ impl AccountMetadata {
     pub fn trust_score(&self) -> i32 { self.trust_score }
     pub fn last_moderation_at(&self) -> Option<DateTime<Utc>> { self.last_moderation_at }
     pub fn moderation_notes(&self) -> Option<&str> { self.moderation_notes.as_deref() }
-    pub fn estimated_ip(&self) -> Option<&str> { self.estimated_ip.as_deref() }
+    pub fn last_ip_addr(&self) -> Option<&str> { self.last_ip_addr.as_deref() }
     pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
 
     // ==========================================

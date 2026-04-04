@@ -34,7 +34,7 @@ mod tests {
         assert_eq!(meta.trust_score(), 100);
         assert!(!meta.is_beta_tester());
         assert!(!meta.is_shadowbanned());
-        assert_eq!(meta.estimated_ip(), Some("127.0.0.1"));
+        assert_eq!(meta.last_ip_addr(), Some("127.0.0.1"));
         assert!(!meta.is_high_trust());
     }
 
@@ -84,7 +84,7 @@ mod tests {
 
         let changed = meta.shadowban(&region, "Reason".into()).unwrap();
         assert!(changed);
-        let events_count = meta.pull_events().len(); // On vide
+        meta.pull_events().len(); // On vide
 
         let changed_again = meta.shadowban(&region, "Reason".into()).unwrap();
         assert!(!changed_again); // Idempotence

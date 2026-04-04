@@ -58,7 +58,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let is_shadow = metadata.is_shadowbanned();
         let trust = metadata.trust_score();
         let notes = metadata.moderation_notes().map(|s| s.to_string());
-        let ip = metadata.estimated_ip().map(|s| s.to_string());
+        let last_ip_addr = metadata.last_ip_addr().map(|s| s.to_string());
         let last_mod = metadata.last_moderation_at();
         let updated = metadata.updated_at();
         let new_version = metadata.version_i64()?;
@@ -107,7 +107,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                     .bind(is_shadow)        // $5
                     .bind(trust)            // $6
                     .bind(notes)            // $7
-                    .bind(ip)               // $8
+                    .bind(last_ip_addr)     // $8
                     .bind(last_mod)         // $9
                     .bind(new_version)      // $10
                     .bind(updated)          // $11
