@@ -163,7 +163,7 @@ impl ProfileBuilder {
         );
 
         // Le builder de création génère TOUJOURS l'événement
-        profile.add_event(Box::new(ProfileEvent::ProfileCreated {
+        profile.push_event(Box::new(ProfileEvent::ProfileCreated {
             id: Uuid::now_v7(),
             profile_id: profile.id().clone(),
             owner_id: profile.owner_id().clone(),

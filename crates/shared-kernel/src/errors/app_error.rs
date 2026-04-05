@@ -76,6 +76,8 @@ impl From<DomainError> for AppError {
                 ErrorCode::InternalError,
                 "An unexpected error occurred. Please try again later.",
             ),
+
+            DomainError::Unexpected(message) => Self::new(ErrorCode::InternalError, message),
         }
     }
 }

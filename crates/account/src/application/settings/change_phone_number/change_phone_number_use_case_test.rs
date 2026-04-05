@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(result.version(), 1); 
 
         // 2. Vérification DB (ton point 3) : RIEN n'a été écrasé en base
-        let saved_in_db = account_repo.accounts.lock().unwrap()
+        let saved_in_db = account_repo.accounts_map.lock().unwrap()
             .get(&account_id).cloned().unwrap();
         assert_eq!(saved_in_db.version(), 1);
 

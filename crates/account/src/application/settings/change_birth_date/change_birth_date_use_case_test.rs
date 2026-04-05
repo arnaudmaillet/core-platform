@@ -72,7 +72,7 @@ mod tests {
 
         // 2. Vérifier la persistance
         let saved = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -166,7 +166,7 @@ mod tests {
 
         // 5. Assert : Rien en DB ne doit avoir changé
         let saved_in_db = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)

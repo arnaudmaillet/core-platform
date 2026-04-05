@@ -103,7 +103,7 @@ impl UserLocation {
 
         self.apply_change();
 
-        self.add_event(Box::new(LocationEvent::PositionUpdated {
+        self.push_event(Box::new(LocationEvent::PositionUpdated {
             profile_id: self.profile_id.clone(),
             region: self.region_code.clone(),
             coordinates: self.coordinates,
@@ -116,7 +116,7 @@ impl UserLocation {
             self.is_ghost_mode = enabled;
             self.apply_change();
 
-            self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
+            self.push_event(Box::new(LocationEvent::LocationPrivacyChanged {
                 profile_id: self.profile_id.clone(),
                 region: self.region_code.clone(),
                 is_ghost_mode: enabled,
@@ -138,7 +138,7 @@ impl UserLocation {
             self.privacy_radius_meters = radius_meters;
             self.apply_change();
 
-            self.add_event(Box::new(LocationEvent::LocationPrivacyChanged {
+            self.push_event(Box::new(LocationEvent::LocationPrivacyChanged {
                 profile_id: self.profile_id.clone(),
                 region: self.region_code.clone(),
                 is_ghost_mode: self.is_ghost_mode,

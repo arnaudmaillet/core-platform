@@ -48,7 +48,7 @@ impl ReactivateUseCase {
 
         let mut account = original_account.clone();
 
-        if !account.reactivate(&cmd.region_code)? {
+        if !account.activate(&cmd.region_code)? {
             return Ok(original_account);
         }
 

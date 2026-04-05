@@ -161,7 +161,7 @@ impl AccountSettings {
         self.timezone = new_tz.clone();
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::TimezoneChanged {
+        self.push_event(Box::new(AccountEvent::TimezoneChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             new_timezone: new_tz,
@@ -186,7 +186,7 @@ impl AccountSettings {
         self.push_tokens.push(token.clone());
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::PushTokenAdded {
+        self.push_event(Box::new(AccountEvent::PushTokenAdded {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             token,
@@ -208,7 +208,7 @@ impl AccountSettings {
 
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::PushTokenRemoved {
+        self.push_event(Box::new(AccountEvent::PushTokenRemoved {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             token: token.clone(),
@@ -231,7 +231,7 @@ impl AccountSettings {
         }
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::NotificationsPreferencesChanged {
+        self.push_event(Box::new(AccountEvent::NotificationsPreferencesChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             new_preferences: new_prefs,
@@ -252,7 +252,7 @@ impl AccountSettings {
         }
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AppearancePreferencesChanged {
+        self.push_event(Box::new(AccountEvent::AppearancePreferencesChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             new_preferences: new_prefs,
@@ -273,7 +273,7 @@ impl AccountSettings {
         }
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::PrivacyPreferencesChanged {
+        self.push_event(Box::new(AccountEvent::PrivacyPreferencesChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             new_preferences: new_prefs,

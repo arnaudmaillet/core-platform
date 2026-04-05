@@ -49,7 +49,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.locale(), &new_locale);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }

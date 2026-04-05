@@ -65,7 +65,7 @@ mod tests {
 
         // 4. Persistence
         let saved = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)

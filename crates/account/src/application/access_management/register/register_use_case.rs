@@ -1,6 +1,6 @@
 // crates/account/src/application/register_account/mod.rs
 
-use chrono::Utc;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 use crate::application::access_management::register::RegisterCommand;
 use crate::domain::account::entities::{Account, AccountMetadata, AccountSettings};
-use crate::domain::events::AccountEvent;
 use crate::domain::repositories::{
     AccountMetadataRepository, AccountRepository, AccountSettingsRepository,
 };
@@ -20,76 +19,88 @@ pub struct RegisterUseCase {
     account_repo: Arc<dyn AccountRepository>,
     metadata_repo: Arc<dyn AccountMetadataRepository>,
     settings_repo: Arc<dyn AccountSettingsRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
+    outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl RegisterUseCase {
-    // pub async fn execute(&self, command: RegisterAccountCommand) -> Result<AccountId> {
-    //     with_retry(RetryConfig::default(), || async {
-    //         self.try_execute_once(&command).await
-    //     }).await
-    // }
-    //
-    // async fn try_execute_once(&self, cmd: &RegisterAccountCommand) -> Result<AccountId> {
-    //     // --- ÉTAPE 1 : Build full account entity ---
-    //     let account_id = AccountId::new();
-    //     let account_id_for_return = account_id.clone();
-    //
-    //     let account = Account::builder(account_id.clone(), cmd.region.clone(), cmd.username.clone(), cmd.email.clone(), cmd.external_id.clone())
-    //         .with_locale(cmd.locale.clone())
-    //         .build();
-    //
-    //     let mut metadata_builder = AccountMetadata::builder(account_id.clone(), cmd.region.clone());
-    //     if let Some(ip) = cmd.ip_address.clone() {
-    //         metadata_builder = metadata_builder.with_estimated_ip(ip);
-    //     }
-    //     let metadata = metadata_builder.build();
-    //
-    //     let settings = AccountSettings::builder(account_id.clone(), cmd.region.clone())
-    //         .build();
-    //
-    //     // --- ÉTAPE 2 : Exécution (Dans la Transaction) ---
-    //     self.tx_manager.run_in_transaction(|mut tx| {
-    //         // Clones nécessaires pour le déplacement dans la closure async move
-    //         let account_repo = self.account_repo.clone();
-    //         let metadata_repo = self.metadata_repo.clone();
-    //         let settings_repo = self.settings_repo.clone();
-    //         let outbox = self.outbox_repo.clone();
-    //
-    //         let account = account.clone();
-    //         let metadata = metadata.clone();
-    //         let settings = settings.clone();
-    //         let external_id = cmd.external_id.clone();
-    //         let events = account_repo.pull_events();
-    //         let events_to_save = events;
-    //
-    //         Box::pin(async move {
-    //             // 1. Vérification d'unicité
-    //             if account_repo.find_account_id_by_external_id(&external_id, Some(&mut *tx)).await?.is_some() {
-    //                 return Err(DomainError::AlreadyExists {
-    //                     entity: "Account",
-    //                     field: "external_id",
-    //                     value: external_id.as_str().to_string(),
-    //                 });
-    //             }
-    //
-    //             // 2. Persistance via les repositories uniformisés
-    //             account_repo.save(&account, Some(&mut *tx)).await?;
-    //             metadata_repo.save(&metadata, Some(&mut *tx)).await?;
-    //             settings_repo.save(&settings, Some(&mut *tx)).await?;
-    //
-    //             // 3. Événements Outbox
-    //             for event in events_to_save {
-    //                 outbox.save(&mut *tx, event.as_ref()).await?;
-    //             }
-    //
-    //             Ok(())
-    //         })
-    //     }).await?;
-    //
-    //     // --- ÉTAPE 3 : Succès ---
-    //     // Si on arrive ici, la transaction est commitée.
-    //     Ok(account_id_for_return)
-    // }
+    pub fn new(
+        account_repo: Arc<dyn AccountRepository>,
+        metadata_repo: Arc<dyn AccountMetadataRepository>,
+        settings_repo: Arc<dyn AccountSettingsRepository>,
+        outbox: Arc<dyn OutboxRepository>,
+        tx_manager: Arc<dyn TransactionManager>,
+    ) -> Self {
+        Self {
+            account_repo,
+            metadata_repo,
+            settings_repo,
+            outbox,
+            tx_manager,
+        }
+    }
+
+    pub async fn execute(&self, command: RegisterCommand) -> Result<AccountId> {
+        with_retry(RetryConfig::default(), || async {
+            self.try_execute_once(&command).await
+        }).await
+    }
+    
+    async fn try_execute_once(&self, cmd: &RegisterCommand) -> Result<AccountId> {
+        let account_id = AccountId::new();
+    
+        let mut account = Account::builder(account_id.clone(), cmd.region.clone(), cmd.email.clone(), cmd.external_id.clone())
+            .with_locale(cmd.locale.clone())
+            .build();
+    
+        let metadata = AccountMetadata::builder(account_id.clone(), cmd.region.clone())
+            .with_ip_addr(cmd.ip_addr.clone())
+            .build();
+    
+        let settings = AccountSettings::builder(account_id.clone(), cmd.region.clone())
+            .build();
+
+        if !account.register(&cmd.region, cmd.ip_addr)? {
+            return Err(DomainError::Unexpected("Account registration failed".to_string()));
+        }
+
+        let events = account.pull_events();
+
+        if events.is_empty() {
+            return Err(DomainError::Unexpected("No events generated for new account".to_string()));
+        }
+
+        let account_repo = Arc::clone(&self.account_repo);
+        let metadata_repo = Arc::clone(&self.metadata_repo);
+        let settings_repo = Arc::clone(&self.settings_repo);
+        let outbox = Arc::clone(&self.outbox);
+
+        self.tx_manager.run_in_transaction(move |mut tx| {    
+            let account = account.clone();
+            let metadata = metadata.clone();
+            let settings = settings.clone();
+            let external_id = cmd.external_id.clone();
+    
+            Box::pin(async move {
+                // 1. Vérification d'unicité
+                if account_repo.exists_by_external_id(&external_id).await? {
+                    return Err(DomainError::AlreadyExists { entity: "Account", field: "external_id", value: external_id.to_string() });
+                }
+    
+                // 2. Persistance via les repositories uniformisés
+                account_repo.save(&account, None,  Some(&mut *tx)).await?;
+                metadata_repo.save(&metadata,None,  Some(&mut *tx)).await?;
+                settings_repo.save(&settings, None,  Some(&mut *tx)).await?;
+    
+                // 3. Événements Outbox
+                for event in events {
+                    outbox.save(&mut *tx, event.as_ref()).await?;
+                }
+    
+                Ok(())
+            })
+        }).await?;
+    
+        Ok(account_id)
+    }
 }

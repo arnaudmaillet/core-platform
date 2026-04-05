@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS account_metadata (
     trust_score INT NOT NULL DEFAULT 100,
     moderation_notes TEXT,
     last_moderation_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    estimated_ip TEXT,
+    last_ip_addr INET,
     version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (account_id, region_code)

@@ -53,7 +53,7 @@ mod tests {
         assert!(!updated_account.is_email_verified());
 
         // 3. Assert : Vérifier la persistence (Mock Repo)
-        let saved = account_repo.accounts.lock().unwrap()
+        let saved = account_repo.accounts_map.lock().unwrap()
             .get(&account_id)
             .cloned()
             .unwrap();
@@ -100,7 +100,7 @@ mod tests {
         assert_eq!(returned_account.version(), 1);
 
         // 3. Assert : Rien ne doit avoir été persisté (pas d'appel à save inutile)
-        let saved_in_db = account_repo.accounts.lock().unwrap()
+        let saved_in_db = account_repo.accounts_map.lock().unwrap()
             .get(&account_id).cloned().unwrap();
         assert_eq!(saved_in_db.version(), 1);
 

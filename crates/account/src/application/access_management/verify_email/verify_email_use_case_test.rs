@@ -51,7 +51,7 @@ mod tests {
         assert_eq!(updated.version(), 2, "La version doit passer à 2");
 
         // 4. Persistence réelle
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert!(saved.is_email_verified());
         
         // 5. Outbox

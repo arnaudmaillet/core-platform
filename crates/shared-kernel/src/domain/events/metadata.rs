@@ -44,7 +44,7 @@ impl AggregateMetadata {
         }
     }
 
-    pub fn add_event(&mut self, event: Box<dyn DomainEvent>) {
+    pub fn push_event(&mut self, event: Box<dyn DomainEvent>) {
         self.events.push(event);
     }
 
@@ -87,8 +87,8 @@ pub trait AggregateRoot: Send + Sync {
     }
 
     /// Enregistre un fait métier
-    fn add_event(&mut self, event: Box<dyn DomainEvent>) {
-        self.metadata_mut().add_event(event);
+    fn push_event(&mut self, event: Box<dyn DomainEvent>) {
+        self.metadata_mut().push_event(event);
     }
 
     /// Récupère et vide la file d'attente des événements pour traitement (Outbox)

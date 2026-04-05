@@ -41,7 +41,7 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         assert!(result.is_ok());
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.external_id(), &new_ext);
     }
 
