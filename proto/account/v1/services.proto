@@ -13,7 +13,7 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 // --- IDENTITY ---
 service AccountIdentityService {
   // Registration & Search
-  // rpc RegisterAccount(RegisterAccountRequest) returns (Account);
+  rpc Register(RegisterRequest) returns (Account);
   // rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
   rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (Account);
 
@@ -26,28 +26,28 @@ service AccountIdentityService {
   rpc ChangeRegion(ChangeRegionRequest) returns (Account);
 
   // Lifecycle
-  rpc DeactivateAccount(DeactivateAccountRequest) returns (Account);
-  rpc ReactivateAccount(ReactivateAccountRequest) returns (Account);
+  rpc DeactivateAccount(DeactivateRequest) returns (Account);
+  rpc ReactivateAccount(ActivateRequest) returns (Account);
 }
 
 // --- STATUS ---
 service AccountStatusService {
   rpc GetAccount(GetAccountRequest) returns (Account);
   rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (Account);
-  rpc DeactivateAccount(DeactivateAccountRequest) returns (Account);
-  rpc ReactivateAccount(ReactivateAccountRequest) returns (Account);
+  rpc DeactivateAccount(DeactivateRequest) returns (Account);
+  rpc ReactivateAccount(ActivateRequest) returns (Account);
 }
 
 // --- MESSAGES ---
 message GetAccountRequest { string id = 1; }
-// message RegisterAccountRequest {
-//   string external_id = 1;
-//   string email = 2;
-//   google.protobuf.Timestamp birth_date = 3;
-//   string region_code = 4;
-//   string locale = 5;
-//   string ip_address = 6;
-// }
+message RegisterRequest {
+  string external_id = 1;
+  string email = 2;
+  google.protobuf.Timestamp birth_date = 3;
+  string region_code = 4;
+  string locale = 5;
+  string ip_addr = 6;
+}
 // message ResolveIdentityRequest { string external_id = 1; }
 message LinkExternalIdentityRequest { string id = 1; string external_id = 2; }
 message ChangeEmailRequest { string id = 1; string new_email = 2; }
@@ -56,8 +56,8 @@ message ChangePhoneNumberRequest { string id = 1; string new_phone = 2; }
 message VerifyPhoneNumberRequest { string id = 1; string code = 2; }
 message ChangeBirthDateRequest { string id = 1; google.protobuf.Timestamp new_birth_date = 2; }
 message ChangeRegionRequest { string id = 1; string new_region = 2; }
-message DeactivateAccountRequest { string id = 1; }
-message ReactivateAccountRequest { string id = 1; }
+message DeactivateRequest { string id = 1; }
+message ActivateRequest { string id = 1; }
 message ResolveIdentityResponse {
   string account_id = 1;
   AccountState state = 2;
