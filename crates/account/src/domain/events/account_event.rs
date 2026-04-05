@@ -1,12 +1,12 @@
 // crates/account/src/domain/entities/account_event.rs
 
 use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
-use crate::domain::value_objects::{AccountRole, Email, ExternalId, Locale, PhoneNumber};
+use crate::domain::value_objects::{AccountRole, Email, ExternalId, IpAddr, Locale, PhoneNumber};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone, Username};
+use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
 use std::borrow::Cow;
 use uuid::Uuid;
 
@@ -14,11 +14,13 @@ use uuid::Uuid;
 #[serde(tag = "type", content = "data")]
 pub enum AccountEvent {
     // --- IDENTITY & SECURITY EVENTS ---
-    AccountCreated {
+    AccountRegistered {
         account_id: AccountId,
         region: RegionCode,
-        username: Username,
-        display_name: String,
+        email: Email,
+        external_id: ExternalId,
+        locale: Locale,
+        ip_addr: IpAddr,
         occurred_at: DateTime<Utc>,
     },
     ExternalIdentityLinked {
@@ -191,7 +193,7 @@ impl DomainEvent for AccountEvent {
 
     fn event_type(&self) -> Cow<'_, str> {
         let s = match self {
-            Self::AccountCreated { .. } => "account.created",
+            Self::AccountRegistered { .. } => "account.registered",
             Self::ExternalIdentityLinked { .. } => "account.external_linked",
             Self::EmailChanged { .. } => "account.email_changed",
             Self::PhoneNumberChanged { .. } => "account.phone_number_changed",
@@ -222,7 +224,7 @@ impl DomainEvent for AccountEvent {
 
     fn region_code(&self) -> RegionCode {
         match self {
-            Self::AccountCreated { region, .. }
+            Self::AccountRegistered { region, .. }
             | Self::ExternalIdentityLinked { region, .. }
             | Self::EmailChanged { region, .. }
             | Self::PhoneNumberChanged { region, .. }
@@ -257,7 +259,7 @@ impl DomainEvent for AccountEvent {
     fn aggregate_id(&self) -> String {
         // Pattern matching simplifié pour tous les types portant un account_id
         match self {
-            Self::AccountCreated { account_id, .. }
+            Self::AccountRegistered { account_id, .. }
             | Self::ExternalIdentityLinked { account_id, .. }
             | Self::EmailChanged { account_id, .. }
             | Self::PhoneNumberChanged { account_id, .. }
@@ -287,7 +289,7 @@ impl DomainEvent for AccountEvent {
 
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
-            Self::AccountCreated { occurred_at, .. }
+            Self::AccountRegistered { occurred_at, .. }
             | Self::ExternalIdentityLinked { occurred_at, .. }
             | Self::EmailChanged { occurred_at, .. }
             | Self::PhoneNumberChanged { occurred_at, .. }

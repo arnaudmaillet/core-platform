@@ -18,6 +18,9 @@ pub enum DomainError {
         value: String,
     },
 
+    #[error("Unexpected error: {0}")]
+    Unexpected(String),
+
     /// Erreur de concurrence (Optimistic Locking / Version Mismatch)
     #[error("Concurrency conflict: {reason}")]
     ConcurrencyConflict { reason: String },

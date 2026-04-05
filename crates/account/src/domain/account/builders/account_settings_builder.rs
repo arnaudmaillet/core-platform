@@ -1,6 +1,5 @@
 // crates/account/src/domain/builders/account_settings_builder.rs
 
-
 use crate::domain::account::entities::{AccountSettings, AccountPreferences};
 use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use chrono::{DateTime, Utc};
@@ -10,10 +9,10 @@ use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Tim
 pub struct AccountSettingsBuilder {
     account_id: AccountId,
     region_code: RegionCode,
-    timezone: Option<Timezone>,
-    privacy: Option<PrivacyPreferences>,
-    notifications: Option<NotificationPreferences>,
-    appearance: Option<AppearancePreferences>,
+    timezone: Timezone,
+    privacy: PrivacyPreferences,
+    notifications: NotificationPreferences,
+    appearance: AppearancePreferences,
     push_tokens: Vec<PushToken>,
     version: u64,
 }
@@ -23,10 +22,10 @@ impl AccountSettingsBuilder {
         Self {
             account_id,
             region_code,
-            timezone: None,
-            privacy: None,
-            notifications: None,
-            appearance: None,
+            timezone: Timezone::from_raw("UTC"),
+            privacy: PrivacyPreferences::builder().build(),
+            notifications: NotificationPreferences::builder().build(),
+            appearance: AppearancePreferences::builder().build(),
             push_tokens: Vec::new(),
             version: 1,
         }
@@ -57,44 +56,21 @@ impl AccountSettingsBuilder {
     // --- SETTERS FLUIDES ---
 
     pub fn with_timezone(mut self, timezone: Timezone) -> Self {
-        self.timezone = Some(timezone);
-        self
-    }
-
-    pub fn with_optional_timezone(mut self, timezone: Option<Timezone>) -> Self {
         self.timezone = timezone;
         self
     }
 
     pub fn with_privacy(mut self, privacy: PrivacyPreferences) -> Self {
-        self.privacy = Some(privacy);
-        self
-    }
-
-    pub fn with_optional_privacy(mut self, privacy: Option<PrivacyPreferences>) -> Self {
         self.privacy = privacy;
         self
     }
 
     pub fn with_notifications(mut self, notifications: NotificationPreferences) -> Self {
-        self.notifications = Some(notifications);
-        self
-    }
-
-    pub fn with_optional_notifications(
-        mut self,
-        notifications: Option<NotificationPreferences>,
-    ) -> Self {
         self.notifications = notifications;
         self
     }
 
     pub fn with_appearance(mut self, appearance: AppearancePreferences) -> Self {
-        self.appearance = Some(appearance);
-        self
-    }
-
-    pub fn with_optional_appearance(mut self, appearance: Option<AppearancePreferences>) -> Self {
         self.appearance = appearance;
         self
     }
@@ -107,12 +83,12 @@ impl AccountSettingsBuilder {
     /// Finalise pour une CRÉATION
     pub fn build(self) -> AccountSettings {
         let now = Utc::now();
-        let timezone = self.timezone.unwrap_or_else(|| Timezone::from_raw("UTC"));
 
+        let metadata = AggregateMetadata::new(self.version);
         let preferences = AccountPreferences::new(
-            self.privacy.unwrap_or_default(),
-            self.notifications.unwrap_or_default(),
-            self.appearance.unwrap_or_default(),
+            self.privacy,
+            self.notifications,
+            self.appearance,
         );
 
         // Centralisation via restore
@@ -120,10 +96,10 @@ impl AccountSettingsBuilder {
             self.account_id,
             self.region_code,
             preferences,
-            timezone,
+            self.timezone,
             self.push_tokens,
             now,
-            AggregateMetadata::new(self.version),
+            metadata,
         )
     }
 }

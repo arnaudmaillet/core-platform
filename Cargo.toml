@@ -70,6 +70,7 @@ sqlx = { version = "0.8.6", features = [
     "json",
     "macros",
     "migrate",
+    "ipnetwork",
 ] }
 fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool"] }
 rdkafka = "0.38.0"

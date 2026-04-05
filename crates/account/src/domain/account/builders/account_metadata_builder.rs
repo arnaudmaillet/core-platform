@@ -1,7 +1,7 @@
 // crates/account/src/domain/builders/account_metadata_builder.rs
 
 use crate::domain::account::entities::AccountMetadata;
-use crate::domain::value_objects::AccountRole;
+use crate::domain::value_objects::{AccountRole, IpAddr};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
@@ -11,7 +11,7 @@ pub struct AccountMetadataBuilder {
     region_code: RegionCode,
     role: AccountRole,
     trust_score: i32,
-    last_ip_addr: Option<String>,
+    last_ip_addr: Option<IpAddr>,
     version: u64,
 }
 
@@ -39,7 +39,7 @@ impl AccountMetadataBuilder {
         trust_score: i32,
         last_moderation_at: Option<DateTime<Utc>>,
         moderation_notes: Option<String>,
-        last_ip_addr: Option<String>,
+        last_ip_addr: Option<IpAddr>,
         updated_at: DateTime<Utc>,
         version: u64,
     ) -> AccountMetadata {
@@ -65,13 +65,8 @@ impl AccountMetadataBuilder {
         self
     }
 
-    pub fn with_estimated_ip(mut self, ip: String) -> Self {
+    pub fn with_ip_addr(mut self, ip: IpAddr) -> Self {
         self.last_ip_addr = Some(ip);
-        self
-    }
-
-    pub fn with_optional_estimated_ip(mut self, ip: Option<String>) -> Self {
-        self.last_ip_addr = ip;
         self
     }
 

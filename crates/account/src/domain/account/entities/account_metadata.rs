@@ -2,7 +2,7 @@
 
 use crate::domain::account::builders::AccountMetadataBuilder;
 use crate::domain::events::AccountEvent;
-use crate::domain::value_objects::AccountRole;
+use crate::domain::value_objects::{AccountRole, IpAddr};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
@@ -21,7 +21,7 @@ pub struct AccountMetadata {
     trust_score: i32,
     last_moderation_at: Option<DateTime<Utc>>,
     moderation_notes: Option<String>,
-    last_ip_addr: Option<String>,
+    last_ip_addr: Option<IpAddr>,
     updated_at: DateTime<Utc>,
     metadata: AggregateMetadata,
 }
@@ -41,7 +41,7 @@ impl AccountMetadata {
         trust_score: i32,
         last_moderation_at: Option<DateTime<Utc>>,
         moderation_notes: Option<String>,
-        last_ip_addr: Option<String>,
+        last_ip_addr: Option<IpAddr>,
         updated_at: DateTime<Utc>,
         metadata: AggregateMetadata,
     ) -> Self {
@@ -62,16 +62,36 @@ impl AccountMetadata {
 
     // --- GETTERS PUBLICS ---
 
-    pub fn account_id(&self) -> &AccountId { &self.account_id }
-    pub fn region_code(&self) -> &RegionCode { &self.region_code }
-    pub fn role(&self) -> AccountRole { self.role }
-    pub fn is_beta_tester(&self) -> bool { self.is_beta_tester }
-    pub fn is_shadowbanned(&self) -> bool { self.is_shadowbanned }
-    pub fn trust_score(&self) -> i32 { self.trust_score }
-    pub fn last_moderation_at(&self) -> Option<DateTime<Utc>> { self.last_moderation_at }
-    pub fn moderation_notes(&self) -> Option<&str> { self.moderation_notes.as_deref() }
-    pub fn last_ip_addr(&self) -> Option<&str> { self.last_ip_addr.as_deref() }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn account_id(&self) -> &AccountId {
+        &self.account_id
+    }
+    pub fn region_code(&self) -> &RegionCode {
+        &self.region_code
+    }
+    pub fn role(&self) -> AccountRole {
+        self.role
+    }
+    pub fn is_beta_tester(&self) -> bool {
+        self.is_beta_tester
+    }
+    pub fn is_shadowbanned(&self) -> bool {
+        self.is_shadowbanned
+    }
+    pub fn trust_score(&self) -> i32 {
+        self.trust_score
+    }
+    pub fn last_moderation_at(&self) -> Option<DateTime<Utc>> {
+        self.last_moderation_at
+    }
+    pub fn moderation_notes(&self) -> Option<&str> {
+        self.moderation_notes.as_deref()
+    }
+    pub fn last_ip_addr(&self) -> Option<&IpAddr> {
+        self.last_ip_addr.as_ref()
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 
     // ==========================================
     // LOGIQUE DE MODÉRATION & SCORE
@@ -79,7 +99,13 @@ impl AccountMetadata {
 
     /// Ajuste le score de confiance. Un score trop bas pourrait déclencher
     /// des restrictions automatiques via le Use Case.
-    pub fn increase_trust_score(&mut self, region: &RegionCode, action_id: Uuid, amount: u32, reason: String) -> Result<bool> {
+    pub fn increase_trust_score(
+        &mut self,
+        region: &RegionCode,
+        action_id: Uuid,
+        amount: u32,
+        reason: String,
+    ) -> Result<bool> {
         self.ensure_region_match(region)?;
         let previous_score = self.trust_score;
         let delta = amount as i32;
@@ -92,7 +118,7 @@ impl AccountMetadata {
 
         self.apply_moderation_change(format!("Score increased by {}: {}", amount, reason));
 
-        self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
+        self.push_event(Box::new(AccountEvent::TrustScoreAdjusted {
             id: action_id,
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
@@ -106,7 +132,13 @@ impl AccountMetadata {
     }
 
     /// Sanctionne un comportement négatif
-    pub fn decrease_trust_score(&mut self, region: &RegionCode, action_id: Uuid, amount: u32, reason: String) -> Result<bool> {
+    pub fn decrease_trust_score(
+        &mut self,
+        region: &RegionCode,
+        action_id: Uuid,
+        amount: u32,
+        reason: String,
+    ) -> Result<bool> {
         self.ensure_region_match(region)?;
 
         let previous_score = self.trust_score;
@@ -127,13 +159,15 @@ impl AccountMetadata {
         // Shadowban automatique si on tombe à zéro
         let mut shadowban_triggered = false;
         if self.trust_score == 0 && !self.is_shadowbanned {
-            self.apply_shadowban("Automated system: Trust score dropped below critical threshold".into());
+            self.apply_shadowban(
+                "Automated system: Trust score dropped below critical threshold".into(),
+            );
             shadowban_triggered = true;
         }
 
         // On n'ajoute l'événement de score que s'il y a eu un changement de score
         if self.trust_score != previous_score {
-            self.add_event(Box::new(AccountEvent::TrustScoreAdjusted {
+            self.push_event(Box::new(AccountEvent::TrustScoreAdjusted {
                 id: action_id,
                 account_id: self.account_id.clone(),
                 region: self.region_code.clone(),
@@ -147,7 +181,7 @@ impl AccountMetadata {
         Ok(self.trust_score != previous_score || shadowban_triggered)
     }
 
-    pub fn shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool>  {
+    pub fn shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
         self.ensure_region_match(region)?;
         if !self.is_shadowbanned {
             self.apply_shadowban(reason);
@@ -156,13 +190,13 @@ impl AccountMetadata {
         Ok(false)
     }
 
-    pub fn lift_shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool>  {
+    pub fn lift_shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
         self.ensure_region_match(region)?;
         if self.is_shadowbanned {
             self.is_shadowbanned = false;
             self.apply_moderation_change(format!("Shadowban lifted: {}", reason));
 
-            self.add_event(Box::new(AccountEvent::ShadowbanStatusChanged {
+            self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
                 account_id: self.account_id.clone(),
                 region: self.region_code.clone(),
                 is_shadowbanned: false,
@@ -175,7 +209,12 @@ impl AccountMetadata {
     }
 
     /// Change le rôle du compte (Admin only via Use Case)
-    pub fn upgrade_role(&mut self, region: &RegionCode, new_role: AccountRole, reason: String) -> Result<bool> {
+    pub fn upgrade_role(
+        &mut self,
+        region: &RegionCode,
+        new_role: AccountRole,
+        reason: String,
+    ) -> Result<bool> {
         self.ensure_region_match(region)?;
 
         // 1. Idempotence : si le rôle est déjà le bon, on ne fait rien
@@ -190,7 +229,7 @@ impl AccountMetadata {
         self.apply_moderation_change(format!("Role changed to {:?}: {}", new_role, reason));
 
         // 3. Capture de l'événement
-        self.add_event(Box::new(AccountEvent::AccountRoleChanged {
+        self.push_event(Box::new(AccountEvent::AccountRoleChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             old_role,
@@ -210,7 +249,12 @@ impl AccountMetadata {
         self.role.has_permission_of(AccountRole::Staff)
     }
 
-    pub fn set_beta_status(&mut self, region: &RegionCode, status: bool, reason: String) -> Result<bool> {
+    pub fn set_beta_status(
+        &mut self,
+        region: &RegionCode,
+        status: bool,
+        reason: String,
+    ) -> Result<bool> {
         self.ensure_region_match(region)?;
         if self.is_beta_tester == status {
             return Ok(false);
@@ -221,7 +265,7 @@ impl AccountMetadata {
 
         self.apply_moderation_change(format!("Beta tester mode {}: {}", action, reason));
 
-        self.add_event(Box::new(AccountEvent::BetaStatusChanged {
+        self.push_event(Box::new(AccountEvent::BetaStatusChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             is_beta_tester: status,
@@ -246,7 +290,7 @@ impl AccountMetadata {
         self.region_code = new_region.clone();
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountRegionChanged {
+        self.push_event(Box::new(AccountEvent::AccountRegionChanged {
             account_id: self.account_id.clone(),
             old_region,
             new_region,
@@ -284,7 +328,7 @@ impl AccountMetadata {
         self.is_shadowbanned = true;
         self.apply_moderation_change(format!("Shadowbanned: {}", reason));
 
-        self.add_event(Box::new(AccountEvent::ShadowbanStatusChanged {
+        self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
             account_id: self.account_id.clone(),
             region: self.region_code.clone(),
             is_shadowbanned: true,

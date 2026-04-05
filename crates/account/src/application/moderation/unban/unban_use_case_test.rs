@@ -66,7 +66,7 @@ mod tests {
 
         // 4. Persistence réelle
         let saved = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -122,7 +122,7 @@ mod tests {
 
         // Vérification DB
         let in_db = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)

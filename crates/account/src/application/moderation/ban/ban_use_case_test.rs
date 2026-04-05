@@ -49,7 +49,7 @@ mod tests {
 
         assert!(result.is_ok());
         let saved = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -112,7 +112,7 @@ mod tests {
 
         assert!(result.is_ok());
         let saved = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&cmd.account_id)
@@ -153,7 +153,7 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let saved = account_repo
-            .accounts
+            .accounts_map
             .lock()
             .unwrap()
             .get(&account_id)

@@ -48,7 +48,7 @@ mod tests {
         assert_eq!(*updated.state(), AccountState::Deactivated);
         assert_eq!(updated.version(), 2);
 
-        let saved_in_db = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved_in_db = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved_in_db.version(), 2);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
@@ -85,7 +85,7 @@ mod tests {
         // On vérifie que la version est restée la même que celle insérée (2)
         assert_eq!(returned.version(), 2);
         
-        let saved = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.version(), 2);
         
         // Aucun événement supplémentaire

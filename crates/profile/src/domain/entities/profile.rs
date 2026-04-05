@@ -105,7 +105,7 @@ impl Profile {
 
     pub fn create(mut profile: Self) -> Self {
         let occurred_at = profile.created_at();
-        profile.add_event(Box::new(ProfileEvent::ProfileCreated {
+        profile.push_event(Box::new(ProfileEvent::ProfileCreated {
             id: Uuid::now_v7(),
             profile_id: profile.id().clone(),
             owner_id: profile.owner_id().clone(),
@@ -130,7 +130,7 @@ impl Profile {
         let old_handle = std::mem::replace(&mut self.handle, new_handle);
 
         self.apply_change();
-        self.add_event(Box::new(ProfileEvent::HandleChanged {
+        self.push_event(Box::new(ProfileEvent::HandleChanged {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -155,7 +155,7 @@ impl Profile {
         let old_display_name = std::mem::replace(&mut self.display_name, new_display_name);
 
         self.apply_change();
-        self.add_event(Box::new(ProfileEvent::DisplayNameChanged {
+        self.push_event(Box::new(ProfileEvent::DisplayNameChanged {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -179,7 +179,7 @@ impl Profile {
         self.bio = new_bio;
 
         self.apply_change();
-        self.add_event(Box::new(ProfileEvent::BioUpdated {
+        self.push_event(Box::new(ProfileEvent::BioUpdated {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -203,7 +203,7 @@ impl Profile {
         let old_avatar_url = std::mem::replace(&mut self.avatar_url, Some(new_avatar_url));
         self.apply_change();
 
-        self.add_event(Box::new(ProfileEvent::AvatarUpdated {
+        self.push_event(Box::new(ProfileEvent::AvatarUpdated {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -227,7 +227,7 @@ impl Profile {
         let old_avatar_url = self.avatar_url.take();
         self.apply_change();
 
-        self.add_event(Box::new(ProfileEvent::AvatarRemoved {
+        self.push_event(Box::new(ProfileEvent::AvatarRemoved {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -248,7 +248,7 @@ impl Profile {
         let old_banner_url = std::mem::replace(&mut self.banner_url, Some(new_banner_url)) ;
         self.apply_change();
 
-        self.add_event(Box::new(ProfileEvent::BannerUpdated {
+        self.push_event(Box::new(ProfileEvent::BannerUpdated {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -270,7 +270,7 @@ impl Profile {
         let old_banner_url = self.banner_url.take();
         self.apply_change();
 
-        self.add_event(Box::new(ProfileEvent::BannerRemoved {
+        self.push_event(Box::new(ProfileEvent::BannerRemoved {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -296,7 +296,7 @@ impl Profile {
         self.apply_change();
 
         // 5. Événement avec les deux états (pour comparaison/audit)
-        self.add_event(Box::new(ProfileEvent::SocialLinksUpdated {
+        self.push_event(Box::new(ProfileEvent::SocialLinksUpdated {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -320,7 +320,7 @@ impl Profile {
         self.apply_change();
 
         // 3. Émission de l'événement
-        self.add_event(Box::new(ProfileEvent::LocationLabelUpdated {
+        self.push_event(Box::new(ProfileEvent::LocationLabelUpdated {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -343,7 +343,7 @@ impl Profile {
         self.is_private = is_private;
         self.apply_change();
 
-        self.add_event(Box::new(ProfileEvent::PrivacySettingsChanged {
+        self.push_event(Box::new(ProfileEvent::PrivacySettingsChanged {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -363,7 +363,7 @@ impl Profile {
         self.apply_change();
 
         // On génère l'événement spécifique avec l'ID du post
-        self.add_event(Box::new(ProfileEvent::PostCountIncremented {
+        self.push_event(Box::new(ProfileEvent::PostCountIncremented {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -393,7 +393,7 @@ impl Profile {
 
         // Même logique pour la décrémentation : on utilise le post_id
         // pour s'assurer qu'on ne décrémente pas deux fois si l'appel est rejoué.
-        self.add_event(Box::new(ProfileEvent::PostCountDecremented {
+        self.push_event(Box::new(ProfileEvent::PostCountDecremented {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),
@@ -421,7 +421,7 @@ impl Profile {
     }
 
     fn record_stats_snapshot(&mut self) {
-        self.add_event(Box::new(ProfileEvent::StatsSnapshotUpdated {
+        self.push_event(Box::new(ProfileEvent::StatsSnapshotUpdated {
             id: Self::create_event_id(),
             profile_id: self.id.clone(),
             owner_id: self.owner_id.clone(),

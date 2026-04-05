@@ -16,7 +16,7 @@ use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber}
 #[derive(Default)]
 pub struct AccountRepositoryStub {
     /// Stockage en mémoire : AccountId -> Account
-    pub accounts: Arc<Mutex<HashMap<AccountId, Account>>>,
+    pub accounts_map: Arc<Mutex<HashMap<AccountId, Account>>>,
     /// Simulation d'erreur forcée
     pub error_to_return: Arc<Mutex<Option<DomainError>>>,
 }
@@ -27,7 +27,7 @@ impl AccountRepositoryStub {
     }
 
     pub fn add_account(&self, account: Account) {
-        self.accounts.lock().unwrap().insert(account.id().clone(), account);
+        self.accounts_map.lock().unwrap().insert(account.id().clone(), account);
     }
 
     fn check_error(&self) -> Result<()> {
@@ -44,19 +44,19 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn fetch_by_id(&self, id: &AccountId, _tx: Option<&mut dyn Transaction>) -> Result<Option<Account>> {
         self.check_error()?;
-        Ok(self.accounts.lock().unwrap().get(id).cloned())
+        Ok(self.accounts_map.lock().unwrap().get(id).cloned())
     }
 
     async fn resolve_id_from_external_id(&self, ext_id: &ExternalId) -> Result<Option<AccountId>> {
         self.check_error()?;
-        Ok(self.accounts.lock().unwrap().values()
+        Ok(self.accounts_map.lock().unwrap().values()
             .find(|a| a.external_id() == ext_id)
             .map(|a| a.id().clone()))
     }
 
     async fn resolve_id_from_email(&self, email: &Email) -> Result<Option<AccountId>> {
         self.check_error()?;
-        Ok(self.accounts.lock().unwrap().values()
+        Ok(self.accounts_map.lock().unwrap().values()
             .find(|a| a.email() == email)
             .map(|a| a.id().clone()))
     }
@@ -65,24 +65,24 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn exists_by_external_id(&self, ext_id: &ExternalId) -> Result<bool> {
         self.check_error()?;
-        Ok(self.accounts.lock().unwrap().values().any(|a| a.external_id() == ext_id))
+        Ok(self.accounts_map.lock().unwrap().values().any(|a| a.external_id() == ext_id))
     }
     
     async fn exists_by_email(&self, email: &Email) -> Result<bool> {
         self.check_error()?;
-        Ok(self.accounts.lock().unwrap().values().any(|a| a.email() == email))
+        Ok(self.accounts_map.lock().unwrap().values().any(|a| a.email() == email))
     }
 
     async fn exists_by_phone(&self, phone: &PhoneNumber) -> Result<bool> {
         self.check_error()?;
-        Ok(self.accounts.lock().unwrap().values().any(|a| a.phone_number() == Some(phone)))
+        Ok(self.accounts_map.lock().unwrap().values().any(|a| a.phone_number() == Some(phone)))
     }
 
     // --- MUTATIONS DE L'ÉTAT (COMMANDES) ---
 
     async fn save(&self, account: &Account, original: Option<&Account>, _tx: Option<&mut dyn Transaction>) -> Result<()> {
         self.check_error()?;
-        let mut map = self.accounts.lock().unwrap();
+        let mut map = self.accounts_map.lock().unwrap();
         
         // Simulation du verrouillage optimiste
         if let Some(orig) = original {
@@ -104,7 +104,7 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn transit_to_state(&self, id: &AccountId, state: AccountState, _tx: &mut dyn Transaction) -> Result<()> {
         self.check_error()?;
-        let mut map = self.accounts.lock().unwrap();
+        let mut map = self.accounts_map.lock().unwrap();
         if let Some(acc) = map.get_mut(id) {
             // Dans un stub, on simule l'effet de transit_to_state
             // Note: En prod, cette méthode est souvent une optimisation SQL directe.
@@ -124,7 +124,7 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn hard_delete(&self, id: &AccountId, _tx: &mut dyn Transaction) -> Result<()> {
         self.check_error()?;
-        if self.accounts.lock().unwrap().remove(id).is_none() {
+        if self.accounts_map.lock().unwrap().remove(id).is_none() {
             return Err(DomainError::NotFound { entity: "Account", id: id.as_string() });
         }
         Ok(())

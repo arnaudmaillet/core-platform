@@ -58,7 +58,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let is_shadow = metadata.is_shadowbanned();
         let trust = metadata.trust_score();
         let notes = metadata.moderation_notes().map(|s| s.to_string());
-        let last_ip_addr = metadata.last_ip_addr().map(|s| s.to_string());
+        let last_ip_addr = metadata.last_ip_addr().map(|ip| ip.to_std());
         let last_mod = metadata.last_moderation_at();
         let updated = metadata.updated_at();
         let new_version = metadata.version_i64()?;
@@ -83,7 +83,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                 let sql = r#"
                     INSERT INTO account_metadata (
                         account_id, region_code, role, is_beta_tester, is_shadowbanned,
-                        trust_score, moderation_notes, estimated_ip, last_moderation_at,
+                        trust_score, moderation_notes, last_ip_addr, last_moderation_at,
                         version, updated_at
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     ON CONFLICT (account_id, region_code) DO UPDATE SET
@@ -92,7 +92,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
                         is_shadowbanned = EXCLUDED.is_shadowbanned,
                         trust_score = EXCLUDED.trust_score,
                         moderation_notes = EXCLUDED.moderation_notes,
-                        estimated_ip = EXCLUDED.estimated_ip,
+                        last_ip_addr = EXCLUDED.last_ip_addr,
                         last_moderation_at = EXCLUDED.last_moderation_at,
                         version = EXCLUDED.version,
                         updated_at = EXCLUDED.updated_at

@@ -1,6 +1,8 @@
 use crate::domain::account::entities::AccountMetadata;
 use crate::domain::account::builders::AccountMetadataBuilder;
 use crate::domain::value_objects::AccountRole;
+use std::net::IpAddr as StdIpAddr;
+use crate::domain::value_objects::IpAddr;
 use crate::infrastructure::postgres::models::PostgresAccountRole;
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::Identifier;
@@ -20,7 +22,7 @@ pub struct PostgresAccountMetadataRow {
     pub trust_score: i32,
     pub last_moderation_at: Option<DateTime<Utc>>,
     pub moderation_notes: Option<String>,
-    pub estimated_ip: Option<String>,
+    pub last_ip_addr: Option<StdIpAddr>,
     pub updated_at: DateTime<Utc>,
     pub version: i64,
 }
@@ -29,6 +31,8 @@ impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
     type Error = DomainError;
 
     fn try_from(row: PostgresAccountMetadataRow) -> Result<Self> {
+        let last_ip_addr = row.last_ip_addr
+            .map(IpAddr::from_raw);
         let metadata = AggregateMetadata::try_from(row.version)?;
 
         Ok(AccountMetadataBuilder::restore(
@@ -40,7 +44,7 @@ impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
             row.trust_score,
             row.last_moderation_at,
             row.moderation_notes,
-            row.estimated_ip,
+            last_ip_addr,
             row.updated_at,
             metadata.version(),
         ))

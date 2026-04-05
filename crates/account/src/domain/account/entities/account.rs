@@ -3,7 +3,7 @@
 use crate::domain::account::builders::AccountBuilder;
 use crate::domain::events::AccountEvent;
 use crate::domain::value_objects::{
-    AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
+    AccountState, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
 };
 use chrono::{DateTime, Duration, Utc};
 use shared_kernel::domain::Identifier;
@@ -82,19 +82,45 @@ impl Account {
 
     // --- GETTERS PUBLICS ---
 
-    pub fn id(&self) -> &AccountId { &self.id }
-    pub fn region_code(&self) -> &RegionCode { &self.region_code }
-    pub fn external_id(&self) -> &ExternalId { &self.external_id }
-    pub fn email(&self) -> &Email { &self.email }
-    pub fn is_email_verified(&self) -> bool { self.email_verified }
-    pub fn phone_number(&self) -> Option<&PhoneNumber> { self.phone_number.as_ref() }
-    pub fn is_phone_verified(&self) -> bool { self.phone_verified }
-    pub fn state(&self) -> &AccountState { &self.state }
-    pub fn birth_date(&self) -> Option<&BirthDate> { self.birth_date.as_ref() }
-    pub fn locale(&self) -> &Locale { &self.locale }
-    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
-    pub fn last_active_at(&self) -> Option<DateTime<Utc>> { self.last_active_at }
+    pub fn id(&self) -> &AccountId {
+        &self.id
+    }
+    pub fn region_code(&self) -> &RegionCode {
+        &self.region_code
+    }
+    pub fn external_id(&self) -> &ExternalId {
+        &self.external_id
+    }
+    pub fn email(&self) -> &Email {
+        &self.email
+    }
+    pub fn is_email_verified(&self) -> bool {
+        self.email_verified
+    }
+    pub fn phone_number(&self) -> Option<&PhoneNumber> {
+        self.phone_number.as_ref()
+    }
+    pub fn is_phone_verified(&self) -> bool {
+        self.phone_verified
+    }
+    pub fn state(&self) -> &AccountState {
+        &self.state
+    }
+    pub fn birth_date(&self) -> Option<&BirthDate> {
+        self.birth_date.as_ref()
+    }
+    pub fn locale(&self) -> &Locale {
+        &self.locale
+    }
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+    pub fn last_active_at(&self) -> Option<DateTime<Utc>> {
+        self.last_active_at
+    }
 
     // ==========================================
     // GESTION DE L'IDENTITÉ (EMAIL & SÉCURITÉ)
@@ -102,7 +128,11 @@ impl Account {
 
     /// Lie une identité externe (ex: Cognito sub) au compte utilisateur.
     /// Cette opération est critique pour la sécurité.
-    pub fn link_external_identity(&mut self, region: &RegionCode, new_external_id: ExternalId) -> Result<bool> {
+    pub fn link_external_identity(
+        &mut self,
+        region: &RegionCode,
+        new_external_id: ExternalId,
+    ) -> Result<bool> {
         self.ensure_region_match(region)?;
         if self.external_id == new_external_id {
             return Ok(false);
@@ -118,7 +148,7 @@ impl Account {
         let old_external_id = std::mem::replace(&mut self.external_id, new_external_id);
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::ExternalIdentityLinked {
+        self.push_event(Box::new(AccountEvent::ExternalIdentityLinked {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             old_external_id,
@@ -145,7 +175,7 @@ impl Account {
         self.email_verified = false;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::EmailChanged {
+        self.push_event(Box::new(AccountEvent::EmailChanged {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             old_email: Some(old_email),
@@ -169,7 +199,7 @@ impl Account {
             self.state = AccountState::Active;
         }
 
-        self.add_event(Box::new(AccountEvent::EmailVerified {
+        self.push_event(Box::new(AccountEvent::EmailVerified {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -182,7 +212,11 @@ impl Account {
     // GESTION DU TÉLÉPHONE (MFA / NOTIFICATIONS)
     // ==========================================
 
-    pub fn change_phone_number(&mut self, region: &RegionCode, new_phone: PhoneNumber) -> Result<bool> {
+    pub fn change_phone_number(
+        &mut self,
+        region: &RegionCode,
+        new_phone: PhoneNumber,
+    ) -> Result<bool> {
         self.ensure_region_match(region)?;
         if self.phone_number.as_ref() == Some(&new_phone) {
             return Ok(false);
@@ -192,7 +226,7 @@ impl Account {
         self.phone_verified = false;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::PhoneNumberChanged {
+        self.push_event(Box::new(AccountEvent::PhoneNumberChanged {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             old_phone_number,
@@ -212,7 +246,7 @@ impl Account {
         self.phone_verified = true;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::PhoneVerified {
+        self.push_event(Box::new(AccountEvent::PhoneVerified {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -240,7 +274,7 @@ impl Account {
         self.birth_date = Some(new_date);
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::BirthDateChanged {
+        self.push_event(Box::new(AccountEvent::BirthDateChanged {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -258,7 +292,7 @@ impl Account {
         self.locale = new_locale;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::LocaleChanged {
+        self.push_event(Box::new(AccountEvent::LocaleChanged {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             new_locale: self.locale.clone(),
@@ -276,7 +310,7 @@ impl Account {
         let old_region = std::mem::replace(&mut self.region_code, new_region);
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountRegionChanged {
+        self.push_event(Box::new(AccountEvent::AccountRegionChanged {
             account_id: self.id.clone(),
             old_region,
             new_region: self.region_code.clone(),
@@ -290,6 +324,26 @@ impl Account {
     // CYCLE DE VIE & ÉTATS DE SÉCURITÉ
     // ==========================================
 
+    pub fn register(&mut self, region: &RegionCode, ip_addr: IpAddr) -> Result<bool> {
+        self.ensure_region_match(region)?;
+
+        self.state = AccountState::Active;
+        self.last_active_at = Some(Utc::now());
+        self.apply_change();
+
+        self.push_event(Box::new(AccountEvent::AccountRegistered {
+            account_id: self.id.clone(),
+            region: self.region_code.clone(),
+            email: self.email.clone(),
+            external_id: self.external_id.clone(),
+            locale: self.locale.clone(),
+            ip_addr,
+            occurred_at: self.updated_at,
+        }));
+
+        Ok(true)
+    }
+
     pub fn deactivate(&mut self, region: &RegionCode) -> Result<bool> {
         self.ensure_region_match(region)?;
         if self.state == AccountState::Deactivated {
@@ -299,7 +353,7 @@ impl Account {
         self.state = AccountState::Deactivated;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountDeactivated {
+        self.push_event(Box::new(AccountEvent::AccountDeactivated {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -308,7 +362,7 @@ impl Account {
         Ok(true)
     }
 
-    pub fn reactivate(&mut self, region: &RegionCode) -> Result<bool> {
+    pub fn activate(&mut self, region: &RegionCode) -> Result<bool> {
         self.ensure_region_match(region)?;
         if self.is_active() {
             return Ok(false);
@@ -320,11 +374,11 @@ impl Account {
                 reason: "Only deactivated accounts can be reactivated manually".into(),
             });
         }
-        
+
         self.state = AccountState::Active;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountReactivated {
+        self.push_event(Box::new(AccountEvent::AccountReactivated {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -342,7 +396,7 @@ impl Account {
         self.state = AccountState::Suspended;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountSuspended {
+        self.push_event(Box::new(AccountEvent::AccountSuspended {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             reason,
@@ -361,7 +415,7 @@ impl Account {
         self.state = AccountState::Active;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountUnsuspended {
+        self.push_event(Box::new(AccountEvent::AccountUnsuspended {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -378,7 +432,7 @@ impl Account {
 
         self.state = AccountState::Banned;
         self.apply_change();
-        self.add_event(Box::new(AccountEvent::AccountBanned {
+        self.push_event(Box::new(AccountEvent::AccountBanned {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             reason,
@@ -397,7 +451,7 @@ impl Account {
         self.state = AccountState::Active;
         self.apply_change();
 
-        self.add_event(Box::new(AccountEvent::AccountUnbanned {
+        self.push_event(Box::new(AccountEvent::AccountUnbanned {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -410,7 +464,10 @@ impl Account {
         self.ensure_region_match(region)?;
 
         let now = Utc::now();
-        if self.last_active_at.map_or(true, |l| now - l > Duration::minutes(5)) {
+        if self
+            .last_active_at
+            .map_or(true, |l| now - l > Duration::minutes(5))
+        {
             self.last_active_at = Some(now);
             Ok(true)
         } else {

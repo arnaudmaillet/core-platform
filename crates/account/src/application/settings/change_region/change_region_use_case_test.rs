@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(response.settings.region_code().as_str(), "us");
 
         // Vérification de l'objet SAUVEGARDÉ (Persistence)
-        let a = account_repo.accounts.lock().unwrap().get(&account_id).cloned().unwrap();
+        let a = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
         let m = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
         let s = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
 

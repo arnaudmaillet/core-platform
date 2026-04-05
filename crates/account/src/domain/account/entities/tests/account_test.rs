@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
+    use crate::domain::account::entities::Account;
     use crate::domain::value_objects::*;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use chrono::{Duration, Utc};
     use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
-    use crate::domain::account::entities::Account;
 
     // Helper pour créer un compte de base rapidement
     fn create_test_account() -> Account {
@@ -57,7 +57,10 @@ mod tests {
         // Tentative de vérification d'email avec la mauvaise région
         let result = account.verify_email(&wrong_region);
 
-        assert!(result.is_err(), "L'opération aurait dû être bloquée (Forbidden)");
+        assert!(
+            result.is_err(),
+            "L'opération aurait dû être bloquée (Forbidden)"
+        );
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
@@ -84,7 +87,9 @@ mod tests {
         account.verify_email(&region).unwrap();
 
         // 1. Suspension : true
-        let changed = account.suspend(&region, "Suspicious activity".into()).unwrap();
+        let changed = account
+            .suspend(&region, "Suspicious activity".into())
+            .unwrap();
         assert!(changed);
         assert!(account.is_blocked());
 
@@ -109,7 +114,7 @@ mod tests {
         assert_eq!(account.state(), &AccountState::Banned);
 
         // On ne peut pas réactiver (reactivate) un compte banni sans unban
-        let res = account.reactivate(&region);
+        let res = account.activate(&region);
         assert!(res.is_err());
 
         // Unban : true
@@ -124,10 +129,16 @@ mod tests {
 
         // Le premier log devrait maintenant être true car l'activité initiale est ancienne
         let first_log = account.record_activity(&region).unwrap();
-        assert!(first_log, "First log after builder should be true if last_activity is old");
+        assert!(
+            first_log,
+            "First log after builder should be true if last_activity is old"
+        );
 
         // Le second log est immédiat, donc throttle -> false
         let second_log = account.record_activity(&region).unwrap();
-        assert!(!second_log, "Should be throttled and return false on immediate subsequent call");
+        assert!(
+            !second_log,
+            "Should be throttled and return false on immediate subsequent call"
+        );
     }
 }
