@@ -9,13 +9,16 @@ use std::convert::TryFrom;
 pub struct IpAddr(StdIpAddr); // Ton Value Object s'appelle IpAddr
 
 impl IpAddr {
-    pub fn try_new(ip_str: &str) -> Result<Self> {
-        StdIpAddr::from_str(ip_str)
-            .map(IpAddr)
-            .map_err(|_| DomainError::Validation {
-                field: "ip_address",
-                reason: format!("L'adresse IP '{}' est mal formée", ip_str),
-            })
+    pub fn try_new(value: impl Into<String>) -> Result<Self> {
+        let raw = value.into();
+        let cleaned = raw.trim();
+
+        let parsed = StdIpAddr::from_str(cleaned).map_err(|e| DomainError::Validation {
+            field: "ip_addr",
+            reason: format!("Invalid IP address format: {}", e),
+        })?;
+
+        Ok(Self(parsed))
     }
 
     pub fn is_global(&self) -> bool {

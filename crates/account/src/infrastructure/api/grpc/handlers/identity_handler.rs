@@ -3,15 +3,15 @@
 use shared_kernel::domain::value_objects::RegionCode;
 use shared_proto::account::v1::{
     Account,
+    ActivateRequest,
+    DeactivateRequest,
     ChangeBirthDateRequest,
     ChangeEmailRequest,
     ChangePhoneNumberRequest,
     ChangeRegionRequest,
-    DeactivateAccountRequest,
-    // RegisterAccountRequest,
+    RegisterRequest,
     // ResolveIdentityRequest,
     LinkExternalIdentityRequest,
-    ReactivateAccountRequest,
     VerifyEmailRequest,
     VerifyPhoneNumberRequest,
     account_identity_service_server::AccountIdentityService,
@@ -49,11 +49,11 @@ pub struct IdentityHandler {
     verify_phone_number_use_case: Arc<VerifyPhoneNumberUseCase>,
     change_birth_date_use_case: Arc<ChangeBirthDateUseCase>,
     change_region_use_case: Arc<ChangeRegionUseCase>,
-    // register_account_use_case: Arc<RegisterAccountUseCase>,
+    register_use_case: Arc<RegisterUseCase>,
     resolve_identity_use_case: Arc<ResolveIdentityUseCase>,
     link_external_identity_use_case: Arc<LinkExternalIdentityUseCase>,
-    deactivate_account_use_case: Arc<DeactivateUseCase>,
-    reactivate_account_use_case: Arc<ReactivateUseCase>,
+    deactivate_use_case: Arc<DeactivateUseCase>,
+    activate_use_case: Arc<ReactivateUseCase>,
 }
 
 impl IdentityHandler {
@@ -64,11 +64,11 @@ impl IdentityHandler {
         verify_phone_number_use_case: Arc<VerifyPhoneNumberUseCase>,
         change_birth_date_use_case: Arc<ChangeBirthDateUseCase>,
         change_region_use_case: Arc<ChangeRegionUseCase>,
-        // register_account_use_case: Arc<RegisterAccountUseCase>,
+        register_use_case: Arc<RegisterUseCase>,
         resolve_identity_use_case: Arc<ResolveIdentityUseCase>,
         link_external_identity_use_case: Arc<LinkExternalIdentityUseCase>,
-        deactivate_account_use_case: Arc<DeactivateUseCase>,
-        reactivate_account_use_case: Arc<ReactivateUseCase>,
+        deactivate_use_case: Arc<DeactivateUseCase>,
+        activate_use_case: Arc<ReactivateUseCase>,
     ) -> Self {
         Self {
             change_email_use_case,
@@ -77,11 +77,11 @@ impl IdentityHandler {
             verify_phone_number_use_case,
             change_birth_date_use_case,
             change_region_use_case,
-            // register_account_use_case,
+            register_use_case,
             resolve_identity_use_case,
             link_external_identity_use_case,
-            deactivate_account_use_case,
-            reactivate_account_use_case,
+            deactivate_use_case,
+            activate_use_case,
         }
     }
 
@@ -96,6 +96,14 @@ impl IdentityHandler {
 
 #[tonic::async_trait]
 impl AccountIdentityService for IdentityHandler {
+
+    async fn register(&self, request: Request<RegisterRequest>) -> Result<Response<Account>, Status> {
+        let region: RegionCode = self.get_region(&request)?;
+        let command = RegisterCommand::try_from_proto(request.into_inner(), region)?;
+        let account = self.register_use_case.execute(command).await.map_grpc()?;
+        Ok(Response::new(account.into()))
+    }
+
     async fn change_email(
         &self,
         request: Request<ChangeEmailRequest>,
@@ -180,13 +188,6 @@ impl AccountIdentityService for IdentityHandler {
         Ok(Response::new(response.account.into()))
     }
 
-    // async fn register_account(&self, request: Request<RegisterAccountRequest>) -> Result<Response<Account>, Status> {
-    //     let region = self.get_region(&request)?;
-    //     let command = RegisterAccountCommand::try_from_proto(request.into_inner(), region)?;
-    //     let account = self.register_account_use_case.execute(command).await.map_grpc()?;
-    //     Ok(Response::new(account.into()))
-    // }
-
     // async fn resolve_identity(&self, request: Request<ResolveIdentityRequest>) -> Result<Response<Account>, Status> {
     //     let region = self.get_region(&request)?;
     //     let command = ResolveIdentityCommand::try_from_proto(request.into_inner())?;
@@ -210,12 +211,12 @@ impl AccountIdentityService for IdentityHandler {
 
     async fn deactivate_account(
         &self,
-        request: Request<DeactivateAccountRequest>,
+        request: Request<DeactivateRequest>,
     ) -> Result<Response<Account>, Status> {
         let region = self.get_region(&request)?;
         let command = DeactivateCommand::try_from_proto(request.into_inner(), region)?;
         let account = self
-            .deactivate_account_use_case
+            .deactivate_use_case
             .execute(command)
             .await
             .map_grpc()?;
@@ -224,12 +225,12 @@ impl AccountIdentityService for IdentityHandler {
 
     async fn reactivate_account(
         &self,
-        request: Request<ReactivateAccountRequest>,
+        request: Request<ActivateRequest>,
     ) -> Result<Response<Account>, Status> {
         let region = self.get_region(&request)?;
         let command = ActivateCommand::try_from_proto(request.into_inner(), region)?;
         let account = self
-            .reactivate_account_use_case
+            .activate_use_case
             .execute(command)
             .await
             .map_grpc()?;

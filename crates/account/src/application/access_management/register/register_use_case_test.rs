@@ -66,14 +66,14 @@ mod tests {
 
         // Assert
         assert!(result.is_ok(), "Le register devrait réussir");
-        let account_id = result.unwrap();
+        let account = result.unwrap();
 
         // Vérification de la création de l'Account
         let saved_account = account_repo
             .accounts_map
             .lock()
             .unwrap()
-            .get(&account_id)
+            .get(&account.id())
             .cloned()
             .unwrap();
         assert_eq!(
@@ -96,7 +96,7 @@ mod tests {
             .metadata_map
             .lock()
             .unwrap()
-            .get(&account_id)
+            .get(&account.id())
             .cloned()
             .unwrap();
         assert_eq!(
@@ -109,10 +109,10 @@ mod tests {
             .settings_map
             .lock()
             .unwrap()
-            .get(&account_id)
+            .get(&account.id())
             .cloned()
             .unwrap();
-        assert_eq!(saved_settings.account_id(), &account_id);
+        assert_eq!(saved_settings.account_id(), account.id());
 
         // Vérification de l'outbox
         assert_eq!(

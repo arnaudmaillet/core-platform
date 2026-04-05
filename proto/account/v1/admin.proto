@@ -11,22 +11,22 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
 // --- MODERATION ---
 service AccountModerationService {
-  rpc SuspendAccount(SuspendAccountRequest) returns (Account);
-  rpc UnsuspendAccount(UnsuspendAccountRequest) returns (Account);
+  rpc Suspend(SuspendRequest) returns (Account);
+  rpc Unsuspend(UnsuspendRequest) returns (Account);
   rpc Shadowban(ShadowbanRequest) returns (Account);
   rpc LiftShadowban(LiftShadowbanRequest) returns (Account);
-  rpc BanAccount(BanAccountRequest) returns (Account);
-  rpc UnbanAccount(UnbanAccountRequest) returns (Account);
+  rpc BanAccount(BanRequest) returns (Account);
+  rpc UnbanAccount(UnbanRequest) returns (Account);
   rpc IncreaseTrustScore(IncreaseTrustScoreRequest) returns (Account);
   rpc DecreaseTrustScore(DecreaseTrustScoreRequest) returns (Account);
 }
 
 // --- METADATA ---
 service AccountMetadataService {
-  rpc GetAccountMetadata(GetAccountMetadataRequest) returns (AccountMetadata);
+  rpc GetMetadata(GetMetadataRequest) returns (AccountMetadata);
   rpc SetBetaStatus(SetBetaStatusRequest) returns (AccountMetadata);
   rpc SetShadowbanStatus(SetShadowbanStatusRequest) returns (AccountMetadata);
-  rpc UpdateAccountRole(UpdateAccountRoleRequest) returns (AccountMetadata);
+  rpc UpdateAccountRole(UpdateRoleRequest) returns (AccountMetadata);
 }
 
 // --- SETTINGS ---
@@ -39,16 +39,16 @@ service AccountSettingsService {
 }
 
 // --- MESSAGES ---
-message SuspendAccountRequest { string id = 1; string reason = 2; }
-message UnsuspendAccountRequest { string id = 1; }
+message SuspendRequest { string id = 1; string reason = 2; }
+message UnsuspendRequest { string id = 1; }
 message ShadowbanRequest { string id = 1; string reason = 2; }
 message LiftShadowbanRequest { string id = 1; }
-message BanAccountRequest { string id = 1; string reason = 2; }
-message UnbanAccountRequest { string id = 1; }
-message GetAccountMetadataRequest { string account_id = 1; }
+message BanRequest { string id = 1; string reason = 2; }
+message UnbanRequest { string id = 1; }
+message GetMetadataRequest { string account_id = 1; }
 message SetBetaStatusRequest { string account_id = 1; bool is_beta_tester = 2; string reason = 3; }
 message SetShadowbanStatusRequest { string account_id = 1; bool is_shadowbanned = 2; string reason = 3; }
-message UpdateAccountRoleRequest { string account_id = 1; AccountRole new_role = 2; string reason = 3; }
+message UpdateRoleRequest { string account_id = 1; AccountRole new_role = 2; string reason = 3; }
 message GetSettingsRequest { string account_id = 1; }
 message UpdateTimezoneRequest { string account_id = 1; string timezone = 2; }
 message AddPushTokenRequest { string account_id = 1; string token = 2; }

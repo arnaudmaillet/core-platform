@@ -40,24 +40,24 @@ impl RegisterUseCase {
         }
     }
 
-    pub async fn execute(&self, command: RegisterCommand) -> Result<AccountId> {
+    pub async fn execute(&self, command: RegisterCommand) -> Result<Account> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         }).await
     }
     
-    async fn try_execute_once(&self, cmd: &RegisterCommand) -> Result<AccountId> {
+    async fn try_execute_once(&self, cmd: &RegisterCommand) -> Result<Account> {
         let account_id = AccountId::new();
     
-        let mut account = Account::builder(account_id.clone(), cmd.region.clone(), cmd.email.clone(), cmd.external_id.clone())
+        let mut account = Account::builder(account_id, cmd.region.clone(), cmd.email.clone(), cmd.external_id.clone())
             .with_locale(cmd.locale.clone())
             .build();
     
-        let metadata = AccountMetadata::builder(account_id.clone(), cmd.region.clone())
+        let metadata = AccountMetadata::builder(account_id, cmd.region.clone())
             .with_ip_addr(cmd.ip_addr.clone())
             .build();
     
-        let settings = AccountSettings::builder(account_id.clone(), cmd.region.clone())
+        let settings = AccountSettings::builder(account_id, cmd.region.clone())
             .build();
 
         if !account.register(&cmd.region, cmd.ip_addr)? {
@@ -74,6 +74,7 @@ impl RegisterUseCase {
         let metadata_repo = Arc::clone(&self.metadata_repo);
         let settings_repo = Arc::clone(&self.settings_repo);
         let outbox = Arc::clone(&self.outbox);
+        let registered_account = account.clone();
 
         self.tx_manager.run_in_transaction(move |mut tx| {    
             let account = account.clone();
@@ -101,6 +102,6 @@ impl RegisterUseCase {
             })
         }).await?;
     
-        Ok(account_id)
+        Ok(registered_account)
     }
 }
