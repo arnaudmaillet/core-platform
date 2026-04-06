@@ -1,6 +1,8 @@
 // crates/account/src/domain/entities/account_event.rs
 
-use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
+use crate::domain::preferences::models::{
+    AppearancePreferences, NotificationPreferences, PrivacyPreferences,
+};
 use crate::domain::value_objects::{AccountRole, Email, ExternalId, IpAddr, Locale, PhoneNumber};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -112,7 +114,7 @@ pub enum AccountEvent {
         region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
-    AccountReactivated {
+    AccountActivated {
         account_id: AccountId,
         region: RegionCode,
         occurred_at: DateTime<Utc>,
@@ -207,14 +209,20 @@ impl DomainEvent for AccountEvent {
             Self::AccountRoleChanged { .. } => "account.metadata.role_changed",
             Self::AccountRegionChanged { .. } => "account.system.region_changed",
             Self::AccountDeactivated { .. } => "account.deactivated",
-            Self::AccountReactivated { .. } => "account.reactivated",
+            Self::AccountActivated { .. } => "account.activated",
             Self::AccountBanned { .. } => "account.banned",
             Self::AccountUnbanned { .. } => "account.unbanned",
             Self::AccountSuspended { .. } => "account.suspended",
             Self::AccountUnsuspended { .. } => "account.unsuspended",
-            Self::NotificationsPreferencesChanged { .. } => "account.settings.notifications_preferences_changed",
-            Self::AppearancePreferencesChanged { .. } => "account.settings.appearance_preferences_changed",
-            Self::PrivacyPreferencesChanged { .. } => "account.settings.privacy_preferences_changed",
+            Self::NotificationsPreferencesChanged { .. } => {
+                "account.settings.notifications_preferences_changed"
+            }
+            Self::AppearancePreferencesChanged { .. } => {
+                "account.settings.appearance_preferences_changed"
+            }
+            Self::PrivacyPreferencesChanged { .. } => {
+                "account.settings.privacy_preferences_changed"
+            }
             Self::PushTokenAdded { .. } => "account.settings.push_token_added",
             Self::PushTokenRemoved { .. } => "account.settings.push_token_removed",
             Self::TimezoneChanged { .. } => "account.settings.timezone_changed",
@@ -237,7 +245,7 @@ impl DomainEvent for AccountEvent {
             | Self::ShadowbanStatusChanged { region, .. }
             | Self::AccountRoleChanged { region, .. }
             | Self::AccountDeactivated { region, .. }
-            | Self::AccountReactivated { region, .. }
+            | Self::AccountActivated { region, .. }
             | Self::AccountBanned { region, .. }
             | Self::AccountUnbanned { region, .. }
             | Self::AccountSuspended { region, .. }
@@ -273,7 +281,7 @@ impl DomainEvent for AccountEvent {
             | Self::AccountRoleChanged { account_id, .. }
             | Self::AccountRegionChanged { account_id, .. }
             | Self::AccountDeactivated { account_id, .. }
-            | Self::AccountReactivated { account_id, .. }
+            | Self::AccountActivated { account_id, .. }
             | Self::AccountBanned { account_id, .. }
             | Self::AccountUnbanned { account_id, .. }
             | Self::AccountSuspended { account_id, .. }
@@ -303,7 +311,7 @@ impl DomainEvent for AccountEvent {
             | Self::AccountRoleChanged { occurred_at, .. }
             | Self::AccountRegionChanged { occurred_at, .. }
             | Self::AccountDeactivated { occurred_at, .. }
-            | Self::AccountReactivated { occurred_at, .. }
+            | Self::AccountActivated { occurred_at, .. }
             | Self::AccountBanned { occurred_at, .. }
             | Self::AccountUnbanned { occurred_at, .. }
             | Self::AccountSuspended { occurred_at, .. }

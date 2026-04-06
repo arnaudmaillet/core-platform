@@ -1,11 +1,11 @@
-use crate::domain::account::entities::Account;
+use crate::domain::account::entities::AccountIdentity;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::infrastructure::grpc::ChronoTimestampExt;
 use shared_proto::account::v1::Account as ProtoAccount;
 use shared_proto::account::v1::AccountState as ProtoState;
 
-impl From<Account> for ProtoAccount {
-    fn from(a: Account) -> Self {
+impl From<AccountIdentity> for ProtoAccount {
+    fn from(a: AccountIdentity) -> Self {
         Self {
             id: a.id().to_string(),
             region_code: a.region_code().to_string(),

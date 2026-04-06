@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::account::entities::{Account, AccountMetadata, AccountSettings};
+    use crate::domain::account::entities::{AccountIdentity, AccountMetadata, AccountSettings};
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -9,16 +9,16 @@ mod tests {
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::settings::change_region::{ChangeRegionCommand, ChangeRegionUseCase};
-    use crate::domain::repositories::{AccountMetadataRepositoryStub, AccountRepositoryStub, AccountSettingsRepositoryStub};
+    use crate::domain::repositories::{AccountMetadataRepositoryStub, AccountIdentityRepositoryStub, AccountSettingsRepositoryStub};
 
     fn setup() -> (
         ChangeRegionUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<AccountMetadataRepositoryStub>,
         Arc<AccountSettingsRepositoryStub>,
         Arc<OutboxRepositoryStub>
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let metadata_repo = Arc::new(AccountMetadataRepositoryStub::new());
         let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
@@ -44,7 +44,7 @@ mod tests {
         let new_region = RegionCode::from_raw("us");
 
         // Initialisation des 3 agrégats en "eu"
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), old_region.clone(),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(response.settings.region_code().as_str(), "us");
 
         // Vérification de l'objet SAUVEGARDÉ (Persistence)
-        let a = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let a = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
         let m = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
         let s = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
 
@@ -92,7 +92,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("us");
 
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), region.clone(),
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
@@ -121,7 +121,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
 
-        account_repo.add_account(Account::builder(account_id.clone(), region.clone(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
+        account_repo.add_account(AccountIdentity::builder(account_id.clone(), region.clone(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
         metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
         settings_repo.add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
 

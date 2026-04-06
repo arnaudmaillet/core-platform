@@ -1,9 +1,9 @@
 // crates/account/src/infrastructure/postgres/repositories/account_repository
 
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber};
-use crate::infrastructure::postgres::rows::PostgresAccountRow;
+use crate::infrastructure::postgres::rows::PostgresAccountIdentityRow;
 use async_trait::async_trait;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
@@ -13,56 +13,59 @@ use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use sqlx::{Pool, Postgres, query, query_as, query_scalar};
 
-pub struct PostgresAccountRepository {
+pub struct PostgresAccountIdentityRepository {
     pool: Pool<Postgres>,
 }
 
-impl PostgresAccountRepository {
+impl PostgresAccountIdentityRepository {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl AccountRepository for PostgresAccountRepository {
+impl AccountIdentityRepository for PostgresAccountIdentityRepository {
     // --- RÉSOLUTIONS & LECTURES ---
 
     async fn fetch_by_id(
         &self,
         id: &AccountId,
         tx: Option<&mut dyn Transaction>,
-    ) -> Result<Option<Account>> {
+    ) -> Result<Option<AccountIdentity>> {
         let uid = id.as_uuid();
         let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
-                query_as::<_, PostgresAccountRow>("SELECT * FROM accounts WHERE id = $1")
-                    .bind(uid)
-                    .fetch_optional(conn)
-                    .await
-                    .map_domain::<Account>()
+                query_as::<_, PostgresAccountIdentityRow>(
+                    "SELECT * FROM account_identity WHERE id = $1",
+                )
+                .bind(uid)
+                .fetch_optional(conn)
+                .await
+                .map_domain::<AccountIdentity>()
             })
         })
         .await?;
 
-        row.map(Account::try_from).transpose()
+        row.map(AccountIdentity::try_from).transpose()
     }
 
     async fn resolve_id_from_external_id(&self, ext_id: &ExternalId) -> Result<Option<AccountId>> {
-        let id = query_scalar::<_, uuid::Uuid>("SELECT id FROM accounts WHERE external_id = $1")
-            .bind(ext_id.as_str())
-            .fetch_optional(&self.pool)
-            .await
-            .map_domain::<Account>()?;
+        let id =
+            query_scalar::<_, uuid::Uuid>("SELECT id FROM account_identity WHERE external_id = $1")
+                .bind(ext_id.as_str())
+                .fetch_optional(&self.pool)
+                .await
+                .map_domain::<AccountIdentity>()?;
 
         Ok(id.map(AccountId::from_uuid))
     }
 
     async fn resolve_id_from_email(&self, email: &Email) -> Result<Option<AccountId>> {
-        let id = query_scalar::<_, uuid::Uuid>("SELECT id FROM accounts WHERE email = $1")
+        let id = query_scalar::<_, uuid::Uuid>("SELECT id FROM account_identity WHERE email = $1")
             .bind(email.as_str())
             .fetch_optional(&self.pool)
             .await
-            .map_domain::<Account>()?;
+            .map_domain::<AccountIdentity>()?;
 
         Ok(id.map(AccountId::from_uuid))
     }
@@ -70,35 +73,39 @@ impl AccountRepository for PostgresAccountRepository {
     // --- VÉRIFICATIONS ---
 
     async fn exists_by_external_id(&self, ext_id: &ExternalId) -> Result<bool> {
-        query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM accounts WHERE external_id = $1)")
-            .bind(ext_id.as_str())
-            .fetch_one(&self.pool)
-            .await
-            .map_domain::<Account>()
+        query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM account_identity WHERE external_id = $1)",
+        )
+        .bind(ext_id.as_str())
+        .fetch_one(&self.pool)
+        .await
+        .map_domain::<AccountIdentity>()
     }
 
     async fn exists_by_email(&self, email: &Email) -> Result<bool> {
-        query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM accounts WHERE email = $1)")
+        query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM account_identity WHERE email = $1)")
             .bind(email.as_str())
             .fetch_one(&self.pool)
             .await
-            .map_domain::<Account>()
+            .map_domain::<AccountIdentity>()
     }
 
     async fn exists_by_phone(&self, phone: &PhoneNumber) -> Result<bool> {
-        query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM accounts WHERE phone_number = $1)")
-            .bind(phone.as_str())
-            .fetch_one(&self.pool)
-            .await
-            .map_domain::<Account>()
+        query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone_number = $1)",
+        )
+        .bind(phone.as_str())
+        .fetch_one(&self.pool)
+        .await
+        .map_domain::<AccountIdentity>()
     }
 
     // --- MUTATIONS ---
 
     async fn save(
         &self,
-        account: &Account,
-        original: Option<&Account>,
+        account: &AccountIdentity,
+        original: Option<&AccountIdentity>,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let pool = self.pool.clone();
@@ -129,12 +136,12 @@ impl AccountRepository for PostgresAccountRepository {
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
-                query("UPDATE accounts SET state = $1, version = version + 1, updated_at = NOW() WHERE id = $2")
+                query("UPDATE account_identity SET state = $1, version = version + 1, updated_at = NOW() WHERE id = $2")
                     .bind(state_str)
                     .bind(uid)
                     .execute(conn)
                     .await
-                    .map_domain::<Account>()
+                    .map_domain::<AccountIdentity>()
             })
         }).await?;
 
@@ -142,11 +149,11 @@ impl AccountRepository for PostgresAccountRepository {
     }
 
     async fn record_activity(&self, id: &AccountId) -> Result<()> {
-        query("UPDATE accounts SET last_active_at = NOW() WHERE id = $1")
+        query("UPDATE account_identity SET last_active_at = NOW() WHERE id = $1")
             .bind(id.as_uuid())
             .execute(&self.pool)
             .await
-            .map_domain::<Account>()?;
+            .map_domain::<AccountIdentity>()?;
         Ok(())
     }
 
@@ -155,11 +162,11 @@ impl AccountRepository for PostgresAccountRepository {
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
             Box::pin(async move {
-                query("DELETE FROM accounts WHERE id = $1")
+                query("DELETE FROM account_identity WHERE id = $1")
                     .bind(uid)
                     .execute(conn)
                     .await
-                    .map_domain::<Account>()
+                    .map_domain::<AccountIdentity>()
             })
         })
         .await?;
@@ -168,13 +175,13 @@ impl AccountRepository for PostgresAccountRepository {
     }
 }
 
-impl PostgresAccountRepository {
+impl PostgresAccountIdentityRepository {
     async fn execute_upsert(
         &self,
-        account: &Account,
+        account: &AccountIdentity,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
-        let row = PostgresAccountRow::try_from(account)?;
+        let row = PostgresAccountIdentityRow::try_from(account)?;
         let account_id_for_err = account.id().to_string();
         let current_version = account.version();
 
@@ -189,7 +196,7 @@ impl PostgresAccountRepository {
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
-                INSERT INTO accounts (
+                INSERT INTO account_identity (
                     id, region_code, external_id, email, email_verified,
                     phone_number, phone_verified, state, birth_date,
                     locale, version, updated_at
@@ -223,7 +230,7 @@ impl PostgresAccountRepository {
                     .bind(old_version_i64) // $13
                     .execute(conn)
                     .await
-                    .map_domain::<Account>()?;
+                    .map_domain::<AccountIdentity>()?;
 
                 if result.rows_affected() == 0 && current_version > 1 {
                     return Err(shared_kernel::errors::DomainError::ConcurrencyConflict {

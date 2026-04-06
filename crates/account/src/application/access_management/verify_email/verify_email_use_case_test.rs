@@ -1,21 +1,28 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use crate::domain::account::entities::Account;
+    use crate::application::access_management::verify_email::{
+        VerifyEmailCommand, VerifyEmailUseCase,
+    };
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
+    use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use crate::application::access_management::verify_email::{VerifyEmailCommand, VerifyEmailUseCase};
-    use crate::domain::repositories::AccountRepositoryStub;
+    use std::sync::Arc;
 
-    fn setup() -> (VerifyEmailUseCase, Arc<AccountRepositoryStub>, Arc<OutboxRepositoryStub>) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+    fn setup() -> (
+        VerifyEmailUseCase,
+        Arc<AccountIdentityRepositoryStub>,
+        Arc<OutboxRepositoryStub>,
+    ) {
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
-        let use_case = VerifyEmailUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
+        let use_case =
+            VerifyEmailUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
         (use_case, account_repo, outbox_repo)
     }
 
@@ -26,12 +33,15 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Compte initial (Non vérifié, Version 1)
-        account_repo.add_account(Account::builder(
-            account_id.clone(),
-            region.clone(),
-            Email::try_new("verify@test.com").unwrap(),
-            ExternalId::from_raw("ext_999")
-        ).build());
+        account_repo.add_account(
+            AccountIdentity::builder(
+                account_id.clone(),
+                region.clone(),
+                Email::try_new("verify@test.com").unwrap(),
+                ExternalId::from_raw("ext_999"),
+            )
+            .build(),
+        );
 
         let cmd = VerifyEmailCommand {
             account_id: account_id.clone(),
@@ -47,15 +57,29 @@ mod tests {
         let updated = result.unwrap();
 
         assert!(updated.is_email_verified());
-        assert_eq!(*updated.state(), AccountState::Active, "Le compte doit devenir actif après vérification");
+        assert_eq!(
+            *updated.state(),
+            AccountState::Active,
+            "Le compte doit devenir actif après vérification"
+        );
         assert_eq!(updated.version(), 2, "La version doit passer à 2");
 
         // 4. Persistence réelle
-        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo
+            .identity_map
+            .lock()
+            .unwrap()
+            .get(&account_id)
+            .cloned()
+            .unwrap();
         assert!(saved.is_email_verified());
-        
+
         // 5. Outbox
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1, "Un événement EmailVerified attendu");
+        assert_eq!(
+            outbox_repo.saved_events.lock().unwrap().len(),
+            1,
+            "Un événement EmailVerified attendu"
+        );
     }
 
     #[tokio::test]
@@ -65,17 +89,18 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : On prépare un compte déjà vérifié (Version 2)
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("ok@test.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build();
+            ExternalId::from_raw("ext"),
+        )
+        .build();
 
         account.verify_email(&region).unwrap();
         account.pull_events(); // Clear setup events
         let version_verified = account.version();
-        
+
         account_repo.add_account(account);
 
         let cmd = VerifyEmailCommand {
@@ -92,10 +117,18 @@ mod tests {
         let returned = result.unwrap();
 
         assert!(returned.is_email_verified());
-        assert_eq!(returned.version(), version_verified, "La version ne doit pas augmenter");
+        assert_eq!(
+            returned.version(),
+            version_verified,
+            "La version ne doit pas augmenter"
+        );
 
         // 4. Outbox
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Idempotence : pas de double événement");
+        assert_eq!(
+            outbox_repo.saved_events.lock().unwrap().len(),
+            0,
+            "Idempotence : pas de double événement"
+        );
     }
 
     #[tokio::test]
@@ -104,12 +137,15 @@ mod tests {
         let account_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
 
-        account_repo.add_account(Account::builder(
-            account_id.clone(),
-            actual_region,
-            Email::try_new("u@t.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
+        account_repo.add_account(
+            AccountIdentity::builder(
+                account_id.clone(),
+                actual_region,
+                Email::try_new("u@t.com").unwrap(),
+                ExternalId::from_raw("ext"),
+            )
+            .build(),
+        );
 
         let cmd = VerifyEmailCommand {
             account_id,

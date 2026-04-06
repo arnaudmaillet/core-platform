@@ -1,68 +1,153 @@
--- 1. ENUMS
+-- 1. ENUMS (Identité et rôles)
 DO $$ BEGIN
-    -- On vérifie bien le nom exact du TYPE
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_state') THEN
-CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended');
-END IF;
-
+        CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended');
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'internal_role') THEN
-CREATE TYPE internal_role AS ENUM ('user', 'moderator', 'staff', 'admin');
-END IF;
+        CREATE TYPE internal_role AS ENUM ('user', 'moderator', 'staff', 'admin');
+    END IF;
 END $$;
 
--- 2. TABLE ACCOUNTS
-CREATE TABLE IF NOT EXISTS accounts (
+-- 2. FONCTION DE TRIGGER (Crucial : à définir AVANT les tables)
+CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. IDENTITY (Table racine)
+CREATE TABLE IF NOT EXISTS account_identity (
     id UUID PRIMARY KEY,
-    region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
-    external_id TEXT NOT NULL UNIQUE,
-    email TEXT UNIQUE,
-    phone_number TEXT UNIQUE,
-    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    external_id TEXT NOT NULL,
+    email TEXT,
+    phone_number TEXT,
     state account_state NOT NULL DEFAULT 'active',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'en',
+    region_code VARCHAR(10),
     version BIGINT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_active_at TIMESTAMPTZ
-    );
+    last_active_at TIMESTAMPTZ,
+    CONSTRAINT uq_external_id UNIQUE (external_id)
+);
 
--- 3. SETTINGS
+-- 4. SETTINGS (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_settings (
-    account_id UUID NOT NULL,
-    region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+    id UUID PRIMARY KEY,
     preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
     version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (account_id, region_code)
-    );
+    CONSTRAINT fk_settings_identity FOREIGN KEY (id) REFERENCES account_identity(id) ON DELETE CASCADE
+);
 
--- 4. INTERNAL METADATA (Security & Trust)
+-- 5. METADATA (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_metadata (
-    account_id UUID NOT NULL,
-    region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+    id UUID PRIMARY KEY,
     role internal_role NOT NULL DEFAULT 'user',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
     trust_score INT NOT NULL DEFAULT 100,
     moderation_notes TEXT,
-    last_moderation_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_moderation_at TIMESTAMPTZ,
     last_ip_addr INET,
     version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (account_id, region_code)
-    );
+    CONSTRAINT fk_metadata_identity FOREIGN KEY (id) REFERENCES account_identity(id) ON DELETE CASCADE
+);
 
--- 5. INDEXES & TRIGGERS
-CREATE INDEX IF NOT EXISTS idx_account_settings_push_tokens ON account_settings USING GIN (push_tokens);
-CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON accounts (external_id);
+-- 6. INDEXATION
+CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
+CREATE INDEX IF NOT EXISTS idx_metadata_flagged ON account_metadata (id) 
+WHERE is_shadowbanned IS TRUE OR trust_score < 50;
 
-CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON accounts FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+-- 7. TRIGGERS (Automatisation du updated_at)
+DROP TRIGGER IF EXISTS trg_set_timestamp_identity ON account_identity;
+CREATE TRIGGER trg_set_timestamp_identity BEFORE UPDATE ON account_identity FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+
+DROP TRIGGER IF EXISTS trg_set_timestamp_settings ON account_settings;
 CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
-CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON account_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
-ALTER TABLE account_metadata ALTER COLUMN last_moderation_at DROP NOT NULL;
-ALTER TABLE account_metadata ADD CONSTRAINT account_metadata_account_id_unique UNIQUE (account_id);
+DROP TRIGGER IF EXISTS trg_set_timestamp_metadata ON account_metadata;
+CREATE TRIGGER trg_set_timestamp_metadata BEFORE UPDATE ON account_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+
+
+
+
+
+
+
+
+
+-- -- 1. ENUMS
+-- DO $$ BEGIN
+--     -- On vérifie bien le nom exact du TYPE
+--     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_state') THEN
+-- CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended');
+-- END IF;
+
+--     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'internal_role') THEN
+-- CREATE TYPE internal_role AS ENUM ('user', 'moderator', 'staff', 'admin');
+-- END IF;
+-- END $$;
+
+-- -- 2. IDENTITY
+-- CREATE TABLE IF NOT EXISTS account_identity (
+--     id UUID PRIMARY KEY,
+--     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+--     external_id TEXT NOT NULL UNIQUE,
+--     email TEXT UNIQUE,
+--     phone_number TEXT UNIQUE,
+--     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+--     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+--     state account_state NOT NULL DEFAULT 'active',
+--     birth_date DATE,
+--     locale VARCHAR(10) NOT NULL DEFAULT 'en',
+--     version BIGINT NOT NULL DEFAULT 1,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     last_active_at TIMESTAMPTZ
+--     );
+
+-- -- 3. SETTINGS
+-- CREATE TABLE IF NOT EXISTS account_settings (
+--     account_id UUID NOT NULL,
+--     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+--     preferences JSONB NOT NULL DEFAULT '{}',
+--     timezone TEXT NOT NULL DEFAULT 'UTC',
+--     push_tokens TEXT[] DEFAULT '{}',
+--     version BIGINT NOT NULL DEFAULT 1,
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     PRIMARY KEY (account_id, region_code)
+--     );
+
+-- -- 4. INTERNAL METADATA (Security & Trust)
+-- CREATE TABLE IF NOT EXISTS account_metadata (
+--     account_id UUID NOT NULL,
+--     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
+--     role internal_role NOT NULL DEFAULT 'user',
+--     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
+--     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
+--     trust_score INT NOT NULL DEFAULT 100,
+--     moderation_notes TEXT,
+--     last_moderation_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     last_ip_addr INET,
+--     version BIGINT NOT NULL DEFAULT 1,
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     PRIMARY KEY (account_id, region_code)
+--     );
+
+-- -- 5. INDEXES & TRIGGERS
+-- CREATE INDEX IF NOT EXISTS idx_account_settings_push_tokens ON account_settings USING GIN (push_tokens);
+-- CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
+
+-- CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON account_identity FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+-- CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+-- CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON account_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+
+-- ALTER TABLE account_metadata ALTER COLUMN last_moderation_at DROP NOT NULL;
+-- ALTER TABLE account_metadata ADD CONSTRAINT account_metadata_account_id_unique UNIQUE (account_id);

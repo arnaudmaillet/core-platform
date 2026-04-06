@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::account::entities::Account;
+    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::value_objects::*;
     use chrono::{Duration, Utc};
     use shared_kernel::domain::events::AggregateRoot;
@@ -8,13 +8,13 @@ mod tests {
     use shared_kernel::errors::DomainError;
 
     // Helper pour créer un compte de base rapidement
-    fn create_test_account() -> Account {
+    fn create_test_account() -> AccountIdentity {
         let id = AccountId::new();
         let region = RegionCode::try_new("eu").expect("Failed to create region_code");
         let email = Email::try_new("john@example.com").unwrap();
         let external_id = ExternalId::try_new("auth0|123").unwrap();
 
-        Account::builder(id, region, email, external_id)
+        AccountIdentity::builder(id, region, email, external_id)
             .with_last_active_at(Utc::now() - Duration::hours(1))
             .build()
     }

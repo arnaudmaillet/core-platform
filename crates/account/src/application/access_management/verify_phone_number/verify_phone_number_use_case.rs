@@ -10,18 +10,18 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::access_management::verify_phone_number::VerifyPhoneNumberCommand;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct VerifyPhoneNumberUseCase {
-    repo: Arc<dyn AccountRepository>,
+    repo: Arc<dyn AccountIdentityRepository>,
     outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl VerifyPhoneNumberUseCase {
     pub fn new(
-        repo: Arc<dyn AccountRepository>,
+        repo: Arc<dyn AccountIdentityRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
@@ -32,14 +32,14 @@ impl VerifyPhoneNumberUseCase {
         }
     }
 
-    pub async fn execute(&self, command: VerifyPhoneNumberCommand) -> Result<Account> {
+    pub async fn execute(&self, command: VerifyPhoneNumberCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &VerifyPhoneNumberCommand) -> Result<Account> {
+    async fn try_execute_once(&self, cmd: &VerifyPhoneNumberCommand) -> Result<AccountIdentity> {
         let original_account = self
             .repo
             .fetch_by_id(&cmd.account_id, None)

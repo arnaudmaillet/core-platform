@@ -10,18 +10,18 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::lifecycle::unsuspend::UnsuspendCommand;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct UnsuspendUseCase {
-    repo: Arc<dyn AccountRepository>,
+    repo: Arc<dyn AccountIdentityRepository>,
     outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl UnsuspendUseCase {
     pub fn new(
-        repo: Arc<dyn AccountRepository>,
+        repo: Arc<dyn AccountIdentityRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
@@ -32,14 +32,14 @@ impl UnsuspendUseCase {
         }
     }
 
-    pub async fn execute(&self, command: UnsuspendCommand) -> Result<Account> {
+    pub async fn execute(&self, command: UnsuspendCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UnsuspendCommand) -> Result<Account> {
+    async fn try_execute_once(&self, cmd: &UnsuspendCommand) -> Result<AccountIdentity> {
         let original_account = self
             .repo
             .fetch_by_id(&cmd.account_id, None)

@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::application::lifecycle::activate::{ActivateCommand, ReactivateUseCase};
-    use crate::domain::account::builders::AccountBuilder;
-    use crate::domain::account::entities::Account;
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::account::builders::AccountIdentityBuilder;
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
     use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
     use chrono::Utc;
     use shared_kernel::domain::events::AggregateRoot;
@@ -15,10 +15,10 @@ mod tests {
 
     fn setup() -> (
         ReactivateUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<OutboxRepositoryStub>,
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case =
@@ -33,7 +33,7 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : On crée un compte désactivé
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("back@test.com").unwrap(),
@@ -65,7 +65,7 @@ mod tests {
 
         // 4. Persistence
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -84,7 +84,7 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Compte déjà ACTIVE via restore
-        let account = AccountBuilder::restore(
+        let account = AccountIdentityBuilder::restore(
             account_id.clone(),
             region.clone(),
             ExternalId::from_raw("ext"),
@@ -128,7 +128,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("banned@test.com").unwrap(),
@@ -157,7 +157,7 @@ mod tests {
         let actual_region = RegionCode::try_new("eu").unwrap();
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 actual_region,
                 Email::try_new("a@b.com").unwrap(),

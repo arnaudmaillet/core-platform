@@ -1,8 +1,8 @@
 // crates/account/src/application/link_external_identity/link_external_identity_use_case.rs
 
 use crate::application::access_management::link_external_identity::LinkExternalIdentityCommand;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
@@ -13,14 +13,14 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 pub struct LinkExternalIdentityUseCase {
-    repo: Arc<dyn AccountRepository>,
+    repo: Arc<dyn AccountIdentityRepository>,
     outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl LinkExternalIdentityUseCase {
     pub fn new(
-        repo: Arc<dyn AccountRepository>,
+        repo: Arc<dyn AccountIdentityRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
@@ -31,14 +31,14 @@ impl LinkExternalIdentityUseCase {
         }
     }
 
-    pub async fn execute(&self, command: LinkExternalIdentityCommand) -> Result<Account> {
+    pub async fn execute(&self, command: LinkExternalIdentityCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &LinkExternalIdentityCommand) -> Result<Account> {
+    async fn try_execute_once(&self, cmd: &LinkExternalIdentityCommand) -> Result<AccountIdentity> {
         // 1. VÉRIFICATION D'UNICITÉ ET LECTURE OPTIMISTE (Hors transaction)
         
         // On utilise resolve_id_from_external_id pour vérifier si l'ID est déjà pris

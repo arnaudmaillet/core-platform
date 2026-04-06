@@ -1,7 +1,7 @@
-mod account_builder;
-mod account_metadata_builder;
-mod account_settings_builder;
+mod identity_builder;
+mod metadata_builder;
+mod settings_builder;
 
-pub use account_builder::AccountBuilder;
-pub use account_metadata_builder::AccountMetadataBuilder;
-pub use account_settings_builder::AccountSettingsBuilder;
+pub use identity_builder::AccountIdentityBuilder;
+pub use metadata_builder::AccountMetadataBuilder;
+pub use settings_builder::AccountSettingsBuilder;

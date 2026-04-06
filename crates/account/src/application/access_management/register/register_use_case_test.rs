@@ -11,21 +11,21 @@ mod tests {
     use shared_kernel::errors::DomainError;
 
     use crate::application::access_management::register::{RegisterCommand, RegisterUseCase};
-    use crate::domain::account::entities::Account;
+    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::repositories::{
-        AccountMetadataRepositoryStub, AccountRepositoryStub, AccountSettingsRepositoryStub,
+        AccountIdentityRepositoryStub, AccountMetadataRepositoryStub, AccountSettingsRepositoryStub,
     };
     use crate::domain::value_objects::{AccountState, Email, ExternalId, IpAddr, Locale};
 
     /// Helper pour initialiser le Use Case et ses dépendances
     fn setup() -> (
         RegisterUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<AccountMetadataRepositoryStub>,
         Arc<AccountSettingsRepositoryStub>,
         Arc<OutboxRepositoryStub>,
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let metadata_repo = Arc::new(AccountMetadataRepositoryStub::new());
         let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
@@ -70,7 +70,7 @@ mod tests {
 
         // Vérification de la création de l'Account
         let saved_account = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account.id())
@@ -132,7 +132,7 @@ mod tests {
 
         // On pré-enregistre un compte avec cet external_id
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 AccountId::new(),
                 region.clone(),
                 Email::try_new("existing@test.com").unwrap(),

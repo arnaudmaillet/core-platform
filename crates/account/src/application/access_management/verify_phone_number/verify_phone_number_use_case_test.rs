@@ -3,8 +3,8 @@ mod tests {
     use crate::application::access_management::verify_phone_number::{
         VerifyPhoneNumberCommand, VerifyPhoneNumberUseCase,
     };
-    use crate::domain::account::entities::Account;
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
     use crate::domain::value_objects::{Email, ExternalId, PhoneNumber};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -15,10 +15,10 @@ mod tests {
 
     fn setup() -> (
         VerifyPhoneNumberUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<OutboxRepositoryStub>,
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case =
@@ -34,7 +34,7 @@ mod tests {
         let phone = PhoneNumber::try_new("+33612345678").unwrap();
 
         // 1. Arrange : Compte avec téléphone non vérifié (Version 1)
-        let account = Account::builder(
+        let account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("alex@test.com").unwrap(),
@@ -67,7 +67,7 @@ mod tests {
 
         // 4. Persistence réelle
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -90,7 +90,7 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : On simule un téléphone déjà vérifié (Version 2)
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("s@test.com").unwrap(),
@@ -140,7 +140,7 @@ mod tests {
         let actual_region = RegionCode::try_new("eu").unwrap();
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 actual_region,
                 Email::try_new("u@t.com").unwrap(),

@@ -1,6 +1,6 @@
 // crates/account/src/domain/builders/account_builder.rs
 
-use crate::domain::account::entities::Account;
+use crate::domain::account::entities::AccountIdentity;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
 };
@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
-pub struct AccountBuilder {
+pub struct AccountIdentityBuilder {
     id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
@@ -20,7 +20,7 @@ pub struct AccountBuilder {
     last_active_at: Option<DateTime<Utc>>,
 }
 
-impl AccountBuilder {
+impl AccountIdentityBuilder {
     /// Chemin 1 : CRÉATION (Via Use Case d'inscription)
     pub(crate) fn new(
         id: AccountId,
@@ -59,9 +59,9 @@ impl AccountBuilder {
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
         last_active_at: Option<DateTime<Utc>>,
-    ) -> Account {
+    ) -> AccountIdentity {
         // On appelle la méthode restore de l'entité Account
-        Account::restore(
+        AccountIdentity::restore(
             id,
             region_code,
             external_id,
@@ -117,13 +117,13 @@ impl AccountBuilder {
     }
 
     /// Finalise la création d'un NOUVEL utilisateur
-    pub fn build(self) -> Account {
+    pub fn build(self) -> AccountIdentity {
         let now = Utc::now();
         let activity = self.last_active_at.or(Some(now));
 
         // On utilise la même méthode restore en interne pour garantir
         // que l'instanciation de l'agrégat est centralisée.
-        Account::restore(
+        AccountIdentity::restore(
             self.id,
             self.region_code,
             self.external_id,

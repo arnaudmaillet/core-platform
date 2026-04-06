@@ -10,18 +10,18 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::settings::update_locale::UpdateLocaleCommand;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct UpdateLocaleUseCase {
-    repo: Arc<dyn AccountRepository>,
+    repo: Arc<dyn AccountIdentityRepository>,
     outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl UpdateLocaleUseCase {
     pub fn new(
-        repo: Arc<dyn AccountRepository>,
+        repo: Arc<dyn AccountIdentityRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
@@ -32,14 +32,14 @@ impl UpdateLocaleUseCase {
         }
     }
 
-    pub async fn execute(&self, command: UpdateLocaleCommand) -> Result<Account> {
+    pub async fn execute(&self, command: UpdateLocaleCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &UpdateLocaleCommand) -> Result<Account> {
+    async fn try_execute_once(&self, cmd: &UpdateLocaleCommand) -> Result<AccountIdentity> {
         let original_account = self
             .repo
             .fetch_by_id(&cmd.account_id, None)

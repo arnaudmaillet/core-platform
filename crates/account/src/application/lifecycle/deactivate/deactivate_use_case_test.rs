@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::account::entities::Account;
+    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
@@ -9,10 +9,10 @@ mod tests {
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::lifecycle::deactivate::{DeactivateCommand, DeactivateUseCase};
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
 
-    fn setup() -> (DeactivateUseCase, Arc<AccountRepositoryStub>, Arc<OutboxRepositoryStub>) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+    fn setup() -> (DeactivateUseCase, Arc<AccountIdentityRepositoryStub>, Arc<OutboxRepositoryStub>) {
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case = DeactivateUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
@@ -26,7 +26,7 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Compte initial (Version 1 par défaut)
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), 
             region.clone(),
             Email::try_new("bye@test.com").unwrap(),
@@ -48,7 +48,7 @@ mod tests {
         assert_eq!(*updated.state(), AccountState::Deactivated);
         assert_eq!(updated.version(), 2);
 
-        let saved_in_db = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved_in_db = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved_in_db.version(), 2);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
@@ -59,7 +59,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
 
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(), 
             region.clone(),
             Email::try_new("a@b.com").unwrap(),
@@ -85,7 +85,7 @@ mod tests {
         // On vérifie que la version est restée la même que celle insérée (2)
         assert_eq!(returned.version(), 2);
         
-        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.version(), 2);
         
         // Aucun événement supplémentaire
@@ -98,7 +98,7 @@ mod tests {
         let account_id = AccountId::new();
         let actual_region = RegionCode::try_new("eu").unwrap();
 
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), actual_region,
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")

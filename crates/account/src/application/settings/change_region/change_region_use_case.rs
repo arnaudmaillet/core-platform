@@ -10,19 +10,19 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::settings::change_region::ChangeRegionCommand;
-use crate::domain::account::entities::{Account, AccountMetadata, AccountSettings};
+use crate::domain::account::entities::{AccountIdentity, AccountMetadata, AccountSettings};
 use crate::domain::repositories::{
-    AccountMetadataRepository, AccountRepository, AccountSettingsRepository,
+    AccountMetadataRepository, AccountIdentityRepository, AccountSettingsRepository,
 };
 
 pub struct ChangeRegionResponse {
-    pub account: Account,
+    pub account: AccountIdentity,
     pub metadata: AccountMetadata,
     pub settings: AccountSettings,
 }
 
 pub struct ChangeRegionUseCase {
-    account_repo: Arc<dyn AccountRepository>,
+    account_repo: Arc<dyn AccountIdentityRepository>,
     metadata_repo: Arc<dyn AccountMetadataRepository>,
     settings_repo: Arc<dyn AccountSettingsRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
@@ -31,7 +31,7 @@ pub struct ChangeRegionUseCase {
 
 impl ChangeRegionUseCase {
     pub fn new(
-        account_repo: Arc<dyn AccountRepository>,
+        account_repo: Arc<dyn AccountIdentityRepository>,
         metadata_repo: Arc<dyn AccountMetadataRepository>,
         settings_repo: Arc<dyn AccountSettingsRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,

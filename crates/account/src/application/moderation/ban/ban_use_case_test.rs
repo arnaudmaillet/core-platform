@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::application::moderation::ban::{BanCommand, BanUseCase};
-    use crate::domain::account::entities::Account;
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -13,10 +13,10 @@ mod tests {
 
     fn setup() -> (
         BanUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<OutboxRepositoryStub>,
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case = BanUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
@@ -30,7 +30,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         // Création d'un compte actif
-        let account = Account::builder(
+        let account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("user@example.com").unwrap(),
@@ -49,7 +49,7 @@ mod tests {
 
         assert!(result.is_ok());
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -64,7 +64,7 @@ mod tests {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
 
-        let account = Account::builder(
+        let account = AccountIdentity::builder(
             account_id.clone(),
             RegionCode::from_raw("eu"),
             Email::try_new("a@b.com").unwrap(),
@@ -91,7 +91,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
 
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("a@b.com").unwrap(),
@@ -112,7 +112,7 @@ mod tests {
 
         assert!(result.is_ok());
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&cmd.account_id)
@@ -132,7 +132,7 @@ mod tests {
 
         // Arrange: Compte existant
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 region.clone(),
                 Email::try_new("troll@internet.com").unwrap(),
@@ -153,7 +153,7 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -192,7 +192,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 region.clone(),
                 Email::try_new("a@b.com").unwrap(),
@@ -228,7 +228,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 region.clone(),
                 Email::try_new("a@b.com").unwrap(),

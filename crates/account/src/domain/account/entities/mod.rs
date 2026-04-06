@@ -1,10 +1,10 @@
-mod account;
-mod account_metadata;
-mod account_settings;
+mod identity;
+mod metadata;
+mod settings;
 
-pub use account::Account;
-pub use account_metadata::AccountMetadata;
-pub use account_settings::{AccountSettings, AccountPreferences};
+pub use identity::AccountIdentity;
+pub use metadata::AccountMetadata;
+pub use settings::{AccountSettings, AccountPreferences};
 
 #[cfg(test)]
 mod tests;
