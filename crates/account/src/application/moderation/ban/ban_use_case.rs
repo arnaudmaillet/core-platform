@@ -10,18 +10,18 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::moderation::ban::BanCommand;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct BanUseCase {
-    repo: Arc<dyn AccountRepository>,
+    repo: Arc<dyn AccountIdentityRepository>,
     outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl BanUseCase {
     pub fn new(
-        repo: Arc<dyn AccountRepository>,
+        repo: Arc<dyn AccountIdentityRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
@@ -32,14 +32,14 @@ impl BanUseCase {
         }
     }
 
-    pub async fn execute(&self, command: BanCommand) -> Result<Account> {
+    pub async fn execute(&self, command: BanCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &BanCommand) -> Result<Account> {
+    async fn try_execute_once(&self, cmd: &BanCommand) -> Result<AccountIdentity> {
         // 1. Récupération (Identity-only suffit généralement pour la modération)
         let original_account = self
             .repo

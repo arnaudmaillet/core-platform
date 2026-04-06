@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::application::lifecycle::suspend::{SuspendCommand, SuspendUseCase};
-    use crate::domain::account::entities::Account;
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -13,10 +13,10 @@ mod tests {
 
     fn setup() -> (
         SuspendUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<OutboxRepositoryStub>,
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case = SuspendUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
@@ -31,7 +31,7 @@ mod tests {
 
         // 1. Arrange : Compte actif (Version 1)
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 region.clone(),
                 Email::try_new("check@test.com").unwrap(),
@@ -58,7 +58,7 @@ mod tests {
 
         // 4. Persistence réelle
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -81,7 +81,7 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : On crée et on suspend manuellement
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("p@b.com").unwrap(),
@@ -130,7 +130,7 @@ mod tests {
         let actual_region = RegionCode::try_new("eu").unwrap();
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 actual_region,
                 Email::try_new("u@t.com").unwrap(),

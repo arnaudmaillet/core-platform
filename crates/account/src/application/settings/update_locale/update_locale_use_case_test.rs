@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::account::entities::Account;
+    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::value_objects::{Email, ExternalId, Locale};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
@@ -9,10 +9,10 @@ mod tests {
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::settings::update_locale::{UpdateLocaleCommand, UpdateLocaleUseCase};
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
 
-    fn setup() -> (UpdateLocaleUseCase, Arc<AccountRepositoryStub>, Arc<OutboxRepositoryStub>) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+    fn setup() -> (UpdateLocaleUseCase, Arc<AccountIdentityRepositoryStub>, Arc<OutboxRepositoryStub>) {
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case = UpdateLocaleUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
@@ -26,7 +26,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         // ✅ Utilisation du Builder pour créer l'état initial (fr par défaut ou non spécifié)
-        let account = Account::builder(
+        let account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("john@example.com").unwrap(),
@@ -49,7 +49,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.locale(), &new_locale);
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
@@ -62,7 +62,7 @@ mod tests {
         let current_locale = Locale::from_raw("de");
 
         // ✅ Arrange : déjà en allemand
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("hans@test.de").unwrap(),
@@ -95,7 +95,7 @@ mod tests {
         let account_id = AccountId::new();
 
         // Compte en EU
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(),
             RegionCode::from_raw("eu"),
             Email::try_new("t@t.com").unwrap(),

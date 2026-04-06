@@ -5,7 +5,7 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::transaction::TransactionManager;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt;
 use std::sync::Arc;
 

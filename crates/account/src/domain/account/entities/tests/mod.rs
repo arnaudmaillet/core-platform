@@ -1,3 +1,3 @@
-mod account_settings_test;
-mod account_metadata_test;
-mod account_test;
+mod settings_test;
+mod metadata_test;
+mod identity_test;

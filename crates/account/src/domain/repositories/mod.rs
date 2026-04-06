@@ -1,22 +1,22 @@
-mod account_metadata_repository;
-mod account_repository;
-mod account_settings_repository;
+mod metadata_repository;
+mod identity_repository;
+mod settings_repository;
 
-pub use account_metadata_repository::AccountMetadataRepository;
-pub use account_repository::AccountRepository;
-pub use account_settings_repository::AccountSettingsRepository;
+pub use metadata_repository::AccountMetadataRepository;
+pub use identity_repository::AccountIdentityRepository;
+pub use settings_repository::AccountSettingsRepository;
 
-
-#[cfg(test)]
-mod account_repository_stub;
-#[cfg(test)]
-mod account_metadata_repository_stub;
-#[cfg(test)]
-mod account_settings_repository_stub;
 
 #[cfg(test)]
-pub use account_repository_stub::AccountRepositoryStub;
+mod identity_repository_stub;
 #[cfg(test)]
-pub use account_metadata_repository_stub::AccountMetadataRepositoryStub;
+mod metadata_repository_stub;
 #[cfg(test)]
-pub use account_settings_repository_stub::AccountSettingsRepositoryStub;
+mod settings_repository_stub;
+
+#[cfg(test)]
+pub use identity_repository_stub::AccountIdentityRepositoryStub;
+#[cfg(test)]
+pub use metadata_repository_stub::AccountMetadataRepositoryStub;
+#[cfg(test)]
+pub use settings_repository_stub::AccountSettingsRepositoryStub;

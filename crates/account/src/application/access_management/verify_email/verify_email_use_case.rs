@@ -10,18 +10,18 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 use crate::application::access_management::verify_email::VerifyEmailCommand;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepository;
+use crate::domain::account::entities::AccountIdentity;
+use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct VerifyEmailUseCase {
-    repo: Arc<dyn AccountRepository>,
+    repo: Arc<dyn AccountIdentityRepository>,
     outbox: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl VerifyEmailUseCase {
     pub fn new(
-        repo: Arc<dyn AccountRepository>,
+        repo: Arc<dyn AccountIdentityRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
@@ -32,14 +32,14 @@ impl VerifyEmailUseCase {
         }
     }
 
-    pub async fn execute(&self, command: VerifyEmailCommand) -> Result<Account> {
+    pub async fn execute(&self, command: VerifyEmailCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &VerifyEmailCommand) -> Result<Account> {
+    async fn try_execute_once(&self, cmd: &VerifyEmailCommand) -> Result<AccountIdentity> {
         let original_account = self
             .repo
             .fetch_by_id(&cmd.account_id, None)
@@ -52,8 +52,8 @@ impl VerifyEmailUseCase {
             return Ok(original_account);
         }
 
-       let events = account.pull_events();
-        
+        let events = account.pull_events();
+
         if events.is_empty() {
             return Ok(account);
         }
@@ -66,13 +66,14 @@ impl VerifyEmailUseCase {
             .run_in_transaction(move |mut tx| {
                 let repo = Arc::clone(&repo);
                 let outbox = Arc::clone(&outbox);
-                
+
                 let original_for_tx = original_account.clone();
                 let updated_for_tx = account.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                        .await?;
 
                     for event in events_for_tx {
                         outbox.save(&mut *tx, event.as_ref()).await?;

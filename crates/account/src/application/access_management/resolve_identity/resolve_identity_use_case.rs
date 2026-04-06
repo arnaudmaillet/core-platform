@@ -1,7 +1,7 @@
 // crates/account/src/application/resolve_identity/resolve_identity_use_case.rs
 
 use crate::application::access_management::resolve_identity::{ResolveIdentityCommand, ResolvedIdentityResponse};
-use crate::domain::repositories::{AccountMetadataRepository, AccountRepository};
+use crate::domain::repositories::{AccountMetadataRepository, AccountIdentityRepository};
 use crate::domain::value_objects::AccountState;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
@@ -9,13 +9,13 @@ use shared_kernel::errors::{DomainError, Result};
 use std::sync::Arc;
 
 pub struct ResolveIdentityUseCase {
-    account_repo: Arc<dyn AccountRepository>,
+    account_repo: Arc<dyn AccountIdentityRepository>,
     metadata_repo: Arc<dyn AccountMetadataRepository>,
 }
 
 impl ResolveIdentityUseCase {
     pub fn new(
-        account_repo: Arc<dyn AccountRepository>,
+        account_repo: Arc<dyn AccountIdentityRepository>,
         metadata_repo: Arc<dyn AccountMetadataRepository>,
     ) -> Self {
         Self {

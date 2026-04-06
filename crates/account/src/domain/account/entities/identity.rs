@@ -1,6 +1,6 @@
 // crates/account/src/domain/entities/account
 
-use crate::domain::account::builders::AccountBuilder;
+use crate::domain::account::builders::AccountIdentityBuilder;
 use crate::domain::events::AccountEvent;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
@@ -17,7 +17,7 @@ use shared_kernel::errors::{DomainError, Result};
 /// Gère l'identité, la sécurité et le cycle de vie du compte.
 /// Utilise AggregateMetadata pour l'Optimistic Concurrency Control et la capture d'événements.
 #[derive(Debug, Clone)]
-pub struct Account {
+pub struct AccountIdentity {
     id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
@@ -34,14 +34,14 @@ pub struct Account {
     metadata: AggregateMetadata,
 }
 
-impl Account {
+impl AccountIdentity {
     pub fn builder(
         id: AccountId,
         region_code: RegionCode,
         email: Email,
         external_id: ExternalId,
-    ) -> AccountBuilder {
-        AccountBuilder::new(id, region_code, email, external_id)
+    ) -> AccountIdentityBuilder {
+        AccountIdentityBuilder::new(id, region_code, email, external_id)
     }
 
     /// Utilisé par le Builder ou le Repository pour restaurer l'état
@@ -378,7 +378,7 @@ impl Account {
         self.state = AccountState::Active;
         self.apply_change();
 
-        self.push_event(Box::new(AccountEvent::AccountReactivated {
+        self.push_event(Box::new(AccountEvent::AccountActivated {
             account_id: self.id.clone(),
             region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -520,7 +520,7 @@ impl Account {
     }
 }
 
-impl EntityMetadata for Account {
+impl EntityMetadata for AccountIdentity {
     fn entity_name() -> &'static str {
         "Account"
     }
@@ -535,7 +535,7 @@ impl EntityMetadata for Account {
     }
 }
 
-impl AggregateRoot for Account {
+impl AggregateRoot for AccountIdentity {
     fn id(&self) -> String {
         self.id.as_string()
     }

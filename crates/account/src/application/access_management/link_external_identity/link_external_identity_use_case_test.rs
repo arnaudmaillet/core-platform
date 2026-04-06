@@ -1,17 +1,17 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::account::entities::Account;
+    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::access_management::link_external_identity::{LinkExternalIdentityCommand, LinkExternalIdentityUseCase};
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
 
-    fn setup() -> (LinkExternalIdentityUseCase, Arc<AccountRepositoryStub>, Arc<OutboxRepositoryStub>) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+    fn setup() -> (LinkExternalIdentityUseCase, Arc<AccountIdentityRepositoryStub>, Arc<OutboxRepositoryStub>) {
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case = LinkExternalIdentityUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
@@ -25,7 +25,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         // ✅ Initialisation avec un ID vide pour autoriser le premier linkage
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), region.clone(),
             Email::try_new("alex@test.com").unwrap(),
             ExternalId::from_raw("")
@@ -41,7 +41,7 @@ mod tests {
         let result = use_case.execute(cmd).await;
 
         assert!(result.is_ok());
-        let saved = account_repo.accounts_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
         assert_eq!(saved.external_id(), &new_ext);
     }
 
@@ -54,7 +54,7 @@ mod tests {
         let alice_id = AccountId::new();
         let shared_ext = ExternalId::from_raw("google_123");
 
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             alice_id.clone(), region.clone(),
             Email::try_new("alice@test.com").unwrap(),
             shared_ext.clone()
@@ -62,7 +62,7 @@ mod tests {
 
         // Bob essaie de lier le même ID externe
         let bob_id = AccountId::new();
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             bob_id.clone(), region.clone(),
             Email::try_new("bob@test.com").unwrap(),
             ExternalId::from_raw("bob_ext")
@@ -89,7 +89,7 @@ mod tests {
         let ext_id = ExternalId::from_raw("steam_456");
 
         // Arrange: Le compte a déjà cet ID externe
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), region.clone(),
             Email::try_new("g@m.com").unwrap(),
             ext_id.clone()
@@ -114,7 +114,7 @@ mod tests {
         let (use_case, account_repo, _) = setup();
         let account_id = AccountId::new();
 
-        account_repo.add_account(Account::builder(
+        account_repo.add_account(AccountIdentity::builder(
             account_id.clone(), RegionCode::from_raw("eu"),
             Email::try_new("u@t.com").unwrap(),
             ExternalId::from_raw("ext")

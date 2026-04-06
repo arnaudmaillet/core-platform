@@ -3,8 +3,8 @@ mod tests {
     use crate::application::settings::change_birth_date::{
         ChangeBirthDateCommand, ChangeBirthDateUseCase,
     };
-    use crate::domain::account::entities::Account;
-    use crate::domain::repositories::AccountRepositoryStub;
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
     use crate::domain::value_objects::{BirthDate, Email, ExternalId};
     use chrono::{TimeZone, Utc};
     use shared_kernel::domain::events::AggregateRoot;
@@ -16,10 +16,10 @@ mod tests {
 
     fn setup() -> (
         ChangeBirthDateUseCase,
-        Arc<AccountRepositoryStub>,
+        Arc<AccountIdentityRepositoryStub>,
         Arc<OutboxRepositoryStub>,
     ) {
-        let account_repo = Arc::new(AccountRepositoryStub::new());
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
         let use_case =
@@ -43,7 +43,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 region.clone(),
                 Email::try_new("alex@test.com").unwrap(),
@@ -72,7 +72,7 @@ mod tests {
 
         // 2. Vérifier la persistance
         let saved = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -92,7 +92,7 @@ mod tests {
         let account_id = AccountId::new();
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 RegionCode::from_raw("eu"),
                 Email::try_new("alex@test.com").unwrap(),
@@ -127,7 +127,7 @@ mod tests {
         .unwrap();
 
         // 1. On crée le compte via le builder (Version 1)
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("alex@test.com").unwrap(),
@@ -166,7 +166,7 @@ mod tests {
 
         // 5. Assert : Rien en DB ne doit avoir changé
         let saved_in_db = account_repo
-            .accounts_map
+            .identity_map
             .lock()
             .unwrap()
             .get(&account_id)
@@ -186,7 +186,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
 
-        let mut account = Account::builder(
+        let mut account = AccountIdentity::builder(
             account_id.clone(),
             region.clone(),
             Email::try_new("h@k.com").unwrap(),
@@ -235,7 +235,7 @@ mod tests {
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(
-            Account::builder(
+            AccountIdentity::builder(
                 account_id.clone(),
                 region.clone(),
                 Email::try_new("a@b.com").unwrap(),
