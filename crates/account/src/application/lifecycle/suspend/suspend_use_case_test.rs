@@ -1,0 +1,122 @@
+#[cfg(test)]
+mod tests {
+    use crate::application::lifecycle::suspend::{SuspendCommand, SuspendUseCase};
+    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::repositories::AccountIdentityRepositoryStub;
+    use crate::domain::value_objects::{AccountState, Email, ExternalId};
+    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
+    use shared_kernel::domain::transaction::StubTxManager;
+    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use std::sync::Arc;
+
+    fn setup() -> (
+        SuspendUseCase,
+        Arc<AccountIdentityRepositoryStub>,
+        Arc<OutboxRepositoryStub>,
+    ) {
+        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
+        let outbox_repo = Arc::new(OutboxRepositoryStub::new());
+        let tx_manager = Arc::new(StubTxManager);
+        let use_case = SuspendUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
+        (use_case, account_repo, outbox_repo)
+    }
+
+    #[tokio::test]
+    async fn test_suspend_account_success() {
+        let (use_case, account_repo, outbox_repo) = setup();
+        let account_id = AccountId::new();
+        let region = RegionCode::try_new("eu").unwrap();
+
+        // 1. Arrange : Compte actif (Version 1)
+        account_repo.add_account(
+            AccountIdentity::builder(
+                account_id.clone(),
+                region.clone(),
+                Email::try_new("check@test.com").unwrap(),
+                ExternalId::from_raw("ext_789"),
+            )
+            .build(),
+        );
+
+        let cmd = SuspendCommand {
+            account_id: account_id.clone(),
+            reason: "Under investigation for fraud".into(),
+        };
+
+        // 2. Act : On s'attend à recevoir l'Account mis à jour
+        let result = use_case.execute(cmd).await;
+
+        // 3. Assert
+        assert!(result.is_ok(), "La suspension devrait réussir");
+        let updated = result.unwrap();
+
+        assert_eq!(*updated.state(), AccountState::Suspended);
+        assert_eq!(updated.version(), 2, "La version doit être passée à 2");
+
+        // 4. Persistence réelle
+        let saved = account_repo
+            .identity_map
+            .lock()
+            .unwrap()
+            .get(&account_id)
+            .cloned()
+            .unwrap();
+        assert_eq!(*saved.state(), AccountState::Suspended);
+
+        // 5. Outbox
+        assert_eq!(
+            outbox_repo.saved_events.lock().unwrap().len(),
+            1,
+            "Un événement AccountSuspended attendu"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_suspend_idempotency() {
+        let (use_case, account_repo, outbox_repo) = setup();
+        let account_id = AccountId::new();
+        let region = RegionCode::try_new("eu").unwrap();
+
+        // 1. Arrange : On crée et on suspend manuellement
+        let mut account = AccountIdentity::builder(
+            account_id.clone(),
+            region,
+            Email::try_new("p@b.com").unwrap(),
+            ExternalId::from_raw("ext"),
+        )
+        .build();
+
+        account.suspend("Original reason".into()).unwrap();
+        account.pull_events();
+        let version_at_suspension = account.version();
+
+        account_repo.add_account(account);
+
+        let cmd = SuspendCommand {
+            account_id: account_id.clone(),
+            reason: "Second call".into(),
+        };
+
+        // 2. Act
+        let result = use_case.execute(cmd).await;
+
+        // 3. Assert
+        assert!(result.is_ok());
+        let returned = result.unwrap();
+
+        assert_eq!(*returned.state(), AccountState::Suspended);
+        assert_eq!(
+            returned.version(),
+            version_at_suspension,
+            "La version ne doit pas augmenter"
+        );
+
+        // 4. Outbox
+        assert_eq!(
+            outbox_repo.saved_events.lock().unwrap().len(),
+            0,
+            "Idempotence : aucun événement produit"
+        );
+    }
+}

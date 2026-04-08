@@ -132,6 +132,7 @@ mod tests {
         assert_eq!(events.len(), 0);
     }
 
+
     #[tokio::test]
     async fn test_change_email_forbidden_when_restricted() {
         let (use_case, ctx, account_repo, _outbox_repo) = setup();
@@ -148,7 +149,7 @@ mod tests {
 
         // Un banni ne change pas son email
         account.ban("Violation".into()).unwrap();
-        account_repo.insert(account);
+        account_repo.add_account(account);
 
         let cmd = ChangeEmailCommand {
             account_id,

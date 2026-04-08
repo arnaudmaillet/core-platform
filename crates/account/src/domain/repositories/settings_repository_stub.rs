@@ -85,12 +85,12 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
 
         match original {
             Some(orig) => {
-                let current = map.get(account_id).ok_or_else(|| self.not_found(account_id))?;
+                let current = map.get(account_id).ok_or_else(|| self.not_found(account_id.as_string()))?;
                 
                 if current.version() != orig.version() {
                     return Err(DomainError::ConcurrencyConflict {
                         reason: format!(
-                            "OCC Conflict: Stub has v{}, but Input has v{}",
+                            "AccountSettings OCC Conflict: Stub has v{}, but you provided v{}",
                             current.version(),
                             orig.version()
                         ),
@@ -102,7 +102,7 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
                     return Err(DomainError::AlreadyExists {
                         entity: "AccountSettings",
                         field: "account_id",
-                        value: account_id.to_string(),
+                        value: account_id.as_string(),
                     });
                 }
             }
@@ -139,7 +139,6 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         let mut map = self.settings_map.lock().expect("Lock failed");
 
         if let Some(settings) = map.get_mut(account_id) {
-            // Note: On utilise le clone ici car l'interface attend une valeur
             settings.add_push_token(token.clone())?;
             Ok(())
         } else {
