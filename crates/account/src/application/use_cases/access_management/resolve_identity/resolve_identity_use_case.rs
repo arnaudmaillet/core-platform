@@ -1,6 +1,6 @@
 // crates/account/src/application/resolve_identity/resolve_identity_use_case.rs
 
-use crate::application::use_cases::access_management::resolve_identity::{
+use crate::application::access_management::resolve_identity::{
     ResolveIdentityCommand, ResolvedIdentityResponse,
 };
 use crate::domain::repositories::{AccountIdentityRepository, AccountMetadataRepository};

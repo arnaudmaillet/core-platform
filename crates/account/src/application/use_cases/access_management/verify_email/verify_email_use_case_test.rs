@@ -27,7 +27,7 @@ mod tests {
         );
 
         let cmd = VerifyEmailCommand {
-            account_id,
+            account_id: account_id.clone(),
             token: "valid_secure_token_123".into(),
         };
 
@@ -77,15 +77,15 @@ mod tests {
         )
         .build();
 
-        identity.verify_email(&token).unwrap();
-        identity.pull_events(); // Clear setup events
-        let version_verified = identity.version();
+        account.verify_email().unwrap();
+        account.pull_events(); // Clear setup events
+        let version_verified = account.version();
 
         f.identity_repo().insert(identity);
 
         let cmd = VerifyEmailCommand {
-            account_id,
-            token: token.to_string(),
+            account_id: account_id.clone(),
+            token: "any_token".into(),
         };
 
         // 2. Act

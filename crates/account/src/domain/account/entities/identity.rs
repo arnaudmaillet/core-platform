@@ -182,7 +182,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn verify_email(&mut self, token: &str) -> Result<bool> {
+    pub fn verify_email(&mut self) -> Result<bool> {
         if self.email_verified {
             return Ok(false);
         }
@@ -231,7 +231,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn verify_phone(&mut self, code: &str) -> Result<bool> {
+    pub fn verify_phone(&mut self) -> Result<bool> {
         if self.phone_verified {
             return Ok(false);
         }
@@ -405,7 +405,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn ban(&mut self, reason: &str) -> Result<bool> {
+    pub fn ban(&mut self, reason: String) -> Result<bool> {
         if self.state == AccountState::Banned {
             return Ok(false);
         }
@@ -414,7 +414,7 @@ impl AccountIdentity {
         self.apply_change();
         self.push_event(Box::new(AccountEvent::AccountBanned {
             account_id: self.account_id.clone(),
-            reason: reason.to_string(),
+            reason,
             occurred_at: self.updated_at,
         }));
 

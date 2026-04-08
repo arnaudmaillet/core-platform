@@ -30,10 +30,9 @@ mod tests {
     #[test]
     fn test_email_verification_flow_and_idempotency() {
         let mut account = create_test_account();
-        let token = "any_token";
 
         // 1. Plus de paramètre &region
-        let changed = account.verify_email(&token).expect("Should verify email");
+        let changed = account.verify_email().expect("Should verify email");
         assert!(changed);
         assert!(account.is_email_verified());
         assert_eq!(account.state(), &AccountState::Active);
@@ -41,7 +40,7 @@ mod tests {
         let _ = account.metadata_mut().pull_events();
 
         // 2. Idempotence simple
-        let changed = account.verify_email(&token).unwrap();
+        let changed = account.verify_email().unwrap();
         assert!(!changed);
     }
 
@@ -63,8 +62,7 @@ mod tests {
     #[test]
     fn test_account_suspension_lifecycle() {
         let mut account = create_test_account();
-        let token: &str = "any_token";
-        account.verify_email(&token).unwrap();
+        account.verify_email().unwrap();
 
         // Suspension
         let changed = account.suspend("Suspicious activity".into()).unwrap();

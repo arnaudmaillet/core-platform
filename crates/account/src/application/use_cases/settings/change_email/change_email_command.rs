@@ -13,6 +13,7 @@ pub struct ChangeEmailCommand {
 impl ChangeEmailCommand {
     pub fn try_from_proto(
         req: ChangeEmailRequest,
+        region: RegionCode,
     ) -> Result<Self, tonic::Status> {
         Ok(Self {
             account_id: AccountId::try_from(req.account_id).map_err(|e| {

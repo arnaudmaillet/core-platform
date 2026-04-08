@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use crate::domain::Identifier;
-use crate::errors::InfrastructureError;
 use crate::infrastructure::sharding::ShardNode;
 use crate::domain::value_objects::{AccountId, RegionCode};
 
@@ -31,18 +30,16 @@ impl ShardResolver {
     }
 
     /// La méthode "Magique" : Géo + Modulo
-    pub fn resolve(&self, account_id: &AccountId, region: &RegionCode) -> Result<&ShardNode, InfrastructureError> {
-        // 1. On cherche les shards de la région
+    pub fn resolve(&self, account_id: &AccountId, region: &RegionCode) -> Result<&ShardNode, String> {
         let region_shards = self.nodes_by_region.get(region)
-            .ok_or_else(|| InfrastructureError::UnsupportedRegion(region.to_string()))?;
+            .ok_or_else(|| format!("Aucun shard configuré pour la région {:?}", region))?;
 
-        // 2. On vérifie que la région n'est pas une coquille vide
         if region_shards.is_empty() {
-            return Err(InfrastructureError::EmptyShardPool(region.to_string()));
+            return Err(format!("La liste des shards pour {:?} est vide", region));
         }
 
-        // 3. LOGIQUE DU MODULO
-        // L'UUID est distribué uniformément, donc id % len est parfait
+        // --- LOGIQUE DU MODULO ---
+        // On utilise l'u128 de l'UUID pour répartir équitablement
         let id_value = account_id.as_uuid().as_u128();
         let index = (id_value % region_shards.len() as u128) as usize;
 

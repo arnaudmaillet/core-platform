@@ -95,36 +95,34 @@ impl AccountMetadataRepository for AccountMetadataRepositoryStub {
         let account_id = metadata.account_id();
 
         match original {
-            // CAS UPDATE : On vérifie la version pour simuler l'Optimistic Concurrency Control (OCC)
             Some(orig) => {
                 let current_in_map = map.get(account_id).ok_or_else(|| DomainError::NotFound {
                     entity: "AccountMetadata",
-                    id: account_id.to_string(),
+                    id: account_id.as_string(),
                 })?;
 
+                // Vérification stricte de la version
                 if current_in_map.version() != orig.version() {
                     return Err(DomainError::ConcurrencyConflict {
                         reason: format!(
-                            "OCC Conflict: Stub has version {}, but you tried to update version {}",
+                            "AccountMetadata OCC Conflict: Stub has v{}, but you tried to update v{}",
                             current_in_map.version(),
                             orig.version()
                         ),
                     });
                 }
             }
-            // CAS CREATE : On vérifie que l'ID n'est pas déjà pris
             None => {
                 if map.contains_key(account_id) {
                     return Err(DomainError::AlreadyExists {
                         entity: "AccountMetadata",
                         field: "account_id",
-                        value: account_id.to_string(),
+                        value: account_id.as_string(),
                     });
                 }
             }
         }
 
-        // On insère (ou remplace) l'entité
         map.insert(account_id.clone(), metadata.clone());
         
         Ok(())

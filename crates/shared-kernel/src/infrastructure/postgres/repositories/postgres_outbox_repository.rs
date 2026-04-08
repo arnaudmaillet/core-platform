@@ -24,25 +24,20 @@ impl OutboxRepository for PostgresOutboxRepository {
     async fn save_all(&self, tx: &mut dyn Transaction, events: &[&dyn DomainEvent]) -> Result<()> {
         if events.is_empty() { return Ok(()); }
 
-        let sqlx_tx = tx.downcast_mut_sqlx()?;
-        let envelopes: Vec<EventEnvelope> = events.iter().map(|e| EventEnvelope::wrap(*e)).collect();
-
-        let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
-            "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at) "
-        );
-
-        query_builder.push_values(envelopes, |mut b, env| {
-            b.push_bind(env.id)
-             .push_bind(env.aggregate_type)
-             .push_bind(env.aggregate_id)
-             .push_bind(env.event_type)
-             .push_bind(env.payload)
-             .push_bind(env.metadata)
-             .push_bind(env.occurred_at);
-        });
-
-        let query = query_builder.build();
-        query.execute(&mut **sqlx_tx)
+        query(
+            r#"
+            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#
+        )
+            .bind(envelope.id)
+            .bind(envelope.aggregate_type)
+            .bind(envelope.aggregate_id)
+            .bind(envelope.event_type)
+            .bind(envelope.payload)
+            .bind(envelope.metadata)
+            .bind(envelope.occurred_at)
+            .execute(&mut **sqlx_tx)
             .await
             .map_domain_infra("Outbox Bulk Insert")?;
 
