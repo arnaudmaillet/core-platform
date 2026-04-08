@@ -30,17 +30,16 @@ mod tests {
     async fn test_remove_push_token_success() {
         let (use_case, settings_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
         let token_to_keep = PushToken::try_new("token_keep_456").unwrap();
         let token_to_remove = PushToken::try_new("token_remove_123").unwrap();
 
         // 1. Arrange : On prépare des settings avec DEUX tokens
-        let mut settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+        let mut settings = AccountSettings::builder(account_id.clone()).build();
         settings
-            .add_push_token(&region, token_to_remove.clone())
+            .add_push_token(token_to_remove.clone())
             .unwrap();
         settings
-            .add_push_token(&region, token_to_keep.clone())
+            .add_push_token(token_to_keep.clone())
             .unwrap();
         settings.pull_events(); // On vide les events d'ajout initiaux
         let version_after_setup = settings.version(); // Devrait être 3 (Init + Add + Add)
@@ -49,7 +48,6 @@ mod tests {
 
         let cmd = RemovePushTokenCommand {
             account_id: account_id.clone(),
-            region_code: region.clone(),
             token: token_to_remove.clone(),
         };
 
@@ -97,12 +95,11 @@ mod tests {
         let non_existent_token = PushToken::try_new("valid_but_missing_token").unwrap();
 
         // 1. Arrange : Settings avec une liste de tokens vide (Version 1)
-        let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+        let settings = AccountSettings::builder(account_id.clone()).build();
         settings_repo.add_settings(settings);
 
         let cmd = RemovePushTokenCommand {
             account_id,
-            region_code: region,
             token: non_existent_token,
         };
 
@@ -123,29 +120,5 @@ mod tests {
         // 4. Outbox
         let events = outbox_repo.saved_events.lock().unwrap();
         assert_eq!(events.len(), 0, "Idempotence : aucun événement généré");
-    }
-
-    #[tokio::test]
-    async fn test_remove_push_token_fails_on_region_mismatch() {
-        let (use_case, settings_repo, _) = setup();
-        let account_id = AccountId::new();
-        let any_token = PushToken::try_new("valid_token_abc_123").unwrap();
-
-        // Settings en EU
-        settings_repo.add_settings(
-            AccountSettings::builder(account_id.clone(), RegionCode::try_new("eu").unwrap())
-                .build(),
-        );
-
-        let cmd = RemovePushTokenCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            token: any_token,
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // La protection de l'entité doit lever un Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

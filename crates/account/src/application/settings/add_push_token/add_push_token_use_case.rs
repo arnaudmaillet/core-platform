@@ -49,7 +49,7 @@ impl AddPushTokenUseCase {
 
         let mut settings = original_settings.clone();
 
-        if !settings.add_push_token(&cmd.region_code, cmd.token.clone())? {
+        if !settings.add_push_token(cmd.token.clone())? {
             return Ok(original_settings);
         };
 

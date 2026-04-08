@@ -19,10 +19,12 @@ $$ LANGUAGE plpgsql;
 
 -- 3. IDENTITY (Table racine)
 CREATE TABLE IF NOT EXISTS account_identity (
-    id UUID PRIMARY KEY,
+    account_id UUID PRIMARY KEY,
     external_id TEXT NOT NULL,
     email TEXT,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_number TEXT,
+    phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
     state account_state NOT NULL DEFAULT 'active',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'en',
@@ -36,18 +38,18 @@ CREATE TABLE IF NOT EXISTS account_identity (
 
 -- 4. SETTINGS (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_settings (
-    id UUID PRIMARY KEY,
+    account_id UUID PRIMARY KEY,
     preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
     version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_settings_identity FOREIGN KEY (id) REFERENCES account_identity(id) ON DELETE CASCADE
+    CONSTRAINT fk_settings_identity FOREIGN KEY (account_id) REFERENCES account_identity(account_id) ON DELETE CASCADE
 );
 
 -- 5. METADATA (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_metadata (
-    id UUID PRIMARY KEY,
+    account_id UUID PRIMARY KEY,
     role internal_role NOT NULL DEFAULT 'user',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
@@ -57,12 +59,12 @@ CREATE TABLE IF NOT EXISTS account_metadata (
     last_ip_addr INET,
     version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_metadata_identity FOREIGN KEY (id) REFERENCES account_identity(id) ON DELETE CASCADE
+    CONSTRAINT fk_metadata_identity FOREIGN KEY (account_id) REFERENCES account_identity(account_id) ON DELETE CASCADE
 );
 
 -- 6. INDEXATION
 CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
-CREATE INDEX IF NOT EXISTS idx_metadata_flagged ON account_metadata (id) 
+CREATE INDEX IF NOT EXISTS idx_metadata_flagged ON account_metadata (account_id) 
 WHERE is_shadowbanned IS TRUE OR trust_score < 50;
 
 -- 7. TRIGGERS (Automatisation du updated_at)

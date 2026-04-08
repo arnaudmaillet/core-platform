@@ -42,7 +42,7 @@ mod tests {
         .build();
 
         // On le passe en désactivé (Version passe à 2)
-        account.deactivate(&region).unwrap();
+        account.deactivate().unwrap();
         account.pull_events();
         let version_deactivated = account.version();
 
@@ -50,7 +50,6 @@ mod tests {
 
         let cmd = ActivateCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         // 2. Act
@@ -105,7 +104,6 @@ mod tests {
 
         let cmd = ActivateCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         // 2. Act
@@ -136,44 +134,16 @@ mod tests {
         )
         .build();
 
-        account.ban(&region, "Violation".into()).unwrap();
+        account.ban("Violation".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = ActivateCommand {
             account_id,
-            region_code: region,
         };
 
         let result = use_case.execute(cmd).await;
 
         // Seul un compte Deactivated peut être réactivé manuellement
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
-
-    #[tokio::test]
-    async fn test_reactivate_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(
-            AccountIdentity::builder(
-                account_id.clone(),
-                actual_region,
-                Email::try_new("a@b.com").unwrap(),
-                ExternalId::from_raw("ext"),
-            )
-            .build(),
-        );
-
-        let cmd = ActivateCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : renvoie Forbidden
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

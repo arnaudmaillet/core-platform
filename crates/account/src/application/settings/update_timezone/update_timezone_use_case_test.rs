@@ -7,7 +7,7 @@ mod tests {
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Timezone};
+    use shared_kernel::domain::value_objects::{AccountId, Timezone};
     use shared_kernel::errors::DomainError;
     use std::sync::Arc;
 
@@ -31,11 +31,9 @@ mod tests {
     async fn test_update_timezone_success() {
         let (use_case, settings_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
 
-        // ✅ Utilisation du Builder
         settings_repo.add_settings(
-            AccountSettings::builder(account_id.clone(), region.clone())
+            AccountSettings::builder(account_id.clone())
                 .with_timezone(Timezone::from_raw("UTC"))
                 .build(),
         );
@@ -43,7 +41,6 @@ mod tests {
         let new_tz = Timezone::from_raw("Europe/Paris");
         let cmd = UpdateTimezoneCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_timezone: new_tz.clone(),
         };
 
@@ -65,10 +62,9 @@ mod tests {
     async fn test_update_timezone_idempotency() {
         let (use_case, settings_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
         let current_tz = Timezone::from_raw("Europe/London");
 
-        let mut settings = AccountSettings::builder(account_id.clone(), region.clone())
+        let mut settings = AccountSettings::builder(account_id.clone())
             .with_timezone(current_tz.clone())
             .build();
         settings.pull_events();
@@ -76,7 +72,6 @@ mod tests {
 
         let cmd = UpdateTimezoneCommand {
             account_id,
-            region_code: region,
             new_timezone: current_tz,
         };
 
@@ -91,15 +86,13 @@ mod tests {
     async fn test_update_timezone_business_rule_violation() {
         let (use_case, settings_repo, _) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu"); // Shard Europe
 
         settings_repo
-            .add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
+            .add_settings(AccountSettings::builder(account_id.clone()).build());
 
         let cmd = UpdateTimezoneCommand {
             account_id,
-            region_code: region,
-            new_timezone: Timezone::from_raw("America/New_York"), // 👈 Violation de règle métier
+            new_timezone: Timezone::from_raw("America/New_York"),
         };
 
         let result = use_case.execute(cmd).await;
@@ -108,24 +101,5 @@ mod tests {
         assert!(
             matches!(result, Err(DomainError::Validation { field, .. }) if field == "timezone")
         );
-    }
-
-    #[tokio::test]
-    async fn test_update_timezone_fails_on_region_mismatch() {
-        let (use_case, settings_repo, _) = setup();
-        let account_id = AccountId::new();
-
-        settings_repo.add_settings(
-            AccountSettings::builder(account_id.clone(), RegionCode::from_raw("eu")).build(),
-        );
-
-        let cmd = UpdateTimezoneCommand {
-            account_id,
-            region_code: RegionCode::from_raw("us"), // 👈 Mauvais shard spécifié
-            new_timezone: Timezone::from_raw("UTC"),
-        };
-
-        let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

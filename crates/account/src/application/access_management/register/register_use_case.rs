@@ -16,7 +16,7 @@ use crate::domain::repositories::{
 };
 
 pub struct RegisterUseCase {
-    account_repo: Arc<dyn AccountIdentityRepository>,
+    identity_repo: Arc<dyn AccountIdentityRepository>,
     metadata_repo: Arc<dyn AccountMetadataRepository>,
     settings_repo: Arc<dyn AccountSettingsRepository>,
     outbox: Arc<dyn OutboxRepository>,
@@ -25,14 +25,14 @@ pub struct RegisterUseCase {
 
 impl RegisterUseCase {
     pub fn new(
-        account_repo: Arc<dyn AccountIdentityRepository>,
+        identity_repo: Arc<dyn AccountIdentityRepository>,
         metadata_repo: Arc<dyn AccountMetadataRepository>,
         settings_repo: Arc<dyn AccountSettingsRepository>,
         outbox: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            account_repo,
+            identity_repo,
             metadata_repo,
             settings_repo,
             outbox,
@@ -50,7 +50,7 @@ impl RegisterUseCase {
     async fn try_execute_once(&self, cmd: &RegisterCommand) -> Result<AccountIdentity> {
         let account_id = AccountId::new();
 
-        let mut account = AccountIdentity::builder(
+        let mut identity = AccountIdentity::builder(
             account_id,
             cmd.region.clone(),
             cmd.email.clone(),
@@ -59,19 +59,19 @@ impl RegisterUseCase {
         .with_locale(cmd.locale.clone())
         .build();
 
-        let metadata = AccountMetadata::builder(account_id, cmd.region.clone())
+        let metadata = AccountMetadata::builder(account_id)
             .with_ip_addr(cmd.ip_addr.clone())
             .build();
 
-        let settings = AccountSettings::builder(account_id, cmd.region.clone()).build();
+        let settings = AccountSettings::builder(account_id).build();
 
-        if !account.register(&cmd.region, cmd.ip_addr)? {
+        if !identity.register(cmd.region.clone(), cmd.ip_addr.clone())? {
             return Err(DomainError::Unexpected(
                 "Account registration failed".to_string(),
             ));
         }
 
-        let events = account.pull_events();
+        let events = identity.pull_events();
 
         if events.is_empty() {
             return Err(DomainError::Unexpected(
@@ -79,22 +79,22 @@ impl RegisterUseCase {
             ));
         }
 
-        let account_repo = Arc::clone(&self.account_repo);
+        let identity_repo = Arc::clone(&self.identity_repo);
         let metadata_repo = Arc::clone(&self.metadata_repo);
         let settings_repo = Arc::clone(&self.settings_repo);
         let outbox = Arc::clone(&self.outbox);
-        let registered_account = account.clone();
+        let registered_identity = identity.clone();
 
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let account = account.clone();
+                let identity = identity.clone();
                 let metadata = metadata.clone();
                 let settings = settings.clone();
                 let external_id = cmd.external_id.clone();
 
                 Box::pin(async move {
                     // 1. Vérification d'unicité
-                    if account_repo.exists_by_external_id(&external_id).await? {
+                    if identity_repo.exists_by_external_id(&external_id).await? {
                         return Err(DomainError::AlreadyExists {
                             entity: "Account",
                             field: "external_id",
@@ -103,7 +103,7 @@ impl RegisterUseCase {
                     }
 
                     // 2. Persistance via les repositories uniformisés
-                    account_repo.save(&account, None, Some(&mut *tx)).await?;
+                    identity_repo.save(&identity, None, Some(&mut *tx)).await?;
                     metadata_repo.save(&metadata, None, Some(&mut *tx)).await?;
                     settings_repo.save(&settings, None, Some(&mut *tx)).await?;
 
@@ -117,6 +117,6 @@ impl RegisterUseCase {
             })
             .await?;
 
-        Ok(registered_account)
+        Ok(registered_identity)
     }
 }

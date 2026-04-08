@@ -8,7 +8,6 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 pub struct AccountMetadataBuilder {
     account_id: AccountId,
-    region_code: RegionCode,
     role: AccountRole,
     trust_score: i32,
     last_ip_addr: Option<IpAddr>,
@@ -17,10 +16,9 @@ pub struct AccountMetadataBuilder {
 
 impl AccountMetadataBuilder {
     /// CHEMIN 1 : CRÉATION (Via Use Case)
-    pub(crate) fn new(account_id: AccountId, region_code: RegionCode) -> Self {
+    pub(crate) fn new(account_id: AccountId) -> Self {
         Self {
             account_id,
-            region_code,
             role: AccountRole::User,
             trust_score: 100,
             last_ip_addr: None,
@@ -32,7 +30,6 @@ impl AccountMetadataBuilder {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
         account_id: AccountId,
-        region_code: RegionCode,
         role: AccountRole,
         is_beta_tester: bool,
         is_shadowbanned: bool,
@@ -45,7 +42,6 @@ impl AccountMetadataBuilder {
     ) -> AccountMetadata {
         AccountMetadata::restore(
             account_id,
-            region_code,
             role,
             is_beta_tester,
             is_shadowbanned,
@@ -82,7 +78,6 @@ impl AccountMetadataBuilder {
         // On centralise l'instanciation via restore même pour le build initial
         AccountMetadata::restore(
             self.account_id,
-            self.region_code,
             self.role,
             false, // is_beta_tester
             false, // is_shadowbanned

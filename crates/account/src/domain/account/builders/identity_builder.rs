@@ -9,7 +9,7 @@ use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 
 pub struct AccountIdentityBuilder {
-    id: AccountId,
+    account_id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
     email: Email,
@@ -23,13 +23,13 @@ pub struct AccountIdentityBuilder {
 impl AccountIdentityBuilder {
     /// Chemin 1 : CRÉATION (Via Use Case d'inscription)
     pub(crate) fn new(
-        id: AccountId,
+        account_id: AccountId,
         region_code: RegionCode,
         email: Email,
         external_id: ExternalId,
     ) -> Self {
         Self {
-            id,
+            account_id,
             region_code,
             email,
             external_id,
@@ -45,7 +45,7 @@ impl AccountIdentityBuilder {
     /// Utilise la méthode statique de Account pour reconstruire l'agrégat.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
-        id: AccountId,
+        account_id: AccountId,
         region_code: RegionCode,
         external_id: ExternalId,
         email: Email,
@@ -62,7 +62,7 @@ impl AccountIdentityBuilder {
     ) -> AccountIdentity {
         // On appelle la méthode restore de l'entité Account
         AccountIdentity::restore(
-            id,
+            account_id,
             region_code,
             external_id,
             email,
@@ -124,7 +124,7 @@ impl AccountIdentityBuilder {
         // On utilise la même méthode restore en interne pour garantir
         // que l'instanciation de l'agrégat est centralisée.
         AccountIdentity::restore(
-            self.id,
+            self.account_id,
             self.region_code,
             self.external_id,
             self.email,

@@ -4,7 +4,6 @@ mod tests {
     use crate::domain::account::entities::AccountMetadata;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-    use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::lifecycle::upgrade_role::{UpgradeRoleCommand, UpgradeRoleUseCase};
@@ -23,16 +22,14 @@ mod tests {
     async fn test_upgrade_role_success() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Nouveau compte (Rôle User par défaut, Version 1)
         metadata_repo.add_metadata(
-            AccountMetadata::builder(account_id.clone(), region.clone()).build()
+            AccountMetadata::builder(account_id.clone()).build()
         );
 
         let cmd = UpgradeRoleCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_role: AccountRole::Moderator,
             reason: "Joined the safety team".into(),
         };
@@ -61,11 +58,10 @@ mod tests {
     async fn test_upgrade_role_idempotency() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Déjà modérateur (Version passe à 2 lors du setup)
-        let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        metadata.upgrade_role(&region, AccountRole::Moderator, "init".into()).unwrap();
+        let mut metadata = AccountMetadata::builder(account_id.clone()).build();
+        metadata.upgrade_role(AccountRole::Moderator, "init".into()).unwrap();
         metadata.pull_events(); // Clear events du setup
         let version_after_setup = metadata.version();
         
@@ -73,7 +69,6 @@ mod tests {
 
         let cmd = UpgradeRoleCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_role: AccountRole::Moderator, // On redemande Moderator
             reason: "Duplicate promotion".into(),
         };
@@ -91,26 +86,5 @@ mod tests {
         // 4. Outbox
         let events = outbox_repo.saved_events.lock().unwrap();
         assert_eq!(events.len(), 0, "Aucun événement produit si le rôle est identique");
-    }
-
-    #[tokio::test]
-    async fn test_upgrade_role_fails_on_region_mismatch() {
-        let (use_case, metadata_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), actual_region).build());
-
-        let cmd = UpgradeRoleCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            new_role: AccountRole::Admin,
-            reason: "Wrong region test".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : renvoie Forbidden via ensure_region_match
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

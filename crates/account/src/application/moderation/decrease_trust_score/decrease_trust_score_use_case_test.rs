@@ -6,7 +6,7 @@ mod tests {
     use crate::domain::account::entities::AccountMetadata;
     use crate::domain::repositories::AccountMetadataRepositoryStub;
     use crate::domain::value_objects::AccountRole;
-    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
@@ -31,13 +31,11 @@ mod tests {
     async fn test_decrease_trust_score_success() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
         let now = chrono::Utc::now();
 
         // 1. Arrange : On RESTAURE avec un score de 100 en v1
         let metadata = AccountMetadata::restore(
             account_id.clone(),
-            region.clone(),
             AccountRole::User,
             false,
             false,
@@ -46,14 +44,13 @@ mod tests {
             None,
             None,
             now,
-            shared_kernel::domain::events::AggregateMetadata::restore(1),
+            AggregateMetadata::restore(1),
         );
         metadata_repo.add_metadata(metadata);
 
         let cmd = DecreaseTrustScoreCommand {
             action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
-            region_code: region,
             amount: 30,
             reason: "Suspicious activity".into(),
         };
@@ -80,13 +77,11 @@ mod tests {
     async fn test_decrease_trust_score_clamping_and_shadowban() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
         let now = chrono::Utc::now();
 
         // 1. Arrange : On RESTAURE en version 1 avec un score de 20
         let metadata = AccountMetadata::restore(
             account_id.clone(),
-            region.clone(),
             AccountRole::User,
             false,
             false,
@@ -95,14 +90,13 @@ mod tests {
             None,
             None,
             now,
-            shared_kernel::domain::events::AggregateMetadata::restore(1),
+           AggregateMetadata::restore(1),
         );
         metadata_repo.add_metadata(metadata);
 
         let cmd = DecreaseTrustScoreCommand {
             action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
-            region_code: region,
             amount: 50, // 20 - 50 -> tombe à 0
             reason: "Heavy violation".into(),
         };
@@ -134,14 +128,12 @@ mod tests {
     async fn test_decrease_trust_score_idempotency_at_minimum() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
         let now = chrono::Utc::now();
 
         // --- ARRANGE ---
         // Correction de l'appel restore avec les 11 arguments
         let metadata = AccountMetadata::restore(
             account_id.clone(),
-            region.clone(),
             AccountRole::User,                                            // role
             false,                                                        // is_beta_tester
             false,                                                        // is_shadowbanned
@@ -150,7 +142,7 @@ mod tests {
             None, // moderation_notes (Option<String>)
             None, // estimated_ip (Option<String>)
             now,  // updated_at
-            shared_kernel::domain::events::AggregateMetadata::restore(1), // metadata (Version 1)
+            AggregateMetadata::restore(1), // metadata (Version 1)
         );
 
         metadata_repo.add_metadata(metadata);
@@ -163,7 +155,6 @@ mod tests {
         // RE-ARRANGE pour un vrai test d'idempotence au plancher :
         let metadata_at_floor = AccountMetadata::restore(
             account_id.clone(),
-            region.clone(),
             AccountRole::User,
             false,
             true, // DEJÀ SHADOWBANNED
@@ -172,14 +163,13 @@ mod tests {
             Some("Initial penalty".into()),
             None,
             now,
-            shared_kernel::domain::events::AggregateMetadata::restore(1),
+            AggregateMetadata::restore(1),
         );
         metadata_repo.add_metadata(metadata_at_floor);
 
         let cmd = DecreaseTrustScoreCommand {
             action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
-            region_code: region,
             amount: 10,
             reason: "Already at floor".into(),
         };
@@ -207,37 +197,14 @@ mod tests {
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
-    #[tokio::test]
-    async fn test_fails_on_region_mismatch() {
-        let (use_case, metadata_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), actual_region).build());
-
-        let cmd = DecreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            amount: 10,
-            reason: "Test".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard: renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
 
     #[tokio::test]
     async fn test_worst_case_concurrency_conflict() {
         let (use_case, metadata_repo, _) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
+            .add_metadata(AccountMetadata::builder(account_id.clone()).build());
 
         *metadata_repo.error_to_return.lock().unwrap() = Some(DomainError::ConcurrencyConflict {
             reason: "DB Busy".into(),
@@ -246,7 +213,6 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             action_id: Uuid::now_v7(),
             account_id,
-            region_code: region,
             amount: 1,
             reason: "Test".into(),
         };

@@ -15,130 +15,71 @@ use crate::domain::repositories::{
     AccountMetadataRepository, AccountIdentityRepository, AccountSettingsRepository,
 };
 
-pub struct ChangeRegionResponse {
-    pub account: AccountIdentity,
-    pub metadata: AccountMetadata,
-    pub settings: AccountSettings,
-}
-
 pub struct ChangeRegionUseCase {
-    account_repo: Arc<dyn AccountIdentityRepository>,
-    metadata_repo: Arc<dyn AccountMetadataRepository>,
-    settings_repo: Arc<dyn AccountSettingsRepository>,
+    identity_repo: Arc<dyn AccountIdentityRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl ChangeRegionUseCase {
     pub fn new(
-        account_repo: Arc<dyn AccountIdentityRepository>,
-        metadata_repo: Arc<dyn AccountMetadataRepository>,
-        settings_repo: Arc<dyn AccountSettingsRepository>,
+        identity_repo: Arc<dyn AccountIdentityRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            account_repo,
-            metadata_repo,
-            settings_repo,
+            identity_repo,
             outbox_repo,
             tx_manager,
         }
     }
 
-    pub async fn execute(&self, command: ChangeRegionCommand) -> Result<ChangeRegionResponse> {
+    pub async fn execute(&self, command: ChangeRegionCommand) -> Result<AccountIdentity> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(&command).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, cmd: &ChangeRegionCommand) -> Result<ChangeRegionResponse> {
-        // 1. LECTURE OPTIMISTE (Hors transaction)
-        let original_account = self.account_repo
-            .fetch_by_id(&cmd.account_id, None).await?
-            .ok_or_not_found(&cmd.account_id)?;
-
-        let original_metadata = self.metadata_repo
-            .fetch_by_account_id(&cmd.account_id).await?
-            .ok_or_not_found(&cmd.account_id)?;
-
-        let original_settings = self.settings_repo
+    async fn try_execute_once(&self, cmd: &ChangeRegionCommand) -> Result<AccountIdentity> {
+        let original_identity = self.identity_repo
             .fetch_by_account_id(&cmd.account_id, None).await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut account = original_account.clone();
-        let mut metadata = original_metadata.clone();
-        let mut settings = original_settings.clone();
+        let mut identity = original_identity.clone();
 
-        // 2. MUTATION DU MODÈLE RICHE & TEST IDEMPOTENCE
-        // On vérifie si un changement est réellement nécessaire sur l'agrégat principal
-        let changed_acc = account.change_region(cmd.new_region.clone())?;
-        let changed_meta = metadata.change_region(cmd.new_region.clone())?;
-        let changed_sett = settings.change_region(cmd.new_region.clone())?;
-
-        if !changed_acc && !changed_meta && !changed_sett {
-            return Ok(ChangeRegionResponse {
-                account: original_account,
-                metadata: original_metadata,
-                settings: original_settings,
-            });
+        if !identity.change_region(cmd.new_region.clone())? {
+            return Ok(original_identity);
         }
 
-        // 3. EXTRACTION DES ÉVÉNEMENTS
-        let mut events = account.pull_events();
-        events.extend(metadata.pull_events());
-        events.extend(settings.pull_events());
+        let events = identity.pull_events();
 
-        // 4. PRÉPARATION POUR LA TRANSACTION
-        let updated_account = account.clone();
-        let updated_metadata = metadata.clone();
-        let updated_settings = settings.clone();
-        
-        let account_repo = Arc::clone(&self.account_repo);
-        let metadata_repo = Arc::clone(&self.metadata_repo);
-        let settings_repo = Arc::clone(&self.settings_repo);
-        let outbox = Arc::clone(&self.outbox_repo);
+        let updated_identity = identity.clone();
+        let identity_repo = Arc::clone(&self.identity_repo);
+        let outbox_repo = Arc::clone(&self.outbox_repo);
 
-        // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
+        // 4. Persistence Transactionnelle Atomique
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let account_repo = Arc::clone(&account_repo);
-                let metadata_repo = Arc::clone(&metadata_repo);
-                let settings_repo = Arc::clone(&settings_repo);
-                let outbox = Arc::clone(&outbox);
+                let identity_repo = Arc::clone(&identity_repo);
+                let outbox_repo = Arc::clone(&outbox_repo);
 
-                let u_orig = original_account.clone();
-                let m_orig = original_metadata.clone();
-                let s_orig = original_settings.clone();
-
-                let u_upd = account.clone();
-                let m_upd = metadata.clone();
-                let s_upd = settings.clone();
-                
+                let original_for_tx = original_identity.clone();
+                let updated_for_tx = identity.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    // Sauvegarde synchronisée des 3 agrégats avec Optimistic Locking
-                    account_repo.save(&u_upd, Some(&u_orig), Some(&mut *tx)).await?;
-                    metadata_repo.save(&m_upd, Some(&m_orig), Some(&mut *tx)).await?;
-                    settings_repo.save(&s_upd, Some(&s_orig), Some(&mut *tx)).await?;
-
-                    // Enregistrement de tous les événements collectés
+                    identity_repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                        .await?;
                     for event in events_for_tx {
-                        outbox.save(&mut *tx, event.as_ref()).await?;
+                        outbox_repo.save(&mut *tx, event.as_ref()).await?;
                     }
-                    
                     tx.commit().await?;
                     Ok(())
                 })
             })
             .await?;
 
-        Ok(ChangeRegionResponse {
-            account: updated_account,
-            metadata: updated_metadata,
-            settings: updated_settings,
-        })
+        Ok(updated_identity)
     }
 }

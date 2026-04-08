@@ -35,7 +35,6 @@ mod tests {
 
         let cmd = DeactivateCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         // 2. Act : On récupère l'Account
@@ -67,12 +66,11 @@ mod tests {
         ).build();
 
         // On le désactive MANUELLEMENT : la version passe à 2 (si ton entité gère l'auto-incrément)
-        account.deactivate(&region).unwrap(); 
+        account.deactivate().unwrap(); 
         account_repo.add_account(account);
 
         let cmd = DeactivateCommand { 
-            account_id: account_id.clone(), 
-            region_code: region 
+            account_id: account_id.clone()
         };
 
         // 1. Act
@@ -93,34 +91,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_deactivate_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(AccountIdentity::builder(
-            account_id.clone(), actual_region,
-            Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
-
-        let cmd = DeactivateCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Le check de région de l'entité renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
-
-    #[tokio::test]
     async fn test_deactivate_not_found() {
         let (use_case, _, _) = setup();
         let cmd = DeactivateCommand {
             account_id: AccountId::new(),
-            region_code: RegionCode::try_new("eu").unwrap(),
         };
 
         let result = use_case.execute(cmd).await;

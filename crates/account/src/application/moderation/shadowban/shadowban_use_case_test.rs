@@ -27,15 +27,13 @@ mod tests {
     async fn test_shadowban_account_success() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Compte sain (Version 1)
         metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
+            .add_metadata(AccountMetadata::builder(account_id.clone()).build());
 
         let cmd = ShadowbanCommand {
             account_id: account_id.clone(),
-            region_code: region,
             reason: "Spam behavior detected".into(),
         };
 
@@ -76,8 +74,8 @@ mod tests {
         let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Déjà banni (Version 2)
-        let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
-        metadata.shadowban(&region, "First ban".into()).unwrap();
+        let mut metadata = AccountMetadata::builder(account_id.clone()).build();
+        metadata.shadowban("First ban".into()).unwrap();
         metadata.pull_events(); // Clear events
         let version_after_ban = metadata.version();
 
@@ -85,7 +83,6 @@ mod tests {
 
         let cmd = ShadowbanCommand {
             account_id: account_id.clone(),
-            region_code: region,
             reason: "Second report".into(),
         };
 
@@ -102,26 +99,5 @@ mod tests {
         // 4. Outbox
         let events = outbox_repo.saved_events.lock().unwrap();
         assert_eq!(events.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_shadowban_fails_on_region_mismatch() {
-        let (use_case, metadata_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), actual_region).build());
-
-        let cmd = ShadowbanCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            reason: "Moderation".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

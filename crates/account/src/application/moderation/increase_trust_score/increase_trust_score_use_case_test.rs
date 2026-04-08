@@ -30,11 +30,10 @@ mod tests {
     async fn test_increase_trust_score_success() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Score par défaut (ex: 50)
         metadata_repo.add_metadata(
-            AccountMetadata::builder(account_id.clone(), region.clone())
+            AccountMetadata::builder(account_id.clone())
                 .with_trust_score(50)
                 .build(),
         );
@@ -42,7 +41,6 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
-            region_code: region,
             amount: 20, // 50 + 20 = 70
             reason: "Email verified".into(),
         };
@@ -72,21 +70,19 @@ mod tests {
     async fn test_increase_trust_score_cap_at_one_hundred() {
         let (use_case, metadata_repo, _) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : On monte manuellement à 90
-        let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone())
+        let mut metadata = AccountMetadata::builder(account_id.clone())
             .with_trust_score(50)
             .build();
         metadata
-            .increase_trust_score(&region, uuid::Uuid::now_v7(), 40, "bump".into())
+            .increase_trust_score(uuid::Uuid::now_v7(), 40, "bump".into())
             .unwrap();
         metadata_repo.add_metadata(metadata);
 
         let cmd = IncreaseTrustScoreCommand {
             action_id: uuid::Uuid::now_v7(),
             account_id: account_id.clone(),
-            region_code: region,
             amount: 50, // 90 + 50 -> Doit saturer à 100
             reason: "High activity".into(),
         };
@@ -123,12 +119,11 @@ mod tests {
     async fn test_increase_trust_score_idempotency_at_max() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Déjà au max (100)
-        let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
+        let mut metadata = AccountMetadata::builder(account_id.clone()).build();
         metadata
-            .increase_trust_score(&region, uuid::Uuid::now_v7(), 100, "max out".into())
+            .increase_trust_score(uuid::Uuid::now_v7(), 100, "max out".into())
             .unwrap();
         metadata.pull_events(); // On vide les événements du setup
         let version_at_max = metadata.version();
@@ -138,7 +133,6 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             action_id: uuid::Uuid::now_v7(),
             account_id,
-            region_code: region,
             amount: 10,
             reason: "Should do nothing".into(),
         };
@@ -164,28 +158,5 @@ mod tests {
             0,
             "Pas d'événement produit quand on est déjà au max"
         );
-    }
-
-    #[tokio::test]
-    async fn test_increase_fails_on_region_mismatch() {
-        let (use_case, metadata_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), actual_region).build());
-
-        let cmd = IncreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            amount: 10,
-            reason: "Fraud check".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard: renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

@@ -41,7 +41,6 @@ mod tests {
 
         let cmd = BanCommand {
             account_id: account_id.clone(),
-            region_code: region.clone(),
             reason: "TOS Violation".into(),
         };
 
@@ -59,31 +58,6 @@ mod tests {
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
     }
 
-    #[tokio::test]
-    async fn test_ban_account_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-
-        let account = AccountIdentity::builder(
-            account_id.clone(),
-            RegionCode::from_raw("eu"),
-            Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext"),
-        )
-        .build();
-        account_repo.add_account(account);
-
-        let cmd = BanCommand {
-            account_id,
-            region_code: RegionCode::from_raw("us"), // Commande cible US
-            reason: "Wrong region".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Doit échouer car on tente de bannir un compte sur la mauvaise région (shard)
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
 
     #[tokio::test]
     async fn test_ban_account_idempotency_no_double_ban() {
@@ -99,12 +73,11 @@ mod tests {
         )
         .build();
 
-        account.ban(&region, "First reason".into()).unwrap();
+        account.ban("First reason".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = BanCommand {
             account_id,
-            region_code: region,
             reason: "Second attempt".into(),
         };
 
@@ -143,7 +116,6 @@ mod tests {
 
         let cmd = BanCommand {
             account_id: account_id.clone(),
-            region_code: region,
             reason: "Spamming".into(),
         };
 
@@ -169,7 +141,6 @@ mod tests {
 
         let cmd = BanCommand {
             account_id: AccountId::new(),
-            region_code: RegionCode::from_raw("eu"),
             reason: "No matter".into(),
         };
 
@@ -208,7 +179,6 @@ mod tests {
 
         let cmd = BanCommand {
             account_id,
-            region_code: region,
             reason: "Ban".into(),
         };
 
@@ -242,7 +212,6 @@ mod tests {
 
         let cmd = BanCommand {
             account_id,
-            region_code: region,
             reason: "Ban".into(),
         };
 

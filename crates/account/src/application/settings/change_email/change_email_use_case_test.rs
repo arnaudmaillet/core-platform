@@ -45,7 +45,6 @@ mod tests {
 
         let cmd = ChangeEmailCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_email: new_email.clone(),
         };
 
@@ -97,7 +96,6 @@ mod tests {
 
         let cmd = ChangeEmailCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_email: email.clone(),
         };
 
@@ -126,34 +124,6 @@ mod tests {
         assert_eq!(events.len(), 0);
     }
 
-    #[tokio::test]
-    async fn test_change_email_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::from_raw("eu");
-        let wrong_region = RegionCode::from_raw("us");
-
-        account_repo.add_account(
-            AccountIdentity::builder(
-                account_id.clone(),
-                actual_region,
-                Email::try_new("a@b.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
-
-        let cmd = ChangeEmailCommand {
-            account_id,
-            region_code: wrong_region,
-            new_email: Email::try_new("new@test.com").unwrap(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité : mismatch de région = Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
 
     #[tokio::test]
     async fn test_change_email_forbidden_when_restricted() {
@@ -170,12 +140,11 @@ mod tests {
         .build();
 
         // Un banni ne change pas son email
-        account.ban(&region, "Violation".into()).unwrap();
+        account.ban("Violation".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = ChangeEmailCommand {
             account_id,
-            region_code: region,
             new_email: Email::try_new("new@b.com").unwrap(),
         };
 
@@ -206,7 +175,6 @@ mod tests {
 
         let cmd = ChangeEmailCommand {
             account_id,
-            region_code: region,
             new_email: Email::try_new("b@c.com").unwrap(),
         };
 

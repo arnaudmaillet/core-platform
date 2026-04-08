@@ -30,7 +30,7 @@ impl AccountIdentityRepositoryStub {
         self.identity_map
             .lock()
             .unwrap()
-            .insert(account.id().clone(), account);
+            .insert(account.account_id().clone(), account);
     }
 
     fn check_error(&self) -> Result<()> {
@@ -45,13 +45,13 @@ impl AccountIdentityRepositoryStub {
 impl AccountIdentityRepository for AccountIdentityRepositoryStub {
     // --- RÉSOLUTIONS & LECTURES ---
 
-    async fn fetch_by_id(
+    async fn fetch_by_account_id(
         &self,
-        id: &AccountId,
+        account_id: &AccountId,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountIdentity>> {
         self.check_error()?;
-        Ok(self.identity_map.lock().unwrap().get(id).cloned())
+        Ok(self.identity_map.lock().unwrap().get(account_id).cloned())
     }
 
     async fn resolve_id_from_external_id(&self, ext_id: &ExternalId) -> Result<Option<AccountId>> {
@@ -62,7 +62,7 @@ impl AccountIdentityRepository for AccountIdentityRepositoryStub {
             .unwrap()
             .values()
             .find(|a| a.external_id() == ext_id)
-            .map(|a| a.id().clone()))
+            .map(|a| a.account_id().clone()))
     }
 
     async fn resolve_id_from_email(&self, email: &Email) -> Result<Option<AccountId>> {
@@ -73,7 +73,7 @@ impl AccountIdentityRepository for AccountIdentityRepositoryStub {
             .unwrap()
             .values()
             .find(|a| a.email() == email)
-            .map(|a| a.id().clone()))
+            .map(|a| a.account_id().clone()))
     }
 
     // --- VÉRIFICATIONS D'EXISTENCE ---
@@ -119,44 +119,58 @@ impl AccountIdentityRepository for AccountIdentityRepositoryStub {
         self.check_error()?;
         let mut map = self.identity_map.lock().unwrap();
 
-        // Simulation du verrouillage optimiste
-        if let Some(orig) = original {
-            let current = map.get(identity.id()).ok_or_else(|| DomainError::NotFound {
-                entity: "Account",
-                id: identity.id().as_string(),
-            })?;
+        let account_id = identity.account_id();
 
-            if current.version() != orig.version() {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!(
-                        "Account {}: version mismatch in stub",
-                        identity.id().as_string()
-                    ),
-                });
+        match original {
+            Some(orig) => {
+                let current = map.get(account_id).ok_or_else(|| DomainError::NotFound {
+                    entity: "AccountIdentity",
+                    id: account_id.as_string(),
+                })?;
+
+                if current.version() != orig.version() {
+                    return Err(DomainError::ConcurrencyConflict {
+                        reason: format!(
+                            "Stub OCC Conflict: DB has v{}, but you provided v{}",
+                            current.version(),
+                            orig.version()
+                        ),
+                    });
+                }
+            }
+            None => {
+                if map.contains_key(account_id) {
+                    return Err(DomainError::AlreadyExists {
+                        entity: "AccountIdentity",
+                        field: "id",
+                        value: account_id.as_string(),
+                    });
+                }
             }
         }
 
-        map.insert(identity.id().clone(), identity.clone());
+        // Persistance en mémoire
+        map.insert(account_id.clone(), identity.clone());
         Ok(())
     }
 
     async fn transit_to_state(
         &self,
-        id: &AccountId,
+        account_id: &AccountId,
         state: AccountState,
         _tx: &mut dyn Transaction,
     ) -> Result<()> {
         self.check_error()?;
         let mut map = self.identity_map.lock().unwrap();
-        if let Some(acc) = map.get_mut(id) {
+        if let Some(acc) = map.get_mut(account_id) {
             // Dans un stub, on simule l'effet de transit_to_state
             // Note: En prod, cette méthode est souvent une optimisation SQL directe.
             // Ici, on pourrait charger, modifier l'état, incrémenter la version.
             Ok(())
         } else {
             Err(DomainError::NotFound {
-                entity: "Account",
-                id: id.as_string(),
+                entity: "AccountIdentity",
+                id: account_id.as_string(),
             })
         }
     }
@@ -168,12 +182,12 @@ impl AccountIdentityRepository for AccountIdentityRepositoryStub {
         Ok(())
     }
 
-    async fn hard_delete(&self, id: &AccountId, _tx: &mut dyn Transaction) -> Result<()> {
+    async fn hard_delete(&self, account_id: &AccountId, _tx: &mut dyn Transaction) -> Result<()> {
         self.check_error()?;
-        if self.identity_map.lock().unwrap().remove(id).is_none() {
+        if self.identity_map.lock().unwrap().remove(account_id).is_none() {
             return Err(DomainError::NotFound {
-                entity: "Account",
-                id: id.as_string(),
+                entity: "AccountIdentity",
+                id: account_id.as_string(),
             });
         }
         Ok(())

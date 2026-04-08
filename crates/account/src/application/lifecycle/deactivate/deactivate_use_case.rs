@@ -14,20 +14,20 @@ use crate::domain::account::entities::AccountIdentity;
 use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct DeactivateUseCase {
-    repo: Arc<dyn AccountIdentityRepository>,
-    outbox: Arc<dyn OutboxRepository>,
+    identity_repo: Arc<dyn AccountIdentityRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl DeactivateUseCase {
     pub fn new(
-        repo: Arc<dyn AccountIdentityRepository>,
-        outbox: Arc<dyn OutboxRepository>,
+        identity_repo: Arc<dyn AccountIdentityRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            repo,
-            outbox,
+            identity_repo,
+            outbox_repo,
             tx_manager,
         }
     }
@@ -40,42 +40,42 @@ impl DeactivateUseCase {
     }
 
     async fn try_execute_once(&self, cmd: &DeactivateCommand) -> Result<AccountIdentity> {
-        let original_account = self
-            .repo
-            .fetch_by_id(&cmd.account_id, None)
+        let original_identity = self
+            .identity_repo
+            .fetch_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut account = original_account.clone();
+        let mut identity = original_identity.clone();
 
-        if !account.deactivate(&cmd.region_code)? {
-            return Ok(original_account);
+        if !identity.deactivate()? {
+            return Ok(original_identity);
         }
 
-        let events = account.pull_events();
+        let events = identity.pull_events();
         if events.is_empty() {
-            return Ok(account);
+            return Ok(identity);
         }
 
-        let updated_account = account.clone();
-        let repo = Arc::clone(&self.repo);
-        let outbox = Arc::clone(&self.outbox);
+        let updated_identity = identity.clone();
+        let identity_repo = Arc::clone(&self.identity_repo);
+        let outbox_repo = Arc::clone(&self.outbox_repo);
 
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = Arc::clone(&repo);
-                let outbox = Arc::clone(&outbox);
+                let identity_repo = Arc::clone(&identity_repo);
+                let outbox_repo = Arc::clone(&outbox_repo);
 
-                let original_for_tx = original_account.clone();
-                let updated_for_tx = account.clone();
+                let original_for_tx = original_identity.clone();
+                let updated_for_tx = identity.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                    identity_repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
                         .await?;
 
                     for event in events_for_tx {
-                        outbox.save(&mut *tx, event.as_ref()).await?;
+                        outbox_repo.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
                     Ok(())
@@ -83,6 +83,6 @@ impl DeactivateUseCase {
             })
             .await?;
 
-        Ok(updated_account)
+        Ok(updated_identity)
     }
 }

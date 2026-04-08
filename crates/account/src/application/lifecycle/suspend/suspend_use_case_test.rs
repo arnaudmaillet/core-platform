@@ -8,7 +8,6 @@ mod tests {
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-    use shared_kernel::errors::DomainError;
     use std::sync::Arc;
 
     fn setup() -> (
@@ -42,7 +41,6 @@ mod tests {
 
         let cmd = SuspendCommand {
             account_id: account_id.clone(),
-            region_code: region,
             reason: "Under investigation for fraud".into(),
         };
 
@@ -83,13 +81,13 @@ mod tests {
         // 1. Arrange : On crée et on suspend manuellement
         let mut account = AccountIdentity::builder(
             account_id.clone(),
-            region.clone(),
+            region,
             Email::try_new("p@b.com").unwrap(),
             ExternalId::from_raw("ext"),
         )
         .build();
 
-        account.suspend(&region, "Original reason".into()).unwrap();
+        account.suspend("Original reason".into()).unwrap();
         account.pull_events();
         let version_at_suspension = account.version();
 
@@ -97,7 +95,6 @@ mod tests {
 
         let cmd = SuspendCommand {
             account_id: account_id.clone(),
-            region_code: region,
             reason: "Second call".into(),
         };
 
@@ -121,33 +118,5 @@ mod tests {
             0,
             "Idempotence : aucun événement produit"
         );
-    }
-
-    #[tokio::test]
-    async fn test_suspend_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(
-            AccountIdentity::builder(
-                account_id.clone(),
-                actual_region,
-                Email::try_new("u@t.com").unwrap(),
-                ExternalId::from_raw("ext"),
-            )
-            .build(),
-        );
-
-        let cmd = SuspendCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            reason: "Wrong region".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

@@ -8,21 +8,103 @@ use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
+use shared_kernel::infrastructure::redis::utils::RedisTestContext;
+use shared_kernel::domain::repositories::CacheRepository;
 
 /// Helper pour instancier le repo et la DB de test
-async fn get_test_context() -> (PostgresAccountIdentityRepository, PostgresTestContext) {
-    let ctx = PostgresTestContext::builder()
+async fn get_test_context() -> (PostgresAccountIdentityRepository, PostgresTestContext, RedisTestContext) {
+    // 1. Démarrage de Postgres (Docker)
+    let pg_ctx = PostgresTestContext::builder()
         .with_migrations(&["./migrations/postgres"])
         .build()
         .await;
 
-    let repo = PostgresAccountIdentityRepository::new(ctx.pool().clone());
-    (repo, ctx)
+    // 2. Démarrage de Redis (Docker via ton nouveau util)
+    let redis_ctx = RedisTestContext::builder()
+        .build()
+        .await;
+
+    // 3. Instanciation du Repo avec les deux containers
+    let repo = PostgresAccountIdentityRepository::new(
+        pg_ctx.pool().clone(), 
+        redis_ctx.repository()
+    );
+    
+    (repo, pg_ctx, redis_ctx)
+}
+
+#[tokio::test]
+async fn test_cache_invalidation_lifecycle() {
+    let (repo, _ctx, redis_ctx) = get_test_context().await;
+    let account_id = AccountId::new();
+    let email = Email::try_new("cache@test.com").unwrap();
+    let cache = redis_ctx.repository();
+
+    let account = AccountIdentity::builder(
+        account_id.clone(),
+        RegionCode::try_new("eu").unwrap(),
+        email.clone(),
+        ExternalId::from_raw("ext_cache"),
+    ).build();
+
+    // 1. Sauvegarde initiale
+    repo.save(&account, None, None).await.unwrap();
+
+    // 2. Premier Fetch -> Doit remplir le cache
+    let found_1 = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    
+    // Vérification manuelle que c'est dans Redis
+    let cache_key = format!("account:identity:{}", account_id.clone());
+    let in_cache: bool = cache.exists(&cache_key).await.unwrap();
+    assert!(in_cache, "Data should be in cache after first fetch");
+
+    // 3. Modification (v1 -> v2) -> Doit INVALIDER le cache
+    let mut to_update = found_1.clone();
+    to_update.deactivate().unwrap();
+    repo.save(&to_update, Some(&found_1), None).await.unwrap();
+
+    // Vérification que la clé a disparu de Redis
+    let in_cache_after_save: bool = cache.exists(&cache_key).await.unwrap();
+    assert!(!in_cache_after_save, "Cache should be invalidated after save");
+
+    // 4. Second Fetch -> Doit renvoyer la v2 et re-remplir le cache
+    let found_2 = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert_eq!(found_2.version(), 2);
+    assert!(cache.exists(&cache_key).await.unwrap(), "Cache should be refilled");
+}
+
+#[tokio::test]
+async fn test_transaction_skips_cache() {
+    let (repo, ctx, redis_ctx) = get_test_context().await;
+    let cache = redis_ctx.repository();
+    let account_id = AccountId::new();
+
+    let account = AccountIdentity::builder(
+        account_id.clone(),
+        RegionCode::try_new("eu").unwrap(),
+        Email::try_new("tx_cache@test.com").unwrap(),
+        ExternalId::from_raw("ext_tx_cache"),
+    ).build();
+
+    // On sauve en DB
+    repo.save(&account, None, None).await.unwrap();
+
+    // On ouvre une transaction
+    let tx_sqlx = ctx.pool().begin().await.unwrap();
+    let mut wrapped_tx = PostgresTransaction::new(tx_sqlx);
+
+    // On fetch DANS une transaction
+    // Selon ton code : tx.is_some() donc ça ne devrait pas lire le cache 
+    // et surtout ça ne devrait pas ÉCRIRE dans le cache (Dirty Read protection)
+    let _ = repo.fetch_by_account_id(&account_id, Some(&mut wrapped_tx)).await.unwrap();
+
+    let cache_key = format!("account:identity:{}", account_id.clone());
+    assert!(!cache.exists(&cache_key).await.unwrap(), "Cache should not be filled during a transaction");
 }
 
 #[tokio::test]
 async fn test_account_lifecycle_full() {
-    let (repo, ctx) = get_test_context().await;
+    let (repo, ctx, _redis_ctx) = get_test_context().await;
     let pool = ctx.pool();
     let region = RegionCode::try_new("eu").unwrap();
     let account_id = AccountId::new();
@@ -48,7 +130,7 @@ async fn test_account_lifecycle_full() {
 
     // 2. Vérification fetch_by_id
     let found = repo
-        .fetch_by_id(&account_id, None)
+        .fetch_by_account_id(&account_id, None)
         .await
         .unwrap()
         .expect("Should find account");
@@ -56,21 +138,21 @@ async fn test_account_lifecycle_full() {
 
     // 3. Update (v1 -> v2)
     let mut to_update = found.clone();
-    to_update.deactivate(&region).expect("Deactivation failed");
+    to_update.deactivate().expect("Deactivation failed");
 
     // On passe 'found' comme original pour activer le verrouillage optimiste
     repo.save(&to_update, Some(&found), None)
         .await
         .expect("Save v2 failed");
 
-    let updated = repo.fetch_by_id(&account_id, None).await.unwrap().unwrap();
+    let updated = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
     assert_eq!(*updated.state(), AccountState::Deactivated);
     assert_eq!(updated.version(), 2);
 }
 
 #[tokio::test]
 async fn test_transaction_rollback_logic() {
-    let (repo, ctx) = get_test_context().await;
+    let (repo, ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
 
     let account = AccountIdentity::builder(
@@ -89,13 +171,13 @@ async fn test_transaction_rollback_logic() {
         .unwrap();
     wrapped_tx.into_inner().rollback().await.unwrap();
 
-    let found = repo.fetch_by_id(&account_id, None).await.unwrap();
+    let found = repo.fetch_by_account_id(&account_id, None).await.unwrap();
     assert!(found.is_none(), "Account should not exist after rollback");
 }
 
 #[tokio::test]
 async fn test_unique_constraints_violation() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _ctx, _redis_ctx) = get_test_context().await;
     let region = RegionCode::try_new("eu").unwrap();
     let email_str = "duplicate@test.com";
 
@@ -126,7 +208,7 @@ async fn test_unique_constraints_violation() {
 
 #[tokio::test]
 async fn test_account_concurrency_conflict_it() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _ctx, _redis_ctx) = get_test_context().await;
     let region = RegionCode::try_new("eu").unwrap();
     let account_id = AccountId::new();
 
@@ -140,12 +222,12 @@ async fn test_account_concurrency_conflict_it() {
     repo.save(&account, None, None).await.unwrap();
 
     // On simule deux clients qui chargent la même version (v1)
-    let client_a_found = repo.fetch_by_id(&account_id, None).await.unwrap().unwrap();
-    let client_b_found = repo.fetch_by_id(&account_id, None).await.unwrap().unwrap();
+    let client_a_found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let client_b_found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
 
     // Client A sauvegarde en premier (v1 -> v2)
     let mut client_a_modified = client_a_found.clone();
-    client_a_modified.deactivate(&region).unwrap();
+    client_a_modified.deactivate().unwrap();
     repo.save(&client_a_modified, Some(&client_a_found), None)
         .await
         .expect("Client A wins");
@@ -153,7 +235,7 @@ async fn test_account_concurrency_conflict_it() {
     // Client B essaie de sauvegarder sa version v1 (v1 -> v2) MAIS la DB est déjà en v2
     let mut client_b_modified = client_b_found.clone();
     client_b_modified
-        .suspend(&region, "Late update".into())
+        .suspend("Late update".into())
         .unwrap();
 
     let result = repo
@@ -170,7 +252,7 @@ async fn test_account_concurrency_conflict_it() {
 
 #[tokio::test]
 async fn test_account_lookups_and_resolutions() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _ctx, _redis_ctx) = get_test_context().await;
     let email = Email::try_new("lookup@test.com").unwrap();
     let ext_id = ExternalId::from_raw("ext_lookup_123");
 
@@ -190,59 +272,8 @@ async fn test_account_lookups_and_resolutions() {
 
     // Test des résolutions d'ID
     let id_from_email = repo.resolve_id_from_email(&email).await.unwrap();
-    assert_eq!(id_from_email.unwrap(), *account.id());
+    assert_eq!(id_from_email.unwrap(), *account.account_id());
 
     let id_from_ext = repo.resolve_id_from_external_id(&ext_id).await.unwrap();
-    assert_eq!(id_from_ext.unwrap(), *account.id());
-}
-
-#[tokio::test]
-async fn test_account_security_region_mismatch_it() {
-    let (repo, _ctx) = get_test_context().await;
-
-    let region_eu = RegionCode::try_new("eu").unwrap();
-    let region_us = RegionCode::try_new("us").unwrap();
-    let account_id = AccountId::new();
-
-    // 1. Arrange : Création d'un compte rattaché à la région EU
-    let mut account = AccountIdentity::builder(
-        account_id,
-        region_eu.clone(),
-        Email::try_new("security_test@test.com").unwrap(),
-        ExternalId::from_raw("ext_sec_777"),
-    )
-    .build();
-
-    // Persistance initiale
-    repo.save(&account, None, None)
-        .await
-        .expect("Initial save failed");
-
-    // 2. Act : Tentative de mutation métier en fournissant une région US
-    // Le domaine doit comparer la région fournie dans l'appel (region_us)
-    // avec sa région interne (region_eu).
-    let result = account.deactivate(&region_us);
-
-    // 3. Assert : Vérification que le garde-fou du Domaine a fonctionné
-    assert!(
-        result.is_err(),
-        "Le domaine devrait interdire une action sur une région mismatch"
-    );
-
-    if let Err(shared_kernel::errors::DomainError::Forbidden { reason }) = result {
-        assert!(
-            reason.contains("region"),
-            "L'erreur devrait mentionner le conflit de région"
-        );
-    } else {
-        panic!("Devrait retourner une DomainError::Forbidden spécifique");
-    }
-
-    // 4. Vérification en base : L'état ne doit pas avoir changé
-    let found = repo.fetch_by_id(account.id(), None).await.unwrap().unwrap();
-    assert_eq!(
-        *found.state(),
-        AccountState::Pending,
-        "Le compte doit rester en Pending"
-    );
+    assert_eq!(id_from_ext.unwrap(), *account.account_id());
 }

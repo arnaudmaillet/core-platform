@@ -28,12 +28,11 @@ impl OutboxRepository for PostgresOutboxRepository {
 
         query(
             r#"
-            INSERT INTO outbox_events (id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#
         )
             .bind(envelope.id)
-            .bind(&envelope.region_code)
             .bind(envelope.aggregate_type)
             .bind(envelope.aggregate_id)
             .bind(envelope.event_type)
@@ -49,7 +48,7 @@ impl OutboxRepository for PostgresOutboxRepository {
 
     async fn find_pending(&self, limit: i32) -> Result<Vec<EventEnvelope>> {
         let sql = r#"
-            SELECT id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
+            SELECT id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
             FROM outbox_events
             WHERE processed_at IS NULL
             ORDER BY occurred_at ASC
@@ -65,7 +64,6 @@ impl OutboxRepository for PostgresOutboxRepository {
         let envelopes = rows.into_iter().map(|row| {
             EventEnvelope {
                 id: row.get("id"),
-                region_code: row.get("region_code"),
                 aggregate_type: row.get("aggregate_type"),
                 aggregate_id: row.get("aggregate_id"),
                 event_type: row.get("event_type"),

@@ -1,5 +1,8 @@
 // crates/account/src/infrastructure/postgres/repositories/account_metadata_repository.rs
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres, query, query_as};
 
@@ -9,6 +12,7 @@ use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
+use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
 
 use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
@@ -17,17 +21,30 @@ use crate::infrastructure::postgres::rows::PostgresAccountMetadataRow;
 
 pub struct PostgresAccountMetadataRepository {
     pool: Pool<Postgres>,
+    cache: Arc<dyn CacheRepository>,
 }
 
 impl PostgresAccountMetadataRepository {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self { pool }
+    pub fn new(pool: Pool<Postgres>, cache: Arc<dyn CacheRepository>) -> Self {
+        Self { pool, cache }
+    }
+
+    fn cache_key(account_id: &AccountId) -> String {
+        format!("account:metadata:{}", account_id.as_uuid())
     }
 }
 
 #[async_trait]
 impl AccountMetadataRepository for PostgresAccountMetadataRepository {
     async fn fetch_by_account_id(&self, account_id: &AccountId) -> Result<Option<AccountMetadata>> {
+        let key = Self::cache_key(account_id);
+
+        // 1. TENTATIVE CACHE (Read-through)
+        if let Ok(Some(metadata)) = self.cache.get_obj::<AccountMetadata>(&key).await {
+            return Ok(Some(metadata));
+        }
+
+        // 2. LECTURE SQL
         let uid = account_id.as_uuid();
         let row = <dyn Transaction>::execute_on(&self.pool, None, |conn| {
             Box::pin(async move {
@@ -41,7 +58,15 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         })
         .await?;
 
-        row.map(AccountMetadata::try_from).transpose()
+        let metadata = row.map(AccountMetadata::try_from).transpose()?;
+
+        // 3. MISE EN CACHE (Write-through)
+        if let Some(ref meta) = metadata {
+            // TTL de 30 minutes pour les metadata (souvent moins critiques que l'Identity)
+            let _ = self.cache.set_obj(&key, meta, Some(Duration::from_secs(1800))).await;
+        }
+
+        Ok(metadata)
     }
 
     async fn save(
@@ -50,9 +75,8 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         original: Option<&AccountMetadata>,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
-        // --- 1. EXTRACTION DES DONNÉES (Propriété complète / Owned types) ---
+        // --- 1. EXTRACTION DES DONNÉES ---
         let uid = metadata.account_id().as_uuid();
-        let region = metadata.region_code().to_string();
         let role = PostgresAccountRole::from(metadata.role());
         let is_beta = metadata.is_beta_tester();
         let is_shadow = metadata.is_shadowbanned();
@@ -61,68 +85,65 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let last_ip_addr = metadata.last_ip_addr().map(|ip| ip.to_std());
         let last_mod = metadata.last_moderation_at();
         let updated = metadata.updated_at();
+        
         let new_version = metadata.version_i64()?;
-
-        let old_region = original.map(|o| o.region_code().to_string());
+        
+        let old_version = original
+            .map(|o| o.version_i64()).transpose()?.unwrap_or(0);
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
-                // --- ÉTAPE 1 : GESTION DU CHANGEMENT DE RÉGION ---
-                if let Some(old_reg) = old_region {
-                    if old_reg != region {
-                        query("DELETE FROM account_metadata WHERE account_id = $1 AND region_code = $2")
-                            .bind(uid)
-                            .bind(old_reg)
-                            .execute(&mut *conn)
-                            .await
-                            .map_domain_infra("AccountMetadata: delete old region")?;
-                    }
-                }
-
-                // --- ÉTAPE 2 : UPSERT ATOMIQUE ---
+                // --- ÉTAPE 1 : UPSERT ATOMIQUE ---
                 let sql = r#"
-                    INSERT INTO account_metadata (
-                        account_id, region_code, role, is_beta_tester, is_shadowbanned,
-                        trust_score, moderation_notes, last_ip_addr, last_moderation_at,
-                        version, updated_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                    ON CONFLICT (account_id, region_code) DO UPDATE SET
-                        role = EXCLUDED.role,
-                        is_beta_tester = EXCLUDED.is_beta_tester,
-                        is_shadowbanned = EXCLUDED.is_shadowbanned,
-                        trust_score = EXCLUDED.trust_score,
-                        moderation_notes = EXCLUDED.moderation_notes,
-                        last_ip_addr = EXCLUDED.last_ip_addr,
-                        last_moderation_at = EXCLUDED.last_moderation_at,
-                        version = EXCLUDED.version,
-                        updated_at = EXCLUDED.updated_at
-                    WHERE account_metadata.version < EXCLUDED.version
-                "#;
+                INSERT INTO account_metadata (
+                    account_id, role, is_beta_tester, is_shadowbanned,
+                    trust_score, moderation_notes, last_ip_addr, last_moderation_at,
+                    version, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (account_id) DO UPDATE SET
+                    role = EXCLUDED.role,
+                    is_beta_tester = EXCLUDED.is_beta_tester,
+                    is_shadowbanned = EXCLUDED.is_shadowbanned,
+                    trust_score = EXCLUDED.trust_score,
+                    moderation_notes = EXCLUDED.moderation_notes,
+                    last_ip_addr = EXCLUDED.last_ip_addr,
+                    last_moderation_at = EXCLUDED.last_moderation_at,
+                    version = EXCLUDED.version,
+                    updated_at = EXCLUDED.updated_at
+                WHERE account_metadata.version = $11
+            "#;
 
                 let result = query(sql)
-                    .bind(uid)              // $1
-                    .bind(&region)          // $2
-                    .bind(role)             // $3
-                    .bind(is_beta)          // $4
-                    .bind(is_shadow)        // $5
-                    .bind(trust)            // $6
-                    .bind(notes)            // $7
-                    .bind(last_ip_addr)     // $8
-                    .bind(last_mod)         // $9
-                    .bind(new_version)      // $10
-                    .bind(updated)          // $11
+                    .bind(uid) // $1
+                    .bind(role) // $2
+                    .bind(is_beta) // $3
+                    .bind(is_shadow) // $4
+                    .bind(trust) // $5
+                    .bind(notes) // $6
+                    .bind(last_ip_addr) // $7
+                    .bind(last_mod) // $8
+                    .bind(new_version) // $9
+                    .bind(updated) // $10
+                    .bind(old_version) // $11
                     .execute(conn)
                     .await
                     .map_domain_infra("AccountMetadata: save upsert")?;
 
-                if result.rows_affected() == 0 {
+                if result.rows_affected() == 0 && old_version > 0 {
                     return Err(DomainError::ConcurrencyConflict {
-                        reason: format!("OCC Conflict for {}: version in DB is already >= v{}", uid, new_version),
+                        reason: format!(
+                            "OCC Conflict for metadata {}: expected v{}, but DB version has changed",
+                            uid, old_version
+                        ),
                     });
                 }
 
                 Ok(())
             })
-        }).await
+        })
+        .await?;
+
+        let _ = self.cache.delete(&Self::cache_key(metadata.account_id())).await;
+        Ok(())
     }
 }

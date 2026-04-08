@@ -27,15 +27,13 @@ mod tests {
     async fn test_set_beta_status_to_true_success() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : Nouveau compte (beta_tester = false par défaut, version 1)
         metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
+            .add_metadata(AccountMetadata::builder(account_id.clone()).build());
 
         let cmd = SetAsBetaCommand {
             account_id: account_id.clone(),
-            region_code: region,
             status: true,
             reason: "Early adopter program".into(),
         };
@@ -74,12 +72,11 @@ mod tests {
     async fn test_set_beta_status_idempotency() {
         let (use_case, metadata_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. Arrange : On le passe beta manuellement (Version passe à 2)
-        let mut metadata = AccountMetadata::builder(account_id.clone(), region.clone()).build();
+        let mut metadata = AccountMetadata::builder(account_id.clone()).build();
         metadata
-            .set_beta_status(&region, true, "initial activation".into())
+            .set_beta_status(true, "initial activation".into())
             .unwrap();
         metadata.pull_events(); // On vide les events de l'initialisation
         let version_after_setup = metadata.version();
@@ -88,7 +85,6 @@ mod tests {
 
         let cmd = SetAsBetaCommand {
             account_id: account_id.clone(),
-            region_code: region,
             status: true, // On demande encore true
             reason: "Double call".into(),
         };
@@ -106,27 +102,5 @@ mod tests {
         // 4. Outbox
         let events = outbox_repo.saved_events.lock().unwrap();
         assert_eq!(events.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_set_beta_status_fails_on_region_mismatch() {
-        let (use_case, metadata_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        metadata_repo
-            .add_metadata(AccountMetadata::builder(account_id.clone(), actual_region).build());
-
-        let cmd = SetAsBetaCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            status: true,
-            reason: "Wrong region".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

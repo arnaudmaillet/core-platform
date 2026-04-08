@@ -14,20 +14,20 @@ use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
 pub struct IncreaseTrustScoreUseCase {
-    repo: Arc<dyn AccountMetadataRepository>,
-    outbox: Arc<dyn OutboxRepository>,
+    metadata_repo: Arc<dyn AccountMetadataRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl IncreaseTrustScoreUseCase {
     pub fn new(
-        repo: Arc<dyn AccountMetadataRepository>,
-        outbox: Arc<dyn OutboxRepository>,
+        metadata_repo: Arc<dyn AccountMetadataRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            repo,
-            outbox,
+            metadata_repo,
+            outbox_repo,
             tx_manager,
         }
     }
@@ -41,37 +41,37 @@ impl IncreaseTrustScoreUseCase {
 
     async fn try_execute_once(&self, cmd: &IncreaseTrustScoreCommand) -> Result<AccountMetadata> {
         let original_metadata = self
-            .repo
+            .metadata_repo
             .fetch_by_account_id(&cmd.account_id)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
         let mut metadata = original_metadata.clone();
 
-        if !metadata.increase_trust_score(&cmd.region_code, cmd.action_id, cmd.amount, cmd.reason.clone())?  {
+        if !metadata.increase_trust_score(cmd.action_id, cmd.amount, cmd.reason.clone())?  {
             return Ok(original_metadata);
         }
 
         let events = metadata.pull_events();
 
         let updated_metadata = metadata.clone();
-        let repo = Arc::clone(&self.repo);
-        let outbox = Arc::clone(&self.outbox);
+        let metadata_repo = Arc::clone(&self.metadata_repo);
+        let outbox_repo = Arc::clone(&self.outbox_repo);
 
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = Arc::clone(&repo);
-                let outbox = Arc::clone(&outbox);
-                
+                let metadata_repo = Arc::clone(&metadata_repo);
+                let outbox_repo = Arc::clone(&outbox_repo);
+
                 let original_for_tx = original_metadata.clone();
                 let updated_for_tx = metadata.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
+                    metadata_repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx)).await?;
 
                     for event in events_for_tx {
-                        outbox.save(&mut *tx, event.as_ref()).await?;
+                        outbox_repo.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
                     Ok(())

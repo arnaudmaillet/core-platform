@@ -57,27 +57,35 @@ impl AccountMetadataRepository for AccountMetadataRepositoryStub {
         let mut map = self.metadata_map.lock().unwrap();
         let account_id = metadata.account_id();
 
-        // SIMULATION DU VERROUILLAGE OPTIMISTE (Optimistic Concurrency Control)
-        if let Some(orig) = original {
-            let current_in_map = map.get(account_id).ok_or_else(|| DomainError::NotFound {
-                entity: "AccountMetadata",
-                id: account_id.as_string(),
-            })?;
+        match original {
+            Some(orig) => {
+                let current_in_map = map.get(account_id).ok_or_else(|| DomainError::NotFound {
+                    entity: "AccountMetadata",
+                    id: account_id.as_string(),
+                })?;
 
-            // Si la version en "base" (le stub) est différente de celle qu'on pensait avoir (original)
-            if current_in_map.version() != orig.version() {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!(
-                        "AccountMetadata {}: version mismatch (stub has {}, cmd had {})",
-                        account_id.as_string(),
-                        current_in_map.version(),
-                        orig.version()
-                    ),
-                });
+                // Vérification stricte de la version
+                if current_in_map.version() != orig.version() {
+                    return Err(DomainError::ConcurrencyConflict {
+                        reason: format!(
+                            "AccountMetadata OCC Conflict: Stub has v{}, but you tried to update v{}",
+                            current_in_map.version(),
+                            orig.version()
+                        ),
+                    });
+                }
+            }
+            None => {
+                if map.contains_key(account_id) {
+                    return Err(DomainError::AlreadyExists {
+                        entity: "AccountMetadata",
+                        field: "account_id",
+                        value: account_id.as_string(),
+                    });
+                }
             }
         }
 
-        // On insère ou on met à jour
         map.insert(account_id.clone(), metadata.clone());
         Ok(())
     }

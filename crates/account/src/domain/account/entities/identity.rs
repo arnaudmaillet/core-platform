@@ -6,6 +6,7 @@ use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
 };
 use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
@@ -16,9 +17,9 @@ use shared_kernel::errors::{DomainError, Result};
 ///
 /// Gère l'identité, la sécurité et le cycle de vie du compte.
 /// Utilise AggregateMetadata pour l'Optimistic Concurrency Control et la capture d'événements.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountIdentity {
-    id: AccountId,
+    account_id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
     email: Email,
@@ -36,18 +37,18 @@ pub struct AccountIdentity {
 
 impl AccountIdentity {
     pub fn builder(
-        id: AccountId,
+        account_id: AccountId,
         region_code: RegionCode,
         email: Email,
         external_id: ExternalId,
     ) -> AccountIdentityBuilder {
-        AccountIdentityBuilder::new(id, region_code, email, external_id)
+        AccountIdentityBuilder::new(account_id, region_code, email, external_id)
     }
 
     /// Utilisé par le Builder ou le Repository pour restaurer l'état
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
-        id: AccountId,
+        account_id: AccountId,
         region_code: RegionCode,
         external_id: ExternalId,
         email: Email,
@@ -63,7 +64,7 @@ impl AccountIdentity {
         metadata: AggregateMetadata,
     ) -> Self {
         Self {
-            id,
+            account_id,
             region_code,
             external_id,
             email,
@@ -82,8 +83,8 @@ impl AccountIdentity {
 
     // --- GETTERS PUBLICS ---
 
-    pub fn id(&self) -> &AccountId {
-        &self.id
+    pub fn account_id(&self) -> &AccountId {
+        &self.account_id
     }
     pub fn region_code(&self) -> &RegionCode {
         &self.region_code
@@ -130,10 +131,8 @@ impl AccountIdentity {
     /// Cette opération est critique pour la sécurité.
     pub fn link_external_identity(
         &mut self,
-        region: &RegionCode,
         new_external_id: ExternalId,
     ) -> Result<bool> {
-        self.ensure_region_match(region)?;
         if self.external_id == new_external_id {
             return Ok(false);
         }
@@ -149,8 +148,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::ExternalIdentityLinked {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             old_external_id,
             new_external_id: self.external_id.clone(),
             occurred_at: self.updated_at,
@@ -159,8 +157,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn change_email(&mut self, region: &RegionCode, new_email: Email) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn change_email(&mut self, new_email: Email) -> Result<bool> {
         if self.email == new_email {
             return Ok(false);
         }
@@ -176,8 +173,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::EmailChanged {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             old_email: Some(old_email),
             new_email: self.email.clone(),
             occurred_at: self.updated_at,
@@ -186,8 +182,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn verify_email(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn verify_email(&mut self) -> Result<bool> {
         if self.email_verified {
             return Ok(false);
         }
@@ -200,8 +195,7 @@ impl AccountIdentity {
         }
 
         self.push_event(Box::new(AccountEvent::EmailVerified {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -214,10 +208,8 @@ impl AccountIdentity {
 
     pub fn change_phone_number(
         &mut self,
-        region: &RegionCode,
         new_phone: PhoneNumber,
     ) -> Result<bool> {
-        self.ensure_region_match(region)?;
         if self.phone_number.as_ref() == Some(&new_phone) {
             return Ok(false);
         }
@@ -227,8 +219,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::PhoneNumberChanged {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             old_phone_number,
             new_phone_number: self.phone_number.clone().unwrap(),
             occurred_at: self.updated_at,
@@ -237,8 +228,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn verify_phone(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn verify_phone(&mut self) -> Result<bool> {
         if self.phone_verified {
             return Ok(false);
         }
@@ -247,8 +237,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::PhoneVerified {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
@@ -259,8 +248,7 @@ impl AccountIdentity {
     // GESTION DU PROFIL & CONFORMITÉ
     // ==========================================
 
-    pub fn change_birth_date(&mut self, region: &RegionCode, new_date: BirthDate) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn change_birth_date(&mut self, new_date: BirthDate) -> Result<bool> {
         if self.birth_date.as_ref() == Some(&new_date) {
             return Ok(false);
         }
@@ -275,16 +263,14 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::BirthDateChanged {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
         Ok(true)
     }
 
-    pub fn update_locale(&mut self, region: &RegionCode, new_locale: Locale) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn update_locale(&mut self, new_locale: Locale) -> Result<bool> {
         if self.locale == new_locale {
             return Ok(false);
         }
@@ -293,8 +279,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::LocaleChanged {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             new_locale: self.locale.clone(),
             occurred_at: self.updated_at,
         }));
@@ -311,7 +296,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountRegionChanged {
-            account_id: self.id.clone(),
+            account_id: self.account_id.clone(),
             old_region,
             new_region: self.region_code.clone(),
             occurred_at: self.updated_at,
@@ -324,19 +309,17 @@ impl AccountIdentity {
     // CYCLE DE VIE & ÉTATS DE SÉCURITÉ
     // ==========================================
 
-    pub fn register(&mut self, region: &RegionCode, ip_addr: IpAddr) -> Result<bool> {
-        self.ensure_region_match(region)?;
-
+    pub fn register(&mut self, region: RegionCode, ip_addr: IpAddr) -> Result<bool> {
         self.state = AccountState::Active;
         self.last_active_at = Some(Utc::now());
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountRegistered {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             email: self.email.clone(),
             external_id: self.external_id.clone(),
             locale: self.locale.clone(),
+            region,
             ip_addr,
             occurred_at: self.updated_at,
         }));
@@ -344,8 +327,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn deactivate(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn deactivate(&mut self) -> Result<bool> {
         if self.state == AccountState::Deactivated {
             return Ok(false);
         }
@@ -354,16 +336,14 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountDeactivated {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
         Ok(true)
     }
 
-    pub fn activate(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn activate(&mut self) -> Result<bool> {
         if self.is_active() {
             return Ok(false);
         }
@@ -379,16 +359,14 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountActivated {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
         Ok(true)
     }
 
-    pub fn suspend(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn suspend(&mut self, reason: String) -> Result<bool> {
         if self.state == AccountState::Suspended {
             return Ok(false);
         }
@@ -397,8 +375,7 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountSuspended {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             reason,
             occurred_at: self.updated_at,
         }));
@@ -406,8 +383,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn unsuspend(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn unsuspend(&mut self) -> Result<bool> {
         if self.state != AccountState::Suspended {
             return Ok(false);
         }
@@ -416,16 +392,14 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountUnsuspended {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
         Ok(true)
     }
 
-    pub fn ban(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn ban(&mut self, reason: String) -> Result<bool> {
         if self.state == AccountState::Banned {
             return Ok(false);
         }
@@ -433,8 +407,7 @@ impl AccountIdentity {
         self.state = AccountState::Banned;
         self.apply_change();
         self.push_event(Box::new(AccountEvent::AccountBanned {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             reason,
             occurred_at: self.updated_at,
         }));
@@ -442,8 +415,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn unban(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn unban(&mut self) -> Result<bool> {
         if self.state != AccountState::Banned {
             return Ok(false);
         }
@@ -452,17 +424,14 @@ impl AccountIdentity {
         self.apply_change();
 
         self.push_event(Box::new(AccountEvent::AccountUnbanned {
-            account_id: self.id.clone(),
-            region: self.region_code.clone(),
+            account_id: self.account_id.clone(),
             occurred_at: self.updated_at,
         }));
 
         Ok(true)
     }
 
-    pub fn record_activity(&mut self, region: &RegionCode) -> Result<bool> {
-        self.ensure_region_match(region)?;
-
+    pub fn record_activity(&mut self) -> Result<bool> {
         let now = Utc::now();
         if self
             .last_active_at
@@ -509,27 +478,18 @@ impl AccountIdentity {
         self.increment_version();
         self.updated_at = Utc::now();
     }
-
-    fn ensure_region_match(&self, region: &RegionCode) -> Result<()> {
-        if &self.region_code != region {
-            return Err(DomainError::Forbidden {
-                reason: "Cross-region operation detected".into(),
-            });
-        }
-        Ok(())
-    }
 }
 
 impl EntityMetadata for AccountIdentity {
     fn entity_name() -> &'static str {
-        "Account"
+        "AccountIdentity"
     }
 
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
-            "account_email_key" => "email",
-            "account_phone_number_key" => "phone_number",
-            "account_external_id_key" => "external_id",
+            "account_identity_email_key" => "email",
+            "account_identity_phone_number_key" => "phone_number",
+            "account_identity_external_id_key" => "external_id",
             _ => "unique_constraint",
         }
     }
@@ -537,7 +497,7 @@ impl EntityMetadata for AccountIdentity {
 
 impl AggregateRoot for AccountIdentity {
     fn id(&self) -> String {
-        self.id.as_string()
+        self.account_id.as_string()
     }
     fn metadata(&self) -> &AggregateMetadata {
         &self.metadata

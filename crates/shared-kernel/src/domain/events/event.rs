@@ -17,9 +17,6 @@ pub trait DomainEvent: DynClone + Debug + Send + Sync {
         Uuid::now_v7()
     }
 
-    /// La région d'origine de l'événement (Crucial pour le routage et la souveraineté)
-    fn region_code(&self) -> RegionCode;
-
     /// Nom de l'événement (ex: "user.profile.updated")
     fn event_type(&self) -> Cow<'_, str>;
 

@@ -8,7 +8,6 @@ use uuid::Uuid;
 pub struct IncreaseTrustScoreCommand {
     pub action_id: Uuid,
     pub account_id: AccountId,
-    pub region_code: RegionCode,
     pub amount: u32,
     pub reason: String,
 }

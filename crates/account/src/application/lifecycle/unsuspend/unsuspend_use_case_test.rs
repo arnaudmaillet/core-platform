@@ -40,7 +40,7 @@ mod tests {
         .build();
 
         account
-            .suspend(&region, "Suspicious activity".into())
+            .suspend("Suspicious activity".into())
             .unwrap();
         account.pull_events(); // On vide les events du setup
         let version_suspended = account.version();
@@ -49,7 +49,6 @@ mod tests {
 
         let cmd = UnsuspendCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         // 2. Act : On s'attend à recevoir l'Account réactivé
@@ -110,7 +109,6 @@ mod tests {
 
         let cmd = UnsuspendCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         let result = use_case.execute(cmd).await.unwrap();
@@ -119,30 +117,4 @@ mod tests {
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
     }
 
-    #[tokio::test]
-    async fn test_unsuspend_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(
-            AccountIdentity::builder(
-                account_id.clone(),
-                actual_region,
-                Email::try_new("a@b.com").unwrap(),
-                ExternalId::from_raw("ext"),
-            )
-            .build(),
-        );
-
-        let cmd = UnsuspendCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-    }
 }

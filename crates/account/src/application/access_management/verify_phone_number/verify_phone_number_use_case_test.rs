@@ -48,7 +48,6 @@ mod tests {
 
         let cmd = VerifyPhoneNumberCommand {
             account_id: account_id.clone(),
-            region_code: region,
             code: "123456".into(),
         };
 
@@ -99,7 +98,7 @@ mod tests {
         .with_phone(PhoneNumber::try_new("+33600000000").unwrap())
         .build();
 
-        account.verify_phone(&region).unwrap();
+        account.verify_phone().unwrap();
         account.pull_events(); // On vide les événements du setup
         let version_verified = account.version();
 
@@ -107,7 +106,6 @@ mod tests {
 
         let cmd = VerifyPhoneNumberCommand {
             account_id: account_id.clone(),
-            region_code: region,
             code: "000000".into(),
         };
 
@@ -131,33 +129,5 @@ mod tests {
             0,
             "Idempotence : aucun événement généré"
         );
-    }
-
-    #[tokio::test]
-    async fn test_verify_phone_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(
-            AccountIdentity::builder(
-                account_id.clone(),
-                actual_region,
-                Email::try_new("u@t.com").unwrap(),
-                ExternalId::from_raw("ext"),
-            )
-            .build(),
-        );
-
-        let cmd = VerifyPhoneNumberCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-            code: "111111".into(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

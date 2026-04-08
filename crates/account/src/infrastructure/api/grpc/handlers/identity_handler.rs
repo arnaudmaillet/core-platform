@@ -2,7 +2,7 @@
 
 use shared_kernel::domain::value_objects::RegionCode;
 use shared_proto::account::v1::{
-    Account,
+    AccountIdentity,
     ActivateRequest,
     DeactivateRequest,
     ChangeBirthDateRequest,
@@ -97,95 +97,91 @@ impl IdentityHandler {
 #[tonic::async_trait]
 impl AccountIdentityService for IdentityHandler {
 
-    async fn register(&self, request: Request<RegisterRequest>) -> Result<Response<Account>, Status> {
+    async fn register(&self, request: Request<RegisterRequest>) -> Result<Response<AccountIdentity>, Status> {
         let region: RegionCode = self.get_region(&request)?;
         let command = RegisterCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self.register_use_case.execute(command).await.map_grpc()?;
-        Ok(Response::new(account.into()))
+        let res = self.register_use_case.execute(command).await.map_grpc()?;
+        Ok(Response::new(res.into()))
     }
 
     async fn change_email(
         &self,
         request: Request<ChangeEmailRequest>,
-    ) -> Result<Response<Account>, Status> {
+    ) -> Result<Response<AccountIdentity>, Status> {
         let region = self.get_region(&request)?;
         let command = ChangeEmailCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+        let res = self
             .change_email_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn verify_email(
         &self,
         request: Request<VerifyEmailRequest>,
-    ) -> Result<Response<Account>, Status> {
+    ) -> Result<Response<AccountIdentity>, Status> {
         let region = self.get_region(&request)?;
         let command = VerifyEmailCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+        let res = self
             .verify_email_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn change_phone_number(
         &self,
         request: Request<ChangePhoneNumberRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ChangePhoneNumberCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = ChangePhoneNumberCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .change_phone_number_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn verify_phone_number(
         &self,
         request: Request<VerifyPhoneNumberRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = VerifyPhoneNumberCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = VerifyPhoneNumberCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .verify_phone_number_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn change_birth_date(
         &self,
         request: Request<ChangeBirthDateRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ChangeBirthDateCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = ChangeBirthDateCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .change_birth_date_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn change_region(
         &self,
         request: Request<ChangeRegionRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ChangeRegionCommand::try_from_proto(request.into_inner(), region)?;
-        let response = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = ChangeRegionCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .change_region_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(response.account.into()))
+        Ok(Response::new(res.into()))
     }
 
     // async fn resolve_identity(&self, request: Request<ResolveIdentityRequest>) -> Result<Response<Account>, Status> {
@@ -198,42 +194,39 @@ impl AccountIdentityService for IdentityHandler {
     async fn link_external_identity(
         &self,
         request: Request<LinkExternalIdentityRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = LinkExternalIdentityCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = LinkExternalIdentityCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .link_external_identity_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn deactivate_account(
         &self,
         request: Request<DeactivateRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = DeactivateCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = DeactivateCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .deactivate_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 
     async fn reactivate_account(
         &self,
         request: Request<ActivateRequest>,
-    ) -> Result<Response<Account>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ActivateCommand::try_from_proto(request.into_inner(), region)?;
-        let account = self
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = ActivateCommand::try_from_proto(request.into_inner())?;
+        let res = self
             .activate_use_case
             .execute(command)
             .await
             .map_grpc()?;
-        Ok(Response::new(account.into()))
+        Ok(Response::new(res.into()))
     }
 }

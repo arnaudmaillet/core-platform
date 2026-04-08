@@ -9,7 +9,7 @@ use crate::domain::account::entities::AccountMetadata;
 
 #[async_trait]
 pub trait AccountMetadataRepository: Send + Sync {
-    async fn fetch_by_account_id(&self, id: &AccountId) -> Result<Option<AccountMetadata>>;
+    async fn fetch_by_account_id(&self, account_id: &AccountId) -> Result<Option<AccountMetadata>>;
     async fn save(
         &self,
         metadata: &AccountMetadata,

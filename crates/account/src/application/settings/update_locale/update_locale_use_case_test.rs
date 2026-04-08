@@ -40,7 +40,6 @@ mod tests {
         let new_locale = Locale::from_raw("en");
         let cmd = UpdateLocaleCommand {
             account_id: account_id.clone(),
-            region_code: region,
             locale: new_locale.clone(),
         };
 
@@ -76,7 +75,6 @@ mod tests {
 
         let cmd = UpdateLocaleCommand {
             account_id,
-            region_code: region,
             locale: current_locale,
         };
 
@@ -87,31 +85,5 @@ mod tests {
         assert!(result.is_ok());
         // L'entité détecte qu'il n'y a pas de changement -> pas d'event -> pas de save transactionnel
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_update_locale_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-
-        // Compte en EU
-        account_repo.add_account(AccountIdentity::builder(
-            account_id.clone(),
-            RegionCode::from_raw("eu"),
-            Email::try_new("t@t.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
-
-        let cmd = UpdateLocaleCommand {
-            account_id,
-            region_code: RegionCode::from_raw("us"), // 👈 Mismatch
-            locale: Locale::from_raw("en"),
-        };
-
-        // Act
-        let result = use_case.execute(cmd).await;
-
-        // Assert
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

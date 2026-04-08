@@ -34,7 +34,6 @@ mod tests {
         let new_ext = ExternalId::from_raw("google_123");
         let cmd = LinkExternalIdentityCommand {
             account_id: account_id.clone(),
-            region_code: region,
             external_id: new_ext.clone(),
         };
 
@@ -70,7 +69,6 @@ mod tests {
 
         let cmd = LinkExternalIdentityCommand {
             account_id: bob_id,
-            region_code: region,
             external_id: shared_ext,
         };
 
@@ -97,7 +95,6 @@ mod tests {
 
         let cmd = LinkExternalIdentityCommand {
             account_id: account_id,
-            region_code: region,
             external_id: ext_id,
         };
 
@@ -107,26 +104,5 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0, "Aucun changement si déjà lié");
-    }
-
-    #[tokio::test]
-    async fn test_link_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-
-        account_repo.add_account(AccountIdentity::builder(
-            account_id.clone(), RegionCode::from_raw("eu"),
-            Email::try_new("u@t.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
-
-        let cmd = LinkExternalIdentityCommand {
-            account_id: account_id,
-            region_code: RegionCode::from_raw("us"), // Region mismatch
-            external_id: ExternalId::from_raw("new_ext"),
-        };
-
-        let result = use_case.execute(cmd).await;
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

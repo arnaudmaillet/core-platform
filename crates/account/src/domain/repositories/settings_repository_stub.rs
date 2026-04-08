@@ -64,14 +64,28 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         let mut map = self.settings_map.lock().unwrap();
         let account_id = settings.account_id();
 
-        // SIMULATION DU VERROUILLAGE OPTIMISTE
-        if let Some(orig) = original {
-            let current = map.get(account_id).ok_or_else(|| self.not_found(account_id.as_string()))?;
-            
-            if current.version() != orig.version() {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!("AccountSettings {}: version mismatch", account_id.as_string())
-                });
+        match original {
+            Some(orig) => {
+                let current = map.get(account_id).ok_or_else(|| self.not_found(account_id.as_string()))?;
+                
+                if current.version() != orig.version() {
+                    return Err(DomainError::ConcurrencyConflict {
+                        reason: format!(
+                            "AccountSettings OCC Conflict: Stub has v{}, but you provided v{}",
+                            current.version(),
+                            orig.version()
+                        ),
+                    });
+                }
+            }
+            None => {
+                if map.contains_key(account_id) {
+                    return Err(DomainError::AlreadyExists {
+                        entity: "AccountSettings",
+                        field: "account_id",
+                        value: account_id.as_string(),
+                    });
+                }
             }
         }
 
@@ -89,8 +103,7 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         let mut map = self.settings_map.lock().unwrap();
 
         if let Some(settings) = map.get_mut(account_id) {
-            let region = settings.region_code().clone();
-            settings.update_timezone(&region, timezone.clone())?;
+            settings.update_timezone(timezone.clone())?;
             Ok(())
         } else {
             Err(self.not_found(account_id.as_string()))
@@ -107,8 +120,7 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         let mut map = self.settings_map.lock().unwrap();
 
         if let Some(settings) = map.get_mut(account_id) {
-            let region = settings.region_code().clone();
-            settings.add_push_token(&region, token.clone())?;
+            settings.add_push_token(token.clone())?;
             Ok(())
         } else {
             Err(self.not_found(account_id.as_string()))
@@ -125,21 +137,10 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         let mut map = self.settings_map.lock().unwrap();
 
         if let Some(settings) = map.get_mut(account_id) {
-            let region = settings.region_code().clone();
-            settings.remove_push_token(&region, token)?;
+            settings.remove_push_token(token)?;
             Ok(())
         } else {
             Err(self.not_found(account_id.as_string()))
         }
-    }
-
-    async fn delete_for_user(
-        &self,
-        account_id: &AccountId,
-        _tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        self.check_error()?;
-        self.settings_map.lock().unwrap().remove(account_id);
-        Ok(())
     }
 }

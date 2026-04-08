@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::domain::account::entities::{AccountIdentity, AccountMetadata, AccountSettings};
+    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
@@ -9,36 +9,30 @@ mod tests {
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
     use crate::application::settings::change_region::{ChangeRegionCommand, ChangeRegionUseCase};
-    use crate::domain::repositories::{AccountMetadataRepositoryStub, AccountIdentityRepositoryStub, AccountSettingsRepositoryStub};
+    use crate::domain::repositories::{AccountIdentityRepositoryStub};
 
     fn setup() -> (
         ChangeRegionUseCase,
         Arc<AccountIdentityRepositoryStub>,
-        Arc<AccountMetadataRepositoryStub>,
-        Arc<AccountSettingsRepositoryStub>,
         Arc<OutboxRepositoryStub>
     ) {
         let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
-        let metadata_repo = Arc::new(AccountMetadataRepositoryStub::new());
-        let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let tx_manager = Arc::new(StubTxManager);
 
         let use_case = ChangeRegionUseCase::new(
             account_repo.clone(),
-            metadata_repo.clone(),
-            settings_repo.clone(),
             outbox_repo.clone(),
             tx_manager,
         );
 
-        (use_case, account_repo, metadata_repo, settings_repo, outbox_repo)
+        (use_case, account_repo, outbox_repo)
     }
 
     #[tokio::test]
     async fn test_change_region_success_flow() {
         // Arrange
-        let (use_case, account_repo, metadata_repo, settings_repo, outbox_repo) = setup();
+        let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
         let old_region = RegionCode::from_raw("eu");
         let new_region = RegionCode::from_raw("us");
@@ -49,12 +43,9 @@ mod tests {
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), old_region.clone()).build());
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), old_region.clone()).build());
 
         let cmd = ChangeRegionCommand {
             account_id: account_id.clone(),
-            region_code: old_region,
             new_region: new_region.clone(),
         };
 
@@ -66,29 +57,21 @@ mod tests {
         let response = result.unwrap();
 
         // Vérification de l'objet RETOURNÉ (Mémoire)
-        assert_eq!(response.account.region_code().as_str(), "us");
-        assert_eq!(response.metadata.region_code().as_str(), "us");
-        assert_eq!(response.settings.region_code().as_str(), "us");
+        assert_eq!(response.region_code().as_str(), "us");
 
         // Vérification de l'objet SAUVEGARDÉ (Persistence)
         let a = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
-        let m = metadata_repo.metadata_map.lock().unwrap().get(&account_id).cloned().unwrap();
-        let s = settings_repo.settings_map.lock().unwrap().get(&account_id).cloned().unwrap();
 
         assert_eq!(a.region_code().as_str(), "us");
-        assert_eq!(m.region_code().as_str(), "us");
-        assert_eq!(s.region_code().as_str(), "us");
         
         // Vérification des versions (elles doivent toutes être à 2)
         assert_eq!(a.version(), 2);
-        assert_eq!(m.version(), 2);
-        assert_eq!(s.version(), 2);
     }
 
     #[tokio::test]
     async fn test_change_region_idempotency() {
         // Arrange : Déjà en région "us"
-        let (use_case, account_repo, metadata_repo, settings_repo, outbox_repo) = setup();
+        let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("us");
 
@@ -97,12 +80,9 @@ mod tests {
             Email::try_new("a@b.com").unwrap(),
             ExternalId::from_raw("ext")
         ).build());
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
 
         let cmd = ChangeRegionCommand {
             account_id,
-            region_code: region.clone(),
             new_region: region,
         };
 
@@ -117,20 +97,17 @@ mod tests {
     #[tokio::test]
     async fn test_worst_case_partial_failure_outbox() {
         // Arrange
-        let (use_case, account_repo, metadata_repo, settings_repo, outbox_repo) = setup();
+        let (use_case, account_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
 
         account_repo.add_account(AccountIdentity::builder(account_id.clone(), region.clone(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
-        metadata_repo.add_metadata(AccountMetadata::builder(account_id.clone(), region.clone()).build());
-        settings_repo.add_settings(AccountSettings::builder(account_id.clone(), region.clone()).build());
 
         // Simulation d'une erreur fatale lors de l'écriture de l'outbox
         *outbox_repo.force_error.lock().unwrap() = Some(DomainError::Internal("Transaction fail".into()));
 
         let cmd = ChangeRegionCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_region: RegionCode::from_raw("us"),
         };
 

@@ -39,7 +39,7 @@ mod tests {
         )
         .build();
 
-        account.ban(&region, "Past violation".into()).unwrap();
+        account.ban("Past violation".into()).unwrap();
         account.pull_events(); // On nettoie les events du setup
         let version_banned = account.version();
 
@@ -47,7 +47,6 @@ mod tests {
 
         let cmd = UnbanCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         // 2. Act : On s'attend à recevoir l'Account réactivé
@@ -110,7 +109,6 @@ mod tests {
 
         let cmd = UnbanCommand {
             account_id: account_id.clone(),
-            region_code: region,
         };
 
         // --- ACT ---
@@ -132,32 +130,5 @@ mod tests {
 
         // Vérification Outbox
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_unban_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(
-            AccountIdentity::builder(
-                account_id.clone(),
-                actual_region,
-                Email::try_new("a@b.com").unwrap(),
-                ExternalId::from_raw("ext"),
-            )
-            .build(),
-        );
-
-        let cmd = UnbanCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Sécurité Shard : renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 }

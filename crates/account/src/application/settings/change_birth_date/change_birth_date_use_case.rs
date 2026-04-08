@@ -14,20 +14,20 @@ use crate::domain::account::entities::AccountIdentity;
 use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct ChangeBirthDateUseCase {
-    repo: Arc<dyn AccountIdentityRepository>,
-    outbox: Arc<dyn OutboxRepository>,
+    identity_repo: Arc<dyn AccountIdentityRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl ChangeBirthDateUseCase {
     pub fn new(
-        repo: Arc<dyn AccountIdentityRepository>,
-        outbox: Arc<dyn OutboxRepository>,
+        identity_repo: Arc<dyn AccountIdentityRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            repo,
-            outbox,
+            identity_repo,
+            outbox_repo,
             tx_manager,
         }
     }
@@ -41,28 +41,28 @@ impl ChangeBirthDateUseCase {
 
     async fn try_execute_once(&self, cmd: &ChangeBirthDateCommand) -> Result<AccountIdentity> {
         // 1. Lecture Optimiste (hors transaction)
-        let original_account = self
-            .repo
-            .fetch_by_id(&cmd.account_id, None)
+        let original_identity = self
+            .identity_repo
+            .fetch_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut account = original_account.clone();
+        let mut identity = original_identity.clone();
 
         // 2. Application de la logique métier via le Modèle Riche
-        if !account.change_birth_date(&cmd.region_code, cmd.birth_date.clone())? {
-            return Ok(original_account);
+        if !identity.change_birth_date(cmd.birth_date.clone())? {
+            return Ok(original_identity);
         }
 
         // 3. Extraction des événements
-        let events = account.pull_events();
+        let events = identity.pull_events();
         if events.is_empty() {
-            return Ok(account);
+            return Ok(identity);
         }
 
-        let updated_account = account.clone();
-        let repo = Arc::clone(&self.repo);
-        let outbox = Arc::clone(&self.outbox);
+        let updated_identity = identity.clone();
+        let repo = Arc::clone(&self.identity_repo);
+        let outbox = Arc::clone(&self.outbox_repo);
 
         // 4. Persistence Transactionnelle Atomique
         self.tx_manager
@@ -70,8 +70,8 @@ impl ChangeBirthDateUseCase {
                 let repo = Arc::clone(&repo);
                 let outbox = Arc::clone(&outbox);
 
-                let original_for_tx = original_account.clone();
-                let updated_for_tx = account.clone();
+                let original_for_tx = original_identity.clone();
+                let updated_for_tx = identity.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
@@ -86,6 +86,6 @@ impl ChangeBirthDateUseCase {
             })
             .await?;
 
-        Ok(updated_account)
+        Ok(updated_identity)
     }
 }

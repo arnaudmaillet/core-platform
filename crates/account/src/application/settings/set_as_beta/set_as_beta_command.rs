@@ -6,7 +6,6 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 #[derive(Debug, Deserialize, Clone)]
 pub struct SetAsBetaCommand {
     pub account_id: AccountId,
-    pub region_code: RegionCode,
     pub status: bool,
     pub reason: String,
 }

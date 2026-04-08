@@ -13,20 +13,20 @@ use shared_kernel::infrastructure::postgres::transactions::TransactionManagerExt
 use std::sync::Arc;
 
 pub struct LinkExternalIdentityUseCase {
-    repo: Arc<dyn AccountIdentityRepository>,
-    outbox: Arc<dyn OutboxRepository>,
+    identity_repo: Arc<dyn AccountIdentityRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl LinkExternalIdentityUseCase {
     pub fn new(
-        repo: Arc<dyn AccountIdentityRepository>,
-        outbox: Arc<dyn OutboxRepository>,
+        identity_repo: Arc<dyn AccountIdentityRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            repo,
-            outbox,
+            identity_repo,
+            outbox_repo,
             tx_manager,
         }
     }
@@ -43,7 +43,7 @@ impl LinkExternalIdentityUseCase {
         
         // On utilise resolve_id_from_external_id pour vérifier si l'ID est déjà pris
         if let Some(existing_account_id) = self
-            .repo
+            .identity_repo
             .resolve_id_from_external_id(&cmd.external_id)
             .await?
         {
@@ -57,54 +57,54 @@ impl LinkExternalIdentityUseCase {
             }
             
             // Idempotence : si c'est déjà lié à CE compte, on renvoie simplement l'état actuel
-            return self.repo
-                .fetch_by_id(&cmd.account_id, None)
+            return self.identity_repo
+                .fetch_by_account_id(&cmd.account_id, None)
                 .await?
                 .ok_or_not_found(&cmd.account_id);
         }
 
         // On récupère le compte original pour la mutation et le verrouillage optimiste
-        let original_account = self
-            .repo
-            .fetch_by_id(&cmd.account_id, None)
+        let original_identity = self
+            .identity_repo
+            .fetch_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut account = original_account.clone();
+        let mut identity = original_identity.clone();
 
         // 2. MUTATION DU MODÈLE RICHE
         // link_external_identity renvoie false si l'ID était déjà identique (idempotence au niveau entité)
-        if !account.link_external_identity(&cmd.region_code, cmd.external_id.clone())? {
-            return Ok(original_account);
+        if !identity.link_external_identity(cmd.external_id.clone())? {
+            return Ok(original_identity);
         }
         
         // 3. EXTRACTION DES ÉVÉNEMENTS
-        let events = account.pull_events();
+        let events = identity.pull_events();
         if events.is_empty() {
-             return Ok(account);
+             return Ok(identity);
         }
 
         // 4. PRÉPARATION DES DONNÉES POUR LA TRANSACTION
-        let updated_account = account.clone();
-        let repo = Arc::clone(&self.repo);
-        let outbox = Arc::clone(&self.outbox);
+        let updated_identity = identity.clone();
+        let identity_repo = Arc::clone(&self.identity_repo);
+        let outbox_repo = Arc::clone(&self.outbox_repo);
 
         // 5. PERSISTANCE TRANSACTIONNELLE ATOMIQUE
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = Arc::clone(&repo);
-                let outbox = Arc::clone(&outbox);
-                
-                let u_orig = original_account.clone();
-                let u_upd = account.clone();
-                let evs = events.clone();
+                let identity_repo = Arc::clone(&identity_repo);
+                let outbox_repo = Arc::clone(&outbox_repo);
+
+                let original_for_tx = original_identity.clone();
+                let updated_for_tx = identity.clone();
+                let events_for_tx = events.clone();
 
                 Box::pin(async move {
-                    // Sauvegarde avec l'original pour l'Optimistic Lock et la gestion des index
-                    repo.save(&u_upd, Some(&u_orig), Some(&mut *tx)).await?;
+                    identity_repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                        .await?;
 
-                    for event in evs {
-                        outbox.save(&mut *tx, event.as_ref()).await?;
+                    for event in events_for_tx {
+                        outbox_repo.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
                     Ok(())
@@ -112,6 +112,6 @@ impl LinkExternalIdentityUseCase {
             })
             .await?;
 
-        Ok(updated_account)
+        Ok(updated_identity)
     }
 }

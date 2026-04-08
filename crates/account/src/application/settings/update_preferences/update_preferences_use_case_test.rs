@@ -9,7 +9,7 @@ mod tests {
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
     use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::domain::value_objects::AccountId;
     use std::sync::Arc;
 
     fn setup() -> (
@@ -29,9 +29,8 @@ mod tests {
     async fn test_update_settings_success() {
         let (use_case, settings_repo, outbox_repo) = setup();
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
 
-        let initial_settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+        let initial_settings = AccountSettings::builder(account_id.clone()).build();
         settings_repo.add_settings(initial_settings);
 
         let new_appearance = AppearancePreferences::builder()
@@ -40,7 +39,6 @@ mod tests {
             .build();
         let cmd = UpdatePreferencesCommand {
             account_id: account_id.clone(),
-            region_code: region,
             privacy: None,
             notifications: None,
             appearance: Some(new_appearance.clone()),
@@ -65,7 +63,6 @@ mod tests {
     #[test]
     fn test_update_appearance_preferences_idempotency() {
         let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
 
         // 1. On définit une config spécifique
         let initial_appearance = AppearancePreferences::builder()
@@ -73,7 +70,7 @@ mod tests {
             .with_high_contrast(true)
             .build();
         // 2. On injecte cette config via le builder pour être SUR de l'état de départ
-        let mut settings = AccountSettings::builder(account_id, region.clone())
+        let mut settings = AccountSettings::builder(account_id)
             .with_appearance(initial_appearance.clone())
             .build();
 
@@ -82,7 +79,7 @@ mod tests {
 
         // 4. On tente de mettre à jour avec EXACTEMENT la même config
         let changed = settings
-            .update_appearance_preferences(&region, initial_appearance)
+            .update_appearance_preferences(initial_appearance)
             .unwrap();
 
         // 5. Assertions

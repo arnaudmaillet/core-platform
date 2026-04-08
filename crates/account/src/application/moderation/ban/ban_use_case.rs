@@ -14,20 +14,20 @@ use crate::domain::account::entities::AccountIdentity;
 use crate::domain::repositories::AccountIdentityRepository;
 
 pub struct BanUseCase {
-    repo: Arc<dyn AccountIdentityRepository>,
-    outbox: Arc<dyn OutboxRepository>,
+    identity_repo: Arc<dyn AccountIdentityRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl BanUseCase {
     pub fn new(
-        repo: Arc<dyn AccountIdentityRepository>,
-        outbox: Arc<dyn OutboxRepository>,
+        metadata_repo: Arc<dyn AccountIdentityRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            repo,
-            outbox,
+            identity_repo: metadata_repo,
+            outbox_repo,
             tx_manager,
         }
     }
@@ -41,47 +41,47 @@ impl BanUseCase {
 
     async fn try_execute_once(&self, cmd: &BanCommand) -> Result<AccountIdentity> {
         // 1. Récupération (Identity-only suffit généralement pour la modération)
-        let original_account = self
-            .repo
-            .fetch_by_id(&cmd.account_id, None)
+        let original_identity = self
+            .identity_repo
+            .fetch_by_account_id(&cmd.account_id, None)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
-        let mut account = original_account.clone();
+        let mut identity = original_identity.clone();
 
         // 2. Application du changement d'état
-        if !account.ban(&cmd.region_code, cmd.reason.clone())? {
-            return Ok(original_account);
+        if !identity.ban(cmd.reason.clone())? {
+            return Ok(original_identity);
         }
 
         // 4. Extraction des événements
-        let events = account.pull_events();
+        let events = identity.pull_events();
         if events.is_empty() {
-            return Ok(account);
+            return Ok(identity);
         }
 
-        let updated_account = account.clone();
-        let repo = Arc::clone(&self.repo);
-        let outbox = Arc::clone(&self.outbox);
+        let updated_identity = identity.clone();
+        let identity_repo = Arc::clone(&self.identity_repo);
+        let outbox_repo = Arc::clone(&self.outbox_repo);
 
         // 5. Persistance Transactionnelle Atomique (Standard Hyperscale)
         self.tx_manager
             .run_in_transaction(move |mut tx| {
-                let repo = Arc::clone(&repo);
-                let outbox = Arc::clone(&outbox);
+                let identity_repo = Arc::clone(&identity_repo);
+                let outbox_repo = Arc::clone(&outbox_repo);
 
-                let original_for_tx = original_account.clone();
-                let updated_for_tx = account.clone();
+                let original_for_tx = original_identity.clone();
+                let updated_for_tx = identity.clone();
                 let events_for_tx = events.clone();
 
                 Box::pin(async move {
                     // Sauvegarde avec vérification de version (Optimistic Lock)
-                    repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
+                    identity_repo.save(&updated_for_tx, Some(&original_for_tx), Some(&mut *tx))
                         .await?;
 
                     // Enregistrement des événements (EmailChanged, etc.)
                     for event in events_for_tx {
-                        outbox.save(&mut *tx, event.as_ref()).await?;
+                        outbox_repo.save(&mut *tx, event.as_ref()).await?;
                     }
                     tx.commit().await?;
                     Ok(())
@@ -89,6 +89,6 @@ impl BanUseCase {
             })
             .await?;
 
-        Ok(updated_account)
+        Ok(updated_identity)
     }
 }

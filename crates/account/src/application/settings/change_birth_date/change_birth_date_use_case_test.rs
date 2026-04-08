@@ -60,7 +60,6 @@ mod tests {
 
         let cmd = ChangeBirthDateCommand {
             account_id: account_id.clone(),
-            region_code: region,
             birth_date: new_date.clone(),
         };
 
@@ -103,7 +102,6 @@ mod tests {
 
         let cmd = ChangeBirthDateCommand {
             account_id,
-            region_code: RegionCode::from_raw("us"), // Region mismatch
             birth_date: adult_birth_date(),
         };
 
@@ -136,7 +134,7 @@ mod tests {
         .build();
 
         // 2. On applique le changement initial (Version passe de 1 à 2)
-        account.change_birth_date(&region, date.clone()).unwrap();
+        account.change_birth_date(date.clone()).unwrap();
 
         // On vide les événements générés par ce premier changement pour ne pas polluer le test
         account.pull_events();
@@ -146,7 +144,6 @@ mod tests {
 
         let cmd = ChangeBirthDateCommand {
             account_id: account_id.clone(),
-            region_code: region,
             birth_date: date,
         };
 
@@ -194,12 +191,11 @@ mod tests {
         )
         .build();
 
-        account.ban(&region, "Abuse".into()).unwrap();
+        account.ban("Abuse".into()).unwrap();
         account_repo.add_account(account);
 
         let cmd = ChangeBirthDateCommand {
             account_id,
-            region_code: region,
             birth_date: adult_birth_date(),
         };
 
@@ -213,7 +209,6 @@ mod tests {
         let (use_case, _, _) = setup();
         let cmd = ChangeBirthDateCommand {
             account_id: AccountId::new(),
-            region_code: RegionCode::from_raw("eu"),
             birth_date: adult_birth_date(),
         };
 
@@ -250,7 +245,6 @@ mod tests {
 
         let cmd = ChangeBirthDateCommand {
             account_id,
-            region_code: region,
             birth_date: adult_birth_date(),
         };
 

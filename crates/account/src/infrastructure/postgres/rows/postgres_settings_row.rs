@@ -10,7 +10,6 @@ use shared_kernel::errors::{DomainError, Result};
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountSettingsRow {
     pub account_id: uuid::Uuid,
-    pub region_code: String,
     pub preferences: serde_json::Value,
     pub timezone: String,
     pub push_tokens: Vec<String>,
@@ -22,23 +21,19 @@ impl TryFrom<PostgresAccountSettingsRow> for AccountSettings {
     type Error = DomainError;
 
     fn try_from(row: PostgresAccountSettingsRow) -> Result<Self> {
-        // 1. Extraire les données du JSONB (Privacy, Notifications, Appearance)
         let preferences: AccountPreferences = serde_json::from_value(row.preferences)
             .map_err(|e| DomainError::Internal(format!("Désérialisation JSON échouée: {}", e)))?;
 
         let metadata = AggregateMetadata::try_from(row.version)?;
 
-        // 2. Transformer les types simples en Value Objects
         let push_tokens = row
             .push_tokens
             .into_iter()
             .map(PushToken::from_raw)
             .collect();
 
-        // 3. Utiliser le Builder Restore pour injecter la version et les métadonnées
         Ok(AccountSettingsBuilder::restore(
             AccountId::from_uuid(row.account_id),
-            RegionCode::from_raw(row.region_code),
             preferences,
             Timezone::from_raw(row.timezone),
             push_tokens,

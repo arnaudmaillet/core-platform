@@ -41,7 +41,6 @@ mod tests {
 
         let cmd = ChangePhoneNumberCommand {
             account_id: account_id.clone(),
-            region_code: region,
             new_phone: new_phone.clone(),
         };
 
@@ -51,30 +50,6 @@ mod tests {
         assert_eq!(result.phone_number(), Some(&new_phone));
         assert_eq!(result.version(), 2); 
         assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_change_phone_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-
-        account_repo.add_account(AccountIdentity::builder(
-            account_id.clone(), actual_region,
-            Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext")
-        ).build());
-
-        let cmd = ChangePhoneNumberCommand {
-            account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Région pirate
-            new_phone: PhoneNumber::try_new("+1555000111").unwrap(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // Le check ensure_region_match renvoie Forbidden
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
     #[tokio::test]
@@ -97,8 +72,7 @@ mod tests {
         account_repo.add_account(account);
 
         let cmd = ChangePhoneNumberCommand { 
-            account_id: account_id.clone(), 
-            region_code: region, 
+            account_id: account_id.clone(),  
             new_phone: phone.clone() 
         };
 
@@ -135,7 +109,7 @@ mod tests {
         *outbox_repo.force_error.lock().unwrap() = Some(DomainError::Internal("Kafka/Outbox Down".into()));
 
         let cmd = ChangePhoneNumberCommand {
-            account_id, region_code: region,
+            account_id,
             new_phone: PhoneNumber::try_new("+33611223344").unwrap(),
         };
 

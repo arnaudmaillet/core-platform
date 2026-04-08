@@ -14,20 +14,20 @@ use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
 pub struct SetAsBetaUseCase {
-    repo: Arc<dyn AccountMetadataRepository>,
-    outbox: Arc<dyn OutboxRepository>,
+    metadata_repo: Arc<dyn AccountMetadataRepository>,
+    outbox_repo: Arc<dyn OutboxRepository>,
     tx_manager: Arc<dyn TransactionManager>,
 }
 
 impl SetAsBetaUseCase {
     pub fn new(
-        repo: Arc<dyn AccountMetadataRepository>,
-        outbox: Arc<dyn OutboxRepository>,
+        metadata_repo: Arc<dyn AccountMetadataRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
         tx_manager: Arc<dyn TransactionManager>,
     ) -> Self {
         Self {
-            repo,
-            outbox,
+            metadata_repo,
+            outbox_repo,
             tx_manager,
         }
     }
@@ -41,21 +41,21 @@ impl SetAsBetaUseCase {
 
     async fn try_execute_once(&self, cmd: &SetAsBetaCommand) -> Result<AccountMetadata> {
         let original_metadata = self
-            .repo
+            .metadata_repo
             .fetch_by_account_id(&cmd.account_id)
             .await?
             .ok_or_not_found(&cmd.account_id)?;
 
         let mut metadata = original_metadata.clone();
 
-        if !metadata.set_beta_status(&cmd.region_code, cmd.status, cmd.reason.clone())? {
+        if !metadata.set_beta_status(cmd.status, cmd.reason.clone())? {
             return Ok(original_metadata);
         }
 
         let events = metadata.pull_events();
         let updated_metadata = metadata.clone();
-        let repo = Arc::clone(&self.repo);
-        let outbox = Arc::clone(&self.outbox);
+        let repo = Arc::clone(&self.metadata_repo);
+        let outbox = Arc::clone(&self.outbox_repo);
 
         self.tx_manager
             .run_in_transaction(move |mut tx| {

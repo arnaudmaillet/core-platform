@@ -73,7 +73,7 @@ mod tests {
             .identity_map
             .lock()
             .unwrap()
-            .get(&account.id())
+            .get(&account.account_id())
             .cloned()
             .unwrap();
         assert_eq!(
@@ -96,7 +96,7 @@ mod tests {
             .metadata_map
             .lock()
             .unwrap()
-            .get(&account.id())
+            .get(&account.account_id())
             .cloned()
             .unwrap();
         assert_eq!(
@@ -109,10 +109,10 @@ mod tests {
             .settings_map
             .lock()
             .unwrap()
-            .get(&account.id())
+            .get(&account.account_id())
             .cloned()
             .unwrap();
-        assert_eq!(saved_settings.account_id(), account.id());
+        assert_eq!(saved_settings.account_id(), account.account_id());
 
         // Vérification de l'outbox
         assert_eq!(

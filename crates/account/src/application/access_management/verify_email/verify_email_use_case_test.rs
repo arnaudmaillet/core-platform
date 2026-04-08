@@ -45,7 +45,6 @@ mod tests {
 
         let cmd = VerifyEmailCommand {
             account_id: account_id.clone(),
-            region_code: region,
             token: "valid_secure_token_123".into(),
         };
 
@@ -97,7 +96,7 @@ mod tests {
         )
         .build();
 
-        account.verify_email(&region).unwrap();
+        account.verify_email().unwrap();
         account.pull_events(); // Clear setup events
         let version_verified = account.version();
 
@@ -105,7 +104,6 @@ mod tests {
 
         let cmd = VerifyEmailCommand {
             account_id: account_id.clone(),
-            region_code: region,
             token: "any_token".into(),
         };
 
@@ -149,7 +147,6 @@ mod tests {
 
         let cmd = VerifyEmailCommand {
             account_id,
-            region_code: RegionCode::try_new("us").unwrap(), // Mismatch
             token: "token".into(),
         };
 
