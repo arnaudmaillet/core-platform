@@ -5,33 +5,84 @@ use account::domain::preferences::models::{AppearancePreferences, ThemeMode};
 use account::domain::repositories::AccountSettingsRepository;
 use account::infrastructure::postgres::repositories::PostgresAccountSettingsRepository;
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone, RegionCode};
+use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
+use shared_kernel::domain::repositories::CacheRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
+use shared_kernel::infrastructure::redis::utils::RedisTestContext;
 
 /// Helper pour instancier le repo et la pool
-async fn get_test_context() -> (PostgresAccountSettingsRepository, PostgresTestContext) {
-    let ctx = PostgresTestContext::builder()
+async fn get_test_context() -> (PostgresAccountSettingsRepository, PostgresTestContext, RedisTestContext) {
+    let pg_ctx = PostgresTestContext::builder()
         .with_migrations(&["./migrations/postgres"])
         .build()
         .await;
 
-    let repo = PostgresAccountSettingsRepository::new(ctx.pool().clone());
-    (repo, ctx)
+    let redis_ctx = RedisTestContext::builder().build().await;
+
+    let repo = PostgresAccountSettingsRepository::new(
+        pg_ctx.pool().clone(),
+        redis_ctx.repository()
+    );
+    
+    (repo, pg_ctx, redis_ctx)
+}
+
+#[tokio::test]
+async fn test_settings_cache_invalidation_lifecycle() {
+    let (repo, _pg_ctx, redis_ctx) = get_test_context().await;
+    let cache = redis_ctx.repository();
+    let account_id = AccountId::new();
+    let cache_key = format!("account:settings:{}", account_id.clone());
+
+    let settings = AccountSettings::builder(account_id.clone()).build();
+    repo.save(&settings, None, None).await.unwrap();
+
+    // 1. Premier Fetch -> Remplissage Cache
+    let _ = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert!(cache.exists(&cache_key).await.unwrap(), "Settings should be cached");
+
+    // 2. Ajout d'un push token -> Doit INVALIDER le cache
+    let token = PushToken::try_new("new_token").unwrap();
+    repo.add_push_token(&account_id, &token, None).await.unwrap();
+
+    assert!(!cache.exists(&cache_key).await.unwrap(), "Cache must be cleared after atomic SQL update");
+
+    // 3. Second Fetch -> Rechargement
+    let reloaded = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert!(reloaded.push_tokens().contains(&token));
+    assert!(cache.exists(&cache_key).await.unwrap(), "Cache should be refilled");
+}
+
+#[tokio::test]
+async fn test_settings_transaction_skips_cache() {
+    let (repo, pg_ctx, redis_ctx) = get_test_context().await;
+    let cache = redis_ctx.repository();
+    let account_id = AccountId::new();
+    let cache_key = format!("account:settings:{}", account_id.clone());
+
+    let settings = AccountSettings::builder(account_id.clone()).build();
+    repo.save(&settings, None, None).await.unwrap();
+
+    // DANS une transaction, on ne doit pas écrire dans le cache (Dirty Write protection)
+    let tx_sqlx = pg_ctx.pool().begin().await.unwrap();
+    let mut tx = PostgresTransaction::new(tx_sqlx);
+
+    let _ = repo.fetch_by_account_id(&account_id, Some(&mut tx)).await.unwrap();
+    
+    assert!(!cache.exists(&cache_key).await.unwrap(), "Should not cache settings during a transaction");
 }
 
 #[tokio::test]
 async fn test_settings_lifecycle_and_upsert() {
-    let (repo, ctx) = get_test_context().await;
+    let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
 
-    // 1. Création avec des préférences spécifiques
     let appearance = AppearancePreferences::builder()
         .with_theme(ThemeMode::Light)
         .with_high_contrast(true)
         .build();
-    let settings = AccountSettings::builder(account_id.clone(), region.clone())
+    let settings = AccountSettings::builder(account_id.clone())
         .with_timezone(Timezone::try_new("Europe/Paris").unwrap())
         .with_appearance(appearance.clone())
         .build();
@@ -46,7 +97,7 @@ async fn test_settings_lifecycle_and_upsert() {
 
     // 3. Mise à jour via une méthode granulaire (v1 -> v2)
     let mut updated_settings = found.clone();
-    updated_settings.update_timezone(&region, Timezone::try_new("UTC").unwrap()).unwrap();
+    updated_settings.update_timezone(Timezone::try_new("UTC").unwrap()).unwrap();
 
     // On passe 'found' comme original pour le lock optimiste (version check)
     repo.save(&updated_settings, Some(&found), None).await.expect("Should update settings");
@@ -59,11 +110,10 @@ async fn test_settings_lifecycle_and_upsert() {
 
 #[tokio::test]
 async fn test_update_preferences_persistence() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
 
-    let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+    let settings = AccountSettings::builder(account_id.clone()).build();
     repo.save(&settings, None, None).await.unwrap();
 
     let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
@@ -74,7 +124,7 @@ async fn test_update_preferences_persistence() {
         .with_theme(ThemeMode::Dark)
         .with_high_contrast(false)
         .build();
-    updated_settings.update_appearance_preferences(&region, new_appearance.clone()).unwrap();
+    updated_settings.update_appearance_preferences(new_appearance.clone()).unwrap();
 
     repo.save(&updated_settings, Some(&found), None).await.unwrap();
 
@@ -85,11 +135,10 @@ async fn test_update_preferences_persistence() {
 
 #[tokio::test]
 async fn test_push_tokens_atomic_operations() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("us").unwrap();
 
-    let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+    let settings = AccountSettings::builder(account_id.clone()).build();
     repo.save(&settings, None, None).await.unwrap();
 
     let token_1 = PushToken::try_new("token_alpha").unwrap();
@@ -114,14 +163,13 @@ async fn test_push_tokens_atomic_operations() {
 
 #[tokio::test]
 async fn test_settings_transactional_integrity() {
-    let (repo, ctx) = get_test_context().await;
+    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
 
-    let tx_sqlx = ctx.pool().begin().await.unwrap();
+    let tx_sqlx = pg_ctx.pool().begin().await.unwrap();
     let mut tx = PostgresTransaction::new(tx_sqlx);
 
-    let settings = AccountSettings::builder(account_id.clone(), region).build();
+    let settings = AccountSettings::builder(account_id.clone()).build();
     // Utilisation de Some(&mut tx)
     repo.save(&settings, None, Some(&mut tx)).await.unwrap();
 
@@ -134,12 +182,11 @@ async fn test_settings_transactional_integrity() {
 
 #[tokio::test]
 async fn test_settings_concurrency_conflict() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
 
     // 1. Initialisation (v1)
-    let settings = AccountSettings::builder(account_id.clone(), region.clone()).build();
+    let settings = AccountSettings::builder(account_id.clone()).build();
     repo.save(&settings, None, None).await.unwrap();
 
     // 2. Deux clients lisent la v1
@@ -148,12 +195,12 @@ async fn test_settings_concurrency_conflict() {
 
     // 3. Client A gagne (v1 -> v2)
     let mut client_a_modified = client_a_found.clone();
-    client_a_modified.update_timezone(&region, Timezone::try_new("Europe/Berlin").unwrap()).unwrap();
+    client_a_modified.update_timezone(Timezone::try_new("Europe/Berlin").unwrap()).unwrap();
     repo.save(&client_a_modified, Some(&client_a_found), None).await.expect("A should succeed");
 
     // 4. Client B échoue (tente v1 -> v2 alors que la DB est en v2)
     let mut client_b_modified = client_b_found.clone();
-    client_b_modified.update_timezone(&region, Timezone::try_new("Europe/London").unwrap()).unwrap();
+    client_b_modified.update_timezone(Timezone::try_new("Europe/London").unwrap()).unwrap();
     
     let result = repo.save(&client_b_modified, Some(&client_b_found), None).await;
 
@@ -166,12 +213,11 @@ async fn test_settings_concurrency_conflict() {
 
 #[tokio::test]
 async fn test_push_token_idempotency_it() {
-    let (repo, _ctx) = get_test_context().await;
+    let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
     let token = PushToken::try_new("unique_token").unwrap();
 
-    repo.save(&AccountSettings::builder(account_id.clone(), region).build(), None, None).await.unwrap();
+    repo.save(&AccountSettings::builder(account_id.clone()).build(), None, None).await.unwrap();
 
     // Ajout double du même token
     repo.add_push_token(&account_id, &token, None).await.unwrap();
@@ -179,24 +225,4 @@ async fn test_push_token_idempotency_it() {
 
     let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().expect("Should exist");
     assert_eq!(found.push_tokens().len(), 1, "Token should not be duplicated in DB via SQL atomic query");
-}
-
-#[tokio::test]
-async fn test_settings_region_mismatch_security() {
-    let (repo, _ctx) = get_test_context().await;
-
-    let account_id = AccountId::new();
-    let region_eu = RegionCode::try_new("eu").unwrap();
-    let region_us = RegionCode::try_new("us").unwrap();
-
-    let mut settings = AccountSettings::builder(account_id, region_eu).build();
-
-    // Bloqué par le domaine
-    let result = settings.update_timezone(&region_us, Timezone::try_new("UTC").unwrap());
-
-    assert!(result.is_err());
-    assert!(matches!(
-        result.unwrap_err(),
-        shared_kernel::errors::DomainError::Forbidden { .. }
-    ));
 }

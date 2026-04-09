@@ -1,0 +1,7 @@
+mod change_phone_number_command;
+mod change_phone_number_use_case;
+mod change_phone_number_use_case_test;
+
+
+pub use change_phone_number_command::ChangePhoneNumberCommand;
+pub use change_phone_number_use_case::ChangePhoneNumberUseCase;

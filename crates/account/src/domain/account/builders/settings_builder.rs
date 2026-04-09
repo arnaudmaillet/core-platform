@@ -8,7 +8,6 @@ use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Tim
 
 pub struct AccountSettingsBuilder {
     account_id: AccountId,
-    region_code: RegionCode,
     timezone: Timezone,
     privacy: PrivacyPreferences,
     notifications: NotificationPreferences,
@@ -18,10 +17,9 @@ pub struct AccountSettingsBuilder {
 }
 
 impl AccountSettingsBuilder {
-    pub(crate) fn new(account_id: AccountId, region_code: RegionCode) -> Self {
+    pub(crate) fn new(account_id: AccountId) -> Self {
         Self {
             account_id,
-            region_code,
             timezone: Timezone::from_raw("UTC"),
             privacy: PrivacyPreferences::builder().build(),
             notifications: NotificationPreferences::builder().build(),
@@ -35,7 +33,6 @@ impl AccountSettingsBuilder {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
         account_id: AccountId,
-        region_code: RegionCode,
         preferences: AccountPreferences,
         timezone: Timezone,
         push_tokens: Vec<PushToken>,
@@ -44,7 +41,6 @@ impl AccountSettingsBuilder {
     ) -> AccountSettings {
         AccountSettings::restore(
             account_id,
-            region_code,
             preferences,
             timezone,
             push_tokens,
@@ -94,7 +90,6 @@ impl AccountSettingsBuilder {
         // Centralisation via restore
         AccountSettings::restore(
             self.account_id,
-            self.region_code,
             preferences,
             self.timezone,
             self.push_tokens,

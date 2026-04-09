@@ -1,4 +1,4 @@
-use crate::errors::{DomainError, ErrorCode};
+use crate::errors::{DomainError, ErrorCode, InfrastructureError};
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt;
@@ -68,16 +68,46 @@ impl From<DomainError> for AppError {
                 Self::new(ErrorCode::PreconditionFailed, reason)
             }
 
-            // 7. Cas : Erreurs techniques (500)
-            // On utilise (_) car ce sont des variantes Tuples et on masque le détail au client
-            DomainError::Infrastructure(_)
-            | DomainError::Internal(_)
-            | DomainError::TooManyConflicts(_) => Self::new(
-                ErrorCode::InternalError,
-                "An unexpected error occurred. Please try again later.",
+            DomainError::Unexpected(message) => Self::new(ErrorCode::InternalError, message),
+
+            DomainError::Infrastructure(err) => {
+                tracing::error!("Infrastructure error leaked into domain: {:?}", err);
+                Self::new(ErrorCode::InternalError, "Internal storage failure")
+            }
+            
+            DomainError::Internal(msg) => Self::new(ErrorCode::InternalError, msg),
+            
+            // On s'assure de couvrir toutes les variantes
+            _ => Self::new(ErrorCode::InternalError, "An unexpected error occurred"),
+        }
+    }
+}
+
+impl From<InfrastructureError> for AppError {
+    fn from(error: InfrastructureError) -> Self {
+        match error {
+            // Si la région n'est pas supportée, c'est une erreur de requête client (412)
+            InfrastructureError::UnsupportedRegion(region) => Self::new(
+                ErrorCode::PreconditionFailed,
+                format!("Region '{}' is not supported by this cluster", region),
             ),
 
-            DomainError::Unexpected(message) => Self::new(ErrorCode::InternalError, message),
+            // Si le pool est vide, c'est un problème de config serveur (500)
+            InfrastructureError::EmptyShardPool(region) => {
+                tracing::error!("CRITICAL: No shards available for region {}", region);
+                Self::new(ErrorCode::InternalError, "Regional storage currently unavailable")
+            }
+
+            // Erreurs techniques (DB, Kafka, Serialisation)
+            InfrastructureError::DatabaseError(err) => {
+                tracing::error!("Database error: {:?}", err);
+                Self::new(ErrorCode::InternalError, "Database failure")
+            }
+
+            InfrastructureError::SerializationError(err) => {
+                tracing::error!("Serialization error: {}", err);
+                Self::new(ErrorCode::InternalError, "Data processing error")
+            }
         }
     }
 }

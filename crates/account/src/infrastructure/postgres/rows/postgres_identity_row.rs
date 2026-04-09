@@ -16,7 +16,7 @@ use shared_kernel::errors::{DomainError, Result};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountIdentityRow {
-    pub id: Uuid,
+    pub account_id: Uuid,
     pub region_code: String,
     pub external_id: String,
     pub email: String,
@@ -35,22 +35,22 @@ pub struct PostgresAccountIdentityRow {
 impl TryFrom<&AccountIdentity> for PostgresAccountIdentityRow {
     type Error = DomainError;
 
-    fn try_from(a: &AccountIdentity) -> Result<Self> {
+    fn try_from(identity: &AccountIdentity) -> Result<Self> {
         Ok(Self {
-            id: a.id().as_uuid(),
-            region_code: a.region_code().to_string(),
-            external_id: a.external_id().to_string(),
-            email: a.email().to_string(),
-            email_verified: a.is_email_verified(),
-            phone_number: a.phone_number().as_ref().map(|p| p.to_string()),
-            phone_verified: a.is_phone_verified(),
-            state: PostgresAccountState::from(a.state().clone()),
-            birth_date: a.birth_date().as_ref().map(|d| d.value()),
-            locale: a.locale().to_string(),
-            version: a.version_i64()?,
-            created_at: a.created_at(),
-            updated_at: a.updated_at(),
-            last_active_at: a.last_active_at(),
+            account_id: identity.account_id().as_uuid(),
+            region_code: identity.region_code().to_string(),
+            external_id: identity.external_id().to_string(),
+            email: identity.email().to_string(),
+            email_verified: identity.is_email_verified(),
+            phone_number: identity.phone_number().as_ref().map(|p| p.to_string()),
+            phone_verified: identity.is_phone_verified(),
+            state: PostgresAccountState::from(identity.state().clone()),
+            birth_date: identity.birth_date().as_ref().map(|d| d.value()),
+            locale: identity.locale().to_string(),
+            version: identity.version_i64()?,
+            created_at: identity.created_at(),
+            updated_at: identity.updated_at(),
+            last_active_at: identity.last_active_at(),
         })
     }
 }
@@ -62,7 +62,7 @@ impl TryFrom<PostgresAccountIdentityRow> for AccountIdentity {
         let metadata = AggregateMetadata::try_from(row.version)?;
 
         Ok(AccountIdentityBuilder::restore(
-            AccountId::from_uuid(row.id),
+            AccountId::from_uuid(row.account_id),
             RegionCode::from_raw(row.region_code),
             ExternalId::from_raw(row.external_id),
             Email::from_raw(row.email),

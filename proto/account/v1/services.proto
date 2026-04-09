@@ -13,33 +13,33 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 // --- IDENTITY ---
 service AccountIdentityService {
   // Registration & Search
-  rpc Register(RegisterRequest) returns (Account);
+  rpc Register(RegisterRequest) returns (AccountIdentity);
   // rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
-  rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (Account);
+  rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (AccountIdentity);
 
   // Identity Updates
-  rpc ChangeEmail(ChangeEmailRequest) returns (Account);
-  rpc VerifyEmail(VerifyEmailRequest) returns (Account);
-  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (Account);
-  rpc VerifyPhoneNumber(VerifyPhoneNumberRequest) returns (Account);
-  rpc ChangeBirthDate(ChangeBirthDateRequest) returns (Account);
-  rpc ChangeRegion(ChangeRegionRequest) returns (Account);
+  rpc ChangeEmail(ChangeEmailRequest) returns (AccountIdentity);
+  rpc VerifyEmail(VerifyEmailRequest) returns (AccountIdentity);
+  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (AccountIdentity);
+  rpc VerifyPhoneNumber(VerifyPhoneNumberRequest) returns (AccountIdentity);
+  rpc ChangeBirthDate(ChangeBirthDateRequest) returns (AccountIdentity);
+  rpc ChangeRegion(ChangeRegionRequest) returns (AccountIdentity);
 
   // Lifecycle
-  rpc DeactivateAccount(DeactivateRequest) returns (Account);
-  rpc ReactivateAccount(ActivateRequest) returns (Account);
+  rpc DeactivateAccount(DeactivateRequest) returns (AccountIdentity);
+  rpc ReactivateAccount(ActivateRequest) returns (AccountIdentity);
 }
 
 // --- STATUS ---
 service AccountStatusService {
-  rpc GetAccount(GetAccountRequest) returns (Account);
-  rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (Account);
-  rpc DeactivateAccount(DeactivateRequest) returns (Account);
-  rpc ReactivateAccount(ActivateRequest) returns (Account);
+  rpc GetIdentity(GetIdentityRequest) returns (AccountIdentity);
+  rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (AccountIdentity);
+  rpc DeactivateAccount(DeactivateRequest) returns (AccountIdentity);
+  rpc ReactivateAccount(ActivateRequest) returns (AccountIdentity);
 }
 
 // --- MESSAGES ---
-message GetAccountRequest { string id = 1; }
+message GetIdentityRequest { string account_id = 1; }
 message RegisterRequest {
   string external_id = 1;
   string email = 2;
@@ -49,15 +49,15 @@ message RegisterRequest {
   string ip_addr = 6;
 }
 // message ResolveIdentityRequest { string external_id = 1; }
-message LinkExternalIdentityRequest { string id = 1; string external_id = 2; }
-message ChangeEmailRequest { string id = 1; string new_email = 2; }
-message VerifyEmailRequest { string id = 1; string token = 2; }
-message ChangePhoneNumberRequest { string id = 1; string new_phone = 2; }
-message VerifyPhoneNumberRequest { string id = 1; string code = 2; }
-message ChangeBirthDateRequest { string id = 1; google.protobuf.Timestamp new_birth_date = 2; }
-message ChangeRegionRequest { string id = 1; string new_region = 2; }
-message DeactivateRequest { string id = 1; }
-message ActivateRequest { string id = 1; }
+message LinkExternalIdentityRequest { string account_id = 1; string external_id = 2; }
+message ChangeEmailRequest { string account_id = 1; string new_email = 2; }
+message VerifyEmailRequest { string account_id = 1; string token = 2; }
+message ChangePhoneNumberRequest { string account_id = 1; string new_phone = 2; }
+message VerifyPhoneNumberRequest { string account_id = 1; string code = 2; }
+message ChangeBirthDateRequest { string account_id = 1; google.protobuf.Timestamp new_birth_date = 2; }
+message ChangeRegionRequest { string account_id = 1; string new_region = 2; }
+message DeactivateRequest { string account_id = 1; }
+message ActivateRequest { string account_id = 1; }
 message ResolveIdentityResponse {
   string account_id = 1;
   AccountState state = 2;

@@ -4,17 +4,17 @@ use crate::domain::account::builders::AccountMetadataBuilder;
 use crate::domain::events::AccountEvent;
 use crate::domain::value_objects::{AccountRole, IpAddr};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::errors::Result;
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountMetadata {
     account_id: AccountId,
-    region_code: RegionCode,
     role: AccountRole,
     is_beta_tester: bool,
     is_shadowbanned: bool,
@@ -27,14 +27,13 @@ pub struct AccountMetadata {
 }
 
 impl AccountMetadata {
-    pub fn builder(account_id: AccountId, region_code: RegionCode) -> AccountMetadataBuilder {
-        AccountMetadataBuilder::new(account_id, region_code)
+    pub fn builder(account_id: AccountId) -> AccountMetadataBuilder {
+        AccountMetadataBuilder::new(account_id)
     }
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
         account_id: AccountId,
-        region_code: RegionCode,
         role: AccountRole,
         is_beta_tester: bool,
         is_shadowbanned: bool,
@@ -47,7 +46,6 @@ impl AccountMetadata {
     ) -> Self {
         Self {
             account_id,
-            region_code,
             role,
             is_beta_tester,
             is_shadowbanned,
@@ -64,9 +62,6 @@ impl AccountMetadata {
 
     pub fn account_id(&self) -> &AccountId {
         &self.account_id
-    }
-    pub fn region_code(&self) -> &RegionCode {
-        &self.region_code
     }
     pub fn role(&self) -> AccountRole {
         self.role
@@ -101,12 +96,10 @@ impl AccountMetadata {
     /// des restrictions automatiques via le Use Case.
     pub fn increase_trust_score(
         &mut self,
-        region: &RegionCode,
         action_id: Uuid,
         amount: u32,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
-        self.ensure_region_match(region)?;
         let previous_score = self.trust_score;
         let delta = amount as i32;
 
@@ -121,10 +114,9 @@ impl AccountMetadata {
         self.push_event(Box::new(AccountEvent::TrustScoreAdjusted {
             id: action_id,
             account_id: self.account_id.clone(),
-            region: self.region_code.clone(),
             delta,
             new_score: self.trust_score,
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
 
@@ -134,13 +126,10 @@ impl AccountMetadata {
     /// Sanctionne un comportement négatif
     pub fn decrease_trust_score(
         &mut self,
-        region: &RegionCode,
         action_id: Uuid,
         amount: u32,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
-        self.ensure_region_match(region)?;
-
         let previous_score = self.trust_score;
         let delta = amount as i32;
         self.trust_score = (self.trust_score - delta).max(0);
@@ -170,10 +159,9 @@ impl AccountMetadata {
             self.push_event(Box::new(AccountEvent::TrustScoreAdjusted {
                 id: action_id,
                 account_id: self.account_id.clone(),
-                region: self.region_code.clone(),
                 delta: -(amount as i32),
                 new_score: self.trust_score,
-                reason,
+                reason: reason.to_string(),
                 occurred_at: self.updated_at,
             }));
         }
@@ -181,8 +169,7 @@ impl AccountMetadata {
         Ok(self.trust_score != previous_score || shadowban_triggered)
     }
 
-    pub fn shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn shadowban(&mut self, reason: &str) -> Result<bool> {
         if !self.is_shadowbanned {
             self.apply_shadowban(reason);
             return Ok(true);
@@ -190,17 +177,15 @@ impl AccountMetadata {
         Ok(false)
     }
 
-    pub fn lift_shadowban(&mut self, region: &RegionCode, reason: String) -> Result<bool> {
-        self.ensure_region_match(region)?;
+    pub fn lift_shadowban(&mut self, reason: &str) -> Result<bool> {
         if self.is_shadowbanned {
             self.is_shadowbanned = false;
             self.apply_moderation_change(format!("Shadowban lifted: {}", reason));
 
             self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
                 account_id: self.account_id.clone(),
-                region: self.region_code.clone(),
                 is_shadowbanned: false,
-                reason,
+                reason: reason.to_string(),
                 occurred_at: self.updated_at,
             }));
             return Ok(true);
@@ -211,11 +196,9 @@ impl AccountMetadata {
     /// Change le rôle du compte (Admin only via Use Case)
     pub fn upgrade_role(
         &mut self,
-        region: &RegionCode,
         new_role: AccountRole,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
-        self.ensure_region_match(region)?;
 
         // 1. Idempotence : si le rôle est déjà le bon, on ne fait rien
         if self.role == new_role {
@@ -231,10 +214,9 @@ impl AccountMetadata {
         // 3. Capture de l'événement
         self.push_event(Box::new(AccountEvent::AccountRoleChanged {
             account_id: self.account_id.clone(),
-            region: self.region_code.clone(),
             old_role,
             new_role,
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
 
@@ -251,11 +233,9 @@ impl AccountMetadata {
 
     pub fn set_beta_status(
         &mut self,
-        region: &RegionCode,
         status: bool,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
-        self.ensure_region_match(region)?;
         if self.is_beta_tester == status {
             return Ok(false);
         }
@@ -267,33 +247,7 @@ impl AccountMetadata {
 
         self.push_event(Box::new(AccountEvent::BetaStatusChanged {
             account_id: self.account_id.clone(),
-            region: self.region_code.clone(),
             is_beta_tester: status,
-            occurred_at: self.updated_at,
-        }));
-
-        Ok(true)
-    }
-
-    // ==========================================
-    // LOGIQUE DE SHARDING (GÉOGRAPHIE)
-    // ==========================================
-
-    /// Change la région du compte.
-    /// ATTENTION: cela implique souvent une migration physique des données.
-    pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
-        if self.region_code == new_region {
-            return Ok(false);
-        }
-
-        let old_region = self.region_code.clone();
-        self.region_code = new_region.clone();
-        self.apply_change();
-
-        self.push_event(Box::new(AccountEvent::AccountRegionChanged {
-            account_id: self.account_id.clone(),
-            old_region,
-            new_region,
             occurred_at: self.updated_at,
         }));
 
@@ -324,26 +278,16 @@ impl AccountMetadata {
         self.apply_change();
     }
 
-    fn apply_shadowban(&mut self, reason: String) {
+    fn apply_shadowban(&mut self, reason: &str) {
         self.is_shadowbanned = true;
         self.apply_moderation_change(format!("Shadowbanned: {}", reason));
 
         self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
             account_id: self.account_id.clone(),
-            region: self.region_code.clone(),
             is_shadowbanned: true,
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
-    }
-
-    fn ensure_region_match(&self, region: &RegionCode) -> Result<()> {
-        if &self.region_code != region {
-            return Err(DomainError::Forbidden {
-                reason: "Cross-region operation detected".into(),
-            });
-        }
-        Ok(())
     }
 }
 

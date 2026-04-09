@@ -2,12 +2,14 @@
 
 mod app_error;
 mod context;
-mod error;
+mod domain_error;
+mod infrastructure_error;
 mod error_code;
 mod result;
 
 pub use app_error::AppError;
 pub use context::ErrorContext;
-pub use error::DomainError;
+pub use domain_error::DomainError;
+pub use infrastructure_error::InfrastructureError;
 pub use error_code::ErrorCode;
 pub use result::{AppResult, Result};

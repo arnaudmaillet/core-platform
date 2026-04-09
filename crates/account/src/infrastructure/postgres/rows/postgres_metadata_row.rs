@@ -15,7 +15,6 @@ use uuid::Uuid;
 #[derive(Debug, FromRow)]
 pub struct PostgresAccountMetadataRow {
     pub account_id: Uuid,
-    pub region_code: String,
     pub role: PostgresAccountRole,
     pub is_beta_tester: bool,
     pub is_shadowbanned: bool,
@@ -37,7 +36,6 @@ impl TryFrom<PostgresAccountMetadataRow> for AccountMetadata {
 
         Ok(AccountMetadataBuilder::restore(
             AccountId::from_uuid(row.account_id),
-            RegionCode::from_raw(row.region_code),
             AccountRole::from_raw(row.role.into()),
             row.is_beta_tester,
             row.is_shadowbanned,

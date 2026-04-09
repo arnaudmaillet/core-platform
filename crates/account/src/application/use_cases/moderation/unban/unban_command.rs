@@ -1,0 +1,8 @@
+// crates/account/src/application/unban_account/unban_command.rs
+use serde::Deserialize;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct UnbanCommand {
+    pub account_id: AccountId,
+}

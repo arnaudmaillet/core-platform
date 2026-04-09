@@ -1,7 +1,6 @@
 // crates/account/src/domain/repositories/stubs/account_metadata_repository_stub.rs
 
 use async_trait::async_trait;
-use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
@@ -12,10 +11,12 @@ use std::sync::{Arc, Mutex};
 use crate::domain::account::entities::AccountMetadata;
 use crate::domain::repositories::AccountMetadataRepository;
 
+/// Stub pour les tests unitaires.
+/// Utilise des Mutex internes pour permettre l'usage dans des tests async (Tokio).
 #[derive(Default)]
 pub struct AccountMetadataRepositoryStub {
-    pub metadata_map: Arc<Mutex<HashMap<AccountId, AccountMetadata>>>,
-    pub error_to_return: Arc<Mutex<Option<DomainError>>>,
+    metadata_map: Arc<Mutex<HashMap<AccountId, AccountMetadata>>>,
+    error_to_return: Arc<Mutex<Option<DomainError>>>,
 }
 
 impl AccountMetadataRepositoryStub {
@@ -23,16 +24,47 @@ impl AccountMetadataRepositoryStub {
         Self::default()
     }
 
-    /// Helper pour injecter des données initiales dans les tests
+    // --- Helpers pour l'Arrange (Préparation des tests) ---
+
+    /// Injecte des données initiales dans le stub.
     pub fn add_metadata(&self, metadata: AccountMetadata) {
-        self.metadata_map
-            .lock()
-            .unwrap()
-            .insert(metadata.account_id().clone(), metadata);
+        let mut map = self.metadata_map.lock().expect("Lock failed");
+        map.insert(metadata.account_id().clone(), metadata);
     }
 
+    /// Simule une erreur imminente lors du prochain appel au repository.
+    pub fn set_error(&self, err: DomainError) {
+        let mut error_slot = self.error_to_return.lock().expect("Lock failed");
+        *error_slot = Some(err);
+    }
+
+    /// Réinitialise l'état du stub.
+    pub fn clear(&self) {
+        self.metadata_map.lock().expect("Lock failed").clear();
+        *self.error_to_return.lock().expect("Lock failed") = None;
+    }
+
+    // --- Helpers pour l'Assert (Vérification des résultats) ---
+
+    /// Récupère une entité directement (pour vérification post-exécution).
+    pub fn find_by_id(&self, id: &AccountId) -> Option<AccountMetadata> {
+        self.metadata_map.lock().expect("Lock failed").get(id).cloned()
+    }
+
+    /// Vérifie si une entité existe.
+    pub fn exists(&self, id: &AccountId) -> bool {
+        self.metadata_map.lock().expect("Lock failed").contains_key(id)
+    }
+
+    /// Retourne le nombre d'entrées en "base".
+    pub fn count(&self) -> usize {
+        self.metadata_map.lock().expect("Lock failed").len()
+    }
+
+    // --- Logique interne ---
+
     fn check_error(&self) -> Result<()> {
-        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+        if let Some(err) = self.error_to_return.lock().expect("Lock failed").clone() {
             return Err(err);
         }
         Ok(())
@@ -41,9 +73,14 @@ impl AccountMetadataRepositoryStub {
 
 #[async_trait]
 impl AccountMetadataRepository for AccountMetadataRepositoryStub {
-    async fn fetch_by_account_id(&self, id: &AccountId) -> Result<Option<AccountMetadata>> {
+    async fn fetch_by_account_id(
+        &self, 
+        id: &AccountId, 
+        _tx: Option<&mut dyn Transaction> 
+    ) -> Result<Option<AccountMetadata>> {
         self.check_error()?;
-        Ok(self.metadata_map.lock().unwrap().get(id).cloned())
+        
+        Ok(self.find_by_id(id))
     }
 
     async fn save(
@@ -54,31 +91,42 @@ impl AccountMetadataRepository for AccountMetadataRepositoryStub {
     ) -> Result<()> {
         self.check_error()?;
 
-        let mut map = self.metadata_map.lock().unwrap();
+        let mut map = self.metadata_map.lock().expect("Lock failed");
         let account_id = metadata.account_id();
 
-        // SIMULATION DU VERROUILLAGE OPTIMISTE (Optimistic Concurrency Control)
-        if let Some(orig) = original {
-            let current_in_map = map.get(account_id).ok_or_else(|| DomainError::NotFound {
-                entity: "AccountMetadata",
-                id: account_id.as_string(),
-            })?;
+        match original {
+            // CAS UPDATE : On vérifie la version pour simuler l'Optimistic Concurrency Control (OCC)
+            Some(orig) => {
+                let current_in_map = map.get(account_id).ok_or_else(|| DomainError::NotFound {
+                    entity: "AccountMetadata",
+                    id: account_id.to_string(),
+                })?;
 
-            // Si la version en "base" (le stub) est différente de celle qu'on pensait avoir (original)
-            if current_in_map.version() != orig.version() {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!(
-                        "AccountMetadata {}: version mismatch (stub has {}, cmd had {})",
-                        account_id.as_string(),
-                        current_in_map.version(),
-                        orig.version()
-                    ),
-                });
+                if current_in_map.version() != orig.version() {
+                    return Err(DomainError::ConcurrencyConflict {
+                        reason: format!(
+                            "OCC Conflict: Stub has version {}, but you tried to update version {}",
+                            current_in_map.version(),
+                            orig.version()
+                        ),
+                    });
+                }
+            }
+            // CAS CREATE : On vérifie que l'ID n'est pas déjà pris
+            None => {
+                if map.contains_key(account_id) {
+                    return Err(DomainError::AlreadyExists {
+                        entity: "AccountMetadata",
+                        field: "account_id",
+                        value: account_id.to_string(),
+                    });
+                }
             }
         }
 
-        // On insère ou on met à jour
+        // On insère (ou remplace) l'entité
         map.insert(account_id.clone(), metadata.clone());
+        
         Ok(())
     }
 }

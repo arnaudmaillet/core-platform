@@ -18,52 +18,45 @@ pub enum AccountEvent {
     // --- IDENTITY & SECURITY EVENTS ---
     AccountRegistered {
         account_id: AccountId,
-        region: RegionCode,
         email: Email,
         external_id: ExternalId,
+        region: RegionCode,
         locale: Locale,
         ip_addr: IpAddr,
         occurred_at: DateTime<Utc>,
     },
     ExternalIdentityLinked {
         account_id: AccountId,
-        region: RegionCode,
         old_external_id: ExternalId,
         new_external_id: ExternalId,
         occurred_at: DateTime<Utc>,
     },
     EmailChanged {
         account_id: AccountId,
-        region: RegionCode,
         old_email: Option<Email>,
         new_email: Email,
         occurred_at: DateTime<Utc>,
     },
     PhoneNumberChanged {
         account_id: AccountId,
-        region: RegionCode,
         old_phone_number: Option<PhoneNumber>,
         new_phone_number: PhoneNumber,
         occurred_at: DateTime<Utc>,
     },
     EmailVerified {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
     PhoneVerified {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
     BirthDateChanged {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
     LocaleChanged {
         account_id: AccountId,
-        region: RegionCode,
         new_locale: Locale,
         occurred_at: DateTime<Utc>,
     },
@@ -71,14 +64,12 @@ pub enum AccountEvent {
     // --- SYSTEM & MODERATION EVENTS ---
     BetaStatusChanged {
         account_id: AccountId,
-        region: RegionCode,
         is_beta_tester: bool,
         occurred_at: DateTime<Utc>,
     },
     TrustScoreAdjusted {
         id: Uuid,
         account_id: AccountId,
-        region: RegionCode,
         delta: i32,
         new_score: i32,
         reason: String,
@@ -86,21 +77,18 @@ pub enum AccountEvent {
     },
     ShadowbanStatusChanged {
         account_id: AccountId,
-        region: RegionCode,
         is_shadowbanned: bool,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountRoleChanged {
         account_id: AccountId,
-        region: RegionCode,
         old_role: AccountRole,
         new_role: AccountRole,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
 
-    // --- HYPERSCALE / SHARDING EVENTS ---
     AccountRegionChanged {
         account_id: AccountId,
         old_region: RegionCode,
@@ -111,53 +99,44 @@ pub enum AccountEvent {
     // --- STATE & MODERATION ---
     AccountDeactivated {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
     AccountActivated {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
     AccountBanned {
         account_id: AccountId,
-        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountUnbanned {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
     AccountSuspended {
         account_id: AccountId,
-        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountUnsuspended {
         account_id: AccountId,
-        region: RegionCode,
         occurred_at: DateTime<Utc>,
     },
 
     // --- SETTINGS EVENTS ---
     NotificationsPreferencesChanged {
         account_id: AccountId,
-        region: RegionCode,
         new_preferences: NotificationPreferences,
         occurred_at: DateTime<Utc>,
     },
     AppearancePreferencesChanged {
         account_id: AccountId,
-        region: RegionCode,
         new_preferences: AppearancePreferences,
         occurred_at: DateTime<Utc>,
     },
     PrivacyPreferencesChanged {
         account_id: AccountId,
-        region: RegionCode,
         new_preferences: PrivacyPreferences,
         occurred_at: DateTime<Utc>,
     },
@@ -165,19 +144,16 @@ pub enum AccountEvent {
     /// Spécifique pour le routage des notifications
     PushTokenAdded {
         account_id: AccountId,
-        region: RegionCode,
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
     PushTokenRemoved {
         account_id: AccountId,
-        region: RegionCode,
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
     TimezoneChanged {
         account_id: AccountId,
-        region: RegionCode,
         new_timezone: Timezone,
         occurred_at: DateTime<Utc>,
     },
@@ -195,14 +171,14 @@ impl DomainEvent for AccountEvent {
 
     fn event_type(&self) -> Cow<'_, str> {
         let s = match self {
-            Self::AccountRegistered { .. } => "account.registered",
-            Self::ExternalIdentityLinked { .. } => "account.external_linked",
-            Self::EmailChanged { .. } => "account.email_changed",
-            Self::PhoneNumberChanged { .. } => "account.phone_number_changed",
-            Self::EmailVerified { .. } => "account.email_verified",
-            Self::PhoneVerified { .. } => "account.phone_verified",
-            Self::BirthDateChanged { .. } => "account.birth_date_changed",
-            Self::LocaleChanged { .. } => "account.locale_changed",
+            Self::AccountRegistered { .. } => "account.identity.registered",
+            Self::ExternalIdentityLinked { .. } => "account.identity.external_linked",
+            Self::EmailChanged { .. } => "account.identity.email_changed",
+            Self::PhoneNumberChanged { .. } => "account.identity.phone_number_changed",
+            Self::EmailVerified { .. } => "account.identity.email_verified",
+            Self::PhoneVerified { .. } => "account.identity.phone_verified",
+            Self::BirthDateChanged { .. } => "account.identity.birth_date_changed",
+            Self::LocaleChanged { .. } => "account.identity.locale_changed",
             Self::BetaStatusChanged { .. } => "account.metadata.beta_status_changed",
             Self::TrustScoreAdjusted { .. } => "account.metadata.trust_score_adjusted",
             Self::ShadowbanStatusChanged { .. } => "account.metadata.shadowban_status_changed",
@@ -228,36 +204,6 @@ impl DomainEvent for AccountEvent {
             Self::TimezoneChanged { .. } => "account.settings.timezone_changed",
         };
         Cow::Borrowed(s)
-    }
-
-    fn region_code(&self) -> RegionCode {
-        match self {
-            Self::AccountRegistered { region, .. }
-            | Self::ExternalIdentityLinked { region, .. }
-            | Self::EmailChanged { region, .. }
-            | Self::PhoneNumberChanged { region, .. }
-            | Self::EmailVerified { region, .. }
-            | Self::PhoneVerified { region, .. }
-            | Self::BirthDateChanged { region, .. }
-            | Self::LocaleChanged { region, .. }
-            | Self::BetaStatusChanged { region, .. }
-            | Self::TrustScoreAdjusted { region, .. }
-            | Self::ShadowbanStatusChanged { region, .. }
-            | Self::AccountRoleChanged { region, .. }
-            | Self::AccountDeactivated { region, .. }
-            | Self::AccountActivated { region, .. }
-            | Self::AccountBanned { region, .. }
-            | Self::AccountUnbanned { region, .. }
-            | Self::AccountSuspended { region, .. }
-            | Self::AccountUnsuspended { region, .. }
-            | Self::NotificationsPreferencesChanged { region, .. }
-            | Self::AppearancePreferencesChanged { region, .. }
-            | Self::PrivacyPreferencesChanged { region, .. }
-            | Self::PushTokenAdded { region, .. }
-            | Self::PushTokenRemoved { region, .. }
-            | Self::TimezoneChanged { region, .. } => region.clone(),
-            Self::AccountRegionChanged { new_region, .. } => new_region.clone(),
-        }
     }
 
     fn aggregate_type(&self) -> Cow<'_, str> {

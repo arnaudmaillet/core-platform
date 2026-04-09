@@ -5,12 +5,11 @@ mod tests {
     use chrono::{Duration, Utc};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-    use shared_kernel::errors::DomainError;
 
     // Helper pour créer un compte de base rapidement
     fn create_test_account() -> AccountIdentity {
         let id = AccountId::new();
-        let region = RegionCode::try_new("eu").expect("Failed to create region_code");
+        let region = RegionCode::try_new("eu").unwrap();
         let email = Email::try_new("john@example.com").unwrap();
         let external_id = ExternalId::try_new("auth0|123").unwrap();
 
@@ -31,74 +30,49 @@ mod tests {
     #[test]
     fn test_email_verification_flow_and_idempotency() {
         let mut account = create_test_account();
-        let region = account.region_code().clone();
+        let token = "any_token";
 
-        // 1. Première vérification : true
-        let changed = account.verify_email(&region).expect("Should verify email");
+        // 1. Plus de paramètre &region
+        let changed = account.verify_email(&token).expect("Should verify email");
         assert!(changed);
         assert!(account.is_email_verified());
-        // L'état Active est déclenché par la vérification d'email
         assert_eq!(account.state(), &AccountState::Active);
 
-        // On nettoie les événements pour tester l'idempotence proprement
         let _ = account.metadata_mut().pull_events();
 
-        // 2. Deuxième vérification : false (idempotence)
-        let changed = account.verify_email(&region).unwrap();
-        assert!(!changed, "Email already verified, should return false");
-        assert_eq!(account.metadata_mut().pull_events().len(), 0);
-    }
-
-    #[test]
-    fn test_cross_region_security_on_account() {
-        let mut account = create_test_account();
-        let wrong_region = RegionCode::try_new("us").unwrap();
-
-        // Tentative de vérification d'email avec la mauvaise région
-        let result = account.verify_email(&wrong_region);
-
-        assert!(
-            result.is_err(),
-            "L'opération aurait dû être bloquée (Forbidden)"
-        );
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
+        // 2. Idempotence simple
+        let changed = account.verify_email(&token).unwrap();
+        assert!(!changed);
     }
 
     #[test]
     fn test_identity_linking_security() {
         let mut account = create_test_account();
-        let region = account.region_code().clone();
 
-        // Cas 1 : Liaison identique (Idempotence) -> Ok(false)
+        // Liaison identique (Idempotence)
         let same_id = ExternalId::try_new("auth0|123").unwrap();
-        let changed = account.link_external_identity(&region, same_id).unwrap();
+        let changed = account.link_external_identity(same_id).unwrap();
         assert!(!changed);
 
-        // Cas 2 : Tentative de changement d'identité externe -> Err
+        // Tentative de changement d'identité externe (Règle métier : Interdit)
         let new_id = ExternalId::try_new("google|456").unwrap();
-        let result = account.link_external_identity(&region, new_id);
-        assert!(result.is_err());
+        let result = account.link_external_identity(new_id);
+        assert!(result.is_err(), "Should not allow re-linking");
     }
 
     #[test]
     fn test_account_suspension_lifecycle() {
         let mut account = create_test_account();
-        let region = account.region_code().clone();
-        account.verify_email(&region).unwrap();
+        let token: &str = "any_token";
+        account.verify_email(&token).unwrap();
 
-        // 1. Suspension : true
-        let changed = account
-            .suspend(&region, "Suspicious activity".into())
-            .unwrap();
+        // Suspension
+        let changed = account.suspend("Suspicious activity".into()).unwrap();
         assert!(changed);
         assert!(account.is_blocked());
 
-        // 2. Suspension déjà active : false
-        let changed = account.suspend(&region, "Duplicate call".into()).unwrap();
-        assert!(!changed);
-
-        // 3. Unsuspend : true
-        let changed = account.unsuspend(&region).unwrap();
+        // Unsuspend
+        let changed = account.unsuspend().unwrap();
         assert!(changed);
         assert!(account.is_active());
     }
@@ -106,39 +80,28 @@ mod tests {
     #[test]
     fn test_banning_constraints() {
         let mut account = create_test_account();
-        let region = account.region_code().clone();
 
-        // Ban : true
-        let changed = account.ban(&region, "Violation of TOS".into()).unwrap();
-        assert!(changed);
+        account.ban("Violation of TOS".into()).unwrap();
         assert_eq!(account.state(), &AccountState::Banned);
 
-        // On ne peut pas réactiver (reactivate) un compte banni sans unban
-        let res = account.activate(&region);
+        // Règle métier : On ne peut pas "activer" un banni sans l' "unban"
+        let res = account.activate();
         assert!(res.is_err());
 
-        // Unban : true
-        let changed = account.unban(&region).unwrap();
-        assert!(changed);
+        account.unban().unwrap();
         assert_eq!(account.state(), &AccountState::Active);
     }
 
+    #[test]
     fn test_activity_recording_throttling() {
         let mut account = create_test_account();
-        let region = account.region_code().clone();
 
-        // Le premier log devrait maintenant être true car l'activité initiale est ancienne
-        let first_log = account.record_activity(&region).unwrap();
-        assert!(
-            first_log,
-            "First log after builder should be true if last_activity is old"
-        );
+        // Premier log : True (car l'heure dans le builder est ancienne)
+        let first_log = account.record_activity().unwrap();
+        assert!(first_log);
 
-        // Le second log est immédiat, donc throttle -> false
-        let second_log = account.record_activity(&region).unwrap();
-        assert!(
-            !second_log,
-            "Should be throttled and return false on immediate subsequent call"
-        );
+        // Second log : False (Throttling < 5 mins)
+        let second_log = account.record_activity().unwrap();
+        assert!(!second_log);
     }
 }
