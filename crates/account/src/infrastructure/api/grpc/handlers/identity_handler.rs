@@ -105,8 +105,10 @@ impl IdentityHandler {
 
 #[tonic::async_trait]
 impl AccountIdentityService for IdentityHandler {
-
-    async fn register(&self, request: Request<RegisterRequest>) -> Result<Response<AccountIdentity>, Status> {
+    async fn register(
+        &self,
+        request: Request<RegisterRequest>,
+    ) -> Result<Response<AccountIdentity>, Status> {
         let region: RegionCode = self.get_region(&request)?;
         let command = RegisterCommand::try_from_proto(request.into_inner(), region)?;
         let res = self.register_use_case.execute(command).await.map_grpc()?;
@@ -117,8 +119,8 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangeEmailRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ChangeEmailCommand::try_from_proto(request.into_inner(), region)?;
+        let ctx = self.get_ctx(&request)?;
+        let command = ChangeEmailCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_email_use_case
             .execute(&ctx, command)
@@ -131,8 +133,8 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<VerifyEmailRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
-        let region = self.get_region(&request)?;
-        let command = VerifyEmailCommand::try_from_proto(request.into_inner(), region)?;
+        let ctx = self.get_ctx(&request)?;
+        let command = VerifyEmailCommand::try_from_proto(request.into_inner())?;
         let res = self
             .verify_email_use_case
             .execute(&ctx, command)
@@ -145,6 +147,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangePhoneNumberRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ChangePhoneNumberCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_phone_number_use_case
@@ -158,6 +161,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<VerifyPhoneNumberRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = VerifyPhoneNumberCommand::try_from_proto(request.into_inner())?;
         let res = self
             .verify_phone_number_use_case
@@ -171,6 +175,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangeBirthDateRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ChangeBirthDateCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_birth_date_use_case
@@ -184,6 +189,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangeRegionRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ChangeRegionCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_region_use_case
@@ -204,6 +210,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<LinkExternalIdentityRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = LinkExternalIdentityCommand::try_from_proto(request.into_inner())?;
         let res = self
             .link_external_identity_use_case
@@ -217,6 +224,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<DeactivateRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = DeactivateCommand::try_from_proto(request.into_inner())?;
         let res = self
             .deactivate_use_case
@@ -230,6 +238,7 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ActivateRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ActivateCommand::try_from_proto(request.into_inner())?;
         let res = self
             .activate_use_case

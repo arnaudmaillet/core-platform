@@ -10,13 +10,13 @@ use crate::domain::value_objects::{AccountState, Email, ExternalId, PhoneNumber}
 
 #[async_trait]
 pub trait AccountIdentityRepository: Send + Sync {
-    async fn fetch_by_account_id(&self, account_id: &AccountId, tx: Option<&mut dyn Transaction>) -> Result<Option<AccountIdentity>>;
+    async fn fetch_by_account_id(&self, account_id: &AccountId, mut tx: Option<&mut dyn Transaction>) -> Result<Option<AccountIdentity>>;
     async fn resolve_id_from_external_id(&self, ext_id: &ExternalId) -> Result<Option<AccountId>>;
     async fn resolve_id_from_email(&self, email: &Email) -> Result<Option<AccountId>>;
     async fn exists_by_external_id(&self, ext_id: &ExternalId) -> Result<bool>;
     async fn exists_by_email(&self, email: &Email) -> Result<bool>;
     async fn exists_by_phone(&self, phone: &PhoneNumber) -> Result<bool>;
-    async fn save(&self, account: &AccountIdentity, original: Option<&AccountIdentity>, tx: Option<&mut dyn Transaction>) -> Result<()>;
+    async fn save(&self, account: &AccountIdentity, original: Option<&AccountIdentity>, mut tx: Option<&mut dyn Transaction>) -> Result<()>;
     async fn transit_to_state(&self, account_id: &AccountId, state: AccountState, tx: &mut dyn Transaction) -> Result<()>;
     async fn record_activity(&self, account_id: &AccountId) -> Result<()>;
     async fn hard_delete(&self, account_id: &AccountId, tx: &mut dyn Transaction) -> Result<()>;

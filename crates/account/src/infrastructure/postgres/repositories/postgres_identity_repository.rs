@@ -38,7 +38,7 @@ impl AccountIdentityRepository for PostgresAccountIdentityRepository {
     async fn fetch_by_account_id(
         &self,
         account_id: &AccountId,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountIdentity>> {
         let key = Self::cache_key(account_id);
         let should_use_cache = tx.is_none();
@@ -53,7 +53,7 @@ impl AccountIdentityRepository for PostgresAccountIdentityRepository {
         // 2. Read from DB
         let uid = account_id.as_uuid();
         let row: Option<PostgresAccountIdentityRow> =
-            <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
                 Box::pin(async move {
                     query_as::<_, PostgresAccountIdentityRow>(
                         "SELECT * FROM account_identity WHERE account_id = $1",
@@ -211,7 +211,7 @@ impl PostgresAccountIdentityRepository {
         &self,
         identity: &AccountIdentity,
         original: Option<&AccountIdentity>,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         // 1. Préparation des données possédées (Owned data)
         let row = PostgresAccountIdentityRow::try_from(identity)?;
@@ -223,7 +223,7 @@ impl PostgresAccountIdentityRepository {
 
         // 2. Exécution via le wrapper de transaction
         // On utilise 'move' sur la clôture pour capturer 'row' et 'account_id_display'
-        <dyn Transaction>::execute_on(&self.pool, tx, move |conn| {
+        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), move |conn| {
             // On clone row ici pour que le Box::pin soit propriétaire des données
             let account_id_display = account_id_display.clone();
 

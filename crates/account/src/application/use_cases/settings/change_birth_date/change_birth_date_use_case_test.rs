@@ -192,7 +192,7 @@ mod tests {
         .build();
 
         account.ban("Abuse".into()).unwrap();
-        account_repo.add_account(account);
+        account_repo.insert(account);
 
         let cmd = ChangeBirthDateCommand {
             account_id,
