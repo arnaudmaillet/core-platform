@@ -25,14 +25,20 @@ impl OutboxRepositoryStub {
 
 #[async_trait]
 impl OutboxRepository for OutboxRepositoryStub {
-    async fn save(&self, _tx: &mut dyn Transaction, event: &dyn DomainEvent) -> Result<()> {
-        // Simulation de panne
+    async fn save_all(&self, _tx: &mut dyn Transaction, events: &[&dyn DomainEvent]) -> Result<()> {
         if let Some(err) = self.force_error.lock().unwrap().clone() {
             return Err(err);
         }
 
-        // On stocke le nom de l'événement pour l'assertion
-        self.saved_events.lock().unwrap().push(event.event_type().to_string());
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        let mut saved = self.saved_events.lock().unwrap();
+        for event in events {
+            saved.push(event.event_type().to_string());
+        }
+        
         Ok(())
     }
 

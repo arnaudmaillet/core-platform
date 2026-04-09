@@ -4,14 +4,14 @@ use shared_kernel::domain::value_objects::RegionCode;
 use shared_proto::account::v1::{
     AccountIdentity,
     ActivateRequest,
-    DeactivateRequest,
     ChangeBirthDateRequest,
     ChangeEmailRequest,
     ChangePhoneNumberRequest,
     ChangeRegionRequest,
-    RegisterRequest,
+    DeactivateRequest,
     // ResolveIdentityRequest,
     LinkExternalIdentityRequest,
+    RegisterRequest,
     VerifyEmailRequest,
     VerifyPhoneNumberRequest,
     account_identity_service_server::AccountIdentityService,
@@ -19,27 +19,36 @@ use shared_proto::account::v1::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
-use crate::application::access_management::link_external_identity::{
+use crate::application::context::AccountContext;
+use crate::application::use_cases::access_management::link_external_identity::{
     LinkExternalIdentityCommand, LinkExternalIdentityUseCase,
 };
-use crate::application::access_management::register::{RegisterCommand, RegisterUseCase};
-use crate::application::access_management::resolve_identity::{
+use crate::application::use_cases::access_management::register::{
+    RegisterCommand, RegisterUseCase,
+};
+use crate::application::use_cases::access_management::resolve_identity::{
     ResolveIdentityCommand, ResolveIdentityUseCase,
 };
-use crate::application::access_management::verify_email::{VerifyEmailCommand, VerifyEmailUseCase};
-use crate::application::access_management::verify_phone_number::{
+use crate::application::use_cases::access_management::verify_email::{
+    VerifyEmailCommand, VerifyEmailUseCase,
+};
+use crate::application::use_cases::access_management::verify_phone_number::{
     VerifyPhoneNumberCommand, VerifyPhoneNumberUseCase,
 };
-use crate::application::lifecycle::activate::{ReactivateUseCase, ActivateCommand};
-use crate::application::lifecycle::deactivate::{DeactivateCommand, DeactivateUseCase};
-use crate::application::settings::change_birth_date::{
+use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateUseCase};
+use crate::application::use_cases::lifecycle::deactivate::{DeactivateCommand, DeactivateUseCase};
+use crate::application::use_cases::settings::change_birth_date::{
     ChangeBirthDateCommand, ChangeBirthDateUseCase,
 };
-use crate::application::settings::change_email::{ChangeEmailCommand, ChangeEmailUseCase};
-use crate::application::settings::change_phone_number::{
+use crate::application::use_cases::settings::change_email::{
+    ChangeEmailCommand, ChangeEmailUseCase,
+};
+use crate::application::use_cases::settings::change_phone_number::{
     ChangePhoneNumberCommand, ChangePhoneNumberUseCase,
 };
-use crate::application::settings::change_region::{ChangeRegionCommand, ChangeRegionUseCase};
+use crate::application::use_cases::settings::change_region::{
+    ChangeRegionCommand, ChangeRegionUseCase,
+};
 use crate::infrastructure::api::grpc::mappers::errors_mapper::ToGrpcStatus;
 
 pub struct IdentityHandler {
@@ -53,7 +62,7 @@ pub struct IdentityHandler {
     resolve_identity_use_case: Arc<ResolveIdentityUseCase>,
     link_external_identity_use_case: Arc<LinkExternalIdentityUseCase>,
     deactivate_use_case: Arc<DeactivateUseCase>,
-    activate_use_case: Arc<ReactivateUseCase>,
+    activate_use_case: Arc<ActivateUseCase>,
 }
 
 impl IdentityHandler {
@@ -68,7 +77,7 @@ impl IdentityHandler {
         resolve_identity_use_case: Arc<ResolveIdentityUseCase>,
         link_external_identity_use_case: Arc<LinkExternalIdentityUseCase>,
         deactivate_use_case: Arc<DeactivateUseCase>,
-        activate_use_case: Arc<ReactivateUseCase>,
+        activate_use_case: Arc<ActivateUseCase>,
     ) -> Self {
         Self {
             change_email_use_case,
@@ -85,19 +94,21 @@ impl IdentityHandler {
         }
     }
 
-    fn get_region<T>(&self, request: &Request<T>) -> Result<RegionCode, Status> {
+    fn get_ctx<T>(&self, request: &Request<T>) -> Result<AccountContext, Status> {
         request
             .extensions()
-            .get::<RegionCode>()
+            .get::<AccountContext>()
             .cloned()
-            .ok_or_else(|| Status::internal("Region context missing from metadata"))
+            .ok_or_else(|| Status::internal("AccountContext missing from extensions"))
     }
 }
 
 #[tonic::async_trait]
 impl AccountIdentityService for IdentityHandler {
-
-    async fn register(&self, request: Request<RegisterRequest>) -> Result<Response<AccountIdentity>, Status> {
+    async fn register(
+        &self,
+        request: Request<RegisterRequest>,
+    ) -> Result<Response<AccountIdentity>, Status> {
         let region: RegionCode = self.get_region(&request)?;
         let command = RegisterCommand::try_from_proto(request.into_inner(), region)?;
         let res = self.register_use_case.execute(command).await.map_grpc()?;
@@ -108,11 +119,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangeEmailRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
-        let region = self.get_region(&request)?;
-        let command = ChangeEmailCommand::try_from_proto(request.into_inner(), region)?;
+        let ctx = self.get_ctx(&request)?;
+        let command = ChangeEmailCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_email_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -122,11 +133,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<VerifyEmailRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
-        let region = self.get_region(&request)?;
-        let command = VerifyEmailCommand::try_from_proto(request.into_inner(), region)?;
+        let ctx = self.get_ctx(&request)?;
+        let command = VerifyEmailCommand::try_from_proto(request.into_inner())?;
         let res = self
             .verify_email_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -136,10 +147,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangePhoneNumberRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ChangePhoneNumberCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_phone_number_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -149,10 +161,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<VerifyPhoneNumberRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = VerifyPhoneNumberCommand::try_from_proto(request.into_inner())?;
         let res = self
             .verify_phone_number_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -162,10 +175,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangeBirthDateRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ChangeBirthDateCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_birth_date_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -175,10 +189,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ChangeRegionRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ChangeRegionCommand::try_from_proto(request.into_inner())?;
         let res = self
             .change_region_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -195,10 +210,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<LinkExternalIdentityRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = LinkExternalIdentityCommand::try_from_proto(request.into_inner())?;
         let res = self
             .link_external_identity_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -208,10 +224,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<DeactivateRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = DeactivateCommand::try_from_proto(request.into_inner())?;
         let res = self
             .deactivate_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))
@@ -221,10 +238,11 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<ActivateRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
+        let ctx = self.get_ctx(&request)?;
         let command = ActivateCommand::try_from_proto(request.into_inner())?;
         let res = self
             .activate_use_case
-            .execute(command)
+            .execute(&ctx, command)
             .await
             .map_grpc()?;
         Ok(Response::new(res.into()))

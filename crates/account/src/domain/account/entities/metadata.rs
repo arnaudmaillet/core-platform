@@ -98,7 +98,7 @@ impl AccountMetadata {
         &mut self,
         action_id: Uuid,
         amount: u32,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
         let previous_score = self.trust_score;
         let delta = amount as i32;
@@ -116,7 +116,7 @@ impl AccountMetadata {
             account_id: self.account_id.clone(),
             delta,
             new_score: self.trust_score,
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
 
@@ -128,7 +128,7 @@ impl AccountMetadata {
         &mut self,
         action_id: Uuid,
         amount: u32,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
         let previous_score = self.trust_score;
         let delta = amount as i32;
@@ -161,7 +161,7 @@ impl AccountMetadata {
                 account_id: self.account_id.clone(),
                 delta: -(amount as i32),
                 new_score: self.trust_score,
-                reason,
+                reason: reason.to_string(),
                 occurred_at: self.updated_at,
             }));
         }
@@ -169,7 +169,7 @@ impl AccountMetadata {
         Ok(self.trust_score != previous_score || shadowban_triggered)
     }
 
-    pub fn shadowban(&mut self, reason: String) -> Result<bool> {
+    pub fn shadowban(&mut self, reason: &str) -> Result<bool> {
         if !self.is_shadowbanned {
             self.apply_shadowban(reason);
             return Ok(true);
@@ -177,7 +177,7 @@ impl AccountMetadata {
         Ok(false)
     }
 
-    pub fn lift_shadowban(&mut self, reason: String) -> Result<bool> {
+    pub fn lift_shadowban(&mut self, reason: &str) -> Result<bool> {
         if self.is_shadowbanned {
             self.is_shadowbanned = false;
             self.apply_moderation_change(format!("Shadowban lifted: {}", reason));
@@ -185,7 +185,7 @@ impl AccountMetadata {
             self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
                 account_id: self.account_id.clone(),
                 is_shadowbanned: false,
-                reason,
+                reason: reason.to_string(),
                 occurred_at: self.updated_at,
             }));
             return Ok(true);
@@ -197,7 +197,7 @@ impl AccountMetadata {
     pub fn upgrade_role(
         &mut self,
         new_role: AccountRole,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
 
         // 1. Idempotence : si le rôle est déjà le bon, on ne fait rien
@@ -216,7 +216,7 @@ impl AccountMetadata {
             account_id: self.account_id.clone(),
             old_role,
             new_role,
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
 
@@ -234,7 +234,7 @@ impl AccountMetadata {
     pub fn set_beta_status(
         &mut self,
         status: bool,
-        reason: String,
+        reason: &str,
     ) -> Result<bool> {
         if self.is_beta_tester == status {
             return Ok(false);
@@ -278,14 +278,14 @@ impl AccountMetadata {
         self.apply_change();
     }
 
-    fn apply_shadowban(&mut self, reason: String) {
+    fn apply_shadowban(&mut self, reason: &str) {
         self.is_shadowbanned = true;
         self.apply_moderation_change(format!("Shadowbanned: {}", reason));
 
         self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
             account_id: self.account_id.clone(),
             is_shadowbanned: true,
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
     }

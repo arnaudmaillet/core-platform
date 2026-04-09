@@ -7,7 +7,7 @@ use crate::errors::Result;
 use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::transactions::TransactionExt;
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres, query, Row};
+use sqlx::{Pool, Postgres, QueryBuilder, Row, query};
 
 pub struct PostgresOutboxRepository {
     pool: Pool<Postgres>,
@@ -21,27 +21,30 @@ impl PostgresOutboxRepository {
 
 #[async_trait]
 impl OutboxRepository for PostgresOutboxRepository {
-    /// Sauvegarde l'événement (Write)
-    async fn save(&self, tx: &mut dyn Transaction, event: &dyn DomainEvent) -> Result<()> {
-        let sqlx_tx = tx.downcast_mut_sqlx()?;
-        let envelope = EventEnvelope::wrap(event);
+    async fn save_all(&self, tx: &mut dyn Transaction, events: &[&dyn DomainEvent]) -> Result<()> {
+        if events.is_empty() { return Ok(()); }
 
-        query(
-            r#"
-            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            "#
-        )
-            .bind(envelope.id)
-            .bind(envelope.aggregate_type)
-            .bind(envelope.aggregate_id)
-            .bind(envelope.event_type)
-            .bind(envelope.payload)
-            .bind(envelope.metadata)
-            .bind(envelope.occurred_at)
-            .execute(&mut **sqlx_tx)
+        let sqlx_tx = tx.downcast_mut_sqlx()?;
+        let envelopes: Vec<EventEnvelope> = events.iter().map(|e| EventEnvelope::wrap(*e)).collect();
+
+        let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
+            "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at) "
+        );
+
+        query_builder.push_values(envelopes, |mut b, env| {
+            b.push_bind(env.id)
+             .push_bind(env.aggregate_type)
+             .push_bind(env.aggregate_id)
+             .push_bind(env.event_type)
+             .push_bind(env.payload)
+             .push_bind(env.metadata)
+             .push_bind(env.occurred_at);
+        });
+
+        let query = query_builder.build();
+        query.execute(&mut **sqlx_tx)
             .await
-            .map_domain_infra("Outbox")?;
+            .map_domain_infra("Outbox Bulk Insert")?;
 
         Ok(())
     }

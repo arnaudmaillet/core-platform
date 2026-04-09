@@ -34,37 +34,31 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
     async fn fetch_by_account_id(
         &self,
         account_id: &AccountId,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountSettings>> {
         let key = Self::cache_key(account_id);
         let should_use_cache = tx.is_none();
 
-        // 1. READ-THROUGH
         if should_use_cache {
             if let Ok(Some(settings)) = self.cache.get_obj::<AccountSettings>(&key).await {
                 return Ok(Some(settings));
             }
         }
 
-        // 2. READ DB
         let uid = account_id.as_uuid();
-        let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        // Utilisation de .as_deref_mut() ici aussi !
+        let row = <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
-                let query =
-                    "SELECT account_id, preferences, timezone, push_tokens, version, updated_at
-                    FROM account_settings WHERE account_id = $1";
-
+                let query = "SELECT ... FROM account_settings WHERE account_id = $1";
                 let res: Option<PostgresAccountSettingsRow> = sqlx::query_as(query)
                     .bind(uid)
                     .fetch_optional(conn)
                     .await
                     .map_domain_infra("AccountSettings: find_by_account_id")?;
-
                 Ok(res)
             })
         })
         .await?;
-
         let settings = row.map(AccountSettings::try_from).transpose()?;
 
         // 3. WRITE-THROUGH
@@ -85,7 +79,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         &self,
         settings: &AccountSettings,
         original: Option<&AccountSettings>,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let settings_json = serde_json::to_value(settings.preferences())
             .map_err(|e| DomainError::Internal(format!("Serialization failed: {}", e)))?;
@@ -103,7 +97,7 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let new_version_i64 = settings.version_i64()?;
         let old_version_i64 = original.map(|o| o.version_i64()).transpose()?.unwrap_or(0);
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
+        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| Box::pin(async move {
             let query = "
                 INSERT INTO account_settings (account_id, preferences, timezone, push_tokens, version, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6)
@@ -147,12 +141,12 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         &self,
         account_id: &AccountId,
         timezone: &Timezone,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let uid = account_id.as_uuid();
         let tz = timezone.as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
                 let query = "UPDATE account_settings
              SET timezone = $1, version = version + 1, updated_at = NOW()
@@ -175,12 +169,12 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         &self,
         account_id: &AccountId,
         token: &PushToken,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let uid = account_id.as_uuid();
         let token_str = token.as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
                 let query = "UPDATE account_settings
              SET push_tokens = ARRAY(SELECT DISTINCT unnest(array_append(push_tokens, $1))),
@@ -205,12 +199,12 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         &self,
         account_id: &AccountId,
         token: &PushToken,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let uid = account_id.as_uuid();
         let token_str = token.as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
                 let query = "UPDATE account_settings
                          SET push_tokens = array_remove(push_tokens, $1),

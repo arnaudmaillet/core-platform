@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
@@ -15,8 +14,8 @@ use crate::domain::repositories::AccountSettingsRepository;
 
 #[derive(Default)]
 pub struct AccountSettingsRepositoryStub {
-    pub settings_map: Arc<Mutex<HashMap<AccountId, AccountSettings>>>,
-    pub error_to_return: Arc<Mutex<Option<DomainError>>>,
+    settings_map: Arc<Mutex<HashMap<AccountId, AccountSettings>>>,
+    error_to_return: Arc<Mutex<Option<DomainError>>>,
 }
 
 impl AccountSettingsRepositoryStub {
@@ -24,21 +23,41 @@ impl AccountSettingsRepositoryStub {
         Self::default()
     }
 
+    // --- Helpers pour l'Arrange (Setup) ---
+
     pub fn add_settings(&self, settings: AccountSettings) {
-        self.settings_map.lock().unwrap().insert(settings.account_id().clone(), settings);
+        let mut map = self.settings_map.lock().expect("Lock failed");
+        map.insert(settings.account_id().clone(), settings);
     }
 
+    pub fn set_error(&self, err: DomainError) {
+        let mut error_slot = self.error_to_return.lock().expect("Lock failed");
+        *error_slot = Some(err);
+    }
+
+    // --- Helpers pour l'Assert (Vérification) ---
+
+    pub fn find_by_id(&self, id: &AccountId) -> Option<AccountSettings> {
+        self.settings_map.lock().expect("Lock failed").get(id).cloned()
+    }
+
+    pub fn count(&self) -> usize {
+        self.settings_map.lock().expect("Lock failed").len()
+    }
+
+    // --- Logique interne ---
+
     fn check_error(&self) -> Result<()> {
-        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+        if let Some(err) = self.error_to_return.lock().expect("Lock failed").clone() {
             return Err(err);
         }
         Ok(())
     }
 
-    fn not_found(&self, id: String) -> DomainError {
+    fn not_found(&self, id: &AccountId) -> DomainError {
         DomainError::NotFound {
             entity: "AccountSettings",
-            id,
+            id: id.to_string(),
         }
     }
 }
@@ -51,7 +70,7 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountSettings>> {
         self.check_error()?;
-        Ok(self.settings_map.lock().unwrap().get(account_id).cloned())
+        Ok(self.find_by_id(account_id))
     }
 
     async fn save(
@@ -61,17 +80,17 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
-        let mut map = self.settings_map.lock().unwrap();
+        let mut map = self.settings_map.lock().expect("Lock failed");
         let account_id = settings.account_id();
 
         match original {
             Some(orig) => {
-                let current = map.get(account_id).ok_or_else(|| self.not_found(account_id.as_string()))?;
+                let current = map.get(account_id).ok_or_else(|| self.not_found(account_id))?;
                 
                 if current.version() != orig.version() {
                     return Err(DomainError::ConcurrencyConflict {
                         reason: format!(
-                            "AccountSettings OCC Conflict: Stub has v{}, but you provided v{}",
+                            "OCC Conflict: Stub has v{}, but Input has v{}",
                             current.version(),
                             orig.version()
                         ),
@@ -83,7 +102,7 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
                     return Err(DomainError::AlreadyExists {
                         entity: "AccountSettings",
                         field: "account_id",
-                        value: account_id.as_string(),
+                        value: account_id.to_string(),
                     });
                 }
             }
@@ -100,13 +119,13 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
-        let mut map = self.settings_map.lock().unwrap();
+        let mut map = self.settings_map.lock().expect("Lock failed");
 
         if let Some(settings) = map.get_mut(account_id) {
             settings.update_timezone(timezone.clone())?;
             Ok(())
         } else {
-            Err(self.not_found(account_id.as_string()))
+            Err(self.not_found(account_id))
         }
     }
 
@@ -117,13 +136,14 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
-        let mut map = self.settings_map.lock().unwrap();
+        let mut map = self.settings_map.lock().expect("Lock failed");
 
         if let Some(settings) = map.get_mut(account_id) {
+            // Note: On utilise le clone ici car l'interface attend une valeur
             settings.add_push_token(token.clone())?;
             Ok(())
         } else {
-            Err(self.not_found(account_id.as_string()))
+            Err(self.not_found(account_id))
         }
     }
 
@@ -134,13 +154,13 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
-        let mut map = self.settings_map.lock().unwrap();
+        let mut map = self.settings_map.lock().expect("Lock failed");
 
         if let Some(settings) = map.get_mut(account_id) {
             settings.remove_push_token(token)?;
             Ok(())
         } else {
-            Err(self.not_found(account_id.as_string()))
+            Err(self.not_found(account_id))
         }
     }
 }

@@ -4,15 +4,15 @@
 // use tonic::{Request, Response, Status};
 // use shared_proto::account::v1::{
 //     account_moderation_service_server::AccountModerationService,
-//     BanAccountRequest, UnbanAccountRequest, ShadowbanRequest, 
+//     BanAccountRequest, UnbanAccountRequest, ShadowbanRequest,
 //     LiftShadowbanRequest, IncreaseTrustScoreRequest, DecreaseTrustScoreRequest, SuspendAccountRequest, UnsuspendAccountRequest,
 //     AccountMetadata as ProtoMetadata
 // };
 // use shared_kernel::domain::value_objects::RegionCode;
-// use crate::application::use_cases::suspend_account::{SuspendAccountCommand, SuspendAccountUseCase};
-// use crate::application::use_cases::unsuspend_account::{UnsuspendAccountCommand, UnsuspendAccountUseCase};
-// use crate::application::use_cases::{
-//     ban_account::*, unban_account::*, shadowban::*, 
+// use crate::application::use_cases::use_cases::suspend_account::{SuspendAccountCommand, SuspendAccountUseCase};
+// use crate::application::use_cases::use_cases::unsuspend_account::{UnsuspendAccountCommand, UnsuspendAccountUseCase};
+// use crate::application::use_cases::use_cases::{
+//     ban_account::*, unban_account::*, shadowban::*,
 //     lift_shadowban::*, increase_trust_score::*, decrease_trust_score::*
 // };
 // use crate::infrastructure::api::grpc::mappers::errors_mapper::ToGrpcStatus;

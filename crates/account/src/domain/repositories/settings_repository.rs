@@ -12,34 +12,34 @@ pub trait AccountSettingsRepository: Send + Sync {
     async fn fetch_by_account_id(
         &self,
         account_id: &AccountId,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountSettings>>;
 
     async fn save(
         &self,
         settings: &AccountSettings,
         original: Option<&AccountSettings>,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
 
     async fn update_timezone(
         &self,
         account_id: &AccountId,
         timezone: &Timezone,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
 
     async fn add_push_token(
         &self,
         account_id: &AccountId,
         token: &PushToken,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
 
     async fn remove_push_token(
         &self,
         account_id: &AccountId,
         token: &PushToken,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
 }

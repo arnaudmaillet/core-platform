@@ -36,17 +36,23 @@ impl PostgresAccountMetadataRepository {
 
 #[async_trait]
 impl AccountMetadataRepository for PostgresAccountMetadataRepository {
-    async fn fetch_by_account_id(&self, account_id: &AccountId) -> Result<Option<AccountMetadata>> {
+    async fn fetch_by_account_id(
+        &self, 
+        account_id: &AccountId, 
+        mut tx: Option<&mut dyn Transaction>
+    ) -> Result<Option<AccountMetadata>> {
         let key = Self::cache_key(account_id);
+        let should_use_cache = tx.is_none();
 
-        // 1. TENTATIVE CACHE (Read-through)
-        if let Ok(Some(metadata)) = self.cache.get_obj::<AccountMetadata>(&key).await {
-            return Ok(Some(metadata));
+        if should_use_cache {
+            if let Ok(Some(metadata)) = self.cache.get_obj::<AccountMetadata>(&key).await {
+                return Ok(Some(metadata));
+            }
         }
 
-        // 2. LECTURE SQL
         let uid = account_id.as_uuid();
-        let row = <dyn Transaction>::execute_on(&self.pool, None, |conn| {
+        // Utilisation de .as_deref_mut() pour éviter le move
+        let row = <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
                 let sql = "SELECT * FROM account_metadata WHERE account_id = $1";
                 query_as::<_, PostgresAccountMetadataRow>(sql)
@@ -60,10 +66,10 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
 
         let metadata = row.map(AccountMetadata::try_from).transpose()?;
 
-        // 3. MISE EN CACHE (Write-through)
-        if let Some(ref meta) = metadata {
-            // TTL de 30 minutes pour les metadata (souvent moins critiques que l'Identity)
-            let _ = self.cache.set_obj(&key, meta, Some(Duration::from_secs(1800))).await;
+        if tx.is_none() {
+            if let Some(ref meta) = metadata {
+                let _ = self.cache.set_obj(&key, meta, Some(Duration::from_secs(1800))).await;
+            }
         }
 
         Ok(metadata)
@@ -73,7 +79,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         &self,
         metadata: &AccountMetadata,
         original: Option<&AccountMetadata>,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         // --- 1. EXTRACTION DES DONNÉES ---
         let uid = metadata.account_id().as_uuid();
@@ -91,7 +97,7 @@ impl AccountMetadataRepository for PostgresAccountMetadataRepository {
         let old_version = original
             .map(|o| o.version_i64()).transpose()?.unwrap_or(0);
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
                 // --- ÉTAPE 1 : UPSERT ATOMIQUE ---
                 let sql = r#"

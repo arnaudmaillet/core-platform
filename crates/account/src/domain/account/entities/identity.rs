@@ -182,10 +182,13 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn verify_email(&mut self) -> Result<bool> {
+    pub fn verify_email(&mut self, token: &str) -> Result<bool> {
         if self.email_verified {
             return Ok(false);
         }
+
+        // Note : Tu as probablement un champ 'verification_token' dans ton entité
+        // ou une logique de signature/expiration.
 
         self.email_verified = true;
         self.apply_change();
@@ -228,10 +231,13 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn verify_phone(&mut self) -> Result<bool> {
+    pub fn verify_phone(&mut self, code: &str) -> Result<bool> {
         if self.phone_verified {
             return Ok(false);
         }
+
+        // Note : Tu as probablement un champ 'verification_code' dans ton entité
+        // ou une logique de signature/expiration.
 
         self.phone_verified = true;
         self.apply_change();
@@ -399,7 +405,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub fn ban(&mut self, reason: String) -> Result<bool> {
+    pub fn ban(&mut self, reason: &str) -> Result<bool> {
         if self.state == AccountState::Banned {
             return Ok(false);
         }
@@ -408,7 +414,7 @@ impl AccountIdentity {
         self.apply_change();
         self.push_event(Box::new(AccountEvent::AccountBanned {
             account_id: self.account_id.clone(),
-            reason,
+            reason: reason.to_string(),
             occurred_at: self.updated_at,
         }));
 
