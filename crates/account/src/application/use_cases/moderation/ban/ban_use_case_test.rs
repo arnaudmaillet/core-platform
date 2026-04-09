@@ -74,7 +74,7 @@ mod tests {
         .build();
 
         account.ban("First reason".into()).unwrap();
-        account_repo.add_account(account);
+        account_repo.insert(account);
 
         let cmd = BanCommand {
             account_id,

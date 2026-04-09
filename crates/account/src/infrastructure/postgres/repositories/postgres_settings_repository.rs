@@ -39,21 +39,17 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
         let key = Self::cache_key(account_id);
         let should_use_cache = tx.is_none();
 
-        // 1. READ-THROUGH
         if should_use_cache {
             if let Ok(Some(settings)) = self.cache.get_obj::<AccountSettings>(&key).await {
                 return Ok(Some(settings));
             }
         }
 
-        // 2. READ DB
         let uid = account_id.as_uuid();
-        let row = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        // Utilisation de .as_deref_mut() ici aussi !
+        let row = <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
             Box::pin(async move {
-                let query =
-                    "SELECT account_id, preferences, timezone, push_tokens, version, updated_at
-                    FROM account_settings WHERE account_id = $1";
-
+                let query = "SELECT ... FROM account_settings WHERE account_id = $1";
                 let res: Option<PostgresAccountSettingsRow> = sqlx::query_as(query)
                     .bind(uid)
                     .fetch_optional(conn)
@@ -63,8 +59,6 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
             })
         })
         .await?;
-        let settings = row.map(AccountSettings::try_from).transpose()?;
-
         let settings = row.map(AccountSettings::try_from).transpose()?;
 
         // 3. WRITE-THROUGH

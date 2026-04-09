@@ -8,7 +8,7 @@ mod tests {
     use shared_kernel::domain::value_objects::{AccountId, RegionCode};
     use shared_kernel::errors::DomainError;
     use shared_kernel::domain::transaction::StubTxManager;
-    use crate::application::settings::change_region::{ChangeRegionCommand, ChangeRegionUseCase};
+    use crate::application::use_cases::settings::change_region::{ChangeRegionCommand, ChangeRegionUseCase};
     use crate::domain::repositories::{AccountIdentityRepositoryStub};
 
     fn setup() -> (
@@ -101,7 +101,7 @@ mod tests {
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
 
-        account_repo.add_account(AccountIdentity::builder(account_id.clone(), region.clone(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
+        account_repo.insert(AccountIdentity::builder(account_id.clone(), region.clone(), Email::try_new("e@e.com").unwrap(), ExternalId::from_raw("x")).build());
 
         // Simulation d'une erreur fatale lors de l'écriture de l'outbox
         *outbox_repo.force_error.lock().unwrap() = Some(DomainError::Internal("Transaction fail".into()));

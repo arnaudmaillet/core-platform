@@ -169,7 +169,7 @@ impl AccountMetadata {
         Ok(self.trust_score != previous_score || shadowban_triggered)
     }
 
-    pub fn shadowban(&mut self, reason: String) -> Result<bool> {
+    pub fn shadowban(&mut self, reason: &str) -> Result<bool> {
         if !self.is_shadowbanned {
             self.apply_shadowban(reason);
             return Ok(true);
@@ -177,7 +177,7 @@ impl AccountMetadata {
         Ok(false)
     }
 
-    pub fn lift_shadowban(&mut self, reason: String) -> Result<bool> {
+    pub fn lift_shadowban(&mut self, reason: &str) -> Result<bool> {
         if self.is_shadowbanned {
             self.is_shadowbanned = false;
             self.apply_moderation_change(format!("Shadowban lifted: {}", reason));

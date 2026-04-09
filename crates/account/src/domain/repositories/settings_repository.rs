@@ -40,6 +40,6 @@ pub trait AccountSettingsRepository: Send + Sync {
         &self,
         account_id: &AccountId,
         token: &PushToken,
-        tx: Option<&mut dyn Transaction>,
+        mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
 }
