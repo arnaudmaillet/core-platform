@@ -22,7 +22,7 @@ impl UpdatePreferencesUseCase {
     }
 
     async fn try_execute_once(&self, ctx: &AccountContext, cmd: &UpdatePreferencesCommand) -> Result<AccountSettings> {
-        ctx.ensure_id(&cmd.account_id);
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_settings = ctx.settings().await?;
         let mut settings = original_settings.clone();

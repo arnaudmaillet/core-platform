@@ -37,7 +37,7 @@ pub enum LocationEvent {
 }
 
 impl DomainEvent for LocationEvent {
-    fn event_type(&self) -> Cow<'_, str> {
+    fn event_name(&self) -> Cow<'_, str> {
         match self {
             Self::PositionUpdated { .. } => Cow::Borrowed("location.updated"),
             Self::LocationPrivacyChanged { .. } => Cow::Borrowed("location.privacy.changed"),

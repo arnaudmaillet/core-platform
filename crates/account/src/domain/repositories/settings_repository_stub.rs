@@ -1,13 +1,12 @@
 // crates/account/src/domain/repositories/stubs/account_settings_repository_stub.rs
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::AccountId;
-use shared_kernel::domain::value_objects::{PushToken, Timezone};
 use shared_kernel::errors::{DomainError, Result};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::domain::account::entities::AccountSettings;
 use crate::domain::repositories::AccountSettingsRepository;
@@ -25,7 +24,7 @@ impl AccountSettingsRepositoryStub {
 
     // --- Helpers pour l'Arrange (Setup) ---
 
-    pub fn add_settings(&self, settings: AccountSettings) {
+    pub fn insert(&self, settings: AccountSettings) {
         let mut map = self.settings_map.lock().expect("Lock failed");
         map.insert(settings.account_id().clone(), settings);
     }
@@ -38,7 +37,11 @@ impl AccountSettingsRepositoryStub {
     // --- Helpers pour l'Assert (Vérification) ---
 
     pub fn find_by_id(&self, id: &AccountId) -> Option<AccountSettings> {
-        self.settings_map.lock().expect("Lock failed").get(id).cloned()
+        self.settings_map
+            .lock()
+            .expect("Lock failed")
+            .get(id)
+            .cloned()
     }
 
     pub fn count(&self) -> usize {
@@ -85,8 +88,10 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
 
         match original {
             Some(orig) => {
-                let current = map.get(account_id).ok_or_else(|| self.not_found(account_id))?;
-                
+                let current = map
+                    .get(account_id)
+                    .ok_or_else(|| self.not_found(account_id))?;
+
                 if current.version() != orig.version() {
                     return Err(DomainError::ConcurrencyConflict {
                         reason: format!(
@@ -110,57 +115,5 @@ impl AccountSettingsRepository for AccountSettingsRepositoryStub {
 
         map.insert(account_id.clone(), settings.clone());
         Ok(())
-    }
-
-    async fn update_timezone(
-        &self,
-        account_id: &AccountId,
-        timezone: &Timezone,
-        _tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        self.check_error()?;
-        let mut map = self.settings_map.lock().expect("Lock failed");
-
-        if let Some(settings) = map.get_mut(account_id) {
-            settings.update_timezone(timezone.clone())?;
-            Ok(())
-        } else {
-            Err(self.not_found(account_id))
-        }
-    }
-
-    async fn add_push_token(
-        &self,
-        account_id: &AccountId,
-        token: &PushToken,
-        _tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        self.check_error()?;
-        let mut map = self.settings_map.lock().expect("Lock failed");
-
-        if let Some(settings) = map.get_mut(account_id) {
-            // Note: On utilise le clone ici car l'interface attend une valeur
-            settings.add_push_token(token.clone())?;
-            Ok(())
-        } else {
-            Err(self.not_found(account_id))
-        }
-    }
-
-    async fn remove_push_token(
-        &self,
-        account_id: &AccountId,
-        token: &PushToken,
-        _tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        self.check_error()?;
-        let mut map = self.settings_map.lock().expect("Lock failed");
-
-        if let Some(settings) = map.get_mut(account_id) {
-            settings.remove_push_token(token)?;
-            Ok(())
-        } else {
-            Err(self.not_found(account_id))
-        }
     }
 }

@@ -3,29 +3,15 @@ mod tests {
     use crate::application::use_cases::settings::change_birth_date::{
         ChangeBirthDateCommand, ChangeBirthDateUseCase,
     };
+    use crate::application::utils::TestFixture;
     use crate::domain::account::entities::AccountIdentity;
-    use crate::domain::repositories::AccountIdentityRepositoryStub;
+
+    use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{BirthDate, Email, ExternalId};
     use chrono::{TimeZone, Utc};
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode, Username};
+    use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::DomainError;
-    use std::sync::Arc;
-
-    fn setup() -> (
-        ChangeBirthDateUseCase,
-        Arc<AccountIdentityRepositoryStub>,
-        Arc<OutboxRepositoryStub>,
-    ) {
-        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
-        let outbox_repo = Arc::new(OutboxRepositoryStub::new());
-        let tx_manager = Arc::new(StubTxManager);
-        let use_case =
-            ChangeBirthDateUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
-        (use_case, account_repo, outbox_repo)
-    }
 
     fn adult_birth_date() -> BirthDate {
         let date = Utc
@@ -35,17 +21,16 @@ mod tests {
         BirthDate::try_new(date).unwrap()
     }
 
-    // --- CAS 1 : SUCCÈS (HAPPY PATH) ---
     #[tokio::test]
     async fn test_change_birth_date_success() {
-        let (use_case, account_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let f = TestFixture::new(ChangeBirthDateUseCase::new);
+        let account_id = f.account_id();
+        let region = f.region();
 
-        account_repo.insert(
+        f.identity_repo().insert(
             AccountIdentity::builder(
-                account_id.clone(),
-                region.clone(),
+                account_id,
+                region,
                 Email::try_new("alex@test.com").unwrap(),
                 ExternalId::from_raw("ext_1"),
             )
@@ -59,64 +44,37 @@ mod tests {
         let new_date = BirthDate::try_new(date_raw).unwrap();
 
         let cmd = ChangeBirthDateCommand {
-            account_id: account_id.clone(),
+            account_id,
             birth_date: new_date.clone(),
         };
 
         // 1. On vérifie que execute renvoie Ok(true)
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(result.is_ok());
         let updated_account = result.unwrap();
         assert_eq!(updated_account.birth_date(), Some(&new_date));
 
         // 2. Vérifier la persistance
-        let saved = account_repo
-            .identity_map
-            .lock()
-            .unwrap()
-            .get(&account_id)
-            .cloned()
-            .unwrap();
+        let saved = f
+            .identity_repo()
+            .find_by_id(&account_id)
+            .expect("Should exist");
 
         assert_eq!(saved.birth_date(), Some(&new_date));
         assert_eq!(saved.version(), 2);
-        let events = outbox_repo.saved_events.lock().unwrap();
-        assert_eq!(events.len(), 1);
-    }
-
-    // --- CAS 2 : ERREUR DE RÉGION (SÉCURITÉ SHARD) ---
-    #[tokio::test]
-    async fn test_change_birth_date_fails_on_region_mismatch() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-
-        account_repo.insert(
-            AccountIdentity::builder(
-                account_id.clone(),
-                RegionCode::from_raw("eu"),
-                Email::try_new("alex@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
+        assert_eq!(
+            f.outbox_repo().count(),
+            1,
+            "Un événement AccountEvent::BIRTH_DATE_CHANGED attendu"
         );
-
-        let cmd = ChangeBirthDateCommand {
-            account_id,
-            birth_date: adult_birth_date(),
-        };
-
-        let result = use_case.execute(cmd).await;
-
-        // L'entité renvoie Forbidden en cas de mismatch de région
-        assert!(matches!(result, Err(DomainError::Forbidden { .. })));
+        assert!(f.outbox_events().contains(&AccountEvent::BIRTH_DATE_CHANGED.to_string()));
     }
 
-    // --- CAS 3 : IDEMPOTENCE (AUCUN CHANGEMENT) ---
     #[tokio::test]
     async fn test_change_birth_date_idempotency() {
-        let (use_case, account_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let f = TestFixture::new(ChangeBirthDateUseCase::new);
+        let account_id = f.account_id();
+        let region = f.region();
         let date = BirthDate::try_new(
             Utc.with_ymd_and_hms(1990, 1, 1, 0, 0, 0)
                 .unwrap()
@@ -125,30 +83,30 @@ mod tests {
         .unwrap();
 
         // 1. On crée le compte via le builder (Version 1)
-        let mut account = AccountIdentity::builder(
-            account_id.clone(),
-            region.clone(),
+        let mut identity = AccountIdentity::builder(
+            account_id,
+            region,
             Email::try_new("alex@test.com").unwrap(),
             ExternalId::from_raw("ext_1"),
         )
         .build();
 
         // 2. On applique le changement initial (Version passe de 1 à 2)
-        account.change_birth_date(date.clone()).unwrap();
+        identity.change_birth_date(date.clone()).unwrap();
 
         // On vide les événements générés par ce premier changement pour ne pas polluer le test
-        account.pull_events();
+        identity.pull_events();
 
-        let version_after_setup = account.version(); // Ceci sera 2
-        account_repo.insert(account);
+        let version_after_setup = identity.version(); // Ceci sera 2
+        f.identity_repo().insert(identity);
 
         let cmd = ChangeBirthDateCommand {
-            account_id: account_id.clone(),
+            account_id,
             birth_date: date,
         };
 
         // 3. Act : Le Use Case s'exécute
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(result.is_ok());
 
         let returned_account = result.unwrap();
@@ -162,84 +120,82 @@ mod tests {
         );
 
         // 5. Assert : Rien en DB ne doit avoir changé
-        let saved_in_db = account_repo
-            .identity_map
-            .lock()
-            .unwrap()
-            .get(&account_id)
-            .cloned()
-            .unwrap();
-        assert_eq!(saved_in_db.version(), version_after_setup);
+        let saved = f
+            .identity_repo()
+            .find_by_id(&account_id)
+            .expect("Should exist");
+        assert_eq!(saved.version(), version_after_setup);
 
         // 6. Assert : Aucun nouvel événement
-        let events = outbox_repo.saved_events.lock().unwrap();
-        assert_eq!(events.len(), 0);
+        assert_eq!(
+            f.outbox_repo().count(),
+            0,
+            "Aucun evewnement attendu"
+        );
     }
 
-    // --- CAS 4 : WORST CASE - COMPTE BLOQUÉ/BANNI ---
     #[tokio::test]
     async fn test_change_birth_date_forbidden_when_banned() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let f = TestFixture::new(ChangeBirthDateUseCase::new);
+        let account_id = f.account_id();
+        let region = f.region();
 
-        let mut account = AccountIdentity::builder(
-            account_id.clone(),
-            region.clone(),
+        let mut identity = AccountIdentity::builder(
+            account_id,
+            region,
             Email::try_new("h@k.com").unwrap(),
             ExternalId::from_raw("ext"),
         )
         .build();
 
-        account.ban("Abuse".into()).unwrap();
-        account_repo.insert(account);
+        identity.ban("Abuse".into()).unwrap();
+        f.identity_repo().insert(identity);
 
         let cmd = ChangeBirthDateCommand {
             account_id,
             birth_date: adult_birth_date(),
         };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
     }
 
-    // --- CAS 5 : WORST CASE - COMPTE INEXISTANT ---
     #[tokio::test]
     async fn test_change_birth_date_not_found() {
-        let (use_case, _, _) = setup();
+        let f = TestFixture::new(ChangeBirthDateUseCase::new);
+        let account_id = f.account_id();
         let cmd = ChangeBirthDateCommand {
-            account_id: AccountId::new(),
+            account_id,
             birth_date: adult_birth_date(),
         };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(matches!(
             result,
             Err(DomainError::NotFound {
-                entity: "Account",
+                entity: "AccountIdentity",
                 ..
             })
         ));
     }
 
-    // --- CAS 6 : CONCURRENCE EXTRÊME ---
     #[tokio::test]
     async fn test_worst_case_concurrency_exhaustion() {
-        let (use_case, account_repo, _) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let f = TestFixture::new(ChangeBirthDateUseCase::new);
+        let account_id = f.account_id();
+        let region = f.region();
 
-        account_repo.insert(
+        f.identity_repo().insert(
             AccountIdentity::builder(
-                account_id.clone(),
-                region.clone(),
+                account_id,
+                region,
                 Email::try_new("a@b.com").unwrap(),
                 ExternalId::from_raw("ext"),
             )
             .build(),
         );
 
-        *account_repo.error_to_return.lock().unwrap() = Some(DomainError::ConcurrencyConflict {
+        f.identity_repo().set_error(DomainError::ConcurrencyConflict {
             reason: "Always failing".into(),
         });
 
@@ -248,10 +204,37 @@ mod tests {
             birth_date: adult_birth_date(),
         };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(matches!(
             result,
             Err(DomainError::ConcurrencyConflict { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() {
+        let f = TestFixture::new(ChangeBirthDateUseCase::new);
+        let account_id = f.account_id();
+        let wrong_region = RegionCode::from_raw("us");
+
+        // On simule une donnée en base qui appartient aux "us"
+        // alors que notre contexte est "eu"
+        f.identity_repo().insert(
+            AccountIdentity::builder(
+                account_id,
+                wrong_region,
+                Email::try_new("hacker@test.com").unwrap(),
+                ExternalId::from_raw("ext_1"),
+            )
+            .build(),
+        );
+        let cmd = ChangeBirthDateCommand {
+            account_id,
+            birth_date: adult_birth_date(),
+        };
+
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
+
+        assert!(matches!(result, Err(DomainError::NotFound { .. })));
     }
 }

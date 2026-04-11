@@ -4,13 +4,15 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::account::builders::AccountIdentityBuilder;
     use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
     use chrono::Utc;
     use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::DomainError;
 
     #[tokio::test]
-    async fn test_reactivate_account_success() {
+    async fn test_activate_account_success() {
         let f = TestFixture::new(ActivateUseCase::new);
         let account_id = f.account_id();
         let region = f.region();
@@ -31,9 +33,7 @@ mod tests {
 
         f.identity_repo().insert(identity);
 
-        let cmd = ActivateCommand {
-            account_id,
-        };
+        let cmd = ActivateCommand { account_id };
 
         // 2. Act
         let result = f.use_case().execute(&f.ctx(), cmd).await;
@@ -53,15 +53,12 @@ mod tests {
         assert_eq!(*saved.state(), AccountState::Active);
 
         // 5. Outbox
-        assert_eq!(
-            f.outbox_count(),
-            1,
-            "Un événement Activate attendu"
-        );
+        assert_eq!(f.outbox_repo().count(), 1, "Un événement AccountEvent::ACTIVATED attendu");
+        assert!(f.outbox_events().contains(&AccountEvent::ACTIVATED.to_string()));
     }
 
     #[tokio::test]
-    async fn test_reactivate_idempotency() {
+    async fn test_activate_idempotency() {
         let f = TestFixture::new(ActivateUseCase::new);
         let account_id = f.account_id();
         let region = f.region();
@@ -87,7 +84,7 @@ mod tests {
         f.identity_repo().insert(identity);
 
         let cmd = ActivateCommand {
-            account_id: account_id.clone(),
+            account_id,
         };
 
         // 2. Act
@@ -101,11 +98,15 @@ mod tests {
         assert_eq!(returned.version(), 1);
 
         // 4. Outbox
-        assert_eq!(f.outbox_count(), 0, "Idempotence : aucun événement produit");
+        assert_eq!(
+            f.outbox_repo().count(),
+            0,
+            "Idempotence : aucun événement produit"
+        );
     }
 
     #[tokio::test]
-    async fn test_reactivate_forbidden_if_banned() {
+    async fn test_activate_forbidden_if_banned() {
         let f = TestFixture::new(ActivateUseCase::new);
         let account_id = f.account_id();
         let region = f.region();
@@ -133,15 +134,14 @@ mod tests {
     async fn test_region_mismatch_returns_not_found() {
         let f = TestFixture::new(ActivateUseCase::new);
         let account_id = f.account_id();
-        let region = f.region();
-
+        let wrong_region = RegionCode::from_raw("us");
 
         // On simule une donnée en base qui appartient aux "us"
         // alors que notre contexte est "eu"
         f.identity_repo().insert(
             AccountIdentity::builder(
                 account_id,
-                region,
+                wrong_region,
                 Email::try_new("hacker@test.com").unwrap(),
                 ExternalId::from_raw("ext_1"),
             )

@@ -63,7 +63,7 @@ impl ResolveIdentityUseCase {
         // 4. Récupération des métadonnées (Rôles, Beta, etc.)
         let metadata = self
             .metadata_repo
-            .fetch_by_account_id(&account_id)
+            .fetch_by_account_id(&account_id, None)
             .await?
             .ok_or_else(|| {
                 DomainError::Internal(format!(

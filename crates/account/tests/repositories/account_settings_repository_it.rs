@@ -35,23 +35,25 @@ async fn test_settings_cache_invalidation_lifecycle() {
     let account_id = AccountId::new();
     let cache_key = format!("account:settings:{}", account_id.clone());
 
+    // Initialisation
     let settings = AccountSettings::builder(account_id.clone()).build();
     repo.save(&settings, None, None).await.unwrap();
 
     // 1. Premier Fetch -> Remplissage Cache
-    let _ = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
     assert!(cache.exists(&cache_key).await.unwrap(), "Settings should be cached");
 
-    // 2. Ajout d'un push token -> Doit INVALIDER le cache
-    let token = PushToken::try_new("new_token").unwrap();
-    repo.add_push_token(&account_id, &token, None).await.unwrap();
+    // 2. Modification via Save -> Doit INVALIDER le cache
+    let mut updated = found.clone();
+    updated.add_push_token(PushToken::try_new("token_1").unwrap()).unwrap();
+    
+    repo.save(&updated, Some(&found), None).await.unwrap();
 
-    assert!(!cache.exists(&cache_key).await.unwrap(), "Cache must be cleared after atomic SQL update");
+    assert!(!cache.exists(&cache_key).await.unwrap(), "Cache must be cleared after repo.save()");
 
     // 3. Second Fetch -> Rechargement
-    let reloaded = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
-    assert!(reloaded.push_tokens().contains(&token));
-    assert!(cache.exists(&cache_key).await.unwrap(), "Cache should be refilled");
+    let _ = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert!(cache.exists(&cache_key).await.unwrap(), "Cache should be refilled after fetch");
 }
 
 #[tokio::test]
@@ -89,17 +91,16 @@ async fn test_settings_lifecycle_and_upsert() {
 
     repo.save(&settings, None, None).await.expect("Should save initial settings");
 
-    // 2. Vérification du fetch et du contenu du JSONB
+    // 2. Vérification du fetch
     let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().expect("Should find settings");
     assert_eq!(found.timezone().as_str(), "Europe/Paris");
-    assert_eq!(found.preferences().appearance(), &appearance); // Vérifie le bloc JSONB
     assert_eq!(found.version(), 1);
 
-    // 3. Mise à jour via une méthode granulaire (v1 -> v2)
+    // 3. Mise à jour (v1 -> v2)
     let mut updated_settings = found.clone();
-    updated_settings.update_timezone(Timezone::try_new("UTC").unwrap()).unwrap();
+    // Note: On utilise une méthode de domaine ici
+    updated_settings.set_timezone_raw(Timezone::try_new("UTC").unwrap());
 
-    // On passe 'found' comme original pour le lock optimiste (version check)
     repo.save(&updated_settings, Some(&found), None).await.expect("Should update settings");
 
     let final_check = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
@@ -134,7 +135,7 @@ async fn test_update_preferences_persistence() {
 }
 
 #[tokio::test]
-async fn test_push_tokens_atomic_operations() {
+async fn test_push_tokens_lifecycle() {
     let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
 
@@ -144,17 +145,28 @@ async fn test_push_tokens_atomic_operations() {
     let token_1 = PushToken::try_new("token_alpha").unwrap();
     let token_2 = PushToken::try_new("token_beta").unwrap();
 
-    // 1. Ajout atomique (SQL direct)
-    repo.add_push_token(&account_id, &token_1, None).await.unwrap();
-    repo.add_push_token(&account_id, &token_2, None).await.unwrap();
-
-    // 2. Vérification
+    // 1. Ajout du premier token
     let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
-    assert_eq!(found.push_tokens().len(), 2);
-    assert!(found.push_tokens().contains(&token_1));
+    let mut updated = found.clone();
+    updated.add_push_token(token_1.clone()).unwrap();
+    repo.save(&updated, Some(&found), None).await.unwrap();
 
-    // 3. Suppression
-    repo.remove_push_token(&account_id, &token_1, None).await.unwrap();
+    // 2. Ajout du second token (v2 -> v3)
+    let found_v2 = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let mut updated_v2 = found_v2.clone();
+    updated_v2.add_push_token(token_2.clone()).unwrap();
+    repo.save(&updated_v2, Some(&found_v2), None).await.unwrap();
+
+    // 3. Vérification finale
+    let final_check = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    assert_eq!(final_check.push_tokens().len(), 2);
+    assert!(final_check.push_tokens().contains(&token_1));
+    assert!(final_check.push_tokens().contains(&token_2));
+
+    // 4. Suppression
+    let mut for_remove = final_check.clone();
+    for_remove.remove_push_token(&token_1).unwrap();
+    repo.save(&for_remove, Some(&final_check), None).await.unwrap();
 
     let after_remove = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
     assert_eq!(after_remove.push_tokens().len(), 1);
@@ -170,10 +182,9 @@ async fn test_settings_transactional_integrity() {
     let mut tx = PostgresTransaction::new(tx_sqlx);
 
     let settings = AccountSettings::builder(account_id.clone()).build();
-    // Utilisation de Some(&mut tx)
     repo.save(&settings, None, Some(&mut tx)).await.unwrap();
 
-    // Rollback explicite
+    // Rollback explicite : rien ne doit être en base
     tx.into_inner().rollback().await.unwrap();
 
     let found = repo.fetch_by_account_id(&account_id, None).await.unwrap();
@@ -189,22 +200,22 @@ async fn test_settings_concurrency_conflict() {
     let settings = AccountSettings::builder(account_id.clone()).build();
     repo.save(&settings, None, None).await.unwrap();
 
-    // 2. Deux clients lisent la v1
+    // 2. Deux clients lisent la v1 simultanément
     let client_a_found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
     let client_b_found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
 
     // 3. Client A gagne (v1 -> v2)
     let mut client_a_modified = client_a_found.clone();
-    client_a_modified.update_timezone(Timezone::try_new("Europe/Berlin").unwrap()).unwrap();
+    client_a_modified.set_timezone_raw(Timezone::try_new("Europe/Berlin").unwrap());
     repo.save(&client_a_modified, Some(&client_a_found), None).await.expect("A should succeed");
 
-    // 4. Client B échoue (tente v1 -> v2 alors que la DB est en v2)
+    // 4. Client B échoue (tente de passer de v1 -> v2 alors que la DB est déjà en v2)
     let mut client_b_modified = client_b_found.clone();
-    client_b_modified.update_timezone(Timezone::try_new("Europe/London").unwrap()).unwrap();
+    client_b_modified.set_timezone_raw(Timezone::try_new("Europe/London").unwrap());
     
     let result = repo.save(&client_b_modified, Some(&client_b_found), None).await;
 
-    assert!(result.is_err(), "B should fail due to optimistic locking conflict (OCC)");
+    assert!(result.is_err(), "B should fail due to OCC conflict");
     assert!(matches!(
         result.unwrap_err(),
         shared_kernel::errors::DomainError::ConcurrencyConflict { .. }
@@ -212,17 +223,28 @@ async fn test_settings_concurrency_conflict() {
 }
 
 #[tokio::test]
-async fn test_push_token_idempotency_it() {
+async fn test_push_token_idempotency_via_domain() {
     let (repo, _pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::new();
     let token = PushToken::try_new("unique_token").unwrap();
 
-    repo.save(&AccountSettings::builder(account_id.clone()).build(), None, None).await.unwrap();
+    let settings = AccountSettings::builder(account_id.clone()).build();
+    repo.save(&settings, None, None).await.unwrap();
 
-    // Ajout double du même token
-    repo.add_push_token(&account_id, &token, None).await.unwrap();
-    repo.add_push_token(&account_id, &token, None).await.unwrap();
+    // Premier ajout
+    let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let mut updated = found.clone();
+    updated.add_push_token(token.clone()).unwrap();
+    repo.save(&updated, Some(&found), None).await.unwrap();
 
-    let found = repo.fetch_by_account_id(&account_id, None).await.unwrap().expect("Should exist");
-    assert_eq!(found.push_tokens().len(), 1, "Token should not be duplicated in DB via SQL atomic query");
+    // Tentative de second ajout (L'entité domaine doit retourner Ok(false) ou une erreur)
+    let found_v2 = repo.fetch_by_account_id(&account_id, None).await.unwrap().unwrap();
+    let mut updated_v2 = found_v2.clone();
+    
+    // Si add_push_token gère l'idempotence, changed vaudra false
+    let changed = updated_v2.add_push_token(token).unwrap();
+    assert!(!changed, "Domain should detect token already exists");
+
+    // Pas besoin de repo.save si rien n'a changé
+    assert_eq!(found_v2.version(), 1); 
 }

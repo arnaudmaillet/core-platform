@@ -23,7 +23,7 @@ impl BanUseCase {
     }
 
     async fn try_execute_once(&self, ctx: &AccountContext, cmd: &BanCommand) -> Result<AccountIdentity> {
-        ctx.ensure_id(&cmd.account_id);
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_identity = ctx.identity().await?;
         let mut identity = original_identity.clone();

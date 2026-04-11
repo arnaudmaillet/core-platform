@@ -18,7 +18,7 @@ impl TransactionManager for StubTxManager {
         >,
     ) -> Pin<Box<dyn Future<Output =crate::errors::Result<()>> + Send + 'a>> {
         // On crée l'instance ici pour qu'elle soit trouvée dans le scope
-        let tx = Box::new(FakeTransaction);
+        let tx = Box::new(FakeTransaction::new());
         Box::pin(async move { f(tx).await })
     }
 }

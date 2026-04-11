@@ -3,7 +3,7 @@ mod tests {
     use crate::domain::account::entities::{AccountSettings, AccountPreferences};
     use crate::domain::preferences::models::{
         AppearancePreferences, NotificationPreferences,
-        PrivacyPreferences, ThemeMode,
+        PrivacyPreferences,
     };
     use chrono::Utc;
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
@@ -31,32 +31,41 @@ mod tests {
     #[test]
     fn test_timezone_update_idempotency() {
         let mut settings = create_test_settings();
+        let region = RegionCode::try_new("eu").unwrap(); // On définit une région cohérente
         let new_tz = Timezone::try_new("Europe/Paris").unwrap();
 
-        // 1. Plus de paramètre &region
-        let changed = settings.update_timezone(new_tz.clone()).unwrap();
+        // 1. Premier passage : on fournit la région
+        let changed = settings.update_timezone(new_tz.clone(), &region).unwrap();
         assert!(changed);
+        // On vérifie qu'un événement a été généré
         assert_eq!(settings.metadata_mut().pull_events().len(), 1);
 
-        // 2. Idempotence
-        let changed_again = settings.update_timezone(new_tz).unwrap();
+        // 2. Idempotence : même valeur + même région
+        let changed_again = settings.update_timezone(new_tz, &region).unwrap();
         assert!(!changed_again);
+        // Aucun nouvel événement ne doit être présent
+        assert_eq!(settings.metadata_mut().pull_events().len(), 0);
     }
 
     #[test]
     fn test_push_token_fifo_rotation() {
         let mut settings = create_test_settings();
 
+        // 1. On utilise des tokens d'au moins 8 caractères
         for i in 0..10 {
-            let token = PushToken::try_new(format!("token_{}", i)).unwrap();
+            // "push_token_0" fait 12 caractères -> OK
+            let token = PushToken::try_new(format!("push_token_{}", i)).unwrap();
             settings.add_push_token(token).unwrap();
         }
 
-        let token_11 = PushToken::try_new("token_11_v").unwrap();
+        // 2. On vérifie la rotation avec un 11ème token
+        let token_11 = PushToken::try_new("push_token_11").unwrap();
         settings.add_push_token(token_11).unwrap();
 
+        // 3. Assertions
         assert_eq!(settings.push_tokens().len(), 10);
-        assert_eq!(settings.push_tokens()[0].as_str(), "token_1");
+        // Le premier inséré ("push_token_0") doit avoir disparu, le nouveau index 0 est "push_token_1"
+        assert_eq!(settings.push_tokens()[0].as_str(), "push_token_1");
     }
 
     #[test]

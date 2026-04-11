@@ -1,13 +1,15 @@
 use crate::domain::account::builders::AccountSettingsBuilder;
-use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use crate::domain::events::AccountEvent;
+use crate::domain::preferences::models::{
+    AppearancePreferences, NotificationPreferences, PrivacyPreferences,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::EntityMetadata;
 use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
-use shared_kernel::errors::Result;
+use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
+use shared_kernel::errors::{DomainError, Result};
 
 /// Cette struct représente exactement le contenu de la colonne JSONB 'settings'
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -46,7 +48,7 @@ impl AccountPreferences {
     }
 
     // --- SETTERS / UPDATERS (Accès en écriture avec logique) ---
-    
+
     /// Met à jour la confidentialité et retourne true si une modification a eu lieu
     pub fn update_privacy(&mut self, new_privacy: PrivacyPreferences) -> bool {
         if self.privacy == new_privacy {
@@ -127,21 +129,40 @@ impl AccountSettings {
     }
 
     /// Met à jour la timezone avec un événement spécifique
-    pub fn update_timezone(&mut self, new_tz: Timezone) -> Result<bool> {
+    pub fn update_timezone(&mut self, new_tz: Timezone, region: &RegionCode) -> Result<bool> {
         if self.timezone == new_tz {
             return Ok(false);
         }
 
-        self.timezone = new_tz.clone();
+        if !new_tz.is_compatible_with(region) {
+        return Err(DomainError::Validation {
+            field: "timezone".into(),
+            reason: format!(
+                "Timezone '{}' is geographically inconsistent with region '{}'",
+                new_tz, region
+            ),
+        });
+    }
+
+        self.timezone = new_tz;
         self.apply_change();
 
-        self.push_event(Box::new(AccountEvent::TimezoneChanged {
+        self.push_event(Box::new(AccountEvent::TimezoneUpdated {
             account_id: self.account_id.clone(),
-            new_timezone: new_tz,
+            new_timezone: self.timezone.clone(),
             occurred_at: self.updated_at,
         }));
 
         Ok(true)
+    }
+
+    pub fn set_timezone_raw(&mut self, new_tz: Timezone) -> bool {
+        if self.timezone == new_tz {
+            return false;
+        }
+        self.timezone = new_tz;
+        self.apply_change();
+        true
     }
 
     /// Ajoute un token avec événement spécifique et rotation FIFO
@@ -187,18 +208,16 @@ impl AccountSettings {
         Ok(true)
     }
 
-    
     pub fn update_notifications_preferences(
         &mut self,
         new_prefs: NotificationPreferences,
     ) -> Result<bool> {
-
         if !self.preferences.update_notifications(new_prefs.clone()) {
             return Ok(false);
         }
         self.apply_change();
 
-        self.push_event(Box::new(AccountEvent::NotificationsPreferencesChanged {
+        self.push_event(Box::new(AccountEvent::NotificationsPreferencesUpdated {
             account_id: self.account_id.clone(),
             new_preferences: new_prefs,
             occurred_at: self.updated_at,
@@ -216,7 +235,7 @@ impl AccountSettings {
         }
         self.apply_change();
 
-        self.push_event(Box::new(AccountEvent::AppearancePreferencesChanged {
+        self.push_event(Box::new(AccountEvent::AppearancePreferencesUpdated {
             account_id: self.account_id.clone(),
             new_preferences: new_prefs,
             occurred_at: self.updated_at,
@@ -225,16 +244,13 @@ impl AccountSettings {
         Ok(true)
     }
 
-    pub fn update_privacy_preferences(
-        &mut self,
-        new_prefs: PrivacyPreferences,
-    ) -> Result<bool> {
+    pub fn update_privacy_preferences(&mut self, new_prefs: PrivacyPreferences) -> Result<bool> {
         if !self.preferences.update_privacy(new_prefs.clone()) {
             return Ok(false);
         }
         self.apply_change();
 
-        self.push_event(Box::new(AccountEvent::PrivacyPreferencesChanged {
+        self.push_event(Box::new(AccountEvent::PrivacyPreferencesUpdated {
             account_id: self.account_id.clone(),
             new_preferences: new_prefs,
             occurred_at: self.updated_at,

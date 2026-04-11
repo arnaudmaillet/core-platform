@@ -31,18 +31,13 @@ impl ActivateUseCase {
         ctx: &AccountContext,
         cmd: &ActivateCommand,
     ) -> Result<AccountIdentity> {
-        ctx.ensure_id(&cmd.account_id);
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_identity = ctx.identity().await?;
 
         let mut identity = original_identity.clone();
         if !identity.activate()? {
             return Ok(original_identity);
-        }
-
-        let events = identity.pull_events();
-        if events.is_empty() {
-            return Ok(identity);
         }
 
         let pulled_events = identity.pull_events();

@@ -129,10 +129,7 @@ impl AccountIdentity {
 
     /// Lie une identité externe (ex: Cognito sub) au compte utilisateur.
     /// Cette opération est critique pour la sécurité.
-    pub fn link_external_identity(
-        &mut self,
-        new_external_id: ExternalId,
-    ) -> Result<bool> {
+    pub fn link_external_identity(&mut self, new_external_id: ExternalId) -> Result<bool> {
         if self.external_id == new_external_id {
             return Ok(false);
         }
@@ -209,10 +206,7 @@ impl AccountIdentity {
     // GESTION DU TÉLÉPHONE (MFA / NOTIFICATIONS)
     // ==========================================
 
-    pub fn change_phone_number(
-        &mut self,
-        new_phone: PhoneNumber,
-    ) -> Result<bool> {
+    pub fn change_phone_number(&mut self, new_phone: PhoneNumber) -> Result<bool> {
         if self.phone_number.as_ref() == Some(&new_phone) {
             return Ok(false);
         }
@@ -284,7 +278,7 @@ impl AccountIdentity {
         self.locale = new_locale;
         self.apply_change();
 
-        self.push_event(Box::new(AccountEvent::LocaleChanged {
+        self.push_event(Box::new(AccountEvent::LocaleUpdated {
             account_id: self.account_id.clone(),
             new_locale: self.locale.clone(),
             occurred_at: self.updated_at,

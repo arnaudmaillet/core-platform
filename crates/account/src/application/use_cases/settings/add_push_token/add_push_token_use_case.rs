@@ -14,7 +14,11 @@ impl AddPushTokenUseCase {
         Self
     }
 
-    pub async fn execute(&self, ctx: &AccountContext, cmd: AddPushTokenCommand) -> Result<AccountSettings> {
+    pub async fn execute(
+        &self,
+        ctx: &AccountContext,
+        cmd: AddPushTokenCommand,
+    ) -> Result<AccountSettings> {
         // En Hyperscale, les conflits de tokens sont rares mais possibles si
         // l'utilisateur se connecte sur deux devices en même temps.
         with_retry(RetryConfig::default(), || async {
@@ -23,8 +27,12 @@ impl AddPushTokenUseCase {
         .await
     }
 
-    async fn try_execute_once(&self, ctx: &AccountContext, cmd: &AddPushTokenCommand) -> Result<AccountSettings> {
-        ctx.ensure_id(&cmd.account_id);
+    async fn try_execute_once(
+        &self,
+        ctx: &AccountContext,
+        cmd: &AddPushTokenCommand,
+    ) -> Result<AccountSettings> {
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_settings = ctx.settings().await?;
         let mut settings = original_settings.clone();
@@ -41,10 +49,10 @@ impl AddPushTokenUseCase {
         let events: Vec<&dyn DomainEvent> = pulled_events.iter().map(|e| e.as_ref()).collect();
         let mut tx = ctx.begin_transaction().await?;
 
-        ctx.save_settings(&settings, Some(&original_settings), &mut *tx).await?;
+        ctx.save_settings(&settings, Some(&original_settings), &mut *tx)
+            .await?;
         ctx.outbox_repo().save_all(&mut *tx, &events).await?;
         tx.commit().await?;
-
 
         Ok(settings)
     }

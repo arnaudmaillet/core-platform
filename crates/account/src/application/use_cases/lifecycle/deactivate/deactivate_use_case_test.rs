@@ -5,8 +5,10 @@ mod tests {
     };
     use crate::application::utils::TestFixture;
     use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::DomainError;
 
     #[tokio::test]
@@ -26,9 +28,7 @@ mod tests {
             .build(),
         );
 
-        let cmd = DeactivateCommand {
-            account_id,
-        };
+        let cmd = DeactivateCommand { account_id };
 
         // 2. Act : On récupère l'Account
         let result = f.use_case().execute(&f.ctx(), cmd).await;
@@ -46,10 +46,11 @@ mod tests {
             .expect("Should exist");
         assert_eq!(saved.version(), 2);
         assert_eq!(
-            f.outbox_count(),
+            f.outbox_repo().count(),
             1,
-            "Un événement Deactivate attendu"
+            "Un événement AccountEvent::DEACTIVATED attendu"
         );
+        assert!(f.outbox_events().contains(&AccountEvent::DEACTIVATED.to_string()));
     }
 
     #[tokio::test]
@@ -70,9 +71,7 @@ mod tests {
         account.deactivate().unwrap();
         f.identity_repo().insert(account);
 
-        let cmd = DeactivateCommand {
-            account_id,
-        };
+        let cmd = DeactivateCommand { account_id };
 
         // 1. Act
         let result = f.use_case().execute(&f.ctx(), cmd).await;
@@ -92,7 +91,11 @@ mod tests {
         assert_eq!(saved.version(), 2);
 
         // Aucun événement supplémentaire
-        assert_eq!(f.outbox_count(), 0, "Idempotence : aucun événement produit");
+        assert_eq!(
+            f.outbox_repo().count(),
+            0,
+            "Idempotence : aucun événement produit"
+        );
     }
 
     #[tokio::test]
@@ -100,9 +103,7 @@ mod tests {
         let f = TestFixture::new(DeactivateUseCase::new);
         let account_id = f.account_id();
 
-        let cmd = DeactivateCommand {
-            account_id,
-        };
+        let cmd = DeactivateCommand { account_id };
 
         let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
@@ -112,13 +113,12 @@ mod tests {
     async fn test_region_mismatch_returns_not_found() {
         let f = TestFixture::new(DeactivateUseCase::new);
         let account_id = f.account_id();
-        let region = f.region();
-
+        let wrong_region = RegionCode::from_raw("us");
 
         f.identity_repo().insert(
             AccountIdentity::builder(
                 account_id,
-                region,
+                wrong_region,
                 Email::try_new("hacker@test.com").unwrap(),
                 ExternalId::from_raw("ext_1"),
             )

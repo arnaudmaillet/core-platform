@@ -1,90 +1,72 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::settings::add_push_token::{AddPushTokenCommand, AddPushTokenUseCase};
-    use crate::domain::account::entities::AccountSettings;
-    use crate::domain::repositories::AccountSettingsRepositoryStub;
+    use crate::application::use_cases::settings::add_push_token::{
+        AddPushTokenCommand, AddPushTokenUseCase,
+    };
+    use crate::application::utils::TestFixture;
+    use crate::domain::account::entities::{AccountIdentity, AccountSettings};
+    use crate::domain::events::AccountEvent;
+    use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode};
+    use shared_kernel::domain::value_objects::{PushToken, RegionCode};
     use shared_kernel::errors::DomainError;
-    use std::sync::Arc;
-
-    // Helper pour initialiser le Use Case
-    fn setup() -> (
-        AddPushTokenUseCase,
-        Arc<AccountSettingsRepositoryStub>,
-        Arc<OutboxRepositoryStub>,
-    ) {
-        let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
-        let outbox_repo = Arc::new(OutboxRepositoryStub::new());
-        let tx_manager = Arc::new(StubTxManager);
-
-        let use_case =
-            AddPushTokenUseCase::new(settings_repo.clone(), outbox_repo.clone(), tx_manager);
-
-        (use_case, settings_repo, outbox_repo)
-    }
 
     #[tokio::test]
     async fn test_success_path_full_flow() {
-        let (use_case, settings_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
+        let f: TestFixture<AddPushTokenUseCase> = TestFixture::new(AddPushTokenUseCase::new);
+        let account_id = f.account_id();
 
-        let settings = AccountSettings::builder(account_id.clone()).build();
-        settings_repo.add_settings(settings);
+        let settings = AccountSettings::builder(account_id).build();
+        f.settings_repo().insert(settings);
 
         let token = PushToken::try_new("valid_push_token_long_enough").unwrap();
         let cmd = AddPushTokenCommand {
-            account_id: account_id.clone(),
+            account_id,
             token: token.clone(),
         };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
 
         assert!(result.is_ok());
 
         // Vérifier la persistance
-        let saved = settings_repo
-            .settings_map
-            .lock()
-            .unwrap()
-            .get(&account_id)
-            .cloned()
-            .unwrap();
+        let saved = f
+            .settings_repo()
+            .find_by_id(&account_id)
+            .expect("Should exist");
         assert!(saved.push_tokens().contains(&token));
         assert_eq!(saved.version(), 2);
 
         // Vérifier l'événement Outbox
-        let events = outbox_repo.saved_events.lock().unwrap();
-        assert_eq!(events.len(), 1);
+        assert_eq!(
+            f.outbox_repo().count(),
+            1,
+            "Un événement AccountEvent::PUSH_TOKEN_ADDED attendu"
+        );
+        assert!(f.outbox_events().contains(&AccountEvent::PUSH_TOKEN_ADDED.to_string()));
     }
 
     #[tokio::test]
     async fn test_idempotency_stops_execution_early() {
-        let (use_case, settings_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::try_new("us").unwrap();
+        let f = TestFixture::new(AddPushTokenUseCase::new);
+        let account_id = f.account_id();
         let token = PushToken::try_new("idempotent_token_test_123").unwrap();
 
-        let mut settings = AccountSettings::builder(account_id.clone()).build();
+        let mut settings = AccountSettings::builder(account_id).build();
         // On simule que le token est déjà présent via l'entité directement
         settings.add_push_token(token.clone()).unwrap();
-        settings_repo.add_settings(settings);
+        f.settings_repo().insert(settings);
 
-        let cmd = AddPushTokenCommand {
-            account_id,
-            token,
-        };
+        let cmd = AddPushTokenCommand { account_id, token };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
 
         assert!(result.is_ok());
 
         // Grace au retour `false` de l'entité, le Use Case ne doit pas avoir
         // persisté d'événements dans l'outbox
         assert_eq!(
-            outbox_repo.saved_events.lock().unwrap().len(),
+            f.outbox_repo().count(),
             0,
             "L'idempotence aurait dû stopper le Use Case"
         );
@@ -92,13 +74,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_worst_case_retry_exhaustion() {
-        let (use_case, settings_repo, _) = setup();
-        let account_id = AccountId::new();
+        let f = TestFixture::new(AddPushTokenUseCase::new);
+        let account_id = f.account_id();
 
-        settings_repo
-            .add_settings(AccountSettings::builder(account_id.clone()).build());
 
-        *settings_repo.error_to_return.lock().unwrap() = Some(DomainError::ConcurrencyConflict {
+        f.settings_repo().insert(AccountSettings::builder(account_id).build());
+        f.settings_repo().set_error(DomainError::ConcurrencyConflict {
             reason: "Database high pressure".into(),
         });
 
@@ -107,7 +88,7 @@ mod tests {
             token: PushToken::try_new("retry_token_test_12345").unwrap(),
         };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
         assert!(matches!(
             result,
             Err(DomainError::ConcurrencyConflict { .. })
@@ -116,25 +97,52 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_failure_propagation() {
-        let (use_case, settings_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-
-        settings_repo
-            .add_settings(AccountSettings::builder(account_id.clone()).build());
-
+        let f = TestFixture::new(AddPushTokenUseCase::new);
+        let account_id = f.account_id();
         let error_msg = "Kafka/Outbox DB Error";
-        *outbox_repo.force_error.lock().unwrap() = Some(DomainError::Internal(error_msg.into()));
+
+        f.settings_repo().insert(AccountSettings::builder(account_id).build());
+        f.outbox_repo().set_error(DomainError::Internal(error_msg.into()));
 
         let cmd = AddPushTokenCommand {
             account_id,
             token: PushToken::try_new("token_trigger_failure_123").unwrap(),
         };
 
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(f.ctx(), cmd).await;
 
+        // 4. Assert
         assert!(result.is_err());
         if let Err(DomainError::Internal(msg)) = result {
             assert_eq!(msg, error_msg);
         }
     }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() {
+        let f = TestFixture::new(AddPushTokenUseCase::new);
+        let account_id = f.account_id();
+        let wrong_region = RegionCode::from_raw("us");
+
+        // On simule une donnée en base qui appartient aux "us"
+        // alors que notre contexte est "eu"
+        f.identity_repo().insert(
+            AccountIdentity::builder(
+                account_id,
+                wrong_region,
+                Email::try_new("hacker@test.com").unwrap(),
+                ExternalId::from_raw("ext_1"),
+            )
+            .build(),
+        );
+
+        let cmd = AddPushTokenCommand {
+            account_id,
+            token: PushToken::try_new("token_trigger_failure_123").unwrap(),
+        };
+
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
+
+        assert!(matches!(result, Err(DomainError::NotFound { .. })));
+    }  
 }

@@ -43,7 +43,7 @@ impl AccountContextFactory {
             metadata_repo,
             settings_repo,
             outbox_repo, 
-            pool,
+            Some(pool),
         )
     }
 }

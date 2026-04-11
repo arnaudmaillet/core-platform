@@ -23,7 +23,7 @@ impl ChangeRegionUseCase {
     }
 
     async fn try_execute_once(&self, ctx: &AccountContext, cmd: &ChangeRegionCommand) -> Result<AccountIdentity> {
-        ctx.ensure_id(&cmd.account_id);
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_identity = ctx.identity().await?;
         let mut identity = original_identity.clone();
@@ -40,7 +40,7 @@ impl ChangeRegionUseCase {
         let events: Vec<&dyn DomainEvent> = pulled_events.iter().map(|e| e.as_ref()).collect();
         let mut tx = ctx.begin_transaction().await?;
 
-        ctx.save_identity(&identity, Some(&original_identity), &mut *tx).await?;
+        ctx.migrate_identity_to_region(&identity, &original_identity, &mut *tx).await?;
         ctx.outbox_repo().save_all(&mut *tx, &events).await?;
         tx.commit().await?;
 

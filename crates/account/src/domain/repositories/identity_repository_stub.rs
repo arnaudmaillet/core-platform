@@ -104,9 +104,10 @@ impl AccountIdentityRepository for AccountIdentityRepositoryStub {
         &self,
         identity: &AccountIdentity,
         original: Option<&AccountIdentity>,
-        _tx: Option<&mut dyn Transaction>,
+        tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         self.check_error()?;
+        
         let mut map = self.identity_map.lock().expect("Lock failed");
         let account_id = identity.account_id();
 

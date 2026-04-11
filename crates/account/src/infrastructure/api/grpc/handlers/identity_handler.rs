@@ -109,9 +109,9 @@ impl AccountIdentityService for IdentityHandler {
         &self,
         request: Request<RegisterRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
-        let region: RegionCode = self.get_region(&request)?;
-        let command = RegisterCommand::try_from_proto(request.into_inner(), region)?;
-        let res = self.register_use_case.execute(command).await.map_grpc()?;
+        let ctx = self.get_ctx(&request)?;
+        let command = RegisterCommand::try_from_proto(request.into_inner())?;
+        let res = self.register_use_case.execute(&ctx, command).await.map_grpc()?;
         Ok(Response::new(res.into()))
     }
 

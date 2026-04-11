@@ -76,7 +76,7 @@ impl AccountContextBuilder {
             self.metadata_repo.expect("metadata_repo is required"),
             self.settings_repo.expect("settings_repo is required"),
             self.outbox_repo.expect("outbox_repo is required"),
-            self.pool.expect("pool is required"),
+            self.pool,
         )
     }
 }

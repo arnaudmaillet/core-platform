@@ -7,7 +7,7 @@ use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
 use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
+use shared_kernel::domain::value_objects::{AccountId, PushToken};
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use sqlx::PgPool;
@@ -134,94 +134,6 @@ impl AccountSettingsRepository for PostgresAccountSettingsRepository {
             .cache
             .delete(&Self::cache_key(settings.account_id()))
             .await;
-        Ok(())
-    }
-
-    async fn update_timezone(
-        &self,
-        account_id: &AccountId,
-        timezone: &Timezone,
-        mut tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        let uid = account_id.as_uuid();
-        let tz = timezone.as_str().to_string();
-
-        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
-            Box::pin(async move {
-                let query = "UPDATE account_settings
-             SET timezone = $1, version = version + 1, updated_at = NOW()
-             WHERE account_id = $2";
-                sqlx::query(query)
-                    .bind(tz)
-                    .bind(uid)
-                    .execute(conn)
-                    .await
-                    .map_domain_infra("AccountSettings: update_timezone")?;
-                Ok(())
-            })
-        })
-        .await?;
-        let _ = self.cache.delete(&Self::cache_key(account_id)).await;
-        Ok(())
-    }
-
-    async fn add_push_token(
-        &self,
-        account_id: &AccountId,
-        token: &PushToken,
-        mut tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        let uid = account_id.as_uuid();
-        let token_str = token.as_str().to_string();
-
-        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
-            Box::pin(async move {
-                let query = "UPDATE account_settings
-             SET push_tokens = ARRAY(SELECT DISTINCT unnest(array_append(push_tokens, $1))),
-                 version = version + 1,
-                 updated_at = NOW()
-             WHERE account_id = $2";
-                sqlx::query(query)
-                    .bind(token_str)
-                    .bind(uid)
-                    .execute(conn)
-                    .await
-                    .map_domain_infra("AccountSettings: add_push_token")?;
-                Ok(())
-            })
-        })
-        .await?;
-        let _ = self.cache.delete(&Self::cache_key(account_id)).await;
-        Ok(())
-    }
-
-    async fn remove_push_token(
-        &self,
-        account_id: &AccountId,
-        token: &PushToken,
-        mut tx: Option<&mut dyn Transaction>,
-    ) -> Result<()> {
-        let uid = account_id.as_uuid();
-        let token_str = token.as_str().to_string();
-
-        <dyn Transaction>::execute_on(&self.pool, tx.as_deref_mut(), |conn| {
-            Box::pin(async move {
-                let query = "UPDATE account_settings
-                         SET push_tokens = array_remove(push_tokens, $1),
-                             version = version + 1,
-                             updated_at = NOW()
-                         WHERE account_id = $2";
-                sqlx::query(query)
-                    .bind(token_str)
-                    .bind(uid)
-                    .execute(conn)
-                    .await
-                    .map_domain_infra("AccountSettings: remove_push_token")?;
-                Ok(())
-            })
-        })
-        .await?;
-        let _ = self.cache.delete(&Self::cache_key(account_id)).await;
         Ok(())
     }
 }

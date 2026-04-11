@@ -3,8 +3,10 @@ mod tests {
     use crate::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendUseCase};
     use crate::application::utils::TestFixture;
     use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::DomainError;
 
     #[tokio::test]
@@ -48,10 +50,11 @@ mod tests {
 
         // 5. Outbox
         assert_eq!(
-            f.outbox_count(),
+            f.outbox_repo().count(),
             1,
-            "Un événement AccountSuspended attendu"
+            "Un événement AccountEvent::SUSPENDED attendu"
         );
+        assert!(f.outbox_events().contains(&AccountEvent::SUSPENDED.to_string()));
     }
 
     #[tokio::test]
@@ -95,20 +98,20 @@ mod tests {
         );
 
         // 4. Outbox
-        assert_eq!(f.outbox_count(), 0, "Idempotence : aucun événement produit");
+        assert_eq!(f.outbox_repo().count(), 0, "Idempotence : aucun événement produit");
     }
 
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() {
         let f = TestFixture::new(SuspendUseCase::new);
         let account_id = f.account_id();
-        let region = f.region();
+        let wrong_region = RegionCode::from_raw("us");
         let reason = "some_reason";
 
         f.identity_repo().insert(
             AccountIdentity::builder(
                 account_id,
-                region,
+                wrong_region,
                 Email::try_new("hacker@test.com").unwrap(),
                 ExternalId::from_raw("ext_1"),
             )

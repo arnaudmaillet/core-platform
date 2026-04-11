@@ -2,161 +2,96 @@
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use tokio;
 
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::domain::value_objects::AccountId;
     use shared_kernel::errors::DomainError;
 
     use crate::application::use_cases::access_management::register::{RegisterCommand, RegisterUseCase};
+    use crate::application::utils::TestFixture;
     use crate::domain::account::entities::AccountIdentity;
-    use crate::domain::repositories::{
-        AccountIdentityRepositoryStub, AccountMetadataRepositoryStub, AccountSettingsRepositoryStub,
-    };
+    use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Email, ExternalId, IpAddr, Locale};
-
-    /// Helper pour initialiser le Use Case et ses dépendances
-    fn setup() -> (
-        RegisterUseCase,
-        Arc<AccountIdentityRepositoryStub>,
-        Arc<AccountMetadataRepositoryStub>,
-        Arc<AccountSettingsRepositoryStub>,
-        Arc<OutboxRepositoryStub>,
-    ) {
-        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
-        let metadata_repo = Arc::new(AccountMetadataRepositoryStub::new());
-        let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
-        let outbox_repo = Arc::new(OutboxRepositoryStub::new());
-        let tx_manager = Arc::new(StubTxManager);
-
-        let use_case = RegisterUseCase::new(
-            account_repo.clone(),
-            metadata_repo.clone(),
-            settings_repo.clone(),
-            outbox_repo.clone(),
-            tx_manager,
-        );
-
-        (
-            use_case,
-            account_repo,
-            metadata_repo,
-            settings_repo,
-            outbox_repo,
-        )
-    }
 
     #[tokio::test]
     async fn test_register_success() {
-        // Arrange
-        let (use_case, account_repo, metadata_repo, settings_repo, outbox_repo) = setup();
+        // 1. Setup : La fixture instancie tout le nécessaire (repos, ctx, use_case)
+        let f = TestFixture::new(RegisterUseCase::new);
+        
+        let email = Email::try_new("new-user@example.com").unwrap();
+        let region = f.region();
+        let ext_id = ExternalId::from_raw("auth0|12345");
+        let ip = IpAddr::try_new("127.0.0.1").unwrap();
 
         let command = RegisterCommand {
-            email: Email::try_new("new-user@example.com").unwrap(),
-            region: RegionCode::try_new("eu").unwrap(),
-            external_id: ExternalId::from_raw("auth0|12345"),
+            email: email.clone(),
+            region: region.clone(),
+            external_id: ext_id.clone(),
             locale: Locale::try_new("en-US").unwrap(),
-            ip_addr: IpAddr::try_new("127.0.0.1").unwrap(),
+            ip_addr: ip.clone(),
         };
 
-        // Act
-        let result = use_case.execute(command.clone()).await;
+        // 2. Act : On passe le ctx de la fixture
+        let result = f.use_case().execute(f.ctx(), command).await;
 
-        // Assert
+        // 3. Assert
         assert!(result.is_ok(), "Le register devrait réussir");
-        let account = result.unwrap();
 
-        // Vérification de la création de l'Account
-        let saved_account = account_repo
-            .identity_map
-            .lock()
-            .unwrap()
-            .get(&account.account_id())
-            .cloned()
-            .unwrap();
-        assert_eq!(
-            saved_account.email(),
-            &Email::try_new("new-user@example.com").unwrap()
-        );
-        assert_eq!(
-            saved_account.region_code(),
-            &RegionCode::try_new("eu").unwrap()
-        );
-        assert_eq!(
-            saved_account.external_id(),
-            &ExternalId::from_raw("auth0|12345")
-        );
-        assert_eq!(saved_account.locale(), &Locale::try_new("en-US").unwrap());
-        assert_eq!(saved_account.state(), &AccountState::Active);
+        let all_events = f.outbox_events();
+        let account = result.unwrap();
+        let new_id = account.account_id();
+
+        // Vérification de la création de l'AccountIdentity via le helper find_by_id
+        let saved_identity = f.identity_repo().find_by_id(new_id).expect("Identity non sauvegardée");
+        assert_eq!(saved_identity.email(), &email);
+        assert_eq!(saved_identity.region_code(), &region);
+        assert_eq!(saved_identity.external_id(), &ext_id);
+        assert_eq!(saved_identity.state(), &AccountState::Active);
 
         // Vérification de la création de l'AccountMetadata
-        let saved_metadata = metadata_repo
-            .metadata_map
-            .lock()
-            .unwrap()
-            .get(&account.account_id())
-            .cloned()
-            .unwrap();
-        assert_eq!(
-            saved_metadata.last_ip_addr(),
-            Some(&IpAddr::try_new("127.0.0.1").unwrap())
-        );
+        let saved_metadata = f.metadata_repo().find_by_id(new_id).expect("Metadata non sauvegardée");
+        assert_eq!(saved_metadata.last_ip_addr(), Some(&ip));
 
         // Vérification de la création de l'AccountSettings
-        let saved_settings = settings_repo
-            .settings_map
-            .lock()
-            .unwrap()
-            .get(&account.account_id())
-            .cloned()
-            .unwrap();
-        assert_eq!(saved_settings.account_id(), account.account_id());
+        let saved_settings = f.settings_repo().find_by_id(new_id).expect("Settings non sauvegardées");
+        assert_eq!(saved_settings.account_id(), new_id);
 
-        // Vérification de l'outbox
-        assert_eq!(
-            outbox_repo.saved_events.lock().unwrap().len(),
-            1,
-            "Un événement AccountRegistered devrait être publié"
-        );
+        // Vérification de l'outbox via le helper de la fixture
+        assert_eq!(f.outbox_repo().count(), 1, "Un événement AccountEvent::REGISTERED attendu");
+        assert!(f.outbox_events().contains(&AccountEvent::REGISTERED.to_string()));
     }
 
     #[tokio::test]
     async fn test_register_fails_if_external_id_already_exists() {
-        // Arrange
-        let (use_case, account_repo, _, _, _) = setup();
+        let f = TestFixture::new(RegisterUseCase::new);
+        let existing_ext_id = ExternalId::from_raw("duplicate_id");
 
-        let existing_id = ExternalId::from_raw("duplicate_id");
-        let region = RegionCode::try_new("eu").unwrap();
-
-        // On pré-enregistre un compte avec cet external_id
-        account_repo.insert(
+        // 1. Arrange : On pré-enregistre un compte avec cet external_id
+        f.identity_repo().insert(
             AccountIdentity::builder(
                 AccountId::new(),
-                region.clone(),
+                f.region(),
                 Email::try_new("existing@test.com").unwrap(),
-                existing_id.clone(),
+                existing_ext_id.clone(),
             )
             .build(),
         );
 
         let command = RegisterCommand {
             email: Email::try_new("new@test.com").unwrap(),
-            region: region.clone(),
-            external_id: existing_id,
+            region: f.region(),
+            external_id: existing_ext_id,
             locale: Locale::try_new("en-US").unwrap(),
             ip_addr: IpAddr::try_new("127.0.0.1").unwrap(),
         };
 
-        // Act
-        let result = use_case.execute(command).await;
+        // 2. Act
+        let result = f.use_case().execute(f.ctx(), command).await;
 
-        // Assert
+        // 3. Assert
         assert!(result.is_err());
         match result.unwrap_err() {
-            DomainError::AlreadyExists { entity, field, .. } => {
-                assert_eq!(entity, "Account");
+            DomainError::AlreadyExists { field, .. } => {
                 assert_eq!(field, "external_id");
             }
             _ => panic!("Devrait retourner une erreur AlreadyExists"),
@@ -164,23 +99,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_handles_retry_on_failure() {
-        // Ce test vérifie indirectement le with_retry en simulant une erreur passagère
-        // Pour un test pur, il faudrait un mock complexe du TxManager,
-        // mais ici on s'assure au moins de la logique de base.
-        let (use_case, _, _, _, _) = setup();
+    async fn test_register_atomic_rollback_on_outbox_failure() {
+        let f = TestFixture::new(RegisterUseCase::new);
+        
+        // 1. Arrange : On force une erreur sur l'outbox pour simuler un échec de transaction
+        f.outbox_repo().set_error(DomainError::Internal("DB Crash".into()));
 
-        // Une commande invalide qui ferait planter le builder (si validation ajoutée plus tard)
-        // ou simplement tester le comportement nominal après retry.
         let command = RegisterCommand {
-            email: Email::try_new("test@test.com").unwrap(),
-            region: RegionCode::try_new("eu").unwrap(),
-            external_id: ExternalId::from_raw("id_retry"),
+            email: Email::try_new("atomic@test.com").unwrap(),
+            region: f.region(),
+            external_id: ExternalId::from_raw("atomic_ext"),
             locale: Locale::try_new("en-US").unwrap(),
             ip_addr: IpAddr::try_new("127.0.0.1").unwrap(),
         };
 
-        let result = use_case.execute(command).await;
-        assert!(result.is_ok());
+        // 2. Act
+        let result = f.use_case().execute(f.ctx(), command).await;
+
+        // 3. Assert
+        assert!(result.is_err());
+        
+        if let Err(DomainError::Internal(msg)) = result {
+            assert_eq!(msg, "DB Crash");
+        }
     }
 }

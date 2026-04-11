@@ -27,7 +27,7 @@ impl AccountMetadataRepositoryStub {
     // --- Helpers pour l'Arrange (Préparation des tests) ---
 
     /// Injecte des données initiales dans le stub.
-    pub fn add_metadata(&self, metadata: AccountMetadata) {
+    pub fn insert(&self, metadata: AccountMetadata) {
         let mut map = self.metadata_map.lock().expect("Lock failed");
         map.insert(metadata.account_id().clone(), metadata);
     }
@@ -48,12 +48,19 @@ impl AccountMetadataRepositoryStub {
 
     /// Récupère une entité directement (pour vérification post-exécution).
     pub fn find_by_id(&self, id: &AccountId) -> Option<AccountMetadata> {
-        self.metadata_map.lock().expect("Lock failed").get(id).cloned()
+        self.metadata_map
+            .lock()
+            .expect("Lock failed")
+            .get(id)
+            .cloned()
     }
 
     /// Vérifie si une entité existe.
     pub fn exists(&self, id: &AccountId) -> bool {
-        self.metadata_map.lock().expect("Lock failed").contains_key(id)
+        self.metadata_map
+            .lock()
+            .expect("Lock failed")
+            .contains_key(id)
     }
 
     /// Retourne le nombre d'entrées en "base".
@@ -74,12 +81,12 @@ impl AccountMetadataRepositoryStub {
 #[async_trait]
 impl AccountMetadataRepository for AccountMetadataRepositoryStub {
     async fn fetch_by_account_id(
-        &self, 
-        id: &AccountId, 
-        _tx: Option<&mut dyn Transaction> 
+        &self,
+        id: &AccountId,
+        _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountMetadata>> {
         self.check_error()?;
-        
+
         Ok(self.find_by_id(id))
     }
 
@@ -126,7 +133,7 @@ impl AccountMetadataRepository for AccountMetadataRepositoryStub {
 
         // On insère (ou remplace) l'entité
         map.insert(account_id.clone(), metadata.clone());
-        
+
         Ok(())
     }
 }

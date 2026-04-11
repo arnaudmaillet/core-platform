@@ -21,25 +21,4 @@ pub trait AccountSettingsRepository: Send + Sync {
         original: Option<&AccountSettings>,
         mut tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
-
-    async fn update_timezone(
-        &self,
-        account_id: &AccountId,
-        timezone: &Timezone,
-        mut tx: Option<&mut dyn Transaction>,
-    ) -> Result<()>;
-
-    async fn add_push_token(
-        &self,
-        account_id: &AccountId,
-        token: &PushToken,
-        mut tx: Option<&mut dyn Transaction>,
-    ) -> Result<()>;
-
-    async fn remove_push_token(
-        &self,
-        account_id: &AccountId,
-        token: &PushToken,
-        mut tx: Option<&mut dyn Transaction>,
-    ) -> Result<()>;
 }
