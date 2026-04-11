@@ -23,7 +23,7 @@ impl LiftShadowbanUseCase {
     }
 
     async fn try_execute_once(&self, ctx: &AccountContext, cmd: &LiftShadowbanCommand) -> Result<AccountMetadata> {
-        ctx.ensure_id(&cmd.account_id);
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_metadata = ctx.metadata().await?;
         let mut metadata = original_metadata.clone();

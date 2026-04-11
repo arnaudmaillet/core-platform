@@ -1,8 +1,6 @@
 // crates/shared-kernel/src/domain/events/event.rs
 
 use dyn_clone::DynClone;
-
-use crate::domain::value_objects::RegionCode;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -18,7 +16,7 @@ pub trait DomainEvent: DynClone + Debug + Send + Sync {
     }
 
     /// Nom de l'événement (ex: "user.profile.updated")
-    fn event_type(&self) -> Cow<'_, str>;
+    fn event_name(&self) -> Cow<'_, str>;
 
     /// Nom de l'agrégat (ex: "user")
     fn aggregate_type(&self) -> Cow<'_, str>;

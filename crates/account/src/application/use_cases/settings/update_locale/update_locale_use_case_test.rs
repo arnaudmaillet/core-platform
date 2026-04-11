@@ -1,77 +1,78 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use crate::application::use_cases::settings::update_locale::{
+        UpdateLocaleCommand, UpdateLocaleUseCase,
+    };
+    use crate::application::utils::TestFixture;
     use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{Email, ExternalId, Locale};
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-    use shared_kernel::errors::DomainError;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use crate::application::use_cases::settings::update_locale::{UpdateLocaleCommand, UpdateLocaleUseCase};
-    use crate::domain::repositories::AccountIdentityRepositoryStub;
-
-    fn setup() -> (UpdateLocaleUseCase, Arc<AccountIdentityRepositoryStub>, Arc<OutboxRepositoryStub>) {
-        let account_repo = Arc::new(AccountIdentityRepositoryStub::new());
-        let outbox_repo = Arc::new(OutboxRepositoryStub::new());
-        let tx_manager = Arc::new(StubTxManager);
-        let use_case = UpdateLocaleUseCase::new(account_repo.clone(), outbox_repo.clone(), tx_manager);
-        (use_case, account_repo, outbox_repo)
-    }
+    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::errors::DomainError;
 
     #[tokio::test]
     async fn test_update_locale_success() {
-        let (use_case, account_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let f = TestFixture::new(UpdateLocaleUseCase::new);
+        let account_id = f.account_id();
+        let region = f.region();
 
-        // ✅ Utilisation du Builder pour créer l'état initial (fr par défaut ou non spécifié)
-        let account = AccountIdentity::builder(
-            account_id.clone(),
-            region.clone(),
+        let identity = AccountIdentity::builder(
+            account_id,
+            region,
             Email::try_new("john@example.com").unwrap(),
-            ExternalId::from_raw("ext_123")
+            ExternalId::from_raw("ext_123"),
         )
-            .with_locale(Locale::from_raw("fr"))
-            .build();
+        .with_locale(Locale::from_raw("fr"))
+        .build();
 
-        account_repo.insert(account);
+        f.identity_repo().insert(identity);
 
         let new_locale = Locale::from_raw("en");
         let cmd = UpdateLocaleCommand {
-            account_id: account_id.clone(),
+            account_id,
             locale: new_locale.clone(),
         };
 
         // Act
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
 
         // Assert
         assert!(result.is_ok());
-        let saved = account_repo.identity_map.lock().unwrap().get(&account_id).cloned().unwrap();
+        let saved = f
+            .identity_repo()
+            .find_by_id(&account_id)
+            .expect("Should exist");
         assert_eq!(saved.locale(), &new_locale);
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 1);
+        assert_eq!(
+            f.outbox_repo().count(),
+            1,
+            "Un événement AccountEvent::LOCALE_CHANGED attendu"
+        );
+        assert!(
+            f.outbox_events()
+                .contains(&AccountEvent::LOCALE_UPDATED.to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_update_locale_idempotency() {
-        let (use_case, account_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let f = TestFixture::new(UpdateLocaleUseCase::new);
+        let account_id = f.account_id();
+        let region = f.region();
         let current_locale = Locale::from_raw("de");
 
-        // ✅ Arrange : déjà en allemand
-        let mut account = AccountIdentity::builder(
-            account_id.clone(),
-            region.clone(),
+        let mut identity = AccountIdentity::builder(
+            account_id,
+            region,
             Email::try_new("hans@test.de").unwrap(),
-            ExternalId::from_raw("ext_456")
+            ExternalId::from_raw("ext_456"),
         )
-            .with_locale(current_locale.clone())
-            .build();
+        .with_locale(current_locale.clone())
+        .build();
 
-        account.pull_events(); // Nettoyage
-        account_repo.insert(account);
+        identity.pull_events(); // Nettoyage
+        f.identity_repo().insert(identity);
 
         let cmd = UpdateLocaleCommand {
             account_id,
@@ -79,11 +80,38 @@ mod tests {
         };
 
         // Act
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
 
         // Assert
         assert!(result.is_ok());
         // L'entité détecte qu'il n'y a pas de changement -> pas d'event -> pas de save transactionnel
-        assert_eq!(outbox_repo.saved_events.lock().unwrap().len(), 0);
+        assert_eq!(f.outbox_repo().count(), 0, "Aucun evewnement attendu");
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() {
+        let f = TestFixture::new(UpdateLocaleUseCase::new);
+        let account_id = f.account_id();
+        let wrong_region = RegionCode::from_raw("us");
+
+        // On simule une donnée en base qui appartient aux "us"
+        // alors que notre contexte est "eu"
+        f.identity_repo().insert(
+            AccountIdentity::builder(
+                account_id,
+                wrong_region,
+                Email::try_new("hacker@test.com").unwrap(),
+                ExternalId::from_raw("ext_1"),
+            )
+            .build(),
+        );
+
+        let cmd = UpdateLocaleCommand {
+            account_id,
+            locale: Locale::from_raw("us"),
+        };
+
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        assert!(matches!(result, Err(DomainError::NotFound { .. })));
     }
 }

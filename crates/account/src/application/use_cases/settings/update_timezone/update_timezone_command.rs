@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::domain::value_objects::Timezone;
 
 #[derive(Debug, Deserialize)]

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use shared_kernel::domain::repositories::OutboxRepositoryStub;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use crate::application::context::{AccountContext, AccountContextTestExt};
 use crate::domain::repositories::{AccountIdentityRepositoryStub, AccountMetadataRepositoryStub, AccountSettingsRepositoryStub};
 
@@ -27,8 +27,10 @@ impl<Usecase> TestFixture<Usecase> {
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         
         let account_id = AccountId::new();
+        let region = RegionCode::from_raw("eu");
         let ctx = AccountContext::builder()
             .with_account_id(account_id)
+            .with_region(region)
             .with_identity_repo(identity_repo.clone())
             .with_metadata_repo(metadata_repo.clone())
             .with_settings_repo(settings_repo.clone())
@@ -62,10 +64,6 @@ impl<Usecase> TestFixture<Usecase> {
         &self.use_case
     }
 
-    pub fn outbox_count(&self) -> usize { 
-        self.outbox_repo.saved_events.lock().unwrap().len() 
-    }
-
     pub fn identity_repo(&self) -> &AccountIdentityRepositoryStub {
         &self.identity_repo
     }
@@ -78,7 +76,11 @@ impl<Usecase> TestFixture<Usecase> {
         &self.settings_repo
     }
 
+   pub fn outbox_repo(&self) -> &OutboxRepositoryStub {
+        &self.outbox_repo
+    }
+
     pub fn outbox_events(&self) -> Vec<String> {
-        self.outbox_repo.saved_events.lock().unwrap().clone()
+        self.outbox_repo.event_names()
     }
 }

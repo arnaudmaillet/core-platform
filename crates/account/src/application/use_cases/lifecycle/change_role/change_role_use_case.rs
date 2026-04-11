@@ -1,35 +1,43 @@
-// crates/account/src/application/upgrade_role/upgrade_role_use_case.rs
+// crates/account/src/application/change_role/change_role_use_case.rs
 
 use shared_kernel::domain::events::{AggregateRoot, DomainEvent};
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::lifecycle::upgrade_role::UpgradeRoleCommand;
+use crate::application::use_cases::lifecycle::change_role::ChangeRoleCommand;
 use crate::domain::account::entities::AccountMetadata;
 
-pub struct UpgradeRoleUseCase;
+pub struct ChangeRoleUseCase;
 
-impl UpgradeRoleUseCase {
+impl ChangeRoleUseCase {
     pub fn new() -> Self {
         Self
     }
 
-    pub async fn execute(&self, ctx: &AccountContext, cmd: UpgradeRoleCommand) -> Result<AccountMetadata> {
+    pub async fn execute(
+        &self,
+        ctx: &AccountContext,
+        cmd: ChangeRoleCommand,
+    ) -> Result<AccountMetadata> {
         with_retry(RetryConfig::default(), || async {
             self.try_execute_once(ctx, &cmd).await
         })
         .await
     }
 
-    async fn try_execute_once(&self, ctx: &AccountContext, cmd: &UpgradeRoleCommand) -> Result<AccountMetadata> {
-        ctx.ensure_id(&cmd.account_id);  
+    async fn try_execute_once(
+        &self,
+        ctx: &AccountContext,
+        cmd: &ChangeRoleCommand,
+    ) -> Result<AccountMetadata> {
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_metadata = ctx.metadata().await?;
 
         let mut metadata = original_metadata.clone();
 
-        if !metadata.upgrade_role(cmd.new_role.into(), &cmd.reason)? {
+        if !metadata.change_role(cmd.new_role.into(), &cmd.reason)? {
             return Ok(original_metadata);
         }
 
@@ -41,10 +49,10 @@ impl UpgradeRoleUseCase {
         let events: Vec<&dyn DomainEvent> = pulled_events.iter().map(|e| e.as_ref()).collect();
         let mut tx = ctx.begin_transaction().await?;
 
-        ctx.save_metadata(&metadata, Some(&original_metadata), &mut *tx).await?;
+        ctx.save_metadata(&metadata, Some(&original_metadata), &mut *tx)
+            .await?;
         ctx.outbox_repo().save_all(&mut *tx, &events).await?;
         tx.commit().await?;
-
 
         Ok(metadata)
     }

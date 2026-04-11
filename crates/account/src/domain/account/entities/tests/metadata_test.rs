@@ -93,13 +93,13 @@ mod tests {
         let mut meta = create_test_metadata();
 
         let changed = meta
-            .upgrade_role(AccountRole::Staff, "Promoted".into())
+            .change_role(AccountRole::Staff, "Promoted".into())
             .unwrap();
         assert!(changed);
         assert!(meta.is_staff());
 
         let changed = meta
-            .upgrade_role(AccountRole::Staff, "Again".into())
+            .change_role(AccountRole::Staff, "Again".into())
             .unwrap();
         assert!(!changed);
     }

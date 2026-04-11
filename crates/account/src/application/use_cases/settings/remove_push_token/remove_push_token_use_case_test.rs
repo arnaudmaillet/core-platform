@@ -1,58 +1,39 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::application::use_cases::settings::remove_push_token::{
         RemovePushTokenCommand, RemovePushTokenUseCase,
     };
-    use crate::domain::account::entities::AccountSettings;
-    use crate::domain::repositories::AccountSettingsRepositoryStub;
+    use crate::application::utils::TestFixture;
+    use crate::domain::account::entities::{AccountIdentity, AccountSettings};
+    use crate::domain::events::AccountEvent;
+    use crate::domain::value_objects::{Email, ExternalId};
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::repositories::outbox_repository_stub::OutboxRepositoryStub;
-    use shared_kernel::domain::transaction::StubTxManager;
-    use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode};
+    use shared_kernel::domain::value_objects::{PushToken, RegionCode};
     use shared_kernel::errors::DomainError;
-    use std::sync::Arc;
-
-    fn setup() -> (
-        RemovePushTokenUseCase,
-        Arc<AccountSettingsRepositoryStub>,
-        Arc<OutboxRepositoryStub>,
-    ) {
-        let settings_repo = Arc::new(AccountSettingsRepositoryStub::new());
-        let outbox_repo = Arc::new(OutboxRepositoryStub::new());
-        let tx_manager = Arc::new(StubTxManager);
-        let use_case =
-            RemovePushTokenUseCase::new(settings_repo.clone(), outbox_repo.clone(), tx_manager);
-        (use_case, settings_repo, outbox_repo)
-    }
 
     #[tokio::test]
     async fn test_remove_push_token_success() {
-        let (use_case, settings_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
+        let f = TestFixture::new(RemovePushTokenUseCase::new);
+        let account_id = f.account_id();
         let token_to_keep = PushToken::try_new("token_keep_456").unwrap();
         let token_to_remove = PushToken::try_new("token_remove_123").unwrap();
 
         // 1. Arrange : On prépare des settings avec DEUX tokens
-        let mut settings = AccountSettings::builder(account_id.clone()).build();
-        settings
-            .add_push_token(token_to_remove.clone())
-            .unwrap();
-        settings
-            .add_push_token(token_to_keep.clone())
-            .unwrap();
+        let mut settings = AccountSettings::builder(account_id).build();
+        settings.add_push_token(token_to_remove.clone()).unwrap();
+        settings.add_push_token(token_to_keep.clone()).unwrap();
         settings.pull_events(); // On vide les events d'ajout initiaux
         let version_after_setup = settings.version(); // Devrait être 3 (Init + Add + Add)
 
-        settings_repo.add_settings(settings);
+        f.settings_repo().insert(settings);
 
         let cmd = RemovePushTokenCommand {
-            account_id: account_id.clone(),
+            account_id,
             token: token_to_remove.clone(),
         };
 
         // 2. Act : On s'attend à recevoir les AccountSettings mis à jour
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
 
         // 3. Assert
         assert!(result.is_ok(), "La suppression du token devrait réussir");
@@ -70,33 +51,33 @@ mod tests {
         assert_eq!(updated.version(), version_after_setup + 1);
 
         // 4. Persistence
-        let saved = settings_repo
-            .settings_map
-            .lock()
-            .unwrap()
-            .get(&account_id)
-            .cloned()
-            .unwrap();
+        let saved = f
+            .settings_repo()
+            .find_by_id(&account_id)
+            .expect("Should exist");
         assert!(!saved.push_tokens().contains(&token_to_remove));
 
         // 5. Outbox
         assert_eq!(
-            outbox_repo.saved_events.lock().unwrap().len(),
+            f.outbox_repo().count(),
             1,
-            "Un événement PushTokenRemoved attendu"
+            "Un événement AccountEvent::PUSH_TOKEN_REMOVED attendu"
+        );
+        assert!(
+            f.outbox_events()
+                .contains(&AccountEvent::PUSH_TOKEN_REMOVED.to_string())
         );
     }
 
     #[tokio::test]
     async fn test_remove_push_token_idempotency() {
-        let (use_case, settings_repo, outbox_repo) = setup();
-        let account_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let f = TestFixture::new(RemovePushTokenUseCase::new);
+        let account_id = f.account_id();
         let non_existent_token = PushToken::try_new("valid_but_missing_token").unwrap();
 
         // 1. Arrange : Settings avec une liste de tokens vide (Version 1)
-        let settings = AccountSettings::builder(account_id.clone()).build();
-        settings_repo.add_settings(settings);
+        let settings = AccountSettings::builder(account_id).build();
+        f.settings_repo().insert(settings);
 
         let cmd = RemovePushTokenCommand {
             account_id,
@@ -104,7 +85,7 @@ mod tests {
         };
 
         // 2. Act
-        let result = use_case.execute(cmd).await;
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
 
         // 3. Assert
         assert!(result.is_ok());
@@ -118,7 +99,35 @@ mod tests {
         assert!(returned.push_tokens().is_empty());
 
         // 4. Outbox
-        let events = outbox_repo.saved_events.lock().unwrap();
-        assert_eq!(events.len(), 0, "Idempotence : aucun événement généré");
+        assert_eq!(
+            f.outbox_repo().count(),
+            0,
+            "Idempotence : aucun événement généré"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() {
+        let f = TestFixture::new(RemovePushTokenUseCase::new);
+        let account_id = f.account_id();
+        let wrong_region = RegionCode::from_raw("us");
+        let token = PushToken::try_new("valid_token_123").unwrap();
+
+        // On simule une donnée en base qui appartient aux "us"
+        // alors que notre contexte est "eu"
+        f.identity_repo().insert(
+            AccountIdentity::builder(
+                account_id,
+                wrong_region,
+                Email::try_new("hacker@test.com").unwrap(),
+                ExternalId::from_raw("ext_1"),
+            )
+            .build(),
+        );
+
+        let cmd = RemovePushTokenCommand { account_id, token };
+
+        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        assert!(matches!(result, Err(DomainError::NotFound { .. })));
     }
 }

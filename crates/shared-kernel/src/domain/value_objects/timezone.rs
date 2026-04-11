@@ -1,6 +1,6 @@
 // crates/shared_kernel/src/domain/value_objects/timezone.rs
 
-use crate::domain::value_objects::ValueObject;
+use crate::domain::value_objects::{RegionCode, ValueObject};
 use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -31,6 +31,19 @@ impl Timezone {
         self.0
             .parse::<chrono_tz::Tz>()
             .expect("Corrupted Timezone: Must be validated at construction")
+    }
+
+    pub fn super_region(&self) -> &str {
+        self.0.split('/').next().unwrap_or("UTC")
+    }
+
+    pub fn is_compatible_with(&self, region: &RegionCode) -> bool {
+        match region.as_str() {
+            "eu" => self.super_region() == "Europe" || self.super_region() == "Africa",
+            "us" | "ca" => self.super_region() == "America",
+            "as" => self.super_region() == "Asia" || self.super_region() == "Australia",
+            _ => true, // Par défaut on laisse passer si la région est inconnue
+        }
     }
 }
 

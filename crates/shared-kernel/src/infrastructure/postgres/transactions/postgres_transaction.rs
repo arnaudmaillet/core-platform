@@ -42,6 +42,19 @@ impl Transaction for PostgresTransaction {
             Ok(())
         })
     }
+
+    fn rollback(&mut self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+        let tx = self.inner.take();
+
+        Box::pin(async move {
+            if let Some(t) = tx {
+                t.rollback().await.map_err(|e| {
+                    DomainError::Internal(format!("Rollback failed: {}", e))
+                })?;
+            }
+            Ok(())
+        })
+    }
 }
 
 impl dyn Transaction + '_ {

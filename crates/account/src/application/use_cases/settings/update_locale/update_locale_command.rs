@@ -2,7 +2,7 @@
 
 use crate::domain::value_objects::Locale;
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::AccountId;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct UpdateLocaleCommand {

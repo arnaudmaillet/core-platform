@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::domain::transaction::Transaction;
+use shared_kernel::domain::transaction::{FakeTransaction, Transaction};
 use shared_kernel::errors::{Result, DomainError};
 use crate::application::context::AccountContextBuilder;
 use crate::domain::account::entities::{AccountIdentity, AccountMetadata, AccountSettings};
@@ -25,7 +25,7 @@ pub struct AccountContext {
     metadata_repo: Arc<dyn AccountMetadataRepository>,
     settings_repo: Arc<dyn AccountSettingsRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
-    pool: sqlx::PgPool,
+    pool: Option<sqlx::PgPool>,
 }
 
 impl AccountContext {
@@ -36,7 +36,7 @@ impl AccountContext {
         metadata_repo: Arc<dyn AccountMetadataRepository>,
         settings_repo: Arc<dyn AccountSettingsRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
-        pool: sqlx::PgPool,
+        pool: Option<sqlx::PgPool>,
     ) -> Self {
         Self {
             account_id,
@@ -82,11 +82,18 @@ impl AccountContext {
     // --- Gestion des Transactions ---
     // On force la transaction sur le bon shard.
     
-    pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {        
-        let tx = self.pool.begin().await
-            .map_err(|e| DomainError::Internal(e.to_string()))?;
-            
-        Ok(Box::new(PostgresTransaction::new(tx)))
+    pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
+        match &self.pool {
+            Some(pool) => {
+                let tx = pool.begin().await.map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+                let pg_tx: Box<dyn Transaction> = Box::new(PostgresTransaction::new(tx));
+                Ok(pg_tx)
+            },
+            None => {
+                let fake_tx: Box<dyn Transaction> = Box::new(FakeTransaction::new());
+                Ok(fake_tx)
+            }
+        }
     }
 
     // --- High-Level Decorated API (The "Safe" Zone) ---
@@ -160,6 +167,27 @@ impl AccountContext {
         self.identity_repo.save(identity, original, Some(tx)).await
     }
 
+    /// Action critique : Déplace un agrégat vers un autre shard (Région).
+    /// Cette méthode est la SEULE autorisée à changer le RegionCode.
+    pub async fn migrate_identity_to_region(
+        &self,
+        identity: &AccountIdentity,
+        original: &AccountIdentity,
+        tx: &mut dyn Transaction
+    ) -> Result<()> {
+        // 1. Sécurité : On vérifie que l'original appartient bien à CE contexte (Shard actuel)
+        self.ensure_region(original)?;
+
+        // 2. Sécurité : On vérifie que l'ID n'a pas changé (On ne migre pas vers un autre compte)
+        if identity.account_id() != original.account_id() {
+            return Err(DomainError::Validation {
+                field: "account_id".into(),
+                reason: "Identity account_id mismatch during migration".into(),
+            });
+        }
+        self.identity_repo.save(identity, Some(original), Some(tx)).await
+    }
+
     pub async fn save_metadata(
         &self,
         metadata: &AccountMetadata,
@@ -191,11 +219,11 @@ impl AccountContext {
         self.settings_repo.save(settings, original, Some(tx)).await
     }
 
-    /// Vérifie que l'entité appartient bien à la région de ce contexte (ce shard).
-    pub fn ensure_region(&self, identity: &AccountIdentity) -> Result<()> {
+    /// (private) Vérifie que l'entité appartient bien à la région de ce contexte (ce shard).
+    fn ensure_region(&self, identity: &AccountIdentity) -> Result<()> {
         if identity.region_code() != &self.region {
             return Err(DomainError::NotFound {
-                entity: "AccountIdentity",
+                entity: "Account",
                 id: identity.account_id().to_string(),
             });
         }
@@ -205,9 +233,9 @@ impl AccountContext {
      /// Vérifie que l'id de la commande correspond bien
     pub fn ensure_id(&self, cmd_account_id: &AccountId) -> Result<()> {
         if cmd_account_id != &self.account_id {
-            return Err(DomainError::Validation {
-                field: "account_id".into(),
-                reason: "Command account_id mismatch".into(),
+            return Err(DomainError::NotFound {
+                entity: "Account",
+                id: cmd_account_id.to_string(),
             });
         }
         Ok(())

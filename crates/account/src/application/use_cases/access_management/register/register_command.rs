@@ -14,11 +14,11 @@ pub struct RegisterCommand {
 }
 
 impl RegisterCommand {
-    pub fn try_from_proto(req: RegisterRequest, region: RegionCode) -> Result<Self, tonic::Status> {
+    pub fn try_from_proto(req: RegisterRequest) -> Result<Self, tonic::Status> {
         Ok(Self {
             external_id: ExternalId::from_raw(req.external_id),
             email: Email::try_new(req.email).map_err(|e| tonic::Status::invalid_argument(format!("Invalid email: {}", e)))?,
-            region,
+            region: RegionCode::try_new(req.region_code).map_err(|e| tonic::Status::invalid_argument(format!("Invalid region: {}", e)))?,
             locale: Locale::try_new(req.locale).map_err(|e| tonic::Status::invalid_argument(format!("Invalid locale: {}", e)))?,
             ip_addr: IpAddr::try_new(req.ip_addr).map_err(|e| tonic::Status::invalid_argument(format!("Invalid IP address: {}", e)))?,
         })

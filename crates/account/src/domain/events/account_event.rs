@@ -55,14 +55,14 @@ pub enum AccountEvent {
         account_id: AccountId,
         occurred_at: DateTime<Utc>,
     },
-    LocaleChanged {
+    LocaleUpdated {
         account_id: AccountId,
         new_locale: Locale,
         occurred_at: DateTime<Utc>,
     },
 
     // --- SYSTEM & MODERATION EVENTS ---
-    BetaStatusChanged {
+    BetaStatusUpdated {
         account_id: AccountId,
         is_beta_tester: bool,
         occurred_at: DateTime<Utc>,
@@ -75,7 +75,7 @@ pub enum AccountEvent {
         reason: String,
         occurred_at: DateTime<Utc>,
     },
-    ShadowbanStatusChanged {
+    ShadowbanUpdated {
         account_id: AccountId,
         is_shadowbanned: bool,
         reason: String,
@@ -125,17 +125,17 @@ pub enum AccountEvent {
     },
 
     // --- SETTINGS EVENTS ---
-    NotificationsPreferencesChanged {
+    NotificationsPreferencesUpdated {
         account_id: AccountId,
         new_preferences: NotificationPreferences,
         occurred_at: DateTime<Utc>,
     },
-    AppearancePreferencesChanged {
+    AppearancePreferencesUpdated {
         account_id: AccountId,
         new_preferences: AppearancePreferences,
         occurred_at: DateTime<Utc>,
     },
-    PrivacyPreferencesChanged {
+    PrivacyPreferencesUpdated {
         account_id: AccountId,
         new_preferences: PrivacyPreferences,
         occurred_at: DateTime<Utc>,
@@ -152,11 +152,48 @@ pub enum AccountEvent {
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
-    TimezoneChanged {
+    TimezoneUpdated {
         account_id: AccountId,
         new_timezone: Timezone,
         occurred_at: DateTime<Utc>,
     },
+}
+
+impl AccountEvent {
+    // Identity & Security
+    pub const REGISTERED: &'static str = "account.identity.registered";
+    pub const EXTERNAL_LINKED: &'static str = "account.identity.external_linked";
+    pub const EMAIL_CHANGED: &'static str = "account.identity.email_changed";
+    pub const PHONE_NUMBER_CHANGED: &'static str = "account.identity.phone_number_changed";
+    pub const EMAIL_VERIFIED: &'static str = "account.identity.email_verified";
+    pub const PHONE_VERIFIED: &'static str = "account.identity.phone_verified";
+    pub const BIRTH_DATE_CHANGED: &'static str = "account.identity.birth_date_changed";
+    pub const LOCALE_UPDATED: &'static str = "account.identity.locale_updated";
+
+    // Metadata & System
+    pub const BETA_STATUS_UPADTED: &'static str = "account.metadata.beta_status_updated";
+    pub const TRUST_SCORE_ADJUSTED: &'static str = "account.metadata.trust_score_adjusted";
+    pub const SHADOWBAN_UPDATED: &'static str = "account.metadata.shadowban_updated";
+    pub const ROLE_CHANGED: &'static str = "account.metadata.role_changed";
+    pub const REGION_CHANGED: &'static str = "account.system.region_changed";
+
+    // Lifecycle & Moderation
+    pub const DEACTIVATED: &'static str = "account.deactivated";
+    pub const ACTIVATED: &'static str = "account.activated";
+    pub const BANNED: &'static str = "account.banned";
+    pub const UNBANNED: &'static str = "account.unbanned";
+    pub const SUSPENDED: &'static str = "account.suspended";
+    pub const UNSUSPENDED: &'static str = "account.unsuspended";
+
+    // Settings
+    pub const NOTIFICATIONS_PREFS_UPDATED: &'static str =
+        "account.settings.notifications_preferences_updated";
+    pub const APPEARANCE_PREFS_UPDATED: &'static str =
+        "account.settings.appearance_preferences_updated";
+    pub const PRIVACY_PREFS_UPDATED: &'static str = "account.settings.privacy_preferences_updated";
+    pub const PUSH_TOKEN_ADDED: &'static str = "account.settings.push_token_added";
+    pub const PUSH_TOKEN_REMOVED: &'static str = "account.settings.push_token_removed";
+    pub const TIMEZONE_UPDATED: &'static str = "account.settings.timezone_updated";
 }
 
 impl DomainEvent for AccountEvent {
@@ -169,39 +206,33 @@ impl DomainEvent for AccountEvent {
         }
     }
 
-    fn event_type(&self) -> Cow<'_, str> {
+    fn event_name(&self) -> Cow<'_, str> {
         let s = match self {
-            Self::AccountRegistered { .. } => "account.identity.registered",
-            Self::ExternalIdentityLinked { .. } => "account.identity.external_linked",
-            Self::EmailChanged { .. } => "account.identity.email_changed",
-            Self::PhoneNumberChanged { .. } => "account.identity.phone_number_changed",
-            Self::EmailVerified { .. } => "account.identity.email_verified",
-            Self::PhoneVerified { .. } => "account.identity.phone_verified",
-            Self::BirthDateChanged { .. } => "account.identity.birth_date_changed",
-            Self::LocaleChanged { .. } => "account.identity.locale_changed",
-            Self::BetaStatusChanged { .. } => "account.metadata.beta_status_changed",
-            Self::TrustScoreAdjusted { .. } => "account.metadata.trust_score_adjusted",
-            Self::ShadowbanStatusChanged { .. } => "account.metadata.shadowban_status_changed",
-            Self::AccountRoleChanged { .. } => "account.metadata.role_changed",
-            Self::AccountRegionChanged { .. } => "account.system.region_changed",
-            Self::AccountDeactivated { .. } => "account.deactivated",
-            Self::AccountActivated { .. } => "account.activated",
-            Self::AccountBanned { .. } => "account.banned",
-            Self::AccountUnbanned { .. } => "account.unbanned",
-            Self::AccountSuspended { .. } => "account.suspended",
-            Self::AccountUnsuspended { .. } => "account.unsuspended",
-            Self::NotificationsPreferencesChanged { .. } => {
-                "account.settings.notifications_preferences_changed"
-            }
-            Self::AppearancePreferencesChanged { .. } => {
-                "account.settings.appearance_preferences_changed"
-            }
-            Self::PrivacyPreferencesChanged { .. } => {
-                "account.settings.privacy_preferences_changed"
-            }
-            Self::PushTokenAdded { .. } => "account.settings.push_token_added",
-            Self::PushTokenRemoved { .. } => "account.settings.push_token_removed",
-            Self::TimezoneChanged { .. } => "account.settings.timezone_changed",
+            Self::AccountRegistered { .. } => Self::REGISTERED,
+            Self::ExternalIdentityLinked { .. } => Self::EXTERNAL_LINKED,
+            Self::EmailChanged { .. } => Self::EMAIL_CHANGED,
+            Self::PhoneNumberChanged { .. } => Self::PHONE_NUMBER_CHANGED,
+            Self::EmailVerified { .. } => Self::EMAIL_VERIFIED,
+            Self::PhoneVerified { .. } => Self::PHONE_VERIFIED,
+            Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
+            Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
+            Self::BetaStatusUpdated { .. } => Self::BETA_STATUS_UPADTED,
+            Self::TrustScoreAdjusted { .. } => Self::TRUST_SCORE_ADJUSTED,
+            Self::ShadowbanUpdated { .. } => Self::SHADOWBAN_UPDATED,
+            Self::AccountRoleChanged { .. } => Self::ROLE_CHANGED,
+            Self::AccountRegionChanged { .. } => Self::REGION_CHANGED,
+            Self::AccountDeactivated { .. } => Self::DEACTIVATED,
+            Self::AccountActivated { .. } => Self::ACTIVATED,
+            Self::AccountBanned { .. } => Self::BANNED,
+            Self::AccountUnbanned { .. } => Self::UNBANNED,
+            Self::AccountSuspended { .. } => Self::SUSPENDED,
+            Self::AccountUnsuspended { .. } => Self::UNSUSPENDED,
+            Self::NotificationsPreferencesUpdated { .. } => Self::NOTIFICATIONS_PREFS_UPDATED,
+            Self::AppearancePreferencesUpdated { .. } => Self::APPEARANCE_PREFS_UPDATED,
+            Self::PrivacyPreferencesUpdated { .. } => Self::PRIVACY_PREFS_UPDATED,
+            Self::PushTokenAdded { .. } => Self::PUSH_TOKEN_ADDED,
+            Self::PushTokenRemoved { .. } => Self::PUSH_TOKEN_REMOVED,
+            Self::TimezoneUpdated { .. } => Self::TIMEZONE_UPDATED,
         };
         Cow::Borrowed(s)
     }
@@ -220,10 +251,10 @@ impl DomainEvent for AccountEvent {
             | Self::EmailVerified { account_id, .. }
             | Self::PhoneVerified { account_id, .. }
             | Self::BirthDateChanged { account_id, .. }
-            | Self::LocaleChanged { account_id, .. }
-            | Self::BetaStatusChanged { account_id, .. }
+            | Self::LocaleUpdated { account_id, .. }
+            | Self::BetaStatusUpdated { account_id, .. }
             | Self::TrustScoreAdjusted { account_id, .. }
-            | Self::ShadowbanStatusChanged { account_id, .. }
+            | Self::ShadowbanUpdated { account_id, .. }
             | Self::AccountRoleChanged { account_id, .. }
             | Self::AccountRegionChanged { account_id, .. }
             | Self::AccountDeactivated { account_id, .. }
@@ -232,12 +263,12 @@ impl DomainEvent for AccountEvent {
             | Self::AccountUnbanned { account_id, .. }
             | Self::AccountSuspended { account_id, .. }
             | Self::AccountUnsuspended { account_id, .. }
-            | Self::NotificationsPreferencesChanged { account_id, .. }
-            | Self::AppearancePreferencesChanged { account_id, .. }
-            | Self::PrivacyPreferencesChanged { account_id, .. }
+            | Self::NotificationsPreferencesUpdated { account_id, .. }
+            | Self::AppearancePreferencesUpdated { account_id, .. }
+            | Self::PrivacyPreferencesUpdated { account_id, .. }
             | Self::PushTokenAdded { account_id, .. }
             | Self::PushTokenRemoved { account_id, .. }
-            | Self::TimezoneChanged { account_id, .. } => account_id.to_string(),
+            | Self::TimezoneUpdated { account_id, .. } => account_id.to_string(),
         }
     }
 
@@ -250,10 +281,10 @@ impl DomainEvent for AccountEvent {
             | Self::EmailVerified { occurred_at, .. }
             | Self::PhoneVerified { occurred_at, .. }
             | Self::BirthDateChanged { occurred_at, .. }
-            | Self::LocaleChanged { occurred_at, .. }
-            | Self::BetaStatusChanged { occurred_at, .. }
+            | Self::LocaleUpdated { occurred_at, .. }
+            | Self::BetaStatusUpdated { occurred_at, .. }
             | Self::TrustScoreAdjusted { occurred_at, .. }
-            | Self::ShadowbanStatusChanged { occurred_at, .. }
+            | Self::ShadowbanUpdated { occurred_at, .. }
             | Self::AccountRoleChanged { occurred_at, .. }
             | Self::AccountRegionChanged { occurred_at, .. }
             | Self::AccountDeactivated { occurred_at, .. }
@@ -262,12 +293,12 @@ impl DomainEvent for AccountEvent {
             | Self::AccountUnbanned { occurred_at, .. }
             | Self::AccountSuspended { occurred_at, .. }
             | Self::AccountUnsuspended { occurred_at, .. }
-            | Self::NotificationsPreferencesChanged { occurred_at, .. }
-            | Self::AppearancePreferencesChanged { occurred_at, .. }
-            | Self::PrivacyPreferencesChanged { occurred_at, .. }
+            | Self::NotificationsPreferencesUpdated { occurred_at, .. }
+            | Self::AppearancePreferencesUpdated { occurred_at, .. }
+            | Self::PrivacyPreferencesUpdated { occurred_at, .. }
             | Self::PushTokenAdded { occurred_at, .. }
             | Self::PushTokenRemoved { occurred_at, .. }
-            | Self::TimezoneChanged { occurred_at, .. } => *occurred_at,
+            | Self::TimezoneUpdated { occurred_at, .. } => *occurred_at,
         }
     }
 

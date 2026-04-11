@@ -1,6 +1,6 @@
 use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::AccountId;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdatePreferencesCommand {

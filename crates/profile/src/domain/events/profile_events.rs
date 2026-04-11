@@ -186,7 +186,7 @@ impl DomainEvent for ProfileEvent {
             | Self::ProfileDeleted { id, .. } => *id,
         }
     }
-    fn event_type(&self) -> Cow<'_, str> {
+    fn event_name(&self) -> Cow<'_, str> {
         match self {
             Self::ProfileCreated { .. } => Cow::Borrowed("profile.created"),
             Self::HandleChanged { .. } => Cow::Borrowed("profile.handle.changed"),

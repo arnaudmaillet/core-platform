@@ -1,7 +1,6 @@
 // crates/shared-kernel/src/domain/events/envelope.rs
 
 use crate::domain::events::DomainEvent;
-use crate::domain::value_objects::RegionCode;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -24,7 +23,7 @@ impl EventEnvelope {
             id: event.event_id(),
             aggregate_type: event.aggregate_type().into_owned(),
             aggregate_id: event.aggregate_id(),
-            event_type: event.event_type().into_owned(),
+            event_type: event.event_name().into_owned(),
             payload: event.payload(),
             occurred_at: event.occurred_at(),
             // Utilise l'ID de corrélation s'il existe
@@ -41,7 +40,7 @@ impl DomainEvent for EventEnvelope {
     fn event_id(&self) -> Uuid {
         self.id
     }
-    fn event_type(&self) -> Cow<'_, str> {
+    fn event_name(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.event_type)
     }
     fn aggregate_type(&self) -> Cow<'_, str> {

@@ -182,7 +182,7 @@ impl AccountMetadata {
             self.is_shadowbanned = false;
             self.apply_moderation_change(format!("Shadowban lifted: {}", reason));
 
-            self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
+            self.push_event(Box::new(AccountEvent::ShadowbanUpdated {
                 account_id: self.account_id.clone(),
                 is_shadowbanned: false,
                 reason: reason.to_string(),
@@ -194,12 +194,7 @@ impl AccountMetadata {
     }
 
     /// Change le rôle du compte (Admin only via Use Case)
-    pub fn upgrade_role(
-        &mut self,
-        new_role: AccountRole,
-        reason: &str,
-    ) -> Result<bool> {
-
+    pub fn change_role(&mut self, new_role: AccountRole, reason: &str) -> Result<bool> {
         // 1. Idempotence : si le rôle est déjà le bon, on ne fait rien
         if self.role == new_role {
             return Ok(false);
@@ -231,11 +226,7 @@ impl AccountMetadata {
         self.role.has_permission_of(AccountRole::Staff)
     }
 
-    pub fn set_beta_status(
-        &mut self,
-        status: bool,
-        reason: &str,
-    ) -> Result<bool> {
+    pub fn set_beta_status(&mut self, status: bool, reason: &str) -> Result<bool> {
         if self.is_beta_tester == status {
             return Ok(false);
         }
@@ -245,7 +236,7 @@ impl AccountMetadata {
 
         self.apply_moderation_change(format!("Beta tester mode {}: {}", action, reason));
 
-        self.push_event(Box::new(AccountEvent::BetaStatusChanged {
+        self.push_event(Box::new(AccountEvent::BetaStatusUpdated {
             account_id: self.account_id.clone(),
             is_beta_tester: status,
             occurred_at: self.updated_at,
@@ -282,7 +273,7 @@ impl AccountMetadata {
         self.is_shadowbanned = true;
         self.apply_moderation_change(format!("Shadowbanned: {}", reason));
 
-        self.push_event(Box::new(AccountEvent::ShadowbanStatusChanged {
+        self.push_event(Box::new(AccountEvent::ShadowbanUpdated {
             account_id: self.account_id.clone(),
             is_shadowbanned: true,
             reason: reason.to_string(),

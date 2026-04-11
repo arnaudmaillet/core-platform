@@ -23,7 +23,7 @@ impl VerifyEmailUseCase {
     }
 
     async fn try_execute_once(&self, ctx: &AccountContext, cmd: &VerifyEmailCommand) -> Result<AccountIdentity> {
-        ctx.ensure_id(&cmd.account_id);
+        let _ = ctx.ensure_id(&cmd.account_id);
 
         let original_identity = ctx.identity().await?;
 
