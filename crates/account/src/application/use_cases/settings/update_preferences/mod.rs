@@ -3,4 +3,4 @@ mod update_preferences_use_case;
 mod update_preferences_use_case_test;
 
 pub use update_preferences_command::UpdatePreferencesCommand;
-pub use update_preferences_use_case::UpdatePreferencesUseCase;
+pub use update_preferences_use_case::UpdatePreferencesHandler;

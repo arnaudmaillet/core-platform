@@ -1,119 +1,147 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendUseCase};
+    use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
     use crate::application::utils::TestFixture;
-    use crate::domain::account::builders::AccountIdentityBuilder;
-    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_unsuspend_account_success() {
-        let f = TestFixture::new(UnsuspendUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_unsuspend_account_success() -> Result<()> {
+        let f = TestFixture::new();
 
-        // 1. Arrange : On crée un compte et on le suspend (Version passe à 2)
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("temp@test.com").unwrap(),
-            ExternalId::from_raw("ext_unsuspend"),
-        )
-        .build();
-
-        identity
-            .suspend("Suspicious activity".into())
-            .unwrap();
-        identity.pull_events(); // On vide les events du setup
-        let version_suspended = identity.version();
-
-        f.identity_repo().insert(identity);
+        // 1. Arrange : On crée un compte et on le suspend
+        let mut account = f.account_builder()?.build()?;
+        account.suspend(AuditReason::try_new("Suspicious activity")?)?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = UnsuspendCommand {
-            account_id,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Good behavior")?,
         };
 
-        // 2. Act : On s'attend à recevoir l'Account réactivé
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .await?;
 
         // 3. Assert
-        assert!(result.is_ok(), "La levée de suspension devrait réussir");
-        let updated = result.unwrap();
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Active);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-        assert_eq!(*updated.state(), AccountState::Active);
-        assert_eq!(
-            updated.version(),
-            version_suspended + 1,
-            "La version doit être incrémentée"
-        );
+        f.assert_outbox(1, Some(AccountEvent::UNSUSPENDED));
 
-        // 4. Persistence réelle
-        let saved = f.identity_repo().find_by_id(&account_id).expect("Should exist");
-        assert_eq!(*saved.state(), AccountState::Active);
-
-        // 5. Outbox
-        assert_eq!(f.outbox_repo().count(), 1, "Un événement AccountEvent::UNSUSPENDED attendu");
-        assert!(f.outbox_events().contains(&AccountEvent::UNSUSPENDED.to_string()));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_unsuspend_idempotency() {
-        let f = TestFixture::new(UnsuspendUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_unsuspend_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
 
-        let account = AccountIdentityBuilder::restore(
-            account_id,
-            region,
-            ExternalId::from_raw("ext"),
-            Email::try_new("active@test.com").unwrap(),
-            true,
-            None,
-            false,
-            AccountState::Active,
-            None,
-            Locale::default(),
-            1,
-            chrono::Utc::now(),
-            chrono::Utc::now(),
-            None,
-        );
-        f.identity_repo().insert(account);
+        // Arrange : Commande déjà connue de l'infrastructure
+        f.idempotency_repo().seed(cmd_id);
+
+        let mut account = f.account_builder()?.build()?;
+
+        account.suspend(AuditReason::try_new("Suspicious activity")?)?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = UnsuspendCommand {
-            account_id,
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Duplicate call")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await.unwrap();
+        // 2. Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .await;
 
-        assert_eq!(result.version(), 1);
-        assert_eq!(f.outbox_repo().count(), 0, "Idempotence : aucun événement produit");
+        // 3. Assert
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
+
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Suspended);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(UnsuspendUseCase::new);
-        let account_id = f.account_id();
+    async fn test_unsuspend_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+
+        // Arrange : Le compte est déjà Actif
+        let account = f.account_builder()?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = UnsuspendCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Already good")?,
+        };
+
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Pending);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
-        
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            ).build(),
-        );
+
+        let account = f.account_builder_for(wrong_region)?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = UnsuspendCommand {
-            account_id,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Good behavior")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .await;
+
+        // Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
+        assert_eq!(saved.version(), version_snapshot);
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 }

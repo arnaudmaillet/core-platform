@@ -1,59 +1,78 @@
 // crates/account/src/application/context.rs
 
-use std::sync::Arc;
-use shared_kernel::domain::repositories::OutboxRepository;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::domain::transaction::{FakeTransaction, Transaction};
-use shared_kernel::errors::{Result, DomainError};
-use crate::application::context::AccountContextBuilder;
-use crate::domain::account::entities::{AccountIdentity, AccountMetadata, AccountSettings};
-use crate::domain::repositories::{
-    AccountIdentityRepository, 
-    AccountMetadataRepository, 
-    AccountSettingsRepository
+use shared_kernel::{
+    application::BaseAppContext,
+    domain::{
+        events::{AggregateRoot, DomainEvent},
+        repositories::{IdempotencyRepository, OutboxRepository},
+        transaction::{FakeTransaction, Transaction},
+        value_objects::{AccountId, RegionCode},
+    },
+    errors::{DomainError, Result},
+    infrastructure::postgres::transactions::PostgresTransaction,
 };
-use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
+use std::sync::Arc;
 
-/// Le contexte d'exécution "Scoped" pour une requête unique.
-/// Il garantit que toutes les opérations utilisent le même Shard physique.
+use crate::domain::{account::entities::Account, repositories::AccountRepository};
 
 #[derive(Clone)]
-pub struct AccountContext {
-    account_id: AccountId,
-    region: RegionCode,
-    identity_repo: Arc<dyn AccountIdentityRepository>,
-    metadata_repo: Arc<dyn AccountMetadataRepository>,
-    settings_repo: Arc<dyn AccountSettingsRepository>,
+pub struct AccountAppContext {
+    base: BaseAppContext,
+    account_repo: Arc<dyn AccountRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
-    pool: Option<sqlx::PgPool>,
+    idempotency_repo: Arc<dyn IdempotencyRepository>,
 }
 
-impl AccountContext {
-    pub(crate) fn new(
-        account_id: AccountId,
-        region: RegionCode,
-        identity_repo: Arc<dyn AccountIdentityRepository>,
-        metadata_repo: Arc<dyn AccountMetadataRepository>,
-        settings_repo: Arc<dyn AccountSettingsRepository>,
+impl AccountAppContext {
+    pub fn new(
+        base: BaseAppContext,
+        account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
-        pool: Option<sqlx::PgPool>,
+        idempotency_repo: Arc<dyn IdempotencyRepository>,
     ) -> Self {
         Self {
-            account_id,
-            region,
-            identity_repo,
-            metadata_repo,
-            settings_repo,
+            base,
+            account_repo,
             outbox_repo,
-            pool,
+            idempotency_repo,
         }
     }
 
-    pub fn builder() -> AccountContextBuilder {
-        AccountContextBuilder::new()
+    pub fn base(&self) -> &BaseAppContext {
+        &self.base
     }
 
-    // --- Getters d'Accès ---
+    pub fn account_repo(&self) -> Arc<dyn AccountRepository> {
+        self.account_repo.clone()
+    }
+
+    pub fn outbox_repo(&self) -> Arc<dyn OutboxRepository> {
+        self.outbox_repo.clone()
+    }
+
+    pub fn idempotency_repo(&self) -> Arc<dyn IdempotencyRepository> {
+        self.idempotency_repo.clone()
+    }
+}
+
+/// Le contexte d'exécution "Scoped" pour une requête unique sur un compte.
+#[derive(Clone)]
+pub struct AccountContext {
+    app: AccountAppContext,
+    account_id: AccountId,
+    region: RegionCode,
+}
+
+impl AccountContext {
+    pub(crate) fn new(app: AccountAppContext, account_id: AccountId, region: RegionCode) -> Self {
+        Self {
+            app,
+            account_id,
+            region,
+        }
+    }
+
+    // --- Accès aux Repositories ---
 
     pub fn account_id(&self) -> &AccountId {
         &self.account_id
@@ -63,179 +82,137 @@ impl AccountContext {
         &self.region
     }
 
-    pub fn identity_repo(&self) -> Arc<dyn AccountIdentityRepository> {
-        self.identity_repo.clone()
-    }
-
-    pub fn metadata_repo(&self) -> Arc<dyn AccountMetadataRepository> {
-        self.metadata_repo.clone()
-    }
-
-    pub fn settings_repo(&self) -> Arc<dyn AccountSettingsRepository> {
-        self.settings_repo.clone()
+    pub fn account_repo(&self) -> Arc<dyn AccountRepository> {
+        self.app.account_repo()
     }
 
     pub fn outbox_repo(&self) -> Arc<dyn OutboxRepository> {
-        self.outbox_repo.clone()
+        self.app.outbox_repo()
+    }
+
+    pub fn pool(&self) -> Option<&sqlx::PgPool> {
+        self.app.base.pool()
+    }
+    // --- Logique Métier ---
+
+    /// Récupère l'agrégat complet.
+    pub async fn account(&self) -> Result<Account> {
+        let account = self
+            .account_repo()
+            .find_by_id(&self.account_id, None)
+            .await?
+            .ok_or_else(|| DomainError::NotFound {
+                entity: "Account",
+                id: self.account_id.to_string(),
+            })?;
+
+        self.ensure_region(&account)?;
+
+        Ok(account)
+    }
+
+    /// Sauvegarde l'agrégat et ses événements dans une transaction unique.
+    pub async fn save(&self, account: &mut Account, command_id: Option<uuid::Uuid>) -> Result<()> {
+        // 1. Validations de sécurité
+        if account.identity().account_id() != &self.account_id {
+            return Err(DomainError::Validation {
+                field: "account_id".into(),
+                reason: "Account ID mismatch for this context".into(),
+            });
+        }
+        self.ensure_region(account)?;
+
+        // 2. Récupération des événements
+        // C'est notre indicateur de changement : pas d'events = pas de modif métier
+        let events = account.pull_events();
+
+        // --- OPTIMISATION IDEMPOTENCE MÉTIER ---
+        if events.is_empty() {
+            if let Some(cmd_id) = command_id {
+                let mut tx = self.begin_transaction().await?;
+
+                let already_processed = self
+                    .app
+                    .idempotency_repo()
+                    .exists(&mut *tx, &cmd_id)
+                    .await?;
+
+                if already_processed {
+                    return Err(DomainError::AlreadyExists {
+                        entity: "Command",
+                        field: "id",
+                        value: cmd_id.to_string(),
+                    });
+                }
+
+                self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
+                tx.commit().await?;
+            }
+            return Ok(());
+        }
+
+        // 3. Persistance Atomique (si des changements existent)
+        let mut tx = self.begin_transaction().await?;
+
+        if let Some(cmd_id) = command_id {
+            // A. Vérifier (Double check dans la transaction)
+            let already_processed = self
+                .app
+                .idempotency_repo()
+                .exists(&mut *tx, &cmd_id)
+                .await?;
+            if already_processed {
+                return Err(DomainError::AlreadyExists {
+                    entity: "Command",
+                    field: "id",
+                    value: cmd_id.to_string(),
+                });
+            }
+        }
+
+        // B. Sauvegarde de l'agrégat (la version monte ici via le domaine)
+        self.account_repo().save(account, Some(&mut *tx)).await?;
+
+        // C. Outbox
+        let event_refs: Vec<&dyn DomainEvent> = events.iter().map(|e| e.as_ref()).collect();
+        self.outbox_repo().save_all(&mut *tx, &event_refs).await?;
+
+        // D. Marquer la commande
+        if let Some(cmd_id) = command_id {
+            self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 
     // --- Gestion des Transactions ---
-    // On force la transaction sur le bon shard.
-    
+
     pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
-        match &self.pool {
+        // On utilise l'accesseur du base_ctx qui renvoie maintenant Option<&PgPool>
+        match self.app.base.pool() {
             Some(pool) => {
-                let tx = pool.begin().await.map_err(|e| DomainError::Infrastructure(e.to_string()))?;
-                let pg_tx: Box<dyn Transaction> = Box::new(PostgresTransaction::new(tx));
-                Ok(pg_tx)
-            },
+                let tx = pool
+                    .begin()
+                    .await
+                    .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+
+                Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
+            }
             None => {
-                let fake_tx: Box<dyn Transaction> = Box::new(FakeTransaction::new());
-                Ok(fake_tx)
+                // En test, on tombe ici !
+                Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>)
             }
         }
     }
 
-    // --- High-Level Decorated API (The "Safe" Zone) ---
-    
-    pub async fn identity(&self) -> Result<AccountIdentity> {
-        self.fetch_identity(None).await
-    }
+    // --- Sécurité ---
 
-    pub async fn metadata(&self) -> Result<AccountMetadata> {
-        self.fetch_metadata(None).await
-    }
-
-    pub async fn settings(&self) -> Result<AccountSettings> {
-        self.fetch_settings(None).await
-    }
-
-    /// Récupère une identité avec garantie de région et gestion automatique du NotFound.
-    pub async fn fetch_identity(&self, tx: Option<&mut dyn Transaction>) -> Result<AccountIdentity> {
-        let account_id = &self.account_id;
-        let identity = self.identity_repo
-            .fetch_by_account_id(account_id, tx)
-            .await?
-            .ok_or_else(|| DomainError::NotFound {
-                entity: "AccountIdentity",
-                id: account_id.to_string(),
-            })?;
-        self.ensure_region(&identity)?;
-
-        Ok(identity)
-    }
-
-    pub async fn fetch_metadata(&self, tx: Option<&mut dyn Transaction>) -> Result<AccountMetadata> {
-        let account_id = &self.account_id;
-        let metadata = self.metadata_repo()
-            .fetch_by_account_id(account_id, tx)
-            .await?
-            .ok_or_else(|| DomainError::NotFound {
-                entity: "AccountMetadata",
-                id: account_id.to_string(),
-            })?;
-        Ok(metadata)
-    }
-
-    pub async fn fetch_settings(&self, tx: Option<&mut dyn Transaction>) -> Result<AccountSettings> {
-        let account_id = &self.account_id;
-        let settings = self.settings_repo()
-            .fetch_by_account_id(account_id, tx)
-            .await?
-            .ok_or_else(|| DomainError::NotFound {
-                entity: "AccountSettings",
-                id: account_id.to_string(),
-            })?;
-            
-        Ok(settings)
-    }
-
-    /// Sauvegarde une identité en vérifiant une dernière fois la cohérence régionale.
-    pub async fn save_identity(
-        &self, 
-        identity: &AccountIdentity, 
-        original: Option<&AccountIdentity>, 
-        tx: &mut dyn Transaction
-    ) -> Result<()> {
-        if identity.account_id() != &self.account_id {
-            return Err(DomainError::Validation {
-                field: "account_id".into(),
-                reason: "Identity account_id mismatch for this context".into(),
-            });
-        }
-        self.ensure_region(identity)?;
-        self.identity_repo.save(identity, original, Some(tx)).await
-    }
-
-    /// Action critique : Déplace un agrégat vers un autre shard (Région).
-    /// Cette méthode est la SEULE autorisée à changer le RegionCode.
-    pub async fn migrate_identity_to_region(
-        &self,
-        identity: &AccountIdentity,
-        original: &AccountIdentity,
-        tx: &mut dyn Transaction
-    ) -> Result<()> {
-        // 1. Sécurité : On vérifie que l'original appartient bien à CE contexte (Shard actuel)
-        self.ensure_region(original)?;
-
-        // 2. Sécurité : On vérifie que l'ID n'a pas changé (On ne migre pas vers un autre compte)
-        if identity.account_id() != original.account_id() {
-            return Err(DomainError::Validation {
-                field: "account_id".into(),
-                reason: "Identity account_id mismatch during migration".into(),
-            });
-        }
-        self.identity_repo.save(identity, Some(original), Some(tx)).await
-    }
-
-    pub async fn save_metadata(
-        &self,
-        metadata: &AccountMetadata,
-        original: Option<&AccountMetadata>,
-        tx: &mut dyn Transaction
-    ) -> Result<()> {
-       if metadata.account_id() != &self.account_id {
-            return Err(DomainError::Validation {
-                field: "account_id".into(),
-                reason: "Metadata account_id mismatch for this context".into(),
-            });
-        }
-        self.metadata_repo.save(metadata, original, Some(tx)).await
-    }
-
-    /// Sauvegarde les réglages sur le shard actuel.
-    pub async fn save_settings(
-        &self,
-        settings: &AccountSettings,
-        original: Option<&AccountSettings>,
-        tx: &mut dyn Transaction
-    ) -> Result<()> {
-        if settings.account_id() != &self.account_id {
-            return Err(DomainError::Validation {
-                field: "account_id".into(),
-                reason: "Settings account_id mismatch for this context".into(),
-            });
-        }
-        self.settings_repo.save(settings, original, Some(tx)).await
-    }
-
-    /// (private) Vérifie que l'entité appartient bien à la région de ce contexte (ce shard).
-    fn ensure_region(&self, identity: &AccountIdentity) -> Result<()> {
-        if identity.region_code() != &self.region {
+    fn ensure_region(&self, account: &Account) -> Result<()> {
+        if account.identity().region_code() != &self.region {
             return Err(DomainError::NotFound {
                 entity: "Account",
-                id: identity.account_id().to_string(),
-            });
-        }
-        Ok(())
-    }
-
-     /// Vérifie que l'id de la commande correspond bien
-    pub fn ensure_id(&self, cmd_account_id: &AccountId) -> Result<()> {
-        if cmd_account_id != &self.account_id {
-            return Err(DomainError::NotFound {
-                entity: "Account",
-                id: cmd_account_id.to_string(),
+                id: account.identity().account_id().to_string(),
             });
         }
         Ok(())

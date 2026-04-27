@@ -99,6 +99,12 @@ impl From<BirthDate> for NaiveDate {
     }
 }
 
+impl From<&BirthDate> for NaiveDate {
+    fn from(birth_date: &BirthDate) -> Self {
+        NaiveDate::from(*birth_date)
+    }
+}
+
 impl FromStr for BirthDate {
     type Err = DomainError;
     fn from_str(s: &str) -> Result<Self> {

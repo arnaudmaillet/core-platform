@@ -1,3 +1,5 @@
 mod postgres_outbox_repository;
+mod postgres_idempotency_repository;
 
 pub use postgres_outbox_repository::PostgresOutboxRepository;
+pub use postgres_idempotency_repository::PostgresIdempotencyRepository;

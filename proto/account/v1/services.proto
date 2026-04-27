@@ -41,23 +41,24 @@ service AccountStatusService {
 // --- MESSAGES ---
 message GetIdentityRequest { string account_id = 1; }
 message RegisterRequest {
-  string external_id = 1;
-  string email = 2;
-  google.protobuf.Timestamp birth_date = 3;
-  string region_code = 4;
-  string locale = 5;
-  string ip_addr = 6;
+  string command_id = 1;
+  string external_id = 2;
+  RegistrationIdentifier identifier = 3;
+  google.protobuf.Timestamp birth_date = 4;
+  string region_code = 5;
+  string locale = 6;
+  string ip_addr = 7;
 }
 // message ResolveIdentityRequest { string external_id = 1; }
-message LinkExternalIdentityRequest { string account_id = 1; string external_id = 2; }
-message ChangeEmailRequest { string account_id = 1; string new_email = 2; }
-message VerifyEmailRequest { string account_id = 1; string token = 2; }
-message ChangePhoneNumberRequest { string account_id = 1; string new_phone = 2; }
-message VerifyPhoneNumberRequest { string account_id = 1; string code = 2; }
-message ChangeBirthDateRequest { string account_id = 1; google.protobuf.Timestamp new_birth_date = 2; }
-message ChangeRegionRequest { string account_id = 1; string new_region = 2; }
-message DeactivateRequest { string account_id = 1; }
-message ActivateRequest { string account_id = 1; }
+message LinkExternalIdentityRequest { string command_id = 1; string account_id = 2; string external_id = 3; }
+message ChangeEmailRequest { string command_id = 1; string account_id = 2; string new_email = 3; }
+message VerifyEmailRequest { string command_id = 1; string account_id = 2; string token = 3; }
+message ChangePhoneNumberRequest { string command_id = 1; string account_id = 2; string new_phone = 3; }
+message VerifyPhoneNumberRequest { string command_id = 1; string account_id = 2; string code = 3; }
+message ChangeBirthDateRequest { string command_id = 1; string account_id = 2; google.protobuf.Timestamp new_birth_date = 3; }
+message ChangeRegionRequest { string command_id = 1; string account_id = 2; string new_region = 3; }
+message DeactivateRequest { string command_id = 1; string account_id = 2; optional string reason = 3; }
+message ActivateRequest { string command_id = 1; string account_id = 2; }
 message ResolveIdentityResponse {
   string account_id = 1;
   AccountState state = 2;

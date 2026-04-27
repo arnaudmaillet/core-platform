@@ -7,7 +7,7 @@ use crate::errors::Result;
 use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::transactions::TransactionExt;
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres, QueryBuilder, Row, query};
+use sqlx::{Pool, Postgres, QueryBuilder, Row};
 
 pub struct PostgresOutboxRepository {
     pool: Pool<Postgres>,

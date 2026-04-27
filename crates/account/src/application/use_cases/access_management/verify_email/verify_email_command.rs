@@ -1,4 +1,4 @@
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::AccountId;
 use shared_proto::account::v1::VerifyEmailRequest;
 
 pub struct VerifyEmailCommand {

@@ -1,85 +1,45 @@
-// crates/account/src/domain/builders/account_builder.rs
+// crates/account/src/domain/builders/_builder.rs
 
 use crate::domain::account::entities::AccountIdentity;
 use crate::domain::value_objects::{
     AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
 };
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::errors::{DomainError, Result};
 
 pub struct AccountIdentityBuilder {
     account_id: AccountId,
     region_code: RegionCode,
     external_id: ExternalId,
-    email: Email,
+    email: Option<Email>,
     locale: Option<Locale>,
     phone: Option<PhoneNumber>,
     birth_date: Option<BirthDate>,
-    version: u64,
+    state: AccountState,
     last_active_at: Option<DateTime<Utc>>,
 }
 
 impl AccountIdentityBuilder {
-    /// Chemin 1 : CRÉATION (Via Use Case d'inscription)
     pub(crate) fn new(
         account_id: AccountId,
         region_code: RegionCode,
-        email: Email,
         external_id: ExternalId,
     ) -> Self {
         Self {
             account_id,
             region_code,
-            email,
+            email: None,
             external_id,
             locale: None,
             phone: None,
             birth_date: None,
-            version: 1,
+            state: AccountState::Pending,
             last_active_at: None,
         }
     }
 
-    /// Chemin 2 : RESTAURATION (Via Repository)
-    /// Utilise la méthode statique de Account pour reconstruire l'agrégat.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn restore(
-        account_id: AccountId,
-        region_code: RegionCode,
-        external_id: ExternalId,
-        email: Email,
-        email_verified: bool,
-        phone_number: Option<PhoneNumber>,
-        phone_verified: bool,
-        account_state: AccountState,
-        birth_date: Option<BirthDate>,
-        locale: Locale,
-        version: u64,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
-        last_active_at: Option<DateTime<Utc>>,
-    ) -> AccountIdentity {
-        // On appelle la méthode restore de l'entité Account
-        AccountIdentity::restore(
-            account_id,
-            region_code,
-            external_id,
-            email,
-            email_verified,
-            phone_number,
-            phone_verified,
-            account_state,
-            birth_date,
-            locale,
-            created_at,
-            updated_at,
-            last_active_at,
-            AggregateMetadata::restore(version),
-        )
-    }
-
-    // --- SETTERS FLUIDES ---
+    // --- SETTERS ---
 
     pub fn with_locale(mut self, locale: Locale) -> Self {
         self.locale = Some(locale);
@@ -88,6 +48,11 @@ impl AccountIdentityBuilder {
 
     pub fn with_optional_locale(mut self, locale: Option<Locale>) -> Self {
         self.locale = locale;
+        self
+    }
+
+    pub fn with_email(mut self, email: Email) -> Self {
+        self.email = Some(email);
         self
     }
 
@@ -116,14 +81,27 @@ impl AccountIdentityBuilder {
         self
     }
 
-    /// Finalise la création d'un NOUVEL utilisateur
-    pub fn build(self) -> AccountIdentity {
-        let now = Utc::now();
-        let activity = self.last_active_at.or(Some(now));
+    pub fn with_state(mut self, state: AccountState) -> Self {
+        self.state = state;
+        self
+    }
 
-        // On utilise la même méthode restore en interne pour garantir
-        // que l'instanciation de l'agrégat est centralisée.
-        AccountIdentity::restore(
+    pub fn with_external_id(mut self, external_id: ExternalId) -> Self {
+        self.external_id = external_id;
+        self
+    }
+
+    pub fn build(self) -> Result<AccountIdentity> {
+        let now = Utc::now();
+
+        if self.email.is_none() && self.phone.is_none() {
+            return Err(DomainError::Validation {
+                field: "identity",
+                reason: "At least one contact method is required".into(),
+            });
+        }
+
+        Ok(AccountIdentity::restore(
             self.account_id,
             self.region_code,
             self.external_id,
@@ -131,13 +109,11 @@ impl AccountIdentityBuilder {
             false,
             self.phone,
             false,
-            AccountState::Pending,
+            self.state,
             self.birth_date,
             self.locale.unwrap_or_default(),
             now,
-            now,
-            activity,
-            AggregateMetadata::new(self.version),
-        )
+            self.last_active_at,
+        ))
     }
 }

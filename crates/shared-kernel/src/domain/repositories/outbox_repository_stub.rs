@@ -7,6 +7,7 @@ use crate::errors::{DomainError, Result};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
+#[derive(Default)]
 pub struct OutboxRepositoryStub {
     saved_events: Arc<Mutex<Vec<String>>>,
     error_to_return: Arc<Mutex<Option<DomainError>>>,
@@ -14,10 +15,7 @@ pub struct OutboxRepositoryStub {
 
 impl OutboxRepositoryStub {
     pub fn new() -> Self {
-        Self {
-            saved_events: Arc::new(Mutex::new(vec![])),
-            error_to_return: Arc::new(Mutex::new(None)),
-        }
+        Self::default()
     }
 
     // --- Helpers pour l'Arrange ---

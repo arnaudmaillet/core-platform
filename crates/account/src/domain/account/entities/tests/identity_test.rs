@@ -1,107 +1,151 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::account::entities::AccountIdentity;
-    use crate::domain::value_objects::*;
-    use chrono::{Duration, Utc};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+    use shared_kernel::{
+        domain::{
+            events::{AggregateMetadata, AggregateRoot},
+            value_objects::{AccountId, AuditReason, RegionCode},
+        },
+        errors::Result,
+    };
 
-    // Helper pour créer un compte de base rapidement
-    fn create_test_account() -> AccountIdentity {
+    use crate::domain::{
+        account::entities::Account,
+        value_objects::{AccountState, Email, ExternalId, RegistrationIdentifier, TrustScore},
+    };
+
+    fn create_test_account() -> Account {
         let id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
-        let email = Email::try_new("john@example.com").unwrap();
         let external_id = ExternalId::try_new("auth0|123").unwrap();
+        let identifier =
+            RegistrationIdentifier::from_email(Email::try_new("john@example.com").unwrap());
 
-        AccountIdentity::builder(id, region, email, external_id)
-            .with_last_active_at(Utc::now() - Duration::hours(1))
+        Account::builder(id, region, identifier, external_id)
             .build()
+            .expect("Failed to build test account")
     }
 
     #[test]
-    fn test_account_initial_state() {
+    fn test_account_initial_state() -> Result<()> {
         let account = create_test_account();
 
-        assert_eq!(account.state(), &AccountState::Pending);
-        assert!(!account.is_email_verified());
-        assert_eq!(account.version(), 1);
+        assert_eq!(account.identity().state(), &AccountState::Pending);
+        assert!(!account.identity().is_email_verified());
+        // La version est portée par l'agrégat via AggregateMetadata
+        assert_eq!(
+            account.metadata().version(),
+            AggregateMetadata::INITIAL_VERSION
+        );
+        assert_eq!(account.governance().trust_score().value(), TrustScore::MAX);
+
+        Ok(())
     }
 
     #[test]
-    fn test_email_verification_flow_and_idempotency() {
+    fn test_email_verification_flow_with_bonus() -> Result<()> {
         let mut account = create_test_account();
-        let token = "any_token";
+        let token = "valid_token";
+        let snapshot_version = account.version();
+        // Action
+        let changed = account.verify_email(token)?;
 
-        // 1. Plus de paramètre &region
-        let changed = account.verify_email(&token).expect("Should verify email");
         assert!(changed);
-        assert!(account.is_email_verified());
-        assert_eq!(account.state(), &AccountState::Active);
+        assert!(account.identity().is_email_verified());
+        assert_eq!(account.identity().state(), &AccountState::Active);
 
-        let _ = account.metadata_mut().pull_events();
+        // Vérification du bonus de confiance automatique
+        // Score initial (100) + Bonus (10) plafonné à MAX (100)
+        // Pour tester le reward, on pourrait baisser le score avant
+        assert_eq!(account.governance().trust_score().value(), TrustScore::MAX);
 
-        // 2. Idempotence simple
-        let changed = account.verify_email(&token).unwrap();
-        assert!(!changed);
+        // Vérification de la version globale
+        assert_eq!(account.metadata().version(), snapshot_version + 1);
+
+        Ok(())
     }
 
     #[test]
-    fn test_identity_linking_security() {
+    fn test_account_suspension_and_unsuspend_with_reason() -> Result<()> {
         let mut account = create_test_account();
+        let snapshot_version = account.version();
 
-        // Liaison identique (Idempotence)
-        let same_id = ExternalId::try_new("auth0|123").unwrap();
-        let changed = account.link_external_identity(same_id).unwrap();
-        assert!(!changed);
-
-        // Tentative de changement d'identité externe (Règle métier : Interdit)
-        let new_id = ExternalId::try_new("google|456").unwrap();
-        let result = account.link_external_identity(new_id);
-        assert!(result.is_err(), "Should not allow re-linking");
-    }
-
-    #[test]
-    fn test_account_suspension_lifecycle() {
-        let mut account = create_test_account();
-        let token: &str = "any_token";
-        account.verify_email(&token).unwrap();
-
-        // Suspension
-        let changed = account.suspend("Suspicious activity".into()).unwrap();
+        // Suspension avec raison obligatoire (&str)
+        let changed = account.suspend(AuditReason::try_new("Suspicious activity")?)?;
         assert!(changed);
-        assert!(account.is_blocked());
+        assert!(account.identity().is_blocked());
+        assert_eq!(account.metadata().version(), 2);
 
-        // Unsuspend
-        let changed = account.unsuspend().unwrap();
+        // Unsuspend avec raison optionnelle (Option<&str>)
+        let changed = account.unsuspend(AuditReason::try_new("Cleared by support")?)?;
         assert!(changed);
-        assert!(account.is_active());
+        assert!(account.identity().is_active());
+        assert_eq!(account.metadata().version(), snapshot_version + 2);
+
+        Ok(())
     }
 
     #[test]
-    fn test_banning_constraints() {
+    fn test_banning_and_trust_score_destruction() -> Result<()> {
         let mut account = create_test_account();
 
-        account.ban("Violation of TOS".into()).unwrap();
-        assert_eq!(account.state(), &AccountState::Banned);
+        // Ban (Raison obligatoire)
+        account.ban(AuditReason::try_new("Violation of TOS")?)?;
 
-        // Règle métier : On ne peut pas "activer" un banni sans l' "unban"
-        let res = account.activate();
-        assert!(res.is_err());
+        assert_eq!(account.identity().state(), &AccountState::Banned);
+        // Le ban doit détruire le trust score (Penalty 100)
+        assert_eq!(account.governance().trust_score().value(), TrustScore::MIN);
 
-        account.unban().unwrap();
-        assert_eq!(account.state(), &AccountState::Active);
+        // Unban (Raison optionnelle)
+        account.unban(AuditReason::system("Automatic unban"))?;
+        assert_eq!(account.identity().state(), &AccountState::Active);
+        // Le unban redonne un petit bonus de réhabilitation (20)
+        assert_eq!(account.governance().trust_score().value(), 20);
+
+        Ok(())
     }
 
     #[test]
-    fn test_activity_recording_throttling() {
+    fn test_trust_score_operations() -> Result<()> {
         let mut account = create_test_account();
 
-        // Premier log : True (car l'heure dans le builder est ancienne)
-        let first_log = account.record_activity().unwrap();
-        assert!(first_log);
+        // On baisse manuellement le score
+        account.penalize_trust(30, AuditReason::try_new("Minor warning")?)?;
+        assert_eq!(account.governance().trust_score().value(), 70);
 
-        // Second log : False (Throttling < 5 mins)
-        let second_log = account.record_activity().unwrap();
-        assert!(!second_log);
+        // On remonte
+        account.reward_trust(10, AuditReason::try_new("Good behavior")?)?;
+        assert_eq!(account.governance().trust_score().value(), 80);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_activity_throttling() -> Result<()> {
+        let mut account = create_test_account();
+
+        // Premier enregistrement (toujours true à l'init)
+        let first = account.record_activity()?;
+        assert!(first);
+
+        // Deuxième immédiat (doit être false cause throttling 5min)
+        let second = account.record_activity()?;
+        assert!(!second);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_shadowban_logic() -> Result<()> {
+        let mut account = create_test_account();
+
+        assert!(!account.governance().is_shadowbanned());
+
+        account.shadowban(AuditReason::try_new("Investigation pending")?)?;
+        assert!(account.governance().is_shadowbanned());
+
+        account.lift_shadowban(AuditReason::try_new("Investigation cleared")?)?;
+        assert!(!account.governance().is_shadowbanned());
+
+        Ok(())
     }
 }

@@ -27,8 +27,8 @@ impl From<PostgresAccountState> for AccountState {
 }
 
 /// Convertit le Domaine vers le type SQLx (Écriture vers la DB)
-impl From<AccountState> for PostgresAccountState {
-    fn from(domain_status: AccountState) -> Self {
+impl From<&AccountState> for PostgresAccountState {
+    fn from(domain_status: &AccountState) -> Self {
         match domain_status {
             AccountState::Pending => PostgresAccountState::Pending,
             AccountState::Active => PostgresAccountState::Active,

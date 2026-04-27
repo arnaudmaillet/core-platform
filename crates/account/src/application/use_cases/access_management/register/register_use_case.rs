@@ -1,94 +1,65 @@
 // crates/account/src/application/use_cases/access_management/register/mod.rs
+use async_trait::async_trait;
 
-use shared_kernel::domain::events::{AggregateRoot, DomainEvent};
-use shared_kernel::domain::utils::{RetryConfig, with_retry};
+use shared_kernel::application::CommandHandler;
+use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 
-use crate::application::context::AccountContext;
+use crate::application::context::{AccountAppContext, AccountContext};
 use crate::application::use_cases::access_management::register::RegisterCommand;
-use crate::domain::account::entities::{AccountIdentity, AccountMetadata, AccountSettings};
+use crate::domain::account::entities::Account;
 
-pub struct RegisterUseCase;
+pub struct RegisterHandler;
 
-impl RegisterUseCase {
-    pub fn new() -> Self {
-        Self
-    }
+#[async_trait]
+impl CommandHandler for RegisterHandler {
+    type Context = AccountAppContext;
+    type Command = RegisterCommand;
+    type Output = AccountId;
 
-    pub async fn execute(
-        &self, 
-        ctx: &AccountContext, 
-        cmd: RegisterCommand
-    ) -> Result<AccountIdentity> {
-        with_retry(RetryConfig::default(), || async {
-            self.try_execute_once(ctx, &cmd).await
-        })
-        .await
-    }
-
-    async fn try_execute_once(
-        &self, 
-        ctx: &AccountContext, 
-        cmd: &RegisterCommand
-    ) -> Result<AccountIdentity> {
-        let account_id = *ctx.account_id();
-
-        // Vérification d'unicité (Optimiste)
-        if ctx.identity_repo().exists_by_external_id(&cmd.external_id).await? {
+    async fn handle(
+        &self,
+        app_ctx: &AccountAppContext,
+        cmd: RegisterCommand,
+    ) -> Result<Self::Output> {
+        // 1. Validation de non-existence (Invariants métier)
+        // On vérifie l'external_id (Keycloak sub)
+        if app_ctx
+            .account_repo()
+            .exists_by_external_id(&cmd.external_id)
+            .await?
+        {
             return Err(DomainError::AlreadyExists {
-                entity: "AccountIdentity",
+                entity: "Account",
                 field: "external_id",
                 value: cmd.external_id.to_string(),
             });
         }
 
-        if ctx.identity_repo().exists_by_email(&cmd.email).await? {
-            return Err(DomainError::AlreadyExists {
-                entity: "AccountIdentity",
-                field: "email",
-                value: cmd.email.to_string(),
-            });
-        }
+        // 2. Création de l'identifiant unique de notre domaine
+        let account_id = AccountId::new();
 
-        // 1. INITIALISATION DES 3 AGRÉGATS
-        let mut identity = AccountIdentity::builder(
-            account_id,
+        // 3. Construction de l'agrégat via le builder
+        // CHANGEMENT ICI : on utilise cmd.identifier directement
+        let mut account = Account::builder(
+            account_id.clone(),
             cmd.region.clone(),
-            cmd.email.clone(),
-            cmd.external_id.clone(),
+            cmd.identifier,
+            cmd.external_id,
         )
-        .with_locale(cmd.locale.clone())
-        .build();
+        .with_locale(cmd.locale)
+        .build()?;
 
-        let metadata = AccountMetadata::builder(account_id)
-            .with_ip_addr(cmd.ip_addr.clone())
-            .build();
+        // 4. Exécution de la logique de domaine
+        // C'est ici que l'IP est enregistrée et que l'événement AccountRegistered est généré
+        account.register(cmd.region.clone(), cmd.ip_addr)?;
 
-        let settings = AccountSettings::builder(account_id).build();
+        // 5. Sauvegarde atomique via le Scoped Context
+        // Cela garantit : Transaction DB + Outbox Event + Idempotence (command_id)
+        let scoped_ctx = AccountContext::new(app_ctx.clone(), account_id.clone(), cmd.region);
 
-        // 2. LOGIQUE MÉTIER & ÉVÉNEMENTS
-        if !identity.register(cmd.region.clone(), cmd.ip_addr.clone())? {
-            return Err(DomainError::Unexpected("Registration logic failed".into()));
-        }
+        scoped_ctx.save(&mut account, Some(cmd.command_id)).await?;
 
-        let pulled_events = identity.pull_events();
-        let events: Vec<&dyn DomainEvent> = pulled_events.iter().map(|e| e.as_ref()).collect();
-
-        // 3. PERSISTANCE TRANSACTIONNELLE
-        // On ouvre une transaction sur le shard de la région demandée
-        let mut tx = ctx.begin_transaction().await?;
-
-        // On sauvegarde les 3 piliers du compte
-        // On passe None pour "original" car c'est une création (INSERT)
-        ctx.save_identity(&identity, None, &mut *tx).await?;
-        ctx.save_metadata(&metadata, None, &mut *tx).await?;
-        ctx.save_settings(&settings, None, &mut *tx).await?;
-
-        // On persiste les événements
-        ctx.outbox_repo().save_all(&mut *tx, &events).await?;
-
-        tx.commit().await?;
-
-        Ok(identity)
+        Ok(account_id)
     }
 }

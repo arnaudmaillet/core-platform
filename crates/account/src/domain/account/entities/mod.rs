@@ -1,9 +1,11 @@
+mod account;
 mod identity;
-mod metadata;
+mod governance;
 mod settings;
 
+pub use account::Account;
 pub use identity::AccountIdentity;
-pub use metadata::AccountMetadata;
+pub use governance::AccountGovernance;
 pub use settings::{AccountSettings, AccountPreferences};
 
 #[cfg(test)]

@@ -1,159 +1,178 @@
+// crates/account/src/application/use_cases/lifecycle/activate/activate_use_case_test.rs
+
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateUseCase};
+    use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
     use crate::application::utils::TestFixture;
-    use crate::domain::account::builders::AccountIdentityBuilder;
-    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
-    use chrono::Utc;
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_activate_account_success() {
-        let f = TestFixture::new(ActivateUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_activate_account_success() -> Result<()> {
+        let f = TestFixture::new();
 
         // 1. Arrange : On crée un compte désactivé
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("back@test.com").unwrap(),
-            ExternalId::from_raw("ext_123"),
-        )
-        .build();
+        let mut account = f.account_builder()?.build()?;
 
-        // On le passe en désactivé (Version passe à 2)
-        identity.deactivate().unwrap();
-        identity.pull_events();
-        let version_deactivated = identity.version();
+        account.deactivate(None)?;
+        account.pull_events();
 
-        f.identity_repo().insert(identity);
+        let version_snapshot = account.version();
 
-        let cmd = ActivateCommand { account_id };
+        f.account_repo().insert(account);
 
-        // 2. Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let cmd = ActivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+        };
 
-        // 3. Assert
-        assert!(result.is_ok());
-        let updated = result.unwrap();
+        f.bus()
+            .execute(f.account_ctx(), cmd, ActivateHandler)
+            .await?;
 
-        assert_eq!(*updated.state(), AccountState::Active);
-        assert_eq!(updated.version(), version_deactivated + 1);
-
-        // 4. Persistence
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(*saved.state(), AccountState::Active);
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Active);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
         // 5. Outbox
-        assert_eq!(f.outbox_repo().count(), 1, "Un événement AccountEvent::ACTIVATED attendu");
-        assert!(f.outbox_events().contains(&AccountEvent::ACTIVATED.to_string()));
+        f.assert_outbox(1, Some(AccountEvent::ACTIVATED));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_activate_idempotency() {
-        let f = TestFixture::new(ActivateUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_activate_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
 
-        // 1. Arrange : Compte déjà ACTIVE via restore
-        let identity = AccountIdentityBuilder::restore(
-            account_id,
-            region,
-            ExternalId::from_raw("ext"),
-            Email::try_new("a@b.com").unwrap(),
-            true,
-            None,
-            false,
-            AccountState::Active,
-            None,
-            Locale::default(),
-            1,
-            Utc::now(),
-            Utc::now(),
-            Some(Utc::now()),
-        );
+        // Arrange : On simule une commande déjà traitée
+        f.idempotency_repo().seed(cmd_id);
 
-        f.identity_repo().insert(identity);
+        let mut account = f.account_builder()?.build()?;
+        account.deactivate(None)?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ActivateCommand {
-            account_id,
+            command_id: cmd_id,
+            account_id: f.account_id(),
         };
 
         // 2. Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let result = f.bus().execute(f.account_ctx(), cmd, ActivateHandler).await;
 
         // 3. Assert
-        assert!(result.is_ok());
-        let returned = result.unwrap();
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
-        assert_eq!(*returned.state(), AccountState::Active);
-        assert_eq!(returned.version(), 1);
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Deactivated);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
 
-        // 4. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : aucun événement produit"
-        );
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_activate_forbidden_if_banned() {
-        let f = TestFixture::new(ActivateUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_activate_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
 
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("banned@test.com").unwrap(),
-            ExternalId::from_raw("ext"),
-        )
-        .build();
+        // Arrange : Compte déjà actif
+        let mut account = f.account_builder()?.build()?;
+        account.activate()?;
 
-        identity.ban("Violation".into()).unwrap();
-        f.identity_repo().insert(identity);
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        let cmd = ActivateCommand { account_id };
+        let cmd = ActivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+        };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, ActivateHandler)
+            .await?;
 
-        // Seul un compte Deactivated peut être réactivé manuellement
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Active);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_activate_forbidden_if_banned() -> Result<()> {
+        let f = TestFixture::new();
+
+        // Arrange
+        let mut account = f.account_builder()?.build()?;
+        account.ban(AuditReason::try_new("Violation")?)?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = ActivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+        };
+
+        // 2. Act
+        let result = f.bus().execute(f.account_ctx(), cmd, ActivateHandler).await;
+
+        // 3. Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
+
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Banned);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(ActivateUseCase::new);
-        let account_id = f.account_id();
-        let wrong_region = RegionCode::from_raw("us");
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
+        let wrong_region = RegionCode::try_new("us")?;
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Arrange : On insère un compte qui n'est pas dans la région du contexte (eu)
+        let account = f.account_builder_for(wrong_region)?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        let cmd = ActivateCommand { account_id };
+        let cmd = ActivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+        };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        let result = f.bus().execute(f.account_ctx(), cmd, ActivateHandler).await;
 
-        // ASSERT : On vérifie l'obfuscation de sécurité
-        // Le compte existe en base, mais le contexte doit dire "NotFound"
+        // 3. Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        // Vérification directe via le repo (car le contexte ne le trouvera pas)
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
+        assert_eq!(saved.version(), version_snapshot);
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 }

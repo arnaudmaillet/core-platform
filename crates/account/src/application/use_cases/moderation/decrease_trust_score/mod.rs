@@ -3,4 +3,4 @@ mod decrease_trust_score_use_case;
 mod decrease_trust_score_use_case_test;
 
 pub use decrease_trust_score_command::DecreaseTrustScoreCommand;
-pub use decrease_trust_score_use_case::DecreaseTrustScoreUseCase;
+pub use decrease_trust_score_use_case::DecreaseTrustScoreHandler;

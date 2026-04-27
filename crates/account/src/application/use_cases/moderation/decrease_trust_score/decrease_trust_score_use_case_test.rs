@@ -1,238 +1,238 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::moderation::decrease_trust_score::{
-        DecreaseTrustScoreCommand, DecreaseTrustScoreUseCase,
+        DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::{AccountIdentity, AccountMetadata};
-    use crate::domain::value_objects::{AccountRole, Email, ExternalId};
-    use shared_kernel::domain::events::{AggregateRoot, AggregateMetadata};
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use crate::domain::events::AccountEvent;
+    use crate::domain::value_objects::AccountState;
+    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_decrease_trust_score_success() {
-        let f = TestFixture::new(DecreaseTrustScoreUseCase::new);
-        let account_id = f.account_id();
-        let now = chrono::Utc::now();
+    async fn test_decrease_trust_score_success() -> Result<()> {
+        let f = TestFixture::new();
 
-        // 1. Arrange : On RESTAURE avec un score de 100 en v1
-        let metadata = AccountMetadata::restore(
-            account_id,
-            AccountRole::User,
-            false,
-            false,
-            100, // On force le départ à 100
-            None,
-            None,
-            None,
-            now,
-            AggregateMetadata::restore(1),
-        );
-        f.metadata_repo().insert(metadata);
+        // 1. Arrange : Compte actif (score 100 par défaut via builder)
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = DecreaseTrustScoreCommand {
-            account_id: account_id,
-            action_id: uuid::Uuid::now_v7(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
             amount: 30,
-            reason: "Suspicious activity".into(),
+            reason: AuditReason::try_new("Suspicious activity")?,
         };
 
         // 2. Act
-        let updated = f.use_case().execute(&f.ctx(), cmd).await.unwrap();
+        f.bus()
+            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .await?;
 
         // 3. Assert
-        assert_eq!(updated.trust_score(), 70, "100 - 30 devrait donner 70");
-        assert_eq!(updated.version(), 2, "v1 + une mutation = v2");
+        f.assert_account(|acc| {
+            assert_eq!(acc.governance().trust_score().value(), 70);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-       let saved = f
-            .metadata_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.trust_score(), 70);
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement DecreaseTrustScore attendu"
-        );
+        // Vérification de l'événement exact produit par penalize_trust
+        f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_ADJUSTED));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_decrease_trust_score_clamping_and_shadowban() {
-        let f = TestFixture::new(DecreaseTrustScoreUseCase::new);
-        let account_id = f.account_id();
-        let now = chrono::Utc::now();
+    async fn test_decrease_trust_score_clamping_and_shadowban() -> Result<()> {
+        let f = TestFixture::new();
 
-        // 1. Arrange : On RESTAURE en version 1 avec un score de 20
-        let metadata = AccountMetadata::restore(
-            account_id,
-            AccountRole::User,
-            false,
-            false,
-            20, // Score de départ
-            None,
-            None,
-            None,
-            now,
-           AggregateMetadata::restore(1),
-        );
-        f.metadata_repo().insert(metadata);
+        // 1. Arrange : Utilisation du builder avec un score précis
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .with_trust_score(20)?
+            .build()?;
 
-        let cmd: DecreaseTrustScoreCommand = DecreaseTrustScoreCommand {
-            account_id,
-            action_id: uuid::Uuid::now_v7(),
-            amount: 50, // 20 - 50 -> tombe à 0
-            reason: "Heavy violation".into(),
-        };
-
-        // 2. Act
-        let updated = f.use_case().execute(&f.ctx(), cmd).await.unwrap();
-
-        // 3. Assert
-        assert_eq!(updated.trust_score(), 0);
-        assert!(updated.is_shadowbanned());
-
-        // IMPORTANT : Version 3 car : v1 + 1(score) + 1(shadowban) = 3
-        assert_eq!(
-            updated.version(),
-            3,
-            "La version doit être 3 car deux mutations distinctes ont eu lieu"
-        );
-
-        // 4. Vérification Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            2,
-            "Doit contenir TrustScoreAdjusted ET ShadowbanStatusChanged"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_decrease_trust_score_idempotency_at_minimum() {
-        let f = TestFixture::new(DecreaseTrustScoreUseCase::new);
-        let account_id = f.account_id();
-        let now = chrono::Utc::now();
-
-        // --- ARRANGE ---
-        // Correction de l'appel restore avec les 11 arguments
-        let metadata = AccountMetadata::restore(
-            account_id,
-            AccountRole::User,
-            false,
-            false,
-            20,
-            None,
-            None,
-            None,
-            now,
-            AggregateMetadata::restore(1),
-        );
-
-        f.metadata_repo().insert(metadata);
-
-        // On crée une commande pour baisser de 50.
-        // Comme le score est à 20, il devrait tomber à 0 (clamping) et déclencher un shadowban.
-        // MAIS ici on veut tester l'IDEMPOTENCE, donc on va mettre le score à 0 dans le restore
-        // et s'assurer que si on est déjà à 0 et déjà shadowbanned, rien ne bouge.
-
-        // RE-ARRANGE pour un vrai test d'idempotence au plancher :
-        let metadata_at_floor = AccountMetadata::restore(
-            account_id,
-            AccountRole::User,
-            false,
-            true, // DEJÀ SHADOWBANNED
-            0,    // DEJÀ À ZERO
-            Some(now),
-            Some("Initial penalty".into()),
-            None,
-            now,
-            AggregateMetadata::restore(1),
-        );
-        f.metadata_repo().insert(metadata_at_floor);
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = DecreaseTrustScoreCommand {
-            action_id: uuid::Uuid::now_v7(),
-            account_id: account_id,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            amount: 50, // 20 - 50 -> Clamping à 0
+            reason: AuditReason::try_new("Heavy violation")?,
+        };
+
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(acc.governance().trust_score().value(), 0);
+            assert!(acc.governance().is_shadowbanned());
+            // v1 + 1 (score) + 1 (shadowban) = v3
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
+
+        f.assert_outbox(2, None); // ScoreAdjusted + ShadowbanUpdated
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_decrease_trust_score_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
+
+        f.idempotency_repo().seed(cmd_id);
+
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = DecreaseTrustScoreCommand {
+            command_id: cmd_id,
+            account_id: f.account_id(),
             amount: 10,
-            reason: "Already at floor".into(),
+            reason: AuditReason::try_new("Duplicate")?,
         };
 
-        // --- ACT ---
-        let result = f.use_case().execute(&f.ctx(), cmd).await.unwrap();
+        let result: std::result::Result<(), DomainError> = f
+            .bus()
+            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .await;
 
-        // --- ASSERT ---
-        // Le score reste à 0, l'état shadowbanned reste true, la version reste à 1
-        assert_eq!(result.trust_score(), 0);
-        assert_eq!(result.is_shadowbanned(), true);
-        assert_eq!(result.version(), 1);
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
-        // Vérification Repo : l'objet en base n'a pas été modifié (pas de save)
-       let saved = f
-            .metadata_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.version(), 1);
+        f.assert_account(|acc| {
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
 
-        // Vérification Outbox : aucun événement TrustScoreAdjusted produit
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : aucun événement généré"
-        );
+        Ok(())
     }
 
-
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() {
-        let f = TestFixture::new(DecreaseTrustScoreUseCase::new);
-        let account_id = f.account_id();
+    async fn test_decrease_trust_score_business_idempotency_at_floor() -> Result<()> {
+        let f = TestFixture::new();
 
-        f.metadata_repo().insert(AccountMetadata::builder(account_id).build());
-        f.metadata_repo().set_error(DomainError::ConcurrencyConflict {
-            reason: "DB Busy".into(),
-        });
+        // Arrange : Utilisation du with_state(Banned) qui met auto le score à 0 et shadowban
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Banned)?
+            .build()?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = DecreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
-            account_id,
-            amount: 1,
-            reason: "Test".into(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            amount: 10,
+            reason: AuditReason::try_new("Already at zero")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(acc.governance().trust_score().value(), 0);
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "Pas de mutation si déjà au plancher"
+            );
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+        let f = TestFixture::new();
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+        f.account_repo().insert(account);
+
+        f.account_repo()
+            .set_error(DomainError::ConcurrencyConflict {
+                reason: "DB Busy".into(),
+            });
+
+        let cmd = DecreaseTrustScoreCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            amount: 1,
+            reason: AuditReason::try_new("Test")?,
+        };
+
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .await;
         assert!(matches!(
             result,
             Err(DomainError::ConcurrencyConflict { .. })
         ));
+        f.assert_outbox(0, None);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(DecreaseTrustScoreUseCase::new);
-        let account_id = f.account_id();
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Compte aux US, Contexte en EU
+        let account = f
+            .account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)?
+            .build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
         let cmd = DecreaseTrustScoreCommand {
-            action_id: Uuid::now_v7(),
-            account_id,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
             amount: 1,
-            reason: "Test".into(),
+            reason: AuditReason::try_new("Test")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
-
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .await;
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        assert_eq!(
+            saved.version(),
+            version_snapshot,
+            "La version ne doit pas avoir bougé"
+        );
+
+        f.assert_outbox(0, None);
+        Ok(())
     }
 }

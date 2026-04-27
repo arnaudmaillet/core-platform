@@ -3,4 +3,4 @@ mod change_birth_date_use_case;
 mod change_birth_date_use_case_test;
 
 pub use change_birth_date_command::ChangeBirthDateCommand;
-pub use change_birth_date_use_case::ChangeBirthDateUseCase;
+pub use change_birth_date_use_case::ChangeBirthDateHandler;

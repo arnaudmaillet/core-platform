@@ -1,7 +1,3 @@
-mod postgres_metadata_repository;
-mod postgres_identity_repository;
-mod postgres_settings_repository;
+mod postgres_account_repository;
 
-pub use postgres_metadata_repository::PostgresAccountMetadataRepository;
-pub use postgres_identity_repository::PostgresAccountIdentityRepository;
-pub use postgres_settings_repository::PostgresAccountSettingsRepository;
+pub use postgres_account_repository::PostgresAccountRepository;

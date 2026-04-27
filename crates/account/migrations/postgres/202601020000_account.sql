@@ -1,7 +1,7 @@
 -- 1. ENUMS (Identité et rôles)
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_state') THEN
-        CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended');
+        CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended', 'banned');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'internal_role') THEN
         CREATE TYPE internal_role AS ENUM ('user', 'moderator', 'staff', 'admin');
@@ -25,13 +25,14 @@ CREATE TABLE IF NOT EXISTS account_identity (
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_number TEXT,
     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    state account_state NOT NULL DEFAULT 'active',
+    state account_state NOT NULL DEFAULT 'pending',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'en',
     region_code VARCHAR(10),
-    version BIGINT NOT NULL DEFAULT 1,
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    aggregate_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_active_at TIMESTAMPTZ,
     CONSTRAINT uq_external_id UNIQUE (external_id)
 );
@@ -42,13 +43,12 @@ CREATE TABLE IF NOT EXISTS account_settings (
     preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
-    version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_settings_identity FOREIGN KEY (account_id) REFERENCES account_identity(account_id) ON DELETE CASCADE
 );
 
--- 5. METADATA (Relation 1:1 co-localisée)
-CREATE TABLE IF NOT EXISTS account_metadata (
+-- 5. GOVERNANCE (Relation 1:1 co-localisée)
+CREATE TABLE IF NOT EXISTS account_governance (
     account_id UUID PRIMARY KEY,
     role internal_role NOT NULL DEFAULT 'user',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
@@ -57,14 +57,13 @@ CREATE TABLE IF NOT EXISTS account_metadata (
     moderation_notes TEXT,
     last_moderation_at TIMESTAMPTZ,
     last_ip_addr INET,
-    version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_metadata_identity FOREIGN KEY (account_id) REFERENCES account_identity(account_id) ON DELETE CASCADE
+    CONSTRAINT fk_governance_identity FOREIGN KEY (account_id) REFERENCES account_identity(account_id) ON DELETE CASCADE
 );
 
 -- 6. INDEXATION
 CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
-CREATE INDEX IF NOT EXISTS idx_metadata_flagged ON account_metadata (account_id) 
+CREATE INDEX IF NOT EXISTS idx_governance_flagged ON account_governance (account_id) 
 WHERE is_shadowbanned IS TRUE OR trust_score < 50;
 
 -- 7. TRIGGERS (Automatisation du updated_at)
@@ -74,8 +73,8 @@ CREATE TRIGGER trg_set_timestamp_identity BEFORE UPDATE ON account_identity FOR 
 DROP TRIGGER IF EXISTS trg_set_timestamp_settings ON account_settings;
 CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
-DROP TRIGGER IF EXISTS trg_set_timestamp_metadata ON account_metadata;
-CREATE TRIGGER trg_set_timestamp_metadata BEFORE UPDATE ON account_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+DROP TRIGGER IF EXISTS trg_set_timestamp_governance ON account_governance;
+CREATE TRIGGER trg_set_timestamp_governance BEFORE UPDATE ON account_governance FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
 
 
@@ -127,8 +126,8 @@ CREATE TRIGGER trg_set_timestamp_metadata BEFORE UPDATE ON account_metadata FOR 
 --     PRIMARY KEY (account_id, region_code)
 --     );
 
--- -- 4. INTERNAL METADATA (Security & Trust)
--- CREATE TABLE IF NOT EXISTS account_metadata (
+-- -- 4. INTERNAL GOVERNANCE (Security & Trust)
+-- CREATE TABLE IF NOT EXISTS account_governance (
 --     account_id UUID NOT NULL,
 --     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
 --     role internal_role NOT NULL DEFAULT 'user',
@@ -149,7 +148,7 @@ CREATE TRIGGER trg_set_timestamp_metadata BEFORE UPDATE ON account_metadata FOR 
 
 -- CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON account_identity FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 -- CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
--- CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON account_metadata FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+-- CREATE TRIGGER trg_set_timestamp_internal BEFORE UPDATE ON account_governance FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
--- ALTER TABLE account_metadata ALTER COLUMN last_moderation_at DROP NOT NULL;
--- ALTER TABLE account_metadata ADD CONSTRAINT account_metadata_account_id_unique UNIQUE (account_id);
+-- ALTER TABLE account_governance ALTER COLUMN last_moderation_at DROP NOT NULL;
+-- ALTER TABLE account_governance ADD CONSTRAINT account_governance_account_id_unique UNIQUE (account_id);

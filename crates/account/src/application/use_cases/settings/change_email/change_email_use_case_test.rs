@@ -1,202 +1,254 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::settings::change_email::{
-        ChangeEmailCommand, ChangeEmailUseCase,
+        ChangeEmailCommand, ChangeEmailHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{Email, ExternalId};
+    use crate::domain::value_objects::{AccountState, Email};
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects:: RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_change_email_success() {
-        let f = TestFixture::new(ChangeEmailUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
-        let old_email = Email::try_new("old@test.com").unwrap();
-        let new_email = Email::try_new("new@test.com").unwrap();
+    async fn test_change_email_success() -> Result<()> {
+        let f = TestFixture::new();
+        let old_email = Email::try_new("old@test.com")?;
+        let new_email = Email::try_new("new@test.com")?;
 
+        // 1. Arrange : Compte actif avec l'ancien email
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .with_email(old_email)
+            .build()?;
 
-        // On prépare le compte existant
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                region,
-                old_email.clone(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ChangeEmailCommand {
-            account_id: account_id,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
             new_email: new_email.clone(),
         };
 
-        // 1. Act : On récupère l'Account retourné par le Use Case
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .await?;
 
-        // On vérifie que c'est un succès
-        assert!(result.is_ok());
-        let identity = result.unwrap();
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(acc.identity().email(), Some(&new_email));
+            assert!(
+                !acc.identity().is_email_verified(),
+                "L'email ne doit plus être vérifié"
+            );
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-        // 2. Assert : Vérifier l'objet retourné (Mémoire)
-        assert_eq!(identity.email(), &new_email);
-        assert!(!identity.is_email_verified());
+        f.assert_outbox(1, Some(AccountEvent::EMAIL_CHANGED));
 
-        // 3. Assert : Vérifier la persistence (Mock Repo)
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-
-        assert_eq!(saved.email(), &new_email);
-        assert_eq!(saved.version(), 2);
-
-        // 4. Assert : Vérifier l'Outbox (Événements)
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::EMAIL_CHANGED attendu"
-        );
-        assert!(f.outbox_events().contains(&AccountEvent::EMAIL_CHANGED.to_string()));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_change_email_idempotency() {
-        let f = TestFixture::new(ChangeEmailUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
-        let email = Email::try_new("same@test.com").unwrap();
+    async fn test_change_email_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
+        let requested_email = Email::try_new("other@test.com")?;
 
-        // On insère un compte avec la version 1
-        let initial_account = AccountIdentity::builder(
-            account_id,
-            region,
-            email.clone(),
-            ExternalId::from_raw("ext_1"),
-        )
-        .build();
+        // Arrange : Commande déjà enregistrée
+        f.idempotency_repo().seed(cmd_id);
 
-        f.identity_repo().insert(initial_account.clone());
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ChangeEmailCommand {
-            account_id,
-            new_email: email.clone(),
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            new_email: requested_email.clone(),
         };
 
-        // 1. Act : L'exécution doit réussir mais ne rien modifier
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .await;
 
-        assert!(result.is_ok());
-        let returned_identity = result.unwrap();
+        // Assert
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
-        // 2. Assert : L'objet retourné doit être identique à l'initial
-        assert_eq!(returned_identity.email(), &email);
-        assert_eq!(returned_identity.version(), 1);
+        // VERIFICATION : L'email n'a pas été modifié
+        f.assert_account(|acc| {
+            assert_ne!(acc.identity().email(), Some(&requested_email));
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
 
-        // 3. Assert : Rien ne doit avoir été persisté (pas d'appel à save inutile)
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.version(), 1);
-
-        // 4. Assert : Crucial - Aucun événement ne doit être produit
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Aucun evewnement attendu"
-        );
+        f.assert_outbox(0, None);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_change_email_forbidden_when_restricted() {
-        let f = TestFixture::new(ChangeEmailUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_change_email_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let email = Email::try_new("same@test.com")?;
 
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext_1"),
-        )
-        .build();
+        // 1. Arrange : Compte possédant déjà cet email
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .with_email(email.clone())
+            .build()?;
 
-        // Un banni ne change pas son email
-        identity.ban("Violation".into()).unwrap();
-        f.identity_repo().insert(identity);
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ChangeEmailCommand {
-            account_id,
-            new_email: Email::try_new("new@b.com").unwrap(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_email: email,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger"
+            );
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_change_email_forbidden_when_restricted() -> Result<()> {
+        let f = TestFixture::new();
+        let requested_email = Email::try_new("new@test.com")?;
+
+        // Arrange : Un banni ne peut pas modifier ses réglages
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Banned)?
+            .build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = ChangeEmailCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_email: requested_email.clone(),
+        };
+
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .await;
+
+        // Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
+
+        // VERIFICATION : Intégrité conservée
+        f.assert_account(|acc| {
+            assert_ne!(acc.identity().email(), Some(&requested_email));
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() {
-        let f = TestFixture::new(ChangeEmailUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+        let f = TestFixture::new();
+        let requested_email = Email::try_new("b@c.com")?;
 
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                region,
-                Email::try_new("a@b.com").unwrap(),
-                ExternalId::from_raw("ext"),
-            )
-            .build(),
-        );
-        
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        f.identity_repo().set_error(DomainError::ConcurrencyConflict {
-            reason: "Version mismatch".into(),
-        });
+        // Simulation erreur OCC
+        f.account_repo()
+            .set_error(DomainError::ConcurrencyConflict {
+                reason: "Version mismatch".into(),
+            });
 
         let cmd = ChangeEmailCommand {
-            account_id,
-            new_email: Email::try_new("b@c.com").unwrap(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_email: requested_email.clone(),
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .await;
+
         assert!(matches!(
             result,
             Err(DomainError::ConcurrencyConflict { .. })
         ));
+
+        // VERIFICATION : Rollback logique
+        f.assert_account(|acc| {
+            assert_ne!(acc.identity().email(), Some(&requested_email));
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(ChangeEmailUseCase::new);
-        let account_id = f.account_id();
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        let account = f
+            .account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)?
+            .build()?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ChangeEmailCommand {
-            account_id,
-            new_email: Email::try_new("new@test.com").unwrap(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_email: Email::try_new("new@test.com")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .await;
+
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        // Vérification directe (le contexte ne voit pas le compte)
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
+        assert_eq!(saved.version(), version_snapshot);
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 }

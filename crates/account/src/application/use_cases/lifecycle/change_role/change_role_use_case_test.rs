@@ -1,133 +1,144 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::lifecycle::change_role::{
-        ChangeRoleCommand, ChangeRoleUseCase,
+        ChangeRoleCommand, ChangeRoleHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::{AccountIdentity, AccountMetadata};
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountRole, Email, ExternalId};
+    use crate::domain::value_objects::AccountRole;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_change_role_success() {
-        let f = TestFixture::new(ChangeRoleUseCase::new);
-        let account_id = f.account_id();
+    async fn test_change_role_success() -> Result<()> {
+        let f = TestFixture::new();
+        let account = f.account_builder()?.build()?;
+        let version_snapshot = account.version();
 
-        // 1. Arrange : Nouveau compte (Rôle User par défaut, Version 1)
-        f.metadata_repo()
-            .insert(AccountMetadata::builder(account_id).build());
+        f.account_repo().insert(account);
 
         let cmd = ChangeRoleCommand {
-            account_id,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
             new_role: AccountRole::Moderator,
-            reason: "Joined the safety team".into(),
+            reason: AuditReason::try_new("Joined the safety team")?,
         };
 
-        // 2. Act : On récupère l'entité Metadata mise à jour
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        f.bus()
+            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .await?;
 
-        // 3. Assert
-        assert!(result.is_ok(), "Le changement de rôle devrait réussir");
-        let updated = result.unwrap();
+        f.assert_account(|acc| {
+            assert_eq!(acc.governance().role(), AccountRole::Moderator);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-        assert_eq!(updated.role(), AccountRole::Moderator);
-        assert!(
-            updated
-                .moderation_notes()
-                .unwrap()
-                .contains("Joined the safety team")
-        );
-        assert_eq!(updated.version(), 2, "La version doit passer à 2");
+        f.assert_outbox(1, Some(AccountEvent::ROLE_CHANGED));
 
-        // 4. Persistence
-        let saved = f
-            .metadata_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.role(), AccountRole::Moderator);
-
-        // 5. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::ROLE_CHANGED attendu"
-        );
-        assert!(
-            f.outbox_events()
-                .contains(&AccountEvent::ROLE_CHANGED.to_string())
-        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_change_role_idempotency() {
-        let f: TestFixture<ChangeRoleUseCase> = TestFixture::new(ChangeRoleUseCase::new);
-        let account_id = f.account_id();
+    async fn test_change_role_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
 
-        // 1. Arrange : Déjà modérateur (Version passe à 2 lors du setup)
-        let mut metadata = AccountMetadata::builder(account_id).build();
-        metadata
-            .change_role(AccountRole::Moderator, "init".into())
-            .unwrap();
-        metadata.pull_events(); // Clear events du setup
-        let version_after_setup = metadata.version();
+        f.idempotency_repo().seed(cmd_id);
 
-        f.metadata_repo().insert(metadata);
+        let mut account = f.account_builder()?.build()?;
+        let _ = account.change_role(AccountRole::Moderator, AuditReason::try_new("init")?);
+        account.pull_events();
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ChangeRoleCommand {
-            account_id,
-            new_role: AccountRole::Moderator, // On redemande Moderator
-            reason: "Duplicate promotion".into(),
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            new_role: AccountRole::Moderator,
+            reason: AuditReason::try_new("Duplicate promotion")?,
         };
 
-        // 2. Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .await;
 
-        // 3. Assert
-        assert!(result.is_ok());
-        let returned = result.unwrap();
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
-        assert_eq!(returned.role(), AccountRole::Moderator);
-        assert_eq!(
-            returned.version(),
-            version_after_setup,
-            "La version ne doit pas augmenter"
-        );
+        f.assert_account(|acc| {
+            assert_eq!(acc.governance().role(), AccountRole::Moderator);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
 
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "L'idempotence ne doit générer aucun événement"
-        );
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(ChangeRoleUseCase::new);
-        let account_id = f.account_id();
+    async fn test_change_role_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let mut account = f.account_builder()?.build()?;
+
+        let _ = account.change_role(AccountRole::Moderator, AuditReason::try_new("init")?);
+        account.pull_events();
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = ChangeRoleCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_role: AccountRole::Moderator,
+            reason: AuditReason::try_new("Duplicate promotion")?,
+        };
+
+        f.bus()
+            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .await?;
+
+        f.assert_account(|acc| {
+            assert_eq!(acc.governance().role(), AccountRole::Moderator);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
-        let new_role = AccountRole::Moderator;
-        let reason = "some_reason";
 
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        let account = f.account_builder_for(wrong_region)?.build()?;
+        let version_snapshot = account.version();
+
+        f.account_repo().insert(account);
 
         let cmd = ChangeRoleCommand {
-            account_id,
-            new_role,
-            reason: reason.to_string(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_role: AccountRole::Moderator,
+            reason: AuditReason::try_new("some_reason")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .await;
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        // Vérification directe via le repo (car le contexte ne le trouvera pas)
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
+        assert_eq!(saved.version(), version_snapshot);
+        f.assert_outbox(0, None);
+        Ok(())
     }
 }

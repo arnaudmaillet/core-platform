@@ -1,146 +1,162 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::moderation::unban::{UnbanCommand, UnbanUseCase};
+    use crate::application::use_cases::moderation::shadowban::{
+        ShadowbanCommand, ShadowbanHandler,
+    };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::builders::AccountIdentityBuilder;
-    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId, Locale};
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_unban_account_success() {
-        let f = TestFixture::new(UnbanUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_shadowban_account_success() -> Result<()> {
+        let f = TestFixture::new();
 
-        // 1. Arrange : On crée un compte et on le bannit (Version passe à 2)
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("clean@test.com").unwrap(),
-            ExternalId::from_raw("ext_000"),
-        )
-        .build();
+        // 1. Arrange : Compte sain (v1)
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
 
-        identity.ban("Past violation".into()).unwrap();
-        identity.pull_events(); // On nettoie les events du setup
-        let version_banned = identity.version();
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        f.identity_repo().insert(identity);
-
-        let cmd = UnbanCommand {
-            account_id,
+        let cmd = ShadowbanCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Spam behavior detected")?,
         };
 
-        // 2. Act : On s'attend à recevoir l'Account réactivé
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await?;
 
         // 3. Assert
-        assert!(result.is_ok(), "Le débannissement devrait réussir");
-        let updated = result.unwrap();
+        f.assert_account(|acc| {
+            assert!(acc.governance().is_shadowbanned());
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-        assert_eq!(*updated.state(), AccountState::Active);
-        assert_eq!(
-            updated.version(),
-            version_banned + 1,
-            "La version doit être incrémentée"
-        );
+        f.assert_outbox(1, Some(AccountEvent::SHADOWBAN_UPDATED));
 
-        // 4. Persistence réelle
-       let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(*saved.state(), AccountState::Active);
-
-        // 5. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::UNBANNED attendu"
-        );
-        assert!(f.outbox_events().contains(&AccountEvent::UNBANNED.to_string()));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_unban_idempotency() {
-        let f = TestFixture::new(UnbanUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_shadowban_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
 
-        // --- ARRANGE ---
-        // Important : On restaure en état ACTIVE (pas Pending)
-        let account = AccountIdentityBuilder::restore(
-            account_id,
-            region,
-            ExternalId::from_raw("ext"),
-            Email::try_new("active@test.com").unwrap(),
-            true,
-            None,
-            false,
-            AccountState::Active, // État cible déjà atteint
-            None,
-            Locale::default(),
-            1,
-            chrono::Utc::now(),
-            chrono::Utc::now(),
-            None,
-        );
-        f.identity_repo().insert(account);
+        // Arrange
+        f.idempotency_repo().seed(cmd_id);
 
-        let cmd = UnbanCommand {
-            account_id,
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+        f.account_repo().insert(account);
+
+        let cmd = ShadowbanCommand {
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Duplicate network call")?,
         };
 
-        // --- ACT ---
-        let result = f.use_case().execute(&f.ctx(), cmd).await.unwrap();
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await;
 
-        // --- ASSERT ---
-        assert_eq!(*result.state(), AccountState::Active);
-        assert_eq!(result.version(), 1);
+        // Assert
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
+        f.assert_outbox(0, None);
 
-        // Vérification DB
-       let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.version(), 1);
-
-        // Vérification Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : aucun événement généré"
-        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(UnbanUseCase::new);
-        let account_id = f.account_id();
+    async fn test_shadowban_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+
+        // 1. Arrange : Déjà shadowbanné (on peut utiliser une closure ou un helper dédié)
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .governance(|g| g.with_shadowban(true)) // Utilisation de la closure de ton builder
+            .build()?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = ShadowbanCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Second report")?,
+        };
+
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert!(acc.governance().is_shadowbanned());
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger"
+            );
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Arrange
+        let account = f
+            .account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)?
+            .build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        let cmd = UnbanCommand {
-            account_id,
+        let cmd = ShadowbanCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Spam")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await;
 
+        // Assert
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        assert_eq!(
+            saved.version(),
+            version_snapshot,
+            "La version ne doit pas avoir bougé"
+        );
+
+        f.assert_outbox(0, None);
+        Ok(())
     }
 }

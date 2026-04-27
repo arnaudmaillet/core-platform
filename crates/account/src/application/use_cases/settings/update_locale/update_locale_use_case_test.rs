@@ -1,117 +1,148 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::settings::update_locale::{
-        UpdateLocaleCommand, UpdateLocaleUseCase,
+        UpdateLocaleCommand, UpdateLocaleHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{Email, ExternalId, Locale};
+    use crate::domain::value_objects::{AccountState, Locale};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_update_locale_success() {
-        let f = TestFixture::new(UpdateLocaleUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
-
-        let identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("john@example.com").unwrap(),
-            ExternalId::from_raw("ext_123"),
-        )
-        .with_locale(Locale::from_raw("fr"))
-        .build();
-
-        f.identity_repo().insert(identity);
-
+    async fn test_update_locale_success() -> Result<()> {
+        let f = TestFixture::new();
+        let old_locale = Locale::from_raw("fr");
         let new_locale = Locale::from_raw("en");
+
+        // 1. Arrange : Compte actif avec une locale spécifique
+        let account = f.account_builder()?
+            .with_state(AccountState::Active)?
+            .with_locale(old_locale)
+            .build()?;
+            
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
         let cmd = UpdateLocaleCommand {
-            account_id,
-            locale: new_locale.clone(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_locale: new_locale.clone(),
         };
 
-        // Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await?;
 
-        // Assert
-        assert!(result.is_ok());
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.locale(), &new_locale);
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::LOCALE_CHANGED attendu"
-        );
-        assert!(
-            f.outbox_events()
-                .contains(&AccountEvent::LOCALE_UPDATED.to_string())
-        );
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(acc.identity().locale(), &new_locale);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        }).await?;
+
+        f.assert_outbox(1, Some(AccountEvent::LOCALE_UPDATED));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_update_locale_idempotency() {
-        let f = TestFixture::new(UpdateLocaleUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_update_locale_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
+        let requested_locale = Locale::from_raw("it");
+
+        // Arrange : Commande déjà vue par l'infra
+        f.idempotency_repo().seed(cmd_id);
+
+        let account = f.account_builder()?.with_state(AccountState::Active)?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = UpdateLocaleCommand {
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            new_locale: requested_locale.clone(),
+        };
+
+        // Act
+        let result = f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await;
+
+        // Assert
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
+        
+        // Vérification intégrité : pas de changement
+        f.assert_account(|acc| {
+            assert_ne!(acc.identity().locale(), &requested_locale);
+            assert_eq!(acc.version(), version_snapshot);
+        }).await?;
+
+        f.assert_outbox(0, None);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_locale_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
         let current_locale = Locale::from_raw("de");
 
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("hans@test.de").unwrap(),
-            ExternalId::from_raw("ext_456"),
-        )
-        .with_locale(current_locale.clone())
-        .build();
-
-        identity.pull_events(); // Nettoyage
-        f.identity_repo().insert(identity);
+        // 1. Arrange : Compte possédant déjà cette locale
+        let account = f.account_builder()?
+            .with_state(AccountState::Active)?
+            .with_locale(current_locale.clone())
+            .build()?;
+            
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = UpdateLocaleCommand {
-            account_id,
-            locale: current_locale,
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_locale: current_locale,
         };
 
-        // Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await?;
 
-        // Assert
-        assert!(result.is_ok());
-        // L'entité détecte qu'il n'y a pas de changement -> pas d'event -> pas de save transactionnel
-        assert_eq!(f.outbox_repo().count(), 0, "Aucun evewnement attendu");
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(acc.version(), version_snapshot, "La version ne doit pas bouger");
+        }).await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(UpdateLocaleUseCase::new);
-        let account_id = f.account_id();
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Compte aux US, Contexte en EU
+        let account = f.account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)?
+            .build()?;
+            
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = UpdateLocaleCommand {
-            account_id,
-            locale: Locale::from_raw("us"),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            new_locale: Locale::from_raw("us"),
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await;
+
+        // Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+        
+        // Vérification directe via le repo
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
+        assert_eq!(saved.version(), version_snapshot);
+
+        Ok(())
     }
 }
