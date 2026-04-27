@@ -1,126 +1,163 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::moderation::shadowban::{
-        ShadowbanCommand, ShadowbanUseCase,
+        ShadowbanCommand, ShadowbanHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::{AccountIdentity, AccountMetadata};
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{Email, ExternalId};
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_shadowban_account_success() {
-        let f = TestFixture::new(ShadowbanUseCase::new);
-        let account_id = f.account_id();
+    async fn test_shadowban_account_success() -> Result<()> {
+        let f = TestFixture::new();
 
-        // 1. Arrange : Compte sain (Version 1)
-        f.metadata_repo()
-            .insert(AccountMetadata::builder(account_id).build());
+        // 1. Arrange : Compte sain (v1)
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
 
-        let cmd = ShadowbanCommand {
-            account_id,
-            reason: "Spam behavior detected".into(),
-        };
-
-        // 2. Act : On récupère l'entité mise à jour
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
-
-        // 3. Assert
-        assert!(result.is_ok());
-        let updated = result.unwrap();
-
-        assert!(updated.is_shadowbanned());
-        assert!(
-            updated
-                .moderation_notes()
-                .unwrap()
-                .contains("Spam behavior detected")
-        );
-        assert_eq!(updated.version(), 2);
-
-        // 4. Persistence
-        let saved = f
-            .metadata_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert!(saved.is_shadowbanned());
-
-        // 5. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::SHADOWBAN_STATUS_UPDATED attendu"
-        );
-        assert!(
-            f.outbox_events()
-                .contains(&AccountEvent::SHADOWBAN_UPDATED.to_string())
-        );
-    }
-
-    #[tokio::test]
-    async fn test_shadowban_idempotency() {
-        let f = TestFixture::new(ShadowbanUseCase::new);
-        let account_id = f.account_id();
-
-        // 1. Arrange : Déjà banni (Version 2)
-        let mut metadata = AccountMetadata::builder(account_id).build();
-        metadata.shadowban("First ban".into()).unwrap();
-        metadata.pull_events(); // Clear events
-        let version_after_ban = metadata.version();
-
-        f.metadata_repo().insert(metadata);
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = ShadowbanCommand {
-            account_id,
-            reason: "Second report".into(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Spam behavior detected")?,
         };
 
         // 2. Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        f.bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await?;
 
         // 3. Assert
-        assert!(result.is_ok());
-        let returned = result.unwrap();
+        f.assert_account(|acc| {
+            assert!(acc.governance().is_shadowbanned());
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-        assert!(returned.is_shadowbanned());
-        assert_eq!(returned.version(), version_after_ban);
+        f.assert_outbox(1, Some(AccountEvent::SHADOWBAN_UPDATED));
 
-        // 4. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : aucun événement généré"
-        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(ShadowbanUseCase::new);
-        let account_id = f.account_id();
-        let wrong_region = RegionCode::from_raw("us");
+    async fn test_shadowban_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Arrange
+        f.idempotency_repo().seed(cmd_id);
+
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .build()?;
+        f.account_repo().insert(account);
 
         let cmd = ShadowbanCommand {
-            account_id,
-            reason: "Second report".into(),
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Duplicate network call")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await;
 
+        // Assert
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_shadowban_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+
+        // 1. Arrange : Déjà shadowbanné (on peut utiliser une closure ou un helper dédié)
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)?
+            .governance(|g| g.with_shadowban(true)) // Utilisation de la closure de ton builder
+            .build()?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = ShadowbanCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Second report")?,
+        };
+
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert!(acc.governance().is_shadowbanned());
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger"
+            );
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
+        let wrong_region = RegionCode::from_raw("us");
+
+        // Arrange
+        let account = f
+            .account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)?
+            .build()?;
+        let version_snapshot = account.version();
+
+        f.account_repo().insert(account);
+
+        let cmd = ShadowbanCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: AuditReason::try_new("Spam")?,
+        };
+
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, ShadowbanHandler)
+            .await;
+
+        // Assert
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        assert_eq!(
+            saved.version(),
+            version_snapshot,
+            "La version ne doit pas avoir bougé"
+        );
+
+        f.assert_outbox(0, None);
+        Ok(())
     }
 }

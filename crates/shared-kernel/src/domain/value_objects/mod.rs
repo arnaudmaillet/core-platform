@@ -13,6 +13,8 @@ mod speed;
 mod timezone;
 mod url;
 mod username;
+mod audit_reason;
+mod trust_context;
 mod value_object;
 mod slug;
 
@@ -32,4 +34,6 @@ pub use timezone::Timezone;
 pub use url::Url;
 pub use username::Username;
 pub use slug::Slug;
+pub use audit_reason::AuditReason;
+pub use trust_context::TrustContext;
 pub use value_object::ValueObject;

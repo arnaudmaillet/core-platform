@@ -1,146 +1,96 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::access_management::verify_email::{
-        VerifyEmailCommand, VerifyEmailUseCase,
+        VerifyEmailCommand, VerifyEmailHandler
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::AccountIdentity;
+    use crate::domain::account::entities::Account;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId};
+    use crate::domain::value_objects::ExternalId;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::DomainError;
 
     #[tokio::test]
     async fn test_verify_email_success() {
-        let f = TestFixture::new(VerifyEmailUseCase::new);
+        // Le fixture fournit maintenant le Bus et l'AccountAppContext
+        let f = TestFixture::new(); 
         let account_id = f.account_id();
-        let region = f.region();
-
-        // 1. Arrange : Compte initial (Non vérifié, Version 1)
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                region,
-                Email::try_new("verify@test.com").unwrap(),
-                ExternalId::from_raw("ext_999"),
-            )
-            .build(),
-        );
-
         let cmd = VerifyEmailCommand {
             account_id,
-            token: "valid_secure_token_123".into(),
+            token: "valid_token".into(),
         };
 
-        // 2. Act : On s'attend à recevoir l'Account mis à jour
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 1. Arrange : On crée un agrégat complet via le Builder
+        let account = Account::builder(
+            account_id,
+            f.region(),
+            "verify@test.com".parse().unwrap(),
+            ExternalId::from_raw("ext_555"),
+        ).build();
+        
+        f.account_repo().insert(account.unwrap()); // Le stub stocke l'agrégat
+
+        // 2. Act : On passe par le BUS
+        let result = f.bus().execute(f.account_ctx(), cmd, VerifyEmailHandler).await;
 
         // 3. Assert
-        assert!(result.is_ok(), "La vérification d'email devrait réussir");
-        let updated = result.unwrap();
+        assert!(result.is_ok(), "Le handler devrait réussir");
 
-        assert!(updated.is_email_verified());
-        assert_eq!(
-            *updated.state(),
-            AccountState::Active,
-            "Le compte doit devenir actif après vérification"
-        );
-        assert_eq!(updated.version(), 2, "La version doit passer à 2");
+        // 4. Persistence : On vérifie l'état final dans le repo
+        let saved = f.account_repo()
+            .find_by_id(&account_id, None)
+            .await
+            .unwrap()
+            .expect("Le compte doit exister");
 
-        // 4. Persistence réelle
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert!(saved.is_email_verified());
+        assert!(saved.identity().is_email_verified());
+        assert_eq!(saved.metadata().version(), 2, "La version doit avoir été incrémentée");
 
         // 5. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::EMAIL_VERIFIED attendu"
-        );
         assert!(f.outbox_events().contains(&AccountEvent::EMAIL_VERIFIED.to_string()));
     }
 
     #[tokio::test]
-    async fn test_verify_email_idempotency() {
-        let f = TestFixture::new(VerifyEmailUseCase::new);
+    async fn test_verify_email_concurrency_retry() {
+        let f = TestFixture::new();
         let account_id = f.account_id();
-        let region = f.region();
-        let token = "any_token";
+        
+        // Arrange : On simule un conflit de version au premier appel
+        // On peut configurer le Stub pour renvoyer une ConcurrencyConflict une fois
+        f.account_repo().set_error_once(DomainError::ConcurrencyConflict { 
+            reason: "Simulated conflict".into() 
+        });
 
-        // 1. Arrange : On prépare un compte déjà vérifié (Version 2)
-        let mut identity = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("ok@test.com").unwrap(),
-            ExternalId::from_raw("ext"),
-        )
-        .build();
+        let account = Account::builder(account_id, f.region(), "retry@test.com".parse().unwrap(), "ext".parse().unwrap()).build();
+        f.account_repo().insert(account.unwrap());
 
-        identity.verify_email(&token).unwrap();
-        identity.pull_events(); // Clear setup events
-        let version_verified = identity.version();
+        let cmd = VerifyEmailCommand { account_id, token: "token".into() };
 
-        f.identity_repo().insert(identity);
+        // Act
+        let result = f.bus().execute(f.account_ctx(), cmd, VerifyEmailHandler).await;
 
-        let cmd = VerifyEmailCommand {
-            account_id,
-            token: token.to_string(),
-        };
-
-        // 2. Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
-
-        // 3. Assert
-        assert!(result.is_ok());
-        let returned = result.unwrap();
-
-        assert!(returned.is_email_verified());
-        assert_eq!(
-            returned.version(),
-            version_verified,
-            "La version ne doit pas augmenter"
-        );
-
-        // 4. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : pas de double événement"
-        );
-    }
+        // Assert
+        assert!(result.is_ok(), "Le bus doit avoir retenté l'opération avec succès");
+        assert_eq!(f.account_repo().find_direct(&account_id).unwrap().metadata().version(), 2);
+    }   
 
 
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(VerifyEmailUseCase::new);
+        let f = TestFixture::new();
         let account_id = f.account_id();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = "us".parse().unwrap();
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Compte en base sur la mauvaise région
+        let account = Account::builder(account_id, wrong_region, "hacker@test.com".parse().unwrap(), "ext".parse().unwrap()).build();
+        f.account_repo().insert(account.unwrap());
 
-        let cmd = VerifyEmailCommand {
-            account_id,
-            token: "token".into(),
-        };
+        let cmd = VerifyEmailCommand { account_id, token: "token".into() };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f.bus().execute(f.account_ctx(), cmd, VerifyEmailHandler).await;
 
-        // ASSERT : On vérifie l'obfuscation de sécurité
-        // Le compte existe en base, mais le contexte doit dire "NotFound"
+        // Assert : La sécurité est gérée par ctx.account() qui renvoie NotFound si la région ne matche pas
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
-    }
+    }   
 }

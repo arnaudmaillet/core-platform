@@ -4,4 +4,4 @@ mod change_phone_number_use_case_test;
 
 
 pub use change_phone_number_command::ChangePhoneNumberCommand;
-pub use change_phone_number_use_case::ChangePhoneNumberUseCase;
+pub use change_phone_number_use_case::ChangePhoneNumberHandler;

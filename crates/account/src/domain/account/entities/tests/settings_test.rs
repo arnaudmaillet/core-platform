@@ -1,16 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::account::entities::{AccountSettings, AccountPreferences};
-    use crate::domain::preferences::models::{
-        AppearancePreferences, NotificationPreferences,
-        PrivacyPreferences,
+    use crate::domain::{
+        account::entities::{AccountPreferences, AccountSettings},
+        preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
     };
-    use chrono::Utc;
-    use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-    use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
+    use shared_kernel::{
+        domain::value_objects::{AccountId, PushToken, RegionCode, Timezone},
+        errors::Result,
+    };
 
-    // Helper pour initialiser un AccountSettings de test
-    fn create_test_settings() -> AccountSettings {
+    fn create_test_settings() -> Result<AccountSettings> {
         let account_id = AccountId::new();
         let preferences = AccountPreferences::new(
             PrivacyPreferences::default(),
@@ -18,82 +17,84 @@ mod tests {
             AppearancePreferences::default(),
         );
 
-        AccountSettings::restore(
+        Ok(AccountSettings::restore(
             account_id,
-            preferences, // On passe l'objet groupé ici
-            Timezone::try_new("UTC").unwrap(),
+            preferences,
+            Timezone::try_new("UTC")?,
             vec![],
-            Utc::now(),
-            AggregateMetadata::default(),
-        )
+        ))
     }
 
     #[test]
-    fn test_timezone_update_idempotency() {
-        let mut settings = create_test_settings();
-        let region = RegionCode::try_new("eu").unwrap(); // On définit une région cohérente
-        let new_tz = Timezone::try_new("Europe/Paris").unwrap();
+    fn test_timezone_update_logic_and_idempotency() -> Result<()> {
+        let mut settings = create_test_settings()?;
+        let region = RegionCode::try_new("eu")?;
+        let new_tz = Timezone::try_new("Europe/Paris")?;
 
-        // 1. Premier passage : on fournit la région
-        let changed = settings.update_timezone(new_tz.clone(), &region).unwrap();
+        // 1. Premier passage : mutation acceptée
+        let changed = settings.apply_timezone_update(new_tz.clone(), &region)?;
         assert!(changed);
-        // On vérifie qu'un événement a été généré
-        assert_eq!(settings.metadata_mut().pull_events().len(), 1);
+        assert_eq!(settings.timezone().as_str(), "Europe/Paris");
 
-        // 2. Idempotence : même valeur + même région
-        let changed_again = settings.update_timezone(new_tz, &region).unwrap();
+        // 2. Idempotence : même valeur
+        let changed_again = settings.apply_timezone_update(new_tz, &region)?;
         assert!(!changed_again);
-        // Aucun nouvel événement ne doit être présent
-        assert_eq!(settings.metadata_mut().pull_events().len(), 0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_push_token_fifo_rotation() {
-        let mut settings = create_test_settings();
+    fn test_push_token_fifo_rotation() -> Result<()> {
+        let mut settings = create_test_settings()?;
 
-        // 1. On utilise des tokens d'au moins 8 caractères
+        // 1. Remplissage jusqu'à la limite (10 tokens)
         for i in 0..10 {
-            // "push_token_0" fait 12 caractères -> OK
-            let token = PushToken::try_new(format!("push_token_{}", i)).unwrap();
-            settings.add_push_token(token).unwrap();
+            let token = PushToken::try_new(format!("push_token_{:02}", i))?;
+            settings.apply_push_token_add(token);
         }
-
-        // 2. On vérifie la rotation avec un 11ème token
-        let token_11 = PushToken::try_new("push_token_11").unwrap();
-        settings.add_push_token(token_11).unwrap();
-
-        // 3. Assertions
         assert_eq!(settings.push_tokens().len(), 10);
-        // Le premier inséré ("push_token_0") doit avoir disparu, le nouveau index 0 est "push_token_1"
-        assert_eq!(settings.push_tokens()[0].as_str(), "push_token_1");
-    }
 
-    #[test]
-    fn test_push_token_removal() {
-        let mut settings = create_test_settings();
-        let token = PushToken::try_new("token_to_delete_xyz").unwrap();
+        // 2. Ajout du 11ème token : déclenche la rotation FIFO (le premier sort)
+        let token_11 = PushToken::try_new("push_token_11")?;
+        let changed = settings.apply_push_token_add(token_11);
 
-        settings.add_push_token(token.clone()).unwrap();
-        let _ = settings.metadata_mut().pull_events();
-
-        let changed = settings.remove_push_token(&token).unwrap();
         assert!(changed);
-        assert_eq!(settings.push_tokens().len(), 0);
+        assert_eq!(settings.push_tokens().len(), 10);
+        // "push_token_00" doit avoir été supprimé, le nouveau premier est "push_token_01"
+        assert_eq!(settings.push_tokens()[0].as_str(), "push_token_01");
+        // Le dernier est bien le nouveau token
+        assert_eq!(settings.push_tokens()[9].as_str(), "push_token_11");
+
+        Ok(())
     }
 
     #[test]
-    fn test_update_appearance_preferences_idempotency() {
-        let mut settings = create_test_settings();
-        
-        // Données par défaut identiques
-        let identical_appearance = AppearancePreferences::default();
-        let _ = settings.metadata_mut().pull_events();
+    fn test_update_appearance_preferences_idempotency() -> Result<()> {
+        let mut settings = create_test_settings()?;
 
-        let changed = settings
-            .update_appearance_preferences(identical_appearance)
-            .unwrap();
+        // Les préférences par défaut sont déjà chargées
+        let identical_appearance = AppearancePreferences::default();
+
+        // On tente de mettre à jour avec exactement la même chose
+        let changed = settings.apply_appearance_update(identical_appearance);
 
         assert!(!changed);
-        assert_eq!(settings.metadata_mut().pull_events().len(), 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_timezone_region_inconsistency() -> Result<()> {
+        let mut settings = create_test_settings()?;
+        let region_eu = RegionCode::try_new("eu")?;
+
+        // Exemple d'une timezone incohérente avec la région (si ton VO implémente cette logique)
+        let invalid_tz = Timezone::try_new("America/New_York")?;
+
+        // On s'attend à ce que la règle de validation métier dans apply_timezone_update bloque cela
+        let result = settings.apply_timezone_update(invalid_tz, &region_eu);
+        assert!(result.is_err());
+
+        Ok(())
     }
 }

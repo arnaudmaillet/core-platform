@@ -18,7 +18,8 @@ pub enum AccountEvent {
     // --- IDENTITY & SECURITY EVENTS ---
     AccountRegistered {
         account_id: AccountId,
-        email: Email,
+        email: Option<Email>,
+        phone: Option<PhoneNumber>,
         external_id: ExternalId,
         region: RegionCode,
         locale: Locale,
@@ -99,10 +100,12 @@ pub enum AccountEvent {
     // --- STATE & MODERATION ---
     AccountDeactivated {
         account_id: AccountId,
+        reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountActivated {
         account_id: AccountId,
+        reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountBanned {
@@ -112,6 +115,7 @@ pub enum AccountEvent {
     },
     AccountUnbanned {
         account_id: AccountId,
+        reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountSuspended {
@@ -121,6 +125,7 @@ pub enum AccountEvent {
     },
     AccountUnsuspended {
         account_id: AccountId,
+        reason: String,
         occurred_at: DateTime<Utc>,
     },
 

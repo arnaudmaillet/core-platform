@@ -29,3 +29,16 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 
 CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed
     ON outbox_events (occurred_at) WHERE processed_at IS NULL;
+
+
+
+-- Empêche le traitement en double des commandes
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    command_id UUID PRIMARY KEY,
+    namespace TEXT NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Index pour accélérer le nettoyage (TTL) des vieilles clés
+CREATE INDEX IF NOT EXISTS idx_idempotency_occurred_at 
+    ON idempotency_keys (occurred_at);

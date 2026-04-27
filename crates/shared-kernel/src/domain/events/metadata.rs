@@ -2,6 +2,7 @@
 
 use crate::domain::events::DomainEvent;
 use crate::errors::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Données techniques partagées par tous les agrégats.
@@ -10,11 +11,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AggregateMetadata {
     version: u64,
+    updated_at: DateTime<Utc>,
     #[serde(skip)]
-    events: Vec<Box<dyn DomainEvent>>,
+    events: Vec<Box<dyn DomainEvent>>
 }
 
 impl AggregateMetadata {
+    pub const INITIAL_VERSION: u64 = 0;
+
     pub fn version(&self) -> u64 {
         self.version
     }
@@ -30,6 +34,7 @@ impl AggregateMetadata {
     pub fn new(version: u64) -> Self {
         Self {
             version,
+            updated_at: Utc::now(),
             events: Vec::new(),
         }
     }
@@ -37,9 +42,10 @@ impl AggregateMetadata {
     /// RESTAURATION : Utilise ceci dans tes Repositories.
     /// On restaure la version exacte de la DB et on garantit
     /// que la liste d'événements est vide (on ne veut pas re-publier le passé).
-    pub fn restore(version: u64) -> Self {
+    pub fn restore(version: u64, updated_at: DateTime<Utc>) -> Self {
         Self {
             version,
+            updated_at,
             events: Vec::new(),
         }
     }
@@ -52,14 +58,19 @@ impl AggregateMetadata {
         std::mem::take(&mut self.events)
     }
 
-    pub fn increment_version(&mut self) {
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+
+    pub fn record_change(&mut self) {
         self.version += 1;
+        self.updated_at = Utc::now();
     }
 }
 
 impl Default for AggregateMetadata {
     fn default() -> Self {
-        Self::new(1)
+        Self::new(Self::INITIAL_VERSION)
     }
 }
 
@@ -97,8 +108,8 @@ pub trait AggregateRoot: Send + Sync {
     }
 
     /// Incrémente la version technique de l'agrégat
-    fn increment_version(&mut self) {
-        self.metadata_mut().increment_version();
+    fn record_change(&mut self) {
+        self.metadata_mut().record_change();
     }
 }
 
@@ -106,20 +117,22 @@ impl Clone for AggregateMetadata {
     fn clone(&self) -> Self {
         Self {
             version: self.version,
+            updated_at: self.updated_at,
             events: Vec::new(),
         }
     }
 }
 
-impl TryFrom<i64> for AggregateMetadata {
+impl TryFrom<(i64, DateTime<Utc>)> for AggregateMetadata {
     type Error = crate::errors::DomainError;
 
-    fn try_from(version: i64) -> Result<Self> {
+    fn try_from(value: (i64, DateTime<Utc>)) -> Result<Self> {
+        let (version, updated_at) = value;
         if version < 0 {
             return Err(crate::errors::DomainError::Internal(
                 "Database returned a negative version number".into()
             ));
         }
-        Ok(Self::restore(version as u64))
+        Ok(Self::restore(version as u64, updated_at))
     }
 }

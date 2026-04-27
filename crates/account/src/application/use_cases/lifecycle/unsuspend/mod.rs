@@ -3,4 +3,4 @@ mod unsuspend_use_case;
 mod unsuspend_use_case_test;
 
 pub use unsuspend_command::UnsuspendCommand;
-pub use unsuspend_use_case::UnsuspendUseCase;
+pub use unsuspend_use_case::UnsuspendHandler;

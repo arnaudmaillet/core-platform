@@ -1,50 +1,25 @@
 // crates/account/src/application/lift_shadowban/lift_shadowban_use_case.rs
 
-use shared_kernel::domain::events::{AggregateRoot, DomainEvent};
-use shared_kernel::domain::utils::{RetryConfig, with_retry};
+use async_trait::async_trait;
+use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
 use crate::application::use_cases::moderation::lift_shadowban::LiftShadowbanCommand;
-use crate::domain::account::entities::AccountMetadata;
 
-pub struct LiftShadowbanUseCase;
+pub struct LiftShadowbanHandler;
 
-impl LiftShadowbanUseCase {
-    pub fn new() -> Self {
-        Self
-    }
+#[async_trait]
+impl CommandHandler for LiftShadowbanHandler {
+    type Context = AccountContext;
+    type Command = LiftShadowbanCommand;
+    type Output = ();
 
-    pub async fn execute(&self, ctx: &AccountContext, cmd: LiftShadowbanCommand) -> Result<AccountMetadata> {
-        with_retry(RetryConfig::default(), || async {
-            self.try_execute_once(ctx, &cmd).await
-        })
-        .await
-    }
+    async fn handle(&self, ctx: &AccountContext, cmd: LiftShadowbanCommand) -> Result<Self::Output> {
+        let mut account = ctx.account().await?;
+        account.lift_shadowban(cmd.reason)?;
+        ctx.save(&mut account, Some(cmd.command_id)).await?;
 
-    async fn try_execute_once(&self, ctx: &AccountContext, cmd: &LiftShadowbanCommand) -> Result<AccountMetadata> {
-        let _ = ctx.ensure_id(&cmd.account_id);
-
-        let original_metadata = ctx.metadata().await?;
-        let mut metadata = original_metadata.clone();
-
-        if !metadata.lift_shadowban(&cmd.reason)? {
-            return Ok(original_metadata);
-        }
-
-        let pulled_events = metadata.pull_events();
-        if pulled_events.is_empty() {
-            return Ok(metadata);
-        }
-
-        let events: Vec<&dyn DomainEvent> = pulled_events.iter().map(|e| e.as_ref()).collect();
-        let mut tx = ctx.begin_transaction().await?;
-
-        ctx.save_metadata(&metadata, Some(&original_metadata), &mut *tx).await?;
-        ctx.outbox_repo().save_all(&mut *tx, &events).await?;
-        tx.commit().await?;
-
-
-        Ok(metadata)
+        Ok(())
     }
 }

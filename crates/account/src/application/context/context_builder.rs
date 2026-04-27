@@ -1,37 +1,55 @@
+// crates/account/src/application/context_builder.rs
+
 use std::sync::Arc;
-use shared_kernel::domain::{repositories::OutboxRepository, value_objects::{AccountId, RegionCode}};
-use crate::{application::context::AccountContext, domain::repositories::{AccountIdentityRepository, AccountMetadataRepository, AccountSettingsRepository}};
 
-
-
+use crate::{
+    application::context::{AccountContext, context::AccountAppContext},
+    domain::repositories::AccountRepository,
+};
+use shared_kernel::domain::{
+    repositories::OutboxRepository,
+    value_objects::{AccountId, RegionCode},
+};
 
 pub struct AccountContextBuilder {
+    app: Option<AccountAppContext>,
     account_id: Option<AccountId>,
     region: Option<RegionCode>,
-    identity_repo: Option<Arc<dyn AccountIdentityRepository>>,
-    metadata_repo: Option<Arc<dyn AccountMetadataRepository>>,
-    settings_repo: Option<Arc<dyn AccountSettingsRepository>>,
-    outbox_repo: Option<Arc<dyn OutboxRepository>>,
-    pool: Option<sqlx::PgPool>,
 }
 
 impl AccountContextBuilder {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
+            app: None,
             account_id: None,
             region: None,
-            identity_repo: None,
-            metadata_repo: None,
-            settings_repo: None,
-            outbox_repo: None,
-            pool: None,
         }
     }
 
-    pub fn has_identity_repo(&self) -> bool { self.identity_repo.is_some() }
-    pub fn has_metadata_repo(&self) -> bool { self.metadata_repo.is_some() }
-    pub fn has_settings_repo(&self) -> bool { self.settings_repo.is_some() }
-    pub fn has_outbox_repo(&self) -> bool { self.outbox_repo.is_some() }
+    pub fn account_id(&self) -> Option<&AccountId> {
+        self.account_id.as_ref()
+    }
+
+    pub fn region(&self) -> Option<&RegionCode> {
+        self.region.as_ref()
+    }
+
+    pub fn app(&self) -> Option<&AccountAppContext> {
+        self.app.as_ref()
+    }
+
+    pub fn account_repo(&self) -> Option<Arc<dyn AccountRepository>> {
+        self.app.as_ref().map(|a| a.account_repo())
+    }
+
+    pub fn outbox_repo(&self) -> Option<Arc<dyn OutboxRepository>> {
+        self.app.as_ref().map(|a| a.outbox_repo())
+    }
+
+    pub fn with_app(mut self, app: AccountAppContext) -> Self {
+        self.app = Some(app);
+        self
+    }
 
     pub fn with_account_id(mut self, id: AccountId) -> Self {
         self.account_id = Some(id);
@@ -43,40 +61,19 @@ impl AccountContextBuilder {
         self
     }
 
-    pub fn with_identity_repo(mut self, repo: Arc<dyn AccountIdentityRepository>) -> Self {
-        self.identity_repo = Some(repo);
-        self
-    }
-
-    pub fn with_outbox_repo(mut self, repo: Arc<dyn OutboxRepository>) -> Self {
-        self.outbox_repo = Some(repo);
-        self
-    }
-
-    pub fn with_metadata_repo(mut self, repo: Arc<dyn AccountMetadataRepository>) -> Self {
-        self.metadata_repo = Some(repo);
-        self
-    }
-
-    pub fn with_settings_repo(mut self, repo: Arc<dyn AccountSettingsRepository>) -> Self {
-        self.settings_repo = Some(repo);
-        self
-    }
-
-    pub fn with_pool(mut self, pool: sqlx::PgPool) -> Self {
-        self.pool = Some(pool);
-        self
-    }
-
     pub fn build(self) -> AccountContext {
         AccountContext::new(
-            self.account_id.expect("account_id is required"),
-            self.region.expect("region is required"),
-            self.identity_repo.expect("identity_repo is required"),
-            self.metadata_repo.expect("metadata_repo is required"),
-            self.settings_repo.expect("settings_repo is required"),
-            self.outbox_repo.expect("outbox_repo is required"),
-            self.pool,
+            self.app
+                .expect("AccountAppContext is required. Use .with_app()"),
+            self.account_id
+                .expect("account_id is required for AccountContext"),
+            self.region.expect("region is required for AccountContext"),
         )
+    }
+}
+
+impl Default for AccountContextBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }

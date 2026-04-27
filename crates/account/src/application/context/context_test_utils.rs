@@ -1,29 +1,50 @@
-use std::sync::Arc;
+// // crates/account/src/application/context_test_ext.rs (ou dans tes fichiers de tests)
 
-use shared_kernel::domain::repositories::OutboxRepositoryStub;
+// use std::sync::Arc;
 
-use crate::{application::context::{AccountContext, AccountContextBuilder}, domain::repositories::{AccountIdentityRepositoryStub, AccountMetadataRepositoryStub, AccountSettingsRepositoryStub}};
+// use shared_kernel::{
+//     application::BaseAppContext,
+//     domain::{
+//         repositories::{CacheRepositoryStub, OutboxRepositoryStub},
+//         value_objects::{AccountId, RegionCode},
+//     },
+// };
 
-// Dans un module ou fichier de test
-pub trait AccountContextTestExt {
-    fn build_test(self) -> AccountContext;
-}
+// use crate::{
+//     application::context::{AccountAppContext, AccountContext, AccountContextBuilder},
+//     domain::repositories::AccountRepositoryStub,
+// };
 
-impl AccountContextTestExt for AccountContextBuilder {
-    fn build_test(mut self) -> AccountContext {
-        if !self.has_identity_repo() {
-            self = self.with_identity_repo(Arc::new(AccountIdentityRepositoryStub::new()));
-        }
-        if !self.has_metadata_repo() {
-            self = self.with_metadata_repo(Arc::new(AccountMetadataRepositoryStub::new()));
-        }
-        if !self.has_settings_repo() {
-            self = self.with_settings_repo(Arc::new(AccountSettingsRepositoryStub::new()));
-        }
-        if !self.has_outbox_repo() {
-            self = self.with_outbox_repo(Arc::new(OutboxRepositoryStub::new()));
-        }
-        
-        self.build()
-    }
-}
+// pub trait AccountContextTestExt {
+//     fn build_test(self) -> AccountContext;
+// }
+
+// impl AccountContextTestExt for AccountContextBuilder {
+//     fn build_test(self) -> AccountContext {
+//         let mut builder = self;
+
+//         // 1. Handle Simple Value Objects
+//         if builder.account_id().is_none() {
+//             builder = builder.with_account_id(AccountId::new());
+//         }
+
+//         if builder.region().is_none() {
+//             builder = builder.with_region(RegionCode::from_raw("eu".to_string()));
+//         }
+
+//         // 2. Handle the App Context and Repositories
+//         if builder.app().is_none() {
+//             // Fix: BaseAppContext::new now needs (pool, cache)
+//             let base = BaseAppContext::new(None, Arc::new(CacheRepositoryStub::new()));
+
+//             let app = AccountAppContext::new(
+//                 base,
+//                 Arc::new(AccountRepositoryStub::new()),
+//                 Arc::new(OutboxRepositoryStub::new()),
+//             );
+//             builder = builder.with_app(app);
+//         }
+
+//         builder.build()
+//     }
+// }

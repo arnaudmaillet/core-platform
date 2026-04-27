@@ -69,3 +69,16 @@ message AccountSettings {
   google.protobuf.Timestamp updated_at = 9;
   int64 version = 10;
 }
+
+message RegistrationIdentifier {
+  oneof method {
+    string email = 1;
+    string phone_number = 2;
+    FullIdentifier both = 3;
+  }
+}
+
+message FullIdentifier {
+  string email = 1;
+  string phone_number = 2;
+}

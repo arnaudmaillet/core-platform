@@ -1,136 +1,172 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::lifecycle::deactivate::{
-        DeactivateCommand, DeactivateUseCase,
+        DeactivateCommand, DeactivateHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::AccountIdentity;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, Email, ExternalId};
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_deactivate_account_success() {
-        let f = TestFixture::new(DeactivateUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_deactivate_account_success() -> Result<()> {
+        let f = TestFixture::new();
 
-        // 1. Arrange : Compte initial (Version 1 par défaut)
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                region,
-                Email::try_new("bye@test.com").unwrap(),
-                ExternalId::from_raw("ext_123"),
-            )
-            .build(),
-        );
+        // 1. Arrange : Compte initial actif
+        let account = f.account_builder()?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        let cmd = DeactivateCommand { account_id };
+        let cmd = DeactivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: None,
+        };
 
-        // 2. Act : On récupère l'Account
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .await?;
 
         // 3. Assert
-        assert!(result.is_ok());
-        let updated = result.unwrap();
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Deactivated);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
 
-        assert_eq!(*updated.state(), AccountState::Deactivated);
-        assert_eq!(updated.version(), 2);
+        f.assert_outbox(1, Some(AccountEvent::DEACTIVATED));
 
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert_eq!(saved.version(), 2);
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::DEACTIVATED attendu"
-        );
-        assert!(f.outbox_events().contains(&AccountEvent::DEACTIVATED.to_string()));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_deactivate_idempotency() {
-        let f = TestFixture::new(DeactivateUseCase::new);
-        let account_id = f.account_id();
-        let region = f.region();
+    async fn test_deactivate_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
 
-        let mut account = AccountIdentity::builder(
-            account_id,
-            region,
-            Email::try_new("a@b.com").unwrap(),
-            ExternalId::from_raw("ext"),
-        )
-        .build();
+        // Arrange : Simulation d'une commande de désactivation déjà enregistrée
+        f.idempotency_repo().seed(cmd_id);
 
-        // On le désactive MANUELLEMENT : la version passe à 2 (si ton entité gère l'auto-incrément)
-        account.deactivate().unwrap();
-        f.identity_repo().insert(account);
+        let account = f.account_builder()?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        let cmd = DeactivateCommand { account_id };
+        let cmd = DeactivateCommand {
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            reason: None,
+        };
 
-        // 1. Act
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .await;
 
-        // 2. Assert
-        assert!(result.is_ok());
-        let returned = result.unwrap();
+        // 3. Assert
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
-        // On vérifie que la version est restée la même que celle insérée (2)
-        assert_eq!(returned.version(), 2);
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Pending);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
 
-        let saved = f
-            .identity_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
+        f.assert_outbox(0, None);
 
-        assert_eq!(saved.version(), 2);
-
-        // Aucun événement supplémentaire
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : aucun événement produit"
-        );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_deactivate_not_found() {
-        let f = TestFixture::new(DeactivateUseCase::new);
-        let account_id = f.account_id();
+    async fn test_deactivate_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
 
-        let cmd = DeactivateCommand { account_id };
+        // Arrange : Compte DÉJÀ désactivé
+        let mut account = f.account_builder()?.build()?;
+        account.deactivate(None)?;
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        let cmd = DeactivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: None,
+        };
+
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(*acc.identity().state(), AccountState::Deactivated);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_deactivate_not_found() -> Result<()> {
+        let f = TestFixture::new();
+
+        let cmd = DeactivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: None,
+        };
+
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .await;
+
+        // Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(DeactivateUseCase::new);
-        let account_id = f.account_id();
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
 
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Arrange : Compte aux USA, mais contexte Europe
+        let account = f.account_builder_for(wrong_region)?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
-        let cmd = DeactivateCommand { account_id };
+        let cmd = DeactivateCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            reason: None,
+        };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .await;
 
-        // ASSERT : On vérifie l'obfuscation de sécurité
-        // Le compte existe en base, mais le contexte doit dire "NotFound"
+        // Assert : Obfuscation de sécurité
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+
+        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
+        assert_eq!(saved.version(), version_snapshot);
+        f.assert_outbox(0, None);
+
+        Ok(())
     }
 }

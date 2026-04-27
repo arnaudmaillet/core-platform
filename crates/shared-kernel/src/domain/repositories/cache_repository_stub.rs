@@ -6,17 +6,15 @@ use async_trait::async_trait;
 use std::sync::Mutex;
 use std::time::Duration;
 
+#[derive(Default)]
 pub struct CacheRepositoryStub {
     pub storage: Mutex<std::collections::HashMap<String, String>>,
     pub fail_all: bool,
 }
 
-impl Default for CacheRepositoryStub {
-    fn default() -> Self {
-        Self {
-            storage: Mutex::new(std::collections::HashMap::new()),
-            fail_all: false,
-        }
+impl CacheRepositoryStub {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -55,7 +53,11 @@ impl CacheRepository for CacheRepositoryStub {
         Ok(self.storage.lock().unwrap().contains_key(key))
     }
 
-    async fn set_many(&self, entries: Vec<(&str, String)>, _ttl: Option<Duration>) -> AppResult<()> {
+    async fn set_many(
+        &self,
+        entries: Vec<(&str, String)>,
+        _ttl: Option<Duration>,
+    ) -> AppResult<()> {
         if self.fail_all {
             return Err(AppError::new(ErrorCode::InternalError, "Cache Down"));
         }
