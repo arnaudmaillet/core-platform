@@ -121,16 +121,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+    async fn test_concurrency_retry_success() -> Result<()> {
         let f = TestFixture::new();
-
         let account = f.account_builder()?.build()?;
         f.account_repo().insert(account);
 
-        // Simulation d'un conflit de concurrence (ex: deux admins ban en même temps)
+        // On simule UN conflit (grâce au .take() dans le stub, seul le 1er appel échouera)
         f.account_repo()
-            .set_error(DomainError::ConcurrencyConflict {
-                reason: "Optimistic locking failed".into(),
+            .set_error_once(DomainError::ConcurrencyConflict {
+                reason: "Race condition".into(),
             });
 
         let cmd = BanCommand {
@@ -139,12 +138,16 @@ mod tests {
             reason: AuditReason::try_new("System ban")?,
         };
 
+        // ACT : Le bus doit absorber l'erreur et réussir au 2ème essai
         let result = f.bus().execute(f.account_ctx(), cmd, BanHandler).await;
 
-        assert!(matches!(
-            result,
-            Err(DomainError::ConcurrencyConflict { .. })
-        ));
+        // ASSERT
+        assert!(result.is_ok(), "Le bus aurait dû réussir après un retry");
+        f.assert_account(|acc| {
+            assert!(acc.identity().is_banned());
+        })
+        .await?;
+
         Ok(())
     }
 

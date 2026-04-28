@@ -44,9 +44,9 @@ impl CommandHandler for RegisterHandler {
         let mut account = Account::builder(
             account_id.clone(),
             cmd.region.clone(),
-            cmd.identifier,
-            cmd.external_id,
+            cmd.identifier
         )
+        .with_external_id(cmd.external_id)
         .with_locale(cmd.locale)
         .build()?;
 

@@ -17,8 +17,8 @@ impl CommandHandler for VerifyEmailHandler {
     async fn handle(&self, ctx: &AccountContext, cmd: VerifyEmailCommand) -> Result<Self::Output> {
         let mut account = ctx.account().await?;
 
-        account.verify_email_token(&cmd.token)?;
-        ctx.save(&mut account).await?;
+        account.verify_email(cmd.token)?;
+        ctx.save(&mut account, Some(cmd.command_id)).await?;
 
         Ok(())
     }

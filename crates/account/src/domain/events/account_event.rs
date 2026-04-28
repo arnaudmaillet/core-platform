@@ -3,7 +3,9 @@
 use crate::domain::preferences::models::{
     AppearancePreferences, NotificationPreferences, PrivacyPreferences,
 };
-use crate::domain::value_objects::{AccountRole, Email, ExternalId, IpAddr, Locale, PhoneNumber};
+use crate::domain::value_objects::{
+    AccountRole, Email, ExternalId, IpAddr, Locale, PhoneNumber, TrustDelta, TrustScore, VerificationToken
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,7 +22,7 @@ pub enum AccountEvent {
         account_id: AccountId,
         email: Option<Email>,
         phone: Option<PhoneNumber>,
-        external_id: ExternalId,
+        external_id: Option<ExternalId>,
         region: RegionCode,
         locale: Locale,
         ip_addr: IpAddr,
@@ -28,7 +30,7 @@ pub enum AccountEvent {
     },
     ExternalIdentityLinked {
         account_id: AccountId,
-        old_external_id: ExternalId,
+        old_external_id: Option<ExternalId>,
         new_external_id: ExternalId,
         occurred_at: DateTime<Utc>,
     },
@@ -46,10 +48,12 @@ pub enum AccountEvent {
     },
     EmailVerified {
         account_id: AccountId,
+        token: VerificationToken,
         occurred_at: DateTime<Utc>,
     },
     PhoneVerified {
         account_id: AccountId,
+        token: VerificationToken,
         occurred_at: DateTime<Utc>,
     },
     BirthDateChanged {
@@ -71,8 +75,8 @@ pub enum AccountEvent {
     TrustScoreAdjusted {
         id: Uuid,
         account_id: AccountId,
-        delta: i32,
-        new_score: i32,
+        delta: TrustDelta,
+        new_score: TrustScore,
         reason: String,
         occurred_at: DateTime<Utc>,
     },

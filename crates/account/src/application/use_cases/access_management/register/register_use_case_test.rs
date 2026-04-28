@@ -46,7 +46,7 @@ mod tests {
         f.assert_account_by_id(&account_id, |acc| {
             // Vérification Identity
             assert_eq!(acc.identity().email(), Some(&email));
-            assert_eq!(acc.identity().external_id(), &ext_id);
+            assert_eq!(acc.identity().external_id(), Some(&ext_id));
             assert_eq!(acc.identity().state(), &AccountState::Active);
 
             // Vérification Governance (Metadata/IP)
@@ -76,7 +76,7 @@ mod tests {
         // 1. Arrange : On pré-enregistre un compte existant dans le repo
         let existing_acc = f
             .account_builder()?
-            .with_external_id(existing_ext_id.clone())?
+            .with_external_id(existing_ext_id.clone())
             .build()?;
         f.account_repo().insert(existing_acc);
 

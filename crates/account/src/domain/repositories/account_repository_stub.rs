@@ -35,6 +35,11 @@ impl AccountRepositoryStub {
         *slot = Some(err);
     }
 
+    pub fn set_error_once(&self, err: DomainError) {
+        let mut slot = self.error_to_return.lock().unwrap();
+        *slot = Some(err);
+    }
+
     // --- Helpers Assert ---
 
     pub fn find_direct(&self, id: &AccountId) -> Option<Account> {
@@ -44,7 +49,8 @@ impl AccountRepositoryStub {
     // --- Logique Interne ---
 
     fn check_error(&self) -> Result<()> {
-        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+        let mut slot = self.error_to_return.lock().unwrap();
+        if let Some(err) = slot.take() {
             return Err(err);
         }
         Ok(())
@@ -76,7 +82,7 @@ impl AccountRepository for AccountRepositoryStub {
         let map = self.accounts.lock().unwrap();
         Ok(map
             .values()
-            .find(|a| a.identity().external_id() == ext_id)
+            .find(|a| a.identity().external_id() == Some(ext_id))
             .map(|a| a.identity().account_id().clone()))
     }
 
@@ -97,7 +103,9 @@ impl AccountRepository for AccountRepositoryStub {
     async fn exists_by_external_id(&self, ext_id: &ExternalId) -> Result<bool> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
-        Ok(map.values().any(|a| a.identity().external_id() == ext_id))
+        Ok(map
+            .values()
+            .any(|a| a.identity().external_id() == Some(ext_id)))
     }
 
     async fn create(&self, account: &Account, _tx: &mut dyn Transaction) -> Result<()> {

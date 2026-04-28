@@ -5,7 +5,7 @@ mod tests {
     };
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::AccountState;
+    use crate::domain::value_objects::{AccountState, TrustDelta, TrustScore};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
@@ -18,8 +18,8 @@ mod tests {
         // 1. Arrange : Score initial à 50
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
-            .with_trust_score(50)?
+            .with_state(AccountState::Active)
+            .with_trust_score(TrustScore::from_raw(50))
             .build()?;
 
         let version_snapshot = account.version();
@@ -28,7 +28,7 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 20, // 50 + 20 = 70
+            amount: TrustDelta::from_raw(20), // 50 + 20 = 70
             reason: AuditReason::try_new("Good behavior")?,
         };
 
@@ -56,8 +56,8 @@ mod tests {
         // 1. Arrange : Score à 90
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
-            .with_trust_score(90)?
+            .with_state(AccountState::Active)
+            .with_trust_score(TrustScore::from_raw(50))
             .build()?;
 
         let version_snapshot = account.version();
@@ -66,7 +66,7 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 50, // 90 + 50 -> Saturé à 100
+            amount: TrustDelta::from_raw(50), // 90 + 50 -> Saturé à 100
             reason: AuditReason::try_new("High activity")?,
         };
 
@@ -95,7 +95,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -103,7 +103,7 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             command_id: cmd_id,
             account_id: f.account_id(),
-            amount: 10,
+            amount: TrustDelta::from_raw(10),
             reason: AuditReason::try_new("Duplicate")?,
         };
 
@@ -133,8 +133,8 @@ mod tests {
         // Arrange : Déjà au maximum (100)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
-            .with_trust_score(100)?
+            .with_state(AccountState::Active)
+            .with_trust_score(TrustScore::from_raw(TrustScore::MAX))
             .build()?;
 
         let version_snapshot = account.version();
@@ -143,7 +143,7 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 10,
+            amount: TrustDelta::from_raw(10),
             reason: AuditReason::try_new("Should do nothing")?,
         };
 
@@ -176,7 +176,7 @@ mod tests {
         // Arrange : Compte US vs Contexte EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
 
@@ -185,7 +185,7 @@ mod tests {
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 10,
+            amount: TrustDelta::from_raw(10),
             reason: AuditReason::try_new("No matter")?,
         };
 

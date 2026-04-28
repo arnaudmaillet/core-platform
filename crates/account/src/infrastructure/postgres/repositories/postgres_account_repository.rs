@@ -116,12 +116,14 @@ impl AccountRepository for PostgresAccountRepository {
             // --- 1. UPDATE IDENTITY (avec vérification de version) ---
             let sql_identity = r#"
                 UPDATE account_identity SET 
-                    email = $2, email_verified = $3, phone_number = $4, phone_verified = $5,
-                    state = $6, locale = $7, version = $8, aggregate_updated_at = $9, last_active_at = $10
-                WHERE account_id = $1 AND version = $11"#;
+                    external_id = $2,
+                    email = $3, email_verified = $4, phone_number = $5, phone_verified = $6,
+                    state = $7, locale = $8, version = $9, aggregate_updated_at = $10, last_active_at = $11
+                WHERE account_id = $1 AND version = $12"#;
 
             let res = sqlx::query(sql_identity)
                 .bind(uid)
+                .bind(ident_row.external_id)
                 .bind(ident_row.email)
                 .bind(ident_row.email_verified)
                 .bind(ident_row.phone_number)

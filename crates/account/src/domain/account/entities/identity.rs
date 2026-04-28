@@ -14,6 +14,7 @@ use crate::domain::{
     account::builders::AccountIdentityBuilder,
     value_objects::{
         AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber, VerificationCode,
+        VerificationToken,
     },
 };
 
@@ -24,7 +25,7 @@ use crate::domain::{
 pub struct AccountIdentity {
     account_id: AccountId,
     region_code: RegionCode,
-    external_id: ExternalId,
+    external_id: Option<ExternalId>,
     email: Option<Email>,
     email_verified: bool,
     phone_number: Option<PhoneNumber>,
@@ -40,9 +41,8 @@ impl AccountIdentity {
     pub fn builder(
         account_id: AccountId,
         region_code: RegionCode,
-        external_id: ExternalId,
     ) -> AccountIdentityBuilder {
-        AccountIdentityBuilder::new(account_id, region_code, external_id)
+        AccountIdentityBuilder::new(account_id, region_code)
     }
 
     /// Utilisé par le Builder ou le Repository pour restaurer l'état.
@@ -50,7 +50,7 @@ impl AccountIdentity {
     pub(crate) fn restore(
         account_id: AccountId,
         region_code: RegionCode,
-        external_id: ExternalId,
+        external_id: Option<ExternalId>,
         email: Option<Email>,
         email_verified: bool,
         phone_number: Option<PhoneNumber>,
@@ -85,8 +85,8 @@ impl AccountIdentity {
     pub fn region_code(&self) -> &RegionCode {
         &self.region_code
     }
-    pub fn external_id(&self) -> &ExternalId {
-        &self.external_id
+    pub fn external_id(&self) -> Option<&ExternalId> {
+        self.external_id.as_ref()
     }
     pub fn email(&self) -> Option<&Email> {
         self.email.as_ref()
@@ -121,10 +121,10 @@ impl AccountIdentity {
     // ==========================================
 
     pub(crate) fn apply_external_id_change(&mut self, new_external_id: ExternalId) -> Result<bool> {
-        if self.external_id == new_external_id {
+        if self.external_id.as_ref() == Some(&new_external_id) {
             return Ok(false);
         }
-        self.external_id = new_external_id;
+        self.external_id = Some(new_external_id);
         Ok(true)
     }
 
@@ -137,7 +137,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub(crate) fn apply_email_verification(&mut self, _token: &str) -> Result<bool> {
+    pub(crate) fn apply_email_verification(&mut self) -> Result<bool> {
         if self.email_verified {
             return Ok(false);
         }
@@ -157,7 +157,7 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub(crate) fn apply_phone_verification(&mut self, _code: VerificationCode) -> Result<bool> {
+    pub(crate) fn apply_phone_verification(&mut self) -> Result<bool> {
         if self.phone_verified {
             return Ok(false);
         }

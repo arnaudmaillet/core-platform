@@ -18,11 +18,12 @@ mod tests {
         let new_locale = Locale::from_raw("en");
 
         // 1. Arrange : Compte actif avec une locale spécifique
-        let account = f.account_builder()?
-            .with_state(AccountState::Active)?
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)
             .with_locale(old_locale)
             .build()?;
-            
+
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -33,13 +34,16 @@ mod tests {
         };
 
         // 2. Act
-        f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await?;
+        f.bus()
+            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
             assert_eq!(acc.identity().locale(), &new_locale);
             assert_eq!(acc.version(), version_snapshot + 1);
-        }).await?;
+        })
+        .await?;
 
         f.assert_outbox(1, Some(AccountEvent::LOCALE_UPDATED));
 
@@ -55,7 +59,10 @@ mod tests {
         // Arrange : Commande déjà vue par l'infra
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f.account_builder()?.with_state(AccountState::Active)?.build()?;
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)
+            .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -66,16 +73,20 @@ mod tests {
         };
 
         // Act
-        let result = f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
-        
+
         // Vérification intégrité : pas de changement
         f.assert_account(|acc| {
             assert_ne!(acc.identity().locale(), &requested_locale);
             assert_eq!(acc.version(), version_snapshot);
-        }).await?;
+        })
+        .await?;
 
         f.assert_outbox(0, None);
         Ok(())
@@ -87,11 +98,12 @@ mod tests {
         let current_locale = Locale::from_raw("de");
 
         // 1. Arrange : Compte possédant déjà cette locale
-        let account = f.account_builder()?
-            .with_state(AccountState::Active)?
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)
             .with_locale(current_locale.clone())
             .build()?;
-            
+
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -102,12 +114,19 @@ mod tests {
         };
 
         // 2. Act
-        f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await?;
+        f.bus()
+            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(acc.version(), version_snapshot, "La version ne doit pas bouger");
-        }).await?;
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger"
+            );
+        })
+        .await?;
 
         f.assert_outbox(0, None);
 
@@ -120,10 +139,11 @@ mod tests {
         let wrong_region = RegionCode::from_raw("us");
 
         // Compte aux US, Contexte en EU
-        let account = f.account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+        let account = f
+            .account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)
             .build()?;
-            
+
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -134,11 +154,14 @@ mod tests {
         };
 
         // Act
-        let result = f.bus().execute(f.account_ctx(), cmd, UpdateLocaleHandler).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
-        
+
         // Vérification directe via le repo
         let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert_eq!(saved.version(), version_snapshot);

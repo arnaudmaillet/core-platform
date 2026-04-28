@@ -54,7 +54,7 @@ message LinkExternalIdentityRequest { string command_id = 1; string account_id =
 message ChangeEmailRequest { string command_id = 1; string account_id = 2; string new_email = 3; }
 message VerifyEmailRequest { string command_id = 1; string account_id = 2; string token = 3; }
 message ChangePhoneNumberRequest { string command_id = 1; string account_id = 2; string new_phone = 3; }
-message VerifyPhoneNumberRequest { string command_id = 1; string account_id = 2; string code = 3; }
+message VerifyPhoneNumberRequest { string command_id = 1; string account_id = 2; string token = 3; }
 message ChangeBirthDateRequest { string command_id = 1; string account_id = 2; google.protobuf.Timestamp new_birth_date = 3; }
 message ChangeRegionRequest { string command_id = 1; string account_id = 2; string new_region = 3; }
 message DeactivateRequest { string command_id = 1; string account_id = 2; optional string reason = 3; }

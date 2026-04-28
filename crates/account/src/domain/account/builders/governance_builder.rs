@@ -20,7 +20,7 @@ impl AccountGovernanceBuilder {
         Self {
             account_id,
             role: AccountRole::User,
-            trust_score: TrustScore::new_perfect(),
+            trust_score: TrustScore::new_max(),
             is_shadowbanned: false,
             is_beta_tester: false,
             last_ip_addr: None,
@@ -47,9 +47,9 @@ impl AccountGovernanceBuilder {
     }
 
     #[cfg(test)]
-    pub fn with_trust_score(mut self, score: i32) -> Result<Self> {
-        self.trust_score = TrustScore::try_new(score)?;
-        Ok(self)
+    pub fn with_trust_score(mut self, score: TrustScore) -> Self {
+        self.trust_score = score;
+        self
     }
 
     pub fn build(self) -> Result<AccountGovernance> {

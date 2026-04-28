@@ -17,7 +17,7 @@ use crate::domain::{
     preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
     value_objects::{
         AccountRole, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
-        RegistrationIdentifier, TrustScore, VerificationCode,
+        RegistrationIdentifier, TrustDelta, TrustScore, VerificationToken,
     },
 };
 
@@ -34,9 +34,8 @@ impl Account {
         account_id: AccountId,
         region: RegionCode,
         identifier: RegistrationIdentifier,
-        external_id: ExternalId,
     ) -> AccountBuilder {
-        AccountBuilder::new(account_id, region, identifier, external_id)
+        AccountBuilder::new(account_id, region, identifier)
     }
 
     pub(crate) fn restore(
@@ -71,39 +70,48 @@ impl Account {
         self.governance.apply_ip_record(ip_addr.clone());
 
         self.apply_change();
+
         self.push_event(Box::new(AccountEvent::AccountRegistered {
             account_id: self.id_typed(),
             email: self.identity.email().cloned(),
             phone: self.identity.phone_number().cloned(),
-            external_id: self.identity.external_id().clone(),
+            external_id: self.identity.external_id().cloned(),
             locale: self.identity.locale().clone(),
             region,
             ip_addr,
             occurred_at: self.updated_at(),
         }));
+
         Ok(true)
     }
 
-    pub fn link_external_identity(&mut self, new_external_id: ExternalId) -> Result<bool> {
-        let current_id = self.identity.external_id().clone();
+    pub fn link_external_identity(&mut self, new_id: ExternalId) -> Result<bool> {
+        let current_id = self.identity.external_id().cloned();
 
-        if new_external_id == current_id {
+        // 1. Idempotence métier : si l'ID est déjà le même, on ne fait rien
+        if current_id.as_ref() == Some(&new_id) {
             return Ok(false);
         }
 
-        if !current_id.as_str().is_empty() {
+        // 2. Garde de sécurité : on interdit d'écraser un lien existant
+        // C'est ce check qui faisait paniquer ton test "forbidden"
+        if current_id.is_some() {
             return Err(DomainError::Forbidden {
                 reason: "Account is already linked to an external provider".into(),
             });
         }
 
+        // 3. Application du changement (Transition de None vers Some)
         self.track_change(
-            |s| s.identity.apply_external_id_change(new_external_id.clone()),
+            |s| {
+                s.identity.apply_external_id_change(new_id.clone())?;
+                Ok(true)
+            },
             |s| {
                 Box::new(AccountEvent::ExternalIdentityLinked {
                     account_id: s.id_typed(),
-                    old_external_id: current_id,
-                    new_external_id: new_external_id.clone(),
+                    old_external_id: current_id, // Sera None
+                    new_external_id: new_id.clone(),
                     occurred_at: s.updated_at(),
                 })
             },
@@ -158,21 +166,22 @@ impl Account {
         )
     }
 
-    pub fn verify_email(&mut self, token: &str) -> Result<bool> {
+    pub fn verify_email(&mut self, token: VerificationToken) -> Result<bool> {
         self.ensure_not_restricted()?;
 
         self.track_change(
-            |s| s.identity.apply_email_verification(token),
+            |s| s.identity.apply_email_verification(),
             |s| {
                 Box::new(AccountEvent::EmailVerified {
                     account_id: s.id_typed(),
+                    token: token,
                     occurred_at: s.updated_at(),
                 })
             },
         )?;
 
         self.governance.apply_trust_reward(
-            TrustScore::REWARD_VERIFY,
+            TrustDelta::REWARD_VERIFY,
             TrustContext::EmailVerified,
             &AuditReason::system("Automatic verification"),
         )?;
@@ -180,21 +189,22 @@ impl Account {
         Ok(true)
     }
 
-    pub fn verify_phone(&mut self, code: VerificationCode) -> Result<bool> {
+    pub fn verify_phone(&mut self, token: VerificationToken) -> Result<bool> {
         self.ensure_not_restricted()?;
 
         self.track_change(
-            |s| s.identity.apply_phone_verification(code),
+            |s| s.identity.apply_phone_verification(),
             |s| {
                 Box::new(AccountEvent::PhoneVerified {
                     account_id: s.id_typed(),
+                    token: token,
                     occurred_at: Utc::now(),
                 })
             },
         )?;
 
         self.governance.apply_trust_reward(
-            TrustScore::REWARD_VERIFY,
+            TrustDelta::REWARD_VERIFY,
             TrustContext::PhoneVerified,
             &AuditReason::system("Automatic verification"),
         )?;
@@ -216,7 +226,7 @@ impl Account {
 
         if changed {
             self.governance.apply_trust_penalty(
-                TrustScore::PENALTY_BAN,
+                TrustDelta::PENALTY_BAN,
                 TrustContext::AccountBanned,
                 &reason,
             )?;
@@ -238,7 +248,7 @@ impl Account {
 
         if changed {
             self.governance.apply_trust_reward(
-                TrustScore::REWARD_UNBAN,
+                TrustDelta::REWARD_UNBAN,
                 TrustContext::UnbanBonus,
                 &reason,
             )?;
@@ -273,7 +283,7 @@ impl Account {
 
         if changed {
             self.governance.apply_trust_reward(
-                TrustScore::REWARD_UNSUSPEND,
+                TrustDelta::REWARD_UNSUSPEND,
                 TrustContext::SuspensionLifted,
                 &reason,
             )?;
@@ -322,7 +332,7 @@ impl Account {
         )
     }
 
-    pub fn reward_trust(&mut self, amount: i32, reason: AuditReason) -> Result<bool> {
+    pub fn reward_trust(&mut self, amount: TrustDelta, reason: AuditReason) -> Result<bool> {
         self.track_change(
             |s| {
                 s.governance
@@ -333,7 +343,7 @@ impl Account {
                     id: uuid::Uuid::new_v4(),
                     account_id: s.id_typed(),
                     delta: amount,
-                    new_score: s.governance.trust_score().value(),
+                    new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
                 })
@@ -355,7 +365,7 @@ impl Account {
         )
     }
 
-    pub fn penalize_trust(&mut self, amount: i32, reason: AuditReason) -> Result<bool> {
+    pub fn penalize_trust(&mut self, amount: TrustDelta, reason: AuditReason) -> Result<bool> {
         let mut extra_event: Option<Box<dyn DomainEvent>> = None;
         let auto_reason = AuditReason::system("Trust score critical threshold reached");
 
@@ -385,7 +395,7 @@ impl Account {
                     id: uuid::Uuid::new_v4(),
                     account_id: s.id_typed(),
                     delta: -amount,
-                    new_score: s.governance.trust_score().value(),
+                    new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
                 })

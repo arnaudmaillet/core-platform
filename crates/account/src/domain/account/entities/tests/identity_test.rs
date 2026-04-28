@@ -10,17 +10,18 @@ mod tests {
 
     use crate::domain::{
         account::entities::Account,
-        value_objects::{AccountState, Email, ExternalId, RegistrationIdentifier, TrustScore},
+        value_objects::{
+            AccountState, Email, RegistrationIdentifier, TrustDelta, TrustScore, VerificationToken,
+        },
     };
 
     fn create_test_account() -> Account {
         let id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
-        let external_id = ExternalId::try_new("auth0|123").unwrap();
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@example.com").unwrap());
 
-        Account::builder(id, region, identifier, external_id)
+        Account::builder(id, region, identifier)
             .build()
             .expect("Failed to build test account")
     }
@@ -44,7 +45,7 @@ mod tests {
     #[test]
     fn test_email_verification_flow_with_bonus() -> Result<()> {
         let mut account = create_test_account();
-        let token = "valid_token";
+        let token = VerificationToken::try_new("valid_token")?;
         let snapshot_version = account.version();
         // Action
         let changed = account.verify_email(token)?;
@@ -73,7 +74,7 @@ mod tests {
         let changed = account.suspend(AuditReason::try_new("Suspicious activity")?)?;
         assert!(changed);
         assert!(account.identity().is_blocked());
-        assert_eq!(account.metadata().version(), 2);
+        assert_eq!(account.metadata().version(), snapshot_version + 1);
 
         // Unsuspend avec raison optionnelle (Option<&str>)
         let changed = account.unsuspend(AuditReason::try_new("Cleared by support")?)?;
@@ -109,11 +110,17 @@ mod tests {
         let mut account = create_test_account();
 
         // On baisse manuellement le score
-        account.penalize_trust(30, AuditReason::try_new("Minor warning")?)?;
+        account.penalize_trust(
+            TrustDelta::from_raw(30),
+            AuditReason::try_new("Minor warning")?,
+        )?;
         assert_eq!(account.governance().trust_score().value(), 70);
 
         // On remonte
-        account.reward_trust(10, AuditReason::try_new("Good behavior")?)?;
+        account.reward_trust(
+            TrustDelta::from_raw(10),
+            AuditReason::try_new("Good behavior")?,
+        )?;
         assert_eq!(account.governance().trust_score().value(), 80);
 
         Ok(())

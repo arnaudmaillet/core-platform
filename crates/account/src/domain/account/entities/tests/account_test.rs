@@ -10,11 +10,10 @@ mod tests {
     fn create_test_account() -> Account {
         let id = AccountId::new();
         let region = RegionCode::try_new("eu").unwrap();
-        let external_id = ExternalId::try_new("auth0|123").unwrap();
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@doe.com").unwrap());
 
-        Account::builder(id, region, identifier, external_id)
+        Account::builder(id, region, identifier)
             .build()
             .expect("Failed to build test account")
     }
@@ -44,7 +43,7 @@ mod tests {
 
         // Act: On inflige une pénalité qui fait tomber le score à 0
         // Le score initial est 100. Une pénalité de 100 active le shadowban auto.
-        account.penalize_trust(100, reason)?;
+        account.penalize_trust(TrustDelta::PENALTY_BAN, reason)?;
 
         // Assert
         assert_eq!(account.governance().trust_score().value(), 0);
@@ -76,12 +75,12 @@ mod tests {
         let reason = AuditReason::try_new("Test floor")?;
 
         // On met d'abord le compte au plancher
-        account.penalize_trust(100, reason.clone())?;
+        account.penalize_trust(TrustDelta::PENALTY_BAN, reason.clone())?;
         account.pull_events(); // Clear events
         let version_before = account.metadata().version();
 
         // Act: On pénalise encore alors qu'il est déjà à 0
-        let changed = account.penalize_trust(10, reason)?;
+        let changed = account.penalize_trust(TrustDelta::from_raw(10), reason)?;
 
         // Assert
         assert!(!changed);
@@ -117,8 +116,8 @@ mod tests {
 
         // 0 + 20 = 20
         assert_eq!(
-            account.governance().trust_score().value(),
-            TrustScore::REWARD_UNBAN
+            account.governance().trust_score(),
+            TrustScore::from_raw(TrustScore::CRITICAL_THRESHOLD)
         );
 
         Ok(())
@@ -172,15 +171,26 @@ mod tests {
 
     #[test]
     fn test_link_external_identity_forbidden_if_already_linked() -> Result<()> {
+        // 1. Arrange : Un compte qui a DEJÀ un lien externe
         let mut account = create_test_account();
-        let new_ext = ExternalId::try_new("google|456")?;
+        let initial_ext = ExternalId::try_new("google|123")?;
 
-        // Act
+        // On lie le premier ID (ceci doit réussir)
+        account.link_external_identity(initial_ext)?;
+
+        // 2. Act : On tente d'en lier un DEUXIÈME (différent)
+        let new_ext = ExternalId::try_new("apple|456")?;
         let result = account.link_external_identity(new_ext);
 
-        // Assert
-        // Le builder de create_test_account met déjà un external_id ("auth0|123")
+        // 3. Assert : L'agrégat doit refuser (Forbidden)
         assert!(result.is_err());
+
+        if let Err(DomainError::Forbidden { reason }) = result {
+            assert!(reason.contains("already linked"));
+        } else {
+            panic!("Devrait retourner une erreur Forbidden, reçu: {:?}", result);
+        }
+
         Ok(())
     }
 
@@ -192,7 +202,7 @@ mod tests {
 
         // 2. Act : On passe par la méthode de la racine
         // On inflige une pénalité qui fait tomber le score à 0 (Score initial 100 - 150)
-        let changed = account.penalize_trust(150, reason)?;
+        let changed = account.penalize_trust(TrustDelta::from_raw(150), reason)?;
 
         // 3. Assert
         assert!(changed);

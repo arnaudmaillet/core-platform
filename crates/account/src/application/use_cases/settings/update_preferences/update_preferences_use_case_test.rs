@@ -17,10 +17,11 @@ mod tests {
         let f = TestFixture::new();
 
         // 1. Arrange : Compte actif
-        let account = f.account_builder()?
-            .with_state(AccountState::Active)?
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)
             .build()?;
-            
+
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -28,7 +29,7 @@ mod tests {
             .with_theme(ThemeMode::Dark)
             .with_high_contrast(true)
             .build();
-            
+
         let cmd = UpdatePreferencesCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
@@ -38,14 +39,20 @@ mod tests {
         };
 
         // 2. Act
-        f.bus().execute(f.account_ctx(), cmd, UpdatePreferencesHandler).await?;
+        f.bus()
+            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(acc.settings().preferences().appearance().theme(), ThemeMode::Dark);
+            assert_eq!(
+                acc.settings().preferences().appearance().theme(),
+                ThemeMode::Dark
+            );
             assert!(acc.settings().preferences().appearance().high_contrast());
             assert_eq!(acc.version(), version_snapshot + 1);
-        }).await?;
+        })
+        .await?;
 
         f.assert_outbox(1, Some(AccountEvent::APPEARANCE_PREFS_UPDATED));
 
@@ -59,7 +66,10 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f.account_builder()?.with_state(AccountState::Active)?.build()?;
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)
+            .build()?;
         f.account_repo().insert(account);
 
         let cmd = UpdatePreferencesCommand {
@@ -71,7 +81,10 @@ mod tests {
         };
 
         // Act
-        let result = f.bus().execute(f.account_ctx(), cmd, UpdatePreferencesHandler).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -90,8 +103,9 @@ mod tests {
             .build();
 
         // 1. Arrange : Compte possédant déjà ces préférences
-        let account = f.account_builder()?
-            .with_state(AccountState::Active)?
+        let account = f
+            .account_builder()?
+            .with_state(AccountState::Active)
             .settings(|s| s.with_appearance(initial_appearance.clone()))
             .build()?;
 
@@ -107,12 +121,19 @@ mod tests {
         };
 
         // 2. Act
-        f.bus().execute(f.account_ctx(), cmd, UpdatePreferencesHandler).await?;
+        f.bus()
+            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(acc.version(), version_snapshot, "La version ne doit pas bouger");
-        }).await?;
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger"
+            );
+        })
+        .await?;
 
         f.assert_outbox(0, None);
 
@@ -125,10 +146,11 @@ mod tests {
         let wrong_region = RegionCode::from_raw("us");
 
         // Arrange : Compte US vs contexte EU
-        let account = f.account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+        let account = f
+            .account_builder_for(wrong_region)?
+            .with_state(AccountState::Active)
             .build()?;
-            
+
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -141,11 +163,14 @@ mod tests {
         };
 
         // Act
-        let result = f.bus().execute(f.account_ctx(), cmd, UpdatePreferencesHandler).await;
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
-        
+
         // Vérification intégrité
         let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert_eq!(saved.version(), version_snapshot);

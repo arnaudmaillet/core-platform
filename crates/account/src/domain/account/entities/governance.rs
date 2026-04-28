@@ -12,7 +12,7 @@ use shared_kernel::{
 
 use crate::domain::{
     account::builders::AccountGovernanceBuilder,
-    value_objects::{AccountRole, IpAddr, TrustScore},
+    value_objects::{AccountRole, IpAddr, TrustDelta, TrustScore},
 };
 
 /// Entité Metadata (Interne à l'Agrégat Account)
@@ -91,7 +91,7 @@ impl AccountGovernance {
 
     pub(crate) fn apply_trust_reward(
         &mut self,
-        amount: i32,
+        amount: TrustDelta,
         context: TrustContext,
         reason: &AuditReason,
     ) -> Result<bool> {
@@ -109,7 +109,7 @@ impl AccountGovernance {
 
     pub(crate) fn apply_trust_penalty(
         &mut self,
-        amount: i32,
+        amount: TrustDelta,
         context: TrustContext,
         reason: &AuditReason,
     ) -> Result<bool> {

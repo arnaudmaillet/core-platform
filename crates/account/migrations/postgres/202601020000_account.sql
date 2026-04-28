@@ -20,7 +20,7 @@ $$ LANGUAGE plpgsql;
 -- 3. IDENTITY (Table racine)
 CREATE TABLE IF NOT EXISTS account_identity (
     account_id UUID PRIMARY KEY,
-    external_id TEXT NOT NULL,
+    external_id TEXT,
     email TEXT,
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_number TEXT,

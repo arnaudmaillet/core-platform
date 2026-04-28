@@ -12,7 +12,7 @@ use crate::application::context::{AccountAppContext, AccountContext};
 use crate::domain::account::builders::AccountBuilder;
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepositoryStub;
-use crate::domain::value_objects::{ExternalId, RegistrationIdentifier};
+use crate::domain::value_objects::{RegistrationIdentifier};
 
 pub struct TestFixture {
     bus: CommandBus,
@@ -108,7 +108,6 @@ impl TestFixture {
             self.account_id(),
             region,
             RegistrationIdentifier::try_from_email("test@example.com")?,
-            ExternalId::try_new("ext_123")?,
         ))
     }
 

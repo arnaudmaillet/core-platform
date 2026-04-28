@@ -23,7 +23,7 @@ use shared_kernel::{
 pub struct PostgresAccountRow {
     // --- Champs de Identity ---
     pub account_id: uuid::Uuid,
-    pub external_id: String,
+    pub external_id: Option<String>,
     pub email: Option<String>,
     pub email_verified: bool,
     pub phone_number: Option<String>,
@@ -60,7 +60,9 @@ impl PostgresAccountRow {
         let identity = AccountIdentity::restore(
             account_id,
             RegionCode::try_new(self.region_code.as_deref().unwrap_or("US"))?,
-            ExternalId::try_new(self.external_id)?,
+            self.external_id
+                .map(|id| ExternalId::try_new(id))
+                .transpose()?,
             self.email.map(|e| Email::try_new(e)).transpose()?,
             self.email_verified,
             self.phone_number

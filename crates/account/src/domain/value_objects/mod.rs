@@ -8,7 +8,9 @@ mod state;
 mod ip_addr;
 mod registration_identifier;
 mod trust_score;
+mod trust_delta;
 mod verification_code;
+mod verification_token;
 mod r#type;
 
 pub use birth_date::BirthDate;
@@ -21,7 +23,9 @@ pub use phone_number::PhoneNumber;
 pub use state::AccountState;
 pub use registration_identifier::RegistrationIdentifier;
 pub use trust_score::TrustScore;
+pub use trust_delta::TrustDelta;
 pub use verification_code::VerificationCode;
+pub use verification_token::VerificationToken;
 pub use r#type::AccountType;
 
 

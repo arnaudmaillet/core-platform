@@ -20,7 +20,7 @@ mod tests {
         // 1. Arrange : Utilisation de la closure settings pour injecter les tokens
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .settings(|s| s.with_tokens(vec![token_to_remove.clone(), token_to_keep.clone()]))
             .build()?;
 
@@ -69,7 +69,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         f.account_repo().insert(account);
 
@@ -100,7 +100,7 @@ mod tests {
         // 1. Arrange : Compte sans tokens
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();
@@ -142,7 +142,7 @@ mod tests {
         // Arrange : Compte US dans contexte EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();
