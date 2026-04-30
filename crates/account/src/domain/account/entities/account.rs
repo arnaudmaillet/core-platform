@@ -17,7 +17,7 @@ use crate::domain::{
     preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
     value_objects::{
         AccountRole, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
-        RegistrationIdentifier, TrustDelta, TrustScore, VerificationToken,
+        RegistrationIdentifier, TrustDelta, VerificationToken,
     },
 };
 
@@ -30,7 +30,7 @@ pub struct Account {
 }
 
 impl Account {
-    pub(crate) fn builder(
+    pub fn builder(
         account_id: AccountId,
         region: RegionCode,
         identifier: RegistrationIdentifier,
@@ -62,7 +62,7 @@ impl Account {
         &self.settings
     }
     pub fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
+        self.identity.aggregate_updated_at()
     }
 
     pub fn register(&mut self, region: RegionCode, ip_addr: IpAddr) -> Result<bool> {
@@ -83,6 +83,23 @@ impl Account {
         }));
 
         Ok(true)
+    }
+
+    pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
+        self.ensure_not_restricted()?;
+        let old_region = self.identity.region_code().clone();
+
+        self.track_change(
+            |s| s.identity.apply_region_change(new_region.clone()),
+            |s| {
+                Box::new(AccountEvent::AccountRegionChanged {
+                    account_id: s.id_typed(),
+                    old_region,
+                    new_region: new_region.clone(),
+                    occurred_at: s.updated_at(),
+                })
+            },
+        )
     }
 
     pub fn link_external_identity(&mut self, new_id: ExternalId) -> Result<bool> {

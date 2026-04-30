@@ -3,7 +3,7 @@
 use crate::domain::value_objects::{
     Email, ExternalId, IpAddr, Locale, PhoneNumber, RegistrationIdentifier,
 };
-use shared_kernel::domain::value_objects::RegionCode;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
 use tonic::Status;
 use uuid::Uuid;
@@ -11,7 +11,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct RegisterCommand {
     pub command_id: Uuid,
-    pub external_id: ExternalId,
+    pub account_id: AccountId,
+    pub external_id: Option<ExternalId>,
     pub identifier: RegistrationIdentifier,
     pub region: RegionCode,
     pub locale: Locale,
@@ -19,7 +20,7 @@ pub struct RegisterCommand {
 }
 
 impl RegisterCommand {
-    pub fn try_from_proto(req: RegisterRequest) -> Result<Self, tonic::Status> {
+    pub fn try_from_proto(req: RegisterRequest, account_id: AccountId) -> Result<Self, tonic::Status> {
         let identifier = match req.identifier.and_then(|i| i.method) {
             Some(Method::Email(e)) => RegistrationIdentifier::from_email(
                 Email::try_new(e).map_err(|err| Status::invalid_argument(err.to_string()))?,
@@ -38,7 +39,13 @@ impl RegisterCommand {
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
-            external_id: ExternalId::from_raw(req.external_id),
+            account_id: account_id,
+            external_id: match req.external_id {
+                Some(id) if !id.is_empty() => Some(
+                    ExternalId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?,
+                ),
+                _ => None,
+            },
             identifier,
             region: RegionCode::try_new(req.region_code)
                 .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?,

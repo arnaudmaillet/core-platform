@@ -15,29 +15,33 @@ pub struct RedisCacheRepository {
 }
 
 impl RedisCacheRepository {
+    // crates/shared-kernel/src/infrastructure/persistence/redis_cache_repository.rs
+
     pub async fn new(redis_url: &str) -> AppResult<Self> {
         let config = Config::from_url(redis_url)
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
         let pool = Builder::from_config(config)
             .with_pool_config(|cfg| {
-                cfg.max_clients = 2; // On descend à 2 pour les tests, c'est plus stable
+                cfg.max_clients = 1; // Un seul client suffit largement pour les tests
             })
             .with_connection_config(|cfg| {
-                cfg.connection_timeout = Duration::from_secs(5);
-                cfg.internal_command_timeout = Duration::from_secs(5);
-                cfg.max_command_attempts = 5;
+                // On réduit les timeouts pour que ça "fail fast" au lieu de freezer
+                cfg.connection_timeout = Duration::from_secs(2);
+                cfg.internal_command_timeout = Duration::from_secs(2);
             })
-            // On rend la reconnexion plus patiente
             .set_policy(ReconnectPolicy::new_exponential(0, 100, 1000, 2))
-            .build_pool(2)
+            .build_pool(1) // Pool de 1 pour éviter les attentes multiples
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
-        // Initialisation
-        pool.init().await.map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+        pool.init()
+            .await
+            .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
 
-        // On attend que TOUS les clients du pool soient connectés
-        pool.wait_for_connect().await.map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+        // Au lieu d'attendre indéfiniment, on met un timeout de 1 seconde.
+        // Si Redis n'est pas prêt, tant pis, le cache sera juste indisponible
+        // mais il ne bloquera pas toute l'application.
+        let _ = tokio::time::timeout(Duration::from_secs(1), pool.wait_for_connect()).await;
 
         Ok(Self { pool })
     }
@@ -85,7 +89,8 @@ impl CacheRepository for RedisCacheRepository {
     }
 
     async fn exists(&self, key: &str) -> AppResult<bool> {
-        let count: i64 = self.pool
+        let count: i64 = self
+            .pool
             .exists(key)
             .await
             .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;

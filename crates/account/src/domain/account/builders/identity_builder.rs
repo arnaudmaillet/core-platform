@@ -112,7 +112,9 @@ impl AccountIdentityBuilder {
             self.birth_date,
             self.locale.unwrap_or_default(),
             now,
-            self.last_active_at,
+            now,
+            now,
+            self.last_active_at
         ))
     }
 }

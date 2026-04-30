@@ -68,7 +68,26 @@ impl AccountRepository for AccountRepositoryStub {
         Ok(self.find_direct(id))
     }
 
-    async fn find_id_by_email(&self, email: &Email) -> Result<Option<AccountId>> {
+    async fn find_by_external_id(
+        &self,
+        ext_id: &ExternalId,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<Option<Account>> {
+        self.check_error()?;
+        let map = self.accounts.lock().unwrap();
+        let account = map
+            .values()
+            .find(|a| a.identity().external_id() == Some(ext_id))
+            .cloned();
+        Ok(account)
+    }
+
+    // AJOUTÉ : _tx
+    async fn find_id_by_email(
+        &self,
+        email: &Email,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<Option<AccountId>> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
         Ok(map
@@ -77,7 +96,11 @@ impl AccountRepository for AccountRepositoryStub {
             .map(|a| a.identity().account_id().clone()))
     }
 
-    async fn find_id_by_external_id(&self, ext_id: &ExternalId) -> Result<Option<AccountId>> {
+    async fn find_id_by_external_id(
+        &self,
+        ext_id: &ExternalId,
+        _tx: Option<&mut dyn Transaction>, // Déjà présent ou à corriger
+    ) -> Result<Option<AccountId>> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
         Ok(map
@@ -86,13 +109,21 @@ impl AccountRepository for AccountRepositoryStub {
             .map(|a| a.identity().account_id().clone()))
     }
 
-    async fn exists_by_email(&self, email: &Email) -> Result<bool> {
+    async fn exists_by_email(
+        &self,
+        email: &Email,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<bool> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
         Ok(map.values().any(|a| a.identity().email() == Some(email)))
     }
 
-    async fn exists_by_phone(&self, phone: &PhoneNumber) -> Result<bool> {
+    async fn exists_by_phone(
+        &self,
+        phone: &PhoneNumber,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<bool> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
         Ok(map
@@ -100,7 +131,11 @@ impl AccountRepository for AccountRepositoryStub {
             .any(|a| a.identity().phone_number() == Some(phone)))
     }
 
-    async fn exists_by_external_id(&self, ext_id: &ExternalId) -> Result<bool> {
+    async fn exists_by_external_id(
+        &self,
+        ext_id: &ExternalId,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<bool> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
         Ok(map

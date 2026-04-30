@@ -1,7 +1,6 @@
 // crates/shared-kernel/src/domain/post_id.rs
 
 use crate::domain::Identifier;
-use crate::domain::entities::EntityMetadata;
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
@@ -97,11 +96,5 @@ impl TryFrom<&str> for PostId {
 impl fmt::Display for PostId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl EntityMetadata for PostId {
-    fn entity_name() -> &'static str {
-        "Post" // Souvent raccourci pour les messages d'erreur
     }
 }

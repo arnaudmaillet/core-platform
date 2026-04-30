@@ -1,7 +1,10 @@
 // crates/account/src/application/verify_phone_number/command.rs
 
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::{
+    domain::value_objects::AccountId,
+    errors::{DomainError, Result},
+};
 use shared_proto::account::v1::VerifyPhoneNumberRequest;
 use uuid::Uuid;
 
@@ -15,16 +18,23 @@ pub struct VerifyPhoneNumberCommand {
 }
 
 impl VerifyPhoneNumberCommand {
-    pub fn try_from_proto(req: VerifyPhoneNumberRequest) -> Result<Self, tonic::Status> {
+    pub fn try_from_proto(req: VerifyPhoneNumberRequest) -> Result<Self> {
         Ok(Self {
-            command_id: Uuid::parse_str(&req.command_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid CommandId: {}", e))
+            command_id: Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
+                field: "command_id",
+                reason: "Invalid UUID format".to_string(),
             })?,
-            account_id: AccountId::try_from(req.account_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid AccountId: {}", e))
+
+            account_id: AccountId::try_new(&req.account_id).map_err(|e| {
+                DomainError::Validation {
+                    field: "account_id",
+                    reason: e.to_string(),
+                }
             })?,
-            token: VerificationToken::try_new(req.token)
-                .map_err(|e| tonic::Status::invalid_argument(format!("Invalid Token: {}", e)))?,
+            token: VerificationToken::try_new(req.token).map_err(|e| DomainError::Validation {
+                field: "token",
+                reason: e.to_string(),
+            })?,
         })
     }
 }

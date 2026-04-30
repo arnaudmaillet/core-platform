@@ -21,7 +21,7 @@ use shared_kernel::{
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountRow {
-    // --- Champs de Identity ---
+    // --- Identity ---
     pub account_id: uuid::Uuid,
     pub external_id: Option<String>,
     pub email: Option<String>,
@@ -34,10 +34,11 @@ pub struct PostgresAccountRow {
     pub region_code: Option<String>,
     pub version: i64,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    pub identity_updated_at: chrono::DateTime<chrono::Utc>,
     pub aggregate_updated_at: chrono::DateTime<chrono::Utc>,
     pub last_active_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    // --- Champs de Governance ---
+    // --- Governance ---
     pub role: PostgresAccountRole,
     pub is_beta_tester: bool,
     pub is_shadowbanned: bool,
@@ -45,11 +46,13 @@ pub struct PostgresAccountRow {
     pub moderation_notes: Option<String>,
     pub last_moderation_at: Option<chrono::DateTime<chrono::Utc>>,
     pub last_ip_addr: Option<std::net::IpAddr>,
+    pub governance_updated_at: chrono::DateTime<chrono::Utc>,
 
-    // --- Champs de Settings ---
+    // --- Settings ---
     pub preferences: serde_json::Value,
     pub timezone: String,
     pub push_tokens: Vec<String>,
+    pub settings_updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl PostgresAccountRow {
@@ -60,19 +63,17 @@ impl PostgresAccountRow {
         let identity = AccountIdentity::restore(
             account_id,
             RegionCode::try_new(self.region_code.as_deref().unwrap_or("US"))?,
-            self.external_id
-                .map(|id| ExternalId::try_new(id))
-                .transpose()?,
-            self.email.map(|e| Email::try_new(e)).transpose()?,
+            self.external_id.map(ExternalId::try_new).transpose()?,
+            self.email.map(Email::try_new).transpose()?,
             self.email_verified,
-            self.phone_number
-                .map(|p| PhoneNumber::try_new(p))
-                .transpose()?,
+            self.phone_number.map(PhoneNumber::try_new).transpose()?,
             self.phone_verified,
             AccountState::from(self.state),
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(self.locale)?,
             self.created_at,
+            self.identity_updated_at,
+            self.aggregate_updated_at,
             self.last_active_at,
         );
 
@@ -86,6 +87,7 @@ impl PostgresAccountRow {
             self.last_moderation_at,
             self.moderation_notes,
             self.last_ip_addr.map(IpAddr::from_raw),
+            self.governance_updated_at,
         );
 
         // 3. Reconstruction de Settings
@@ -103,6 +105,7 @@ impl PostgresAccountRow {
             preferences,
             shared_kernel::domain::value_objects::Timezone::try_new(&self.timezone)?,
             push_tokens,
+            self.settings_updated_at,
         );
 
         // 4. Reconstruction de l'Agrégat complet

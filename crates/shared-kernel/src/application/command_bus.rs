@@ -2,7 +2,7 @@
 
 use crate::{
     application::CommandHandler,
-    domain::utils::{RetryConfig, with_retry},
+    domain::utils::{with_retry},
     errors::Result,
 };
 
@@ -24,9 +24,8 @@ impl CommandBus {
         THandler: CommandHandler<Context = TContext, Command = TCommand>,
         TCommand: Clone + Send + Sync,
     {
-        with_retry(RetryConfig::default(), || async {
-            handler.handle(ctx, cmd.clone()).await
-        })
-        .await
+        let config = handler.retry_config();
+
+        with_retry(config, || async { handler.handle(ctx, cmd.clone()).await }).await
     }
 }

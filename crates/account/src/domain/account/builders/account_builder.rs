@@ -1,6 +1,5 @@
-// domain/account/builder.rs (Nouveau fichier ou dans mod.rs)
+// crates/account/src/domain/account/builders/account_builder.rs
 
-#[cfg(test)]
 use crate::domain::value_objects::{
     AccountRole, AccountState, BirthDate, Email, IpAddr, PhoneNumber,
 };
@@ -11,7 +10,6 @@ use crate::domain::{
     },
     value_objects::{ExternalId, Locale, RegistrationIdentifier, TrustScore},
 };
-#[cfg(test)]
 use shared_kernel::domain::value_objects::Timezone;
 use shared_kernel::{
     domain::{
@@ -62,49 +60,41 @@ impl AccountBuilder {
         self
     }
 
-    #[cfg(test)]
     pub fn with_email(mut self, email: Email) -> Self {
         self.identity = self.identity.with_email(email);
         self
     }
 
-    #[cfg(test)]
     pub fn with_phone(mut self, phone: PhoneNumber) -> Self {
         self.identity = self.identity.with_phone(phone);
         self
     }
 
-    #[cfg(test)]
     pub fn with_birth_date(mut self, birth_date: BirthDate) -> Self {
         self.identity = self.identity.with_birth_date(birth_date);
         self
     }
 
-    #[cfg(test)]
     pub fn with_role(mut self, role: AccountRole) -> Self {
         self.governance = self.governance.with_role(role);
         self
     }
 
-    #[cfg(test)]
     pub fn with_ip_addr(mut self, ip: IpAddr) -> Self {
         self.governance = self.governance.with_ip_addr(ip);
         self
     }
 
-    #[cfg(test)]
     pub fn with_timezone(mut self, tz: Timezone) -> Self {
         self.settings = self.settings.with_timezone(tz);
         self
     }
 
-    #[cfg(test)]
     pub fn with_trust_score(mut self, score: TrustScore) -> Self {
         self.governance = self.governance.with_trust_score(score);
         self
     }
 
-    #[cfg(test)]
     pub fn with_state(mut self, state: AccountState) -> Self {
         self.identity = self.identity.with_state(state.clone());
         match state {
@@ -129,7 +119,6 @@ impl AccountBuilder {
         self
     }
 
-    #[cfg(test)]
     pub fn identity<F>(mut self, f: F) -> Self
     where
         F: FnOnce(AccountIdentityBuilder) -> AccountIdentityBuilder,
@@ -138,7 +127,6 @@ impl AccountBuilder {
         self
     }
 
-    #[cfg(test)]
     pub fn governance<F>(mut self, f: F) -> Self
     where
         F: FnOnce(AccountGovernanceBuilder) -> AccountGovernanceBuilder,
@@ -147,7 +135,6 @@ impl AccountBuilder {
         self
     }
 
-    #[cfg(test)]
     pub fn settings<F>(mut self, f: F) -> Self
     where
         F: FnOnce(AccountSettingsBuilder) -> AccountSettingsBuilder,

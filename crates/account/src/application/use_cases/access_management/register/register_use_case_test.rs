@@ -3,7 +3,8 @@
 #[cfg(test)]
 mod tests {
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::domain::value_objects::AccountId;
+    use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     use crate::application::use_cases::access_management::register::{
@@ -16,7 +17,7 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_register_success() -> shared_kernel::errors::Result<()> {
+    async fn test_register_success() -> Result<()> {
         // 1. Setup
         let f = TestFixture::new();
         let email = Email::try_new("new-user@example.com")?;
@@ -25,16 +26,16 @@ mod tests {
 
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
-            external_id: ext_id.clone(),
+            account_id: f.account_id(),
+            external_id: Some(ext_id.clone()),
             identifier: RegistrationIdentifier::from_email(email.clone()),
             region: f.region(), // ex: "eu"
             locale: Locale::try_new("en-US")?,
             ip_addr: ip.clone(),
         };
 
-        // 2. Act : On utilise le bus ou l'appel direct au handler
-        // Note: Le contexte est le AppContext global ici
-        let result = f.bus().execute(f.app_ctx(), command, RegisterHandler).await;
+        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
 
         // 3. Assert
         assert!(result.is_ok(), "Le register devrait réussir");
@@ -68,8 +69,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_fails_if_external_id_already_exists() -> shared_kernel::errors::Result<()>
-    {
+    async fn test_register_success_without_external_id() -> Result<()> {
+        let f = TestFixture::new();
+
+        let command = RegisterCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            external_id: None,
+            identifier: RegistrationIdentifier::try_from_email("no-social@test.com")?,
+            region: f.region(),
+            locale: Locale::try_new("fr-FR")?,
+            ip_addr: IpAddr::try_new("127.0.0.1")?,
+        };
+
+        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
+
+        assert!(result.is_ok());
+        f.assert_account_by_id(&f.account_id(), |acc| {
+            assert!(acc.identity().external_id().is_none());
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_register_fails_if_external_id_already_exists() -> Result<()> {
         let f = TestFixture::new();
         let existing_ext_id = ExternalId::from_raw("duplicate_id");
 
@@ -82,7 +108,8 @@ mod tests {
 
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
-            external_id: existing_ext_id,
+            account_id: f.account_id(),
+            external_id: Some(existing_ext_id),
             identifier: RegistrationIdentifier::try_from_email("new@test.com")?,
             region: f.region(),
             locale: Locale::try_new("en-US")?,
@@ -90,7 +117,8 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.app_ctx(), command, RegisterHandler).await;
+        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
 
         // 3. Assert
         assert!(result.is_err());
@@ -104,8 +132,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_atomic_rollback_on_outbox_failure() -> shared_kernel::errors::Result<()>
-    {
+    async fn test_register_atomic_rollback_on_outbox_failure() -> Result<()> {
         let f = TestFixture::new();
 
         // 1. Arrange : On force une erreur sur l'outbox
@@ -115,7 +142,8 @@ mod tests {
 
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
-            external_id: ExternalId::from_raw("atomic_ext"),
+            account_id: f.account_id(),
+            external_id: Some(ExternalId::from_raw("atomic_ext")),
             identifier: RegistrationIdentifier::try_from_email("atomic@test.com")?,
             region: f.region(),
             locale: Locale::try_new("en-US")?,
@@ -123,7 +151,8 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.app_ctx(), command, RegisterHandler).await;
+        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
 
         // 3. Assert
         assert!(result.is_err());

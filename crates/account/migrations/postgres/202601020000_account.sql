@@ -17,13 +17,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
 -- 3. IDENTITY (Table racine)
 CREATE TABLE IF NOT EXISTS account_identity (
     account_id UUID PRIMARY KEY,
     external_id TEXT,
-    email TEXT,
+    email TEXT UNIQUE,
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    phone_number TEXT,
+    phone_number TEXT UNIQUE,
     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
     state account_state NOT NULL DEFAULT 'pending',
     birth_date DATE,
@@ -76,8 +77,8 @@ CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR 
 DROP TRIGGER IF EXISTS trg_set_timestamp_governance ON account_governance;
 CREATE TRIGGER trg_set_timestamp_governance BEFORE UPDATE ON account_governance FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
-
-
+-- 7. INDEXATION (En dernier)
+CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
 
 
 

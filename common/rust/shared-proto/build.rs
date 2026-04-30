@@ -1,14 +1,21 @@
 // common/rust/shared-proto/build.rs
 
+// common/rust/shared-proto/build.rs
+
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Définition de la racine (chemin relatif par rapport à build.rs)
+    // 1. Définition de la racine
     let proto_root = PathBuf::from("../../../proto");
 
-    // 2. Construction des chemins complets vers les fichiers de services
-    let services_proto = proto_root.join("account/v1/services.proto");
-    let admin_proto = proto_root.join("account/v1/admin.proto");
+    // 2. Construction des chemins vers les nouveaux fichiers de services
+    let protos = [
+        proto_root.join("account/v1/access.proto"),
+        proto_root.join("account/v1/personal.proto"),
+        proto_root.join("account/v1/settings.proto"),
+        proto_root.join("account/v1/moderation.proto"),
+        proto_root.join("account/v1/query.proto"),
+    ];
 
     // 3. Configuration de Tonic
     tonic_prost_build::configure()
@@ -17,9 +24,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .file_descriptor_set_path(
             PathBuf::from(std::env::var("OUT_DIR")?).join("service_descriptor.bin"),
         )
-        .compile_protos(&[services_proto, admin_proto], &[proto_root])?;
+        // Note : On ne liste pas models.proto ou enums.proto ici car
+        // ils sont importés automatiquement par les autres.
+        .compile_protos(&protos, &[proto_root])?;
 
-    // Indiquer à Cargo de recompiler si les fichiers proto changent
+    // Indiquer à Cargo de recompiler si le dossier proto change
     println!("cargo:rerun-if-changed=../../../proto");
 
     Ok(())

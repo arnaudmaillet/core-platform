@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
-        entities::EntityMetadata,
+        entities::Entity,
         value_objects::{AccountId, RegionCode},
     },
     errors::Result,
@@ -12,10 +12,7 @@ use shared_kernel::{
 
 use crate::domain::{
     account::builders::AccountIdentityBuilder,
-    value_objects::{
-        AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber, VerificationCode,
-        VerificationToken,
-    },
+    value_objects::{AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber},
 };
 
 /// Entité Identity (Interne à l'Agrégat Account)
@@ -34,14 +31,13 @@ pub struct AccountIdentity {
     birth_date: Option<BirthDate>,
     locale: Locale,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    aggregate_updated_at: DateTime<Utc>,
     last_active_at: Option<DateTime<Utc>>,
 }
 
 impl AccountIdentity {
-    pub fn builder(
-        account_id: AccountId,
-        region_code: RegionCode,
-    ) -> AccountIdentityBuilder {
+    pub fn builder(account_id: AccountId, region_code: RegionCode) -> AccountIdentityBuilder {
         AccountIdentityBuilder::new(account_id, region_code)
     }
 
@@ -59,6 +55,8 @@ impl AccountIdentity {
         birth_date: Option<BirthDate>,
         locale: Locale,
         created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        aggregate_updated_at: DateTime<Utc>,
         last_active_at: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -73,6 +71,8 @@ impl AccountIdentity {
             birth_date,
             locale,
             created_at,
+            updated_at,
+            aggregate_updated_at,
             last_active_at,
         }
     }
@@ -112,6 +112,9 @@ impl AccountIdentity {
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
+    pub fn aggregate_updated_at(&self) -> DateTime<Utc> {
+        self.aggregate_updated_at
+    }
     pub fn last_active_at(&self) -> Option<DateTime<Utc>> {
         self.last_active_at
     }
@@ -119,6 +122,14 @@ impl AccountIdentity {
     // ==========================================
     // MUTATIONS INTERNES (pub(crate))
     // ==========================================
+
+    pub(crate) fn apply_region_change(&mut self, new_region: RegionCode) -> Result<bool> {
+        if self.region_code == new_region {
+            return Ok(false);
+        }
+        self.region_code = new_region;
+        Ok(true)
+    }
 
     pub(crate) fn apply_external_id_change(&mut self, new_external_id: ExternalId) -> Result<bool> {
         if self.external_id.as_ref() == Some(&new_external_id) {
@@ -278,7 +289,17 @@ impl AccountIdentity {
     }
 }
 
-impl EntityMetadata for AccountIdentity {
+impl Entity for AccountIdentity {
+    type Id = AccountId;
+
+    fn id(&self) -> &Self::Id {
+        &self.account_id
+    }
+
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+
     fn entity_name() -> &'static str {
         "AccountIdentity"
     }

@@ -3,13 +3,21 @@ use crate::domain::Identifier;
 use crate::errors::DomainError;
 use chrono::{DateTime, Utc};
 
-pub trait EntityMetadata {
+pub trait Entity {
+    type Id: Identifier;
+
+    // --- Métadonnées (statiques) ---
     fn entity_name() -> &'static str;
 
     fn map_constraint_to_field(_constraint: &str) -> &'static str {
         "unique_constraint"
     }
 
+    // --- Accès aux données (instance) ---
+    fn id(&self) -> &Self::Id;
+    fn updated_at(&self) -> DateTime<Utc>;
+
+    // --- Helper par défaut ---
     fn not_found<I: ToString>(id: I) -> DomainError {
         DomainError::NotFound {
             entity: Self::entity_name(),
@@ -18,24 +26,16 @@ pub trait EntityMetadata {
     }
 }
 
-pub trait Entity: EntityMetadata {
-    type Id: Identifier;
-
-    fn id(&self) -> &Self::Id;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> Option<DateTime<Utc>>;
-}
-
 pub trait EntityOptionExt<T> {
     fn ok_or_not_found<I: ToString>(self, id: I) -> Result<T, DomainError>
     where
-        T: EntityMetadata;
+        T: Entity;
 }
 
 impl<T> EntityOptionExt<T> for Option<T> {
     fn ok_or_not_found<I: ToString>(self, id: I) -> Result<T, DomainError>
     where
-        T: EntityMetadata,
+        T: Entity,
     {
         self.ok_or_else(|| T::not_found(id))
     }

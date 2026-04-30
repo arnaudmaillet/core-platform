@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
-        entities::EntityMetadata,
+        entities::Entity,
         value_objects::{AccountId, AuditReason, TrustContext},
     },
     errors::Result,
@@ -28,6 +28,7 @@ pub struct AccountGovernance {
     last_moderation_at: Option<DateTime<Utc>>,
     moderation_notes: Option<String>,
     last_ip_addr: Option<IpAddr>,
+    updated_at: DateTime<Utc>,
 }
 
 impl AccountGovernance {
@@ -45,6 +46,7 @@ impl AccountGovernance {
         last_moderation_at: Option<DateTime<Utc>>,
         moderation_notes: Option<String>,
         last_ip_addr: Option<IpAddr>,
+        updated_at: DateTime<Utc>,
     ) -> Self {
         Self {
             account_id,
@@ -55,6 +57,7 @@ impl AccountGovernance {
             last_moderation_at,
             moderation_notes,
             last_ip_addr,
+            updated_at,
         }
     }
 
@@ -192,7 +195,10 @@ impl AccountGovernance {
     }
 }
 
-impl EntityMetadata for AccountGovernance {
+impl Entity for AccountGovernance {
+    type Id = AccountId;
+
+    // Métadonnées
     fn entity_name() -> &'static str {
         "AccountGovernance"
     }
@@ -202,5 +208,12 @@ impl EntityMetadata for AccountGovernance {
             "account_governance_pkey" => "account_id",
             _ => "internal_governance",
         }
+    }
+
+    fn id(&self) -> &Self::Id {
+        &self.account_id
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
     }
 }

@@ -33,6 +33,7 @@ pub struct PostgresAccountIdentityRow {
     pub locale: String,
     pub version: i64,
     pub created_at: DateTime<Utc>,
+    #[sqlx(rename = "identity_updated_at")]
     pub updated_at: DateTime<Utc>,
     pub aggregate_updated_at: DateTime<Utc>,
     pub last_active_at: Option<DateTime<Utc>>,
@@ -57,6 +58,8 @@ impl PostgresAccountIdentityRow {
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(&self.locale)?,
             self.created_at,
+            self.updated_at,
+            self.aggregate_updated_at,
             self.last_active_at,
         ))
     }

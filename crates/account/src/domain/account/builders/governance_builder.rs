@@ -29,7 +29,6 @@ impl AccountGovernanceBuilder {
 
     // --- SETTERS ---
 
-    #[cfg(test)]
     pub fn with_role(mut self, role: AccountRole) -> Self {
         self.role = role;
         self
@@ -40,13 +39,11 @@ impl AccountGovernanceBuilder {
         self
     }
 
-    #[cfg(test)]
     pub fn with_shadowban(mut self, is_shadowbanned: bool) -> Self {
         self.is_shadowbanned = is_shadowbanned;
         self
     }
 
-    #[cfg(test)]
     pub fn with_trust_score(mut self, score: TrustScore) -> Self {
         self.trust_score = score;
         self
@@ -67,6 +64,7 @@ impl AccountGovernanceBuilder {
                 now.format("%Y-%m-%d %H:%M:%S")
             )),
             self.last_ip_addr,
+            now
         ))
     }
 }

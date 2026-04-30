@@ -1,0 +1,34 @@
+syntax = "proto3";
+package account.v1;
+
+import "account/v1/models.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1;accountv1";
+
+service AccountPersonalService {
+  // Informations personnelles
+  rpc ChangeEmail(ChangeEmailRequest) returns (AccountIdentity);
+  rpc VerifyEmail(VerifyEmailRequest) returns (AccountIdentity);
+  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (AccountIdentity);
+  rpc VerifyPhoneNumber(VerifyPhoneNumberRequest) returns (AccountIdentity);
+  rpc ChangeBirthDate(ChangeBirthDateRequest) returns (AccountIdentity);
+  
+  // Localisation
+  rpc ChangeRegion(ChangeRegionRequest) returns (AccountIdentity);
+  rpc UpdateLocale(UpdateLocaleRequest) returns (AccountIdentity);
+
+  // Cycle de vie utilisateur
+  rpc Activate(ActivateRequest) returns (AccountIdentity);
+  rpc Deactivate(DeactivateRequest) returns (AccountIdentity);
+}
+
+message ChangeEmailRequest { string command_id = 1; string account_id = 2; string new_email = 3; }
+message VerifyEmailRequest { string command_id = 1; string account_id = 2; string token = 3; }
+message ChangePhoneNumberRequest { string command_id = 1; string account_id = 2; string new_phone = 3; }
+message VerifyPhoneNumberRequest { string command_id = 1; string account_id = 2; string token = 3; }
+message ChangeBirthDateRequest { string command_id = 1; string account_id = 2; google.protobuf.Timestamp new_birth_date = 3; }
+message ChangeRegionRequest { string command_id = 1; string account_id = 2; string new_region = 3; }
+message UpdateLocaleRequest { string command_id = 1; string account_id = 2; string locale = 3; }
+message ActivateRequest { string command_id = 1; string account_id = 2; optional string reason = 3; }
+message DeactivateRequest { string command_id = 1; string account_id = 2; optional string reason = 3; }

@@ -24,7 +24,7 @@ pub struct AccountAppContext {
 }
 
 impl AccountAppContext {
-    pub fn new(
+    pub(crate) fn new(
         base: BaseAppContext,
         account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
@@ -36,6 +36,10 @@ impl AccountAppContext {
             outbox_repo,
             idempotency_repo,
         }
+    }
+
+    pub fn create_context(&self, account_id: AccountId, region: RegionCode) -> AccountContext {
+        AccountContext::new(self.clone(), account_id, region)
     }
 
     pub fn base(&self) -> &BaseAppContext {
@@ -93,6 +97,10 @@ impl AccountContext {
     pub fn pool(&self) -> Option<&sqlx::PgPool> {
         self.app.base.pool()
     }
+
+    pub fn app_ctx(&self) -> &AccountAppContext {
+        &self.app
+    }
     // --- Logique Métier ---
 
     /// Récupère l'agrégat complet.
@@ -120,7 +128,6 @@ impl AccountContext {
                 reason: "Account ID mismatch for this context".into(),
             });
         }
-        self.ensure_region(account)?;
 
         // 2. Récupération des événements
         // C'est notre indicateur de changement : pas d'events = pas de modif métier

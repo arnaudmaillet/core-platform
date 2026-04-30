@@ -1,7 +1,11 @@
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
     use shared_kernel::{
-        domain::value_objects::{AccountId, AuditReason, TrustContext},
+        domain::{
+            entities::Entity,
+            value_objects::{AccountId, AuditReason, TrustContext},
+        },
         errors::Result,
     };
 
@@ -24,6 +28,7 @@ mod tests {
             None,
             None,
             Some(ip_addr),
+            Utc::now(),
         ))
     }
 
@@ -36,6 +41,8 @@ mod tests {
         assert_eq!(gov.trust_score().value(), 100);
         assert_eq!(gov.last_ip_addr(), Some(&expected_ip));
 
+        assert!(gov.updated_at() <= Utc::now());
+
         Ok(())
     }
 
@@ -45,19 +52,31 @@ mod tests {
         let mut reason = AuditReason::try_new("Good behavior")?;
 
         // Déjà à 100, une récompense ne doit rien changer (idempotence)
-        let changed = gov.apply_trust_reward(TrustDelta::from_raw(10), TrustContext::ManualAdjustment, &reason)?;
+        let changed = gov.apply_trust_reward(
+            TrustDelta::from_raw(10),
+            TrustContext::ManualAdjustment,
+            &reason,
+        )?;
         assert!(!changed);
         assert_eq!(gov.trust_score().value(), 100);
 
         reason = AuditReason::try_new("Penalty")?;
 
         // On baisse pour tester la remontée
-        gov.apply_trust_penalty(TrustDelta::from_raw(20), TrustContext::ManualAdjustment, &reason)?;
+        gov.apply_trust_penalty(
+            TrustDelta::from_raw(20),
+            TrustContext::ManualAdjustment,
+            &reason,
+        )?;
         assert_eq!(gov.trust_score().value(), 80);
 
         reason = AuditReason::try_new("Bouncing back")?;
 
-        let changed = gov.apply_trust_reward(TrustDelta::from_raw(10), TrustContext::ManualAdjustment, &reason)?;
+        let changed = gov.apply_trust_reward(
+            TrustDelta::from_raw(10),
+            TrustContext::ManualAdjustment,
+            &reason,
+        )?;
         assert!(changed);
         assert_eq!(gov.trust_score().value(), 90);
 

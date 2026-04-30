@@ -1,0 +1,111 @@
+// crates/account/src/infrastructure/api/grpc/access_service.rs
+
+use shared_kernel::domain::events::AggregateRoot;
+use shared_kernel::domain::value_objects::AccountId;
+use std::sync::Arc;
+use tonic::{Request, Response, Status};
+
+use shared_proto::account::v1::account_access_service_server::AccountAccessService;
+use shared_proto::account::v1::{
+    AccountIdentity, LinkExternalIdentityRequest, RegisterRequest, ResolveIdentityRequest,
+    ResolveIdentityResponse,
+};
+
+use crate::application::context::AccountAppContext;
+use crate::application::use_cases::access_management::link_external_identity::{
+    LinkExternalIdentityCommand, LinkExternalIdentityHandler,
+};
+use crate::application::use_cases::access_management::register::{
+    RegisterCommand, RegisterHandler,
+};
+
+use crate::infrastructure::api::grpc::mapper;
+use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use shared_kernel::application::CommandBus;
+
+pub struct GrpcAccessService {
+    bus: Arc<CommandBus>,
+    app_ctx: Arc<AccountAppContext>,
+}
+
+impl GrpcAccessService {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext>) -> Self {
+        Self { bus, app_ctx }
+    }
+}
+
+impl GrpcServiceUtils for GrpcAccessService {
+    fn app_ctx(&self) -> &AccountAppContext {
+        &self.app_ctx
+    }
+    fn bus(&self) -> &CommandBus {
+        &self.bus
+    }
+}
+
+#[tonic::async_trait]
+impl AccountAccessService for GrpcAccessService {
+    async fn register(
+        &self,
+        request: Request<RegisterRequest>,
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let req = request.into_inner();
+        let new_account_id = AccountId::new();
+        let command = RegisterCommand::try_from_proto(req, new_account_id)?;
+
+        let ctx = self
+            .app_ctx
+            .create_context(command.account_id, command.region.clone());
+        self.execute_and_fetch(
+            &ctx,
+            command,
+            RegisterHandler,
+            mapper::map_account_to_identity_proto,
+        )
+        .await
+    }
+
+    async fn link_external_identity(
+        &self,
+        request: Request<LinkExternalIdentityRequest>,
+    ) -> Result<Response<AccountIdentity>, Status> {
+        let command = LinkExternalIdentityCommand::try_from_proto(request.get_ref().clone())
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let ctx = self.get_context(&request, &command.account_id).await?;
+        self.execute_and_fetch(
+            &ctx,
+            command,
+            LinkExternalIdentityHandler,
+            mapper::map_account_to_identity_proto,
+        )
+        .await
+    }
+
+    async fn resolve_identity(
+        &self,
+        request: Request<ResolveIdentityRequest>,
+    ) -> Result<Response<ResolveIdentityResponse>, Status> {
+        let req = request.into_inner();
+        let external_id = req
+            .external_id
+            .parse()
+            .map_err(|_| Status::invalid_argument("Invalid external_id"))?;
+
+        // Query directe sur le repo
+        let account = self
+            .app_ctx
+            .account_repo()
+            .find_by_external_id(&external_id, None)
+            .await
+            .map_err(|e| Status::internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| {
+                Status::not_found("No account associated with this external identity")
+            })?;
+
+        Ok(Response::new(ResolveIdentityResponse {
+            account_id: account.id(),
+            state: *account.identity().state() as i32,
+            role: account.governance().role() as i32,
+        }))
+    }
+}

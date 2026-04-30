@@ -5,7 +5,7 @@ use crate::application::{
     use_cases::access_management::link_external_identity::LinkExternalIdentityCommand,
 };
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, errors::Result};
+use shared_kernel::{application::CommandHandler, domain::utils::RetryConfig, errors::Result};
 
 pub struct LinkExternalIdentityHandler;
 
@@ -25,5 +25,12 @@ impl CommandHandler for LinkExternalIdentityHandler {
         ctx.save(&mut account, Some(cmd.command_id)).await?;
 
         Ok(())
+    }
+    
+    fn retry_config(&self) -> RetryConfig {
+        RetryConfig {
+            max_retries: 5,
+            initial_backoff_ms: 50,
+        }
     }
 }

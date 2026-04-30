@@ -1,0 +1,43 @@
+syntax = "proto3";
+package account.v1;
+
+import "account/v1/models.proto";
+import "account/v1/enums.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1;accountv1";
+
+service AccountModerationService {
+  // Sanctions
+  rpc Ban(ModerationRequest) returns (AccountGovernance);
+  rpc Unban(ModerationRequest) returns (AccountGovernance);
+  rpc Suspend(ModerationRequest) returns (AccountGovernance);
+  rpc Unsuspend(ModerationRequest) returns (AccountGovernance);
+  
+  // Visibilité
+  rpc Shadowban(ModerationRequest) returns (AccountGovernance);
+  rpc LiftShadowban(ModerationRequest) returns (AccountGovernance);
+
+  // Trust Score & Role
+  rpc AdjustTrustScore(AdjustTrustScoreRequest) returns (AccountGovernance);
+  rpc ChangeRole(ChangeRoleRequest) returns (AccountGovernance);
+}
+
+message ModerationRequest { 
+  string command_id = 1; 
+  string account_id = 2; 
+  string reason = 3; 
+}
+
+message AdjustTrustScoreRequest {
+  string command_id = 1; 
+  string account_id = 2;
+  int32 delta = 3; // On utilise un delta (ex: -10 ou +5)
+  string reason = 4;
+}
+
+message ChangeRoleRequest { 
+  string command_id = 1; 
+  string account_id = 2; 
+  AccountRole new_role = 3; 
+  string reason = 4; 
+}

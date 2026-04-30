@@ -1,0 +1,24 @@
+syntax = "proto3";
+package account.v1;
+
+import "account/v1/models.proto";
+
+option go_package = "github.com/core-platform/proto/account/v1;accountv1";
+
+service AccountQueryService {
+  rpc GetAccount(GetAccountRequest) returns (FullAccountResponse);
+  rpc GetPublicProfile(GetAccountRequest) returns (PublicProfileResponse);
+}
+
+message GetAccountRequest { string account_id = 1; }
+
+message FullAccountResponse {
+  AccountIdentity identity = 1;
+  AccountGovernance governance = 2;
+  AccountSettings settings = 3;
+}
+
+message PublicProfileResponse {
+  string account_id = 1;
+  string locale = 2;
+}

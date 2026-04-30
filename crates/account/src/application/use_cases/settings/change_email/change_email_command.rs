@@ -1,7 +1,10 @@
 // crates/account/src/application/change_email/change_email_command.rs
 
 use crate::domain::value_objects::Email;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::{
+    domain::value_objects::AccountId,
+    errors::{DomainError, Result},
+};
 use shared_proto::account::v1::ChangeEmailRequest;
 use uuid::Uuid;
 
@@ -13,16 +16,23 @@ pub struct ChangeEmailCommand {
 }
 
 impl ChangeEmailCommand {
-    pub fn try_from_proto(req: ChangeEmailRequest) -> Result<Self, tonic::Status> {
-        Ok(Self {            
-            command_id: Uuid::parse_str(&req.command_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid CommandId: {}", e))
+    pub fn try_from_proto(req: ChangeEmailRequest) -> Result<Self> {
+        Ok(Self {
+            command_id: Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
+                field: "command_id",
+                reason: "Invalid UUID format".to_string(),
             })?,
-            account_id: AccountId::try_from(req.account_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid AccountId: {}", e))
+
+            account_id: AccountId::try_new(&req.account_id).map_err(|e| {
+                DomainError::Validation {
+                    field: "account_id",
+                    reason: e.to_string(),
+                }
             })?,
-            new_email: Email::try_from(req.new_email)
-                .map_err(|e| tonic::Status::invalid_argument(format!("Invalid Email: {}", e)))?,
+            new_email: Email::try_from(req.new_email).map_err(|e| DomainError::Validation {
+                field: "account_id",
+                reason: e.to_string(),
+            })?,
         })
     }
 }

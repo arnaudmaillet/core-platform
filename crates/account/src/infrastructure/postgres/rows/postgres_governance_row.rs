@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use shared_kernel::{
-    domain::{Identifier, value_objects::AccountId},
+    domain::{Identifier, entities::Entity, value_objects::AccountId},
     errors::Result,
 };
 use std::net::IpAddr as StdIpAddr;
@@ -26,6 +26,8 @@ pub struct PostgresAccountGovernanceRow {
     pub last_moderation_at: Option<DateTime<Utc>>,
     pub moderation_notes: Option<String>,
     pub last_ip_addr: Option<StdIpAddr>,
+    #[sqlx(rename = "governance_updated_at")]
+    pub updated_at: DateTime<Utc>,
 }
 
 impl PostgresAccountGovernanceRow {
@@ -41,12 +43,13 @@ impl PostgresAccountGovernanceRow {
             self.last_moderation_at,
             self.moderation_notes,
             last_ip_addr,
+            self.updated_at
         ))
     }
 
     pub fn from_domain(account: &crate::domain::account::entities::Account) -> Self {
         let gov = account.governance();
-        
+
         Self {
             account_id: account.identity().account_id().as_uuid(),
             role: gov.role().into(),
@@ -55,7 +58,8 @@ impl PostgresAccountGovernanceRow {
             trust_score: gov.trust_score().value(),
             last_moderation_at: gov.last_moderation_at(),
             moderation_notes: gov.moderation_notes().map(|s| s.to_string()),
-            last_ip_addr: gov.last_ip_addr().map(|ip| ip.to_std()), 
+            last_ip_addr: gov.last_ip_addr().map(|ip| ip.to_std()),
+            updated_at: gov.updated_at()
         }
     }
 }
