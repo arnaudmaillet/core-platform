@@ -8,7 +8,7 @@ use crate::domain::{
         builders::{AccountGovernanceBuilder, AccountIdentityBuilder, AccountSettingsBuilder},
         entities::Account,
     },
-    value_objects::{ExternalId, Locale, RegistrationIdentifier, TrustScore},
+    value_objects::{SubId, Locale, RegistrationIdentifier, TrustScore},
 };
 use shared_kernel::domain::value_objects::Timezone;
 use shared_kernel::{
@@ -50,8 +50,8 @@ impl AccountBuilder {
         }
     }
 
-    pub fn with_external_id(mut self, external_id: ExternalId) -> Self {
-        self.identity = self.identity.with_external_id(external_id);
+    pub fn with_sub_id(mut self, sub_id: SubId) -> Self {
+        self.identity = self.identity.with_sub_id(sub_id);
         self
     }
 

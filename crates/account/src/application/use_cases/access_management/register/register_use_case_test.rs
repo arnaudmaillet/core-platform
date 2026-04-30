@@ -13,7 +13,7 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{
-        AccountState, Email, ExternalId, IpAddr, Locale, RegistrationIdentifier,
+        AccountState, Email, SubId, IpAddr, Locale, RegistrationIdentifier,
     };
 
     #[tokio::test]
@@ -21,13 +21,13 @@ mod tests {
         // 1. Setup
         let f = TestFixture::new();
         let email = Email::try_new("new-user@example.com")?;
-        let ext_id = ExternalId::from_raw("keycloak|12345");
+        let ext_id = SubId::from_raw("keycloak|12345");
         let ip = IpAddr::try_new("127.0.0.1")?;
 
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: Some(ext_id.clone()),
+            sub_id: Some(ext_id.clone()),
             identifier: RegistrationIdentifier::from_email(email.clone()),
             region: f.region(), // ex: "eu"
             locale: Locale::try_new("en-US")?,
@@ -47,7 +47,7 @@ mod tests {
         f.assert_account_by_id(&account_id, |acc| {
             // Vérification Identity
             assert_eq!(acc.identity().email(), Some(&email));
-            assert_eq!(acc.identity().external_id(), Some(&ext_id));
+            assert_eq!(acc.identity().sub_id(), Some(&ext_id));
             assert_eq!(acc.identity().state(), &AccountState::Active);
 
             // Vérification Governance (Metadata/IP)
@@ -69,13 +69,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_success_without_external_id() -> Result<()> {
+    async fn test_register_success_without_sub_id() -> Result<()> {
         let f = TestFixture::new();
 
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: None,
+            sub_id: None,
             identifier: RegistrationIdentifier::try_from_email("no-social@test.com")?,
             region: f.region(),
             locale: Locale::try_new("fr-FR")?,
@@ -87,7 +87,7 @@ mod tests {
 
         assert!(result.is_ok());
         f.assert_account_by_id(&f.account_id(), |acc| {
-            assert!(acc.identity().external_id().is_none());
+            assert!(acc.identity().sub_id().is_none());
         })
         .await?;
 
@@ -95,21 +95,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_fails_if_external_id_already_exists() -> Result<()> {
+    async fn test_register_fails_if_sub_id_already_exists() -> Result<()> {
         let f = TestFixture::new();
-        let existing_ext_id = ExternalId::from_raw("duplicate_id");
+        let existing_ext_id = SubId::from_raw("duplicate_id");
 
         // 1. Arrange : On pré-enregistre un compte existant dans le repo
         let existing_acc = f
             .account_builder()?
-            .with_external_id(existing_ext_id.clone())
+            .with_sub_id(existing_ext_id.clone())
             .build()?;
         f.account_repo().insert(existing_acc);
 
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: Some(existing_ext_id),
+            sub_id: Some(existing_ext_id),
             identifier: RegistrationIdentifier::try_from_email("new@test.com")?,
             region: f.region(),
             locale: Locale::try_new("en-US")?,
@@ -123,9 +123,9 @@ mod tests {
         // 3. Assert
         assert!(result.is_err());
         if let Err(DomainError::AlreadyExists { field, .. }) = result {
-            assert_eq!(field, "external_id");
+            assert_eq!(field, "sub_id");
         } else {
-            panic!("Devrait retourner une erreur AlreadyExists sur external_id");
+            panic!("Devrait retourner une erreur AlreadyExists sur sub_id");
         }
 
         Ok(())
@@ -143,7 +143,7 @@ mod tests {
         let command = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: Some(ExternalId::from_raw("atomic_ext")),
+            sub_id: Some(SubId::from_raw("atomic_ext")),
             identifier: RegistrationIdentifier::try_from_email("atomic@test.com")?,
             region: f.region(),
             locale: Locale::try_new("en-US")?,

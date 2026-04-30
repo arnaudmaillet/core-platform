@@ -7,13 +7,13 @@ use tonic::{Request, Response, Status};
 
 use shared_proto::account::v1::account_access_service_server::AccountAccessService;
 use shared_proto::account::v1::{
-    AccountIdentity, LinkExternalIdentityRequest, RegisterRequest, ResolveIdentityRequest,
+    AccountIdentity, LinkSubIdentityRequest, RegisterRequest, ResolveIdentityRequest,
     ResolveIdentityResponse,
 };
 
 use crate::application::context::AccountAppContext;
-use crate::application::use_cases::access_management::link_external_identity::{
-    LinkExternalIdentityCommand, LinkExternalIdentityHandler,
+use crate::application::use_cases::access_management::link_sub_identity::{
+    LinkSubIdentityCommand, LinkSubIdentityHandler,
 };
 use crate::application::use_cases::access_management::register::{
     RegisterCommand, RegisterHandler,
@@ -65,17 +65,17 @@ impl AccountAccessService for GrpcAccessService {
         .await
     }
 
-    async fn link_external_identity(
+    async fn link_sub_identity(
         &self,
-        request: Request<LinkExternalIdentityRequest>,
+        request: Request<LinkSubIdentityRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
-        let command = LinkExternalIdentityCommand::try_from_proto(request.get_ref().clone())
+        let command = LinkSubIdentityCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
         self.execute_and_fetch(
             &ctx,
             command,
-            LinkExternalIdentityHandler,
+            LinkSubIdentityHandler,
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -86,16 +86,16 @@ impl AccountAccessService for GrpcAccessService {
         request: Request<ResolveIdentityRequest>,
     ) -> Result<Response<ResolveIdentityResponse>, Status> {
         let req = request.into_inner();
-        let external_id = req
-            .external_id
+        let sub_id = req
+            .sub_id
             .parse()
-            .map_err(|_| Status::invalid_argument("Invalid external_id"))?;
+            .map_err(|_| Status::invalid_argument("Invalid sub_id"))?;
 
         // Query directe sur le repo
         let account = self
             .app_ctx
             .account_repo()
-            .find_by_external_id(&external_id, None)
+            .find_by_sub_id(&sub_id, None)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?
             .ok_or_else(|| {

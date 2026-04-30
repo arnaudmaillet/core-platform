@@ -17,7 +17,7 @@ pub fn map_account_to_identity_proto(account: Account) -> ProtoIdentity {
 
     ProtoIdentity {
         account_id: identity.account_id().to_string(),
-        external_id: identity.external_id().map(|id| id.to_string()),
+        sub_id: identity.sub_id().map(|id| id.to_string()),
         email: identity.email().map(|e| e.to_string()).unwrap_or_default(),
         email_verified: identity.is_email_verified(),
 

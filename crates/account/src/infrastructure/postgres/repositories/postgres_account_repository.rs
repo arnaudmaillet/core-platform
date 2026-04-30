@@ -14,7 +14,7 @@ use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
-use crate::domain::value_objects::{Email, ExternalId, PhoneNumber};
+use crate::domain::value_objects::{Email, PhoneNumber, SubId};
 use crate::infrastructure::postgres::rows::{
     PostgresAccountGovernanceRow, PostgresAccountIdentityRow, PostgresAccountRow,
     PostgresAccountSettingsRow,
@@ -64,8 +64,20 @@ impl AccountRepository for PostgresAccountRepository {
 
             match cache_result {
                 Ok(Ok(Some(account))) => return Ok(Some(account)),
-                Ok(Err(e)) => println!("⚠️ Cache error (ignored): {:?}", e),
-                Err(_) => println!("🛑 Cache TIMEOUT (deadlock évité)"),
+                Ok(Err(e)) => {
+                    tracing::error!(
+                        error = %e,
+                        account_id = %id,
+                        "Cache retrieval failed"
+                    );
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        timeout_ms = 50,
+                        account_id = %id,
+                        "Cache timeout - potential deadlock avoided, falling back to DB"
+                    );
+                }
                 _ => {}
             }
         }
@@ -128,14 +140,12 @@ impl AccountRepository for PostgresAccountRepository {
         Ok(account_opt)
     }
 
-    async fn find_by_external_id(
+    async fn find_by_sub_id(
         &self,
-        ext_id: &ExternalId,
+        ext_id: &SubId,
         mut tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
-        let account_id_opt = self
-            .find_id_by_external_id(ext_id, tx.as_deref_mut())
-            .await?;
+        let account_id_opt = self.find_id_by_sub_id(ext_id, tx.as_deref_mut()).await?;
 
         match account_id_opt {
             Some(id) => self.find_by_id(&id, tx).await,
@@ -167,14 +177,14 @@ impl AccountRepository for PostgresAccountRepository {
             // --- 1. UPDATE IDENTITY (avec vérification de version) ---
             let sql_identity = r#"
                 UPDATE account_identity SET 
-                    external_id = $2,
+                    sub_id = $2,
                     email = $3, email_verified = $4, phone_number = $5, phone_verified = $6,
                     state = $7, locale = $8, version = $9, last_active_at = $10
                 WHERE account_id = $1 AND version = $11"#;
 
             let res = sqlx::query(sql_identity)
                 .bind(uid)
-                .bind(ident_row.external_id)
+                .bind(ident_row.sub_id)
                 .bind(ident_row.email)
                 .bind(ident_row.email_verified)
                 .bind(ident_row.phone_number)
@@ -272,9 +282,9 @@ impl AccountRepository for PostgresAccountRepository {
         })
         .await
     }
-    async fn find_id_by_external_id(
+    async fn find_id_by_sub_id(
         &self,
-        ext_id: &ExternalId,
+        ext_id: &SubId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountId>> {
         let ext_id_raw = ext_id.to_string();
@@ -283,12 +293,12 @@ impl AccountRepository for PostgresAccountRepository {
             let ext_id_owned = ext_id_raw.clone();
 
             Box::pin(async move {
-                let sql = "SELECT account_id FROM account_identity WHERE external_id = $1";
+                let sql = "SELECT account_id FROM account_identity WHERE sub_id = $1";
                 let res = sqlx::query_scalar::<_, uuid::Uuid>(sql)
                     .bind(ext_id_owned)
                     .fetch_optional(conn)
                     .await
-                    .map_domain_infra("Account: find_id_by_external_id")?;
+                    .map_domain_infra("Account: find_id_by_sub_id")?;
 
                 Ok(res.map(AccountId::from_uuid))
             })
@@ -339,9 +349,9 @@ impl AccountRepository for PostgresAccountRepository {
         .await
     }
 
-    async fn exists_by_external_id(
+    async fn exists_by_sub_id(
         &self,
-        ext_id: &ExternalId,
+        ext_id: &SubId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
         let ext_id_raw = ext_id.to_string();
@@ -349,12 +359,12 @@ impl AccountRepository for PostgresAccountRepository {
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             let ext_id_owned = ext_id_raw.clone();
             Box::pin(async move {
-                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE external_id = $1)";
+                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE sub_id = $1)";
                 let exists = sqlx::query_scalar::<_, bool>(sql)
                     .bind(ext_id_owned)
                     .fetch_one(conn) // 3. Utilisation de conn
                     .await
-                    .map_domain_infra("Account: exists_by_external_id")?;
+                    .map_domain_infra("Account: exists_by_sub_id")?;
                 Ok(exists)
             })
         })
@@ -372,11 +382,11 @@ impl AccountRepository for PostgresAccountRepository {
             // --- 1. INSERT IDENTITY ---
             sqlx::query(
                 r#"INSERT INTO account_identity 
-                    (account_id, external_id, email, email_verified, state, locale, version, last_active_at)
+                    (account_id, sub_id, email, email_verified, state, locale, version, last_active_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
             )
             .bind(ident_row.account_id)
-            .bind(ident_row.external_id)
+            .bind(ident_row.sub_id)
             .bind(ident_row.email)
             .bind(ident_row.email_verified)
             .bind(ident_row.state)

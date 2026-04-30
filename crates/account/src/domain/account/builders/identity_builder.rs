@@ -2,7 +2,7 @@
 
 use crate::domain::account::entities::AccountIdentity;
 use crate::domain::value_objects::{
-    AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
+    AccountState, BirthDate, Email, SubId, Locale, PhoneNumber,
 };
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
@@ -11,7 +11,7 @@ use shared_kernel::errors::{DomainError, Result};
 pub struct AccountIdentityBuilder {
     account_id: AccountId,
     region_code: RegionCode,
-    external_id: Option<ExternalId>,
+    sub_id: Option<SubId>,
     email: Option<Email>,
     locale: Option<Locale>,
     phone: Option<PhoneNumber>,
@@ -29,7 +29,7 @@ impl AccountIdentityBuilder {
             account_id,
             region_code,
             email: None,
-            external_id: None,
+            sub_id: None,
             locale: None,
             phone: None,
             birth_date: None,
@@ -85,8 +85,8 @@ impl AccountIdentityBuilder {
         self
     }
 
-    pub fn with_external_id(mut self, external_id: ExternalId) -> Self {
-        self.external_id = Some(external_id);
+    pub fn with_sub_id(mut self, sub_id: SubId) -> Self {
+        self.sub_id = Some(sub_id);
         self
     }
 
@@ -103,7 +103,7 @@ impl AccountIdentityBuilder {
         Ok(AccountIdentity::restore(
             self.account_id,
             self.region_code,
-            self.external_id,
+            self.sub_id,
             self.email,
             false,
             self.phone,

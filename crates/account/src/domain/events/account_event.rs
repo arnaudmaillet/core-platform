@@ -4,7 +4,7 @@ use crate::domain::preferences::models::{
     AppearancePreferences, NotificationPreferences, PrivacyPreferences,
 };
 use crate::domain::value_objects::{
-    AccountRole, Email, ExternalId, IpAddr, Locale, PhoneNumber, TrustDelta, TrustScore, VerificationToken
+    AccountRole, Email, SubId, IpAddr, Locale, PhoneNumber, TrustDelta, TrustScore, VerificationToken
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -22,16 +22,16 @@ pub enum AccountEvent {
         account_id: AccountId,
         email: Option<Email>,
         phone: Option<PhoneNumber>,
-        external_id: Option<ExternalId>,
+        sub_id: Option<SubId>,
         region: RegionCode,
         locale: Locale,
         ip_addr: IpAddr,
         occurred_at: DateTime<Utc>,
     },
-    ExternalIdentityLinked {
+    SubIdentityLinked {
         account_id: AccountId,
-        old_external_id: Option<ExternalId>,
-        new_external_id: ExternalId,
+        old_sub_id: Option<SubId>,
+        new_sub_id: SubId,
         occurred_at: DateTime<Utc>,
     },
     EmailChanged {
@@ -218,7 +218,7 @@ impl DomainEvent for AccountEvent {
     fn event_name(&self) -> Cow<'_, str> {
         let s = match self {
             Self::AccountRegistered { .. } => Self::REGISTERED,
-            Self::ExternalIdentityLinked { .. } => Self::EXTERNAL_LINKED,
+            Self::SubIdentityLinked { .. } => Self::EXTERNAL_LINKED,
             Self::EmailChanged { .. } => Self::EMAIL_CHANGED,
             Self::PhoneNumberChanged { .. } => Self::PHONE_NUMBER_CHANGED,
             Self::EmailVerified { .. } => Self::EMAIL_VERIFIED,
@@ -254,7 +254,7 @@ impl DomainEvent for AccountEvent {
         // Pattern matching simplifié pour tous les types portant un account_id
         match self {
             Self::AccountRegistered { account_id, .. }
-            | Self::ExternalIdentityLinked { account_id, .. }
+            | Self::SubIdentityLinked { account_id, .. }
             | Self::EmailChanged { account_id, .. }
             | Self::PhoneNumberChanged { account_id, .. }
             | Self::EmailVerified { account_id, .. }
@@ -284,7 +284,7 @@ impl DomainEvent for AccountEvent {
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
             Self::AccountRegistered { occurred_at, .. }
-            | Self::ExternalIdentityLinked { occurred_at, .. }
+            | Self::SubIdentityLinked { occurred_at, .. }
             | Self::EmailChanged { occurred_at, .. }
             | Self::PhoneNumberChanged { occurred_at, .. }
             | Self::EmailVerified { occurred_at, .. }

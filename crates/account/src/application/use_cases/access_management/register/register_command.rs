@@ -1,7 +1,7 @@
 // crates/account/src/application/register_account/register_account_command
 
 use crate::domain::value_objects::{
-    Email, ExternalId, IpAddr, Locale, PhoneNumber, RegistrationIdentifier,
+    Email, SubId, IpAddr, Locale, PhoneNumber, RegistrationIdentifier,
 };
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub struct RegisterCommand {
     pub command_id: Uuid,
     pub account_id: AccountId,
-    pub external_id: Option<ExternalId>,
+    pub sub_id: Option<SubId>,
     pub identifier: RegistrationIdentifier,
     pub region: RegionCode,
     pub locale: Locale,
@@ -40,9 +40,9 @@ impl RegisterCommand {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
             account_id: account_id,
-            external_id: match req.external_id {
+            sub_id: match req.sub_id {
                 Some(id) if !id.is_empty() => Some(
-                    ExternalId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?,
+                    SubId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?,
                 ),
                 _ => None,
             },

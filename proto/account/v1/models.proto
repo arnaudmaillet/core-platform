@@ -12,7 +12,7 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 message AccountIdentity {
   string account_id = 1;
   string region_code = 2;
-  optional string external_id = 3;
+  optional string sub_id = 3;
   string email = 4;
   bool email_verified = 5;
   google.protobuf.StringValue phone_number = 6;

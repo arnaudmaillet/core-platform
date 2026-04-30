@@ -5,7 +5,7 @@ use crate::domain::{
         Account, AccountGovernance, AccountIdentity, AccountPreferences, AccountSettings,
     },
     value_objects::{
-        AccountRole, AccountState, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
+        AccountRole, AccountState, BirthDate, Email, SubId, IpAddr, Locale, PhoneNumber,
         TrustScore,
     },
 };
@@ -23,7 +23,7 @@ use shared_kernel::{
 pub struct PostgresAccountRow {
     // --- Identity ---
     pub account_id: uuid::Uuid,
-    pub external_id: Option<String>,
+    pub sub_id: Option<String>,
     pub email: Option<String>,
     pub email_verified: bool,
     pub phone_number: Option<String>,
@@ -63,7 +63,7 @@ impl PostgresAccountRow {
         let identity = AccountIdentity::restore(
             account_id,
             RegionCode::try_new(self.region_code.as_deref().unwrap_or("US"))?,
-            self.external_id.map(ExternalId::try_new).transpose()?,
+            self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
             self.email_verified,
             self.phone_number.map(PhoneNumber::try_new).transpose()?,

@@ -1,22 +1,22 @@
-// crates/account/src/application/link_external_identity/link_external_identity_command.rs
+// crates/account/src/application/link_sub_identity/link_sub_identity_command.rs
 
-use crate::domain::value_objects::ExternalId;
+use crate::domain::value_objects::SubId;
 use shared_kernel::{
     domain::value_objects::AccountId,
     errors::{DomainError, Result},
 };
-use shared_proto::account::v1::LinkExternalIdentityRequest;
+use shared_proto::account::v1::LinkSubIdentityRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub struct LinkExternalIdentityCommand {
+pub struct LinkSubIdentityCommand {
     pub command_id: Uuid,
     pub account_id: AccountId,
-    pub external_id: ExternalId,
+    pub sub_id: SubId,
 }
 
-impl LinkExternalIdentityCommand {
-    pub fn try_from_proto(req: LinkExternalIdentityRequest) -> Result<Self> {
+impl LinkSubIdentityCommand {
+    pub fn try_from_proto(req: LinkSubIdentityRequest) -> Result<Self> {
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
                 field: "command_id",
@@ -29,9 +29,9 @@ impl LinkExternalIdentityCommand {
                     reason: e.to_string(),
                 }
             })?,
-            external_id: ExternalId::try_from(req.external_id).map_err(|e| {
+            sub_id: SubId::try_from(req.sub_id).map_err(|e| {
                 DomainError::Validation {
-                    field: "external_id",
+                    field: "sub_id",
                     reason: e.to_string(),
                 }
             })?,

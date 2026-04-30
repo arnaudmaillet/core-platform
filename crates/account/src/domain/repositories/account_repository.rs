@@ -8,7 +8,7 @@ use shared_kernel::{
 
 use crate::domain::{
     account::entities::Account,
-    value_objects::{Email, ExternalId, PhoneNumber},
+    value_objects::{Email, SubId, PhoneNumber},
 };
 
 #[async_trait]
@@ -21,15 +21,15 @@ pub trait AccountRepository: Send + Sync {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>>;
 
-    async fn find_by_external_id(
+    async fn find_by_sub_id(
         &self,
-        ext_id: &ExternalId,
+        ext_id: &SubId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>>;
 
-    async fn find_id_by_external_id(
+    async fn find_id_by_sub_id(
         &self,
-        ext_id: &ExternalId,
+        ext_id: &SubId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountId>>;
 
@@ -53,9 +53,9 @@ pub trait AccountRepository: Send + Sync {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool>;
 
-    async fn exists_by_external_id(
+    async fn exists_by_sub_id(
         &self,
-        ext_id: &ExternalId,
+        ext_id: &SubId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool>;
 

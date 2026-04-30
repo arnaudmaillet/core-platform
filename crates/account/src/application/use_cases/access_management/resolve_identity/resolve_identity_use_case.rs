@@ -42,9 +42,9 @@ impl ResolveIdentityUseCase {
         // 1. Récupération de l'ID interne (Lookup indexé ultra-rapide)
         let account_id = self
             .identity_repo
-            .resolve_id_from_external_id(&cmd.external_id)
+            .resolve_id_from_sub_id(&cmd.sub_id)
             .await?
-            .ok_or_not_found(&cmd.external_id)?;
+            .ok_or_not_found(&cmd.sub_id)?;
 
         // 2. Récupération de l'entité (Vérification d'état)
         let identity = self

@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     domain::{
         account::entities::{Account, AccountIdentity},
-        value_objects::{AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber},
+        value_objects::{AccountState, BirthDate, Email, SubId, Locale, PhoneNumber},
     },
     infrastructure::postgres::models::PostgresAccountState,
 };
@@ -23,7 +23,7 @@ use crate::{
 pub struct PostgresAccountIdentityRow {
     pub account_id: Uuid,
     pub region_code: String,
-    pub external_id: Option<String>,
+    pub sub_id: Option<String>,
     pub email: Option<String>,
     pub email_verified: bool,
     pub phone_number: Option<String>,
@@ -44,8 +44,8 @@ impl PostgresAccountIdentityRow {
         Ok(AccountIdentity::restore(
             AccountId::from_uuid(self.account_id),
             RegionCode::try_new(&self.region_code)?,
-            self.external_id
-                .map(|id| ExternalId::try_new(id))
+            self.sub_id
+                .map(|id| SubId::try_new(id))
                 .transpose()?,
             self.email.as_deref().map(Email::try_new).transpose()?,
             self.email_verified,
@@ -69,7 +69,7 @@ impl PostgresAccountIdentityRow {
         Self {
             account_id: ident.account_id().as_uuid(),
             region_code: ident.region_code().to_string(),
-            external_id: ident.external_id().as_ref().map(|id| id.to_string()),
+            sub_id: ident.sub_id().as_ref().map(|id| id.to_string()),
             email: ident.email().as_ref().map(|e| e.to_string()),
             email_verified: ident.is_email_verified(),
             phone_number: ident.phone_number().as_ref().map(|p| p.to_string()),

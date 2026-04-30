@@ -1,4 +1,4 @@
-pub mod link_external_identity;
+pub mod link_sub_identity;
 pub mod register;
 pub mod resolve_identity;
 pub mod verify_email;

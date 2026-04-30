@@ -9,7 +9,7 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 service AccountAccessService {
   // Inscription & Liaison Sociale
   rpc Register(RegisterRequest) returns (AccountIdentity);
-  rpc LinkExternalIdentity(LinkExternalIdentityRequest) returns (AccountIdentity);
+  rpc LinkSubIdentity(LinkSubIdentityRequest) returns (AccountIdentity);
   
   // Résolution technique (souvent utilisé par une Gateway ou un service d'Auth)
   rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
@@ -17,20 +17,20 @@ service AccountAccessService {
 
 message RegisterRequest {
   string command_id = 1;
-  optional string external_id = 2; // Optionnel grâce à notre refacto Option 1
+  optional string sub_id = 2; // Optionnel grâce à notre refacto Option 1
   RegistrationIdentifier identifier = 3;
   string region_code = 4;
   string locale = 5;
   string ip_addr = 6;
 }
 
-message LinkExternalIdentityRequest { 
+message LinkSubIdentityRequest { 
   string command_id = 1; 
   string account_id = 2; 
-  string external_id = 3; 
+  string sub_id = 3; 
 }
 
-message ResolveIdentityRequest { string external_id = 1; }
+message ResolveIdentityRequest { string sub_id = 1; }
 
 message ResolveIdentityResponse {
   string account_id = 1;

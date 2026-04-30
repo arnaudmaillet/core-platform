@@ -16,7 +16,7 @@ use crate::domain::{
     events::AccountEvent,
     preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
     value_objects::{
-        AccountRole, BirthDate, Email, ExternalId, IpAddr, Locale, PhoneNumber,
+        AccountRole, BirthDate, Email, SubId, IpAddr, Locale, PhoneNumber,
         RegistrationIdentifier, TrustDelta, VerificationToken,
     },
 };
@@ -75,7 +75,7 @@ impl Account {
             account_id: self.id_typed(),
             email: self.identity.email().cloned(),
             phone: self.identity.phone_number().cloned(),
-            external_id: self.identity.external_id().cloned(),
+            sub_id: self.identity.sub_id().cloned(),
             locale: self.identity.locale().clone(),
             region,
             ip_addr,
@@ -102,8 +102,8 @@ impl Account {
         )
     }
 
-    pub fn link_external_identity(&mut self, new_id: ExternalId) -> Result<bool> {
-        let current_id = self.identity.external_id().cloned();
+    pub fn link_sub_identity(&mut self, new_id: SubId) -> Result<bool> {
+        let current_id = self.identity.sub_id().cloned();
 
         // 1. Idempotence métier : si l'ID est déjà le même, on ne fait rien
         if current_id.as_ref() == Some(&new_id) {
@@ -121,14 +121,14 @@ impl Account {
         // 3. Application du changement (Transition de None vers Some)
         self.track_change(
             |s| {
-                s.identity.apply_external_id_change(new_id.clone())?;
+                s.identity.apply_sub_id_change(new_id.clone())?;
                 Ok(true)
             },
             |s| {
-                Box::new(AccountEvent::ExternalIdentityLinked {
+                Box::new(AccountEvent::SubIdentityLinked {
                     account_id: s.id_typed(),
-                    old_external_id: current_id, // Sera None
-                    new_external_id: new_id.clone(),
+                    old_sub_id: current_id, // Sera None
+                    new_sub_id: new_id.clone(),
                     occurred_at: s.updated_at(),
                 })
             },

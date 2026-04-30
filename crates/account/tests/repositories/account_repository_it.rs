@@ -1,7 +1,7 @@
 use account::domain::account::entities::Account;
 use account::domain::repositories::AccountRepository;
 use account::domain::value_objects::{
-    AccountRole, AccountState, Email, ExternalId, RegistrationIdentifier,
+    AccountRole, AccountState, Email, RegistrationIdentifier, SubId,
 };
 use account::infrastructure::postgres::repositories::PostgresAccountRepository;
 use shared_kernel::domain::Identifier;
@@ -208,11 +208,11 @@ async fn test_lookups() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
     let email = Email::try_new("lookup@test.com")?;
     let identifier = RegistrationIdentifier::try_from_email(email.to_string())?;
-    let ext_id = ExternalId::from_raw("ext_123");
+    let ext_id = SubId::from_raw("ext_123");
     let account_id = AccountId::new();
 
     let account = Account::builder(account_id.clone(), RegionCode::from_raw("eu"), identifier)
-        .with_external_id(ext_id.clone())
+        .with_sub_id(ext_id.clone())
         .with_email(email.clone())
         .build()?;
 
@@ -221,14 +221,14 @@ async fn test_lookups() -> Result<()> {
     tx.into_inner().commit().await.unwrap();
 
     assert!(repo.exists_by_email(&email, None).await?);
-    assert!(repo.exists_by_external_id(&ext_id, None).await?);
+    assert!(repo.exists_by_sub_id(&ext_id, None).await?);
 
     assert_eq!(
         repo.find_id_by_email(&email, None).await?.unwrap(),
         account_id
     );
     assert_eq!(
-        repo.find_id_by_external_id(&ext_id, None).await?.unwrap(),
+        repo.find_id_by_sub_id(&ext_id, None).await?.unwrap(),
         account_id
     );
 

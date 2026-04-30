@@ -19,16 +19,16 @@ impl CommandHandler for RegisterHandler {
     type Output = AccountId;
 
     async fn handle(&self, ctx: &AccountContext, cmd: RegisterCommand) -> Result<Self::Output> {
-        if let Some(ref ext_id) = cmd.external_id {
+        if let Some(ref ext_id) = cmd.sub_id {
             if ctx
                 .app_ctx()
                 .account_repo()
-                .exists_by_external_id(ext_id, None)
+                .exists_by_sub_id(ext_id, None)
                 .await?
             {
                 return Err(DomainError::AlreadyExists {
                     entity: "Account",
-                    field: "external_id",
+                    field: "sub_id",
                     value: ext_id.to_string(),
                 });
             }
@@ -37,8 +37,8 @@ impl CommandHandler for RegisterHandler {
         let account_id = cmd.account_id.clone();
         let mut builder = Account::builder(account_id.clone(), cmd.region.clone(), cmd.identifier);
 
-        if let Some(ext_id) = cmd.external_id {
-            builder = builder.with_external_id(ext_id);
+        if let Some(ext_id) = cmd.sub_id {
+            builder = builder.with_sub_id(ext_id);
         }
 
         let mut account = builder.with_locale(cmd.locale).build()?;

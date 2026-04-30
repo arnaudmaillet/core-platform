@@ -4,12 +4,12 @@
 
 use uuid::Uuid;
 
-use crate::domain::value_objects::ExternalId;
+use crate::domain::value_objects::SubId;
 
 #[derive(Debug, Clone)]
 pub struct ResolveIdentityCommand {
     pub command_id: Uuid,
-    pub external_id: ExternalId,
+    pub sub_id: SubId,
 }
 
 impl ResolveIdentityCommand {
@@ -18,8 +18,8 @@ impl ResolveIdentityCommand {
             command_id: Uuid::parse_str(&req.command_id).map_err(|e| {
                 tonic::Status::invalid_argument(format!("Invalid CommandId: {}", e))
             })?,
-            external_id: ExternalId::try_from(req.external_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid ExternalId: {}", e))
+            sub_id: SubId::try_from(req.sub_id).map_err(|e| {
+                tonic::Status::invalid_argument(format!("Invalid SubId: {}", e))
             })?,
         })
     }
