@@ -4,94 +4,125 @@ mod tests {
         VerifyPhoneNumberCommand, VerifyPhoneNumberHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::Account;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{ExternalId, RegistrationIdentifier, VerificationCode};
+    use crate::domain::value_objects::VerificationToken;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_verify_phone_success() {
+    async fn test_verify_phone_success() -> Result<()> {
         let f = TestFixture::new();
-        let account_id = f.account_id();
+        // Utilisation du builder de la fixture
+        let account = f.account_builder()?.build()?;
+        let version_snapshot = account.version();
 
-        // 1. Arrange : Compte avec téléphone non vérifié (Version 1)
-        let account = Account::builder(
-            account_id,
-            f.region(),
-            RegistrationIdentifier::try_from_phone("+33612345678")?,
-            ExternalId::try_new("ext_555")?,
-        )
-        .build()
-        .unwrap();
+        f.account_repo().insert(account);
 
-        assert!(!account.is_phone_verified());
+        // Le token est la preuve fournie par le webhook Keycloak
+        let token = VerificationToken::try_new("keycloak_sms_verified_proof_123")?;
+
+        let cmd = VerifyPhoneNumberCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            token,
+        };
+
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, VerifyPhoneNumberHandler)
+            .await?;
+
+        // 3. Assert via DSL
+        f.assert_account(|acc| {
+            assert!(acc.identity().is_phone_verified());
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
+
+        f.assert_outbox(1, Some(AccountEvent::PHONE_VERIFIED));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_phone_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let token = VerificationToken::try_new("proof_already_processed")?;
+
+        // 1. Arrange : On simule un téléphone déjà vérifié dans l'agrégat
+        let mut account = f.account_builder()?.build()?;
+        account.verify_phone(token.clone())?;
+        account.pull_events(); // Vider l'outbox initiale
+        let version_snapshot = account.version();
+
         f.account_repo().insert(account);
 
         let cmd = VerifyPhoneNumberCommand {
-            account_id,
-            code: "123456".into(),
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            token,
         };
 
-        // 2. Act : On récupère l'Account mis à jour
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, VerifyPhoneNumberHandler)
+            .await?;
+
+        // 3. Assert : Rien ne doit changer (Idempotence)
+        f.assert_account(|acc| {
+            assert!(acc.identity().is_phone_verified());
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_phone_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
+
+        // Simule que l'infrastructure a déjà vu cet ID de commande
+        f.idempotency_repo().seed(cmd_id);
+
+        let account = f.account_builder()?.build()?;
+        f.account_repo().insert(account);
+
+        let cmd = VerifyPhoneNumberCommand {
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            token: VerificationToken::try_new("any_token")?,
+        };
+
+        // 2. Act
         let result = f
             .bus()
             .execute(f.account_ctx(), cmd, VerifyPhoneNumberHandler)
             .await;
 
-        // 3. Assert
-        assert!(
-            result.is_ok(),
-            "La vérification du téléphone devrait réussir"
-        );
-        let updated = result.unwrap();
-
-        assert!(updated.is_phone_verified());
-        assert_eq!(updated.version(), 2, "La version doit être passée à 2");
-
-        // 4. Persistence réelle
-        let saved = f
-            .account_repo()
-            .find_by_id(&account_id)
-            .expect("Should exist");
-        assert!(saved.is_phone_verified());
-
-        // 5. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            1,
-            "Un événement AccountEvent::PHONE_VERIFIED attendu"
-        );
-        assert!(
-            f.outbox_events()
-                .contains(&AccountEvent::PHONE_VERIFIED.to_string())
-        );
+        // 3. Assert : Rejet technique avant le domaine
+        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
+        f.assert_outbox(0, None);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_verify_phone_idempotency() {
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let account_id = f.account_id();
-        let code = VerificationCode::try_new("000000")?;
+        let wrong_region = RegionCode::from_raw("us");
 
-        // 1. Arrange : On simule un téléphone déjà vérifié (Version 2)
-        let mut account = Account::builder(
-            account_id,
-            f.region(),
-            RegistrationIdentifier::try_from_phone("+33612345678")?,
-            ExternalId::try_new("ext_555")?,
-        )
-        .build()
-        .unwrap();
-
-        account.verify_phone(code).unwrap();
-        account.pull_events();
-        let version_verified = account.version();
-
+        // Arrange : Donnée aux US, contexte en EU
+        let account = f.account_builder_for(wrong_region)?.build()?;
         f.account_repo().insert(account);
 
-        let cmd = VerifyPhoneNumberCommand { account_id, code };
+        let cmd = VerifyPhoneNumberCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            token: VerificationToken::try_new("some_token")?,
+        };
 
         // 2. Act
         let result = f
@@ -100,49 +131,7 @@ mod tests {
             .await;
 
         // 3. Assert
-        assert!(result.is_ok());
-        let returned = result.unwrap();
-
-        assert!(returned.is_phone_verified());
-        assert_eq!(
-            returned.version(),
-            version_verified,
-            "La version ne doit pas augmenter"
-        );
-
-        // 4. Outbox
-        assert_eq!(
-            f.outbox_repo().count(),
-            0,
-            "Idempotence : aucun événement généré"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new();
-        let account_id = f.account_id();
-        let wrong_region = RegionCode::from_raw("us");
-        let code = VerificationCode::try_new("000000")?;
-
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.account_repo().insert(
-            Account::builder(
-                account_id,
-                wrong_region,
-                RegistrationIdentifier::try_from_phone("+33612345678")?,
-                ExternalId::from_raw("ext_1"),
-            )
-            .build()?,
-        );
-
-        let cmd = VerifyPhoneNumberCommand { account_id, code };
-
-        let result = f
-            .bus()
-            .execute(f.account_ctx(), cmd, VerifyPhoneNumberHandler)
-            .await;
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+        Ok(())
     }
 }

@@ -1,7 +1,10 @@
 // crates/account/src/domain/builders/account_settings_builder.rs
 
-use crate::domain::account::entities::{AccountSettings, AccountPreferences};
-use crate::domain::preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences};
+use crate::domain::account::entities::{AccountPreferences, AccountSettings};
+use crate::domain::preferences::models::{
+    AppearancePreferences, NotificationPreferences, PrivacyPreferences,
+};
+use chrono::Utc;
 use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
 use shared_kernel::errors::Result;
 
@@ -55,17 +58,16 @@ impl AccountSettingsBuilder {
 
     /// Finalise pour une CRÉATION
     pub fn build(self) -> Result<AccountSettings> {
-        let preferences = AccountPreferences::new(
-            self.privacy,
-            self.notifications,
-            self.appearance,
-        );
+        let now = Utc::now();
+        let preferences =
+            AccountPreferences::new(self.privacy, self.notifications, self.appearance);
 
         Ok(AccountSettings::restore(
             self.account_id,
             preferences,
             self.timezone,
             self.push_tokens,
+            now,
         ))
     }
 }

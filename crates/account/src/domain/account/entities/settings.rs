@@ -1,9 +1,10 @@
 // crates/account/src/domain/entities/account_settings.rs
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
-        entities::EntityMetadata,
+        entities::Entity,
         value_objects::{AccountId, PushToken, RegionCode, Timezone},
     },
     errors::{DomainError, Result},
@@ -80,6 +81,7 @@ pub struct AccountSettings {
     preferences: AccountPreferences,
     timezone: Timezone,
     push_tokens: Vec<PushToken>,
+    updated_at: DateTime<Utc>,
 }
 
 impl AccountSettings {
@@ -92,12 +94,14 @@ impl AccountSettings {
         preferences: AccountPreferences,
         timezone: Timezone,
         push_tokens: Vec<PushToken>,
+        updated_at: DateTime<Utc>,
     ) -> Self {
         Self {
             account_id,
             preferences,
             timezone,
             push_tokens,
+            updated_at,
         }
     }
 
@@ -175,7 +179,13 @@ impl AccountSettings {
     }
 }
 
-impl EntityMetadata for AccountSettings {
+impl Entity for AccountSettings {
+    type Id = AccountId;
+
+    fn id(&self) -> &Self::Id {
+        &self.account_id
+    }
+
     fn entity_name() -> &'static str {
         "AccountSettings"
     }
@@ -184,5 +194,9 @@ impl EntityMetadata for AccountSettings {
             "account_settings_pkey" => "account_id",
             _ => "settings",
         }
+    }
+
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
     }
 }

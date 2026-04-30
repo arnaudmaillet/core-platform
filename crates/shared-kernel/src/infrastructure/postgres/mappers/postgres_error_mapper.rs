@@ -1,16 +1,15 @@
 // crates/shared-kernel/src/infrastructure/postgres/mappers/postgres_error_mapper.rs
 
-use crate::domain::entities::EntityMetadata;
-use crate::errors::DomainError;
+use crate::{domain::entities::Entity, errors::DomainError};
 use sqlx::postgres::PgDatabaseError;
 
 pub trait SqlxErrorExt<T> {
-    fn map_domain<E: EntityMetadata>(self) -> Result<T, DomainError>;
+    fn map_domain<E: Entity>(self) -> Result<T, DomainError>;
     fn map_domain_infra(self, context: &'static str) -> Result<T, DomainError>;
 }
 
 impl<T> SqlxErrorExt<T> for std::result::Result<T, sqlx::Error> {
-    fn map_domain<E: EntityMetadata>(self) -> Result<T, DomainError> {
+    fn map_domain<E: Entity>(self) -> Result<T, DomainError> {
         self.map_err(|e| {
             match e {
                 sqlx::Error::RowNotFound => DomainError::NotFound {

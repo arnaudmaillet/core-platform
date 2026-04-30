@@ -92,6 +92,19 @@ impl TryFrom<String> for AccountRole {
     }
 }
 
+impl TryFrom<i32> for AccountRole {
+    type Error = String;
+
+    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::User),
+            1 => Ok(Self::Staff),
+            2 => Ok(Self::Admin),
+            _ => Err(format!("'{}' is not a valid AccountRole ID", value)),
+        }
+    }
+}
+
 impl fmt::Display for AccountRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())

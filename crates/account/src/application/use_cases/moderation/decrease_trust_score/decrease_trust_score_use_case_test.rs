@@ -5,7 +5,7 @@ mod tests {
     };
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::AccountState;
+    use crate::domain::value_objects::{AccountState, TrustDelta, TrustScore};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
@@ -18,7 +18,7 @@ mod tests {
         // 1. Arrange : Compte actif (score 100 par défaut via builder)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();
@@ -27,7 +27,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 30,
+            amount: TrustDelta::from_raw(30),
             reason: AuditReason::try_new("Suspicious activity")?,
         };
 
@@ -56,8 +56,8 @@ mod tests {
         // 1. Arrange : Utilisation du builder avec un score précis
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
-            .with_trust_score(20)?
+            .with_state(AccountState::Active)
+            .with_trust_score(TrustScore::from_raw(TrustScore::CRITICAL_THRESHOLD))
             .build()?;
 
         let version_snapshot = account.version();
@@ -66,7 +66,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 50, // 20 - 50 -> Clamping à 0
+            amount: TrustDelta::from_raw(50), // 20 - 50 -> Clamping à 0
             reason: AuditReason::try_new("Heavy violation")?,
         };
 
@@ -98,7 +98,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -106,7 +106,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: cmd_id,
             account_id: f.account_id(),
-            amount: 10,
+            amount: TrustDelta::from_raw(10),
             reason: AuditReason::try_new("Duplicate")?,
         };
 
@@ -132,7 +132,7 @@ mod tests {
         // Arrange : Utilisation du with_state(Banned) qui met auto le score à 0 et shadowban
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)?
+            .with_state(AccountState::Banned)
             .build()?;
 
         let version_snapshot = account.version();
@@ -141,7 +141,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 10,
+            amount: TrustDelta::from_raw(10),
             reason: AuditReason::try_new("Already at zero")?,
         };
 
@@ -167,35 +167,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+    async fn test_trust_decrease_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         f.account_repo().insert(account);
 
+        // On simule UNE erreur (le stub la supprimera après le premier essai)
         f.account_repo()
-            .set_error(DomainError::ConcurrencyConflict {
+            .set_error_once(DomainError::ConcurrencyConflict {
                 reason: "DB Busy".into(),
             });
 
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 1,
+            amount: TrustDelta::from_raw(1),
             reason: AuditReason::try_new("Test")?,
         };
 
+        // ACT : Le bus doit absorber l'erreur et réussir au second essai
         let result = f
             .bus()
             .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
             .await;
-        assert!(matches!(
-            result,
-            Err(DomainError::ConcurrencyConflict { .. })
-        ));
-        f.assert_outbox(0, None);
+
+        // ASSERT
+        assert!(result.is_ok(), "Le retry aurait dû sauver l'opération");
+        f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_ADJUSTED));
         Ok(())
     }
 
@@ -207,7 +208,7 @@ mod tests {
         // Compte aux US, Contexte en EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -215,7 +216,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            amount: 1,
+            amount: TrustDelta::from_raw(1),
             reason: AuditReason::try_new("Test")?,
         };
 

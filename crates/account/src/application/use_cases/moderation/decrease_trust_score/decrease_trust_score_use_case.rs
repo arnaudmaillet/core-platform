@@ -18,7 +18,7 @@ impl CommandHandler for DecreaseTrustScoreHandler {
 
     async fn handle(&self, ctx: &AccountContext, cmd: DecreaseTrustScoreCommand) -> Result<Self::Output> {
         let mut account = ctx.account().await?;
-        account.penalize_trust(cmd.amount as i32, cmd.reason)?;
+        account.penalize_trust(cmd.amount, cmd.reason)?;
         ctx.save(&mut account, Some(cmd.command_id)).await?;
         Ok(())
     }

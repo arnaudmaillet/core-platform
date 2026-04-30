@@ -30,7 +30,7 @@ impl PostgresAccountRepository {
         Self { pool, cache }
     }
 
-    fn cache_key(id: &AccountId) -> String {
+    pub fn cache_key(id: &AccountId) -> String {
         format!("account:aggregate:{}", id.as_uuid())
     }
 }
@@ -48,9 +48,25 @@ impl AccountRepository for PostgresAccountRepository {
         // 1. Stratégie de Cache (uniquement hors transaction)
         let is_no_tx = tx.is_none();
 
-        if is_no_tx {
-            if let Ok(Some(account)) = self.cache.get_obj::<Account>(&key).await {
-                return Ok(Some(account));
+        // 1. Stratégie de Cache (uniquement hors transaction)
+        if tx.is_none() {
+            // --- DIAGNOSTIC RADICAL ---
+            // On utilise spawn_blocking ou un timeout très court pour être SÛR
+            // que si le cache est mort, on ne bloque pas le thread principal.
+            let cache_handle = self.cache.clone();
+            let cache_key = key.clone();
+
+            let cache_result = tokio::time::timeout(
+                std::time::Duration::from_millis(50),
+                self.cache.get_obj::<Account>(&cache_key),
+            )
+            .await;
+
+            match cache_result {
+                Ok(Ok(Some(account))) => return Ok(Some(account)),
+                Ok(Err(e)) => println!("⚠️ Cache error (ignored): {:?}", e),
+                Err(_) => println!("🛑 Cache TIMEOUT (deadlock évité)"),
+                _ => {}
             }
         }
 
@@ -60,16 +76,19 @@ impl AccountRepository for PostgresAccountRepository {
         let account_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
-                SELECT 
-                    i.*, 
-                    g.role, g.is_beta_tester, g.is_shadowbanned, g.trust_score, 
-                    g.moderation_notes, g.last_moderation_at, g.last_ip_addr,
-                    s.preferences, s.timezone, s.push_tokens
-                FROM account_identity i
-                JOIN account_governance g ON i.account_id = g.account_id
-                JOIN account_settings s ON i.account_id = s.account_id
-                WHERE i.account_id = $1
-            "#;
+    SELECT 
+        i.*, 
+        i.updated_at as identity_updated_at,
+        s.preferences, s.timezone, s.push_tokens, 
+        s.updated_at as settings_updated_at,
+        g.role, g.is_beta_tester, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
+        g.last_moderation_at, g.last_ip_addr, 
+        g.updated_at as governance_updated_at
+    FROM account_identity i
+    LEFT JOIN account_settings s ON i.account_id = s.account_id
+    LEFT JOIN account_governance g ON i.account_id = g.account_id
+    WHERE i.account_id = $1
+"#;
 
                 let row_opt = sqlx::query_as::<_, PostgresAccountRow>(sql)
                     .bind(uid)
@@ -89,14 +108,39 @@ impl AccountRepository for PostgresAccountRepository {
         // 3. Mise à jour du Cache
         if is_no_tx {
             if let Some(account) = &account_opt {
-                let _ = self
-                    .cache
-                    .set_obj(&key, account, Some(std::time::Duration::from_secs(900)))
-                    .await;
+                let cache_handle = self.cache.clone();
+                let cache_key = key.clone();
+                let account_to_cache = account.clone();
+
+                // On ne bloque PAS la sortie de la fonction pour le cache
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_millis(50),
+                    cache_handle.set_obj(
+                        &cache_key,
+                        &account_to_cache,
+                        Some(std::time::Duration::from_secs(900)),
+                    ),
+                )
+                .await;
             }
         }
 
         Ok(account_opt)
+    }
+
+    async fn find_by_external_id(
+        &self,
+        ext_id: &ExternalId,
+        mut tx: Option<&mut dyn Transaction>,
+    ) -> Result<Option<Account>> {
+        let account_id_opt = self
+            .find_id_by_external_id(ext_id, tx.as_deref_mut())
+            .await?;
+
+        match account_id_opt {
+            Some(id) => self.find_by_id(&id, tx).await,
+            None => Ok(None),
+        }
     }
 
     /// Sauvegarde atomique avec gestion de la concurrence (OCC)
@@ -108,20 +152,29 @@ impl AccountRepository for PostgresAccountRepository {
 
         // Données pour l'OCC (Optimistic Concurrency Control)
         let uid = ident_row.account_id;
-        let current_version = account.metadata().version() as i64;
-        let next_version = ident_row.version;
+        let next_version = account.metadata().version() as i64;
+        let current_version = next_version - 1;
+
+        // Dans account_repository.rs, méthode save ou create
+        let current_v = account.metadata().version();
+        println!(
+            "DEBUG: Tentative de mise à jour. Version dans l'objet Rust: {}",
+            current_v
+        );
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
         Box::pin(async move {
             // --- 1. UPDATE IDENTITY (avec vérification de version) ---
             let sql_identity = r#"
                 UPDATE account_identity SET 
-                    email = $2, email_verified = $3, phone_number = $4, phone_verified = $5,
-                    state = $6, locale = $7, version = $8, aggregate_updated_at = $9, last_active_at = $10
+                    external_id = $2,
+                    email = $3, email_verified = $4, phone_number = $5, phone_verified = $6,
+                    state = $7, locale = $8, version = $9, last_active_at = $10
                 WHERE account_id = $1 AND version = $11"#;
 
             let res = sqlx::query(sql_identity)
                 .bind(uid)
+                .bind(ident_row.external_id)
                 .bind(ident_row.email)
                 .bind(ident_row.email_verified)
                 .bind(ident_row.phone_number)
@@ -129,7 +182,6 @@ impl AccountRepository for PostgresAccountRepository {
                 .bind(ident_row.state)
                 .bind(ident_row.locale)
                 .bind(next_version)
-                .bind(ident_row.aggregate_updated_at)
                 .bind(ident_row.last_active_at)
                 .bind(current_version)
                 .execute(&mut *conn)
@@ -183,68 +235,130 @@ impl AccountRepository for PostgresAccountRepository {
     }).await?;
 
         // --- 4. POST-TRANSACTION ---
-        // On met à jour les métadonnées de l'objet en mémoire après le succès DB
         account.metadata_mut().record_change();
 
-        // Invalidation du cache
-        let _ = self
-            .cache
-            .delete(&Self::cache_key(account.identity().account_id()))
+        let cache_handle = self.cache.clone();
+        let key = Self::cache_key(account.identity().account_id());
+
+        // On ne fait plus de .await ici, on lance la tâche en fond
+        tokio::spawn(async move {
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                cache_handle.delete(&key),
+            )
             .await;
+        });
 
         Ok(())
     }
 
-    async fn find_id_by_email(&self, email: &Email) -> Result<Option<AccountId>> {
-        let sql = "SELECT account_id FROM account_identity WHERE email = $1";
-        let res = query_scalar::<_, uuid::Uuid>(sql)
-            .bind(email.as_str())
-            .fetch_optional(&self.pool)
-            .await
-            .map_domain_infra("Account: find_id_by_email")?;
+    async fn find_id_by_email(
+        &self,
+        email: &Email,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<Option<AccountId>> {
+        let email_raw = email.to_string();
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            let email_owned = email_raw.clone();
+            Box::pin(async move {
+                let sql = "SELECT account_id FROM account_identity WHERE email = $1";
+                let res = query_scalar::<_, uuid::Uuid>(sql)
+                    .bind(email_owned)
+                    .fetch_optional(conn)
+                    .await
+                    .map_domain_infra("Account: find_id_by_email")?;
+                Ok(res.map(AccountId::from_uuid))
+            })
+        })
+        .await
+    }
+    async fn find_id_by_external_id(
+        &self,
+        ext_id: &ExternalId,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<Option<AccountId>> {
+        let ext_id_raw = ext_id.to_string();
 
-        Ok(res.map(AccountId::from_uuid))
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            let ext_id_owned = ext_id_raw.clone();
+
+            Box::pin(async move {
+                let sql = "SELECT account_id FROM account_identity WHERE external_id = $1";
+                let res = sqlx::query_scalar::<_, uuid::Uuid>(sql)
+                    .bind(ext_id_owned)
+                    .fetch_optional(conn)
+                    .await
+                    .map_domain_infra("Account: find_id_by_external_id")?;
+
+                Ok(res.map(AccountId::from_uuid))
+            })
+        })
+        .await
     }
 
-    async fn find_id_by_external_id(&self, ext_id: &ExternalId) -> Result<Option<AccountId>> {
-        let sql = "SELECT account_id FROM account_identity WHERE external_id = $1";
-        let res = query_scalar::<_, uuid::Uuid>(sql)
-            .bind(ext_id.as_str())
-            .fetch_optional(&self.pool)
-            .await
-            .map_domain_infra("Account: find_id_by_external_id")?;
-
-        Ok(res.map(AccountId::from_uuid))
+    async fn exists_by_email(
+        &self,
+        email: &Email,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<bool> {
+        let email_raw = email.to_string();
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            let email_owned = email_raw.clone();
+            Box::pin(async move {
+                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE email = $1)";
+                let exists = query_scalar::<_, bool>(sql)
+                    .bind(email_owned)
+                    .fetch_one(conn)
+                    .await
+                    .map_domain_infra("Account: exists_by_email")?;
+                Ok(exists)
+            })
+        })
+        .await
     }
 
-    async fn exists_by_email(&self, email: &Email) -> Result<bool> {
-        let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE email = $1)";
-        let exists = query_scalar::<_, bool>(sql)
-            .bind(email.as_str())
-            .fetch_one(&self.pool)
-            .await
-            .map_domain_infra("Account: exists_by_email")?;
-        Ok(exists)
+    async fn exists_by_phone(
+        &self,
+        phone: &PhoneNumber,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<bool> {
+        let phone_raw = phone.to_string();
+
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            let phone_owned = phone_raw.clone();
+            Box::pin(async move {
+                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone_number = $1)";
+                let exists = sqlx::query_scalar::<_, bool>(sql)
+                    .bind(phone_owned)
+                    .fetch_one(conn)
+                    .await
+                    .map_domain_infra("Account: exists_by_phone")?;
+                Ok(exists)
+            })
+        })
+        .await
     }
 
-    async fn exists_by_phone(&self, phone: &PhoneNumber) -> Result<bool> {
-        let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone_number = $1)";
-        let exists = query_scalar::<_, bool>(sql)
-            .bind(phone.as_str())
-            .fetch_one(&self.pool)
-            .await
-            .map_domain_infra("Account: exists_by_phone")?;
-        Ok(exists)
-    }
+    async fn exists_by_external_id(
+        &self,
+        ext_id: &ExternalId,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<bool> {
+        let ext_id_raw = ext_id.to_string();
 
-    async fn exists_by_external_id(&self, ext_id: &ExternalId) -> Result<bool> {
-        let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE external_id = $1)";
-        let exists = query_scalar::<_, bool>(sql)
-            .bind(ext_id.as_str())
-            .fetch_one(&self.pool)
-            .await
-            .map_domain_infra("Account: exists_by_external_id")?;
-        Ok(exists)
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            let ext_id_owned = ext_id_raw.clone();
+            Box::pin(async move {
+                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE external_id = $1)";
+                let exists = sqlx::query_scalar::<_, bool>(sql)
+                    .bind(ext_id_owned)
+                    .fetch_one(conn) // 3. Utilisation de conn
+                    .await
+                    .map_domain_infra("Account: exists_by_external_id")?;
+                Ok(exists)
+            })
+        })
+        .await
     }
 
     async fn create(&self, account: &Account, tx: &mut dyn Transaction) -> Result<()> {
@@ -258,8 +372,8 @@ impl AccountRepository for PostgresAccountRepository {
             // --- 1. INSERT IDENTITY ---
             sqlx::query(
                 r#"INSERT INTO account_identity 
-                    (account_id, external_id, email, email_verified, state, locale, version, aggregate_updated_at, last_active_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#
+                    (account_id, external_id, email, email_verified, state, locale, version, last_active_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
             )
             .bind(ident_row.account_id)
             .bind(ident_row.external_id)
@@ -268,7 +382,6 @@ impl AccountRepository for PostgresAccountRepository {
             .bind(ident_row.state)
             .bind(ident_row.locale)
             .bind(ident_row.version)
-            .bind(ident_row.aggregate_updated_at)
             .bind(ident_row.last_active_at)
             .execute(&mut *conn)
             .await
@@ -333,7 +446,16 @@ impl AccountRepository for PostgresAccountRepository {
         // Invalidation du cache APRÈS la réussite de la transaction
         // Note : Idéalement, l'invalidation du cache se fait après le commit final,
         // mais ici on suit ta logique habituelle de repository.
-        let _ = self.cache.delete(&Self::cache_key(id)).await;
+        let cache_handle = self.cache.clone();
+        let key = Self::cache_key(id);
+
+        tokio::spawn(async move {
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                cache_handle.delete(&key),
+            )
+            .await;
+        });
 
         Ok(())
     }

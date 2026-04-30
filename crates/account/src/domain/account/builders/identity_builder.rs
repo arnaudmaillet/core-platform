@@ -11,7 +11,7 @@ use shared_kernel::errors::{DomainError, Result};
 pub struct AccountIdentityBuilder {
     account_id: AccountId,
     region_code: RegionCode,
-    external_id: ExternalId,
+    external_id: Option<ExternalId>,
     email: Option<Email>,
     locale: Option<Locale>,
     phone: Option<PhoneNumber>,
@@ -24,13 +24,12 @@ impl AccountIdentityBuilder {
     pub(crate) fn new(
         account_id: AccountId,
         region_code: RegionCode,
-        external_id: ExternalId,
     ) -> Self {
         Self {
             account_id,
             region_code,
             email: None,
-            external_id,
+            external_id: None,
             locale: None,
             phone: None,
             birth_date: None,
@@ -87,7 +86,7 @@ impl AccountIdentityBuilder {
     }
 
     pub fn with_external_id(mut self, external_id: ExternalId) -> Self {
-        self.external_id = external_id;
+        self.external_id = Some(external_id);
         self
     }
 
@@ -113,7 +112,9 @@ impl AccountIdentityBuilder {
             self.birth_date,
             self.locale.unwrap_or_default(),
             now,
-            self.last_active_at,
+            now,
+            now,
+            self.last_active_at
         ))
     }
 }

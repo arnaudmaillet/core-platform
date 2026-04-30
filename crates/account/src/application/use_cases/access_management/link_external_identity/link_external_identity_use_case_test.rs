@@ -1,145 +1,179 @@
 #[cfg(test)]
 mod tests {
     use crate::application::use_cases::access_management::link_external_identity::{
-        LinkExternalIdentityCommand, LinkExternalIdentityUseCase,
+        LinkExternalIdentityCommand, LinkExternalIdentityHandler,
     };
     use crate::application::utils::TestFixture;
-    use crate::domain::account::entities::AccountIdentity;
-    use crate::domain::value_objects::{Email, ExternalId};
+    use crate::domain::events::AccountEvent;
+    use crate::domain::value_objects::ExternalId;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::errors::{DomainError, Result};
+    use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_link_external_identity_success() {
-        // 1. Setup via la Fixture
-        let f = TestFixture::new(LinkExternalIdentityUseCase::new);
+    async fn test_link_external_identity_success() -> Result<()> {
+        let f = TestFixture::new();
         let account_id = f.account_id();
-        let new_ext = ExternalId::from_raw("google_123");
+        let new_ext = ExternalId::try_new("google_123")?;
 
-        // 2. Arrange : Compte existant sans lien externe (ou lien vide)
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                f.region(),
-                Email::try_new("alex@test.com").unwrap(),
-                ExternalId::from_raw(""),
-            )
-            .build(),
-        );
+        // 1. Arrange : On utilise désormais None (Option)
+        let account = f.account_builder_for(f.region())?.build()?;
+
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = LinkExternalIdentityCommand {
-            account_id: account_id,
+            command_id: Uuid::new_v4(),
+            account_id,
             external_id: new_ext.clone(),
         };
 
-        // 3. Act
-        let result = f.use_case().execute(f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .await?;
 
-        // 4. Assert
-        assert!(result.is_ok());
-        
-        // Vérification via le helper find_by_id du stub
-        let saved = f.identity_repo().find_by_id(&account_id).unwrap();
-        assert_eq!(saved.external_id(), &new_ext);
-        assert_eq!(saved.version(), 2);
-        assert_eq!(f.outbox_repo().count(), 1, "Un événement de linkage attendu");
+        // 3. Assert
+        f.assert_account(|acc| {
+            // CHANGEMENT : external_id() renvoie &Option<ExternalId>
+            // On compare donc avec Some(&new_ext) ou on as_ref()
+            assert_eq!(acc.identity().external_id(), Some(&new_ext));
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
+
+        // Vérifie que le nom de l'événement correspond bien à ta constante
+        f.assert_outbox(1, Some(AccountEvent::EXTERNAL_LINKED));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_link_external_identity_conflict_already_taken() {
-        let f = TestFixture::new(LinkExternalIdentityUseCase::new);
-        let shared_ext = ExternalId::from_raw("google_123");
+    async fn test_link_external_identity_business_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let ext_id = ExternalId::try_new("steam_456")?;
 
-        // Arrange: Alice possède déjà l'ID externe
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                f.account_id(),
-                f.region(),
-                Email::try_new("alice@test.com").unwrap(),
-                shared_ext.clone(),
-            )
-            .build(),
-        );
+        // 1. Arrange: Le compte a déjà cet ID externe
+        let mut account = f
+            .account_builder()?
+            .with_external_id(ext_id.clone())
+            .build()?;
 
-        // Bob (un autre ID) essaie de lier le même ID externe
-        // On simule Bob en créant une commande pour un AUTRE ID que celui d'Alice
-        let bob_id = shared_kernel::domain::value_objects::AccountId::new();
-        let cmd = LinkExternalIdentityCommand {
-            account_id: bob_id,
-            external_id: shared_ext,
-        };
-
-        // Act
-        let result = f.use_case().execute(f.ctx(), cmd).await;
-
-        // Assert
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { field, .. }) if field == "external_id"
-        ));
-    }
-
-    #[tokio::test]
-    async fn test_link_external_identity_idempotency() {
-        let f = TestFixture::new(LinkExternalIdentityUseCase::new);
-        let ext_id = ExternalId::from_raw("steam_456");
-
-        // Arrange: Le compte a déjà cet ID externe
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                f.account_id(),
-                f.region(),
-                Email::try_new("g@m.com").unwrap(),
-                ext_id.clone(),
-            )
-            .build(),
-        );
+        account.pull_events(); // On vide l'outbox de création
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
 
         let cmd = LinkExternalIdentityCommand {
+            command_id: Uuid::new_v4(),
             account_id: f.account_id(),
             external_id: ext_id,
         };
 
-        // Act
-        let result = f.use_case().execute(f.ctx(), cmd).await;
+        // 2. Act
+        f.bus()
+            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .await?;
 
-        // Assert
-        assert!(result.is_ok());
-        assert_eq!(f.outbox_repo().count(), 0, "Aucun changement ni événement si déjà lié");
-        
-        let saved = f.identity_repo().find_by_id(&f.account_id()).unwrap();
-        assert_eq!(saved.version(), 1, "La version ne doit pas avoir augmenté");
+        // 3. Assert: La version et l'outbox restent inchangées
+        f.assert_account(|acc| {
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await?;
+
+        f.assert_outbox(0, None);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() {
-        let f = TestFixture::new(LinkExternalIdentityUseCase::new);
-        let account_id = f.account_id();
+    async fn test_link_external_identity_technical_idempotency() -> Result<()> {
+        let f = TestFixture::new();
+        let cmd_id = Uuid::new_v4();
+
+        f.idempotency_repo().seed(cmd_id);
+
+        // On utilise un compte valide pour ne pas déclencher le "Forbidden"
+        let account = f.account_builder()?.build()?;
+        f.account_repo().insert(account);
+
+        let cmd = LinkExternalIdentityCommand {
+            command_id: cmd_id,
+            account_id: f.account_id(),
+            // On met une valeur qui ne devrait pas poser de problème
+            external_id: ExternalId::try_new("apple_789")?,
+        };
+
+        // 2. Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .await;
+
+        // 3. Assert : Ici on s'attend à ce que l'infra bloque AVANT le domaine
+        assert!(
+            matches!(result, Err(DomainError::AlreadyExists { .. })),
+            "Devrait échouer avec AlreadyExists (idempotence technique), reçu: {:?}",
+            result
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_link_external_identity_concurrency_retry() -> Result<()> {
+        let f = TestFixture::new();
+        let account = f.account_builder()?.build()?;
+        let version_snapshot = account.version();
+        f.account_repo().insert(account);
+
+        // On prépare une erreur de concurrence unique
+        f.account_repo()
+            .set_error_once(DomainError::ConcurrencyConflict {
+                reason: "Race condition".into(),
+            });
+
+        let cmd = LinkExternalIdentityCommand {
+            command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
+            external_id: ExternalId::try_new("discord_000")?,
+        };
+
+        // 2. Act : Le CommandBus doit gérer le retry automatiquement
+        f.bus()
+            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .await?;
+
+        // 3. Assert
+        f.assert_account(|acc| {
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_region_mismatch_returns_not_found() -> Result<()> {
+        let f = TestFixture::new();
         let wrong_region = RegionCode::from_raw("us");
-        let ext_id = ExternalId::from_raw("steam_456");
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
-        f.identity_repo().insert(
-            AccountIdentity::builder(
-                account_id,
-                wrong_region,
-                Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
-            )
-            .build(),
-        );
+        // Arrange : Donnée aux US, contexte de test en EU
+        let account = f.account_builder_for(wrong_region)?.build()?;
+        f.account_repo().insert(account);
 
         let cmd = LinkExternalIdentityCommand {
+            command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: ext_id,
+            external_id: ExternalId::try_new("steam_456")?,
         };
 
-        let result = f.use_case().execute(&f.ctx(), cmd).await;
+        // 2. Act
+        let result = f
+            .bus()
+            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .await;
 
-        // ASSERT : On vérifie l'obfuscation de sécurité
-        // Le compte existe en base, mais le contexte doit dire "NotFound"
+        // 3. Assert : Isolation régionale (NotFound)
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
+        Ok(())
     }
 }

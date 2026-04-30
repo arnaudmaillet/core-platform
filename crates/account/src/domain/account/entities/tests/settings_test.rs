@@ -4,6 +4,7 @@ mod tests {
         account::entities::{AccountPreferences, AccountSettings},
         preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
     };
+    use chrono::Utc;
     use shared_kernel::{
         domain::value_objects::{AccountId, PushToken, RegionCode, Timezone},
         errors::Result,
@@ -22,6 +23,7 @@ mod tests {
             preferences,
             Timezone::try_new("UTC")?,
             vec![],
+            Utc::now(),
         ))
     }
 

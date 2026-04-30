@@ -1,6 +1,6 @@
-// mod link_external_identity_command;
-// mod link_external_identity_use_case;
-// mod link_external_identity_use_case_test;
+mod link_external_identity_command;
+mod link_external_identity_use_case;
+mod link_external_identity_use_case_test;
 
-// pub use link_external_identity_command::LinkExternalIdentityCommand;
-// pub use link_external_identity_use_case::LinkExternalIdentityUseCase;
+pub use link_external_identity_command::LinkExternalIdentityCommand;
+pub use link_external_identity_use_case::LinkExternalIdentityHandler;

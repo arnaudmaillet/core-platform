@@ -4,8 +4,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use shared_kernel::{
     domain::{
         Identifier,
+        events::AggregateRoot,
         value_objects::{AccountId, RegionCode},
-        events::AggregateRoot
     },
     errors::Result,
 };
@@ -23,7 +23,7 @@ use crate::{
 pub struct PostgresAccountIdentityRow {
     pub account_id: Uuid,
     pub region_code: String,
-    pub external_id: String,
+    pub external_id: Option<String>,
     pub email: Option<String>,
     pub email_verified: bool,
     pub phone_number: Option<String>,
@@ -33,6 +33,7 @@ pub struct PostgresAccountIdentityRow {
     pub locale: String,
     pub version: i64,
     pub created_at: DateTime<Utc>,
+    #[sqlx(rename = "identity_updated_at")]
     pub updated_at: DateTime<Utc>,
     pub aggregate_updated_at: DateTime<Utc>,
     pub last_active_at: Option<DateTime<Utc>>,
@@ -43,7 +44,9 @@ impl PostgresAccountIdentityRow {
         Ok(AccountIdentity::restore(
             AccountId::from_uuid(self.account_id),
             RegionCode::try_new(&self.region_code)?,
-            ExternalId::try_new(&self.external_id)?,
+            self.external_id
+                .map(|id| ExternalId::try_new(id))
+                .transpose()?,
             self.email.as_deref().map(Email::try_new).transpose()?,
             self.email_verified,
             self.phone_number
@@ -55,6 +58,8 @@ impl PostgresAccountIdentityRow {
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(&self.locale)?,
             self.created_at,
+            self.updated_at,
+            self.aggregate_updated_at,
             self.last_active_at,
         ))
     }
@@ -64,7 +69,7 @@ impl PostgresAccountIdentityRow {
         Self {
             account_id: ident.account_id().as_uuid(),
             region_code: ident.region_code().to_string(),
-            external_id: ident.external_id().to_string(),
+            external_id: ident.external_id().as_ref().map(|id| id.to_string()),
             email: ident.email().as_ref().map(|e| e.to_string()),
             email_verified: ident.is_email_verified(),
             phone_number: ident.phone_number().as_ref().map(|p| p.to_string()),

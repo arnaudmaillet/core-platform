@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use shared_kernel::domain::value_objects::{AccountId, AuditReason};
+use shared_kernel::errors::{DomainError, Result}; // Utilisation de ton Result métier
 use shared_proto::account::v1::DeactivateRequest;
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -11,19 +13,28 @@ pub struct DeactivateCommand {
 }
 
 impl DeactivateCommand {
-    pub fn try_from_proto(req: DeactivateRequest) -> Result<Self, tonic::Status> {
+    pub fn try_from_proto(req: DeactivateRequest) -> Result<Self> {
         Ok(Self {
-            command_id: Uuid::parse_str(&req.command_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid CommandId: {}", e))
+            command_id: Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
+                field: "command_id",
+                reason: "Invalid UUID format".to_string(),
             })?,
-            account_id: AccountId::try_from(req.account_id).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid AccountId: {}", e))
+
+            account_id: AccountId::from_str(&req.account_id).map_err(|e| {
+                DomainError::Validation {
+                    field: "account_id",
+                    reason: e.to_string(),
+                }
             })?,
+
             reason: req
                 .reason
-                .map(|r| AuditReason::try_from(r))
-                .transpose() // Transforme Option<Result<T, E>> en Result<Option<T>, E>
-                .map_err(|e| tonic::Status::invalid_argument(format!("Invalid Reason: {}", e)))?,
+                .map(AuditReason::try_new)
+                .transpose()
+                .map_err(|e| DomainError::Validation {
+                    field: "reason",
+                    reason: e.to_string(),
+                })?,
         })
     }
 }

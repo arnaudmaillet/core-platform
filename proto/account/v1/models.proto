@@ -1,7 +1,6 @@
 // proto/account/v1/models.proto
 
 syntax = "proto3";
-
 package account.v1;
 
 import "account/v1/enums.proto";
@@ -13,20 +12,22 @@ option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 message AccountIdentity {
   string account_id = 1;
   string region_code = 2;
-  string external_id = 3;
+  optional string external_id = 3;
   string email = 4;
   bool email_verified = 5;
   google.protobuf.StringValue phone_number = 6;
   bool phone_verified = 7;
   AccountState state = 8;
   google.protobuf.Timestamp birth_date = 9;
-  google.protobuf.Timestamp created_at = 10;
-  google.protobuf.Timestamp updated_at = 11;
-  google.protobuf.Timestamp last_active_at = 12;
-  int64 version = 13;
+  string locale = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  google.protobuf.Timestamp aggregate_updated_at = 13;
+  google.protobuf.Timestamp last_active_at = 14;
+  int64 version = 15;
 }
 
-message AccountMetadata {
+message AccountGovernance {
   string account_id = 1;
   AccountRole role = 2;
   bool is_beta_tester = 3;
@@ -36,14 +37,13 @@ message AccountMetadata {
   google.protobuf.StringValue moderation_notes = 7;
   google.protobuf.StringValue estimated_ip = 8;
   google.protobuf.Timestamp updated_at = 9;
-  int64 version = 11;
 }
 
 message AccountSettings {
   string account_id = 1;
-  string locale = 2;
-  string timezone = 3;
-  repeated string push_tokens = 4;
+  string timezone = 2;
+  repeated string push_tokens = 3;
+  google.protobuf.Timestamp updated_at = 4;
   
   message Privacy {
     bool profile_visible_to_public = 1;
@@ -66,10 +66,7 @@ message AccountSettings {
   Privacy privacy = 6;
   Notifications notifications = 7;
   Appearance appearance = 8;
-  google.protobuf.Timestamp updated_at = 9;
-  int64 version = 10;
 }
-
 message RegistrationIdentifier {
   oneof method {
     string email = 1;

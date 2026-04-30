@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};
 
+use crate::domain::value_objects::TrustDelta;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "i32", into = "i32")]
 pub struct TrustScore(i32);
@@ -14,10 +16,6 @@ impl TrustScore {
     pub const DEFAULT: i32 = 100;
 
     // --- CONSTANTES DE RÈGLES MÉTIER ---
-    pub const PENALTY_BAN: i32 = 100; // Un ban détruit le score
-    pub const REWARD_UNBAN: i32 = 20; // Bonus de réhabilitation
-    pub const REWARD_VERIFY: i32 = 10; // Bonus de vérification email/phone
-    pub const REWARD_UNSUSPEND: i32 = 5; // Petit bonus après suspension
     pub const CRITICAL_THRESHOLD: i32 = 20; // Seuil sous lequel l'utilisateur est considéré "à risque"
 
     /// Création sécurisée avec validation
@@ -28,8 +26,16 @@ impl TrustScore {
     }
 
     /// Création par défaut (nouveaux comptes)
-    pub fn new_perfect() -> Self {
+    pub fn new_max() -> Self {
         Self(Self::MAX)
+    }
+
+    pub fn new_min() -> Self {
+        Self(Self::MIN)
+    }
+
+    pub fn from_raw(value: i32) -> Self {
+        Self(value)
     }
 
     /// Retourne la valeur brute pour SQLx ou les calculs
@@ -38,13 +44,13 @@ impl TrustScore {
     }
 
     /// Permet de diminuer le score de manière sécurisée (ne descend jamais sous 0)
-    pub fn penalize(&mut self, points: i32) {
-        self.0 = (self.0 - points).max(Self::MIN);
+    pub fn penalize(&mut self, delta: TrustDelta) {
+        self.0 = (self.0 - delta.abs()).max(Self::MIN);
     }
 
     /// Permet d'augmenter le score de manière sécurisée (ne dépasse jamais 100)
-    pub fn reward(&mut self, points: i32) {
-        self.0 = (self.0 + points).min(Self::MAX);
+    pub fn reward(&mut self, delta: TrustDelta) {
+        self.0 = (self.0 + delta.abs()).min(Self::MAX);
     }
 
     pub fn is_critical(&self) -> bool {

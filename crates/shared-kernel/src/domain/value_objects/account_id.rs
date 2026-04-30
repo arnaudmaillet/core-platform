@@ -1,6 +1,5 @@
 // crates/shared-kernel/src/domain/value_object/account_id.rs
 
-use crate::domain::entities::EntityMetadata;
 use crate::domain::identifier::Identifier; // Nouvel import
 use crate::domain::value_objects::ValueObject;
 use crate::errors::{DomainError, Result};
@@ -88,11 +87,5 @@ impl FromStr for AccountId {
 impl fmt::Display for AccountId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl EntityMetadata for AccountId {
-    fn entity_name() -> &'static str {
-        "AccountId"
     }
 }

@@ -19,7 +19,7 @@ mod tests {
         // 1. Arrange : Compte actif sans tokens
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();
@@ -59,7 +59,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -96,7 +96,7 @@ mod tests {
         // 1. Arrange : Token déjà présent dans l'agrégat
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         // On utilise une petite closure de test pour injecter le token sans passer par le bus
@@ -134,19 +134,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+    async fn test_add_push_token_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         let token = PushToken::try_new("retry_token_123")?;
         f.account_repo().insert(account);
 
-        // Simulation erreur DB
+        // On simule UNE erreur de concurrence.
+        // Le Stub la renverra une fois, puis redeviendra normal au retry.
         f.account_repo()
-            .set_error(DomainError::ConcurrencyConflict {
+            .set_error_once(DomainError::ConcurrencyConflict {
                 reason: "Database high pressure".into(),
             });
 
@@ -156,22 +157,28 @@ mod tests {
             token: token.clone(),
         };
 
+        // 2. Act : Le bus doit absorber le conflit et retenter l'opération
         let result = f
             .bus()
             .execute(f.account_ctx(), cmd, AddPushTokenHandler)
             .await;
-        assert!(matches!(
-            result,
-            Err(DomainError::ConcurrencyConflict { .. })
-        ));
+
+        // 3. Assert : Succès attendu !
+        assert!(
+            result.is_ok(),
+            "Le bus aurait dû réussir après le retry automatique"
+        );
 
         f.assert_account(|acc| {
-            assert!(!acc.settings().push_tokens().contains(&token));
-            assert_eq!(acc.version(), version_snapshot);
+            // Le token doit être présent car l'opération a fini par réussir
+            assert!(acc.settings().push_tokens().contains(&token));
+            // La version doit être incrémentée (version initiale + 1)
+            assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
 
-        f.assert_outbox(0, None);
+        // Un événement doit être présent dans l'outbox
+        f.assert_outbox(1, Some(AccountEvent::PUSH_TOKEN_ADDED));
         Ok(())
     }
 
@@ -183,7 +190,7 @@ mod tests {
         // Compte US, Contexte EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
 

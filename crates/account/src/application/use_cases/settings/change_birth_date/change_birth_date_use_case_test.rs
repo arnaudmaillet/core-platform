@@ -22,7 +22,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();
@@ -59,8 +59,9 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
+
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -95,7 +96,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)?
+            .with_state(AccountState::Banned)
             .build()?;
 
         let version_snapshot = account.version();
@@ -126,17 +127,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+    async fn test_change_birth_date_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
+        // 1. Arrange : On simule un conflit de version SQL (OCC)
+        // Le stub renverra l'erreur une seule fois (take() interne)
         f.account_repo()
-            .set_error(DomainError::ConcurrencyConflict {
+            .set_error_once(DomainError::ConcurrencyConflict {
                 reason: "Optimistic lock failure".into(),
             });
 
@@ -147,21 +150,25 @@ mod tests {
             new_birth_date: new_date.clone(),
         };
 
+        // 2. Act : Le Bus intercepte le ConcurrencyConflict et relance le Handler
         let result = f
             .bus()
             .execute(f.account_ctx(), cmd, ChangeBirthDateHandler)
             .await;
-        assert!(matches!(
-            result,
-            Err(DomainError::ConcurrencyConflict { .. })
-        ));
 
-        // Assert : Rollback logique
+        // 3. Assert : Succès final attendu
+        assert!(result.is_ok(), "Le bus aurait dû retenter et réussir");
+
         f.assert_account(|acc| {
-            assert_ne!(acc.identity().birth_date(), Some(&new_date));
-            assert_eq!(acc.version(), version_snapshot);
+            // La donnée doit être à jour car le retry a réussi
+            assert_eq!(acc.identity().birth_date(), Some(&new_date));
+            // La version a augmenté de 1
+            assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
+
+        // L'événement doit être dans l'outbox
+        f.assert_outbox(1, Some(AccountEvent::BIRTH_DATE_CHANGED));
 
         Ok(())
     }
@@ -173,7 +180,7 @@ mod tests {
 
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();

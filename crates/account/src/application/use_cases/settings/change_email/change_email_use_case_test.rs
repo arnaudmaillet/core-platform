@@ -20,7 +20,7 @@ mod tests {
         // 1. Arrange : Compte actif avec l'ancien email
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .with_email(old_email)
             .build()?;
 
@@ -65,7 +65,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -104,7 +104,7 @@ mod tests {
         // 1. Arrange : Compte possédant déjà cet email
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .with_email(email.clone())
             .build()?;
 
@@ -144,7 +144,7 @@ mod tests {
         // Arrange : Un banni ne peut pas modifier ses réglages
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)?
+            .with_state(AccountState::Banned)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -175,20 +175,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_worst_case_concurrency_conflict() -> Result<()> {
+    async fn test_change_email_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let requested_email = Email::try_new("b@c.com")?;
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
-        // Simulation erreur OCC
+        // 1. Arrange : Simulation d'une erreur OCC (Optimistic Concurrency Control)
+        // Le repo renverra l'erreur une seule fois, puis réussira au retry.
         f.account_repo()
-            .set_error(DomainError::ConcurrencyConflict {
+            .set_error_once(DomainError::ConcurrencyConflict {
                 reason: "Version mismatch".into(),
             });
 
@@ -198,22 +199,28 @@ mod tests {
             new_email: requested_email.clone(),
         };
 
+        // 2. Act : Le Bus intercepte le conflit et relance le handler
         let result = f
             .bus()
             .execute(f.account_ctx(), cmd, ChangeEmailHandler)
             .await;
 
-        assert!(matches!(
-            result,
-            Err(DomainError::ConcurrencyConflict { .. })
-        ));
+        // 3. Assert : On s'attend maintenant à un SUCCÈS
+        assert!(
+            result.is_ok(),
+            "Le retry automatique aurait dû sauver l'opération"
+        );
 
-        // VERIFICATION : Rollback logique
         f.assert_account(|acc| {
-            assert_ne!(acc.identity().email(), Some(&requested_email));
-            assert_eq!(acc.version(), version_snapshot);
+            // L'email a bien été mis à jour après le retry
+            assert_eq!(acc.identity().email(), Some(&requested_email));
+            // La version a bien été incrémentée
+            assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
+
+        // L'événement doit être présent dans l'outbox
+        f.assert_outbox(1, Some(AccountEvent::EMAIL_CHANGED));
 
         Ok(())
     }
@@ -225,7 +232,7 @@ mod tests {
 
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
 
         let version_snapshot = account.version();

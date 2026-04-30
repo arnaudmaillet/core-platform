@@ -1,9 +1,9 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
 
+use chrono::{DateTime, Utc};
 use shared_kernel::{
     domain::{
-        Identifier,
-        value_objects::{AccountId, PushToken, Timezone},
+        Identifier, entities::Entity, value_objects::{AccountId, PushToken, Timezone}
     },
     errors::{DomainError, Result},
 };
@@ -17,6 +17,8 @@ pub struct PostgresAccountSettingsRow {
     pub preferences: serde_json::Value,
     pub timezone: String,
     pub push_tokens: Vec<String>,
+    #[sqlx(rename = "settings_updated_at")]
+    pub updated_at: DateTime<Utc>,
 }
 
 impl PostgresAccountSettingsRow {
@@ -36,6 +38,7 @@ impl PostgresAccountSettingsRow {
             preferences,
             Timezone::try_new(&self.timezone)?,
             push_tokens,
+            self.updated_at
         ))
     }
 
@@ -56,6 +59,7 @@ impl PostgresAccountSettingsRow {
             preferences,
             timezone: settings.timezone().as_str().to_string(),
             push_tokens,
+            updated_at: settings.updated_at()
         }
     }
 }

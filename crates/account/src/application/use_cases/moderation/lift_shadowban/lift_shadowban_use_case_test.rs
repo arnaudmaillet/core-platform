@@ -18,7 +18,7 @@ mod tests {
         // 1. Arrange : Un compte banni est automatiquement shadowbanné par notre builder
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)?
+            .with_state(AccountState::Banned)
             .build()?;
 
         let version_snapshot = account.version();
@@ -60,7 +60,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)?
+            .with_state(AccountState::Banned)
             .build()?;
         f.account_repo().insert(account);
 
@@ -90,7 +90,7 @@ mod tests {
         // 1. Arrange : Compte déjà sain (Shadowban = false par défaut)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)?
+            .with_state(AccountState::Active)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -130,7 +130,7 @@ mod tests {
         // Arrange
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Banned)?
+            .with_state(AccountState::Banned)
             .build()?;
 
         let version_snapshot = account.version();

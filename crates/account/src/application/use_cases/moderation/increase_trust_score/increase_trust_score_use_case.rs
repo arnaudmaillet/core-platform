@@ -17,7 +17,7 @@ impl CommandHandler for IncreaseTrustScoreHandler {
 
     async fn handle(&self, ctx: &AccountContext, cmd: IncreaseTrustScoreCommand) -> Result<Self::Output> {
         let mut account = ctx.account().await?;
-        account.reward_trust(cmd.amount as i32, cmd.reason)?;
+        account.reward_trust(cmd.amount, cmd.reason)?;
         ctx.save(&mut account, Some(cmd.command_id)).await?;
         Ok(())
     }
