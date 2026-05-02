@@ -14,17 +14,15 @@ message AccountIdentity {
   string region_code = 2;
   optional string sub_id = 3;
   string email = 4;
-  bool email_verified = 5;
-  google.protobuf.StringValue phone_number = 6;
-  bool phone_verified = 7;
-  AccountState state = 8;
-  google.protobuf.Timestamp birth_date = 9;
-  string locale = 10;
-  google.protobuf.Timestamp created_at = 11;
-  google.protobuf.Timestamp updated_at = 12;
-  google.protobuf.Timestamp aggregate_updated_at = 13;
-  google.protobuf.Timestamp last_active_at = 14;
-  int64 version = 15;
+  google.protobuf.StringValue phone_number = 5;
+  AccountState state = 6;
+  google.protobuf.Timestamp birth_date = 7;
+  string locale = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  google.protobuf.Timestamp aggregate_updated_at = 11;
+  google.protobuf.Timestamp last_active_at = 12;
+  int64 version = 13;
 }
 
 message AccountGovernance {

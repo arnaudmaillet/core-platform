@@ -2,13 +2,12 @@
 
 use async_trait::async_trait;
 use shared_kernel::{
-    domain::{transaction::Transaction, value_objects::AccountId},
+    domain::{transaction::Transaction, value_objects::{AccountId, Email, PhoneNumber, SubId}},
     errors::Result,
 };
 
 use crate::domain::{
-    account::entities::Account,
-    value_objects::{Email, SubId, PhoneNumber},
+    account::entities::Account
 };
 
 #[async_trait]

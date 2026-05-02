@@ -57,10 +57,11 @@ impl AccountSettingsService for GrpcSettingsService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        // On spécifie () comme Output car le handler ne renvoie rien d'autre qu'un succès
+        self.execute_and_fetch::<UpdatePreferencesCommand, (), ProtoSettings, _>(
             &ctx,
             command,
-            UpdatePreferencesHandler,
+            (),
             mapper::map_account_to_settings_proto,
         )
         .await
@@ -75,10 +76,10 @@ impl AccountSettingsService for GrpcSettingsService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<UpdateTimezoneCommand, (), ProtoSettings, _>(
             &ctx,
             command,
-            UpdateTimezoneHandler,
+            (),
             mapper::map_account_to_settings_proto,
         )
         .await
@@ -93,10 +94,10 @@ impl AccountSettingsService for GrpcSettingsService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<AddPushTokenCommand, (), ProtoSettings, _>(
             &ctx,
             command,
-            AddPushTokenHandler,
+            (),
             mapper::map_account_to_settings_proto,
         )
         .await
@@ -111,10 +112,10 @@ impl AccountSettingsService for GrpcSettingsService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<RemovePushTokenCommand, (), ProtoSettings, _>(
             &ctx,
             command,
-            RemovePushTokenHandler,
+            (),
             mapper::map_account_to_settings_proto,
         )
         .await

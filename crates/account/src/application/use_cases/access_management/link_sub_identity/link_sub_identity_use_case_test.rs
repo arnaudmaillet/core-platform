@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests {
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::access_management::link_sub_identity::{
-        LinkSubIdentityCommand, LinkSubIdentityHandler,
+        LinkSubIdentityCommand,
     };
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::SubId;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::domain::value_objects::{RegionCode, SubId};
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
@@ -31,7 +31,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, LinkSubIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -54,10 +54,7 @@ mod tests {
         let ext_id = SubId::try_new("steam_456")?;
 
         // 1. Arrange: Le compte a déjà cet ID externe
-        let mut account = f
-            .account_builder()?
-            .with_sub_id(ext_id.clone())
-            .build()?;
+        let mut account = f.account_builder()?.with_sub_id(ext_id.clone()).build()?;
 
         account.pull_events(); // On vide l'outbox de création
         let version_snapshot = account.version();
@@ -71,7 +68,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, LinkSubIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert: La version et l'outbox restent inchangées
@@ -105,7 +102,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, LinkSubIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Ici on s'attend à ce que l'infra bloque AVANT le domaine
@@ -139,7 +136,7 @@ mod tests {
 
         // 2. Act : Le CommandBus doit gérer le retry automatiquement
         f.bus()
-            .execute(f.account_ctx(), cmd, LinkSubIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -169,7 +166,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, LinkSubIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Isolation régionale (NotFound)

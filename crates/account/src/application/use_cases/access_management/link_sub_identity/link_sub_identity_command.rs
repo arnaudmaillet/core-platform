@@ -1,8 +1,7 @@
 // crates/account/src/application/link_sub_identity/link_sub_identity_command.rs
 
-use crate::domain::value_objects::SubId;
 use shared_kernel::{
-    domain::value_objects::AccountId,
+    domain::value_objects::{AccountId, SubId},
     errors::{DomainError, Result},
 };
 use shared_proto::account::v1::LinkSubIdentityRequest;

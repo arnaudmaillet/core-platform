@@ -7,7 +7,15 @@ edition.workspace = true
 
 [features]
 default = []
-test-utils = ["postgres", "scylla", "once_cell", "redis", "dep:testcontainers", "dep:testcontainers-modules", "tokio/test-util"]
+test-utils = [
+    "postgres",
+    "scylla",
+    "once_cell",
+    "redis",
+    "dep:testcontainers",
+    "dep:testcontainers-modules",
+    "tokio/test-util",
+]
 
 # --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
@@ -25,13 +33,13 @@ runtime = [
     "tokio/sync",
     "dep:tokio-util",
     "dep:tracing-subscriber",
-    "dep:futures"
+    "dep:futures",
 ]
 
 # --- 3. Rôles Fonctionnels ---
-service-api         = ["postgres", "redis", "grpc", "runtime"]
-service-outbox      = ["postgres", "kafka", "runtime"]
-service-worker      = ["kafka", "runtime", "dep:dashmap"]
+service-api = ["postgres", "redis", "grpc", "runtime"]
+service-outbox = ["postgres", "kafka", "runtime"]
+service-worker = ["kafka", "runtime", "dep:dashmap"]
 service-invalidator = ["redis", "kafka", "runtime", "dep:dashmap"]
 service-search = ["elasticsearch", "grpc", "runtime"]
 service-projection = ["elasticsearch", "kafka", "runtime"]
@@ -43,12 +51,13 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-anyhow = { workspace = true}
+anyhow = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 rand = { workspace = true }
+idna = { workspace = true }
 
 # OBLIGATOIRES (Pour que Bazel génère les cibles @crates//:tonic)
 tonic = { workspace = true }
@@ -66,9 +75,15 @@ dashmap = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true, features = ["rt"] }
-tracing-subscriber = { workspace = true, optional = true, features = ["fmt", "env-filter"] }
+tracing-subscriber = { workspace = true, optional = true, features = [
+    "fmt",
+    "env-filter",
+] }
 testcontainers = { workspace = true, optional = true }
-testcontainers-modules = { workspace = true, optional = true, features = ["postgres", "redis"] }
+testcontainers-modules = { workspace = true, optional = true, features = [
+    "postgres",
+    "redis",
+] }
 
 # --- Utils (Core) ---
 futures-util = { workspace = true }
@@ -76,6 +91,4 @@ log = { workspace = true }
 regex = { workspace = true }
 seahash = { workspace = true }
 unicode-normalization = { workspace = true }
-dyn-clone = { workspace = true}
-
-
+dyn-clone = { workspace = true }

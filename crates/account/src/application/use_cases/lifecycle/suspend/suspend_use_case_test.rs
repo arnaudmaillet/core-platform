@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
@@ -26,7 +27,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, SuspendHandler)
+            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -60,7 +61,10 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.account_ctx(), cmd, SuspendHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -95,7 +99,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, SuspendHandler)
+            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -126,7 +130,10 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.account_ctx(), cmd, SuspendHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

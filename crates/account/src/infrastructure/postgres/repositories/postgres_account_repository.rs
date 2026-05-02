@@ -8,13 +8,12 @@ use std::sync::Arc;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, SubId};
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
-use crate::domain::value_objects::{Email, PhoneNumber, SubId};
 use crate::infrastructure::postgres::rows::{
     PostgresAccountGovernanceRow, PostgresAccountIdentityRow, PostgresAccountRow,
     PostgresAccountSettingsRow,
@@ -178,17 +177,15 @@ impl AccountRepository for PostgresAccountRepository {
             let sql_identity = r#"
                 UPDATE account_identity SET 
                     sub_id = $2,
-                    email = $3, email_verified = $4, phone_number = $5, phone_verified = $6,
-                    state = $7, locale = $8, version = $9, last_active_at = $10
-                WHERE account_id = $1 AND version = $11"#;
+                    email = $3, phone_number = $4,
+                    state = $5, locale = $6, version = $7, last_active_at = $8
+                WHERE account_id = $1 AND version = $9"#;
 
             let res = sqlx::query(sql_identity)
                 .bind(uid)
                 .bind(ident_row.sub_id)
                 .bind(ident_row.email)
-                .bind(ident_row.email_verified)
                 .bind(ident_row.phone_number)
-                .bind(ident_row.phone_verified)
                 .bind(ident_row.state)
                 .bind(ident_row.locale)
                 .bind(next_version)
@@ -382,13 +379,12 @@ impl AccountRepository for PostgresAccountRepository {
             // --- 1. INSERT IDENTITY ---
             sqlx::query(
                 r#"INSERT INTO account_identity 
-                    (account_id, sub_id, email, email_verified, state, locale, version, last_active_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
+                    (account_id, sub_id, email, state, locale, version, last_active_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7)"#
             )
             .bind(ident_row.account_id)
             .bind(ident_row.sub_id)
             .bind(ident_row.email)
-            .bind(ident_row.email_verified)
             .bind(ident_row.state)
             .bind(ident_row.locale)
             .bind(ident_row.version)

@@ -1,9 +1,9 @@
 // crates/account/src/application/register_account/register_account_command
 
 use crate::domain::value_objects::{
-    Email, SubId, IpAddr, Locale, PhoneNumber, RegistrationIdentifier,
+    IpAddr, Locale, RegistrationIdentifier
 };
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId};
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
 use tonic::Status;
 use uuid::Uuid;

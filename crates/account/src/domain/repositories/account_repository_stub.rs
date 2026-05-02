@@ -3,14 +3,13 @@
 use async_trait::async_trait;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, SubId};
 use shared_kernel::errors::{DomainError, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;
-use crate::domain::value_objects::{Email, SubId, PhoneNumber};
 
 #[derive(Default)]
 pub struct AccountRepositoryStub {

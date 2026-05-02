@@ -5,7 +5,7 @@ use shared_kernel::{
     domain::{
         Identifier,
         events::AggregateRoot,
-        value_objects::{AccountId, RegionCode},
+        value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },
     errors::Result,
 };
@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     domain::{
         account::entities::{Account, AccountIdentity},
-        value_objects::{AccountState, BirthDate, Email, SubId, Locale, PhoneNumber},
+        value_objects::{AccountState, BirthDate, Locale},
     },
     infrastructure::postgres::models::PostgresAccountState,
 };
@@ -25,9 +25,7 @@ pub struct PostgresAccountIdentityRow {
     pub region_code: String,
     pub sub_id: Option<String>,
     pub email: Option<String>,
-    pub email_verified: bool,
     pub phone_number: Option<String>,
-    pub phone_verified: bool,
     pub state: PostgresAccountState,
     pub birth_date: Option<NaiveDate>,
     pub locale: String,
@@ -44,16 +42,12 @@ impl PostgresAccountIdentityRow {
         Ok(AccountIdentity::restore(
             AccountId::from_uuid(self.account_id),
             RegionCode::try_new(&self.region_code)?,
-            self.sub_id
-                .map(|id| SubId::try_new(id))
-                .transpose()?,
+            self.sub_id.map(|id| SubId::try_new(id)).transpose()?,
             self.email.as_deref().map(Email::try_new).transpose()?,
-            self.email_verified,
             self.phone_number
                 .as_deref()
                 .map(PhoneNumber::try_new)
                 .transpose()?,
-            self.phone_verified,
             AccountState::from(self.state),
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(&self.locale)?,
@@ -71,9 +65,7 @@ impl PostgresAccountIdentityRow {
             region_code: ident.region_code().to_string(),
             sub_id: ident.sub_id().as_ref().map(|id| id.to_string()),
             email: ident.email().as_ref().map(|e| e.to_string()),
-            email_verified: ident.is_email_verified(),
             phone_number: ident.phone_number().as_ref().map(|p| p.to_string()),
-            phone_verified: ident.is_phone_verified(),
             state: ident.state().into(),
             birth_date: ident.birth_date().map(|d| d.into()),
             locale: ident.locale().to_string(),

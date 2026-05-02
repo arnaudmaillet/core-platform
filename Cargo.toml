@@ -2,14 +2,16 @@
 
 [workspace]
 members = [
+    "backend/services/account/api/command-server",
     "backend/services/account/outbox-processor",
     "backend/services/account/cache-invalidator",
-    "backend/services/profile/workers/outbox-processor",
-    "backend/services/profile/workers/cache-invalidator",
-    "backend/services/profile/api/command-server",
+    # "backend/services/profile/workers/outbox-processor",
+    # "backend/services/profile/workers/cache-invalidator",
+    # "backend/services/profile/api/command-server",
     "common/rust/shared-proto",
     "crates/account",
-    "crates/profile",
+    "crates/auth",
+    # "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
     "backend/gateway/graphql-bff",
@@ -29,7 +31,8 @@ description = "core-platform repo"
 shared-kernel = { path = "crates/shared-kernel" }
 shared-proto = { path = "common/rust/shared-proto" }
 account = { path = "crates/account" }
-profile = { path = "crates/profile" }
+# profile = { path = "crates/profile" }
+auth = { path = "crates/auth" }
 
 # Communs
 tokio = { version = "1.40", features = [
@@ -54,7 +57,7 @@ futures-util = "0.3"
 rand = "0.9.2"
 url = "2.5.7"
 dyn-clone = "1.0.17"
-
+dotenvy = "0.15.7"
 
 # Observabilité
 tracing = "0.1"
@@ -84,6 +87,8 @@ regex = { version = "1.12", features = ["unicode", "unicode-perl"] }
 seahash = "4.1"
 unicode-normalization = { version = "0.1", features = ["std"] }
 idna = "1.1.0"
+openssl = "0.10"
+base64 = "0.22.1"
 
 # Proto / gRPC
 tonic-health = "0.14.3"
@@ -111,6 +116,9 @@ async-graphql = { version = "8.0.0-rc.1", features = [
 async-graphql-axum = "8.0.0-rc.1"
 axum = "0.8.8"
 
+# Http
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+reqwest = { version = "0.12.28", features = ["json", "rustls-tls"] }
 
 # Tests
 testcontainers = "0.26"

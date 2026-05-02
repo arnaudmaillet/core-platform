@@ -7,17 +7,14 @@ import "account/v1/enums.proto";
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
 service AccountAccessService {
-  // Inscription & Liaison Sociale
   rpc Register(RegisterRequest) returns (AccountIdentity);
   rpc LinkSubIdentity(LinkSubIdentityRequest) returns (AccountIdentity);
-  
-  // Résolution technique (souvent utilisé par une Gateway ou un service d'Auth)
   rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
 }
 
 message RegisterRequest {
   string command_id = 1;
-  optional string sub_id = 2; // Optionnel grâce à notre refacto Option 1
+  optional string sub_id = 2;
   RegistrationIdentifier identifier = 3;
   string region_code = 4;
   string locale = 5;

@@ -1,16 +1,16 @@
 // crates/account/src/domain/account/builders/account_builder.rs
 
 use crate::domain::value_objects::{
-    AccountRole, AccountState, BirthDate, Email, IpAddr, PhoneNumber,
+    AccountRole, AccountState, BirthDate, IpAddr,
 };
 use crate::domain::{
     account::{
         builders::{AccountGovernanceBuilder, AccountIdentityBuilder, AccountSettingsBuilder},
         entities::Account,
     },
-    value_objects::{SubId, Locale, RegistrationIdentifier, TrustScore},
+    value_objects::{Locale, RegistrationIdentifier, TrustScore},
 };
-use shared_kernel::domain::value_objects::Timezone;
+use shared_kernel::domain::value_objects::{Email, PhoneNumber, SubId, Timezone};
 use shared_kernel::{
     domain::{
         events::AggregateMetadata,

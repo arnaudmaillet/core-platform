@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
         events::{AggregateMetadata, AggregateRoot, DomainEvent},
-        value_objects::{AccountId, AuditReason, PushToken, RegionCode, Timezone, TrustContext},
+        value_objects::{AccountId, AuditReason, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone, TrustContext},
     },
     errors::{DomainError, Result},
 };
@@ -16,8 +16,8 @@ use crate::domain::{
     events::AccountEvent,
     preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
     value_objects::{
-        AccountRole, BirthDate, Email, SubId, IpAddr, Locale, PhoneNumber,
-        RegistrationIdentifier, TrustDelta, VerificationToken,
+        AccountRole, BirthDate, IpAddr, Locale,
+        RegistrationIdentifier, TrustDelta,
     },
 };
 
@@ -114,7 +114,7 @@ impl Account {
         // C'est ce check qui faisait paniquer ton test "forbidden"
         if current_id.is_some() {
             return Err(DomainError::Forbidden {
-                reason: "Account is already linked to an external provider".into(),
+                reason: "Account is already linked to an sub provider".into(),
             });
         }
 
@@ -181,52 +181,6 @@ impl Account {
                 })
             },
         )
-    }
-
-    pub fn verify_email(&mut self, token: VerificationToken) -> Result<bool> {
-        self.ensure_not_restricted()?;
-
-        self.track_change(
-            |s| s.identity.apply_email_verification(),
-            |s| {
-                Box::new(AccountEvent::EmailVerified {
-                    account_id: s.id_typed(),
-                    token: token,
-                    occurred_at: s.updated_at(),
-                })
-            },
-        )?;
-
-        self.governance.apply_trust_reward(
-            TrustDelta::REWARD_VERIFY,
-            TrustContext::EmailVerified,
-            &AuditReason::system("Automatic verification"),
-        )?;
-
-        Ok(true)
-    }
-
-    pub fn verify_phone(&mut self, token: VerificationToken) -> Result<bool> {
-        self.ensure_not_restricted()?;
-
-        self.track_change(
-            |s| s.identity.apply_phone_verification(),
-            |s| {
-                Box::new(AccountEvent::PhoneVerified {
-                    account_id: s.id_typed(),
-                    token: token,
-                    occurred_at: Utc::now(),
-                })
-            },
-        )?;
-
-        self.governance.apply_trust_reward(
-            TrustDelta::REWARD_VERIFY,
-            TrustContext::PhoneVerified,
-            &AuditReason::system("Automatic verification"),
-        )?;
-
-        Ok(true)
     }
 
     pub fn ban(&mut self, reason: AuditReason) -> Result<bool> {

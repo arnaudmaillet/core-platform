@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
         entities::Entity,
-        value_objects::{AccountId, RegionCode},
+        value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },
     errors::Result,
 };
 
 use crate::domain::{
     account::builders::AccountIdentityBuilder,
-    value_objects::{AccountState, BirthDate, Email, SubId, Locale, PhoneNumber},
+    value_objects::{AccountState, BirthDate, Locale},
 };
 
 /// Entité Identity (Interne à l'Agrégat Account)
@@ -24,9 +24,7 @@ pub struct AccountIdentity {
     region_code: RegionCode,
     sub_id: Option<SubId>,
     email: Option<Email>,
-    email_verified: bool,
     phone_number: Option<PhoneNumber>,
-    phone_verified: bool,
     state: AccountState,
     birth_date: Option<BirthDate>,
     locale: Locale,
@@ -48,9 +46,7 @@ impl AccountIdentity {
         region_code: RegionCode,
         sub_id: Option<SubId>,
         email: Option<Email>,
-        email_verified: bool,
         phone_number: Option<PhoneNumber>,
-        phone_verified: bool,
         state: AccountState,
         birth_date: Option<BirthDate>,
         locale: Locale,
@@ -64,9 +60,7 @@ impl AccountIdentity {
             region_code,
             sub_id,
             email,
-            email_verified,
             phone_number,
-            phone_verified,
             state,
             birth_date,
             locale,
@@ -91,14 +85,8 @@ impl AccountIdentity {
     pub fn email(&self) -> Option<&Email> {
         self.email.as_ref()
     }
-    pub fn is_email_verified(&self) -> bool {
-        self.email_verified
-    }
     pub fn phone_number(&self) -> Option<&PhoneNumber> {
         self.phone_number.as_ref()
-    }
-    pub fn is_phone_verified(&self) -> bool {
-        self.phone_verified
     }
     pub fn state(&self) -> &AccountState {
         &self.state
@@ -144,18 +132,6 @@ impl AccountIdentity {
             return Ok(false);
         }
         self.email = Some(new_email);
-        self.email_verified = false;
-        Ok(true)
-    }
-
-    pub(crate) fn apply_email_verification(&mut self) -> Result<bool> {
-        if self.email_verified {
-            return Ok(false);
-        }
-        self.email_verified = true;
-        if self.state == AccountState::Pending {
-            self.state = AccountState::Active;
-        }
         Ok(true)
     }
 
@@ -164,15 +140,6 @@ impl AccountIdentity {
             return Ok(false);
         }
         self.phone_number = Some(new_phone);
-        self.phone_verified = false;
-        Ok(true)
-    }
-
-    pub(crate) fn apply_phone_verification(&mut self) -> Result<bool> {
-        if self.phone_verified {
-            return Ok(false);
-        }
-        self.phone_verified = true;
         Ok(true)
     }
 

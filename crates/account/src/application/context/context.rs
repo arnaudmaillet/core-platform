@@ -1,5 +1,3 @@
-// crates/account/src/application/context.rs
-
 use shared_kernel::{
     application::BaseAppContext,
     domain::{
@@ -24,7 +22,7 @@ pub struct AccountAppContext {
 }
 
 impl AccountAppContext {
-    pub(crate) fn new(
+    pub fn new(
         base: BaseAppContext,
         account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,

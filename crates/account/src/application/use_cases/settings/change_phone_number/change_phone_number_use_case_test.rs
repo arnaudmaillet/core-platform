@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod tests {
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::settings::change_phone_number::{
         ChangePhoneNumberCommand, ChangePhoneNumberHandler,
     };
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, PhoneNumber};
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::domain::value_objects::{PhoneNumber, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
@@ -35,16 +36,12 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangePhoneNumberHandler)
+            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
             assert_eq!(acc.identity().phone_number(), Some(&new_phone));
-            assert!(
-                !acc.identity().is_phone_verified(),
-                "Le nouveau numéro ne doit pas être vérifié"
-            );
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -79,7 +76,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangePhoneNumberHandler)
+            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -119,7 +116,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangePhoneNumberHandler)
+            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -162,7 +159,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangePhoneNumberHandler)
+            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -200,7 +197,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangePhoneNumberHandler)
+            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

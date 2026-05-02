@@ -3,8 +3,8 @@
 // crates/account/src/domain/value_objects/locale.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
+use crate::domain::value_objects::ValueObject;
+use crate::errors::{DomainError, Result};
 use std::fmt;
 use std::str::FromStr;
 
@@ -38,7 +38,7 @@ impl ValueObject for SubId {
         if self.0.is_empty() {
             return Err(DomainError::Validation {
                 field: "sub_id",
-                reason: "External provider ID cannot be empty".into(),
+                reason: "Sub provider ID cannot be empty".into(),
             });
         }
 
@@ -46,7 +46,7 @@ impl ValueObject for SubId {
         if self.0.len() > 128 {
             return Err(DomainError::Validation {
                 field: "sub_id",
-                reason: "External ID is suspiciously long".into(),
+                reason: "Sub ID is suspiciously long".into(),
             });
         }
 

@@ -3,7 +3,7 @@ mod tests {
     use shared_kernel::{
         domain::{
             events::{AggregateMetadata, AggregateRoot},
-            value_objects::{AccountId, AuditReason, RegionCode},
+            value_objects::{AccountId, AuditReason, Email, RegionCode},
         },
         errors::Result,
     };
@@ -11,7 +11,7 @@ mod tests {
     use crate::domain::{
         account::entities::Account,
         value_objects::{
-            AccountState, Email, RegistrationIdentifier, TrustDelta, TrustScore, VerificationToken,
+            AccountState, RegistrationIdentifier, TrustDelta, TrustScore, VerificationToken,
         },
     };
 
@@ -31,36 +31,11 @@ mod tests {
         let account = create_test_account();
 
         assert_eq!(account.identity().state(), &AccountState::Pending);
-        assert!(!account.identity().is_email_verified());
-        // La version est portée par l'agrégat via AggregateMetadata
         assert_eq!(
             account.metadata().version(),
             AggregateMetadata::INITIAL_VERSION
         );
         assert_eq!(account.governance().trust_score().value(), TrustScore::MAX);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_email_verification_flow_with_bonus() -> Result<()> {
-        let mut account = create_test_account();
-        let token = VerificationToken::try_new("valid_token")?;
-        let snapshot_version = account.version();
-        // Action
-        let changed = account.verify_email(token)?;
-
-        assert!(changed);
-        assert!(account.identity().is_email_verified());
-        assert_eq!(account.identity().state(), &AccountState::Active);
-
-        // Vérification du bonus de confiance automatique
-        // Score initial (100) + Bonus (10) plafonné à MAX (100)
-        // Pour tester le reward, on pourrait baisser le score avant
-        assert_eq!(account.governance().trust_score().value(), TrustScore::MAX);
-
-        // Vérification de la version globale
-        assert_eq!(account.metadata().version(), snapshot_version + 1);
 
         Ok(())
     }

@@ -19,10 +19,7 @@ pub fn map_account_to_identity_proto(account: Account) -> ProtoIdentity {
         account_id: identity.account_id().to_string(),
         sub_id: identity.sub_id().map(|id| id.to_string()),
         email: identity.email().map(|e| e.to_string()).unwrap_or_default(),
-        email_verified: identity.is_email_verified(),
-
         phone_number: identity.phone_number().map(|p| p.to_string()),
-        phone_verified: identity.is_phone_verified(),
 
         region_code: identity.region_code().to_string(),
         state: ProtoState::from(*identity.state()) as i32,

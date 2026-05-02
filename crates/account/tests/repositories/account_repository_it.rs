@@ -1,7 +1,7 @@
 use account::domain::account::entities::Account;
 use account::domain::repositories::AccountRepository;
 use account::domain::value_objects::{
-    AccountRole, AccountState, Email, RegistrationIdentifier, SubId,
+    AccountRole, AccountState, RegistrationIdentifier,
 };
 use account::infrastructure::postgres::repositories::PostgresAccountRepository;
 use shared_kernel::domain::Identifier;
@@ -10,7 +10,7 @@ use tokio;
 
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::CacheRepository;
-use shared_kernel::domain::value_objects::{AccountId, AuditReason, RegionCode};
+use shared_kernel::domain::value_objects::{AccountId, AuditReason, Email, RegionCode, SubId};
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;

@@ -7,12 +7,13 @@ use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::DomainError;
 use tonic::{Request, Response, Status};
 
+// crates/account/src/infrastructure/api/grpc/shared.rs
+
 #[tonic::async_trait]
 pub trait GrpcServiceUtils {
     fn app_ctx(&self) -> &AccountAppContext;
     fn bus(&self) -> &CommandBus;
 
-    /// Extrait la région et crée le contexte scoped
     async fn get_context<T>(
         &self,
         request: &Request<T>,
@@ -33,27 +34,28 @@ pub trait GrpcServiceUtils {
         Ok(self.app_ctx().create_context(account_id.clone(), region))
     }
 
-    async fn execute_and_fetch<C, H, R, F>(
+    /// Exécute une commande et recharge l'agrégat pour renvoyer la réponse
+    async fn execute_and_fetch<C, Output, R, F>(
         &self,
         ctx: &AccountContext,
         cmd: C,
-        handler: H,
+        _handler: (), // On peut supprimer cet argument ou le mettre à () pour ne pas casser les appels
         mapper: F,
     ) -> Result<Response<R>, Status>
     where
-        C: Clone + Send + Sync,
-        H: CommandHandler<Context = AccountContext, Command = C>,
-        H::Output: Send,
+        C: Send + Sync + 'static + Clone,
+        Output: Send + 'static,
         R: Send,
         F: FnOnce(Account) -> R + Send + 'static,
     {
-        // 1. Execute
+        // 1. Execute via le Bus Dynamique
+        // Note le Turbofish : on passe le contexte, la commande et l'output attendu
         self.bus()
-            .execute(ctx, cmd, handler)
+            .execute::<AccountContext, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(map_domain_err_to_status)?;
 
-        // 2. Fetch
+        // 2. Fetch (Rechargement de l'agrégat frais depuis la DB ou le Cache)
         let account = self
             .app_ctx()
             .account_repo()
@@ -62,7 +64,7 @@ pub trait GrpcServiceUtils {
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?
             .ok_or_else(|| Status::not_found("Account not found after operation"))?;
 
-        // 3. Map
+        // 3. Map vers le message Protobuf
         Ok(Response::new(mapper(account)))
     }
 }

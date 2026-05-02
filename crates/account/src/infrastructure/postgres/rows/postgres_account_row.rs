@@ -5,8 +5,7 @@ use crate::domain::{
         Account, AccountGovernance, AccountIdentity, AccountPreferences, AccountSettings,
     },
     value_objects::{
-        AccountRole, AccountState, BirthDate, Email, SubId, IpAddr, Locale, PhoneNumber,
-        TrustScore,
+        AccountRole, AccountState, BirthDate, IpAddr, Locale, TrustScore,
     },
 };
 use crate::infrastructure::postgres::models::{PostgresAccountRole, PostgresAccountState};
@@ -14,7 +13,7 @@ use shared_kernel::{
     domain::{
         Identifier,
         events::AggregateMetadata,
-        value_objects::{AccountId, RegionCode},
+        value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },
     errors::{DomainError, Result},
 };
@@ -25,9 +24,7 @@ pub struct PostgresAccountRow {
     pub account_id: uuid::Uuid,
     pub sub_id: Option<String>,
     pub email: Option<String>,
-    pub email_verified: bool,
     pub phone_number: Option<String>,
-    pub phone_verified: bool,
     pub state: PostgresAccountState,
     pub birth_date: Option<chrono::NaiveDate>,
     pub locale: String,
@@ -65,9 +62,7 @@ impl PostgresAccountRow {
             RegionCode::try_new(self.region_code.as_deref().unwrap_or("US"))?,
             self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
-            self.email_verified,
             self.phone_number.map(PhoneNumber::try_new).transpose()?,
-            self.phone_verified,
             AccountState::from(self.state),
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(self.locale)?,

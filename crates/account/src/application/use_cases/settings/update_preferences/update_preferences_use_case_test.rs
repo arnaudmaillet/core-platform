@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::settings::update_preferences::{
         UpdatePreferencesCommand, UpdatePreferencesHandler,
     };
@@ -40,7 +41,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -83,7 +84,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -122,7 +123,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -165,7 +166,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, UpdatePreferencesHandler)
+            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert

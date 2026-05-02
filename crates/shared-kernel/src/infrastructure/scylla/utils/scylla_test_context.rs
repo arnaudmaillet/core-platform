@@ -9,7 +9,7 @@ use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use tokio::sync::{Mutex, OnceCell};
 use uuid::Uuid;
-use crate::infrastructure::scylla::factories::{ScyllaConfig, ScyllaContext};
+use crate::infrastructure::scylla::factories::ScyllaContext;
 use crate::infrastructure::scylla::utils::scylla_test_context_builder::ScyllaTestContextBuilder;
 
 static SCYLLA_INSTANCE: OnceCell<ScyllaSingleton> = OnceCell::const_new();

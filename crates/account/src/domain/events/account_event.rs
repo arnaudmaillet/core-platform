@@ -4,13 +4,14 @@ use crate::domain::preferences::models::{
     AppearancePreferences, NotificationPreferences, PrivacyPreferences,
 };
 use crate::domain::value_objects::{
-    AccountRole, Email, SubId, IpAddr, Locale, PhoneNumber, TrustDelta, TrustScore, VerificationToken
+    AccountRole, IpAddr, Locale, TrustDelta, TrustScore,
+    VerificationToken,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
+use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone};
 use std::borrow::Cow;
 use uuid::Uuid;
 
@@ -44,16 +45,6 @@ pub enum AccountEvent {
         account_id: AccountId,
         old_phone_number: Option<PhoneNumber>,
         new_phone_number: PhoneNumber,
-        occurred_at: DateTime<Utc>,
-    },
-    EmailVerified {
-        account_id: AccountId,
-        token: VerificationToken,
-        occurred_at: DateTime<Utc>,
-    },
-    PhoneVerified {
-        account_id: AccountId,
-        token: VerificationToken,
         occurred_at: DateTime<Utc>,
     },
     BirthDateChanged {
@@ -174,8 +165,6 @@ impl AccountEvent {
     pub const EXTERNAL_LINKED: &'static str = "account.identity.external_linked";
     pub const EMAIL_CHANGED: &'static str = "account.identity.email_changed";
     pub const PHONE_NUMBER_CHANGED: &'static str = "account.identity.phone_number_changed";
-    pub const EMAIL_VERIFIED: &'static str = "account.identity.email_verified";
-    pub const PHONE_VERIFIED: &'static str = "account.identity.phone_verified";
     pub const BIRTH_DATE_CHANGED: &'static str = "account.identity.birth_date_changed";
     pub const LOCALE_UPDATED: &'static str = "account.identity.locale_updated";
 
@@ -221,8 +210,6 @@ impl DomainEvent for AccountEvent {
             Self::SubIdentityLinked { .. } => Self::EXTERNAL_LINKED,
             Self::EmailChanged { .. } => Self::EMAIL_CHANGED,
             Self::PhoneNumberChanged { .. } => Self::PHONE_NUMBER_CHANGED,
-            Self::EmailVerified { .. } => Self::EMAIL_VERIFIED,
-            Self::PhoneVerified { .. } => Self::PHONE_VERIFIED,
             Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
             Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
             Self::BetaStatusUpdated { .. } => Self::BETA_STATUS_UPADTED,
@@ -257,8 +244,6 @@ impl DomainEvent for AccountEvent {
             | Self::SubIdentityLinked { account_id, .. }
             | Self::EmailChanged { account_id, .. }
             | Self::PhoneNumberChanged { account_id, .. }
-            | Self::EmailVerified { account_id, .. }
-            | Self::PhoneVerified { account_id, .. }
             | Self::BirthDateChanged { account_id, .. }
             | Self::LocaleUpdated { account_id, .. }
             | Self::BetaStatusUpdated { account_id, .. }
@@ -287,8 +272,6 @@ impl DomainEvent for AccountEvent {
             | Self::SubIdentityLinked { occurred_at, .. }
             | Self::EmailChanged { occurred_at, .. }
             | Self::PhoneNumberChanged { occurred_at, .. }
-            | Self::EmailVerified { occurred_at, .. }
-            | Self::PhoneVerified { occurred_at, .. }
             | Self::BirthDateChanged { occurred_at, .. }
             | Self::LocaleUpdated { occurred_at, .. }
             | Self::BetaStatusUpdated { occurred_at, .. }

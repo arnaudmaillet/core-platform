@@ -1,18 +1,82 @@
 // crates/account/src/application/test_utils.rs
 
+use std::sync::Arc;
+use uuid::Uuid;
+
+// Shared Kernel
 use shared_kernel::application::{BaseAppContext, CommandBus};
 use shared_kernel::domain::repositories::{
     CacheRepositoryStub, IdempotencyRepositoryStub, OutboxRepositoryStub,
 };
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::Result;
-use std::sync::Arc;
 
+// Account Domain & Application
+// Note : Importation directe depuis application::context (structure plate)
 use crate::application::context::{AccountAppContext, AccountContext};
 use crate::domain::account::builders::AccountBuilder;
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepositoryStub;
-use crate::domain::value_objects::{RegistrationIdentifier};
+use crate::domain::value_objects::RegistrationIdentifier;
+
+// --- Imports des Use Cases ---
+// Access Management
+use crate::application::use_cases::access_management::link_sub_identity::{
+    LinkSubIdentityCommand, LinkSubIdentityHandler,
+};
+use crate::application::use_cases::access_management::register::{
+    RegisterCommand, RegisterHandler,
+};
+
+// Lifecycle
+use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
+use crate::application::use_cases::lifecycle::change_role::{ChangeRoleCommand, ChangeRoleHandler};
+use crate::application::use_cases::lifecycle::deactivate::{DeactivateCommand, DeactivateHandler};
+use crate::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendHandler};
+use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
+
+// Moderation
+use crate::application::use_cases::moderation::ban::{BanCommand, BanHandler};
+use crate::application::use_cases::moderation::decrease_trust_score::{
+    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
+};
+use crate::application::use_cases::moderation::increase_trust_score::{
+    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
+};
+use crate::application::use_cases::moderation::lift_shadowban::{
+    LiftShadowbanCommand, LiftShadowbanHandler,
+};
+use crate::application::use_cases::moderation::shadowban::{ShadowbanCommand, ShadowbanHandler};
+use crate::application::use_cases::moderation::unban::{UnbanCommand, UnbanHandler};
+
+// Settings
+use crate::application::use_cases::settings::add_push_token::{
+    AddPushTokenCommand, AddPushTokenHandler,
+};
+use crate::application::use_cases::settings::change_birth_date::{
+    ChangeBirthDateCommand, ChangeBirthDateHandler,
+};
+use crate::application::use_cases::settings::change_email::{
+    ChangeEmailCommand, ChangeEmailHandler,
+};
+use crate::application::use_cases::settings::change_phone_number::{
+    ChangePhoneNumberCommand, ChangePhoneNumberHandler,
+};
+use crate::application::use_cases::settings::change_region::{
+    ChangeRegionCommand, ChangeRegionHandler,
+};
+use crate::application::use_cases::settings::remove_push_token::{
+    RemovePushTokenCommand, RemovePushTokenHandler,
+};
+use crate::application::use_cases::settings::update_locale::{
+    UpdateLocaleCommand, UpdateLocaleHandler,
+};
+use crate::application::use_cases::settings::update_preferences::{
+    UpdatePreferencesCommand, UpdatePreferencesHandler,
+};
+use crate::application::use_cases::settings::update_timezone::{
+    UpdateTimezoneCommand, UpdateTimezoneHandler,
+};
 
 pub struct TestFixture {
     bus: CommandBus,
@@ -25,17 +89,13 @@ pub struct TestFixture {
 
 impl TestFixture {
     pub fn new() -> Self {
-        // 1. Initialisation des Stubs de bas niveau
         let account_repo = Arc::new(AccountRepositoryStub::new());
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
 
-        // 2. Création du BaseAppContext (Simule shared-kernel)
-        // On passe None pour le pool car nos Stubs n'en ont pas besoin
         let base_ctx = BaseAppContext::new(None, cache);
 
-        // 3. Création de l'AccountAppContext (Infrastructure du module)
         let app_ctx = AccountAppContext::new(
             base_ctx,
             account_repo.clone(),
@@ -43,13 +103,62 @@ impl TestFixture {
             idempotency_repo.clone(),
         );
 
-        // 4. Création du contexte Scoped par défaut pour les tests
         let account_id = AccountId::new();
         let region = RegionCode::from_raw("eu");
         let account_ctx = AccountContext::new(app_ctx.clone(), account_id, region);
 
+        let mut bus = CommandBus::new();
+
+        // Enregistrement des Handlers avec le type AccountContext propre
+        bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);
+        bus.register::<AccountContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
+            LinkSubIdentityHandler,
+        );
+        bus.register::<AccountContext, ActivateCommand, ActivateHandler>(ActivateHandler);
+        bus.register::<AccountContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
+        bus.register::<AccountContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
+        bus.register::<AccountContext, SuspendCommand, SuspendHandler>(SuspendHandler);
+        bus.register::<AccountContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
+        bus.register::<AccountContext, BanCommand, BanHandler>(BanHandler);
+        bus.register::<AccountContext, UnbanCommand, UnbanHandler>(UnbanHandler);
+        bus.register::<AccountContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
+        bus.register::<AccountContext, LiftShadowbanCommand, LiftShadowbanHandler>(
+            LiftShadowbanHandler,
+        );
+        bus.register::<AccountContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
+            IncreaseTrustScoreHandler,
+        );
+        bus.register::<AccountContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
+            DecreaseTrustScoreHandler,
+        );
+        bus.register::<AccountContext, AddPushTokenCommand, AddPushTokenHandler>(
+            AddPushTokenHandler,
+        );
+        bus.register::<AccountContext, RemovePushTokenCommand, RemovePushTokenHandler>(
+            RemovePushTokenHandler,
+        );
+        bus.register::<AccountContext, ChangeEmailCommand, ChangeEmailHandler>(ChangeEmailHandler);
+        bus.register::<AccountContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
+            ChangePhoneNumberHandler,
+        );
+        bus.register::<AccountContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
+            ChangeBirthDateHandler,
+        );
+        bus.register::<AccountContext, ChangeRegionCommand, ChangeRegionHandler>(
+            ChangeRegionHandler,
+        );
+        bus.register::<AccountContext, UpdateLocaleCommand, UpdateLocaleHandler>(
+            UpdateLocaleHandler,
+        );
+        bus.register::<AccountContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
+            UpdateTimezoneHandler,
+        );
+        bus.register::<AccountContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
+            UpdatePreferencesHandler,
+        );
+
         Self {
-            bus: CommandBus::new(),
+            bus,
             app_ctx,
             account_ctx,
             account_repo,
@@ -58,18 +167,16 @@ impl TestFixture {
         }
     }
 
-    // --- Accesseurs pour les tests ---
+    // --- Accesseurs ---
 
     pub fn bus(&self) -> &CommandBus {
         &self.bus
     }
 
-    /// Pour les créations (Register)
     pub fn app_ctx(&self) -> &AccountAppContext {
         &self.app_ctx
     }
 
-    /// Pour les modifications (Settings, etc.)
     pub fn account_ctx(&self) -> &AccountContext {
         &self.account_ctx
     }
@@ -102,7 +209,6 @@ impl TestFixture {
         self.account_builder_for(self.region())
     }
 
-    /// Cas spécifique : permet d'injecter une région différente
     pub fn account_builder_for(&self, region: RegionCode) -> Result<AccountBuilder> {
         Ok(Account::builder(
             self.account_id(),
@@ -110,6 +216,8 @@ impl TestFixture {
             RegistrationIdentifier::try_from_email("test@example.com")?,
         ))
     }
+
+    // --- Assertions ---
 
     pub fn assert_outbox(&self, expected_count: usize, expected_event: Option<&str>) {
         assert_eq!(
@@ -126,7 +234,6 @@ impl TestFixture {
         }
     }
 
-    /// Vérifie le compte "par défaut" de la fixture
     pub async fn assert_account<F>(&self, check: F) -> Result<()>
     where
         F: FnOnce(&Account),
@@ -134,35 +241,27 @@ impl TestFixture {
         self.assert_account_by_id(&self.account_id(), check).await
     }
 
-    /// NOUVEAU : Indispensable pour le Register car l'ID est généré dynamiquement
     pub async fn assert_account_by_id<F>(&self, id: &AccountId, check: F) -> Result<()>
     where
         F: FnOnce(&Account),
     {
         let saved = self
             .account_repo
-            .find_direct(id) // Utilise la méthode de ton Stub
+            .find_direct(id)
             .expect("Le compte devrait exister dans le repository");
-
         check(&saved);
         Ok(())
     }
 
     pub async fn assert_account_exists(&self, id: &AccountId) -> Result<()> {
-        let account = self.account_repo().find_direct(id);
-
-        assert!(
-            account.is_some(),
-            "Le compte avec l'ID {} devrait exister dans le repository",
-            id
-        );
+        assert!(self.account_repo().find_direct(id).is_some());
         Ok(())
     }
 
     pub fn assert_outbox_contains(&self, event_name: &str) {
         assert!(
             self.outbox_events().contains(&event_name.to_string()),
-            "L'événement {} est manquant dans l'outbox. Événements présents : {:?}",
+            "L'événement {} est manquant. Présents : {:?}",
             event_name,
             self.outbox_events()
         );

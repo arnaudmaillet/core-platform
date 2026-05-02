@@ -1,11 +1,9 @@
 // crates/account/src/domain/builders/_builder.rs
 
 use crate::domain::account::entities::AccountIdentity;
-use crate::domain::value_objects::{
-    AccountState, BirthDate, Email, SubId, Locale, PhoneNumber,
-};
+use crate::domain::value_objects::{AccountState, BirthDate, Locale};
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId};
 use shared_kernel::errors::{DomainError, Result};
 
 pub struct AccountIdentityBuilder {
@@ -21,10 +19,7 @@ pub struct AccountIdentityBuilder {
 }
 
 impl AccountIdentityBuilder {
-    pub(crate) fn new(
-        account_id: AccountId,
-        region_code: RegionCode,
-    ) -> Self {
+    pub(crate) fn new(account_id: AccountId, region_code: RegionCode) -> Self {
         Self {
             account_id,
             region_code,
@@ -57,11 +52,6 @@ impl AccountIdentityBuilder {
 
     pub fn with_phone(mut self, phone: PhoneNumber) -> Self {
         self.phone = Some(phone);
-        self
-    }
-
-    pub fn with_optional_phone(mut self, phone: Option<PhoneNumber>) -> Self {
-        self.phone = phone;
         self
     }
 
@@ -105,16 +95,14 @@ impl AccountIdentityBuilder {
             self.region_code,
             self.sub_id,
             self.email,
-            false,
             self.phone,
-            false,
             self.state,
             self.birth_date,
             self.locale.unwrap_or_default(),
             now,
             now,
             now,
-            self.last_active_at
+            self.last_active_at,
         ))
     }
 }

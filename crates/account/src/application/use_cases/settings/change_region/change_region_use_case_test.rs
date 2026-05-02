@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::settings::change_region::{
         ChangeRegionCommand, ChangeRegionHandler,
     };
@@ -35,14 +36,12 @@ mod tests {
 
         // 1. On vérifie manuellement si le stub a l'objet
         let direct_check = f.account_repo().find_direct(&f.account_id());
-        println!("STUB HAS ACCOUNT DIRECTLY: {}", direct_check.is_some());
 
         // 2. On vérifie via le trait (ce que le Bus utilise)
         let trait_check = f.account_repo().find_by_id(&f.account_id(), None).await?;
-        println!("STUB HAS ACCOUNT VIA TRAIT: {}", trait_check.is_some());
 
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeRegionHandler)
+            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         assert_eq!(
@@ -80,7 +79,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeRegionHandler)
+            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -117,7 +116,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeRegionHandler)
+            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -148,7 +147,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeRegionHandler)
+            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
@@ -170,7 +169,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeRegionHandler)
+            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

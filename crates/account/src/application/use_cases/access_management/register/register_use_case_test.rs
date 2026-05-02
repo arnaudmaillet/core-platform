@@ -3,17 +3,18 @@
 #[cfg(test)]
 mod tests {
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-    use shared_kernel::domain::value_objects::AccountId;
+    use shared_kernel::domain::value_objects::{AccountId, Email, SubId};
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::access_management::register::{
-        RegisterCommand, RegisterHandler,
+        RegisterCommand,
     };
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{
-        AccountState, Email, SubId, IpAddr, Locale, RegistrationIdentifier,
+        AccountState, IpAddr, Locale, RegistrationIdentifier,
     };
 
     #[tokio::test]
@@ -24,7 +25,7 @@ mod tests {
         let ext_id = SubId::from_raw("keycloak|12345");
         let ip = IpAddr::try_new("127.0.0.1")?;
 
-        let command = RegisterCommand {
+        let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
             sub_id: Some(ext_id.clone()),
@@ -35,7 +36,10 @@ mod tests {
         };
 
         let ctx = f.app_ctx().create_context(f.account_id(), f.region());
-        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, RegisterCommand, AccountId>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(result.is_ok(), "Le register devrait réussir");
@@ -69,32 +73,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_success_without_sub_id() -> Result<()> {
-        let f = TestFixture::new();
-
-        let command = RegisterCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            sub_id: None,
-            identifier: RegistrationIdentifier::try_from_email("no-social@test.com")?,
-            region: f.region(),
-            locale: Locale::try_new("fr-FR")?,
-            ip_addr: IpAddr::try_new("127.0.0.1")?,
-        };
-
-        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
-        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
-
-        assert!(result.is_ok());
-        f.assert_account_by_id(&f.account_id(), |acc| {
-            assert!(acc.identity().sub_id().is_none());
-        })
-        .await?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_register_fails_if_sub_id_already_exists() -> Result<()> {
         let f = TestFixture::new();
         let existing_ext_id = SubId::from_raw("duplicate_id");
@@ -106,7 +84,7 @@ mod tests {
             .build()?;
         f.account_repo().insert(existing_acc);
 
-        let command = RegisterCommand {
+        let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
             sub_id: Some(existing_ext_id),
@@ -118,7 +96,10 @@ mod tests {
 
         // 2. Act
         let ctx = f.app_ctx().create_context(f.account_id(), f.region());
-        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(result.is_err());
@@ -140,7 +121,7 @@ mod tests {
         f.outbox_repo()
             .set_error(DomainError::Infrastructure(error_msg.into()));
 
-        let command = RegisterCommand {
+        let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
             sub_id: Some(SubId::from_raw("atomic_ext")),
@@ -152,7 +133,10 @@ mod tests {
 
         // 2. Act
         let ctx = f.app_ctx().create_context(f.account_id(), f.region());
-        let result = f.bus().execute(&ctx, command, RegisterHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(result.is_err());

@@ -12,12 +12,9 @@ use shared_proto::account::v1::{
 };
 
 use crate::application::context::AccountAppContext;
-use crate::application::use_cases::access_management::link_sub_identity::{
-    LinkSubIdentityCommand, LinkSubIdentityHandler,
-};
-use crate::application::use_cases::access_management::register::{
-    RegisterCommand, RegisterHandler,
-};
+// On ne garde que les Commandes, plus de Handlers !
+use crate::application::use_cases::access_management::link_sub_identity::LinkSubIdentityCommand;
+use crate::application::use_cases::access_management::register::RegisterCommand;
 
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
@@ -51,15 +48,17 @@ impl AccountAccessService for GrpcAccessService {
     ) -> Result<Response<AccountIdentity>, Status> {
         let req = request.into_inner();
         let new_account_id = AccountId::new();
-        let command = RegisterCommand::try_from_proto(req, new_account_id)?;
+        let command = RegisterCommand::try_from_proto(req, new_account_id)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let ctx = self
             .app_ctx
             .create_context(command.account_id, command.region.clone());
-        self.execute_and_fetch(
+
+        self.execute_and_fetch::<RegisterCommand, AccountId, AccountIdentity, _>(
             &ctx,
             command,
-            RegisterHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -71,11 +70,13 @@ impl AccountAccessService for GrpcAccessService {
     ) -> Result<Response<AccountIdentity>, Status> {
         let command = LinkSubIdentityCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.account_id).await?;
-        self.execute_and_fetch(
+
+        self.execute_and_fetch::<LinkSubIdentityCommand, (), AccountIdentity, _>(
             &ctx,
             command,
-            LinkSubIdentityHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -91,16 +92,14 @@ impl AccountAccessService for GrpcAccessService {
             .parse()
             .map_err(|_| Status::invalid_argument("Invalid sub_id"))?;
 
-        // Query directe sur le repo
+        // Query directe sur le repo (lecture seule, pas besoin de bus)
         let account = self
             .app_ctx
             .account_repo()
             .find_by_sub_id(&sub_id, None)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| {
-                Status::not_found("No account associated with this external identity")
-            })?;
+            .ok_or_else(|| Status::not_found("No account associated with this sub identity"))?;
 
         Ok(Response::new(ResolveIdentityResponse {
             account_id: account.id(),

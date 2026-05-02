@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::application::context::AccountContext;
     use crate::application::use_cases::settings::add_push_token::{
         AddPushTokenCommand, AddPushTokenHandler,
     };
@@ -33,7 +34,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, AddPushTokenHandler)
+            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -73,7 +74,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, AddPushTokenHandler)
+            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -115,7 +116,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, AddPushTokenHandler)
+            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -160,7 +161,7 @@ mod tests {
         // 2. Act : Le bus doit absorber le conflit et retenter l'opération
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, AddPushTokenHandler)
+            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Succès attendu !
@@ -204,7 +205,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, AddPushTokenHandler)
+            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
