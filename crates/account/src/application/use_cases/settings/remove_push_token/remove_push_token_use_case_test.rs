@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::settings::remove_push_token::{
-        RemovePushTokenCommand, RemovePushTokenHandler,
-    };
+    use crate::application::use_cases::settings::RemovePushTokenCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;

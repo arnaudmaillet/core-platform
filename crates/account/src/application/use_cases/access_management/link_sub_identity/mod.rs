@@ -1,6 +1,3 @@
-mod link_sub_identity_command;
-mod link_sub_identity_use_case;
-mod link_sub_identity_use_case_test;
-
-pub use link_sub_identity_command::LinkSubIdentityCommand;
-pub use link_sub_identity_use_case::LinkSubIdentityHandler;
+pub mod link_sub_identity_command;
+pub mod link_sub_identity_use_case;
+pub mod link_sub_identity_use_case_test;

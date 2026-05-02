@@ -10,20 +10,11 @@ use shared_proto::account::v1::{
 };
 
 use crate::application::context::AccountAppContext;
-use crate::application::use_cases::settings::add_push_token::{
-    AddPushTokenCommand, AddPushTokenHandler,
-};
-use crate::application::use_cases::settings::remove_push_token::{
-    RemovePushTokenCommand, RemovePushTokenHandler,
-};
-use crate::application::use_cases::settings::update_preferences::{
-    UpdatePreferencesCommand, UpdatePreferencesHandler,
-};
-use crate::application::use_cases::settings::update_timezone::{
-    UpdateTimezoneCommand, UpdateTimezoneHandler,
-};
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use crate::use_cases::{
+    AddPushTokenCommand, RemovePushTokenCommand, UpdatePreferencesCommand, UpdateTimezoneCommand,
+};
 use shared_kernel::application::CommandBus;
 
 pub struct GrpcSettingsService {

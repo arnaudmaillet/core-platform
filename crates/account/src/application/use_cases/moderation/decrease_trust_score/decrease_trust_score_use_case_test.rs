@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::moderation::decrease_trust_score::{
+    use crate::application::use_cases::moderation::{
         DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
     };
     use crate::application::utils::TestFixture;

@@ -8,7 +8,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::access_management::register::{
+    use crate::application::use_cases::access_management::{
         RegisterCommand,
     };
     use crate::application::utils::TestFixture;

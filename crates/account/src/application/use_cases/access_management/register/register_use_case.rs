@@ -7,7 +7,7 @@ use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 
 use crate::application::context::{AccountAppContext, AccountContext};
-use crate::application::use_cases::access_management::register::RegisterCommand;
+use crate::application::use_cases::access_management::RegisterCommand;
 use crate::domain::account::entities::Account;
 
 pub struct RegisterHandler;

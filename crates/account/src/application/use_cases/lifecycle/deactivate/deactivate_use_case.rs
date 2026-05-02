@@ -6,7 +6,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::lifecycle::deactivate::DeactivateCommand;
+use crate::application::use_cases::lifecycle::DeactivateCommand;
 
 pub struct DeactivateHandler;
 

@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
+    use crate::application::use_cases::lifecycle::{ActivateCommand, ActivateHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;

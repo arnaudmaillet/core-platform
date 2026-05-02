@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::settings::add_push_token::{
-        AddPushTokenCommand, AddPushTokenHandler,
-    };
+    use crate::application::use_cases::settings::AddPushTokenCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;

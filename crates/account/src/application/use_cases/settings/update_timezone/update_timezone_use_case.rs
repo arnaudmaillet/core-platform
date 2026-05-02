@@ -1,7 +1,7 @@
 // crates/account/src/application/update_timezone/mod.rs
 use async_trait::async_trait;
 use crate::application::context::AccountContext;
-use crate::application::use_cases::settings::update_timezone::update_timezone_command::UpdateTimezoneCommand;
+use crate::application::use_cases::settings::UpdateTimezoneCommand;
 use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 

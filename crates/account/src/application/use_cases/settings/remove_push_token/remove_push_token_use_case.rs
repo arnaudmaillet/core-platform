@@ -1,6 +1,6 @@
 // crates/account/src/application/remove_push_token/remove_push_token_use_case.rs
 use crate::application::context::AccountContext;
-use crate::application::use_cases::settings::remove_push_token::RemovePushTokenCommand;
+use crate::application::use_cases::settings::RemovePushTokenCommand;
 use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;

@@ -1,9 +1,7 @@
-use account::domain::account::entities::Account;
-use account::domain::repositories::AccountRepository;
-use account::domain::value_objects::{
-    AccountRole, AccountState, RegistrationIdentifier,
-};
-use account::infrastructure::postgres::repositories::PostgresAccountRepository;
+use account::account::entities::Account;
+use account::repositories::AccountRepository;
+use account::repositories::db::PostgresAccountRepository;
+use account::value_objects::{AccountRole, AccountState, RegistrationIdentifier};
 use shared_kernel::domain::Identifier;
 use std::time::Duration;
 use tokio;

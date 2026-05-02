@@ -2,7 +2,7 @@
 
 use crate::application::{
     context::AccountContext,
-    use_cases::access_management::link_sub_identity::LinkSubIdentityCommand,
+    use_cases::access_management::LinkSubIdentityCommand,
 };
 use async_trait::async_trait;
 use shared_kernel::{application::CommandHandler, domain::utils::RetryConfig, errors::Result};

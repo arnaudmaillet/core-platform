@@ -1,6 +1,3 @@
-mod deactivate_command;
-mod deactivate_use_case;
-mod deactivate_use_case_test;
-
-pub use deactivate_command::DeactivateCommand;
-pub use deactivate_use_case::DeactivateHandler;
+pub mod deactivate_command;
+pub mod deactivate_use_case;
+pub mod deactivate_use_case_test;

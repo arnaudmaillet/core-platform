@@ -10,25 +10,12 @@ use shared_proto::account::v1::{
 };
 
 use crate::application::context::AccountAppContext;
-use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
-use crate::application::use_cases::lifecycle::deactivate::{DeactivateCommand, DeactivateHandler};
-use crate::application::use_cases::settings::change_birth_date::{
-    ChangeBirthDateCommand, ChangeBirthDateHandler,
-};
-use crate::application::use_cases::settings::change_email::{
-    ChangeEmailCommand, ChangeEmailHandler,
-};
-use crate::application::use_cases::settings::change_phone_number::{
-    ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-};
-use crate::application::use_cases::settings::change_region::{
-    ChangeRegionCommand, ChangeRegionHandler,
-};
-use crate::application::use_cases::settings::update_locale::{
-    UpdateLocaleCommand, UpdateLocaleHandler,
-};
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use crate::use_cases::{
+    ActivateCommand, ChangeBirthDateCommand, ChangeEmailCommand, ChangePhoneNumberCommand,
+    ChangeRegionCommand, DeactivateCommand, UpdateLocaleCommand,
+};
 use shared_kernel::application::CommandBus;
 
 pub struct GrpcPersonalService {

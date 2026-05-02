@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
+    use crate::application::use_cases::lifecycle::{UnsuspendCommand, UnsuspendHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;

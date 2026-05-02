@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::settings::update_locale::{
-        UpdateLocaleCommand, UpdateLocaleHandler,
-    };
+    use crate::application::use_cases::settings::UpdateLocaleCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Locale};

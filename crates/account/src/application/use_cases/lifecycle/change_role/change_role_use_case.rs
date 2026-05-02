@@ -5,7 +5,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::lifecycle::change_role::ChangeRoleCommand;
+use crate::application::use_cases::lifecycle::ChangeRoleCommand;
 
 pub struct ChangeRoleHandler;
 

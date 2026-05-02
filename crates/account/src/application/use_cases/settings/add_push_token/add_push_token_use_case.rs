@@ -1,6 +1,6 @@
 // crates/account/src/application/add_push_token/add_push_token_use_case.rs
 use crate::application::context::AccountContext;
-use crate::application::use_cases::settings::add_push_token::AddPushTokenCommand;
+use crate::application::use_cases::settings::AddPushTokenCommand;
 use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;

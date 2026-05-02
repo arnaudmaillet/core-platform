@@ -12,12 +12,10 @@ use shared_proto::account::v1::{
 };
 
 use crate::application::context::AccountAppContext;
-// On ne garde que les Commandes, plus de Handlers !
-use crate::application::use_cases::access_management::link_sub_identity::LinkSubIdentityCommand;
-use crate::application::use_cases::access_management::register::RegisterCommand;
 
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use crate::use_cases::{LinkSubIdentityCommand, RegisterCommand};
 use shared_kernel::application::CommandBus;
 
 pub struct GrpcAccessService {

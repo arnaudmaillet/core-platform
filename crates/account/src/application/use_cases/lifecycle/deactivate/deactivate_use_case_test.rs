@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::deactivate::{
+    use crate::application::use_cases::lifecycle::{
         DeactivateCommand, DeactivateHandler,
     };
     use crate::application::utils::TestFixture;

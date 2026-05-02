@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::access_management::link_sub_identity::{
+    use crate::application::use_cases::access_management::{
         LinkSubIdentityCommand,
     };
     use crate::application::utils::TestFixture;

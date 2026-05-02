@@ -1,11 +1,8 @@
 // crates/account/src/application/update_settings/mod.rs
 use crate::application::context::AccountContext;
-use crate::application::use_cases::settings::update_preferences::UpdatePreferencesCommand;
-use crate::domain::account::entities::AccountSettings;
+use crate::application::use_cases::settings::UpdatePreferencesCommand;
 use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
-use shared_kernel::domain::events::{AggregateRoot, DomainEvent};
-use shared_kernel::domain::utils::{RetryConfig, with_retry};
 use shared_kernel::errors::Result;
 
 pub struct UpdatePreferencesHandler;

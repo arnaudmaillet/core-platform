@@ -5,7 +5,7 @@ use shared_kernel::errors::Result;
 use async_trait::async_trait;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::lifecycle::activate::ActivateCommand;
+use crate::application::use_cases::lifecycle::ActivateCommand;
 
 pub struct ActivateHandler;
 

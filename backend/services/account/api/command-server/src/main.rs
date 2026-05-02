@@ -3,7 +3,7 @@ use dotenvy::dotenv;
 use std::sync::Arc;
 use tonic::transport::Server;
 
-// 1. Imports du Shared Kernel (Socle technique)
+// Imports du Shared Kernel (Socle technique)
 use shared_kernel::application::{BaseAppContext, CommandBus};
 use shared_kernel::infrastructure::postgres::factories::PostgresContext;
 use shared_kernel::infrastructure::postgres::repositories::{
@@ -11,82 +11,33 @@ use shared_kernel::infrastructure::postgres::repositories::{
 };
 use shared_kernel::infrastructure::redis::factories::RedisContext;
 
-// 2. Imports de la crate Account (Logique métier et Repositories)
-use account::application::context::{AccountAppContext, AccountContext};
-use account::infrastructure::postgres::repositories::PostgresAccountRepository;
-
-// --- Use Cases : Access Management ---
-use account::application::use_cases::access_management::link_sub_identity::{
-    LinkSubIdentityCommand, LinkSubIdentityHandler,
+// Imports de la crate Account
+use account::{
+    context::{AccountAppContext, AccountContext},
+    grpc::{GrpcAccessService, GrpcModerationService, GrpcPersonalService, GrpcSettingsService},
+    repositories::db::PostgresAccountRepository,
+    use_cases::{
+        ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
+        BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
+        ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
+        ChangeRegionCommand, ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler,
+        DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
+        IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
+        LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
+        RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
+        ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler,
+        UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler,
+        UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
+        UpdateTimezoneHandler,
+    },
 };
-use account::application::use_cases::access_management::register::{
-    RegisterCommand, RegisterHandler,
+// Serveurs générés par Tonic
+use shared_proto::account::v1::{
+    account_access_service_server::AccountAccessServiceServer,
+    account_moderation_service_server::AccountModerationServiceServer,
+    account_personal_service_server::AccountPersonalServiceServer,
+    account_settings_service_server::AccountSettingsServiceServer,
 };
-
-// --- Use Cases : Lifecycle ---
-use account::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
-use account::application::use_cases::lifecycle::change_role::{
-    ChangeRoleCommand, ChangeRoleHandler,
-};
-use account::application::use_cases::lifecycle::deactivate::{
-    DeactivateCommand, DeactivateHandler,
-};
-use account::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendHandler};
-use account::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
-
-// --- Use Cases : Moderation ---
-use account::application::use_cases::moderation::ban::{BanCommand, BanHandler};
-use account::application::use_cases::moderation::decrease_trust_score::{
-    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-};
-use account::application::use_cases::moderation::increase_trust_score::{
-    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
-};
-use account::application::use_cases::moderation::lift_shadowban::{
-    LiftShadowbanCommand, LiftShadowbanHandler,
-};
-use account::application::use_cases::moderation::shadowban::{ShadowbanCommand, ShadowbanHandler};
-use account::application::use_cases::moderation::unban::{UnbanCommand, UnbanHandler};
-
-// --- Use Cases : Settings ---
-use account::application::use_cases::settings::add_push_token::{
-    AddPushTokenCommand, AddPushTokenHandler,
-};
-use account::application::use_cases::settings::change_birth_date::{
-    ChangeBirthDateCommand, ChangeBirthDateHandler,
-};
-use account::application::use_cases::settings::change_email::{
-    ChangeEmailCommand, ChangeEmailHandler,
-};
-use account::application::use_cases::settings::change_phone_number::{
-    ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-};
-use account::application::use_cases::settings::change_region::{
-    ChangeRegionCommand, ChangeRegionHandler,
-};
-use account::application::use_cases::settings::remove_push_token::{
-    RemovePushTokenCommand, RemovePushTokenHandler,
-};
-use account::application::use_cases::settings::update_locale::{
-    UpdateLocaleCommand, UpdateLocaleHandler,
-};
-use account::application::use_cases::settings::update_preferences::{
-    UpdatePreferencesCommand, UpdatePreferencesHandler,
-};
-use account::application::use_cases::settings::update_timezone::{
-    UpdateTimezoneCommand, UpdateTimezoneHandler,
-};
-
-// 3. Imports des Services gRPC (Interface)
-use account::infrastructure::api::grpc::{
-    GrpcAccessService, GrpcModerationService, GrpcPersonalService, GrpcSettingsService,
-};
-
-// 4. Serveurs générés par Tonic
-use shared_proto::account::v1::account_access_service_server::AccountAccessServiceServer;
-use shared_proto::account::v1::account_moderation_service_server::AccountModerationServiceServer;
-use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;
-use shared_proto::account::v1::account_settings_service_server::AccountSettingsServiceServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

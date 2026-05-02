@@ -1,6 +1,3 @@
-mod update_locale_command;
-mod update_locale_use_case;
-mod update_locale_use_case_test;
-
-pub use update_locale_command::UpdateLocaleCommand;
-pub use update_locale_use_case::UpdateLocaleHandler;
+pub mod update_locale_command;
+pub mod update_locale_use_case;
+pub mod update_locale_use_case_test;

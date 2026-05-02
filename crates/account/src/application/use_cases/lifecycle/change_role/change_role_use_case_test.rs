@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::change_role::{
+    use crate::application::use_cases::lifecycle::{
         ChangeRoleCommand, ChangeRoleHandler,
     };
     use crate::application::utils::TestFixture;

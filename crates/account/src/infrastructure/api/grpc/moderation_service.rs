@@ -10,24 +10,12 @@ use tonic::{Request, Response, Status};
 use shared_proto::account::v1::account_moderation_service_server::AccountModerationService;
 
 use crate::application::context::AccountAppContext;
-
-use crate::application::use_cases::lifecycle::change_role::{ChangeRoleCommand, ChangeRoleHandler};
-use crate::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendHandler};
-use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
-use crate::application::use_cases::moderation::ban::{BanCommand, BanHandler};
-use crate::application::use_cases::moderation::decrease_trust_score::{
-    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-};
-use crate::application::use_cases::moderation::increase_trust_score::{
-    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
-};
-use crate::application::use_cases::moderation::lift_shadowban::{
-    LiftShadowbanCommand, LiftShadowbanHandler,
-};
-use crate::application::use_cases::moderation::shadowban::{ShadowbanCommand, ShadowbanHandler};
-use crate::application::use_cases::moderation::unban::{UnbanCommand, UnbanHandler};
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use crate::use_cases::{
+    BanCommand, ChangeRoleCommand, DecreaseTrustScoreCommand, IncreaseTrustScoreCommand,
+    LiftShadowbanCommand, ShadowbanCommand, SuspendCommand, UnbanCommand, UnsuspendCommand,
+};
 use shared_kernel::application::CommandBus;
 
 pub struct GrpcModerationService {

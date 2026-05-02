@@ -4,7 +4,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::settings::change_phone_number::change_phone_number_command::ChangePhoneNumberCommand;
+use crate::application::use_cases::settings::ChangePhoneNumberCommand;
 
 pub struct ChangePhoneNumberHandler;
 

@@ -18,65 +18,21 @@ use crate::domain::account::builders::AccountBuilder;
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepositoryStub;
 use crate::domain::value_objects::RegistrationIdentifier;
+use crate::use_cases::{
+    ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
+    BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
+    ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler, ChangeRegionCommand,
+    ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand,
+    DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
+    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
+    LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
+    RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
+    ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler, UnsuspendCommand,
+    UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler, UpdatePreferencesCommand,
+    UpdatePreferencesHandler, UpdateTimezoneCommand, UpdateTimezoneHandler,
+};
 
 // --- Imports des Use Cases ---
-// Access Management
-use crate::application::use_cases::access_management::link_sub_identity::{
-    LinkSubIdentityCommand, LinkSubIdentityHandler,
-};
-use crate::application::use_cases::access_management::register::{
-    RegisterCommand, RegisterHandler,
-};
-
-// Lifecycle
-use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
-use crate::application::use_cases::lifecycle::change_role::{ChangeRoleCommand, ChangeRoleHandler};
-use crate::application::use_cases::lifecycle::deactivate::{DeactivateCommand, DeactivateHandler};
-use crate::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendHandler};
-use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
-
-// Moderation
-use crate::application::use_cases::moderation::ban::{BanCommand, BanHandler};
-use crate::application::use_cases::moderation::decrease_trust_score::{
-    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-};
-use crate::application::use_cases::moderation::increase_trust_score::{
-    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
-};
-use crate::application::use_cases::moderation::lift_shadowban::{
-    LiftShadowbanCommand, LiftShadowbanHandler,
-};
-use crate::application::use_cases::moderation::shadowban::{ShadowbanCommand, ShadowbanHandler};
-use crate::application::use_cases::moderation::unban::{UnbanCommand, UnbanHandler};
-
-// Settings
-use crate::application::use_cases::settings::add_push_token::{
-    AddPushTokenCommand, AddPushTokenHandler,
-};
-use crate::application::use_cases::settings::change_birth_date::{
-    ChangeBirthDateCommand, ChangeBirthDateHandler,
-};
-use crate::application::use_cases::settings::change_email::{
-    ChangeEmailCommand, ChangeEmailHandler,
-};
-use crate::application::use_cases::settings::change_phone_number::{
-    ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-};
-use crate::application::use_cases::settings::change_region::{
-    ChangeRegionCommand, ChangeRegionHandler,
-};
-use crate::application::use_cases::settings::remove_push_token::{
-    RemovePushTokenCommand, RemovePushTokenHandler,
-};
-use crate::application::use_cases::settings::update_locale::{
-    UpdateLocaleCommand, UpdateLocaleHandler,
-};
-use crate::application::use_cases::settings::update_preferences::{
-    UpdatePreferencesCommand, UpdatePreferencesHandler,
-};
-use crate::application::use_cases::settings::update_timezone::{
-    UpdateTimezoneCommand, UpdateTimezoneHandler,
-};
 
 pub struct TestFixture {
     bus: CommandBus,

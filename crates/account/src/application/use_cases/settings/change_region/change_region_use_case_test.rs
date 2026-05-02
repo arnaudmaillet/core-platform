@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::settings::change_region::{
-        ChangeRegionCommand, ChangeRegionHandler,
-    };
+    use crate::application::use_cases::settings::ChangeRegionCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::repositories::AccountRepository;

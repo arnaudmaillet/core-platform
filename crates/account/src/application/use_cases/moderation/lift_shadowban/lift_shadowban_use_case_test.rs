@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::moderation::lift_shadowban::{
+    use crate::application::use_cases::moderation::{
         LiftShadowbanCommand, LiftShadowbanHandler,
     };
     use crate::application::utils::TestFixture;
