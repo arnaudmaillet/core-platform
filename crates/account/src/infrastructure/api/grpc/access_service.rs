@@ -45,13 +45,20 @@ impl AccountAccessService for GrpcAccessService {
         request: Request<RegisterRequest>,
     ) -> Result<Response<AccountIdentity>, Status> {
         let req = request.into_inner();
-        let new_account_id = AccountId::new();
-        let command = RegisterCommand::try_from_proto(req, new_account_id)
+
+        let account_id = match &req.sub_id {
+            Some(id) if !id.is_empty() => AccountId::try_new(id.clone())
+                .map_err(|e| Status::invalid_argument(e.to_string()))?,
+            _ => AccountId::new(),
+        };
+
+        let command = RegisterCommand::try_from_proto(req, account_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
+        // 2. Le contexte utilisera maintenant l'ID stable
         let ctx = self
             .app_ctx
-            .create_context(command.account_id, command.region.clone());
+            .create_context(command.account_id.clone(), command.region.clone());
 
         self.execute_and_fetch::<RegisterCommand, AccountId, AccountIdentity, _>(
             &ctx,

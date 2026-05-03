@@ -33,12 +33,13 @@ CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed
 
 
 -- Empêche le traitement en double des commandes
-CREATE TABLE IF NOT EXISTS idempotency_keys (
-    command_id UUID PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS processed_commands (
+    command_id UUID NOT NULL,
     namespace TEXT NOT NULL,
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (command_id, namespace)
 );
 
 -- Index pour accélérer le nettoyage (TTL) des vieilles clés
 CREATE INDEX IF NOT EXISTS idx_idempotency_occurred_at 
-    ON idempotency_keys (occurred_at);
+    ON processed_commands (occurred_at);

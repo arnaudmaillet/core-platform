@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
         events::{AggregateMetadata, AggregateRoot, DomainEvent},
-        value_objects::{AccountId, AuditReason, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone, TrustContext},
+        value_objects::{
+            AccountId, AuditReason, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone,
+            TrustContext,
+        },
     },
     errors::{DomainError, Result},
 };
@@ -15,10 +18,7 @@ use crate::domain::{
     },
     events::AccountEvent,
     preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
-    value_objects::{
-        AccountRole, BirthDate, IpAddr, Locale,
-        RegistrationIdentifier, TrustDelta,
-    },
+    value_objects::{AccountRole, BirthDate, IpAddr, Locale, RegistrationIdentifier, TrustDelta},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +127,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::SubIdentityLinked {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     old_sub_id: current_id, // Sera None
                     new_sub_id: new_id.clone(),
                     occurred_at: s.updated_at(),
@@ -143,6 +144,9 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::BirthDateChanged {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
+                    old_birth_date: s.identity.birth_date().cloned(),
+                    new_birth_date: new_date,
                     occurred_at: Utc::now(),
                 })
             },
@@ -158,6 +162,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::EmailChanged {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     old_email,
                     new_email: new_email.clone(),
                     occurred_at: s.updated_at(),
@@ -175,6 +180,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::PhoneNumberChanged {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     old_phone_number: old_phone,
                     new_phone_number: new_phone.clone(),
                     occurred_at: s.updated_at(),
@@ -189,6 +195,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountBanned {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
                 })
@@ -211,6 +218,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountUnbanned {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
                 })
@@ -233,6 +241,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountSuspended {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     reason: reason.into(),
                     occurred_at: s.updated_at(),
                 })
@@ -246,6 +255,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountUnsuspended {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
                 })
@@ -279,6 +289,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountActivated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     reason: "User initiated activation".into(),
                     occurred_at: s.updated_at(),
                 })
@@ -296,6 +307,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountDeactivated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     reason: final_reason,
                     occurred_at: s.updated_at(),
                 })
@@ -313,6 +325,7 @@ impl Account {
                 Box::new(AccountEvent::TrustScoreAdjusted {
                     id: uuid::Uuid::new_v4(),
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     delta: amount,
                     new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
@@ -328,6 +341,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::ShadowbanUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     is_shadowbanned: true,
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
@@ -353,6 +367,7 @@ impl Account {
 
                     extra_event = Some(Box::new(AccountEvent::ShadowbanUpdated {
                         account_id: s.id_typed(),
+                        region: s.identity.region_code().clone(),
                         is_shadowbanned: true,
                         reason: auto_reason.into(),
                         occurred_at: s.updated_at(),
@@ -365,6 +380,7 @@ impl Account {
                 Box::new(AccountEvent::TrustScoreAdjusted {
                     id: uuid::Uuid::new_v4(),
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     delta: -amount,
                     new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
@@ -386,6 +402,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::ShadowbanUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     is_shadowbanned: false,
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
@@ -403,6 +420,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AccountRoleChanged {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     old_role,
                     new_role: new_role.clone(),
                     reason: reason.clone().into(),
@@ -421,6 +439,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::TimezoneUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     new_timezone: new_tz.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -436,6 +455,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::LocaleUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     new_locale: new_locale.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -450,6 +470,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::PushTokenAdded {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     token: token.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -464,6 +485,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::PushTokenRemoved {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     token: token.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -481,6 +503,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::NotificationsPreferencesUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     new_preferences: new_prefs.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -498,6 +521,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::AppearancePreferencesUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     new_preferences: new_prefs.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -512,6 +536,7 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::PrivacyPreferencesUpdated {
                     account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
                     new_preferences: new_prefs.clone(),
                     occurred_at: s.updated_at(),
                 })

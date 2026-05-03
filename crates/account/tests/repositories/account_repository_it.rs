@@ -1,6 +1,6 @@
 use account::account::entities::Account;
+use account::db::PostgresAccountRepository;
 use account::repositories::AccountRepository;
-use account::repositories::db::PostgresAccountRepository;
 use account::value_objects::{AccountRole, AccountState, RegistrationIdentifier};
 use shared_kernel::domain::Identifier;
 use std::time::Duration;
@@ -346,6 +346,41 @@ async fn test_cache_performance_benefit() -> Result<()> {
     assert!(
         duration_cache < duration_db,
         "Le cache doit être plus rapide que la DB"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
+    let (repo, pg_ctx, _) = get_test_context().await;
+    let account_id = AccountId::new();
+    let region = RegionCode::try_new("eu")?;
+    let email = Email::try_new("partial@integrity.com")?;
+
+    // --- 1. INSERTION MANUELLE PARTIELLE (SIMULATION BUG/LATENCE) ---
+    // On n'insère QUE l'identité, pas les settings ni la gouvernance.
+    sqlx::query("INSERT INTO account_identity (account_id, region_code, email, locale, state, version, created_at, updated_at, aggregate_updated_at) 
+                 VALUES ($1, $2, $3, 'fr-FR', 'active', 0, NOW(), NOW(), NOW())")
+        .bind(account_id.as_uuid())
+        .bind(region.to_string())
+        .bind(email.to_string())
+        .execute(&pg_ctx.pool())
+        .await
+        .unwrap();
+
+    // --- 2. TENTATIVE DE FETCH DE L'AGRÉGAT COMPLET ---
+    let result = repo.find_by_id(&account_id, None).await?;
+    assert!(
+        result.is_some(),
+        "Le repo devrait être capable de reconstruire un compte même si les tables satellites sont vides (Audit: Résilience)"
+    );
+
+    let account = result.unwrap();
+    assert_eq!(
+        account.settings().timezone().to_string(),
+        "UTC",
+        "Devrait avoir une timezone par défaut"
     );
 
     Ok(())

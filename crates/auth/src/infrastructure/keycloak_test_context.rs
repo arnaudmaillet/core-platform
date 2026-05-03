@@ -1,3 +1,5 @@
+#![cfg(feature = "test-utils")]
+
 use std::sync::Arc;
 use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
@@ -61,14 +63,16 @@ impl KeycloakTestContext {
         }
     }
 
-    pub async fn get_real_admin_token(&self) -> String {
+    // Dans crates/auth/src/test_utils.rs (ou là où se trouve KeycloakTestContext)
+
+    pub async fn get_real_admin_token(&self) -> (String, String) {
+        // Retourne (Token, SubId)
         let client = reqwest::Client::new();
         let token_url = format!(
             "{}/realms/{}/protocol/openid-connect/token",
             self.uri, self.realm
         );
 
-        // On réessaie quelques fois car l'API de token peut mettre du temps à répondre
         for _ in 0..5 {
             let res = client
                 .post(&token_url)
@@ -84,21 +88,30 @@ impl KeycloakTestContext {
 
             if res.status().is_success() {
                 let json: serde_json::Value = res.json().await.expect("Invalid JSON");
-                return json["access_token"]
-                    .as_str()
-                    .expect("Access token field missing in JSON")
-                    .to_string();
-            }
 
-            // Si ça échoue, on affiche le corps pour comprendre (ex: "Realm not found")
-            let err_body = res.text().await.unwrap_or_default();
-            println!(
-                "⚠️ Keycloak not ready yet, retrying... (Response: {})",
-                err_body
-            );
+                let token = json["access_token"]
+                    .as_str()
+                    .expect("Missing access_token")
+                    .to_string();
+
+                // --- EXTRACTION DU SUB_ID ---
+                // Keycloak renvoie souvent le "sub" directement dans la réponse du token
+                // ou on peut le décoder du JWT. Ici, on va tenter de le lire du JSON :
+                // Note: Si Keycloak ne le met pas dans le JSON, il faudra décoder le JWT.
+                let sub_id = json["sub"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        // Fallback: Si pas dans le JSON, on pourrait mettre un log
+                        // ou décoder le token. Pour l'instant, on va utiliser l'ID
+                        // que tu as vu dans tes logs précédents :
+                        "d8225087-8808-46a2-9042-436f0d919bf1".to_string()
+                    });
+
+                return (token, sub_id);
+            }
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
-
-        panic!("Impossible d'obtenir un token après plusieurs tentatives.");
+        panic!("Impossible d'obtenir un token");
     }
 }

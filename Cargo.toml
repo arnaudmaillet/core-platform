@@ -5,17 +5,18 @@ members = [
     "backend/services/account/api/command-server",
     "backend/services/account/outbox-processor",
     "backend/services/account/cache-invalidator",
-    # "backend/services/profile/workers/outbox-processor",
-    # "backend/services/profile/workers/cache-invalidator",
-    # "backend/services/profile/api/command-server",
+    "backend/services/profile/workers/outbox-processor",
+    "backend/services/profile/workers/cache-invalidator",
+    "backend/services/profile/api/command-server",
     "common/rust/shared-proto",
     "crates/account",
     "crates/auth",
-    # "crates/profile",
+    "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
     "backend/gateway/graphql-bff",
 ]
+exclude = ["backend/services/profile"]
 resolver = "2"
 
 [workspace.package]
@@ -31,7 +32,7 @@ description = "core-platform repo"
 shared-kernel = { path = "crates/shared-kernel" }
 shared-proto = { path = "common/rust/shared-proto" }
 account = { path = "crates/account" }
-# profile = { path = "crates/profile" }
+profile = { path = "crates/profile" }
 auth = { path = "crates/auth" }
 
 # Communs

@@ -1,14 +1,14 @@
 // crates/shared-kernel/src/infrastructure/postgres/utils/test_utils.rs
 
-use std::path::Path;
-use sqlx::{Executor, PgPool};
-use sqlx::migrate::Migrator;
-use sqlx::postgres::PgPoolOptions;
-use testcontainers::{ContainerAsync, ImageExt};
-use testcontainers::runners::AsyncRunner;
-use testcontainers_modules::postgres::Postgres as PostgresImage;
 use crate::infrastructure::postgres::factories::PostgresContext;
 use crate::infrastructure::postgres::utils::PostgresTestContextBuilder;
+use sqlx::migrate::Migrator;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{Executor, PgPool};
+use std::path::Path;
+use testcontainers::runners::AsyncRunner;
+use testcontainers::{ContainerAsync, ImageExt};
+use testcontainers_modules::postgres::Postgres as PostgresImage;
 
 pub struct PostgresTestContext {
     context: PostgresContext,
@@ -40,7 +40,8 @@ impl PostgresTestContext {
         let pool = PgPoolOptions::new().connect(&conn_str).await.unwrap();
 
         // 2. Initialisation système ET table de migration SQLx
-        pool.execute(r#"
+        pool.execute(
+            r#"
         -- La fonction de timestamp
         CREATE OR REPLACE FUNCTION public.trigger_set_timestamp()
         RETURNS TRIGGER AS $$
@@ -59,7 +60,10 @@ impl PostgresTestContext {
             checksum BYTEA NOT NULL,
             execution_time BIGINT NOT NULL
         );
-    "#).await.expect("Failed to initialize system tables");
+    "#,
+        )
+        .await
+        .expect("Failed to initialize system tables");
 
         // 3. RÉSOLUTION DES CHEMINS
         let mut paths_to_run = Vec::new();
@@ -84,28 +88,40 @@ impl PostgresTestContext {
                 // on cherche "crates/profile/migrations/postgres"
                 let bazel_path = format!("crates/profile/{}", p.trim_start_matches("./"));
                 if Path::new(&bazel_path).exists() {
-                    println!("✅ Bazel Auto-fix: Found Module migrations at: {}", bazel_path);
+                    println!(
+                        "✅ Bazel Auto-fix: Found Module migrations at: {}",
+                        bazel_path
+                    );
                     paths_to_run.push(bazel_path);
                 } else {
-                    println!("⚠️ WARNING: Migration path not found: {} (tried {})", p, bazel_path);
+                    println!(
+                        "⚠️ WARNING: Migration path not found: {} (tried {})",
+                        p, bazel_path
+                    );
                 }
             }
         }
 
         // 4. EXÉCUTION UNITAIRE (Corrigé pour matcher exactement la table SQLx)
         for path in paths_to_run {
-            let migrator = Migrator::new(Path::new(&path)).await.expect("Invalid migration path");
+            let migrator = Migrator::new(Path::new(&path))
+                .await
+                .expect("Invalid migration path");
 
             for migration in migrator.migrations.iter() {
-                let row: (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM _sqlx_migrations WHERE version = $1)")
-                    .bind(migration.version)
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap_or((false,));
+                let row: (bool,) = sqlx::query_as(
+                    "SELECT EXISTS (SELECT 1 FROM _sqlx_migrations WHERE version = $1)",
+                )
+                .bind(migration.version)
+                .fetch_one(&pool)
+                .await
+                .unwrap_or((false,));
 
                 if !row.0 {
                     // Application du SQL
-                    pool.execute(&*migration.sql).await.expect("Failed to apply migration");
+                    pool.execute(&*migration.sql)
+                        .await
+                        .expect("Failed to apply migration");
 
                     // Log avec tous les champs requis par SQLx
                     sqlx::query(
@@ -122,9 +138,7 @@ impl PostgresTestContext {
             }
         }
 
-        let mut context_builder = PostgresContext::builder_raw()
-            .with_url(&conn_str);
-
+        let mut context_builder = PostgresContext::builder_raw().with_url(&conn_str);
 
         if let Some(cfg) = builder.config {
             context_builder = context_builder
@@ -133,7 +147,10 @@ impl PostgresTestContext {
                 .with_timeout(cfg.connect_timeout);
         }
 
-        let context = context_builder.build().await.expect("Failed to build context");
+        let context = context_builder
+            .build()
+            .await
+            .expect("Failed to build context");
 
         Self { context, container }
     }

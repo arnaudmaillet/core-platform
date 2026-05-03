@@ -43,63 +43,37 @@ impl AccountRepository for PostgresAccountRepository {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
         let key = Self::cache_key(id);
-
-        // 1. Stratégie de Cache (uniquement hors transaction)
         let is_no_tx = tx.is_none();
+        let uid = id.as_uuid();
+        println!("DEBUG REPO: Tentative de find_by_id pour UID: {}", uid);
 
-        // 1. Stratégie de Cache (uniquement hors transaction)
-        if tx.is_none() {
-            // --- DIAGNOSTIC RADICAL ---
-            // On utilise spawn_blocking ou un timeout très court pour être SÛR
-            // que si le cache est mort, on ne bloque pas le thread principal.
-            let cache_handle = self.cache.clone();
-            let cache_key = key.clone();
-
+        // 1. Stratégie de Cache (Uniquement si pas de transaction)
+        if is_no_tx {
             let cache_result = tokio::time::timeout(
                 std::time::Duration::from_millis(50),
-                self.cache.get_obj::<Account>(&cache_key),
+                self.cache.get_obj::<Account>(&key),
             )
             .await;
 
-            match cache_result {
-                Ok(Ok(Some(account))) => return Ok(Some(account)),
-                Ok(Err(e)) => {
-                    tracing::error!(
-                        error = %e,
-                        account_id = %id,
-                        "Cache retrieval failed"
-                    );
-                }
-                Err(_) => {
-                    tracing::warn!(
-                        timeout_ms = 50,
-                        account_id = %id,
-                        "Cache timeout - potential deadlock avoided, falling back to DB"
-                    );
-                }
-                _ => {}
+            if let Ok(Ok(Some(account))) = cache_result {
+                return Ok(Some(account));
             }
         }
 
+        // 2. Fallback DB (Si pas en cache ou si transaction active)
         let uid = id.as_uuid();
 
-        // 2. Récupération des données via une seule requête JOIN
         let account_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
-    SELECT 
-        i.*, 
-        i.updated_at as identity_updated_at,
-        s.preferences, s.timezone, s.push_tokens, 
-        s.updated_at as settings_updated_at,
-        g.role, g.is_beta_tester, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
-        g.last_moderation_at, g.last_ip_addr, 
-        g.updated_at as governance_updated_at
-    FROM account_identity i
-    LEFT JOIN account_settings s ON i.account_id = s.account_id
-    LEFT JOIN account_governance g ON i.account_id = g.account_id
-    WHERE i.account_id = $1
-"#;
+                    SELECT i.*, i.updated_at as identity_updated_at,
+                           s.preferences, s.timezone, s.push_tokens, s.updated_at as settings_updated_at,
+                           g.role, g.is_beta_tester, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
+                           g.last_moderation_at, g.last_ip_addr, g.updated_at as governance_updated_at
+                    FROM account_identity i
+                    LEFT JOIN account_settings s ON i.account_id = s.account_id
+                    LEFT JOIN account_governance g ON i.account_id = g.account_id
+                    WHERE i.account_id = $1"#;
 
                 let row_opt = sqlx::query_as::<_, PostgresAccountRow>(sql)
                     .bind(uid)
@@ -107,32 +81,27 @@ impl AccountRepository for PostgresAccountRepository {
                     .await
                     .map_domain_infra("Account: fetch aggregate join")?;
 
-                // On utilise le to_domain() que nous venons d'implémenter
                 match row_opt {
                     Some(row) => Ok(Some(row.to_domain()?)),
                     None => Ok(None),
                 }
             })
-        })
-        .await?;
+        }).await?;
 
-        // 3. Mise à jour du Cache
+        // 3. Ré-alimentation du Cache en tâche de fond (si lecture DB réussie)
         if is_no_tx {
             if let Some(account) = &account_opt {
                 let cache_handle = self.cache.clone();
-                let cache_key = key.clone();
                 let account_to_cache = account.clone();
-
-                // On ne bloque PAS la sortie de la fonction pour le cache
-                let _ = tokio::time::timeout(
-                    std::time::Duration::from_millis(50),
-                    cache_handle.set_obj(
-                        &cache_key,
-                        &account_to_cache,
-                        Some(std::time::Duration::from_secs(900)),
-                    ),
-                )
-                .await;
+                tokio::spawn(async move {
+                    let _ = cache_handle
+                        .set_obj(
+                            &key,
+                            &account_to_cache,
+                            Some(std::time::Duration::from_secs(900)),
+                        )
+                        .await;
+                });
             }
         }
 
@@ -159,95 +128,105 @@ impl AccountRepository for PostgresAccountRepository {
         let gov_row = PostgresAccountGovernanceRow::from_domain(account);
         let sett_row = PostgresAccountSettingsRow::from_domain(account);
 
-        // Données pour l'OCC (Optimistic Concurrency Control)
         let uid = ident_row.account_id;
         let next_version = account.metadata().version() as i64;
-        let current_version = next_version - 1;
-
-        // Dans account_repository.rs, méthode save ou create
-        let current_v = account.metadata().version();
-        println!(
-            "DEBUG: Tentative de mise à jour. Version dans l'objet Rust: {}",
-            current_v
-        );
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
-        Box::pin(async move {
-            // --- 1. UPDATE IDENTITY (avec vérification de version) ---
-            let sql_identity = r#"
-                UPDATE account_identity SET 
-                    sub_id = $2,
-                    email = $3, phone_number = $4,
-                    state = $5, locale = $6, version = $7, last_active_at = $8
-                WHERE account_id = $1 AND version = $9"#;
-
-            let res = sqlx::query(sql_identity)
+            Box::pin(async move {
+                // 1. On vérifie si le compte existe et on verrouille la ligne (FOR UPDATE) 
+                // pour garantir que personne ne modifie la version entre le check et l'écriture
+                let db_v: Option<i64> = sqlx::query_scalar(
+                    "SELECT version FROM account_identity WHERE account_id = $1 FOR UPDATE"
+                )
                 .bind(uid)
-                .bind(ident_row.sub_id)
-                .bind(ident_row.email)
-                .bind(ident_row.phone_number)
-                .bind(ident_row.state)
-                .bind(ident_row.locale)
-                .bind(next_version)
-                .bind(ident_row.last_active_at)
-                .bind(current_version)
-                .execute(&mut *conn)
+                .fetch_optional(&mut *conn)
                 .await
-                .map_domain_infra("Account: update identity")?;
+                .map_domain_infra("Account: check version for upsert")?;
 
-            // Si aucune ligne n'est modifiée, c'est qu'un autre thread a modifié l'agrégat
-            if res.rows_affected() == 0 {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!("Account {}: OCC mismatch (expected v{})", uid, current_version),
-                });
-            }
+                match db_v {
+                    None => {
+                        // --- MODE INSERT ---
+                        // On insère l'identité
+                        sqlx::query(
+                            r#"INSERT INTO account_identity 
+                                (account_id, sub_id, region_code, email, state, locale, version, last_active_at)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
+                        )
+                        .bind(uid).bind(ident_row.sub_id).bind(ident_row.region_code).bind(ident_row.email)
+                        .bind(ident_row.state).bind(ident_row.locale)
+                        .bind(next_version).bind(ident_row.last_active_at)
+                        .execute(&mut *conn).await.map_domain_infra("Account: insert identity")?;
 
-            // --- 2. UPDATE GOVERNANCE ---
-            let sql_gov = r#"
-                UPDATE account_governance SET
-                    role = $2, is_beta_tester = $3, is_shadowbanned = $4,
-                    trust_score = $5, moderation_notes = $6, last_moderation_at = $7, last_ip_addr = $8
-                WHERE account_id = $1"#;
+                        // On insère la gouvernance
+                        sqlx::query(
+                            r#"INSERT INTO account_governance 
+                                (account_id, role, is_beta_tester, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
+                        )
+                        .bind(uid).bind(gov_row.role).bind(gov_row.is_beta_tester)
+                        .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
+                        .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
+                        .bind(gov_row.last_ip_addr)
+                        .execute(&mut *conn).await.map_domain_infra("Account: governance identity")?;
 
-            sqlx::query(sql_gov)
-                .bind(uid)
-                .bind(gov_row.role)
-                .bind(gov_row.is_beta_tester)
-                .bind(gov_row.is_shadowbanned)
-                .bind(gov_row.trust_score)
-                .bind(gov_row.moderation_notes)
-                .bind(gov_row.last_moderation_at)
-                .bind(gov_row.last_ip_addr)
-                .execute(&mut *conn)
-                .await
-                .map_domain_infra("Account: update governance")?;
+                        // On insère les settings
+                        sqlx::query(
+                            r#"INSERT INTO account_settings (account_id, preferences, timezone, push_tokens)
+                               VALUES ($1, $2, $3, $4)"#
+                        )
+                        .bind(uid).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens)
+                        .execute(&mut *conn).await.map_domain_infra("Account: insert settings")?;
+                    }
+                    Some(v) => {
+                        // --- MODE UPDATE (OCC) ---
+                        let current_version_expected = next_version - 1;
+                        if v != current_version_expected {
+                            return Err(DomainError::ConcurrencyConflict {
+                                reason: format!("Account {}: OCC mismatch (DB v{}, App expected v{})", uid, v, current_version_expected),
+                            });
+                        }
 
-            // --- 3. UPDATE SETTINGS ---
-            let sql_settings = r#"
-                UPDATE account_settings SET
-                    preferences = $2, timezone = $3, push_tokens = $4
-                WHERE account_id = $1"#;
+                        // Update Identity
+                        sqlx::query(
+                            r#"UPDATE account_identity SET 
+                                sub_id = $2, email = $3, state = $4, locale = $5, version = $6, last_active_at = $7
+                               WHERE account_id = $1"#
+                        )
+                        .bind(uid).bind(ident_row.sub_id).bind(ident_row.email)
+                        .bind(ident_row.state).bind(ident_row.locale)
+                        .bind(next_version).bind(ident_row.last_active_at)
+                        .execute(&mut *conn).await.map_domain_infra("Account: update identity")?;
 
-            sqlx::query(sql_settings)
-                .bind(uid)
-                .bind(sett_row.preferences)
-                .bind(sett_row.timezone)
-                .bind(sett_row.push_tokens)
-                .execute(&mut *conn)
-                .await
-                .map_domain_infra("Account: update settings")?;
+                        // Update Governance
+                        sqlx::query(
+                            r#"UPDATE account_governance SET
+                                role = $2, is_beta_tester = $3, is_shadowbanned = $4, trust_score = $5, 
+                                moderation_notes = $6, last_moderation_at = $7, last_ip_addr = $8
+                               WHERE account_id = $1"#
+                        )
+                        .bind(uid).bind(gov_row.role).bind(gov_row.is_beta_tester)
+                        .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
+                        .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
+                        .bind(gov_row.last_ip_addr)
+                        .execute(&mut *conn).await.map_domain_infra("Account: update governance")?;
 
-            Ok(())
-        })
-    }).await?;
+                        // Update Settings
+                        sqlx::query(
+                            r#"UPDATE account_settings SET preferences = $2, timezone = $3, push_tokens = $4
+                               WHERE account_id = $1"#
+                        )
+                        .bind(uid).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens)
+                        .execute(&mut *conn).await.map_domain_infra("Account: insert settings")?;
+                    }
+                }
+                Ok(())
+            })
+        }).await?;
 
-        // --- 4. POST-TRANSACTION ---
+        // --- POST-TRANSACTION (Cache & Metadata) ---
         account.metadata_mut().record_change();
-
         let cache_handle = self.cache.clone();
         let key = Self::cache_key(account.identity().account_id());
-
-        // On ne fait plus de .await ici, on lance la tâche en fond
         tokio::spawn(async move {
             let _ = tokio::time::timeout(
                 std::time::Duration::from_millis(100),
@@ -369,66 +348,8 @@ impl AccountRepository for PostgresAccountRepository {
     }
 
     async fn create(&self, account: &Account, tx: &mut dyn Transaction) -> Result<()> {
-        // 1. Préparation des DTOs (Rows)
-        let ident_row = PostgresAccountIdentityRow::from_domain(account);
-        let gov_row = PostgresAccountGovernanceRow::from_domain(account);
-        let sett_row = PostgresAccountSettingsRow::from_domain(account);
-
-        <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
-        Box::pin(async move {
-            // --- 1. INSERT IDENTITY ---
-            sqlx::query(
-                r#"INSERT INTO account_identity 
-                    (account_id, sub_id, email, state, locale, version, last_active_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7)"#
-            )
-            .bind(ident_row.account_id)
-            .bind(ident_row.sub_id)
-            .bind(ident_row.email)
-            .bind(ident_row.state)
-            .bind(ident_row.locale)
-            .bind(ident_row.version)
-            .bind(ident_row.last_active_at)
-            .execute(&mut *conn)
-            .await
-            .map_domain_infra("Account: insert identity")?;
-
-            // --- 2. INSERT GOVERNANCE ---
-            sqlx::query(
-                r#"INSERT INTO account_governance 
-                    (account_id, role, is_beta_tester, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
-            )
-            .bind(gov_row.account_id)
-            .bind(gov_row.role)
-            .bind(gov_row.is_beta_tester)
-            .bind(gov_row.is_shadowbanned)
-            .bind(gov_row.trust_score)
-            .bind(gov_row.moderation_notes)
-            .bind(gov_row.last_moderation_at)
-            .bind(gov_row.last_ip_addr)
-            .execute(&mut *conn)
-            .await
-            .map_domain_infra("Account: insert governance")?;
-
-            // --- 3. INSERT SETTINGS ---
-            sqlx::query(
-                r#"INSERT INTO account_settings 
-                    (account_id, preferences, timezone, push_tokens)
-                   VALUES ($1, $2, $3, $4)"#
-            )
-            .bind(sett_row.account_id)
-            .bind(sett_row.preferences)
-            .bind(sett_row.timezone)
-            .bind(sett_row.push_tokens)
-            .execute(&mut *conn)
-            .await
-            .map_domain_infra("Account: insert settings")?;
-
-            Ok(())
-        })
-    })
-    .await
+        let mut acc = account.clone();
+        self.save(&mut acc, Some(tx)).await
     }
 
     async fn delete(&self, id: &AccountId, tx: &mut dyn Transaction) -> Result<()> {

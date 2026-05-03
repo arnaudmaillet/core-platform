@@ -1,8 +1,6 @@
 // crates/account/src/domain/account/builders/account_builder.rs
 
-use crate::domain::value_objects::{
-    AccountRole, AccountState, BirthDate, IpAddr,
-};
+use crate::domain::value_objects::{AccountRole, AccountState, BirthDate, IpAddr};
 use crate::domain::{
     account::{
         builders::{AccountGovernanceBuilder, AccountIdentityBuilder, AccountSettingsBuilder},
@@ -48,6 +46,11 @@ impl AccountBuilder {
             governance: governance_builder,
             settings: settings_builder,
         }
+    }
+
+    pub fn with_account_id(mut self, account_id: AccountId) -> Self {
+        self.identity = self.identity.with_account_id(account_id);
+        self
     }
 
     pub fn with_sub_id(mut self, sub_id: SubId) -> Self {

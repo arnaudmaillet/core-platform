@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS account_identity (
     state account_state NOT NULL DEFAULT 'pending',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'en',
-    region_code VARCHAR(10),
+    region_code VARCHAR(10) NOT NULL,
     version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

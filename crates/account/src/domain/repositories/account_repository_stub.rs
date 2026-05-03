@@ -137,26 +137,7 @@ impl AccountRepository for AccountRepositoryStub {
     ) -> Result<bool> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
-        Ok(map
-            .values()
-            .any(|a| a.identity().sub_id() == Some(ext_id)))
-    }
-
-    async fn create(&self, account: &Account, _tx: &mut dyn Transaction) -> Result<()> {
-        self.check_error()?;
-        let mut map = self.accounts.lock().unwrap();
-        let id = account.identity().account_id().clone();
-
-        if map.contains_key(&id) {
-            return Err(DomainError::AlreadyExists {
-                entity: "Account",
-                field: "account_id",
-                value: id.to_string(),
-            });
-        }
-
-        map.insert(id, account.clone());
-        Ok(())
+        Ok(map.values().any(|a| a.identity().sub_id() == Some(ext_id)))
     }
 
     async fn save(&self, account: &mut Account, _tx: Option<&mut dyn Transaction>) -> Result<()> {
@@ -164,24 +145,73 @@ impl AccountRepository for AccountRepositoryStub {
 
         let mut map = self.accounts.lock().unwrap();
         let id = account.identity().account_id().clone();
+        let new_version = account.metadata().version();
+        let existing_opt = map.get(&id);
 
-        if let Some(existing) = map.get(&id) {
-            let current_version = existing.metadata().version();
-            let new_version = account.metadata().version();
+        match existing_opt {
+            None => {
+                // --- MODE INSERT (Logique identique à create) ---
+                // Vérifier que c'est bien une création (version initiale)
+                if new_version > 1 {
+                    return Err(DomainError::ConcurrencyConflict {
+                        reason: format!("Cannot insert new account with version {}", new_version),
+                    });
+                }
+                // On vérifie quand même l'unicité du sub_id pour les nouveaux comptes
+                if let Some(new_sub) = account.identity().sub_id() {
+                    if map.values().any(|a| a.identity().sub_id() == Some(new_sub)) {
+                        return Err(DomainError::AlreadyExists {
+                            entity: "Account",
+                            field: "sub_id",
+                            value: new_sub.to_string(),
+                        });
+                    }
+                }
+                // Note : Ici on pourrait vérifier si new_version == 1 pour être strict
+            }
+            Some(existing) => {
+                // --- MODE UPDATE (OCC) ---
+                let current_version = existing.metadata().version();
 
-            // 1. Logique OCC : On refuse les données obsolètes
-            if new_version < current_version {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!(
-                        "Stale data: Stub v{}, Input v{}",
-                        current_version, new_version
-                    ),
-                });
+                // Vérification OCC
+                if new_version < current_version || new_version > current_version + 1 {
+                    return Err(DomainError::ConcurrencyConflict {
+                        reason: format!(
+                            "OCC mismatch: Stub v{}, Input v{} (Expected v{} or v{})",
+                            current_version,
+                            new_version,
+                            current_version,
+                            current_version + 1
+                        ),
+                    });
+                }
+
+                // Vérification de l'unicité du sub_id (au cas où il a changé)
+                if let Some(new_sub) = account.identity().sub_id() {
+                    let duplicate_exists = map.values().any(|a| {
+                        a.identity().account_id() != &id && a.identity().sub_id() == Some(new_sub)
+                    });
+
+                    if duplicate_exists {
+                        return Err(DomainError::AlreadyExists {
+                            entity: "Account",
+                            field: "sub_id",
+                            value: new_sub.to_string(),
+                        });
+                    }
+                }
             }
         }
 
+        // Dans tous les cas, on insère/écrase
         map.insert(id, account.clone());
         Ok(())
+    }
+
+    // Optionnel : tu peux simplifier create pour qu'il appelle save
+    async fn create(&self, account: &Account, _tx: &mut dyn Transaction) -> Result<()> {
+        let mut acc = account.clone();
+        self.save(&mut acc, None).await
     }
 
     async fn delete(&self, id: &AccountId, _tx: &mut dyn Transaction) -> Result<()> {

@@ -4,32 +4,14 @@ use std::sync::Arc;
 use tonic::transport::Server;
 
 // Imports du Shared Kernel (Socle technique)
-use shared_kernel::application::{BaseAppContext, CommandBus};
-use shared_kernel::infrastructure::postgres::factories::PostgresContext;
-use shared_kernel::infrastructure::postgres::repositories::{
-    PostgresIdempotencyRepository, PostgresOutboxRepository,
+use shared_kernel::infrastructure::{
+    postgres::factories::PostgresContext, redis::factories::RedisContext,
 };
-use shared_kernel::infrastructure::redis::factories::RedisContext;
 
 // Imports de la crate Account
 use account::{
-    context::{AccountAppContext, AccountContext},
+    AccountServiceBuilder,
     grpc::{GrpcAccessService, GrpcModerationService, GrpcPersonalService, GrpcSettingsService},
-    repositories::db::PostgresAccountRepository,
-    use_cases::{
-        ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
-        BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
-        ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-        ChangeRegionCommand, ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler,
-        DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-        IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
-        LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
-        RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
-        ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler,
-        UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler,
-        UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
-        UpdateTimezoneHandler,
-    },
 };
 // Serveurs générés par Tonic
 use shared_proto::account::v1::{
@@ -56,30 +38,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_max_connections(20)
         .build()
         .await?;
-
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
 
-    let pool = pg_ctx.pool().clone();
-
-    // --- Instanciation des Repositories ---
-    let account_repo = Arc::new(PostgresAccountRepository::new(
-        pool.clone(),
-        redis_ctx.repository(),
-    ));
-    let outbox_repo: Arc<PostgresOutboxRepository> =
-        Arc::new(PostgresOutboxRepository::new(pool.clone()));
-    let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("account_idempotency"));
-
-    // --- Initialisation des Contextes ---
-    let app_ctx = Arc::new(AccountAppContext::new(
-        BaseAppContext::new(Some(pool.clone()), redis_ctx.repository().clone()),
-        account_repo,
-        outbox_repo,
-        idempotency_repo,
-    ));
-
-    // --- Configuration du CommandBus ---
-    let bus = Arc::new(configure_command_bus());
+    let builder = AccountServiceBuilder::new(pg_ctx.pool(), redis_ctx.repository());
+    let app_ctx = builder.build_context();
+    let bus = builder.build_command_bus();
 
     // --- Démarrage du Serveur gRPC ---
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
@@ -121,58 +84,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     Ok(())
-}
-
-fn configure_command_bus() -> CommandBus {
-    let mut bus = CommandBus::new();
-
-    // --- Access Management ---
-    bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);
-    bus.register::<AccountContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
-        LinkSubIdentityHandler,
-    );
-
-    // --- Lifecycle ---
-    bus.register::<AccountContext, ActivateCommand, ActivateHandler>(ActivateHandler);
-    bus.register::<AccountContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
-    bus.register::<AccountContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
-    bus.register::<AccountContext, SuspendCommand, SuspendHandler>(SuspendHandler);
-    bus.register::<AccountContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
-
-    // --- Moderation ---
-    bus.register::<AccountContext, BanCommand, BanHandler>(BanHandler);
-    bus.register::<AccountContext, UnbanCommand, UnbanHandler>(UnbanHandler);
-    bus.register::<AccountContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
-    bus.register::<AccountContext, LiftShadowbanCommand, LiftShadowbanHandler>(
-        LiftShadowbanHandler,
-    );
-    bus.register::<AccountContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
-        IncreaseTrustScoreHandler,
-    );
-    bus.register::<AccountContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
-        DecreaseTrustScoreHandler,
-    );
-
-    // --- Settings ---
-    bus.register::<AccountContext, AddPushTokenCommand, AddPushTokenHandler>(AddPushTokenHandler);
-    bus.register::<AccountContext, RemovePushTokenCommand, RemovePushTokenHandler>(
-        RemovePushTokenHandler,
-    );
-    bus.register::<AccountContext, ChangeEmailCommand, ChangeEmailHandler>(ChangeEmailHandler);
-    bus.register::<AccountContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
-        ChangePhoneNumberHandler,
-    );
-    bus.register::<AccountContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
-        ChangeBirthDateHandler,
-    );
-    bus.register::<AccountContext, ChangeRegionCommand, ChangeRegionHandler>(ChangeRegionHandler);
-    bus.register::<AccountContext, UpdateLocaleCommand, UpdateLocaleHandler>(UpdateLocaleHandler);
-    bus.register::<AccountContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
-        UpdateTimezoneHandler,
-    );
-    bus.register::<AccountContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
-        UpdatePreferencesHandler,
-    );
-
-    bus
 }

@@ -35,6 +35,11 @@ impl AccountIdentityBuilder {
 
     // --- SETTERS ---
 
+    pub fn with_account_id(mut self, account_id: AccountId) -> Self {
+        self.account_id = account_id;
+        self
+    }
+
     pub fn with_locale(mut self, locale: Locale) -> Self {
         self.locale = Some(locale);
         self

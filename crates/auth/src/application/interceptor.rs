@@ -30,16 +30,28 @@ impl Interceptor for AuthInterceptor {
 
         match self.validator.validate(&token) {
             Ok(claims) => {
+                // --- AJOUT DES LOGS DE DEBUG ---
+                println!("DEBUG AUTH: Token validé avec succès");
+                println!("DEBUG AUTH: Subject (sub) du token: {}", claims.sub_id);
+                if let Some(ref access) = claims.realm_access {
+                    println!("DEBUG AUTH: Roles trouvés: {:?}", access.roles);
+                } else {
+                    println!("DEBUG AUTH: Aucun role trouvé (realm_access est None)");
+                }
+
                 request.extensions_mut().insert(claims);
                 Ok(request)
             }
-            Err(e) => match e {
-                AuthError::InvalidToken => Err(Status::unauthenticated("Token invalide")),
-                AuthError::DiscoveryFailed => {
-                    Err(Status::internal("Erreur serveur d'authentification"))
+            Err(e) => {
+                println!("DEBUG AUTH: ❌ Échec de validation du token: {:?}", e);
+                match e {
+                    AuthError::InvalidToken => Err(Status::unauthenticated("Token invalide")),
+                    AuthError::DiscoveryFailed => {
+                        Err(Status::internal("Erreur serveur d'authentification"))
+                    }
+                    AuthError::Expired => Err(Status::unauthenticated("Token expiré")),
                 }
-                AuthError::Expired => Err(Status::unauthenticated("Token expiré")),
-            },
+            }
         }
     }
 }

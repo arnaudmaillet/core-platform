@@ -8,14 +8,10 @@ mod tests {
     use uuid::Uuid;
 
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::access_management::{
-        RegisterCommand,
-    };
+    use crate::application::use_cases::access_management::RegisterCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{
-        AccountState, IpAddr, Locale, RegistrationIdentifier,
-    };
+    use crate::domain::value_objects::{AccountState, IpAddr, Locale, RegistrationIdentifier};
 
     #[tokio::test]
     async fn test_register_success() -> Result<()> {
@@ -40,7 +36,6 @@ mod tests {
             .bus()
             .execute::<AccountContext, RegisterCommand, AccountId>(f.account_ctx().clone(), cmd)
             .await;
-
         // 3. Assert
         assert!(result.is_ok(), "Le register devrait réussir");
         let account_id = result.unwrap();
@@ -80,9 +75,10 @@ mod tests {
         // 1. Arrange : On pré-enregistre un compte existant dans le repo
         let existing_acc = f
             .account_builder()?
+            .with_account_id(AccountId::new())
             .with_sub_id(existing_ext_id.clone())
             .build()?;
-        f.account_repo().insert(existing_acc);
+        f.account_repo().insert(existing_acc.clone());
 
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
@@ -95,12 +91,12 @@ mod tests {
         };
 
         // 2. Act
-        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        f.app_ctx().create_context(f.account_id(), f.region());
+
         let result = f
             .bus()
-            .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountContext, RegisterCommand, AccountId>(f.account_ctx().clone(), cmd)
             .await;
-
         // 3. Assert
         assert!(result.is_err());
         if let Err(DomainError::AlreadyExists { field, .. }) = result {

@@ -18,6 +18,6 @@ profile = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
-tonic-health = {workspace = true}
-uuid = {workspace = true}
-futures = {workspace = true}
+tonic-health = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }

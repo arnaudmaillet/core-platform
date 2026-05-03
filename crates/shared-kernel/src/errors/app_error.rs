@@ -40,10 +40,20 @@ impl From<DomainError> for AppError {
                 entity,
                 field,
                 value,
-            } => Self::new(
-                ErrorCode::AlreadyExists,
-                format!("{entity} with {field} '{value}' already exists"),
-            ),
+            } => {
+                // Cas Spécial : Idempotence
+                if entity == "Command" {
+                    Self::new(
+                        ErrorCode::AlreadyExists,
+                        format!("Idempotency: Command {value} already processed"),
+                    )
+                } else {
+                    Self::new(
+                        ErrorCode::AlreadyExists,
+                        format!("{entity} with {field} '{value}' already exists"),
+                    )
+                }
+            }
 
             // 3. Cas : Concurrence (409/429) - Retry géré par le Use Case
             DomainError::ConcurrencyConflict { reason } => {
@@ -74,9 +84,9 @@ impl From<DomainError> for AppError {
                 tracing::error!("Infrastructure error leaked into domain: {:?}", err);
                 Self::new(ErrorCode::InternalError, "Internal storage failure")
             }
-            
+
             DomainError::Internal(msg) => Self::new(ErrorCode::InternalError, msg),
-            
+
             // On s'assure de couvrir toutes les variantes
             _ => Self::new(ErrorCode::InternalError, "An unexpected error occurred"),
         }
@@ -95,7 +105,10 @@ impl From<InfrastructureError> for AppError {
             // Si le pool est vide, c'est un problème de config serveur (500)
             InfrastructureError::EmptyShardPool(region) => {
                 tracing::error!("CRITICAL: No shards available for region {}", region);
-                Self::new(ErrorCode::InternalError, "Regional storage currently unavailable")
+                Self::new(
+                    ErrorCode::InternalError,
+                    "Regional storage currently unavailable",
+                )
             }
 
             // Erreurs techniques (DB, Kafka, Serialisation)

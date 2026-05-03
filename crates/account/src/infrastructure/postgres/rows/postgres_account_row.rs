@@ -4,9 +4,7 @@ use crate::domain::{
     account::entities::{
         Account, AccountGovernance, AccountIdentity, AccountPreferences, AccountSettings,
     },
-    value_objects::{
-        AccountRole, AccountState, BirthDate, IpAddr, Locale, TrustScore,
-    },
+    value_objects::{AccountRole, AccountState, BirthDate, IpAddr, Locale, TrustScore},
 };
 use crate::infrastructure::postgres::models::{PostgresAccountRole, PostgresAccountState};
 use shared_kernel::{
@@ -28,28 +26,28 @@ pub struct PostgresAccountRow {
     pub state: PostgresAccountState,
     pub birth_date: Option<chrono::NaiveDate>,
     pub locale: String,
-    pub region_code: Option<String>,
+    pub region_code: String,
     pub version: i64,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub identity_updated_at: chrono::DateTime<chrono::Utc>,
     pub aggregate_updated_at: chrono::DateTime<chrono::Utc>,
     pub last_active_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    // --- Governance ---
-    pub role: PostgresAccountRole,
-    pub is_beta_tester: bool,
-    pub is_shadowbanned: bool,
-    pub trust_score: i32,
+    // --- Governance (Passage en Option pour gérer le LEFT JOIN vide) ---
+    pub role: Option<PostgresAccountRole>,
+    pub is_beta_tester: Option<bool>,
+    pub is_shadowbanned: Option<bool>,
+    pub trust_score: Option<i32>,
     pub moderation_notes: Option<String>,
     pub last_moderation_at: Option<chrono::DateTime<chrono::Utc>>,
     pub last_ip_addr: Option<std::net::IpAddr>,
-    pub governance_updated_at: chrono::DateTime<chrono::Utc>,
+    pub governance_updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    // --- Settings ---
-    pub preferences: serde_json::Value,
-    pub timezone: String,
-    pub push_tokens: Vec<String>,
-    pub settings_updated_at: chrono::DateTime<chrono::Utc>,
+    // --- Settings (Passage en Option) ---
+    pub preferences: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub push_tokens: Option<Vec<String>>,
+    pub settings_updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl PostgresAccountRow {
@@ -59,7 +57,7 @@ impl PostgresAccountRow {
         // 1. Reconstruction de Identity
         let identity = AccountIdentity::restore(
             account_id,
-            RegionCode::try_new(self.region_code.as_deref().unwrap_or("US"))?,
+            RegionCode::try_new(self.region_code)?,
             self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
             self.phone_number.map(PhoneNumber::try_new).transpose()?,
@@ -72,38 +70,53 @@ impl PostgresAccountRow {
             self.last_active_at,
         );
 
-        // 2. Reconstruction de Governance
-        let governance = AccountGovernance::restore(
-            account_id,
-            AccountRole::from(self.role),
-            self.is_beta_tester,
-            self.is_shadowbanned,
-            TrustScore::try_new(self.trust_score)?,
-            self.last_moderation_at,
-            self.moderation_notes,
-            self.last_ip_addr.map(IpAddr::from_raw),
-            self.governance_updated_at,
-        );
+        // 2. Reconstruction de Governance avec fallback
+        let governance = if let Some(role) = self.role {
+            AccountGovernance::restore(
+                account_id,
+                AccountRole::from(role),
+                self.is_beta_tester.unwrap_or(false),
+                self.is_shadowbanned.unwrap_or(false),
+                TrustScore::try_new(self.trust_score.unwrap_or(0))?,
+                self.last_moderation_at,
+                self.moderation_notes,
+                self.last_ip_addr.map(IpAddr::from_raw),
+                self.governance_updated_at
+                    .unwrap_or(self.aggregate_updated_at),
+            )
+        } else {
+            // Audit Résilience : Si la table governance est vide, on crée un défaut
+            AccountGovernance::builder(account_id).build()?
+        };
 
-        // 3. Reconstruction de Settings
-        let preferences: AccountPreferences = serde_json::from_value(self.preferences)
-            .map_err(|e| DomainError::Internal(format!("JSON settings error: {}", e)))?;
+        // 3. Reconstruction de Settings avec fallback
+        let settings = if let Some(prefs_val) = self.preferences {
+            let preferences: AccountPreferences = serde_json::from_value(prefs_val)
+                .map_err(|e| DomainError::Internal(format!("JSON settings error: {}", e)))?;
 
-        let push_tokens = self
-            .push_tokens
-            .into_iter()
-            .map(shared_kernel::domain::value_objects::PushToken::try_new)
-            .collect::<Result<Vec<_>>>()?;
+            let tokens = self
+                .push_tokens
+                .unwrap_or_default()
+                .into_iter()
+                .map(shared_kernel::domain::value_objects::PushToken::try_new)
+                .collect::<Result<Vec<_>>>()?;
 
-        let settings = AccountSettings::restore(
-            account_id,
-            preferences,
-            shared_kernel::domain::value_objects::Timezone::try_new(&self.timezone)?,
-            push_tokens,
-            self.settings_updated_at,
-        );
+            AccountSettings::restore(
+                account_id,
+                preferences,
+                shared_kernel::domain::value_objects::Timezone::try_new(
+                    &self.timezone.unwrap_or_else(|| "UTC".to_string()),
+                )?,
+                tokens,
+                self.settings_updated_at
+                    .unwrap_or(self.aggregate_updated_at),
+            )
+        } else {
+            // Audit Résilience : Fallback sur les paramètres par défaut
+            AccountSettings::builder(account_id).build()?
+        };
 
-        // 4. Reconstruction de l'Agrégat complet
+        // 4. Reconstruction finale
         Ok(Account::restore(
             identity,
             governance,

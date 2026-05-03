@@ -11,11 +11,11 @@ description.workspace = true
 
 
 [dependencies]
-# Tes briques internes
 shared-kernel = { workspace = true }
 account = { workspace = true }
 shared-proto = { workspace = true }
 auth = { workspace = true }
+async-trait = { workspace = true }
 
 # Serveur & Async
 tonic = { workspace = true }
@@ -32,3 +32,6 @@ sqlx = { workspace = true, features = [
     "uuid",
     "chrono",
 ] }
+
+[dev-dependencies]
+auth = { workspace = true, features = ["test-utils"] }

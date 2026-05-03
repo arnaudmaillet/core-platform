@@ -1,4 +1,4 @@
-use auth::{TokenValidator, infrastructure::keycloak_test_context::KeycloakTestContext};
+use auth::{KeycloakTestContext, TokenValidator};
 use shared_kernel::domain::value_objects::JwtToken;
 
 #[tokio::test]
@@ -37,7 +37,7 @@ async fn test_full_validation_flow_with_real_keycloak_token() {
     let ctx = KeycloakTestContext::restore("master").await;
 
     // 2. Récupération d'un VRAI token généré par le serveur Docker
-    let raw_token = ctx.get_real_admin_token().await;
+    let (raw_token, _) = ctx.get_real_admin_token().await;
     let jwt_token = JwtToken::from_raw(raw_token);
 
     // 3. Validation

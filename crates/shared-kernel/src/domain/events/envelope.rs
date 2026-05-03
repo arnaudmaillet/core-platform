@@ -9,6 +9,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EventEnvelope {
     pub id: Uuid,
+    pub region_code: String,
     pub aggregate_type: String,
     pub aggregate_id: String,
     pub event_type: String,
@@ -21,6 +22,7 @@ impl EventEnvelope {
     pub fn wrap(event: &dyn DomainEvent) -> Self {
         Self {
             id: event.event_id(),
+            region_code: event.region_code(),
             aggregate_type: event.aggregate_type().into_owned(),
             aggregate_id: event.aggregate_id(),
             event_type: event.event_name().into_owned(),
@@ -61,5 +63,8 @@ impl DomainEvent for EventEnvelope {
             .and_then(|m| m.get("correlation_id"))
             .and_then(|v| v.as_str())
             .and_then(|s| Uuid::parse_str(s).ok())
+    }
+    fn region_code(&self) -> String {
+        self.region_code.clone()
     }
 }

@@ -14,8 +14,8 @@ pub struct PostgresIdempotencyRepository {
 
 impl PostgresIdempotencyRepository {
     pub fn new(namespace: impl Into<String>) -> Self {
-        Self { 
-            namespace: namespace.into() 
+        Self {
+            namespace: namespace.into(),
         }
     }
 }
@@ -24,9 +24,9 @@ impl PostgresIdempotencyRepository {
 impl IdempotencyRepository for PostgresIdempotencyRepository {
     async fn exists(&self, tx: &mut dyn Transaction, command_id: &Uuid) -> Result<bool> {
         let sqlx_tx = tx.downcast_mut_sqlx()?;
-        
+
         let sql = "SELECT EXISTS(SELECT 1 FROM processed_commands WHERE command_id = $1 AND namespace = $2)";
-        
+
         let row: (bool,) = sqlx::query_as(sql)
             .bind(command_id)
             .bind(&self.namespace)
@@ -40,7 +40,7 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
     async fn save(&self, tx: &mut dyn Transaction, command_id: &Uuid) -> Result<()> {
         let sqlx_tx = tx.downcast_mut_sqlx()?;
         let sql = r#"
-            INSERT INTO processed_commands (command_id, namespace, processed_at)
+            INSERT INTO processed_commands (command_id, namespace, occurred_at)
             VALUES ($1, $2, NOW())
             ON CONFLICT (command_id, namespace) DO NOTHING
         "#;
