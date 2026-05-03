@@ -1,14 +1,21 @@
 #![cfg(feature = "test-utils")]
 
+use shared_kernel::domain::value_objects::{JwtToken, SubId};
+use shared_kernel::errors::{DomainError, Result};
 use std::sync::Arc;
 use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tokio::sync::OnceCell;
 
-use crate::KeycloakValidator;
+use crate::{KeycloakValidator, TokenValidator};
 
 static KEYCLOAK_INSTANCE: OnceCell<KeycloakSingleton> = OnceCell::const_new();
+
+pub struct KeycloakAuthResponse {
+    pub token: JwtToken,
+    pub sub_id: SubId,
+}
 
 struct KeycloakSingleton {
     _container: ContainerAsync<GenericImage>,
@@ -34,7 +41,6 @@ impl KeycloakTestContext {
                     ))
                     .with_env_var("KEYCLOAK_ADMIN", "admin")
                     .with_env_var("KEYCLOAK_ADMIN_PASSWORD", "admin")
-                    // On attend que Keycloak soit prêt à servir des requêtes
                     .with_cmd(["start-dev"])
                     .start()
                     .await
@@ -63,55 +69,78 @@ impl KeycloakTestContext {
         }
     }
 
-    // Dans crates/auth/src/test_utils.rs (ou là où se trouve KeycloakTestContext)
-
-    pub async fn get_real_admin_token(&self) -> (String, String) {
-        // Retourne (Token, SubId)
+    pub async fn get_admin_token(&self) -> Result<KeycloakAuthResponse> {
         let client = reqwest::Client::new();
-        let token_url = format!(
-            "{}/realms/{}/protocol/openid-connect/token",
-            self.uri, self.realm
-        );
+        let token_url = format!("{}/realms/master/protocol/openid-connect/token", self.uri);
+        let params = [
+            ("client_id", "admin-cli"),
+            ("username", "admin"),
+            ("password", "admin"),
+            ("grant_type", "password"),
+        ];
 
-        for _ in 0..5 {
-            let res = client
-                .post(&token_url)
-                .form(&[
-                    ("client_id", "admin-cli"),
-                    ("username", "admin"),
-                    ("password", "admin"),
-                    ("grant_type", "password"),
-                ])
-                .send()
-                .await
-                .expect("Failed to send request to Keycloak");
+        let mut last_error = String::new();
 
-            if res.status().is_success() {
-                let json: serde_json::Value = res.json().await.expect("Invalid JSON");
+        // On garde la boucle de retry car Keycloak peut mettre quelques secondes
+        // à être opérationnel APRÈS que le port soit ouvert.
+        for i in 0..10 {
+            let response = client.post(&token_url).form(&params).send().await;
 
-                let token = json["access_token"]
-                    .as_str()
-                    .expect("Missing access_token")
-                    .to_string();
+            match response {
+                Ok(res) if res.status().is_success() => {
+                    let json: serde_json::Value = res.json().await.map_err(|_| {
+                        DomainError::Infrastructure(
+                            "Invalid JSON response from Keycloak".to_string(),
+                        )
+                    })?;
 
-                // --- EXTRACTION DU SUB_ID ---
-                // Keycloak renvoie souvent le "sub" directement dans la réponse du token
-                // ou on peut le décoder du JWT. Ici, on va tenter de le lire du JSON :
-                // Note: Si Keycloak ne le met pas dans le JSON, il faudra décoder le JWT.
-                let sub_id = json["sub"]
-                    .as_str()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| {
-                        // Fallback: Si pas dans le JSON, on pourrait mettre un log
-                        // ou décoder le token. Pour l'instant, on va utiliser l'ID
-                        // que tu as vu dans tes logs précédents :
-                        "d8225087-8808-46a2-9042-436f0d919bf1".to_string()
+                    let raw_token = json["access_token"].as_str().ok_or_else(|| {
+                        DomainError::Infrastructure("access_token missing".to_string())
+                    })?;
+
+                    let jwt_token = JwtToken::try_new(raw_token)?;
+
+                    // Extraction du SubId avec validation réelle (pas de hardcode)
+                    let sub_id_str = match json["sub"].as_str() {
+                        Some(s) => s.to_string(),
+                        None => {
+                            let claims = self.validator.validate(&jwt_token).map_err(|e| {
+                                DomainError::Infrastructure(format!(
+                                    "JWT Validation failed: {:?}",
+                                    e
+                                ))
+                            })?;
+                            claims.sub_id.to_string()
+                        }
+                    };
+
+                    return Ok(KeycloakAuthResponse {
+                        token: jwt_token,
+                        sub_id: SubId::try_new(sub_id_str)?,
                     });
-
-                return (token, sub_id);
+                }
+                Ok(res) => {
+                    last_error = format!(
+                        "Status: {}, Body: {}",
+                        res.status(),
+                        res.text().await.unwrap_or_default()
+                    );
+                }
+                Err(e) => {
+                    last_error = format!("Connection error: {}", e);
+                }
             }
+
+            println!(
+                "DEBUG AUTH: Keycloak not ready (Attempt {}/10), waiting...",
+                i + 1
+            );
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
-        panic!("Impossible d'obtenir un token");
+
+        Err(DomainError::Infrastructure(format!(
+            "Keycloak admin auth failed after multiple retries. Last error: {}",
+            last_error
+        )))
     }
 }
