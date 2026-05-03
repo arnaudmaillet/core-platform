@@ -2,6 +2,7 @@
 
 use crate::infrastructure::postgres::factories::PostgresConfig;
 use crate::infrastructure::postgres::utils::PostgresTestContext;
+use std::path::Path;
 
 pub struct PostgresTestContextBuilder {
     pub(crate) image_name: String,
@@ -30,12 +31,15 @@ impl Default for PostgresTestContextBuilder {
 }
 
 impl PostgresTestContextBuilder {
-    pub(crate)  fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_migrations(mut self, paths: &[&str]) -> Self {
-        self.migrations = paths.iter().map(|s| s.to_string()).collect();
+    pub fn with_migrations<P: AsRef<Path>, I: IntoIterator<Item = P>>(mut self, paths: I) -> Self {
+        self.migrations = paths
+            .into_iter()
+            .map(|p| p.as_ref().to_string_lossy().into_owned())
+            .collect();
         self
     }
 

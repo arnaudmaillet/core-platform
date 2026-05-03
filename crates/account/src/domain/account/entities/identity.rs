@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
         entities::Entity,
-        value_objects::{AccountId, RegionCode},
+        value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },
     errors::Result,
 };
 
 use crate::domain::{
     account::builders::AccountIdentityBuilder,
-    value_objects::{AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber},
+    value_objects::{AccountState, BirthDate, Locale},
 };
 
 /// Entité Identity (Interne à l'Agrégat Account)
@@ -22,11 +22,9 @@ use crate::domain::{
 pub struct AccountIdentity {
     account_id: AccountId,
     region_code: RegionCode,
-    external_id: Option<ExternalId>,
+    sub_id: Option<SubId>,
     email: Option<Email>,
-    email_verified: bool,
     phone_number: Option<PhoneNumber>,
-    phone_verified: bool,
     state: AccountState,
     birth_date: Option<BirthDate>,
     locale: Locale,
@@ -46,11 +44,9 @@ impl AccountIdentity {
     pub(crate) fn restore(
         account_id: AccountId,
         region_code: RegionCode,
-        external_id: Option<ExternalId>,
+        sub_id: Option<SubId>,
         email: Option<Email>,
-        email_verified: bool,
         phone_number: Option<PhoneNumber>,
-        phone_verified: bool,
         state: AccountState,
         birth_date: Option<BirthDate>,
         locale: Locale,
@@ -62,11 +58,9 @@ impl AccountIdentity {
         Self {
             account_id,
             region_code,
-            external_id,
+            sub_id,
             email,
-            email_verified,
             phone_number,
-            phone_verified,
             state,
             birth_date,
             locale,
@@ -85,20 +79,14 @@ impl AccountIdentity {
     pub fn region_code(&self) -> &RegionCode {
         &self.region_code
     }
-    pub fn external_id(&self) -> Option<&ExternalId> {
-        self.external_id.as_ref()
+    pub fn sub_id(&self) -> Option<&SubId> {
+        self.sub_id.as_ref()
     }
     pub fn email(&self) -> Option<&Email> {
         self.email.as_ref()
     }
-    pub fn is_email_verified(&self) -> bool {
-        self.email_verified
-    }
     pub fn phone_number(&self) -> Option<&PhoneNumber> {
         self.phone_number.as_ref()
-    }
-    pub fn is_phone_verified(&self) -> bool {
-        self.phone_verified
     }
     pub fn state(&self) -> &AccountState {
         &self.state
@@ -131,11 +119,11 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub(crate) fn apply_external_id_change(&mut self, new_external_id: ExternalId) -> Result<bool> {
-        if self.external_id.as_ref() == Some(&new_external_id) {
+    pub(crate) fn apply_sub_id_change(&mut self, new_sub_id: SubId) -> Result<bool> {
+        if self.sub_id.as_ref() == Some(&new_sub_id) {
             return Ok(false);
         }
-        self.external_id = Some(new_external_id);
+        self.sub_id = Some(new_sub_id);
         Ok(true)
     }
 
@@ -144,18 +132,6 @@ impl AccountIdentity {
             return Ok(false);
         }
         self.email = Some(new_email);
-        self.email_verified = false;
-        Ok(true)
-    }
-
-    pub(crate) fn apply_email_verification(&mut self) -> Result<bool> {
-        if self.email_verified {
-            return Ok(false);
-        }
-        self.email_verified = true;
-        if self.state == AccountState::Pending {
-            self.state = AccountState::Active;
-        }
         Ok(true)
     }
 
@@ -164,15 +140,6 @@ impl AccountIdentity {
             return Ok(false);
         }
         self.phone_number = Some(new_phone);
-        self.phone_verified = false;
-        Ok(true)
-    }
-
-    pub(crate) fn apply_phone_verification(&mut self) -> Result<bool> {
-        if self.phone_verified {
-            return Ok(false);
-        }
-        self.phone_verified = true;
         Ok(true)
     }
 
@@ -308,7 +275,7 @@ impl Entity for AccountIdentity {
         match constraint {
             "account_identity_email_key" => "email",
             "account_identity_phone_number_key" => "phone_number",
-            "account_identity_external_id_key" => "external_id",
+            "account_identity_sub_id_key" => "sub_id",
             _ => "unique_constraint",
         }
     }

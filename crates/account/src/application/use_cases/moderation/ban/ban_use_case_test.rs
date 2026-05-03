@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::moderation::ban::{BanCommand, BanHandler};
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::moderation::{BanCommand, BanHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
@@ -25,7 +26,9 @@ mod tests {
         };
 
         // 2. Act
-        f.bus().execute(f.account_ctx(), cmd, BanHandler).await?;
+        f.bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
@@ -56,7 +59,10 @@ mod tests {
         };
 
         // Act
-        let result = f.bus().execute(f.account_ctx(), cmd, BanHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // Assert
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -83,7 +89,9 @@ mod tests {
         };
 
         // Act
-        f.bus().execute(f.account_ctx(), cmd, BanHandler).await?;
+        f.bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await?;
 
         // Assert
         f.assert_account(|acc| {
@@ -107,7 +115,10 @@ mod tests {
             reason: AuditReason::try_new("No matter")?,
         };
 
-        let result = f.bus().execute(f.account_ctx(), cmd, BanHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         assert!(matches!(
             result,
@@ -139,7 +150,10 @@ mod tests {
         };
 
         // ACT : Le bus doit absorber l'erreur et réussir au 2ème essai
-        let result = f.bus().execute(f.account_ctx(), cmd, BanHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // ASSERT
         assert!(result.is_ok(), "Le bus aurait dû réussir après un retry");
@@ -168,7 +182,10 @@ mod tests {
             reason: AuditReason::try_new("System ban")?,
         };
 
-        let result = f.bus().execute(f.account_ctx(), cmd, BanHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // La transaction globale échoue si l'outbox échoue
         assert!(matches!(result, Err(DomainError::Infrastructure(m)) if m == "Disk full"));
@@ -193,7 +210,10 @@ mod tests {
             reason: AuditReason::try_new("System ban")?,
         };
 
-        let result = f.bus().execute(f.account_ctx(), cmd, BanHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

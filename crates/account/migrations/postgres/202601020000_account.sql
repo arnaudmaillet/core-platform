@@ -21,21 +21,19 @@ $$ LANGUAGE plpgsql;
 -- 3. IDENTITY (Table racine)
 CREATE TABLE IF NOT EXISTS account_identity (
     account_id UUID PRIMARY KEY,
-    external_id TEXT,
+    sub_id TEXT,
     email TEXT UNIQUE,
-    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_number TEXT UNIQUE,
-    phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
     state account_state NOT NULL DEFAULT 'pending',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'en',
-    region_code VARCHAR(10),
+    region_code VARCHAR(10) NOT NULL,
     version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     aggregate_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_active_at TIMESTAMPTZ,
-    CONSTRAINT uq_external_id UNIQUE (external_id)
+    CONSTRAINT uq_sub_id UNIQUE (sub_id)
 );
 
 -- 4. SETTINGS (Relation 1:1 co-localisée)
@@ -63,7 +61,7 @@ CREATE TABLE IF NOT EXISTS account_governance (
 );
 
 -- 6. INDEXATION
-CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_sub_id ON account_identity (sub_id);
 CREATE INDEX IF NOT EXISTS idx_governance_flagged ON account_governance (account_id) 
 WHERE is_shadowbanned IS TRUE OR trust_score < 50;
 
@@ -78,7 +76,7 @@ DROP TRIGGER IF EXISTS trg_set_timestamp_governance ON account_governance;
 CREATE TRIGGER trg_set_timestamp_governance BEFORE UPDATE ON account_governance FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
 -- 7. INDEXATION (En dernier)
-CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_sub_id ON account_identity (sub_id);
 
 
 
@@ -101,7 +99,7 @@ CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (externa
 -- CREATE TABLE IF NOT EXISTS account_identity (
 --     id UUID PRIMARY KEY,
 --     region_code VARCHAR(10) NOT NULL DEFAULT 'eu',
---     external_id TEXT NOT NULL UNIQUE,
+--     sub_id TEXT NOT NULL UNIQUE,
 --     email TEXT UNIQUE,
 --     phone_number TEXT UNIQUE,
 --     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
@@ -145,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (externa
 
 -- -- 5. INDEXES & TRIGGERS
 -- CREATE INDEX IF NOT EXISTS idx_account_settings_push_tokens ON account_settings USING GIN (push_tokens);
--- CREATE INDEX IF NOT EXISTS idx_accounts_external_id ON account_identity (external_id);
+-- CREATE INDEX IF NOT EXISTS idx_accounts_sub_id ON account_identity (sub_id);
 
 -- CREATE TRIGGER trg_set_timestamp_users BEFORE UPDATE ON account_identity FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 -- CREATE TRIGGER trg_set_timestamp_settings BEFORE UPDATE ON account_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();

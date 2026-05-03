@@ -1,17 +1,15 @@
 // crates/account/src/domain/builders/_builder.rs
 
 use crate::domain::account::entities::AccountIdentity;
-use crate::domain::value_objects::{
-    AccountState, BirthDate, Email, ExternalId, Locale, PhoneNumber,
-};
+use crate::domain::value_objects::{AccountState, BirthDate, Locale};
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId};
 use shared_kernel::errors::{DomainError, Result};
 
 pub struct AccountIdentityBuilder {
     account_id: AccountId,
     region_code: RegionCode,
-    external_id: Option<ExternalId>,
+    sub_id: Option<SubId>,
     email: Option<Email>,
     locale: Option<Locale>,
     phone: Option<PhoneNumber>,
@@ -21,15 +19,12 @@ pub struct AccountIdentityBuilder {
 }
 
 impl AccountIdentityBuilder {
-    pub(crate) fn new(
-        account_id: AccountId,
-        region_code: RegionCode,
-    ) -> Self {
+    pub(crate) fn new(account_id: AccountId, region_code: RegionCode) -> Self {
         Self {
             account_id,
             region_code,
             email: None,
-            external_id: None,
+            sub_id: None,
             locale: None,
             phone: None,
             birth_date: None,
@@ -39,6 +34,11 @@ impl AccountIdentityBuilder {
     }
 
     // --- SETTERS ---
+
+    pub fn with_account_id(mut self, account_id: AccountId) -> Self {
+        self.account_id = account_id;
+        self
+    }
 
     pub fn with_locale(mut self, locale: Locale) -> Self {
         self.locale = Some(locale);
@@ -57,11 +57,6 @@ impl AccountIdentityBuilder {
 
     pub fn with_phone(mut self, phone: PhoneNumber) -> Self {
         self.phone = Some(phone);
-        self
-    }
-
-    pub fn with_optional_phone(mut self, phone: Option<PhoneNumber>) -> Self {
-        self.phone = phone;
         self
     }
 
@@ -85,8 +80,8 @@ impl AccountIdentityBuilder {
         self
     }
 
-    pub fn with_external_id(mut self, external_id: ExternalId) -> Self {
-        self.external_id = Some(external_id);
+    pub fn with_sub_id(mut self, sub_id: SubId) -> Self {
+        self.sub_id = Some(sub_id);
         self
     }
 
@@ -103,18 +98,16 @@ impl AccountIdentityBuilder {
         Ok(AccountIdentity::restore(
             self.account_id,
             self.region_code,
-            self.external_id,
+            self.sub_id,
             self.email,
-            false,
             self.phone,
-            false,
             self.state,
             self.birth_date,
             self.locale.unwrap_or_default(),
             now,
             now,
             now,
-            self.last_active_at
+            self.last_active_at,
         ))
     }
 }

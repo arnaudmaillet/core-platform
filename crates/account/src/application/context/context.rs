@@ -1,5 +1,3 @@
-// crates/account/src/application/context.rs
-
 use shared_kernel::{
     application::BaseAppContext,
     domain::{
@@ -24,7 +22,7 @@ pub struct AccountAppContext {
 }
 
 impl AccountAppContext {
-    pub(crate) fn new(
+    pub fn new(
         base: BaseAppContext,
         account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
@@ -114,14 +112,20 @@ impl AccountContext {
                 id: self.account_id.to_string(),
             })?;
 
-        self.ensure_region(&account)?;
+        println!("DEBUG CONTEXT: Account trouvé, vérification de la région...");
+
+        if let Err(e) = self.ensure_region(&account) {
+            println!("DEBUG CONTEXT: ❌ ensure_region a échoué: {:?}", e);
+            return Err(e);
+        }
+
+        println!("DEBUG CONTEXT: ✅ Région valide");
 
         Ok(account)
     }
 
-    /// Sauvegarde l'agrégat et ses événements dans une transaction unique.
     pub async fn save(&self, account: &mut Account, command_id: Option<uuid::Uuid>) -> Result<()> {
-        // 1. Validations de sécurité
+        // 1. Isolation du contexte
         if account.identity().account_id() != &self.account_id {
             return Err(DomainError::Validation {
                 field: "account_id".into(),
@@ -129,62 +133,38 @@ impl AccountContext {
             });
         }
 
-        // 2. Récupération des événements
-        // C'est notre indicateur de changement : pas d'events = pas de modif métier
-        let events = account.pull_events();
-
-        // --- OPTIMISATION IDEMPOTENCE MÉTIER ---
-        if events.is_empty() {
-            if let Some(cmd_id) = command_id {
-                let mut tx = self.begin_transaction().await?;
-
-                let already_processed = self
-                    .app
-                    .idempotency_repo()
-                    .exists(&mut *tx, &cmd_id)
-                    .await?;
-
-                if already_processed {
-                    return Err(DomainError::AlreadyExists {
-                        entity: "Command",
-                        field: "id",
-                        value: cmd_id.to_string(),
-                    });
-                }
-
-                self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
-                tx.commit().await?;
-            }
-            return Ok(());
-        }
-
-        // 3. Persistance Atomique (si des changements existent)
         let mut tx = self.begin_transaction().await?;
 
+        // 2. Idempotence Technique
         if let Some(cmd_id) = command_id {
-            // A. Vérifier (Double check dans la transaction)
-            let already_processed = self
+            if self
                 .app
                 .idempotency_repo()
                 .exists(&mut *tx, &cmd_id)
-                .await?;
-            if already_processed {
+                .await?
+            {
                 return Err(DomainError::AlreadyExists {
                     entity: "Command",
-                    field: "id",
+                    field: "id".into(),
                     value: cmd_id.to_string(),
                 });
             }
         }
 
-        // B. Sauvegarde de l'agrégat (la version monte ici via le domaine)
-        self.account_repo().save(account, Some(&mut *tx)).await?;
+        // 3. Extraction des événements (une seule fois pour éviter de vider l'objet en cas de retry)
+        let events = account.pull_events();
 
-        // C. Outbox
-        let event_refs: Vec<&dyn DomainEvent> = events.iter().map(|e| e.as_ref()).collect();
-        self.outbox_repo().save_all(&mut *tx, &event_refs).await?;
+        // 4. Persistance (Le Repository gère l'INSERT ou l'UPDATE selon l'existence de l'ID)
+        let repo_res = self.account_repo().save(account, Some(&mut *tx)).await;
+        repo_res?;
 
-        // D. Marquer la commande
+        // 5. Outbox
+        if !events.is_empty() {
+            let event_refs: Vec<&dyn DomainEvent> = events.iter().map(|e| e.as_ref()).collect();
+            self.outbox_repo().save_all(&mut *tx, &event_refs).await?;
+        }
+
+        // 6. Enregistrement de l'ID de commande (pour que le prochain appel soit bloqué)
         if let Some(cmd_id) = command_id {
             self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
         }
@@ -196,7 +176,6 @@ impl AccountContext {
     // --- Gestion des Transactions ---
 
     pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
-        // On utilise l'accesseur du base_ctx qui renvoie maintenant Option<&PgPool>
         match self.app.base.pool() {
             Some(pool) => {
                 let tx = pool
@@ -216,7 +195,14 @@ impl AccountContext {
     // --- Sécurité ---
 
     fn ensure_region(&self, account: &Account) -> Result<()> {
-        if account.identity().region_code() != &self.region {
+        let account_region = account.identity().region_code(); // Adapte selon ton getter
+        let context_region = &self.region; // La région extraite du header x-region
+
+        if account_region != context_region {
+            println!(
+                "DEBUG REGION: ❌ Mismatch ! Compte DB: '{:?}', Contexte Header: '{:?}'",
+                account_region, context_region
+            );
             return Err(DomainError::NotFound {
                 entity: "Account",
                 id: account.identity().account_id().to_string(),

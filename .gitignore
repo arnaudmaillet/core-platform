@@ -1,5 +1,6 @@
 # Environnement
 .env
+local-dev/.env
 infra.env
 
 # Rust / Build

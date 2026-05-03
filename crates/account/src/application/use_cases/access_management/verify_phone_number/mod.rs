@@ -1,6 +1,0 @@
-mod verify_phone_number_command;
-mod verify_phone_number_use_case;
-mod verify_phone_number_use_case_test;
-
-pub use verify_phone_number_command::VerifyPhoneNumberCommand;
-pub use verify_phone_number_use_case::VerifyPhoneNumberHandler;

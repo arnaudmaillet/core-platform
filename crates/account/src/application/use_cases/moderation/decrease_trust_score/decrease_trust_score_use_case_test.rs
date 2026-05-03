@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::moderation::decrease_trust_score::{
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::moderation::{
         DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
     };
     use crate::application::utils::TestFixture;
@@ -33,7 +34,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -72,7 +73,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -112,7 +113,7 @@ mod tests {
 
         let result: std::result::Result<(), DomainError> = f
             .bus()
-            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -147,7 +148,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -191,7 +192,7 @@ mod tests {
         // ACT : Le bus doit absorber l'erreur et réussir au second essai
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // ASSERT
@@ -222,7 +223,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, DecreaseTrustScoreHandler)
+            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
         let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

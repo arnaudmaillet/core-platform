@@ -1,24 +1,21 @@
-// crates/account/src/application/verify_phone_number/command.rs
+// crates/account/src/application/link_sub_identity/link_sub_identity_command.rs
 
-use serde::Deserialize;
 use shared_kernel::{
-    domain::value_objects::AccountId,
+    domain::value_objects::{AccountId, SubId},
     errors::{DomainError, Result},
 };
-use shared_proto::account::v1::VerifyPhoneNumberRequest;
+use shared_proto::account::v1::LinkSubIdentityRequest;
 use uuid::Uuid;
 
-use crate::domain::value_objects::VerificationToken;
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct VerifyPhoneNumberCommand {
+#[derive(Debug, Clone)]
+pub struct LinkSubIdentityCommand {
     pub command_id: Uuid,
     pub account_id: AccountId,
-    pub token: VerificationToken,
+    pub sub_id: SubId,
 }
 
-impl VerifyPhoneNumberCommand {
-    pub fn try_from_proto(req: VerifyPhoneNumberRequest) -> Result<Self> {
+impl LinkSubIdentityCommand {
+    pub fn try_from_proto(req: LinkSubIdentityRequest) -> Result<Self> {
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
                 field: "command_id",
@@ -31,9 +28,11 @@ impl VerifyPhoneNumberCommand {
                     reason: e.to_string(),
                 }
             })?,
-            token: VerificationToken::try_new(req.token).map_err(|e| DomainError::Validation {
-                field: "token",
-                reason: e.to_string(),
+            sub_id: SubId::try_from(req.sub_id).map_err(|e| {
+                DomainError::Validation {
+                    field: "sub_id",
+                    reason: e.to_string(),
+                }
             })?,
         })
     }

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::{
-    application::context::{AccountContext, context::AccountAppContext},
+    application::context::{AccountAppContext, AccountContext},
     domain::repositories::AccountRepository,
 };
 use shared_kernel::domain::{

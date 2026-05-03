@@ -7,35 +7,15 @@ use shared_proto::account::v1::account_personal_service_server::AccountPersonalS
 use shared_proto::account::v1::{
     AccountIdentity as ProtoIdentity, ActivateRequest, ChangeBirthDateRequest, ChangeEmailRequest,
     ChangePhoneNumberRequest, ChangeRegionRequest, DeactivateRequest, UpdateLocaleRequest,
-    VerifyEmailRequest, VerifyPhoneNumberRequest,
 };
 
 use crate::application::context::AccountAppContext;
-use crate::application::use_cases::access_management::verify_email::{
-    VerifyEmailCommand, VerifyEmailHandler,
-};
-use crate::application::use_cases::access_management::verify_phone_number::{
-    VerifyPhoneNumberCommand, VerifyPhoneNumberHandler,
-};
-use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
-use crate::application::use_cases::lifecycle::deactivate::{DeactivateCommand, DeactivateHandler};
-use crate::application::use_cases::settings::change_birth_date::{
-    ChangeBirthDateCommand, ChangeBirthDateHandler,
-};
-use crate::application::use_cases::settings::change_email::{
-    ChangeEmailCommand, ChangeEmailHandler,
-};
-use crate::application::use_cases::settings::change_phone_number::{
-    ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-};
-use crate::application::use_cases::settings::change_region::{
-    ChangeRegionCommand, ChangeRegionHandler,
-};
-use crate::application::use_cases::settings::update_locale::{
-    UpdateLocaleCommand, UpdateLocaleHandler,
-};
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use crate::use_cases::{
+    ActivateCommand, ChangeBirthDateCommand, ChangeEmailCommand, ChangePhoneNumberCommand,
+    ChangeRegionCommand, DeactivateCommand, UpdateLocaleCommand,
+};
 use shared_kernel::application::CommandBus;
 
 pub struct GrpcPersonalService {
@@ -69,28 +49,11 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        // On spécifie () comme type de retour attendu du bus
+        self.execute_and_fetch::<ChangeEmailCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            ChangeEmailHandler,
-            mapper::map_account_to_identity_proto,
-        )
-        .await
-    }
-
-    async fn verify_email(
-        &self,
-        request: Request<VerifyEmailRequest>,
-    ) -> Result<Response<ProtoIdentity>, Status> {
-        let command = VerifyEmailCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let ctx = self.get_context(&request, &command.account_id).await?;
-
-        self.execute_and_fetch(
-            &ctx,
-            command,
-            VerifyEmailHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -105,28 +68,10 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<ChangePhoneNumberCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            ChangePhoneNumberHandler,
-            mapper::map_account_to_identity_proto,
-        )
-        .await
-    }
-
-    async fn verify_phone_number(
-        &self,
-        request: Request<VerifyPhoneNumberRequest>,
-    ) -> Result<Response<ProtoIdentity>, Status> {
-        let command = VerifyPhoneNumberCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let ctx = self.get_context(&request, &command.account_id).await?;
-
-        self.execute_and_fetch(
-            &ctx,
-            command,
-            VerifyPhoneNumberHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -141,10 +86,10 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<ChangeBirthDateCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            ChangeBirthDateHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -159,10 +104,10 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<ChangeRegionCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            ChangeRegionHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -177,10 +122,10 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<UpdateLocaleCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            UpdateLocaleHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -195,10 +140,10 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<ActivateCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            ActivateHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await
@@ -213,10 +158,10 @@ impl AccountPersonalService for GrpcPersonalService {
 
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<DeactivateCommand, (), ProtoIdentity, _>(
             &ctx,
             command,
-            DeactivateHandler,
+            (),
             mapper::map_account_to_identity_proto,
         )
         .await

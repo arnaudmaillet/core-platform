@@ -2,7 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::lifecycle::activate::{ActivateCommand, ActivateHandler};
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::lifecycle::{ActivateCommand, ActivateHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
@@ -31,7 +32,7 @@ mod tests {
         };
 
         f.bus()
-            .execute(f.account_ctx(), cmd, ActivateHandler)
+            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -66,7 +67,10 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.account_ctx(), cmd, ActivateHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -100,7 +104,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, ActivateHandler)
+            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -131,7 +135,10 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.account_ctx(), cmd, ActivateHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
@@ -163,7 +170,10 @@ mod tests {
         };
 
         // 2. Act
-        let result = f.bus().execute(f.account_ctx(), cmd, ActivateHandler).await;
+        let result = f
+            .bus()
+            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .await;
 
         // 3. Assert
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

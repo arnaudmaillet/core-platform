@@ -5,7 +5,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::moderation::ban::BanCommand;
+use crate::application::use_cases::moderation::BanCommand;
 
 pub struct BanHandler;
 

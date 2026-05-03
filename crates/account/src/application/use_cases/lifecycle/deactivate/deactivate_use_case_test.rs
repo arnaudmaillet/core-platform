@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::lifecycle::deactivate::{
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::lifecycle::{
         DeactivateCommand, DeactivateHandler,
     };
     use crate::application::utils::TestFixture;
@@ -28,7 +29,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -64,7 +65,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -100,7 +101,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -128,7 +129,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -157,7 +158,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, DeactivateHandler)
+            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert : Obfuscation de sécurité

@@ -4,10 +4,10 @@ use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
 use shared_kernel::domain::utils::RetryConfig;
 use shared_kernel::domain::value_objects::AccountId;
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::errors::Result;
 
-use crate::application::context::{AccountAppContext, AccountContext};
-use crate::application::use_cases::access_management::register::RegisterCommand;
+use crate::application::context::AccountContext;
+use crate::application::use_cases::access_management::RegisterCommand;
 use crate::domain::account::entities::Account;
 
 pub struct RegisterHandler;
@@ -19,26 +19,11 @@ impl CommandHandler for RegisterHandler {
     type Output = AccountId;
 
     async fn handle(&self, ctx: &AccountContext, cmd: RegisterCommand) -> Result<Self::Output> {
-        if let Some(ref ext_id) = cmd.external_id {
-            if ctx
-                .app_ctx()
-                .account_repo()
-                .exists_by_external_id(ext_id, None)
-                .await?
-            {
-                return Err(DomainError::AlreadyExists {
-                    entity: "Account",
-                    field: "external_id",
-                    value: ext_id.to_string(),
-                });
-            }
-        }
-
         let account_id = cmd.account_id.clone();
         let mut builder = Account::builder(account_id.clone(), cmd.region.clone(), cmd.identifier);
 
-        if let Some(ext_id) = cmd.external_id {
-            builder = builder.with_external_id(ext_id);
+        if let Some(ext_id) = cmd.sub_id {
+            builder = builder.with_sub_id(ext_id);
         }
 
         let mut account = builder.with_locale(cmd.locale).build()?;
@@ -51,8 +36,8 @@ impl CommandHandler for RegisterHandler {
 
     fn retry_config(&self) -> RetryConfig {
         RetryConfig {
-            max_retries: 5,
-            initial_backoff_ms: 50,
+            max_retries: 0,
+            initial_backoff_ms: 0,
         }
     }
 }

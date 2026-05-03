@@ -6,7 +6,7 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::account::entities::{AccountIdentity, AccountMetadata};
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{Email, ExternalId};
+    use crate::domain::value_objects::{Email, SubId};
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::DomainError;
@@ -109,7 +109,7 @@ mod tests {
                 account_id,
                 wrong_region,
                 Email::try_new("hacker@test.com").unwrap(),
-                ExternalId::from_raw("ext_1"),
+                SubId::from_raw("ext_1"),
             )
             .build(),
         );

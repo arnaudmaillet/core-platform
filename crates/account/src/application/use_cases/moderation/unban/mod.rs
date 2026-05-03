@@ -1,6 +1,3 @@
-mod unban_command;
-mod unban_use_case;
-mod unban_use_case_test;
-
-pub use unban_command::UnbanCommand;
-pub use unban_use_case::UnbanHandler;
+pub mod unban_command;
+pub mod unban_use_case;
+pub mod unban_use_case_test;

@@ -1,16 +1,14 @@
 // crates/account/src/domain/account/builders/account_builder.rs
 
-use crate::domain::value_objects::{
-    AccountRole, AccountState, BirthDate, Email, IpAddr, PhoneNumber,
-};
+use crate::domain::value_objects::{AccountRole, AccountState, BirthDate, IpAddr};
 use crate::domain::{
     account::{
         builders::{AccountGovernanceBuilder, AccountIdentityBuilder, AccountSettingsBuilder},
         entities::Account,
     },
-    value_objects::{ExternalId, Locale, RegistrationIdentifier, TrustScore},
+    value_objects::{Locale, RegistrationIdentifier, TrustScore},
 };
-use shared_kernel::domain::value_objects::Timezone;
+use shared_kernel::domain::value_objects::{Email, PhoneNumber, SubId, Timezone};
 use shared_kernel::{
     domain::{
         events::AggregateMetadata,
@@ -50,8 +48,13 @@ impl AccountBuilder {
         }
     }
 
-    pub fn with_external_id(mut self, external_id: ExternalId) -> Self {
-        self.identity = self.identity.with_external_id(external_id);
+    pub fn with_account_id(mut self, account_id: AccountId) -> Self {
+        self.identity = self.identity.with_account_id(account_id);
+        self
+    }
+
+    pub fn with_sub_id(mut self, sub_id: SubId) -> Self {
+        self.identity = self.identity.with_sub_id(sub_id);
         self
     }
 

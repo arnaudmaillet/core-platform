@@ -3,14 +3,15 @@
 use crate::domain::preferences::models::{
     AppearancePreferences, NotificationPreferences, PrivacyPreferences,
 };
-use crate::domain::value_objects::{
-    AccountRole, Email, ExternalId, IpAddr, Locale, PhoneNumber, TrustDelta, TrustScore, VerificationToken
-};
+use crate::domain::value_objects::{AccountRole, IpAddr, Locale, TrustDelta, TrustScore};
+use crate::value_objects::BirthDate;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{AccountId, PushToken, RegionCode, Timezone};
+use shared_kernel::domain::value_objects::{
+    AccountId, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone,
+};
 use std::borrow::Cow;
 use uuid::Uuid;
 
@@ -20,48 +21,45 @@ pub enum AccountEvent {
     // --- IDENTITY & SECURITY EVENTS ---
     AccountRegistered {
         account_id: AccountId,
+        region: RegionCode,
         email: Option<Email>,
         phone: Option<PhoneNumber>,
-        external_id: Option<ExternalId>,
-        region: RegionCode,
+        sub_id: Option<SubId>,
         locale: Locale,
         ip_addr: IpAddr,
         occurred_at: DateTime<Utc>,
     },
-    ExternalIdentityLinked {
+    SubIdentityLinked {
         account_id: AccountId,
-        old_external_id: Option<ExternalId>,
-        new_external_id: ExternalId,
+        region: RegionCode,
+        old_sub_id: Option<SubId>,
+        new_sub_id: SubId,
         occurred_at: DateTime<Utc>,
     },
     EmailChanged {
         account_id: AccountId,
+        region: RegionCode,
         old_email: Option<Email>,
         new_email: Email,
         occurred_at: DateTime<Utc>,
     },
     PhoneNumberChanged {
         account_id: AccountId,
+        region: RegionCode,
         old_phone_number: Option<PhoneNumber>,
         new_phone_number: PhoneNumber,
         occurred_at: DateTime<Utc>,
     },
-    EmailVerified {
-        account_id: AccountId,
-        token: VerificationToken,
-        occurred_at: DateTime<Utc>,
-    },
-    PhoneVerified {
-        account_id: AccountId,
-        token: VerificationToken,
-        occurred_at: DateTime<Utc>,
-    },
     BirthDateChanged {
         account_id: AccountId,
+        region: RegionCode,
+        old_birth_date: Option<BirthDate>,
+        new_birth_date: BirthDate,
         occurred_at: DateTime<Utc>,
     },
     LocaleUpdated {
         account_id: AccountId,
+        region: RegionCode,
         new_locale: Locale,
         occurred_at: DateTime<Utc>,
     },
@@ -69,12 +67,14 @@ pub enum AccountEvent {
     // --- SYSTEM & MODERATION EVENTS ---
     BetaStatusUpdated {
         account_id: AccountId,
+        region: RegionCode,
         is_beta_tester: bool,
         occurred_at: DateTime<Utc>,
     },
     TrustScoreAdjusted {
         id: Uuid,
         account_id: AccountId,
+        region: RegionCode,
         delta: TrustDelta,
         new_score: TrustScore,
         reason: String,
@@ -82,12 +82,14 @@ pub enum AccountEvent {
     },
     ShadowbanUpdated {
         account_id: AccountId,
+        region: RegionCode,
         is_shadowbanned: bool,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountRoleChanged {
         account_id: AccountId,
+        region: RegionCode,
         old_role: AccountRole,
         new_role: AccountRole,
         reason: String,
@@ -104,31 +106,37 @@ pub enum AccountEvent {
     // --- STATE & MODERATION ---
     AccountDeactivated {
         account_id: AccountId,
+        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountActivated {
         account_id: AccountId,
+        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountBanned {
         account_id: AccountId,
+        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountUnbanned {
         account_id: AccountId,
+        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountSuspended {
         account_id: AccountId,
+        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountUnsuspended {
         account_id: AccountId,
+        region: RegionCode,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
@@ -136,16 +144,19 @@ pub enum AccountEvent {
     // --- SETTINGS EVENTS ---
     NotificationsPreferencesUpdated {
         account_id: AccountId,
+        region: RegionCode,
         new_preferences: NotificationPreferences,
         occurred_at: DateTime<Utc>,
     },
     AppearancePreferencesUpdated {
         account_id: AccountId,
+        region: RegionCode,
         new_preferences: AppearancePreferences,
         occurred_at: DateTime<Utc>,
     },
     PrivacyPreferencesUpdated {
         account_id: AccountId,
+        region: RegionCode,
         new_preferences: PrivacyPreferences,
         occurred_at: DateTime<Utc>,
     },
@@ -153,16 +164,19 @@ pub enum AccountEvent {
     /// Spécifique pour le routage des notifications
     PushTokenAdded {
         account_id: AccountId,
+        region: RegionCode,
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
     PushTokenRemoved {
         account_id: AccountId,
+        region: RegionCode,
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
     TimezoneUpdated {
         account_id: AccountId,
+        region: RegionCode,
         new_timezone: Timezone,
         occurred_at: DateTime<Utc>,
     },
@@ -174,8 +188,6 @@ impl AccountEvent {
     pub const EXTERNAL_LINKED: &'static str = "account.identity.external_linked";
     pub const EMAIL_CHANGED: &'static str = "account.identity.email_changed";
     pub const PHONE_NUMBER_CHANGED: &'static str = "account.identity.phone_number_changed";
-    pub const EMAIL_VERIFIED: &'static str = "account.identity.email_verified";
-    pub const PHONE_VERIFIED: &'static str = "account.identity.phone_verified";
     pub const BIRTH_DATE_CHANGED: &'static str = "account.identity.birth_date_changed";
     pub const LOCALE_UPDATED: &'static str = "account.identity.locale_updated";
 
@@ -218,11 +230,9 @@ impl DomainEvent for AccountEvent {
     fn event_name(&self) -> Cow<'_, str> {
         let s = match self {
             Self::AccountRegistered { .. } => Self::REGISTERED,
-            Self::ExternalIdentityLinked { .. } => Self::EXTERNAL_LINKED,
+            Self::SubIdentityLinked { .. } => Self::EXTERNAL_LINKED,
             Self::EmailChanged { .. } => Self::EMAIL_CHANGED,
             Self::PhoneNumberChanged { .. } => Self::PHONE_NUMBER_CHANGED,
-            Self::EmailVerified { .. } => Self::EMAIL_VERIFIED,
-            Self::PhoneVerified { .. } => Self::PHONE_VERIFIED,
             Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
             Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
             Self::BetaStatusUpdated { .. } => Self::BETA_STATUS_UPADTED,
@@ -254,11 +264,9 @@ impl DomainEvent for AccountEvent {
         // Pattern matching simplifié pour tous les types portant un account_id
         match self {
             Self::AccountRegistered { account_id, .. }
-            | Self::ExternalIdentityLinked { account_id, .. }
+            | Self::SubIdentityLinked { account_id, .. }
             | Self::EmailChanged { account_id, .. }
             | Self::PhoneNumberChanged { account_id, .. }
-            | Self::EmailVerified { account_id, .. }
-            | Self::PhoneVerified { account_id, .. }
             | Self::BirthDateChanged { account_id, .. }
             | Self::LocaleUpdated { account_id, .. }
             | Self::BetaStatusUpdated { account_id, .. }
@@ -284,11 +292,9 @@ impl DomainEvent for AccountEvent {
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
             Self::AccountRegistered { occurred_at, .. }
-            | Self::ExternalIdentityLinked { occurred_at, .. }
+            | Self::SubIdentityLinked { occurred_at, .. }
             | Self::EmailChanged { occurred_at, .. }
             | Self::PhoneNumberChanged { occurred_at, .. }
-            | Self::EmailVerified { occurred_at, .. }
-            | Self::PhoneVerified { occurred_at, .. }
             | Self::BirthDateChanged { occurred_at, .. }
             | Self::LocaleUpdated { occurred_at, .. }
             | Self::BetaStatusUpdated { occurred_at, .. }
@@ -308,6 +314,34 @@ impl DomainEvent for AccountEvent {
             | Self::PushTokenAdded { occurred_at, .. }
             | Self::PushTokenRemoved { occurred_at, .. }
             | Self::TimezoneUpdated { occurred_at, .. } => *occurred_at,
+        }
+    }
+
+    fn region_code(&self) -> String {
+        match self {
+            Self::AccountRegistered { region, .. }
+            | Self::SubIdentityLinked { region, .. }
+            | Self::EmailChanged { region, .. }
+            | Self::PhoneNumberChanged { region, .. }
+            | Self::LocaleUpdated { region, .. }
+            | Self::BetaStatusUpdated { region, .. }
+            | Self::TrustScoreAdjusted { region, .. }
+            | Self::ShadowbanUpdated { region, .. }
+            | Self::AccountRoleChanged { region, .. }
+            | Self::AccountDeactivated { region, .. }
+            | Self::AccountActivated { region, .. }
+            | Self::AccountBanned { region, .. }
+            | Self::AccountUnbanned { region, .. }
+            | Self::AccountSuspended { region, .. }
+            | Self::AccountUnsuspended { region, .. }
+            | Self::NotificationsPreferencesUpdated { region, .. }
+            | Self::AppearancePreferencesUpdated { region, .. }
+            | Self::PrivacyPreferencesUpdated { region, .. }
+            | Self::PushTokenAdded { region, .. }
+            | Self::PushTokenRemoved { region, .. }
+            | Self::TimezoneUpdated { region, .. } => region.to_string(),
+            Self::AccountRegionChanged { new_region, .. } => new_region.to_string(),
+            Self::BirthDateChanged { region, .. } => region.to_string(),
         }
     }
 

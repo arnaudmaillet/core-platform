@@ -1,13 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::settings::change_email::{
-        ChangeEmailCommand, ChangeEmailHandler,
-    };
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::settings::ChangeEmailCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::{AccountState, Email};
+    use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::domain::value_objects::{Email, RegionCode};
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
@@ -35,16 +34,12 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
             assert_eq!(acc.identity().email(), Some(&new_email));
-            assert!(
-                !acc.identity().is_email_verified(),
-                "L'email ne doit plus être vérifié"
-            );
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -79,7 +74,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -119,7 +114,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -158,7 +153,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -202,7 +197,7 @@ mod tests {
         // 2. Act : Le Bus intercepte le conflit et relance le handler
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : On s'attend maintenant à un SUCCÈS
@@ -246,7 +241,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeEmailHandler)
+            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

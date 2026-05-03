@@ -1,10 +1,30 @@
 pub mod add_push_token;
-pub mod remove_push_token;
-pub mod update_timezone;
-pub mod update_locale;
-pub mod update_preferences;
-pub mod change_region;
+pub mod change_birth_date;
 pub mod change_email;
 pub mod change_phone_number;
-pub mod change_birth_date;
+pub mod change_region;
+pub mod remove_push_token;
 pub mod set_as_beta;
+pub mod update_locale;
+pub mod update_preferences;
+pub mod update_timezone;
+
+pub use add_push_token::add_push_token_command::AddPushTokenCommand;
+pub use change_birth_date::change_birth_date_command::ChangeBirthDateCommand;
+pub use change_email::change_email_command::ChangeEmailCommand;
+pub use change_phone_number::change_phone_number_command::ChangePhoneNumberCommand;
+pub use change_region::change_region_command::ChangeRegionCommand;
+pub use remove_push_token::remove_push_token_command::RemovePushTokenCommand;
+pub use update_locale::update_locale_command::UpdateLocaleCommand;
+pub use update_preferences::update_preferences_command::UpdatePreferencesCommand;
+pub use update_timezone::update_timezone_command::UpdateTimezoneCommand;
+
+pub use add_push_token::add_push_token_use_case::AddPushTokenHandler;
+pub use change_birth_date::change_birth_date_use_case::ChangeBirthDateHandler;
+pub use change_email::change_email_use_case::ChangeEmailHandler;
+pub use change_phone_number::change_phone_number_use_case::ChangePhoneNumberHandler;
+pub use change_region::change_region_use_case::ChangeRegionHandler;
+pub use remove_push_token::remove_push_token_use_case::RemovePushTokenHandler;
+pub use update_locale::update_locale_use_case::UpdateLocaleHandler;
+pub use update_preferences::update_preferences_use_case::UpdatePreferencesHandler;
+pub use update_timezone::update_timezone_use_case::UpdateTimezoneHandler;

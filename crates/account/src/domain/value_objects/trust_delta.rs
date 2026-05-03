@@ -10,7 +10,6 @@ pub struct TrustDelta(i32);
 impl TrustDelta {
     pub const PENALTY_BAN: TrustDelta = TrustDelta::from_raw(100); // Un ban détruit le score
     pub const REWARD_UNBAN: TrustDelta = TrustDelta::from_raw(20); // Bonus de réhabilitation
-    pub const REWARD_VERIFY: TrustDelta = TrustDelta::from_raw(10); // Bonus de vérification email/phone
     pub const REWARD_UNSUSPEND: TrustDelta = TrustDelta::from_raw(5); // Petit bonus après suspension
 
     pub const fn from_raw(value: i32) -> Self {

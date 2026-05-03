@@ -4,15 +4,16 @@ use crate::application::context::{AccountAppContext, AccountContext};
 use crate::domain::account::entities::Account;
 use shared_kernel::application::{CommandBus, CommandHandler};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::DomainError;
+use shared_kernel::errors::{AppError, DomainError, ErrorCode};
 use tonic::{Request, Response, Status};
+
+// crates/account/src/infrastructure/api/grpc/shared.rs
 
 #[tonic::async_trait]
 pub trait GrpcServiceUtils {
     fn app_ctx(&self) -> &AccountAppContext;
     fn bus(&self) -> &CommandBus;
 
-    /// Extrait la région et crée le contexte scoped
     async fn get_context<T>(
         &self,
         request: &Request<T>,
@@ -33,34 +34,52 @@ pub trait GrpcServiceUtils {
         Ok(self.app_ctx().create_context(account_id.clone(), region))
     }
 
-    async fn execute_and_fetch<C, H, R, F>(
+    /// Exécute une commande et recharge l'agrégat pour renvoyer la réponse
+    async fn execute_and_fetch<C, Output, R, F>(
         &self,
         ctx: &AccountContext,
         cmd: C,
-        handler: H,
+        _handler: (),
         mapper: F,
     ) -> Result<Response<R>, Status>
     where
-        C: Clone + Send + Sync,
-        H: CommandHandler<Context = AccountContext, Command = C>,
-        H::Output: Send,
+        C: Send + Sync + 'static + Clone,
+        Output: Send + 'static,
         R: Send,
         F: FnOnce(Account) -> R + Send + 'static,
     {
         // 1. Execute
-        self.bus()
-            .execute(ctx, cmd, handler)
-            .await
-            .map_err(map_domain_err_to_status)?;
+        let execution_result = self
+            .bus()
+            .execute::<AccountContext, C, Output>(ctx.clone(), cmd)
+            .await;
 
-        // 2. Fetch
+        if let Err(err) = execution_result {
+            let app_error: AppError = err.clone().into();
+
+            // --- LOGIQUE D'IDEMPOTENCE GÉNEEIQUE ---
+            // Si la commande a déjà été traitée, on ne renvoie pas d'erreur.
+            // On considère que c'est un "succès" et on passe au Fetch.
+            if app_error.code == ErrorCode::AlreadyExists && app_error.message.contains("Command") {
+                tracing::info!(
+                    "🔁 Idempotency hit for account {:?}. Skipping execution, fetching current state.",
+                    ctx.account_id()
+                );
+            } else {
+                // Pour toutes les autres erreurs, on conserve le comportement habituel
+                return Err(map_domain_err_to_status(err));
+            }
+        }
+
+        // 2. Fetch (Inchangé, mais appelé même en cas d'idempotency hit)
+        let search_id = ctx.account_id();
         let account = self
             .app_ctx()
             .account_repo()
-            .find_by_id(ctx.account_id(), None)
+            .find_by_id(search_id, None)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| Status::not_found("Account not found after operation"))?;
+            .ok_or_else(|| Status::not_found(format!("Account not found: {:?}", search_id)))?;
 
         // 3. Map
         Ok(Response::new(mapper(account)))
@@ -68,10 +87,16 @@ pub trait GrpcServiceUtils {
 }
 
 pub fn map_domain_err_to_status(err: DomainError) -> Status {
-    match err {
-        DomainError::NotFound { .. } => Status::not_found(err.to_string()),
-        DomainError::Forbidden { .. } => Status::permission_denied(err.to_string()),
-        DomainError::ConcurrencyConflict { .. } => Status::aborted("Conflict, please retry"),
-        _ => Status::internal("Internal error"),
+    let app_error: AppError = err.into();
+
+    match app_error.code {
+        ErrorCode::NotFound => Status::not_found(app_error.message),
+        ErrorCode::AlreadyExists => Status::already_exists(app_error.message),
+        ErrorCode::Unauthorized => Status::unauthenticated(app_error.message),
+        ErrorCode::Forbidden => Status::permission_denied(app_error.message),
+        ErrorCode::ValidationFailed => Status::invalid_argument(app_error.message),
+        ErrorCode::ConcurrencyConflict => Status::aborted(app_error.message),
+        ErrorCode::PreconditionFailed => Status::failed_precondition(app_error.message),
+        _ => Status::internal(format!("Internal Server Error: {}", app_error.message)),
     }
 }

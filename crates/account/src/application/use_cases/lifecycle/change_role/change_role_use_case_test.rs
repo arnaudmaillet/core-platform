@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::lifecycle::change_role::{
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::lifecycle::{
         ChangeRoleCommand, ChangeRoleHandler,
     };
     use crate::application::utils::TestFixture;
@@ -27,7 +28,7 @@ mod tests {
         };
 
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -64,7 +65,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -99,7 +100,7 @@ mod tests {
         };
 
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -131,7 +132,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeRoleHandler)
+            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
         assert!(matches!(result, Err(DomainError::NotFound { .. })));
 

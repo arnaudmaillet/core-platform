@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::moderation::lift_shadowban::{
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::moderation::{
         LiftShadowbanCommand, LiftShadowbanHandler,
     };
     use crate::application::utils::TestFixture;
@@ -32,7 +33,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, LiftShadowbanHandler)
+            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -73,7 +74,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, LiftShadowbanHandler)
+            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -103,7 +104,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, LiftShadowbanHandler)
+            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -145,7 +146,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, LiftShadowbanHandler)
+            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert

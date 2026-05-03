@@ -1,16 +1,14 @@
-use account::domain::account::entities::Account;
-use account::domain::repositories::AccountRepository;
-use account::domain::value_objects::{
-    AccountRole, AccountState, Email, ExternalId, RegistrationIdentifier,
-};
-use account::infrastructure::postgres::repositories::PostgresAccountRepository;
+use account::account::entities::Account;
+use account::db::PostgresAccountRepository;
+use account::repositories::AccountRepository;
+use account::value_objects::{AccountRole, AccountState, RegistrationIdentifier};
 use shared_kernel::domain::Identifier;
 use std::time::Duration;
 use tokio;
 
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::CacheRepository;
-use shared_kernel::domain::value_objects::{AccountId, AuditReason, RegionCode};
+use shared_kernel::domain::value_objects::{AccountId, AuditReason, Email, RegionCode, SubId};
 use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
@@ -208,11 +206,11 @@ async fn test_lookups() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
     let email = Email::try_new("lookup@test.com")?;
     let identifier = RegistrationIdentifier::try_from_email(email.to_string())?;
-    let ext_id = ExternalId::from_raw("ext_123");
+    let ext_id = SubId::from_raw("ext_123");
     let account_id = AccountId::new();
 
     let account = Account::builder(account_id.clone(), RegionCode::from_raw("eu"), identifier)
-        .with_external_id(ext_id.clone())
+        .with_sub_id(ext_id.clone())
         .with_email(email.clone())
         .build()?;
 
@@ -221,14 +219,14 @@ async fn test_lookups() -> Result<()> {
     tx.into_inner().commit().await.unwrap();
 
     assert!(repo.exists_by_email(&email, None).await?);
-    assert!(repo.exists_by_external_id(&ext_id, None).await?);
+    assert!(repo.exists_by_sub_id(&ext_id, None).await?);
 
     assert_eq!(
         repo.find_id_by_email(&email, None).await?.unwrap(),
         account_id
     );
     assert_eq!(
-        repo.find_id_by_external_id(&ext_id, None).await?.unwrap(),
+        repo.find_id_by_sub_id(&ext_id, None).await?.unwrap(),
         account_id
     );
 
@@ -348,6 +346,41 @@ async fn test_cache_performance_benefit() -> Result<()> {
     assert!(
         duration_cache < duration_db,
         "Le cache doit être plus rapide que la DB"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
+    let (repo, pg_ctx, _) = get_test_context().await;
+    let account_id = AccountId::new();
+    let region = RegionCode::try_new("eu")?;
+    let email = Email::try_new("partial@integrity.com")?;
+
+    // --- 1. INSERTION MANUELLE PARTIELLE (SIMULATION BUG/LATENCE) ---
+    // On n'insère QUE l'identité, pas les settings ni la gouvernance.
+    sqlx::query("INSERT INTO account_identity (account_id, region_code, email, locale, state, version, created_at, updated_at, aggregate_updated_at) 
+                 VALUES ($1, $2, $3, 'fr-FR', 'active', 0, NOW(), NOW(), NOW())")
+        .bind(account_id.as_uuid())
+        .bind(region.to_string())
+        .bind(email.to_string())
+        .execute(&pg_ctx.pool())
+        .await
+        .unwrap();
+
+    // --- 2. TENTATIVE DE FETCH DE L'AGRÉGAT COMPLET ---
+    let result = repo.find_by_id(&account_id, None).await?;
+    assert!(
+        result.is_some(),
+        "Le repo devrait être capable de reconstruire un compte même si les tables satellites sont vides (Audit: Résilience)"
+    );
+
+    let account = result.unwrap();
+    assert_eq!(
+        account.settings().timezone().to_string(),
+        "UTC",
+        "Devrait avoir une timezone par défaut"
     );
 
     Ok(())

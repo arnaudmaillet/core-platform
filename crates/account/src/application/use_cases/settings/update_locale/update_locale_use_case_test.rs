@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::settings::update_locale::{
-        UpdateLocaleCommand, UpdateLocaleHandler,
-    };
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::settings::UpdateLocaleCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Locale};
@@ -35,7 +34,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -75,7 +74,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -115,7 +114,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -156,7 +155,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, UpdateLocaleHandler)
+            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert

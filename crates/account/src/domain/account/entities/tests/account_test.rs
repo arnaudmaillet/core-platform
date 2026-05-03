@@ -170,17 +170,17 @@ mod tests {
     }
 
     #[test]
-    fn test_link_external_identity_forbidden_if_already_linked() -> Result<()> {
+    fn test_link_sub_identity_forbidden_if_already_linked() -> Result<()> {
         // 1. Arrange : Un compte qui a DEJÀ un lien externe
         let mut account = create_test_account();
-        let initial_ext = ExternalId::try_new("google|123")?;
+        let initial_ext = SubId::try_new("google|123")?;
 
         // On lie le premier ID (ceci doit réussir)
-        account.link_external_identity(initial_ext)?;
+        account.link_sub_identity(initial_ext)?;
 
         // 2. Act : On tente d'en lier un DEUXIÈME (différent)
-        let new_ext = ExternalId::try_new("apple|456")?;
-        let result = account.link_external_identity(new_ext);
+        let new_ext = SubId::try_new("apple|456")?;
+        let result = account.link_sub_identity(new_ext);
 
         // 3. Assert : L'agrégat doit refuser (Forbidden)
         assert!(result.is_err());

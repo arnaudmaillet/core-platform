@@ -1,21 +1,21 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::access_management::link_external_identity::{
-        LinkExternalIdentityCommand, LinkExternalIdentityHandler,
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::access_management::{
+        LinkSubIdentityCommand,
     };
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::value_objects::ExternalId;
     use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::domain::value_objects::{RegionCode, SubId};
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_link_external_identity_success() -> Result<()> {
+    async fn test_link_sub_identity_success() -> Result<()> {
         let f = TestFixture::new();
         let account_id = f.account_id();
-        let new_ext = ExternalId::try_new("google_123")?;
+        let new_ext = SubId::try_new("google_123")?;
 
         // 1. Arrange : On utilise désormais None (Option)
         let account = f.account_builder_for(f.region())?.build()?;
@@ -23,22 +23,22 @@ mod tests {
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
-        let cmd = LinkExternalIdentityCommand {
+        let cmd = LinkSubIdentityCommand {
             command_id: Uuid::new_v4(),
             account_id,
-            external_id: new_ext.clone(),
+            sub_id: new_ext.clone(),
         };
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
         f.assert_account(|acc| {
-            // CHANGEMENT : external_id() renvoie &Option<ExternalId>
+            // CHANGEMENT : sub_id() renvoie &Option<SubId>
             // On compare donc avec Some(&new_ext) ou on as_ref()
-            assert_eq!(acc.identity().external_id(), Some(&new_ext));
+            assert_eq!(acc.identity().sub_id(), Some(&new_ext));
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -49,29 +49,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_link_external_identity_business_idempotency() -> Result<()> {
+    async fn test_link_sub_identity_business_idempotency() -> Result<()> {
         let f = TestFixture::new();
-        let ext_id = ExternalId::try_new("steam_456")?;
+        let ext_id = SubId::try_new("steam_456")?;
 
         // 1. Arrange: Le compte a déjà cet ID externe
-        let mut account = f
-            .account_builder()?
-            .with_external_id(ext_id.clone())
-            .build()?;
+        let mut account = f.account_builder()?.with_sub_id(ext_id.clone()).build()?;
 
         account.pull_events(); // On vide l'outbox de création
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
-        let cmd = LinkExternalIdentityCommand {
+        let cmd = LinkSubIdentityCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: ext_id,
+            sub_id: ext_id,
         };
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert: La version et l'outbox restent inchangées
@@ -85,7 +82,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_link_external_identity_technical_idempotency() -> Result<()> {
+    async fn test_link_sub_identity_technical_idempotency() -> Result<()> {
         let f = TestFixture::new();
         let cmd_id = Uuid::new_v4();
 
@@ -95,17 +92,17 @@ mod tests {
         let account = f.account_builder()?.build()?;
         f.account_repo().insert(account);
 
-        let cmd = LinkExternalIdentityCommand {
+        let cmd = LinkSubIdentityCommand {
             command_id: cmd_id,
             account_id: f.account_id(),
             // On met une valeur qui ne devrait pas poser de problème
-            external_id: ExternalId::try_new("apple_789")?,
+            sub_id: SubId::try_new("apple_789")?,
         };
 
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Ici on s'attend à ce que l'infra bloque AVANT le domaine
@@ -119,7 +116,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_link_external_identity_concurrency_retry() -> Result<()> {
+    async fn test_link_sub_identity_concurrency_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f.account_builder()?.build()?;
         let version_snapshot = account.version();
@@ -131,15 +128,15 @@ mod tests {
                 reason: "Race condition".into(),
             });
 
-        let cmd = LinkExternalIdentityCommand {
+        let cmd = LinkSubIdentityCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: ExternalId::try_new("discord_000")?,
+            sub_id: SubId::try_new("discord_000")?,
         };
 
         // 2. Act : Le CommandBus doit gérer le retry automatiquement
         f.bus()
-            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -160,16 +157,16 @@ mod tests {
         let account = f.account_builder_for(wrong_region)?.build()?;
         f.account_repo().insert(account);
 
-        let cmd = LinkExternalIdentityCommand {
+        let cmd = LinkSubIdentityCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            external_id: ExternalId::try_new("steam_456")?,
+            sub_id: SubId::try_new("steam_456")?,
         };
 
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, LinkExternalIdentityHandler)
+            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Isolation régionale (NotFound)

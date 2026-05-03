@@ -1,8 +1,8 @@
+use crate::domain::value_objects::ValueObject;
+use crate::errors::{DomainError, Result};
 use regex::Regex;
 use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 

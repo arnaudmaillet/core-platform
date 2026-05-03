@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::settings::change_birth_date::{
-        ChangeBirthDateCommand, ChangeBirthDateHandler,
-    };
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::settings::ChangeBirthDateCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, BirthDate};
@@ -36,7 +35,7 @@ mod tests {
         };
 
         f.bus()
-            .execute(f.account_ctx(), cmd, ChangeBirthDateHandler)
+            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -74,7 +73,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeBirthDateHandler)
+            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
@@ -111,7 +110,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeBirthDateHandler)
+            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
@@ -153,7 +152,7 @@ mod tests {
         // 2. Act : Le Bus intercepte le ConcurrencyConflict et relance le Handler
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeBirthDateHandler)
+            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Succès final attendu
@@ -194,7 +193,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, ChangeBirthDateHandler)
+            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(result, Err(DomainError::NotFound { .. })));

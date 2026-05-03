@@ -1,8 +1,7 @@
 // domain/value_objects/registration_identifier.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::errors::{DomainError, Result};
-use crate::domain::value_objects::{Email, PhoneNumber};
+use shared_kernel::{domain::value_objects::{Email, PhoneNumber}, errors::{DomainError, Result}};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RegistrationMethod {

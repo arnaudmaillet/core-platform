@@ -1,0 +1,113 @@
+//proto/profile/v1/profile.proto
+
+syntax = "proto3";
+
+package profile.v1;
+
+// Importation des types partagés et des wrappers Google
+import "profile/v1/types.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/core-platform/proto/profile/v1";
+
+// ==========================================
+// SERVICES DE MODIFICATION (COMMANDES)
+// ==========================================
+
+// 1. SERVICE D'IDENTITÉ
+service ProfileIdentityService {
+  rpc UpdateHandle(UpdateHandleRequest) returns (Profile);
+  rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (Profile);
+  rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
+}
+
+// 2. SERVICE DE MÉDIAS (ASSETS)
+service ProfileMediaService {
+  rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
+  rpc RemoveAvatar(RemoveAvatarRequest) returns (Profile);
+  rpc UpdateBanner(UpdateBannerRequest) returns (Profile);
+  rpc RemoveBanner(RemoveBannerRequest) returns (Profile);
+}
+
+// 3. SERVICE DE MÉTADONNÉES (INFOS ÉDITORIALES)
+service ProfileMetadataService {
+  rpc UpdateBio(UpdateBioRequest) returns (Profile);
+  rpc UpdateLocationLabel(UpdateLocationLabelRequest) returns (Profile);
+  rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
+}
+
+// 4. SERVICE INTERNE (AUTOMATISATION)
+service ProfileCounterService {
+  rpc IncrementPostCount(IncrementPostCountRequest) returns (Profile);
+  rpc DecrementPostCount(DecrementPostCountRequest) returns (Profile);
+}
+// ==========================================
+// MESSAGES DE REQUÊTES
+// ==========================================
+
+// --- Identity ---
+
+message UpdateHandleRequest {
+  string profile_id = 1;
+  string new_handle = 2;
+}
+
+message UpdateDisplayNameRequest {
+  string profile_id = 1;
+  string new_display_name = 2;
+}
+
+
+message UpdatePrivacyRequest {
+  string profile_id = 1;
+  bool is_private = 2;
+}
+
+// --- Medias ---
+
+message UpdateAvatarRequest {
+  string profile_id = 1;
+  string new_avatar_url = 2;
+}
+
+message UpdateBannerRequest {
+  string profile_id = 1;
+  string new_banner_url = 2;
+}
+
+message RemoveAvatarRequest {
+  string profile_id = 1;
+}
+
+message RemoveBannerRequest {
+  string profile_id = 1;
+}
+
+// --- Metadata ---
+
+message UpdateBioRequest {
+  string profile_id = 1;
+  google.protobuf.StringValue new_bio = 2;
+}
+
+message UpdateLocationLabelRequest {
+  string profile_id = 1;
+  google.protobuf.StringValue new_location_label = 2;
+}
+
+message UpdateSocialLinksRequest {
+  string profile_id = 1;
+  optional SocialLinks new_links = 2;
+}
+
+// --- Compteurs / Automation ---
+
+message IncrementPostCountRequest {
+  string profile_id = 1;
+  string post_id = 2;
+}
+
+message DecrementPostCountRequest {
+  string profile_id = 1;
+  string post_id = 2;
+}

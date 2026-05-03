@@ -1,11 +1,5 @@
-mod context;
-mod context_builder;
-
-pub use context::{AccountContext, AccountAppContext};
+// crates/account/src/application/context/mod.rs
+pub mod context;
+pub mod context_builder;
+pub use context::{AccountAppContext, AccountContext};
 pub use context_builder::AccountContextBuilder;
-
-// #[cfg(test)]
-// mod context_test_utils;
-
-// #[cfg(test)]
-// pub use context_test_utils::AccountContextTestExt;

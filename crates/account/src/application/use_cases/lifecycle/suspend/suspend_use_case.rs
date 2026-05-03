@@ -5,7 +5,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::lifecycle::suspend::SuspendCommand;
+use crate::application::use_cases::lifecycle::SuspendCommand;
 
 pub struct SuspendHandler;
 

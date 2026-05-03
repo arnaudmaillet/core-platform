@@ -1,18 +1,18 @@
-// crates/account/src/domain/value_objects/external_id.rs
+// crates/account/src/domain/value_objects/sub_id.rs
 
 // crates/account/src/domain/value_objects/locale.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
+use crate::domain::value_objects::ValueObject;
+use crate::errors::{DomainError, Result};
 use std::fmt;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct ExternalId(String);
+pub struct SubId(String);
 
-impl ExternalId {
+impl SubId {
     /// Constructeur sécurisé (API / Auth Provider Callback)
     pub fn try_new(value: impl Into<String>) -> Result<Self> {
         let raw = value.into();
@@ -33,20 +33,20 @@ impl ExternalId {
     }
 }
 
-impl ValueObject for ExternalId {
+impl ValueObject for SubId {
     fn validate(&self) -> Result<()> {
         if self.0.is_empty() {
             return Err(DomainError::Validation {
-                field: "external_id",
-                reason: "External provider ID cannot be empty".into(),
+                field: "sub_id",
+                reason: "Sub provider ID cannot be empty".into(),
             });
         }
 
         // Sécurité : On limite la taille pour éviter les injections de payloads massifs
         if self.0.len() > 128 {
             return Err(DomainError::Validation {
-                field: "external_id",
-                reason: "External ID is suspiciously long".into(),
+                field: "sub_id",
+                reason: "Sub ID is suspiciously long".into(),
             });
         }
 
@@ -56,27 +56,27 @@ impl ValueObject for ExternalId {
 
 // --- CONVERSIONS ---
 
-impl FromStr for ExternalId {
+impl FromStr for SubId {
     type Err = DomainError;
     fn from_str(s: &str) -> Result<Self> {
         Self::try_new(s)
     }
 }
 
-impl TryFrom<String> for ExternalId {
+impl TryFrom<String> for SubId {
     type Error = DomainError;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }
 }
 
-impl From<ExternalId> for String {
-    fn from(id: ExternalId) -> Self {
+impl From<SubId> for String {
+    fn from(id: SubId) -> Self {
         id.0
     }
 }
 
-impl fmt::Display for ExternalId {
+impl fmt::Display for SubId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }

@@ -1,16 +1,17 @@
 // crates/account/src/domain/value_objects/email.rs
 
+use crate::domain::value_objects::ValueObject;
+use crate::errors::{DomainError, Result};
 use regex::Regex;
 use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 
 // Regex RFC 5322 simplifiée mais robuste pour le Web
 static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$").unwrap()
+    Regex::new(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
+        .unwrap()
 });
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -33,7 +34,7 @@ impl Email {
         let (idna_out, _) = idna::uts46::Uts46::new().to_unicode(
             trimmed.as_bytes(),
             idna::uts46::AsciiDenyList::EMPTY,
-            idna::uts46::Hyphens::Allow
+            idna::uts46::Hyphens::Allow,
         );
 
         // ON FORCE LE RÉSULTAT : on fusionne l'accent manuellement
@@ -76,26 +77,39 @@ impl ValueObject for Email {
         if len == 0 || len > Self::MAX_LEN {
             return Err(DomainError::Validation {
                 field: "email",
-                reason: format!("Email length must be between 1 and {} chars", Self::MAX_LEN)
+                reason: format!("Email length must be between 1 and {} chars", Self::MAX_LEN),
             });
         }
 
         let parts: Vec<&str> = self.address.split('@').collect();
         if parts.len() != 2 {
-            return Err(DomainError::Validation { field: "email", reason: "Must contain one @".into() });
+            return Err(DomainError::Validation {
+                field: "email",
+                reason: "Must contain one @".into(),
+            });
         }
 
         let local = parts[0];
         let domain = parts[1];
 
         // Validation Partie Locale (Rust Natif = 100% Unicode Safe)
-        if local.is_empty() || local.starts_with('.') || local.ends_with('.') || local.contains("..") {
-            return Err(DomainError::Validation { field: "email", reason: "Invalid local part structure".into() });
+        if local.is_empty()
+            || local.starts_with('.')
+            || local.ends_with('.')
+            || local.contains("..")
+        {
+            return Err(DomainError::Validation {
+                field: "email",
+                reason: "Invalid local part structure".into(),
+            });
         }
 
         // Validation Domaine (Regex ASCII = 100% Stable)
         if !EMAIL_REGEX.is_match(domain) {
-            return Err(DomainError::Validation { field: "email", reason: "Invalid domain format".into() });
+            return Err(DomainError::Validation {
+                field: "email",
+                reason: "Invalid domain format".into(),
+            });
         }
 
         Ok(())

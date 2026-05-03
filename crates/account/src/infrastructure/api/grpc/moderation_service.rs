@@ -10,24 +10,12 @@ use tonic::{Request, Response, Status};
 use shared_proto::account::v1::account_moderation_service_server::AccountModerationService;
 
 use crate::application::context::AccountAppContext;
-
-use crate::application::use_cases::lifecycle::change_role::{ChangeRoleCommand, ChangeRoleHandler};
-use crate::application::use_cases::lifecycle::suspend::{SuspendCommand, SuspendHandler};
-use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
-use crate::application::use_cases::moderation::ban::{BanCommand, BanHandler};
-use crate::application::use_cases::moderation::decrease_trust_score::{
-    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-};
-use crate::application::use_cases::moderation::increase_trust_score::{
-    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
-};
-use crate::application::use_cases::moderation::lift_shadowban::{
-    LiftShadowbanCommand, LiftShadowbanHandler,
-};
-use crate::application::use_cases::moderation::shadowban::{ShadowbanCommand, ShadowbanHandler};
-use crate::application::use_cases::moderation::unban::{UnbanCommand, UnbanHandler};
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
+use crate::use_cases::{
+    BanCommand, ChangeRoleCommand, DecreaseTrustScoreCommand, IncreaseTrustScoreCommand,
+    LiftShadowbanCommand, ShadowbanCommand, SuspendCommand, UnbanCommand, UnsuspendCommand,
+};
 use shared_kernel::application::CommandBus;
 
 pub struct GrpcModerationService {
@@ -60,11 +48,11 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        // 4. Exécution
-        self.execute_and_fetch(
+        // On spécifie () comme Output car Ban renvoie Result<()>
+        self.execute_and_fetch::<BanCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            BanHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await
@@ -78,10 +66,10 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<UnbanCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            UnbanHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await
@@ -95,10 +83,10 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<SuspendCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            SuspendHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await
@@ -112,10 +100,10 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<UnsuspendCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            UnsuspendHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await
@@ -129,10 +117,10 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<ShadowbanCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            ShadowbanHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await
@@ -146,10 +134,10 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<LiftShadowbanCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            LiftShadowbanHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await
@@ -162,26 +150,26 @@ impl AccountModerationService for GrpcModerationService {
         let req_ref = request.get_ref();
 
         if req_ref.delta >= 0 {
-            let command = IncreaseTrustScoreCommand::try_from_proto(request.get_ref().clone())
+            let command = IncreaseTrustScoreCommand::try_from_proto(req_ref.clone())
                 .map_err(|e| Status::invalid_argument(e.to_string()))?;
             let ctx = self.get_context(&request, &command.account_id).await?;
 
-            self.execute_and_fetch(
+            self.execute_and_fetch::<IncreaseTrustScoreCommand, (), ProtoGovernance, _>(
                 &ctx,
                 command,
-                IncreaseTrustScoreHandler,
+                (),
                 mapper::map_account_to_governance_proto,
             )
             .await
         } else {
-            let command = DecreaseTrustScoreCommand::try_from_proto(request.get_ref().clone())
+            let command = DecreaseTrustScoreCommand::try_from_proto(req_ref.clone())
                 .map_err(|e| Status::invalid_argument(e.to_string()))?;
             let ctx = self.get_context(&request, &command.account_id).await?;
 
-            self.execute_and_fetch(
+            self.execute_and_fetch::<DecreaseTrustScoreCommand, (), ProtoGovernance, _>(
                 &ctx,
                 command,
-                DecreaseTrustScoreHandler,
+                (),
                 mapper::map_account_to_governance_proto,
             )
             .await
@@ -196,10 +184,10 @@ impl AccountModerationService for GrpcModerationService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ctx = self.get_context(&request, &command.account_id).await?;
 
-        self.execute_and_fetch(
+        self.execute_and_fetch::<ChangeRoleCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
-            ChangeRoleHandler,
+            (),
             mapper::map_account_to_governance_proto,
         )
         .await

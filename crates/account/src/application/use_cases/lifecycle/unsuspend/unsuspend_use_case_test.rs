@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::use_cases::lifecycle::unsuspend::{UnsuspendCommand, UnsuspendHandler};
+    use crate::application::context::AccountContext;
+    use crate::application::use_cases::lifecycle::{UnsuspendCommand, UnsuspendHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
@@ -27,7 +28,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -65,7 +66,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -99,7 +100,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -132,7 +133,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute(f.account_ctx(), cmd, UnsuspendHandler)
+            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
             .await;
 
         // Assert

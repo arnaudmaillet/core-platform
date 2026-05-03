@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/domain/events/event.rs
 
-use dyn_clone::DynClone;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use dyn_clone::DynClone;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -34,6 +34,8 @@ pub trait DomainEvent: DynClone + Debug + Send + Sync {
     fn correlation_id(&self) -> Option<Uuid> {
         None
     }
+
+    fn region_code(&self) -> String;
 }
 
 dyn_clone::clone_trait_object!(DomainEvent);

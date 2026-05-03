@@ -1,0 +1,6 @@
+networks:
+  backend-net:
+    driver: bridge
+
+volumes:
+  postgres_keycloak_data:

@@ -5,7 +5,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::moderation::unban::UnbanCommand;
+use crate::application::use_cases::moderation::UnbanCommand;
 
 pub struct UnbanHandler;
 

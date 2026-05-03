@@ -5,7 +5,7 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::moderation::increase_trust_score::IncreaseTrustScoreCommand;
+use crate::application::use_cases::moderation::IncreaseTrustScoreCommand;
 
 pub struct IncreaseTrustScoreHandler;
 
