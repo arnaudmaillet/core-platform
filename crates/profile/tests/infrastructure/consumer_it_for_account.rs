@@ -1,7 +1,5 @@
 // crates/profile/tests/infrastructure/consumer_it_for_account.rs
 
-use std::sync::Arc;
-use uuid::Uuid;
 use profile::application::use_cases::create_profile::CreateProfileUseCase;
 use profile::domain::repositories::ProfileIdentityRepository;
 use profile::infrastructure::kafka::AccountConsumer;
@@ -12,6 +10,8 @@ use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
 use shared_kernel::infrastructure::utils::InfrastructureKernelTestContext;
+use std::sync::Arc;
+use uuid::Uuid;
 
 struct AccountConsumerTestContext {
     consumer: AccountConsumer,
@@ -63,7 +63,7 @@ async fn setup_consumer_test_context() -> AccountConsumerTestContext {
 async fn test_consumer_creates_profile_on_account_created_event() {
     let ctx = setup_consumer_test_context().await;
     let owner_id = Uuid::now_v7();
-    let region = "eu";
+    let region = "EU";
 
     let payload = serde_json::json!({
         "type": "account.created",
@@ -78,10 +78,14 @@ async fn test_consumer_creates_profile_on_account_created_event() {
     let bytes = serde_json::to_vec(&payload).unwrap();
 
     // Act
-    ctx.consumer.on_message_received(&bytes).await.expect("Should work");
+    ctx.consumer
+        .on_message_received(&bytes)
+        .await
+        .expect("Should work");
 
     // Assert
-    let profiles = ctx.profile_repo
+    let profiles = ctx
+        .profile_repo
         .fetch_all_by_owner(&AccountId::from(owner_id))
         .await
         .unwrap();
@@ -90,7 +94,7 @@ async fn test_consumer_creates_profile_on_account_created_event() {
     let profile = &profiles[0];
 
     assert_eq!(profile.handle().as_str(), "tester_66");
-    assert_eq!(profile.region_code().as_str(), "eu");
+    assert_eq!(profile.region_code().as_str(), "EU");
 }
 
 #[tokio::test]
@@ -102,7 +106,7 @@ async fn test_consumer_fallback_on_invalid_display_name() {
         "type": "account.created",
         "data": {
             "account_id": owner_id, // FIX: account_id et non owner_id
-            "region": "us",
+            "region": "US",
             "username": "safe_handle",
             "display_name": "", // Devrait trigger le fallback sur le username
             "occurred_at": "2026-02-04T12:00:00Z"
@@ -110,9 +114,13 @@ async fn test_consumer_fallback_on_invalid_display_name() {
     });
     let bytes = serde_json::to_vec(&payload).unwrap();
 
-    ctx.consumer.on_message_received(&bytes).await.expect("Message processing failed");
+    ctx.consumer
+        .on_message_received(&bytes)
+        .await
+        .expect("Message processing failed");
 
-    let profiles = ctx.profile_repo
+    let profiles = ctx
+        .profile_repo
         .fetch_all_by_owner(&AccountId::from(owner_id))
         .await
         .unwrap();
@@ -132,7 +140,7 @@ async fn test_consumer_is_idempotent() {
         "type": "account.created",
         "data": {
             "account_id": owner_id, // FIX: account_id et non owner_id
-            "region": "eu",
+            "region": "EU",
             "username": "unique_tester",
             "display_name": "Unique",
             "occurred_at": "2026-02-04T12:00:00Z"
@@ -141,19 +149,30 @@ async fn test_consumer_is_idempotent() {
     let bytes = serde_json::to_vec(&payload).unwrap();
 
     // Premier passage : Création
-    ctx.consumer.on_message_received(&bytes).await.expect("First pass should work");
+    ctx.consumer
+        .on_message_received(&bytes)
+        .await
+        .expect("First pass should work");
 
     // Deuxième passage : Doit ignorer (grâce au catch AlreadyExists dans le consumer)
     let result = ctx.consumer.on_message_received(&bytes).await;
 
-    assert!(result.is_ok(), "Second pass should not return an error (idempotency)");
+    assert!(
+        result.is_ok(),
+        "Second pass should not return an error (idempotency)"
+    );
 
-    let profiles = ctx.profile_repo
+    let profiles = ctx
+        .profile_repo
         .fetch_all_by_owner(&AccountId::from(owner_id))
         .await
         .unwrap();
 
-    assert_eq!(profiles.len(), 1, "Il ne doit toujours y avoir qu'un seul profil après le replay");
+    assert_eq!(
+        profiles.len(),
+        1,
+        "Il ne doit toujours y avoir qu'un seul profil après le replay"
+    );
 }
 
 #[tokio::test]
@@ -167,7 +186,10 @@ async fn test_consumer_ignores_unknown_event_types() {
     let bytes = serde_json::to_vec(&payload).unwrap();
 
     let result = ctx.consumer.on_message_received(&bytes).await;
-    assert!(result.is_ok(), "Should silently ignore unknown event types thanks to #[serde(other)]");
+    assert!(
+        result.is_ok(),
+        "Should silently ignore unknown event types thanks to #[serde(other)]"
+    );
 }
 
 #[tokio::test]
@@ -177,5 +199,8 @@ async fn test_consumer_fails_on_corrupted_json() {
     let corrupted_bytes = b"{ \"type\": \"account.created\", \"data\": corrupted }";
 
     let result = ctx.consumer.on_message_received(corrupted_bytes).await;
-    assert!(result.is_err(), "Should return error on corrupted payload for monitoring/dead-letter purposes");
+    assert!(
+        result.is_err(),
+        "Should return error on corrupted payload for monitoring/dead-letter purposes"
+    );
 }

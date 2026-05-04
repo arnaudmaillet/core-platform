@@ -35,7 +35,7 @@ mod tests {
     async fn test_update_location_success() {
         // Arrange
         let owner_id = AccountId::new(); // Contexte proprio
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -68,8 +68,8 @@ mod tests {
     async fn test_update_location_fails_on_region_mismatch() {
         // Arrange
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -99,7 +99,7 @@ mod tests {
     async fn test_remove_location_success() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let mut profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -132,7 +132,7 @@ mod tests {
     async fn test_update_location_idempotency() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let location = Some(LocationLabel::try_new("Berlin").unwrap());
 
         let mut profile = Profile::builder(
@@ -168,7 +168,7 @@ mod tests {
         let use_case = setup(None);
         let cmd = UpdateLocationLabelCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             new_location: Some(LocationLabel::try_new("Mars").unwrap()),
         };
 
@@ -183,7 +183,7 @@ mod tests {
     async fn test_update_location_concurrency_conflict() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -224,7 +224,7 @@ mod tests {
     async fn test_update_location_atomic_rollback_on_outbox_failure() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),

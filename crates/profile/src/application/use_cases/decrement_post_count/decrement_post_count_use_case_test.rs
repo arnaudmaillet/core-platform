@@ -26,7 +26,7 @@ mod tests {
     async fn test_decrement_post_count_success() {
         // Arrange : Profil ayant 1 post
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let mut profile = Profile::builder(
             owner_id.clone(),
             region.clone(),
@@ -60,7 +60,7 @@ mod tests {
     async fn test_decrement_prevent_negative_count() {
         // Arrange : Profil ayant 0 post
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id.clone(),
             region.clone(),
@@ -96,7 +96,7 @@ mod tests {
 
         let cmd = DecrementPostCountCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             post_id: PostId::new(),
         };
 
@@ -111,7 +111,7 @@ mod tests {
     async fn test_decrement_concurrency_conflict() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap(); // Utilise try_new
+        let region = RegionCode::try_new("EU").unwrap(); // Utilise try_new
         let mut profile = Profile::builder(
             owner_id.clone(),
             region.clone(),
@@ -150,7 +150,7 @@ mod tests {
     async fn test_decrement_outbox_failure_rollbacks_count() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let mut profile = Profile::builder(
             owner_id.clone(),
             region.clone(),
@@ -205,8 +205,8 @@ mod tests {
     async fn test_decrement_fails_on_region_mismatch() {
         // Arrange
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id.clone(),

@@ -1,5 +1,5 @@
 use account::grpc::GrpcPersonalService;
-use shared_kernel::domain::value_objects::JwtToken;
+use shared_kernel::errors::Result;
 use shared_kernel::infrastructure::utils::E2EServerStarter;
 use shared_proto::account::v1::account_personal_service_client::AccountPersonalServiceClient;
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;
@@ -79,7 +79,7 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 }
 
 #[tokio::test]
-async fn test_e2e_complete_account_lifecycle() {
+async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     // 1. SETUP INFRA
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let kernel_migs = manifest_dir.join("../../../../../crates/shared-kernel/migrations/postgres");
@@ -103,13 +103,12 @@ async fn test_e2e_complete_account_lifecycle() {
         .unwrap();
 
     let auth_ctx = KeycloakTestContext::restore("master").await;
-    let (token, _) = auth_ctx.get_real_admin_token().await;
+    let auth_response = auth_ctx.get_admin_token().await?;
 
     // --- UTILISE TON VALIDATEUR POUR EXTRAIRE LE VRAI SUB ---
-    let jwt_token = JwtToken::from_raw(&token);
     let claims = auth_ctx
         .validator
-        .validate(&jwt_token)
+        .validate(&auth_response.token)
         .expect("Le token généré par Keycloak doit être validable par notre propre validator");
 
     let true_admin_id = claims.sub_id.to_string();
@@ -117,7 +116,7 @@ async fn test_e2e_complete_account_lifecycle() {
     println!("DEBUG TEST: Le VRAI sub_id du token est: {}", true_admin_id);
 
     let email = "audit-e2e@test.com";
-    let region_code = "eu";
+    let region_code = "EU";
     let command_id = Uuid::now_v7().to_string();
 
     // --- ÉTAPE 1 : REGISTER (SUCCESS) ---
@@ -133,7 +132,11 @@ async fn test_e2e_complete_account_lifecycle() {
     };
 
     let res = access_client
-        .register(with_auth(register_payload.clone(), &token, &region_code))
+        .register(with_auth(
+            register_payload.clone(),
+            auth_response.token.as_str(),
+            &region_code,
+        ))
         .await;
 
     if let Err(ref e) = res {
@@ -157,7 +160,11 @@ async fn test_e2e_complete_account_lifecycle() {
     // --- ÉTAPE 2 : REGISTER (DUPLICATED / IDEMPOTENCY) ---
     // On renvoie exactement le même payload (même command_id, même sub_id None)
     let res_dup = access_client
-        .register(with_auth(register_payload, &token, &region_code))
+        .register(with_auth(
+            register_payload,
+            auth_response.token.as_str(),
+            &region_code,
+        ))
         .await;
 
     assert!(res_dup.is_ok(), "Idempotency should return OK");
@@ -171,7 +178,11 @@ async fn test_e2e_complete_account_lifecycle() {
     };
 
     let upd_res = personal_client
-        .update_locale(with_auth(update_payload, &token, &region_code))
+        .update_locale(with_auth(
+            update_payload,
+            auth_response.token.as_str(),
+            &region_code,
+        ))
         .await;
 
     assert!(upd_res.is_ok(), "Update failed: {:?}", upd_res.err());
@@ -210,4 +221,6 @@ async fn test_e2e_complete_account_lifecycle() {
     );
 
     ctx.shutdown().await;
+
+    Ok(())
 }

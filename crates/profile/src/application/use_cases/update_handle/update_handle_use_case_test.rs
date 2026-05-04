@@ -32,7 +32,7 @@ mod tests {
     async fn test_update_handle_success() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -64,8 +64,8 @@ mod tests {
     async fn test_update_handle_fails_on_region_mismatch() {
         // Arrange : Profil en EU, Commande en US
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -94,7 +94,7 @@ mod tests {
     async fn test_update_handle_already_exists() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("us").unwrap();
+        let region = RegionCode::try_new("US").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -129,7 +129,7 @@ mod tests {
 
         let cmd = UpdateHandleCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             new_handle: Handle::try_new("new_name").unwrap(),
         };
 
@@ -144,7 +144,7 @@ mod tests {
     async fn test_update_handle_idempotency() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let current_handle = Handle::try_new("no_change").unwrap();
 
         let initial_profile = Profile::builder(

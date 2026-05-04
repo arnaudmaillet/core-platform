@@ -40,7 +40,7 @@ mod tests {
         // Arrange
         let bob = Profile::builder(
             AccountId::new(),
-            RegionCode::from_raw("eu"),
+            RegionCode::from_raw("EU"),
             DisplayName::from_raw("Bob"),
             Handle::try_new("bob").unwrap(),
         )
@@ -51,7 +51,7 @@ mod tests {
 
         let cmd = GetProfileByHandleCommand {
             handle: Handle::try_new("bob").unwrap(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
         };
 
         // Act
@@ -66,7 +66,7 @@ mod tests {
     async fn test_get_profile_cache_miss_then_fill() {
         // 1. Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::from_raw("EU");
         let handle = Handle::try_new("bob").unwrap();
         let cache_key = "profile:h:eu:bob"; // h pour handle
 
@@ -109,7 +109,7 @@ mod tests {
 
         let cmd = GetProfileByHandleCommand {
             handle: Handle::try_new("ghost").unwrap(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
         };
 
         let result = use_case.execute(cmd).await;
@@ -120,7 +120,7 @@ mod tests {
     async fn test_get_profile_resilience_on_redis_failure() {
         let bob = Profile::builder(
             AccountId::new(),
-            RegionCode::from_raw("eu"),
+            RegionCode::from_raw("EU"),
             DisplayName::from_raw("Bob"),
             Handle::try_new("bob").unwrap(),
         )
@@ -130,7 +130,7 @@ mod tests {
 
         let cmd = GetProfileByHandleCommand {
             handle: Handle::try_new("bob").unwrap(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
         };
 
         let result = use_case.execute(cmd).await;
@@ -143,7 +143,7 @@ mod tests {
     async fn test_get_profile_corrupted_cache_trigger_refresh() {
         let bob = Profile::builder(
             AccountId::new(),
-            RegionCode::from_raw("eu"),
+            RegionCode::from_raw("EU"),
             DisplayName::from_raw("Bob"),
             Handle::try_new("bob").unwrap(),
         )
@@ -152,7 +152,7 @@ mod tests {
 
         let cmd = GetProfileByHandleCommand {
             handle: Handle::try_new("bob").unwrap(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
         };
 
         let result = use_case.execute(cmd).await;
@@ -203,7 +203,7 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let bob = Profile::builder(
             AccountId::new(),
-            RegionCode::from_raw("eu"),
+            RegionCode::from_raw("EU"),
             DisplayName::from_raw("Bob"),
             Handle::try_new("bob").unwrap(),
         )
@@ -222,7 +222,7 @@ mod tests {
             handles.push(tokio::spawn(async move {
                 uc.execute(GetProfileByHandleCommand {
                     handle: Handle::try_new("bob").unwrap(),
-                    region: RegionCode::from_raw("eu"),
+                    region: RegionCode::from_raw("EU"),
                 })
                     .await
             }));

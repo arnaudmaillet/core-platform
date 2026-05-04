@@ -101,21 +101,21 @@ impl AccountBuilder {
     pub fn with_state(mut self, state: AccountState) -> Self {
         self.identity = self.identity.with_state(state.clone());
         match state {
-            AccountState::Banned => {
+            AccountState::BANNED => {
                 self.governance = self
                     .governance
                     .with_trust_score(TrustScore::from_raw(TrustScore::MIN));
                 self.governance = self.governance.with_shadowban(true);
             }
-            AccountState::Suspended => {
+            AccountState::SUSPENDED => {
                 self.governance = self
                     .governance
                     .with_trust_score(TrustScore::from_raw(TrustScore::CRITICAL_THRESHOLD));
             }
-            AccountState::Active | AccountState::Pending => {
+            AccountState::ACTIVE | AccountState::PENDING => {
                 // On laisse le score par défaut (100) ou on ne touche à rien
             }
-            AccountState::Deactivated => {
+            AccountState::DEACTIVATED => {
                 // La désactivation n'impacte pas forcément le score
             }
         }

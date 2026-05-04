@@ -21,7 +21,7 @@ mod tests {
         // Utilisation du restore simplifié (sans metadata/version/updated_at)
         Ok(AccountGovernance::restore(
             account_id,
-            AccountRole::User,
+            AccountRole::USER,
             false,
             false,
             TrustScore::new_max(),
@@ -37,7 +37,7 @@ mod tests {
         let gov = create_test_governance()?;
         let expected_ip = IpAddr::try_new("127.0.0.1")?;
 
-        assert_eq!(gov.role(), AccountRole::User);
+        assert_eq!(gov.role(), AccountRole::USER);
         assert_eq!(gov.trust_score().value(), 100);
         assert_eq!(gov.last_ip_addr(), Some(&expected_ip));
 
@@ -112,20 +112,17 @@ mod tests {
         let mut gov = create_test_governance()?;
         let mut reason = AuditReason::try_new("Promotion")?;
 
-        let changed = gov.apply_role_change(AccountRole::Staff, &reason).unwrap();
+        let changed = gov.apply_role_change(AccountRole::STAFF, &reason).unwrap();
         assert!(changed);
-        assert_eq!(gov.role(), AccountRole::Staff);
-
+        assert_eq!(gov.role(), AccountRole::STAFF);
         // Vérification que le log a été écrit
-        assert!(
-            gov.moderation_notes()
-                .unwrap()
-                .contains("Role changed to Staff")
-        );
+        assert!(gov.moderation_notes().unwrap().contains("Role changed"));
+
+        assert!(gov.moderation_notes().unwrap().contains("staff"));
 
         // Idempotence
         reason = AuditReason::try_new("Duplicate")?;
-        let changed = gov.apply_role_change(AccountRole::Staff, &reason).unwrap();
+        let changed = gov.apply_role_change(AccountRole::STAFF, &reason).unwrap();
         assert!(!changed);
 
         Ok(())

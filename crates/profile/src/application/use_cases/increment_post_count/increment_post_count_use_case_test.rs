@@ -26,7 +26,7 @@ mod tests {
     async fn test_increment_post_count_success() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
 
         let initial_profile = Profile::builder(
             owner_id.clone(),
@@ -63,7 +63,7 @@ mod tests {
     async fn test_increment_multiple_times_logic() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let mut profile = Profile::builder(
             owner_id.clone(),
             region.clone(),
@@ -98,8 +98,8 @@ mod tests {
     async fn test_increment_fails_on_region_mismatch() {
         // Arrange
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -131,7 +131,7 @@ mod tests {
 
         let cmd = IncrementPostCountCommand {
             profile_id: ProfileId::new(), // ID inexistant
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             post_id: PostId::new(),
         };
 
@@ -146,7 +146,7 @@ mod tests {
     async fn test_increment_concurrency_conflict_triggers_retry() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -182,7 +182,7 @@ mod tests {
     async fn test_increment_atomic_rollback_on_outbox_failure() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),

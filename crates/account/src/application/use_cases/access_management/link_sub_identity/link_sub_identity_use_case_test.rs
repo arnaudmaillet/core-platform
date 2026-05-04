@@ -151,7 +151,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         // Arrange : Donnée aux US, contexte de test en EU
         let account = f.account_builder_for(wrong_region)?.build()?;

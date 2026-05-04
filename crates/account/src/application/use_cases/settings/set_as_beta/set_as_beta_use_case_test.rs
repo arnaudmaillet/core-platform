@@ -100,10 +100,10 @@ mod tests {
     async fn test_region_mismatch_returns_not_found() {
         let f = TestFixture::new(SetAsBetaUseCase::new);
         let account_id = f.account_id();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
-        // On simule une donnée en base qui appartient aux "us"
-        // alors que notre contexte est "eu"
+        // On simule une donnée en base qui appartient aux "US"
+        // alors que notre contexte est "EU"
         f.identity_repo().insert(
             AccountIdentity::builder(
                 account_id,

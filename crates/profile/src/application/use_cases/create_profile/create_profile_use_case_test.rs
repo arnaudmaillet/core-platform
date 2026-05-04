@@ -35,7 +35,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             owner_id: owner_id.clone(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             display_name: DisplayName::from_raw("John"),
             handle: handle.clone(),
         };
@@ -65,7 +65,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             owner_id: AccountId::new(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             display_name: DisplayName::from_raw("John"),
             handle: Handle::try_new("already_taken").unwrap(),
         };
@@ -92,7 +92,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             owner_id: AccountId::new(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             display_name: DisplayName::from_raw("John"),
             handle: Handle::try_new("johnny").unwrap(),
         };
@@ -131,7 +131,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             owner_id: AccountId::new(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             display_name: DisplayName::from_raw("John"),
             handle: Handle::try_new("johnny").unwrap(),
         };
@@ -163,7 +163,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             owner_id: AccountId::new(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             display_name: DisplayName::from_raw("Fast"),
             handle: Handle::try_new("fast_user").unwrap(),
         };

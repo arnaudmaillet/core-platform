@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::{
-        ChangeRoleCommand, ChangeRoleHandler,
-    };
+    use crate::application::use_cases::lifecycle::{ChangeRoleCommand, ChangeRoleHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountRole;
@@ -23,7 +21,7 @@ mod tests {
         let cmd = ChangeRoleCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            new_role: AccountRole::Moderator,
+            new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("Joined the safety team")?,
         };
 
@@ -32,7 +30,7 @@ mod tests {
             .await?;
 
         f.assert_account(|acc| {
-            assert_eq!(acc.governance().role(), AccountRole::Moderator);
+            assert_eq!(acc.governance().role(), AccountRole::MODERATOR);
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -50,7 +48,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let mut account = f.account_builder()?.build()?;
-        let _ = account.change_role(AccountRole::Moderator, AuditReason::try_new("init")?);
+        let _ = account.change_role(AccountRole::MODERATOR, AuditReason::try_new("init")?);
         account.pull_events();
 
         let version_snapshot = account.version();
@@ -59,7 +57,7 @@ mod tests {
         let cmd = ChangeRoleCommand {
             command_id: cmd_id,
             account_id: f.account_id(),
-            new_role: AccountRole::Moderator,
+            new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("Duplicate promotion")?,
         };
 
@@ -71,7 +69,7 @@ mod tests {
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
         f.assert_account(|acc| {
-            assert_eq!(acc.governance().role(), AccountRole::Moderator);
+            assert_eq!(acc.governance().role(), AccountRole::MODERATOR);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -86,7 +84,7 @@ mod tests {
         let f = TestFixture::new();
         let mut account = f.account_builder()?.build()?;
 
-        let _ = account.change_role(AccountRole::Moderator, AuditReason::try_new("init")?);
+        let _ = account.change_role(AccountRole::MODERATOR, AuditReason::try_new("init")?);
         account.pull_events();
 
         let version_snapshot = account.version();
@@ -95,7 +93,7 @@ mod tests {
         let cmd = ChangeRoleCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            new_role: AccountRole::Moderator,
+            new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("Duplicate promotion")?,
         };
 
@@ -104,7 +102,7 @@ mod tests {
             .await?;
 
         f.assert_account(|acc| {
-            assert_eq!(acc.governance().role(), AccountRole::Moderator);
+            assert_eq!(acc.governance().role(), AccountRole::MODERATOR);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -116,7 +114,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         let account = f.account_builder_for(wrong_region)?.build()?;
         let version_snapshot = account.version();
@@ -126,7 +124,7 @@ mod tests {
         let cmd = ChangeRoleCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            new_role: AccountRole::Moderator,
+            new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("some_reason")?,
         };
 

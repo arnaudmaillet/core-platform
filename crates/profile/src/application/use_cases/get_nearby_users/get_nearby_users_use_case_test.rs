@@ -12,7 +12,7 @@ mod tests {
     fn create_mock_loc(lat: f64, lon: f64, privacy_radius: i32) -> UserLocation {
         UserLocationBuilder::new(
             ProfileId::new(),
-            RegionCode::from_raw("eu"),
+            RegionCode::from_raw("EU"),
             GeoPoint::try_new(lat, lon).unwrap(),
         )
         .with_privacy(false, privacy_radius)
@@ -36,7 +36,7 @@ mod tests {
         let cmd = GetNearbyUsersCommand {
             profile_id: ProfileId::new(), // ID de l'appelant différent
             center: GeoPoint::try_new(48.8566, 2.3522).unwrap(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             radius_meters: 1000.0,
             limit: 10,
         };
@@ -61,7 +61,7 @@ mod tests {
         let cmd = GetNearbyUsersCommand {
             profile_id: my_id,
             center: GeoPoint::try_new(48.0, 2.0).unwrap(),
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             radius_meters: 1000.0,
             limit: 10,
         };
@@ -88,7 +88,7 @@ mod tests {
         let cmd = GetNearbyUsersCommand {
             profile_id: ProfileId::new(),
             center: original_coords,
-            region: RegionCode::from_raw("eu"),
+            region: RegionCode::from_raw("EU"),
             radius_meters: 1000.0,
             limit: 10,
         };

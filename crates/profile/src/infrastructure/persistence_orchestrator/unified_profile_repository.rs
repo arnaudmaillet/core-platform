@@ -42,7 +42,7 @@ impl UnifiedProfileRepository {
 
         // 2. Fallback sur ScyllaDB (notre source de vérité)
         // Note: On utilise une région par défaut ou celle du contexte si nécessaire
-        let scylla_stats = self.stats.fetch(profile_id, &RegionCode::from_raw("eu")).await?;
+        let scylla_stats = self.stats.fetch(profile_id, &RegionCode::from_raw("EU")).await?;
         let stats = scylla_stats.unwrap_or_default();
 
         // 3. Mettre à jour Redis en tâche de fond (Fire and forget)

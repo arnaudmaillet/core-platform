@@ -14,15 +14,15 @@ mod tests {
     #[tokio::test]
     async fn test_change_region_success() -> Result<()> {
         let f = TestFixture::new();
-        let new_region = RegionCode::from_raw("us");
+        let new_region = RegionCode::from_raw("US");
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         // DEBUG pour confirmer
-        assert_eq!(account.identity().region_code().as_str(), "eu");
+        assert_eq!(account.identity().region_code().as_str(), "EU");
 
         f.account_repo().insert(account.clone());
 
@@ -63,7 +63,7 @@ mod tests {
         let current_region = f.region();
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
 
         let version_snapshot = account.version();
@@ -109,7 +109,7 @@ mod tests {
         let cmd = ChangeRegionCommand {
             command_id: cmd_id,
             account_id,
-            new_region: RegionCode::from_raw("us"),
+            new_region: RegionCode::from_raw("US"),
         };
 
         let result = f
@@ -132,7 +132,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)
+            .with_state(AccountState::BANNED)
             .build()?;
 
         f.account_repo().insert(account);
@@ -140,7 +140,7 @@ mod tests {
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            new_region: RegionCode::from_raw("us"),
+            new_region: RegionCode::from_raw("US"),
         };
 
         let result = f
@@ -155,14 +155,14 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let db_region = RegionCode::from_raw("us");
+        let db_region = RegionCode::from_raw("US");
         let account = f.account_builder_for(db_region.clone())?.build()?;
         f.account_repo().insert(account);
 
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
             account_id: f.account_id(),
-            new_region: RegionCode::from_raw("eu"),
+            new_region: RegionCode::from_raw("EU"),
         };
 
         let result = f

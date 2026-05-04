@@ -3,6 +3,7 @@ use account::db::PostgresAccountRepository;
 use account::repositories::AccountRepository;
 use account::value_objects::{AccountRole, AccountState, RegistrationIdentifier};
 use shared_kernel::domain::Identifier;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio;
 
@@ -36,7 +37,7 @@ async fn get_test_context() -> (
 async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::from_raw("eu");
+    let region = RegionCode::from_raw("EU");
     let email = Email::try_new("full@lifecycle.com")?;
 
     let account = Account::builder(
@@ -75,13 +76,13 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     // --- 3. UPDATE ---
     let mut to_update = found.clone();
     to_update.deactivate(Some(AuditReason::system("deactivate test")))?;
-    to_update.change_role(AccountRole::Admin, AuditReason::system("Change Governance"));
+    to_update.change_role(AccountRole::ADMIN, AuditReason::system("Change Governance"));
 
     repo.save(&mut to_update, None).await?;
 
     // --- 4. VERIFY UPDATE ---
     let updated = repo.find_by_id(&account_id, None).await?.unwrap();
-    assert_eq!(*updated.identity().state(), AccountState::Deactivated);
+    assert_eq!(*updated.identity().state(), AccountState::DEACTIVATED);
     assert_eq!(updated.version(), 1);
 
     // --- 5. DELETE (Scope isolé) ---
@@ -103,7 +104,7 @@ async fn test_concurrency_protection_occ() -> Result<()> {
     let account_id = AccountId::new();
     let account = Account::builder(
         account_id,
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("occ@test.com")?,
     )
     .build()?;
@@ -140,7 +141,7 @@ async fn test_cache_logic_integrity() -> Result<()> {
 
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("cache@test.com")?,
     )
     .build()?;
@@ -178,13 +179,13 @@ async fn test_unique_constraints() -> Result<()> {
 
     let acc1 = Account::builder(
         AccountId::new(),
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         identifier.clone(),
     )
     .build()?;
     let acc2 = Account::builder(
         AccountId::new(),
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         identifier.clone(),
     )
     .build()?;
@@ -209,7 +210,7 @@ async fn test_lookups() -> Result<()> {
     let ext_id = SubId::from_raw("ext_123");
     let account_id = AccountId::new();
 
-    let account = Account::builder(account_id.clone(), RegionCode::from_raw("eu"), identifier)
+    let account = Account::builder(account_id.clone(), RegionCode::from_raw("EU"), identifier)
         .with_sub_id(ext_id.clone())
         .with_email(email.clone())
         .build()?;
@@ -239,7 +240,7 @@ async fn test_rollback_works_properly() -> Result<()> {
     let account_id = AccountId::new();
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("rollback@test.com")?,
     )
     .build()?;
@@ -263,7 +264,7 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
 
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("cache-check@test.com")?,
     )
     .build()?;
@@ -314,7 +315,7 @@ async fn test_cache_performance_benefit() -> Result<()> {
     // On prépare un compte
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("eu"),
+        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("perf@test.com")?,
     )
     .build()?;
@@ -355,13 +356,13 @@ async fn test_cache_performance_benefit() -> Result<()> {
 async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
     let account_id = AccountId::new();
-    let region = RegionCode::try_new("eu")?;
+    let region = RegionCode::try_new("EU")?;
     let email = Email::try_new("partial@integrity.com")?;
 
     // --- 1. INSERTION MANUELLE PARTIELLE (SIMULATION BUG/LATENCE) ---
     // On n'insère QUE l'identité, pas les settings ni la gouvernance.
     sqlx::query("INSERT INTO account_identity (account_id, region_code, email, locale, state, version, created_at, updated_at, aggregate_updated_at) 
-                 VALUES ($1, $2, $3, 'fr-FR', 'active', 0, NOW(), NOW(), NOW())")
+                 VALUES ($1, $2, $3, 'fr-FR', 'ACTIVE'::account_state, 0, NOW(), NOW(), NOW())")
         .bind(account_id.as_uuid())
         .bind(region.to_string())
         .bind(email.to_string())

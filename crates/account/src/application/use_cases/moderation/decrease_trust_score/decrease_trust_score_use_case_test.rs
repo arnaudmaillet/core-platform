@@ -19,7 +19,7 @@ mod tests {
         // 1. Arrange : Compte actif (score 100 par défaut via builder)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
 
         let version_snapshot = account.version();
@@ -57,7 +57,7 @@ mod tests {
         // 1. Arrange : Utilisation du builder avec un score précis
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(TrustScore::CRITICAL_THRESHOLD))
             .build()?;
 
@@ -99,7 +99,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -133,7 +133,7 @@ mod tests {
         // Arrange : Utilisation du with_state(Banned) qui met auto le score à 0 et shadowban
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)
+            .with_state(AccountState::BANNED)
             .build()?;
 
         let version_snapshot = account.version();
@@ -172,7 +172,7 @@ mod tests {
         let f = TestFixture::new();
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         f.account_repo().insert(account);
 
@@ -204,12 +204,12 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         // Compte aux US, Contexte en EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);

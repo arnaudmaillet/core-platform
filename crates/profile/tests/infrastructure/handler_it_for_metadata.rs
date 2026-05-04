@@ -73,7 +73,7 @@ async fn setup_test_context() -> MetaDataTestContext {
 
     // 5. Seed initial du profil de test
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let initial_profile = Profile::builder(
         owner_id,
         region.clone(),

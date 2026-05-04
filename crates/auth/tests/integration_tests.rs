@@ -1,5 +1,6 @@
 use auth::{KeycloakTestContext, TokenValidator};
 use shared_kernel::domain::value_objects::JwtToken;
+use shared_kernel::errors::Result;
 
 #[tokio::test]
 async fn test_keycloak_discovery_works_with_singleton() {
@@ -23,25 +24,26 @@ async fn test_keycloak_discovery_works_with_singleton() {
 }
 
 #[tokio::test]
-async fn test_another_realm_reuse_container() {
+async fn test_another_realm_reuse_container() -> Result<()> {
     // Ce test va s'exécuter immédiatement sans attendre 20s de boot Docker
     let ctx = KeycloakTestContext::restore("master").await;
 
     assert_eq!(ctx.realm, "master");
     assert!(ctx.uri.starts_with("http://127.0.0.1:"));
+
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_full_validation_flow_with_real_keycloak_token() {
+async fn test_full_validation_flow_with_real_keycloak_token() -> Result<()> {
     // 1. Setup
     let ctx = KeycloakTestContext::restore("master").await;
 
     // 2. Récupération d'un VRAI token généré par le serveur Docker
-    let (raw_token, _) = ctx.get_real_admin_token().await;
-    let jwt_token = JwtToken::from_raw(raw_token);
+    let res = ctx.get_admin_token().await?;
 
     // 3. Validation
-    let result = ctx.validator.validate(&jwt_token);
+    let result = ctx.validator.validate(&res.token);
 
     // 4. Assertions
     assert!(
@@ -52,4 +54,6 @@ async fn test_full_validation_flow_with_real_keycloak_token() {
 
     // On vérifie que le mapping vers nos Value Objects est parfait
     assert!(!claims.sub_id.as_str().is_empty());
+
+    Ok(())
 }

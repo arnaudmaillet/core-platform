@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::moderation::{
-        LiftShadowbanCommand, LiftShadowbanHandler,
-    };
+    use crate::application::use_cases::moderation::{LiftShadowbanCommand, LiftShadowbanHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
@@ -19,7 +17,7 @@ mod tests {
         // 1. Arrange : Un compte banni est automatiquement shadowbanné par notre builder
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)
+            .with_state(AccountState::BANNED)
             .build()?;
 
         let version_snapshot = account.version();
@@ -61,7 +59,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)
+            .with_state(AccountState::BANNED)
             .build()?;
         f.account_repo().insert(account);
 
@@ -91,7 +89,7 @@ mod tests {
         // 1. Arrange : Compte déjà sain (Shadowban = false par défaut)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -126,12 +124,12 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         // Arrange
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Banned)
+            .with_state(AccountState::BANNED)
             .build()?;
 
         let version_snapshot = account.version();

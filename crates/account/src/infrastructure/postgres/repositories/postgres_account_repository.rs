@@ -44,8 +44,6 @@ impl AccountRepository for PostgresAccountRepository {
     ) -> Result<Option<Account>> {
         let key = Self::cache_key(id);
         let is_no_tx = tx.is_none();
-        let uid = id.as_uuid();
-        println!("DEBUG REPO: Tentative de find_by_id pour UID: {}", uid);
 
         // 1. Stratégie de Cache (Uniquement si pas de transaction)
         if is_no_tx {

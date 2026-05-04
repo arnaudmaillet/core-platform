@@ -33,7 +33,7 @@ mod tests {
     async fn test_update_bio_success() {
         // Arrange
         let owner_id = AccountId::new(); // Contexte proprio
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -66,8 +66,8 @@ mod tests {
     async fn test_update_bio_fails_on_region_mismatch() {
         // Arrange
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -97,7 +97,7 @@ mod tests {
     async fn test_remove_bio_success() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let mut profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -130,7 +130,7 @@ mod tests {
     async fn test_update_bio_idempotency() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let bio_text = Some(Bio::try_new("Consistent Bio").unwrap());
 
         let mut profile = Profile::builder(
@@ -167,7 +167,7 @@ mod tests {
 
         let cmd = UpdateBioCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             new_bio: None,
         };
 
@@ -182,7 +182,7 @@ mod tests {
     async fn test_update_bio_concurrency_conflict() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -226,7 +226,7 @@ mod tests {
     async fn test_update_bio_transaction_atomic_failure() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),

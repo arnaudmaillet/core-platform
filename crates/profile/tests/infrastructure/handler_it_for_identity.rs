@@ -1,27 +1,29 @@
 // crates/profile/tests/infrastructure/handler_it_for_identity.rs
 
-use std::sync::Arc;
-use tonic::Request;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use profile::infrastructure::api::grpc::handlers::IdentityHandler;
-use profile::infrastructure::api::grpc::profile_v1::{UpdateDisplayNameRequest, UpdateHandleRequest, UpdatePrivacyRequest};
-use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_server::ProfileIdentityService;
 use profile::application::use_cases::update_display_name::UpdateDisplayNameUseCase;
 use profile::application::use_cases::update_handle::UpdateHandleUseCase;
 use profile::application::use_cases::update_privacy::UpdatePrivacyUseCase;
 use profile::domain::entities::Profile;
 use profile::domain::repositories::{ProfileIdentityRepository, ProfileRepository};
 use profile::domain::value_objects::{DisplayName, Handle, ProfileId};
+use profile::infrastructure::api::grpc::handlers::IdentityHandler;
+use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_server::ProfileIdentityService;
+use profile::infrastructure::api::grpc::profile_v1::{
+    UpdateDisplayNameRequest, UpdateHandleRequest, UpdatePrivacyRequest,
+};
 use profile::infrastructure::persistence_orchestrator::UnifiedProfileRepository;
 use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
 use profile::infrastructure::scylla::repositories::ScyllaProfileRepository;
-use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::Identifier;
+use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::OutboxRepository;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransactionManager;
 use shared_kernel::infrastructure::redis::repositories::RedisCacheRepository;
 use shared_kernel::infrastructure::utils::InfrastructureKernelTestContext;
+use std::sync::Arc;
+use tonic::Request;
 
 struct IdentityHandlerTestContext {
     handler: IdentityHandler,
@@ -61,23 +63,37 @@ async fn setup_test_context() -> IdentityHandlerTestContext {
 
     // 3. Initialisation du Handler
     let handler = IdentityHandler::new(
-        Arc::new(UpdateHandleUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
-        Arc::new(UpdateDisplayNameUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
-        Arc::new(UpdatePrivacyUseCase::new(profile_repo.clone(), outbox_repo.clone(), tx_manager.clone())),
+        Arc::new(UpdateHandleUseCase::new(
+            profile_repo.clone(),
+            outbox_repo.clone(),
+            tx_manager.clone(),
+        )),
+        Arc::new(UpdateDisplayNameUseCase::new(
+            profile_repo.clone(),
+            outbox_repo.clone(),
+            tx_manager.clone(),
+        )),
+        Arc::new(UpdatePrivacyUseCase::new(
+            profile_repo.clone(),
+            outbox_repo.clone(),
+            tx_manager.clone(),
+        )),
     );
 
     // 4. Seed d'un profil de test
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let initial_profile = Profile::builder(
         owner_id.clone(),
         region.clone(),
         DisplayName::try_new("Original Name").unwrap(),
         Handle::try_new(format!("user_{}", &owner_id.to_string()[..8])).unwrap(),
-    ).build();
+    )
+    .build();
 
     let profile_id = initial_profile.id().clone();
-    profile_repo.save_identity(&initial_profile, None, None)
+    profile_repo
+        .save_identity(&initial_profile, None, None)
         .await
         .expect("Failed to seed profile");
 
@@ -106,16 +122,28 @@ async fn test_identity_handler_update_handle_success() {
     // Simule l'intercepteur de région
     request.extensions_mut().insert(ctx.region.clone());
 
-    let response = ctx.handler.update_handle(request).await.expect("gRPC call failed");
+    let response = ctx
+        .handler
+        .update_handle(request)
+        .await
+        .expect("gRPC call failed");
     assert_eq!(response.into_inner().handle, new_handle_str);
 
     // Vérification Persistance
-    let db_profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(db_profile.handle().as_str(), new_handle_str);
 
     // Vérification Outbox
     let pending_events = ctx.outbox_repo.find_pending(10).await.unwrap();
-    assert!(!pending_events.is_empty(), "Outbox should contain ProfileUpdated event");
+    assert!(
+        !pending_events.is_empty(),
+        "Outbox should contain ProfileUpdated event"
+    );
 }
 
 #[tokio::test]
@@ -129,9 +157,17 @@ async fn test_identity_handler_update_display_name_success() {
     });
     request.extensions_mut().insert(ctx.region.clone());
 
-    ctx.handler.update_display_name(request).await.expect("gRPC call failed");
+    ctx.handler
+        .update_display_name(request)
+        .await
+        .expect("gRPC call failed");
 
-    let db_profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(db_profile.display_name().as_str(), new_name);
 }
 
@@ -145,9 +181,17 @@ async fn test_identity_handler_update_privacy_success() {
     });
     request.extensions_mut().insert(ctx.region.clone());
 
-    ctx.handler.update_privacy(request).await.expect("gRPC call failed");
+    ctx.handler
+        .update_privacy(request)
+        .await
+        .expect("gRPC call failed");
 
-    let db_profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(db_profile.is_private());
 }
 
@@ -162,7 +206,8 @@ async fn test_identity_handler_update_handle_already_exists() {
         ctx.region.clone(),
         DisplayName::try_new("Other").unwrap(),
         Handle::try_new(taken_handle).unwrap(),
-    ).build();
+    )
+    .build();
 
     ctx.identity_repo.save(&other_profile, None).await.unwrap();
 
@@ -176,7 +221,10 @@ async fn test_identity_handler_update_handle_already_exists() {
     let result = ctx.handler.update_handle(request).await;
 
     // 3. Doit retourner une erreur (Status gRPC mappé depuis DomainError::AlreadyExists)
-    assert!(result.is_err(), "Should fail because handle is already taken");
+    assert!(
+        result.is_err(),
+        "Should fail because handle is already taken"
+    );
 }
 
 #[tokio::test]
@@ -199,7 +247,12 @@ async fn test_identity_handler_rollback_on_outbox_failure() {
     let _ = ctx.handler.update_handle(request).await;
 
     // ASSERTION : L'handle en base doit TOUJOURS être l'ancien
-    let db_profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(db_profile.handle().as_str(), db_profile.handle().as_str());
 }
 
@@ -207,7 +260,12 @@ async fn test_identity_handler_rollback_on_outbox_failure() {
 async fn test_identity_handler_update_with_same_value_is_noop() {
     let ctx = setup_test_context().await;
 
-    let initial_db = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let initial_db = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     let current_handle = initial_db.handle().as_str().to_string();
     let initial_version = initial_db.version();
 
@@ -217,10 +275,22 @@ async fn test_identity_handler_update_with_same_value_is_noop() {
     });
     request.extensions_mut().insert(ctx.region.clone());
 
-    ctx.handler.update_handle(request).await.expect("Should be OK");
+    ctx.handler
+        .update_handle(request)
+        .await
+        .expect("Should be OK");
 
-    let final_db = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
-    assert_eq!(final_db.version(), initial_version, "Version should not increment on NOOP");
+    let final_db = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        final_db.version(),
+        initial_version,
+        "Version should not increment on NOOP"
+    );
 }
 
 #[tokio::test]
@@ -244,18 +314,23 @@ async fn test_identity_handler_optimistic_concurrency_retry() {
     let pool = ctx.infra.postgres().pool();
 
     // 1. Récupérer version actuelle
-    let profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let profile = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     let current_version = profile.version();
 
     // 2. Simuler une mise à jour concurrente directe en DB (Out-of-band)
     // On incrémente la version de force pour faire échouer le prochain save du handler
-sqlx::query("UPDATE user_profiles SET version = $1 WHERE id = $2 AND region_code = $3")
-    .bind((current_version + 1) as i64)
-    .bind(ctx.profile_id.as_uuid())
-    .bind(ctx.region.as_str())
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE user_profiles SET version = $1 WHERE id = $2 AND region_code = $3")
+        .bind((current_version + 1) as i64)
+        .bind(ctx.profile_id.as_uuid())
+        .bind(ctx.region.as_str())
+        .execute(&pool)
+        .await
+        .unwrap();
 
     // 3. Appel gRPC : Le Use Case devrait détecter le conflit, recharger le profil et réessayer
     let mut request = Request::new(UpdateHandleRequest {
@@ -266,9 +341,17 @@ sqlx::query("UPDATE user_profiles SET version = $1 WHERE id = $2 AND region_code
 
     let result = ctx.handler.update_handle(request).await;
 
-    assert!(result.is_ok(), "Retry logic should have reloaded the profile and succeeded");
+    assert!(
+        result.is_ok(),
+        "Retry logic should have reloaded the profile and succeeded"
+    );
 
-    let db_profile = ctx.identity_repo.fetch(&ctx.profile_id, &ctx.region).await.unwrap().unwrap();
+    let db_profile = ctx
+        .identity_repo
+        .fetch(&ctx.profile_id, &ctx.region)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(db_profile.handle().as_str(), "retry_works");
     assert_eq!(db_profile.version(), current_version + 2); // Seed(1) + ManualUpdate(2) + gRPC(3)
 }

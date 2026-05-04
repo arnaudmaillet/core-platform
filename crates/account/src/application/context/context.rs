@@ -112,14 +112,7 @@ impl AccountContext {
                 id: self.account_id.to_string(),
             })?;
 
-        println!("DEBUG CONTEXT: Account trouvé, vérification de la région...");
-
-        if let Err(e) = self.ensure_region(&account) {
-            println!("DEBUG CONTEXT: ❌ ensure_region a échoué: {:?}", e);
-            return Err(e);
-        }
-
-        println!("DEBUG CONTEXT: ✅ Région valide");
+        self.ensure_region(&account)?;
 
         Ok(account)
     }
@@ -195,14 +188,10 @@ impl AccountContext {
     // --- Sécurité ---
 
     fn ensure_region(&self, account: &Account) -> Result<()> {
-        let account_region = account.identity().region_code(); // Adapte selon ton getter
-        let context_region = &self.region; // La région extraite du header x-region
+        let account_region = account.identity().region_code();
+        let context_region = &self.region;
 
         if account_region != context_region {
-            println!(
-                "DEBUG REGION: ❌ Mismatch ! Compte DB: '{:?}', Contexte Header: '{:?}'",
-                account_region, context_region
-            );
             return Err(DomainError::NotFound {
                 entity: "Account",
                 id: account.identity().account_id().to_string(),

@@ -19,7 +19,7 @@ mod tests {
         // 1. Arrange : Score initial à 50
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(50))
             .build()?;
 
@@ -57,7 +57,7 @@ mod tests {
         // 1. Arrange : Score à 90
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(50))
             .build()?;
 
@@ -96,7 +96,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -134,7 +134,7 @@ mod tests {
         // Arrange : Déjà au maximum (100)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(TrustScore::MAX))
             .build()?;
 
@@ -172,12 +172,12 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         // Arrange : Compte US vs Contexte EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
 
