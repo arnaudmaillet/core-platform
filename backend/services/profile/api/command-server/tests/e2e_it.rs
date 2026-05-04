@@ -54,7 +54,7 @@ async fn test_profile_e2e_comprehensive() {
 
     // --- SEED INITIAL ---
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let profile = Profile::builder(
         owner_id.clone(),
         region.clone(),
@@ -70,7 +70,7 @@ async fn test_profile_e2e_comprehensive() {
         profile_id: profile.id().to_string(),
         new_handle: "new_handle_ok".into(),
     });
-    req.metadata_mut().insert("x-region", MetadataValue::from_static("eu"));
+    req.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
     let res = identity_client.update_handle(req).await.expect("Identity service failed");
     assert_eq!(res.into_inner().handle, "new_handle_ok");
 
@@ -80,7 +80,7 @@ async fn test_profile_e2e_comprehensive() {
         profile_id: profile.id().to_string(),
         new_bio: Some("Hello, I am a test profile".into()),
     });
-    req_bio.metadata_mut().insert("x-region", MetadataValue::from_static("eu"));
+    req_bio.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
     let res_bio = metadata_client.update_bio(req_bio).await.expect("Metadata service failed");
     assert_eq!(res_bio.into_inner().bio, Some("Hello, I am a test profile".into()));
 
@@ -90,7 +90,7 @@ async fn test_profile_e2e_comprehensive() {
         profile_id: profile.id().to_string(),
         new_avatar_url: "https://cdn.test.com/avatar.png".into(),
     });
-    req_avatar.metadata_mut().insert("x-region", MetadataValue::from_static("eu"));
+    req_avatar.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
     let res_avatar = media_client.update_avatar(req_avatar).await.expect("Media service failed");
     assert_eq!(res_avatar.into_inner().avatar_url, Some("https://cdn.test.com/avatar.png".into()));
 
@@ -108,7 +108,7 @@ async fn test_profile_e2e_comprehensive() {
         profile_id: uuid::Uuid::new_v4().to_string(),
         new_handle: "ghost".into(),
     });
-    req_not_found.metadata_mut().insert("x-region", MetadataValue::from_static("eu"));
+    req_not_found.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
     let res_err = identity_client.update_handle(req_not_found).await.unwrap_err();
     assert_eq!(res_err.code(), Code::NotFound);
 

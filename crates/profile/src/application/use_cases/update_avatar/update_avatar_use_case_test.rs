@@ -32,7 +32,7 @@ mod tests {
     async fn test_update_avatar_success() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -66,8 +66,8 @@ mod tests {
     async fn test_update_avatar_fails_on_region_mismatch() {
         // Arrange : Profil en EU, Commande en US
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -97,7 +97,7 @@ mod tests {
     async fn test_update_avatar_idempotency() {
         // Arrange : Profil qui a DÉJÀ cet avatar
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let avatar_url = Url::try_new("https://cdn.com/existing.png").unwrap();
 
         let mut profile = Profile::builder(
@@ -136,7 +136,7 @@ mod tests {
 
         let cmd = UpdateAvatarCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             new_avatar_url: url,
         };
 
@@ -151,7 +151,7 @@ mod tests {
     async fn test_update_avatar_concurrency_conflict() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -196,7 +196,7 @@ mod tests {
     async fn test_update_avatar_db_error() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),

@@ -17,7 +17,7 @@ mod tests {
 
     fn create_test_account() -> Account {
         let id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@example.com").unwrap());
 
@@ -30,7 +30,7 @@ mod tests {
     fn test_account_initial_state() -> Result<()> {
         let account = create_test_account();
 
-        assert_eq!(account.identity().state(), &AccountState::Pending);
+        assert_eq!(account.identity().state(), &AccountState::PENDING);
         assert_eq!(
             account.metadata().version(),
             AggregateMetadata::INITIAL_VERSION
@@ -67,13 +67,13 @@ mod tests {
         // Ban (Raison obligatoire)
         account.ban(AuditReason::try_new("Violation of TOS")?)?;
 
-        assert_eq!(account.identity().state(), &AccountState::Banned);
+        assert_eq!(account.identity().state(), &AccountState::BANNED);
         // Le ban doit détruire le trust score (Penalty 100)
         assert_eq!(account.governance().trust_score().value(), TrustScore::MIN);
 
         // Unban (Raison optionnelle)
         account.unban(AuditReason::system("Automatic unban"))?;
-        assert_eq!(account.identity().state(), &AccountState::Active);
+        assert_eq!(account.identity().state(), &AccountState::ACTIVE);
         // Le unban redonne un petit bonus de réhabilitation (20)
         assert_eq!(account.governance().trust_score().value(), 20);
 

@@ -25,7 +25,7 @@ async fn test_profile_lifecycle() {
     // Le context 'ctx' doit rester dans le scope pour garder le container en vie
     let (repo, ctx) = get_repo_context().await;
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
 
     // 1. Création initiale
     let profile = Profile::builder(
@@ -61,7 +61,7 @@ async fn test_profile_lifecycle() {
 #[tokio::test]
 async fn test_fetch_by_handle_not_found() {
     let (repo, _ctx) = get_repo_context().await;
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let handle = Handle::try_new("unknown_user").unwrap();
 
     let result = repo.fetch_by_handle(&handle, &region).await.unwrap();
@@ -71,7 +71,7 @@ async fn test_fetch_by_handle_not_found() {
 #[tokio::test]
 async fn test_concurrency_conflict_real_scenario() {
     let (repo, _ctx) = get_repo_context().await;
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
 
     let profile = Profile::builder(
         AccountId::new(),
@@ -97,7 +97,7 @@ async fn test_concurrency_conflict_real_scenario() {
 #[tokio::test]
 async fn test_unique_handle_constraint() {
     let (repo, _ctx) = get_repo_context().await;
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let handle = Handle::try_new("unique_bob").unwrap();
 
     let bob1 = Profile::builder(
@@ -122,7 +122,7 @@ async fn test_unique_handle_constraint() {
 #[tokio::test]
 async fn test_partial_update_integrity() {
     let (repo, _ctx) = get_repo_context().await;
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
 
     // 1. Création avec bio et avatar
     let mut profile = Profile::builder(
@@ -158,7 +158,7 @@ async fn test_transaction_rollback_logic() {
 
     let pool = ctx.pool();
     let repo = PostgresIdentityRepository::new(pool.clone());
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
 
     // Démarrage manuel d'une transaction via SQLx pour tester le rollback
     let tx_sqlx = pool.begin().await.unwrap();

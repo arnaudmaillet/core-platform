@@ -60,7 +60,7 @@ impl TestFixture {
         );
 
         let account_id = AccountId::new();
-        let region = RegionCode::from_raw("eu");
+        let region = RegionCode::from_raw("EU");
         let account_ctx = AccountContext::new(app_ctx.clone(), account_id, region);
 
         let mut bus = CommandBus::new();

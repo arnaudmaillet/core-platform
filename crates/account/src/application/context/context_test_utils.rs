@@ -29,7 +29,7 @@
 //         }
 
 //         if builder.region().is_none() {
-//             builder = builder.with_region(RegionCode::from_raw("eu".to_string()));
+//             builder = builder.with_region(RegionCode::from_raw("EU".to_string()));
 //         }
 
 //         // 2. Handle the App Context and Repositories

@@ -1,10 +1,10 @@
 -- 1. ENUMS (Identité et rôles)
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_state') THEN
-        CREATE TYPE account_state AS ENUM ('pending', 'active', 'deactivated', 'suspended', 'banned');
+        CREATE TYPE account_state AS ENUM ('PENDING', 'ACTIVE', 'DEACTIVATED', 'SUSPENDED', 'BANNED');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'internal_role') THEN
-        CREATE TYPE internal_role AS ENUM ('user', 'moderator', 'staff', 'admin');
+        CREATE TYPE internal_role AS ENUM ('USER', 'MODERATOR', 'STAFF', 'ADMIN');
     END IF;
 END $$;
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS account_identity (
     sub_id TEXT,
     email TEXT UNIQUE,
     phone_number TEXT UNIQUE,
-    state account_state NOT NULL DEFAULT 'pending',
+    state account_state NOT NULL DEFAULT 'PENDING',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'en',
     region_code VARCHAR(10) NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS account_settings (
 -- 5. GOVERNANCE (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_governance (
     account_id UUID PRIMARY KEY,
-    role internal_role NOT NULL DEFAULT 'user',
+    role internal_role NOT NULL DEFAULT 'USER',
     is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE,
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
     trust_score INT NOT NULL DEFAULT 100,

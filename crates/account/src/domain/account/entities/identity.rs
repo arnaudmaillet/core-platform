@@ -160,56 +160,56 @@ impl AccountIdentity {
     }
 
     pub(crate) fn apply_registration(&mut self) -> Result<()> {
-        self.state = AccountState::Active;
+        self.state = AccountState::ACTIVE;
         self.last_active_at = Some(Utc::now());
         Ok(())
     }
 
     pub(crate) fn apply_active_state(&mut self) -> Result<bool> {
-        if self.state == AccountState::Active {
+        if self.state == AccountState::ACTIVE {
             return Ok(false);
         }
-        self.state = AccountState::Active;
+        self.state = AccountState::ACTIVE;
         Ok(true)
     }
 
     pub(crate) fn apply_deactivation_state(&mut self) -> Result<bool> {
-        if self.state == AccountState::Deactivated {
+        if self.state == AccountState::DEACTIVATED {
             return Ok(false);
         }
-        self.state = AccountState::Deactivated;
+        self.state = AccountState::DEACTIVATED;
         Ok(true)
     }
 
     pub(crate) fn apply_suspension_state(&mut self) -> Result<bool> {
-        if self.state == AccountState::Suspended {
+        if self.state == AccountState::SUSPENDED {
             return Ok(false);
         }
-        self.state = AccountState::Suspended;
+        self.state = AccountState::SUSPENDED;
         Ok(true)
     }
 
     pub(crate) fn apply_unsuspend_state(&mut self) -> Result<bool> {
-        if self.state != AccountState::Suspended {
+        if self.state != AccountState::SUSPENDED {
             return Ok(false);
         }
-        self.state = AccountState::Active;
+        self.state = AccountState::ACTIVE;
         Ok(true)
     }
 
     pub(crate) fn apply_ban_state(&mut self) -> Result<bool> {
-        if self.state == AccountState::Banned {
+        if self.state == AccountState::BANNED {
             return Ok(false);
         }
-        self.state = AccountState::Banned;
+        self.state = AccountState::BANNED;
         Ok(true)
     }
 
     pub(crate) fn apply_unban_state(&mut self) -> Result<bool> {
-        if self.state != AccountState::Banned {
+        if self.state != AccountState::BANNED {
             return Ok(false);
         }
-        self.state = AccountState::Active;
+        self.state = AccountState::ACTIVE;
         Ok(true)
     }
 
@@ -229,29 +229,29 @@ impl AccountIdentity {
     // --- LOGIQUE DE LECTURE ---
 
     pub fn is_active(&self) -> bool {
-        self.state == AccountState::Active
+        self.state == AccountState::ACTIVE
     }
 
     pub fn is_pending(&self) -> bool {
-        self.state == AccountState::Pending
+        self.state == AccountState::PENDING
     }
 
     pub fn is_deactivated(&self) -> bool {
-        matches!(self.state, AccountState::Deactivated)
+        matches!(self.state, AccountState::DEACTIVATED)
     }
 
     pub fn is_banned(&self) -> bool {
-        matches!(self.state, AccountState::Banned)
+        matches!(self.state, AccountState::BANNED)
     }
 
     pub fn is_suspended(&self) -> bool {
-        matches!(self.state, AccountState::Suspended)
+        matches!(self.state, AccountState::SUSPENDED)
     }
 
     pub fn is_blocked(&self) -> bool {
         matches!(
             self.state,
-            AccountState::Banned | AccountState::Suspended | AccountState::Deactivated
+            AccountState::BANNED | AccountState::SUSPENDED | AccountState::DEACTIVATED
         )
     }
 }

@@ -19,7 +19,7 @@ mod tests {
         // 1. Arrange : Compte actif en UTC
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .settings(|s| s.with_timezone(initial_tz))
             .build()?;
 
@@ -60,7 +60,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -99,7 +99,7 @@ mod tests {
         // 1. Arrange : Compte possédant déjà cette timezone
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .settings(|s| s.with_timezone(current_tz.clone()))
             .build()?;
 
@@ -139,7 +139,7 @@ mod tests {
         // Arrange : Contexte EU (Paris par défaut dans la fixture)
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         f.account_repo().insert(account);
 
@@ -165,12 +165,12 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         // Arrange : Compte US vs contexte EU
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
 
         let version_snapshot = account.version();

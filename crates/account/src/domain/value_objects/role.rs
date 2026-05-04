@@ -7,12 +7,11 @@ use std::fmt;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub enum AccountRole {
-    User = 0,
-    Moderator = 10,
-    Staff = 20,
-    Admin = 30,
+    USER = 0,
+    MODERATOR = 10,
+    STAFF = 20,
+    ADMIN = 30,
 }
 
 impl AccountRole {
@@ -29,10 +28,10 @@ impl AccountRole {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::User => "user",
-            Self::Moderator => "moderator",
-            Self::Staff => "staff",
-            Self::Admin => "admin",
+            Self::USER => "USER",
+            Self::MODERATOR => "MODERATOR",
+            Self::STAFF => "STAFF",
+            Self::ADMIN => "ADMIN",
         }
     }
 
@@ -43,11 +42,20 @@ impl AccountRole {
     }
 
     pub fn can_suspend(&self) -> bool {
-        self.has_permission_of(Self::Moderator)
+        self.has_permission_of(Self::MODERATOR)
     }
 
     pub fn can_access_admin_panel(&self) -> bool {
-        self.has_permission_of(Self::Staff)
+        self.has_permission_of(Self::STAFF)
+    }
+
+    pub fn as_lowercase(&self) -> &'static str {
+        match self {
+            Self::USER => "user",
+            Self::MODERATOR => "moderator",
+            Self::STAFF => "staff",
+            Self::ADMIN => "admin",
+        }
     }
 }
 
@@ -60,7 +68,7 @@ impl ValueObject for AccountRole {
 
 impl Default for AccountRole {
     fn default() -> Self {
-        Self::User
+        Self::USER
     }
 }
 
@@ -70,13 +78,11 @@ impl FromStr for AccountRole {
     type Err = DomainError;
 
     fn from_str(s: &str) -> Result<Self> {
-        // Hyperscale: On compare des &str sans to_lowercase() si possible
-        // ou on gère le trim de manière performante.
-        match s.trim() {
-            "user" | "User" => Ok(Self::User),
-            "moderator" | "Moderator" => Ok(Self::Moderator),
-            "staff" | "Staff" => Ok(Self::Staff),
-            "admin" | "Admin" => Ok(Self::Admin),
+        match s.to_uppercase().trim() {
+            "USER" => Ok(Self::USER),
+            "MODERATOR" => Ok(Self::MODERATOR),
+            "STAFF" => Ok(Self::STAFF),
+            "ADMIN" => Ok(Self::ADMIN),
             _ => Err(DomainError::Validation {
                 field: "role",
                 reason: format!("Unknown account role: {}", s),
@@ -97,9 +103,9 @@ impl TryFrom<i32> for AccountRole {
 
     fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::User),
-            1 => Ok(Self::Staff),
-            2 => Ok(Self::Admin),
+            0 => Ok(Self::USER),
+            1 => Ok(Self::STAFF),
+            2 => Ok(Self::ADMIN),
             _ => Err(format!("'{}' is not a valid AccountRole ID", value)),
         }
     }

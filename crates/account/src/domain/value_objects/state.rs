@@ -8,11 +8,11 @@ use std::str::FromStr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum AccountState {
-    Pending,
-    Active,
-    Deactivated,
-    Suspended,
-    Banned,
+    PENDING,
+    ACTIVE,
+    DEACTIVATED,
+    SUSPENDED,
+    BANNED,
 }
 
 impl AccountState {
@@ -28,22 +28,22 @@ impl AccountState {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Pending => "pending",
-            Self::Active => "active",
-            Self::Deactivated => "deactivated",
-            Self::Suspended => "suspended",
-            Self::Banned => "banned",
+            Self::PENDING => "PENDING",
+            Self::ACTIVE => "ACTIVE",
+            Self::DEACTIVATED => "DEACTIVATED",
+            Self::SUSPENDED => "SUSPENDED",
+            Self::BANNED => "BANNED",
         }
     }
 
     // --- LOGIQUE MÉTIER ---
 
     pub fn is_blocked(&self) -> bool {
-        matches!(self, Self::Deactivated | Self::Suspended | Self::Banned)
+        matches!(self, Self::DEACTIVATED | Self::SUSPENDED | Self::BANNED)
     }
 
     pub fn can_authenticate(&self) -> bool {
-        matches!(self, Self::Active | Self::Pending)
+        matches!(self, Self::ACTIVE | Self::PENDING)
     }
 }
 
@@ -55,7 +55,7 @@ impl ValueObject for AccountState {
 
 impl Default for AccountState {
     fn default() -> Self {
-        Self::Pending
+        Self::PENDING
     }
 }
 
@@ -65,13 +65,12 @@ impl FromStr for AccountState {
     type Err = DomainError;
 
     fn from_str(s: &str) -> Result<Self> {
-        // Match performant sans allocation String
-        match s.trim().to_lowercase().as_str() {
-            "pending" => Ok(Self::Pending),
-            "active" => Ok(Self::Active),
-            "deactivated" => Ok(Self::Deactivated),
-            "suspended" => Ok(Self::Suspended),
-            "banned" => Ok(Self::Banned),
+        match s.trim().to_uppercase().as_str() {
+            "PENDING" => Ok(Self::PENDING),
+            "ACTIVE" => Ok(Self::ACTIVE),
+            "DEACTIVATED" => Ok(Self::DEACTIVATED),
+            "SUSPENDED" => Ok(Self::SUSPENDED),
+            "BANNED" => Ok(Self::BANNED),
             _ => Err(DomainError::Validation {
                 field: "account_state",
                 reason: format!("Unknown account state: {}", s),

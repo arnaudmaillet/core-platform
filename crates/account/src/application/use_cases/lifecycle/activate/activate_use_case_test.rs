@@ -36,7 +36,7 @@ mod tests {
             .await?;
 
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Active);
+            assert_eq!(*acc.identity().state(), AccountState::ACTIVE);
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -76,7 +76,7 @@ mod tests {
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Deactivated);
+            assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -109,7 +109,7 @@ mod tests {
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Active);
+            assert_eq!(*acc.identity().state(), AccountState::ACTIVE);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -144,7 +144,7 @@ mod tests {
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
 
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Banned);
+            assert_eq!(*acc.identity().state(), AccountState::BANNED);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -157,7 +157,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::try_new("us")?;
+        let wrong_region = RegionCode::try_new("US")?;
 
         // Arrange : On insère un compte qui n'est pas dans la région du contexte (eu)
         let account = f.account_builder_for(wrong_region)?.build()?;

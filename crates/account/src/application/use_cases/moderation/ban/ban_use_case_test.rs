@@ -32,7 +32,7 @@ mod tests {
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Banned);
+            assert_eq!(*acc.identity().state(), AccountState::BANNED);
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -95,7 +95,7 @@ mod tests {
 
         // Assert
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Banned);
+            assert_eq!(*acc.identity().state(), AccountState::BANNED);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -198,7 +198,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         let account = f.account_builder_for(wrong_region)?.build()?;
         let version_snapshot = account.version();

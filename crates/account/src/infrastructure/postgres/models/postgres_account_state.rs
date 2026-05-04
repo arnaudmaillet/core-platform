@@ -2,13 +2,13 @@ use crate::domain::value_objects::AccountState;
 
 /// Il permet de mapper l'ENUM PostgreSQL sans polluer le Domaine avec SQLx.
 #[derive(Debug, sqlx::Type)]
-#[sqlx(type_name = "account_state", rename_all = "lowercase")]
+#[sqlx(type_name = "account_state")]
 pub enum PostgresAccountState {
-    Pending,
-    Active,
-    Deactivated,
-    Suspended,
-    Banned,
+    PENDING,
+    ACTIVE,
+    DEACTIVATED,
+    SUSPENDED,
+    BANNED,
 }
 
 // --- CONVERSIONS ---
@@ -17,11 +17,11 @@ pub enum PostgresAccountState {
 impl From<PostgresAccountState> for AccountState {
     fn from(sql_status: PostgresAccountState) -> Self {
         match sql_status {
-            PostgresAccountState::Pending => Self::Pending,
-            PostgresAccountState::Active => Self::Active,
-            PostgresAccountState::Deactivated => Self::Deactivated,
-            PostgresAccountState::Suspended => Self::Suspended,
-            PostgresAccountState::Banned => Self::Banned,
+            PostgresAccountState::PENDING => Self::PENDING,
+            PostgresAccountState::ACTIVE => Self::ACTIVE,
+            PostgresAccountState::DEACTIVATED => Self::DEACTIVATED,
+            PostgresAccountState::SUSPENDED => Self::SUSPENDED,
+            PostgresAccountState::BANNED => Self::BANNED,
         }
     }
 }
@@ -30,11 +30,11 @@ impl From<PostgresAccountState> for AccountState {
 impl From<&AccountState> for PostgresAccountState {
     fn from(domain_status: &AccountState) -> Self {
         match domain_status {
-            AccountState::Pending => PostgresAccountState::Pending,
-            AccountState::Active => PostgresAccountState::Active,
-            AccountState::Deactivated => PostgresAccountState::Deactivated,
-            AccountState::Suspended => PostgresAccountState::Suspended,
-            AccountState::Banned => PostgresAccountState::Banned,
+            AccountState::PENDING => PostgresAccountState::PENDING,
+            AccountState::ACTIVE => PostgresAccountState::ACTIVE,
+            AccountState::DEACTIVATED => PostgresAccountState::DEACTIVATED,
+            AccountState::SUSPENDED => PostgresAccountState::SUSPENDED,
+            AccountState::BANNED => PostgresAccountState::BANNED,
         }
     }
 }

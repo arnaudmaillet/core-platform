@@ -10,13 +10,13 @@ use std::str::FromStr;
 pub struct RegionCode(String);
 
 impl RegionCode {
-    pub const EU: &'static str = "eu";
-    pub const US: &'static str = "us";
-    pub const ASIA: &'static str = "asia";
+    pub const EU: &'static str = "EU";
+    pub const US: &'static str = "US";
+    pub const ASIA: &'static str = "ASIA";
 
     /// Constructeur sécurisé : normalise en minuscules et valide
     pub fn try_new(code: impl Into<String>) -> Result<Self> {
-        let code_raw = code.into().to_lowercase().trim().to_string();
+        let code_raw = code.into().to_uppercase().trim().to_string();
         let region = Self(code_raw);
         region.validate()?;
         Ok(region)

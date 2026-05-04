@@ -23,7 +23,7 @@ async fn setup_context() -> (PostgresLocationRepository, PostgresTestContext) {
 async fn test_location_upsert_lifecycle() {
     let (repo, _ctx) = setup_context().await;
     let profile_id = ProfileId::new();
-    let region = RegionCode::try_new("eu".to_string()).unwrap();
+    let region = RegionCode::try_new("EU".to_string()).unwrap();
     let point_a = GeoPoint::try_new(2.3522, 48.8566).unwrap();
 
     let loc = UserLocationBuilder::new(profile_id.clone(), region.clone(), point_a).build();
@@ -40,29 +40,27 @@ async fn test_location_upsert_lifecycle() {
 
     repo.save(&fetched, None).await.expect("Update failed");
 
-    let final_check = repo
-        .fetch(&profile_id, &region)
-        .await
-        .unwrap()
-        .unwrap();
+    let final_check = repo.fetch(&profile_id, &region).await.unwrap().unwrap();
     assert_eq!(final_check.version(), 2);
 }
 
 #[tokio::test]
 async fn test_find_nearby_users() {
     let (repo, _ctx) = setup_context().await;
-    let region = RegionCode::try_new("eu".to_string()).unwrap();
+    let region = RegionCode::try_new("EU".to_string()).unwrap();
 
     let user_paris = UserLocationBuilder::new(
         ProfileId::new(),
         region.clone(),
         GeoPoint::try_new(2.3522, 48.8566).unwrap(),
-    ).build();
+    )
+    .build();
     let user_boulogne = UserLocationBuilder::new(
         ProfileId::new(),
         region.clone(),
         GeoPoint::try_new(2.2433, 48.8397).unwrap(),
-    ).build();
+    )
+    .build();
 
     repo.save(&user_paris, None).await.unwrap();
     repo.save(&user_boulogne, None).await.unwrap();
@@ -79,7 +77,7 @@ async fn test_find_nearby_users() {
 #[tokio::test]
 async fn test_ghost_mode_is_excluded_from_nearby() {
     let (repo, _ctx) = setup_context().await;
-    let region = RegionCode::try_new("eu".to_string()).unwrap();
+    let region = RegionCode::try_new("EU".to_string()).unwrap();
     let point = GeoPoint::try_new(2.3522, 48.8566).unwrap();
 
     let mut ghost_user = UserLocationBuilder::new(ProfileId::new(), region.clone(), point).build();
@@ -95,7 +93,7 @@ async fn test_ghost_mode_is_excluded_from_nearby() {
 async fn test_find_nearby_edge_of_radius() {
     let (repo, _ctx) = setup_context().await;
 
-    let region = RegionCode::try_new("eu".to_string()).unwrap();
+    let region = RegionCode::try_new("EU".to_string()).unwrap();
     let center = GeoPoint::try_new(2.3522, 48.8566).unwrap(); // Paris
 
     // On utilise un décalage plus petit pour être sûr de tomber entre 10km et 11km
@@ -110,7 +108,11 @@ async fn test_find_nearby_edge_of_radius() {
         .fetch_nearby(center, region.clone(), 9_000.0, 10)
         .await
         .unwrap();
-    assert_eq!(results_9k.len(), 0, "Le point à 10.5km ne devrait pas être trouvé dans un rayon de 9km");
+    assert_eq!(
+        results_9k.len(),
+        0,
+        "Le point à 10.5km ne devrait pas être trouvé dans un rayon de 9km"
+    );
 
     // 2. Recherche à 12km : doit le trouver
     let results_12k = repo
@@ -128,8 +130,8 @@ async fn test_find_nearby_edge_of_radius() {
 #[tokio::test]
 async fn test_regional_isolation_nearby() {
     let (repo, _ctx) = setup_context().await;
-    let region_eu = RegionCode::try_new("eu".to_string()).unwrap();
-    let region_us = RegionCode::try_new("us".to_string()).unwrap();
+    let region_eu = RegionCode::try_new("EU".to_string()).unwrap();
+    let region_us = RegionCode::try_new("US".to_string()).unwrap();
     let point = GeoPoint::try_new(2.3522, 48.8566).unwrap();
 
     let user_eu = UserLocationBuilder::new(ProfileId::new(), region_eu.clone(), point).build();
@@ -143,5 +145,5 @@ async fn test_regional_isolation_nearby() {
         .await
         .unwrap();
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0.region_code().as_str(), "eu");
+    assert_eq!(results[0].0.region_code().as_str(), "EU");
 }

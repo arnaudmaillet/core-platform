@@ -5,12 +5,12 @@ use crate::domain::value_objects::AccountRole;
 
 /// Représentation technique du rôle pour PostgreSQL
 #[derive(Debug, Deserialize, Clone, Type)]
-#[sqlx(type_name = "internal_role", rename_all = "lowercase")]
+#[sqlx(type_name = "internal_role")]
 pub enum PostgresAccountRole {
-    User,
-    Moderator,
-    Staff,
-    Admin,
+    USER,
+    MODERATOR,
+    STAFF,
+    ADMIN,
 }
 
 // --- CONVERSIONS ---
@@ -19,10 +19,10 @@ pub enum PostgresAccountRole {
 impl From<PostgresAccountRole> for AccountRole {
     fn from(sql_role: PostgresAccountRole) -> Self {
         match sql_role {
-            PostgresAccountRole::User => AccountRole::User,
-            PostgresAccountRole::Moderator => AccountRole::Moderator,
-            PostgresAccountRole::Staff => AccountRole::Staff,
-            PostgresAccountRole::Admin => AccountRole::Admin,
+            PostgresAccountRole::USER => AccountRole::USER,
+            PostgresAccountRole::MODERATOR => AccountRole::MODERATOR,
+            PostgresAccountRole::STAFF => AccountRole::STAFF,
+            PostgresAccountRole::ADMIN => AccountRole::ADMIN,
         }
     }
 }
@@ -31,10 +31,10 @@ impl From<PostgresAccountRole> for AccountRole {
 impl From<AccountRole> for PostgresAccountRole {
     fn from(domain_role: AccountRole) -> Self {
         match domain_role {
-            AccountRole::User => PostgresAccountRole::User,
-            AccountRole::Moderator => PostgresAccountRole::Moderator,
-            AccountRole::Staff => PostgresAccountRole::Staff,
-            AccountRole::Admin => PostgresAccountRole::Admin,
+            AccountRole::USER => PostgresAccountRole::USER,
+            AccountRole::MODERATOR => PostgresAccountRole::MODERATOR,
+            AccountRole::STAFF => PostgresAccountRole::STAFF,
+            AccountRole::ADMIN => PostgresAccountRole::ADMIN,
         }
     }
 }

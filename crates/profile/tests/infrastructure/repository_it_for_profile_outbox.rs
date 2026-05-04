@@ -11,8 +11,8 @@ use shared_kernel::domain::repositories::OutboxRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::infrastructure::postgres::repositories::PostgresOutboxRepository;
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
-use uuid::Uuid;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
+use uuid::Uuid;
 
 /// Helper local pour obtenir un contexte Postgres propre
 async fn get_pg_context() -> PostgresTestContext {
@@ -29,7 +29,7 @@ async fn test_outbox_with_real_profile_events() {
     let repo = PostgresOutboxRepository::new(pool.clone());
     let owner_id = AccountId::new();
     let profile_id = ProfileId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
 
     let event = ProfileEvent::HandleChanged {
         id: Uuid::new_v4(),
@@ -45,7 +45,9 @@ async fn test_outbox_with_real_profile_events() {
     let tx_sqlx = pool.begin().await.unwrap();
     let mut wrapped_tx = PostgresTransaction::new(tx_sqlx);
 
-    repo.save(&mut wrapped_tx, &event).await.expect("Save failed");
+    repo.save(&mut wrapped_tx, &event)
+        .await
+        .expect("Save failed");
     wrapped_tx.into_inner().commit().await.unwrap();
 
     // Vérification
@@ -57,7 +59,7 @@ async fn test_outbox_with_real_profile_events() {
             .unwrap();
 
     assert_eq!(row.0["type"], "HandleChanged");
-    assert_eq!(row.1, "eu");
+    assert_eq!(row.1, "EU");
 }
 
 #[tokio::test]
@@ -69,20 +71,33 @@ async fn test_outbox_atomic_rollback_with_profile() {
 
     let mut profile = Profile::create(create_test_profile());
     let profile_id = profile.id().clone();
-    let event = profile.pull_events().first().cloned().expect("Event missing");
+    let event = profile
+        .pull_events()
+        .first()
+        .cloned()
+        .expect("Event missing");
 
     // TRANSACTION
     let tx_sqlx = pool.begin().await.unwrap();
     let mut wrapped_tx = PostgresTransaction::new(tx_sqlx);
 
-    profile_repo.save(&profile, Some(&mut wrapped_tx)).await.unwrap();
-    outbox_repo.save(&mut wrapped_tx, event.as_ref()).await.unwrap();
+    profile_repo
+        .save(&profile, Some(&mut wrapped_tx))
+        .await
+        .unwrap();
+    outbox_repo
+        .save(&mut wrapped_tx, event.as_ref())
+        .await
+        .unwrap();
 
     // ROLLBACK
     wrapped_tx.into_inner().rollback().await.unwrap();
 
     // VERIFICATIONS : Rien ne doit exister
-    let p_found = profile_repo.fetch(&profile_id, &profile.region_code()).await.unwrap();
+    let p_found = profile_repo
+        .fetch(&profile_id, &profile.region_code())
+        .await
+        .unwrap();
     assert!(p_found.is_none());
 
     let e_count: (i64,) =
@@ -105,7 +120,7 @@ async fn test_outbox_payload_integrity() {
         id: Uuid::new_v4(),
         profile_id: ProfileId::new(),
         owner_id: owner_id.clone(),
-        region: RegionCode::try_new("us").unwrap(),
+        region: RegionCode::try_new("US").unwrap(),
         old_bio: None,
         new_bio: Bio::try_new("Ma nouvelle bio 🚀").ok(),
         occurred_at: Utc::now(),
@@ -139,7 +154,7 @@ async fn test_outbox_duplicate_prevention() {
         id: event_id,
         profile_id: ProfileId::new(),
         owner_id: AccountId::new(),
-        region: RegionCode::try_new("eu").unwrap(),
+        region: RegionCode::try_new("EU").unwrap(),
         old_handle: Handle::try_new("old").unwrap(),
         new_handle: Handle::try_new("new").unwrap(),
         occurred_at: Utc::now(),
@@ -152,17 +167,20 @@ async fn test_outbox_duplicate_prevention() {
     let mut tx2 = PostgresTransaction::new(pool.begin().await.unwrap());
     let result = repo.save(&mut tx2, &event).await;
 
-    assert!(result.is_err(), "Duplicate event ID should be rejected by DB unique constraint");
+    assert!(
+        result.is_err(),
+        "Duplicate event ID should be rejected by DB unique constraint"
+    );
 }
 
 // Helpers
 fn create_test_profile() -> Profile {
     Profile::builder(
         AccountId::new(),
-        RegionCode::try_new("eu").unwrap(),
+        RegionCode::try_new("EU").unwrap(),
         DisplayName::from_raw("Alice"),
         Handle::try_new("alice_dev").unwrap(),
     )
-        .with_bio(Bio::try_new("Rustacean & Architect").unwrap())
-        .build()
+    .with_bio(Bio::try_new("Rustacean & Architect").unwrap())
+    .build()
 }

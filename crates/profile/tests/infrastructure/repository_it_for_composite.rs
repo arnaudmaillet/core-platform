@@ -58,7 +58,7 @@ async fn setup_composite_test_context() -> CompositeRepositoryTestContext {
 async fn test_stats_merging_from_scylla_to_composite() {
     let ctx = setup_composite_test_context().await;
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
 
     // 1. Seed Identity (via Composite -> Postgres)
     let profile = Profile::builder(
@@ -85,7 +85,7 @@ async fn test_stats_merging_from_scylla_to_composite() {
 async fn test_handle_change_invalidates_redis_index() {
     let ctx = setup_composite_test_context().await;
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let old_handle = Handle::try_new("old_name").unwrap();
     let new_handle = Handle::try_new("new_name").unwrap();
 
@@ -125,7 +125,7 @@ async fn test_handle_change_invalidates_redis_index() {
 async fn test_profile_deletion_clears_all_repositories() {
     let ctx = setup_composite_test_context().await;
     let owner_id = AccountId::new();
-    let region = RegionCode::try_new("eu").unwrap();
+    let region = RegionCode::try_new("EU").unwrap();
     let handle = Handle::try_new("to_delete").unwrap();
 
     let profile = Profile::builder(owner_id, region.clone(), DisplayName::from_raw("Bye"), handle.clone()).build();

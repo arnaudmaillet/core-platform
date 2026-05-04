@@ -19,7 +19,7 @@ mod tests {
         // 1. Arrange : Compte actif avec l'ancien email
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .with_email(old_email)
             .build()?;
 
@@ -60,7 +60,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -99,7 +99,7 @@ mod tests {
         // 1. Arrange : Compte possédant déjà cet email
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .with_email(email.clone())
             .build()?;
 
@@ -139,7 +139,7 @@ mod tests {
         // Arrange : Un banni ne peut pas modifier ses réglages
         let account = f
             .account_builder()?
-            .with_state(AccountState::Banned)
+            .with_state(AccountState::BANNED)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -176,7 +176,7 @@ mod tests {
 
         let account = f
             .account_builder()?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -223,11 +223,11 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         let account = f
             .account_builder_for(wrong_region)?
-            .with_state(AccountState::Active)
+            .with_state(AccountState::ACTIVE)
             .build()?;
 
         let version_snapshot = account.version();

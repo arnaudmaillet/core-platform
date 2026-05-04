@@ -33,7 +33,7 @@ mod tests {
     async fn test_update_display_name_success() {
         // Arrange
         let owner_id = AccountId::new(); // Contexte proprio
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -66,8 +66,8 @@ mod tests {
     async fn test_update_display_name_fails_on_region_mismatch() {
         // Arrange
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -96,7 +96,7 @@ mod tests {
     async fn test_update_display_name_idempotency() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let current_name = DisplayName::from_raw("Alice");
 
         let profile = Profile::builder(
@@ -131,7 +131,7 @@ mod tests {
 
         let cmd = UpdateDisplayNameCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             new_display_name: DisplayName::from_raw("Ghost"),
         };
 
@@ -146,7 +146,7 @@ mod tests {
     async fn test_update_display_name_concurrency_conflict() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -187,7 +187,7 @@ mod tests {
     async fn test_update_display_name_transaction_failure() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),

@@ -116,7 +116,7 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     println!("DEBUG TEST: Le VRAI sub_id du token est: {}", true_admin_id);
 
     let email = "audit-e2e@test.com";
-    let region_code = "eu";
+    let region_code = "EU";
     let command_id = Uuid::now_v7().to_string();
 
     // --- ÉTAPE 1 : REGISTER (SUCCESS) ---

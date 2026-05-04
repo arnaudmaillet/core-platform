@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::{
-        DeactivateCommand, DeactivateHandler,
-    };
+    use crate::application::use_cases::lifecycle::{DeactivateCommand, DeactivateHandler};
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
@@ -34,7 +32,7 @@ mod tests {
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Deactivated);
+            assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
@@ -72,7 +70,7 @@ mod tests {
         assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
 
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Pending);
+            assert_eq!(*acc.identity().state(), AccountState::PENDING);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -106,7 +104,7 @@ mod tests {
 
         // 3. Assert
         f.assert_account(|acc| {
-            assert_eq!(*acc.identity().state(), AccountState::Deactivated);
+            assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
             assert_eq!(acc.version(), version_snapshot);
         })
         .await?;
@@ -142,7 +140,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_mismatch_returns_not_found() -> Result<()> {
         let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("us");
+        let wrong_region = RegionCode::from_raw("US");
 
         // Arrange : Compte aux USA, mais contexte Europe
         let account = f.account_builder_for(wrong_region)?.build()?;

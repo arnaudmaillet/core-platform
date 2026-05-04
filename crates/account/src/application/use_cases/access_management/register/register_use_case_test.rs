@@ -26,7 +26,7 @@ mod tests {
             account_id: f.account_id(),
             sub_id: Some(ext_id.clone()),
             identifier: RegistrationIdentifier::from_email(email.clone()),
-            region: f.region(), // ex: "eu"
+            region: f.region(), // ex: "EU"
             locale: Locale::try_new("en-US")?,
             ip_addr: ip.clone(),
         };
@@ -47,7 +47,7 @@ mod tests {
             // Vérification Identity
             assert_eq!(acc.identity().email(), Some(&email));
             assert_eq!(acc.identity().sub_id(), Some(&ext_id));
-            assert_eq!(acc.identity().state(), &AccountState::Active);
+            assert_eq!(acc.identity().state(), &AccountState::ACTIVE);
 
             // Vérification Governance (Metadata/IP)
             assert_eq!(acc.governance().last_ip_addr(), Some(&ip));

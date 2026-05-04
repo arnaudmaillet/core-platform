@@ -30,7 +30,7 @@ mod tests {
     #[test]
     fn test_timezone_update_logic_and_idempotency() -> Result<()> {
         let mut settings = create_test_settings()?;
-        let region = RegionCode::try_new("eu")?;
+        let region = RegionCode::try_new("EU")?;
         let new_tz = Timezone::try_new("Europe/Paris")?;
 
         // 1. Premier passage : mutation acceptée
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn test_timezone_region_inconsistency() -> Result<()> {
         let mut settings = create_test_settings()?;
-        let region_eu = RegionCode::try_new("eu")?;
+        let region_eu = RegionCode::try_new("EU")?;
 
         // Exemple d'une timezone incohérente avec la région (si ton VO implémente cette logique)
         let invalid_tz = Timezone::try_new("America/New_York")?;

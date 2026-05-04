@@ -19,7 +19,7 @@ impl AccountGovernanceBuilder {
     pub(crate) fn new(account_id: AccountId) -> Self {
         Self {
             account_id,
-            role: AccountRole::User,
+            role: AccountRole::USER,
             trust_score: TrustScore::new_max(),
             is_shadowbanned: false,
             is_beta_tester: false,
@@ -64,7 +64,7 @@ impl AccountGovernanceBuilder {
                 now.format("%Y-%m-%d %H:%M:%S")
             )),
             self.last_ip_addr,
-            now
+            now,
         ))
     }
 }

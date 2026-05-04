@@ -12,7 +12,7 @@ mod tests {
     async fn test_update_stats_nominal_increment() {
         // Arrange
         let profile_id = ProfileId::new(); // Pivot sur le profil
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let repo = Arc::new(ProfileStatsRepositoryStub::default());
         let use_case = UpdateStatsUseCase::new(repo.clone());
 
@@ -42,7 +42,7 @@ mod tests {
     async fn test_update_stats_nominal_decrement() {
         // Arrange : On part d'un état à 10 followers
         let profile_id = ProfileId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let repo = Arc::new(ProfileStatsRepositoryStub::default());
 
         // On initialise le stub (save utilise profile_id + region)
@@ -80,7 +80,7 @@ mod tests {
         let use_case = UpdateStatsUseCase::new(repo.clone());
         let cmd = UpdateStatsCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             follower_delta: 1,
             following_delta: 0,
             post_delta: 0,
@@ -110,7 +110,7 @@ mod tests {
         let use_case = UpdateStatsUseCase::new(repo.clone());
         let cmd = UpdateStatsCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             follower_delta: 1,
             following_delta: 0,
             post_delta: 0,

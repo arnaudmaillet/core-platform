@@ -35,7 +35,7 @@ mod tests {
     async fn test_update_social_links_success() {
         // Arrange
         let owner_id = AccountId::new(); // Contexte proprio
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let initial_profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -74,8 +74,8 @@ mod tests {
     async fn test_update_social_links_fails_on_region_mismatch() {
         // Arrange
         let owner_id = AccountId::new();
-        let actual_region = RegionCode::try_new("eu").unwrap();
-        let wrong_region = RegionCode::try_new("us").unwrap();
+        let actual_region = RegionCode::try_new("EU").unwrap();
+        let wrong_region = RegionCode::try_new("US").unwrap();
 
         let profile = Profile::builder(
             owner_id,
@@ -104,7 +104,7 @@ mod tests {
     async fn test_clear_social_links_success() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let mut profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -141,7 +141,7 @@ mod tests {
     async fn test_update_social_links_idempotency() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
 
         let links = SocialLinks::new()
             .with_website(Some(Url::try_new("https://same.com").unwrap()))
@@ -182,7 +182,7 @@ mod tests {
         // Act
         let result = use_case.execute(UpdateSocialLinksCommand {
             profile_id: ProfileId::new(),
-            region: RegionCode::try_new("eu").unwrap(),
+            region: RegionCode::try_new("EU").unwrap(),
             new_links: None,
         }).await;
 
@@ -194,7 +194,7 @@ mod tests {
     async fn test_update_social_links_concurrency_conflict() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),
@@ -233,7 +233,7 @@ mod tests {
     async fn test_update_social_links_atomic_rollback_on_outbox_failure() {
         // Arrange
         let owner_id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let profile = Profile::builder(
             owner_id,
             region.clone(),

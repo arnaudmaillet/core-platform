@@ -154,7 +154,11 @@ impl AccountGovernance {
             return Ok(false);
         }
         self.role = new_role;
-        self.record_moderation_log(&format!("Role changed to {:?}: {}", new_role, reason));
+        self.record_moderation_log(&format!(
+            "Role changed to {:?}: {}",
+            new_role.as_lowercase(),
+            reason
+        ));
         Ok(true)
     }
 

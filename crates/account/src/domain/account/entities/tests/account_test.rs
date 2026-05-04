@@ -9,7 +9,7 @@ mod tests {
     /// Helper pour créer un compte de test valide et actif
     fn create_test_account() -> Account {
         let id = AccountId::new();
-        let region = RegionCode::try_new("eu").unwrap();
+        let region = RegionCode::try_new("EU").unwrap();
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@doe.com").unwrap());
 
@@ -24,7 +24,7 @@ mod tests {
     //     let ip = IpAddr::try_new("127.0.0.1")?;
 
     //     // Act
-    //     account.register(RegionCode::try_new("eu")?, ip.clone())?;
+    //     account.register(RegionCode::try_new("EU")?, ip.clone())?;
 
     //     // Assert
     //     assert_eq!(account.governance().last_ip_addr(), Some(&ip));

@@ -99,11 +99,11 @@ fn chrono_to_proto(dt: DateTime<Utc>) -> Timestamp {
 impl From<DomainState> for ProtoState {
     fn from(state: DomainState) -> Self {
         match state {
-            DomainState::Pending => Self::Pending,
-            DomainState::Active => Self::Active,
-            DomainState::Deactivated => Self::Deactivated,
-            DomainState::Suspended => Self::Suspended,
-            DomainState::Banned => Self::Banned,
+            DomainState::PENDING => Self::Pending,
+            DomainState::ACTIVE => Self::Active,
+            DomainState::DEACTIVATED => Self::Deactivated,
+            DomainState::SUSPENDED => Self::Suspended,
+            DomainState::BANNED => Self::Banned,
         }
     }
 }
