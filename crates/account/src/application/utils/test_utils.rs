@@ -1,7 +1,6 @@
 // crates/account/src/application/test_utils.rs
 
 use std::sync::Arc;
-use uuid::Uuid;
 
 // Shared Kernel
 use shared_kernel::application::{BaseAppContext, CommandBus};
@@ -18,12 +17,13 @@ use crate::domain::account::builders::AccountBuilder;
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepositoryStub;
 use crate::domain::value_objects::RegistrationIdentifier;
+use crate::use_cases::lifecycle::change_beta_tier::change_beta_tier_use_case::ChangeBetaTierHandler;
 use crate::use_cases::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
-    BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
-    ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler, ChangeRegionCommand,
-    ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand,
-    DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
+    BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,
+    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
+    ChangeRegionCommand, ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler,
+    DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
     IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
     LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
     RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
@@ -73,6 +73,9 @@ impl TestFixture {
         bus.register::<AccountContext, ActivateCommand, ActivateHandler>(ActivateHandler);
         bus.register::<AccountContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
         bus.register::<AccountContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
+        bus.register::<AccountContext, ChangeBetaTierCommand, ChangeBetaTierHandler>(
+            ChangeBetaTierHandler,
+        );
         bus.register::<AccountContext, SuspendCommand, SuspendHandler>(SuspendHandler);
         bus.register::<AccountContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
         bus.register::<AccountContext, BanCommand, BanHandler>(BanHandler);

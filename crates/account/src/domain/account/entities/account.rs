@@ -11,14 +11,19 @@ use shared_kernel::{
     errors::{DomainError, Result},
 };
 
-use crate::domain::{
-    account::{
-        builders::AccountBuilder,
-        entities::{AccountGovernance, AccountIdentity, AccountSettings},
+use crate::{
+    domain::{
+        account::{
+            builders::AccountBuilder,
+            entities::{AccountGovernance, AccountIdentity, AccountSettings},
+        },
+        events::AccountEvent,
+        preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
+        value_objects::{
+            AccountRole, BirthDate, IpAddr, Locale, RegistrationIdentifier, TrustDelta,
+        },
     },
-    events::AccountEvent,
-    preferences::models::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
-    value_objects::{AccountRole, BirthDate, IpAddr, Locale, RegistrationIdentifier, TrustDelta},
+    value_objects::BetaTier,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -424,6 +429,24 @@ impl Account {
                     old_role,
                     new_role: new_role.clone(),
                     reason: reason.clone().into(),
+                    occurred_at: s.updated_at(),
+                })
+            },
+        )
+    }
+
+    pub fn change_beta_tier(&mut self, new_tier: BetaTier) -> Result<bool> {
+        self.ensure_not_restricted()?;
+        let old_tier = self.governance.beta_tier();
+
+        self.track_change(
+            |s| s.governance.apply_beta_tier_change(new_tier),
+            |s| {
+                Box::new(AccountEvent::BetaTierChanged {
+                    account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
+                    old_tier,
+                    new_tier: new_tier.clone(),
                     occurred_at: s.updated_at(),
                 })
             },

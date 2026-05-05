@@ -2,6 +2,7 @@
 
 use crate::domain::account::entities::AccountGovernance;
 use crate::domain::value_objects::{AccountRole, IpAddr, TrustScore};
+use crate::value_objects::BetaTier;
 use chrono::Utc;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::Result;
@@ -11,7 +12,7 @@ pub struct AccountGovernanceBuilder {
     role: AccountRole,
     trust_score: TrustScore,
     is_shadowbanned: bool,
-    is_beta_tester: bool,
+    beta_tier: BetaTier,
     last_ip_addr: Option<IpAddr>,
 }
 
@@ -22,7 +23,7 @@ impl AccountGovernanceBuilder {
             role: AccountRole::USER,
             trust_score: TrustScore::new_max(),
             is_shadowbanned: false,
-            is_beta_tester: false,
+            beta_tier: BetaTier::NONE,
             last_ip_addr: None,
         }
     }
@@ -55,7 +56,7 @@ impl AccountGovernanceBuilder {
         Ok(AccountGovernance::restore(
             self.account_id,
             self.role,
-            self.is_beta_tester,
+            self.beta_tier,
             self.is_shadowbanned,
             self.trust_score,
             None,

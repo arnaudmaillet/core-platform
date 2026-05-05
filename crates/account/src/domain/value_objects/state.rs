@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/domain/account_state
+// crates/shared-kernel/src/domain/state
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
 use shared_kernel::errors::{DomainError, Result};

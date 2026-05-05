@@ -9,9 +9,12 @@ mod tests {
         errors::Result,
     };
 
-    use crate::domain::{
-        account::entities::AccountGovernance,
-        value_objects::{AccountRole, IpAddr, TrustDelta, TrustScore},
+    use crate::{
+        domain::{
+            account::entities::AccountGovernance,
+            value_objects::{AccountRole, IpAddr, TrustDelta, TrustScore},
+        },
+        value_objects::BetaTier,
     };
 
     fn create_test_governance() -> Result<AccountGovernance> {
@@ -21,10 +24,10 @@ mod tests {
         // Utilisation du restore simplifié (sans metadata/version/updated_at)
         Ok(AccountGovernance::restore(
             account_id,
-            AccountRole::USER,
+            AccountRole::default(),
+            BetaTier::default(),
             false,
-            false,
-            TrustScore::new_max(),
+            TrustScore::default(),
             None,
             None,
             Some(ip_addr),
@@ -129,17 +132,32 @@ mod tests {
     }
 
     #[test]
-    fn test_beta_status_toggle() -> Result<()> {
+    fn test_beta_tier_transitions() -> Result<()> {
         let mut gov = create_test_governance()?;
-        let mut reason = AuditReason::try_new("Feature testing")?;
 
-        let changed = gov.apply_beta_status(true, &reason).unwrap();
+        // 1. Passage de NONE (default) à BETA
+        let changed = gov.apply_beta_tier_change(BetaTier::BETA).unwrap();
         assert!(changed);
-        assert!(gov.is_beta_tester());
+        assert_eq!(gov.beta_tier(), BetaTier::BETA);
+        assert!(gov.beta_tier().has_experimental_access());
 
-        reason = AuditReason::try_new("Already in")?;
-        let changed = gov.apply_beta_status(true, &reason).unwrap();
-        assert!(!changed);
+        // 2. Passage de BETA à ALPHA (Upgrade)
+        let changed = gov.apply_beta_tier_change(BetaTier::ALPHA).unwrap();
+        assert!(changed);
+        assert_eq!(gov.beta_tier(), BetaTier::ALPHA);
+
+        // 3. Tentative de changement vers le même état (Idempotence)
+        let changed = gov.apply_beta_tier_change(BetaTier::ALPHA).unwrap();
+        assert!(
+            !changed,
+            "Le changement vers le même tier ne doit pas marquer l'objet comme modifié"
+        );
+
+        // 4. Retour à NONE (Downgrade)
+        let changed = gov.apply_beta_tier_change(BetaTier::NONE).unwrap();
+        assert!(changed);
+        assert_eq!(gov.beta_tier(), BetaTier::NONE);
+        assert!(!gov.beta_tier().has_experimental_access());
 
         Ok(())
     }

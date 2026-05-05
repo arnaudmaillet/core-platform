@@ -66,7 +66,7 @@ impl AccountRepository for PostgresAccountRepository {
                 let sql = r#"
                     SELECT i.*, i.updated_at as identity_updated_at,
                            s.preferences, s.timezone, s.push_tokens, s.updated_at as settings_updated_at,
-                           g.role, g.is_beta_tester, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
+                           g.role, g.beta_tier, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
                            g.last_moderation_at, g.last_ip_addr, g.updated_at as governance_updated_at
                     FROM account_identity i
                     LEFT JOIN account_settings s ON i.account_id = s.account_id
@@ -158,10 +158,10 @@ impl AccountRepository for PostgresAccountRepository {
                         // On insère la gouvernance
                         sqlx::query(
                             r#"INSERT INTO account_governance 
-                                (account_id, role, is_beta_tester, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr)
+                                (account_id, role, beta_tier, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr)
                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
                         )
-                        .bind(uid).bind(gov_row.role).bind(gov_row.is_beta_tester)
+                        .bind(uid).bind(gov_row.role).bind(gov_row.beta_tier)
                         .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
                         .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
                         .bind(gov_row.last_ip_addr)
@@ -198,11 +198,11 @@ impl AccountRepository for PostgresAccountRepository {
                         // Update Governance
                         sqlx::query(
                             r#"UPDATE account_governance SET
-                                role = $2, is_beta_tester = $3, is_shadowbanned = $4, trust_score = $5, 
+                                role = $2, beta_tier = $3, is_shadowbanned = $4, trust_score = $5, 
                                 moderation_notes = $6, last_moderation_at = $7, last_ip_addr = $8
                                WHERE account_id = $1"#
                         )
-                        .bind(uid).bind(gov_row.role).bind(gov_row.is_beta_tester)
+                        .bind(uid).bind(gov_row.role).bind(gov_row.beta_tier)
                         .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
                         .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
                         .bind(gov_row.last_ip_addr)

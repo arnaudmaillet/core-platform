@@ -3,12 +3,15 @@
 use chrono::{DateTime, Utc};
 use std::net::IpAddr as StdIpAddr;
 
-use crate::infrastructure::postgres::models::PostgresAccountRole;
+use crate::{
+    account::entities::Account,
+    infrastructure::postgres::models::{PostgresAccountRole, PostgresBetaTier},
+};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountGovernanceRow {
     pub role: PostgresAccountRole,
-    pub is_beta_tester: bool,
+    pub beta_tier: PostgresBetaTier,
     pub is_shadowbanned: bool,
     pub trust_score: i32,
     pub last_moderation_at: Option<DateTime<Utc>>,
@@ -20,12 +23,12 @@ pub struct PostgresAccountGovernanceRow {
 }
 
 impl PostgresAccountGovernanceRow {
-    pub fn from_domain(account: &crate::domain::account::entities::Account) -> Self {
+    pub fn from_domain(account: &Account) -> Self {
         let gov = account.governance();
 
         Self {
             role: gov.role().into(),
-            is_beta_tester: gov.is_beta_tester(),
+            beta_tier: gov.beta_tier().into(),
             is_shadowbanned: gov.is_shadowbanned(),
             trust_score: gov.trust_score().value(),
             last_moderation_at: gov.last_moderation_at(),

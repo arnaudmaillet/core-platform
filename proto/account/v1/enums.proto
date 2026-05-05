@@ -23,6 +23,14 @@ enum AccountRole {
   ACCOUNT_ROLE_ADMIN = 4;
 }
 
+enum BetaTier {
+  BETA_TIER_UNSPECIFIED = 0;
+  BETA_TIER_NONE = 1;
+  BETA_TIER_BETA = 2;
+  BETA_TIER_ALPHA = 3;
+  BETA_TIER_INTERNAL = 4;
+}
+
 enum ThemeMode {
   THEME_MODE_SYSTEM = 0;
   THEME_MODE_LIGHT = 1;

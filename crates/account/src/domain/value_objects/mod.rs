@@ -1,3 +1,4 @@
+mod beta_tier;
 mod birth_date;
 mod ip_addr;
 mod locale;
@@ -10,6 +11,7 @@ mod r#type;
 mod verification_code;
 mod verification_token;
 
+pub use beta_tier::BetaTier;
 pub use birth_date::BirthDate;
 pub use ip_addr::IpAddr;
 pub use locale::Locale;

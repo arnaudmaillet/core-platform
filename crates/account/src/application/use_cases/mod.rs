@@ -9,8 +9,9 @@ pub use access_management::{
 };
 
 pub use lifecycle::{
-    ActivateCommand, ActivateHandler, ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand,
-    DeactivateHandler, SuspendCommand, SuspendHandler, UnsuspendCommand, UnsuspendHandler,
+    ActivateCommand, ActivateHandler, ChangeBetaTierCommand, ChangeBetaTierHandler,
+    ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand, DeactivateHandler, SuspendCommand,
+    SuspendHandler, UnsuspendCommand, UnsuspendHandler,
 };
 
 pub use moderation::{

@@ -4,19 +4,23 @@ use shared_kernel::application::CommandHandler;
 use shared_kernel::errors::Result;
 
 use crate::application::context::AccountContext;
-use crate::application::use_cases::settings::set_as_beta::SetAsBetaCommand;
+use crate::use_cases::lifecycle::ChangeBetaTierCommand;
 
-pub struct SetAsBetaHandler;
+pub struct ChangeBetaTierHandler;
 
 #[async_trait]
-impl CommandHandler for SetAsBetaHandler {
+impl CommandHandler for ChangeBetaTierHandler {
     type Context = AccountContext;
-    type Command = SetAsBetaCommand;
+    type Command = ChangeBetaTierCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: SetAsBetaCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountContext,
+        cmd: ChangeBetaTierCommand,
+    ) -> Result<Self::Output> {
         let mut account = ctx.account().await?;
-        account.unban(cmd.reason)?;
+        account.change_beta_tier(cmd.new_tier)?;
         ctx.save(&mut account, Some(cmd.command_id)).await?;
 
         Ok(())

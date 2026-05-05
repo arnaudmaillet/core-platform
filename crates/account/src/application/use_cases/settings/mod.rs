@@ -4,7 +4,6 @@ pub mod change_email;
 pub mod change_phone_number;
 pub mod change_region;
 pub mod remove_push_token;
-pub mod set_as_beta;
 pub mod update_locale;
 pub mod update_preferences;
 pub mod update_timezone;
