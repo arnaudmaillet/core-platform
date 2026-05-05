@@ -20,6 +20,9 @@ service AccountModerationService {
   // Trust Score & Role
   rpc AdjustTrustScore(AdjustTrustScoreRequest) returns (AccountGovernance);
   rpc ChangeRole(ChangeRoleRequest) returns (AccountGovernance);
+
+  // Beta Access
+  rpc ChangeBetaTier(ChangeBetaTierRequest) returns (AccountGovernance);
 }
 
 message ModerationRequest { 
@@ -40,4 +43,10 @@ message ChangeRoleRequest {
   string account_id = 2; 
   AccountRole new_role = 3; 
   string reason = 4; 
+}
+
+message ChangeBetaTierRequest {
+  string command_id = 1;
+  string account_id = 2;
+  BetaTier new_tier = 3;
 }

@@ -10,9 +10,9 @@ use shared_kernel::{
     errors::Result,
 };
 
-use crate::domain::{
+use crate::{
     account::builders::AccountGovernanceBuilder,
-    value_objects::{AccountRole, IpAddr, TrustDelta, TrustScore},
+    value_objects::{AccountRole, BetaTier, IpAddr, TrustDelta, TrustScore},
 };
 
 /// Entité Metadata (Interne à l'Agrégat Account)
@@ -22,7 +22,7 @@ use crate::domain::{
 pub struct AccountGovernance {
     account_id: AccountId,
     role: AccountRole,
-    is_beta_tester: bool,
+    beta_tier: BetaTier,
     is_shadowbanned: bool,
     trust_score: TrustScore,
     last_moderation_at: Option<DateTime<Utc>>,
@@ -40,7 +40,7 @@ impl AccountGovernance {
     pub(crate) fn restore(
         account_id: AccountId,
         role: AccountRole,
-        is_beta_tester: bool,
+        beta_tier: BetaTier,
         is_shadowbanned: bool,
         trust_score: TrustScore,
         last_moderation_at: Option<DateTime<Utc>>,
@@ -51,7 +51,7 @@ impl AccountGovernance {
         Self {
             account_id,
             role,
-            is_beta_tester,
+            beta_tier,
             is_shadowbanned,
             trust_score,
             last_moderation_at,
@@ -69,8 +69,8 @@ impl AccountGovernance {
     pub fn role(&self) -> AccountRole {
         self.role
     }
-    pub fn is_beta_tester(&self) -> bool {
-        self.is_beta_tester
+    pub fn beta_tier(&self) -> BetaTier {
+        self.beta_tier
     }
     pub fn is_shadowbanned(&self) -> bool {
         self.is_shadowbanned
@@ -162,13 +162,17 @@ impl AccountGovernance {
         Ok(true)
     }
 
-    pub(crate) fn apply_beta_status(&mut self, status: bool, reason: &AuditReason) -> Result<bool> {
-        if self.is_beta_tester == status {
+    pub(crate) fn apply_beta_tier_change(&mut self, new_tier: BetaTier) -> Result<bool> {
+        if self.beta_tier == new_tier {
             return Ok(false);
         }
-        self.is_beta_tester = status;
-        let action = if status { "enabled" } else { "disabled" };
-        self.record_moderation_log(&format!("Beta status {}: {}", action, reason));
+        let old_tier = self.beta_tier;
+        self.beta_tier = new_tier;
+        self.record_moderation_log(&format!(
+            "Beta tier changed from {} to {}",
+            old_tier.as_str(),
+            new_tier.as_str()
+        ));
         Ok(true)
     }
 

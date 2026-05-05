@@ -81,7 +81,7 @@ pub fn map_account_to_governance_proto(account: Account) -> ProtoGovernance {
         role: governance.role() as i32,
         trust_score: governance.trust_score().value(),
         is_shadowbanned: governance.is_shadowbanned(),
-        is_beta_tester: governance.is_beta_tester(),
+        beta_tier: governance.beta_tier() as i32,
         last_moderation_at: governance.last_moderation_at().map(chrono_to_proto),
         moderation_notes: governance.moderation_notes().map(|s| s.to_string()),
         estimated_ip: governance.last_ip_addr().map(|ip| ip.to_string()),

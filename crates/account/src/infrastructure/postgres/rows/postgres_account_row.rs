@@ -1,12 +1,18 @@
 // crates/account/src/infrastructure/postgres/rows/postgres_account_row.rs
 
-use crate::domain::{
-    account::entities::{
-        Account, AccountGovernance, AccountIdentity, AccountPreferences, AccountSettings,
-    },
-    value_objects::{AccountRole, AccountState, BirthDate, IpAddr, Locale, TrustScore},
-};
 use crate::infrastructure::postgres::models::{PostgresAccountRole, PostgresAccountState};
+use crate::{
+    domain::{
+        account::entities::{
+            Account, AccountGovernance, AccountIdentity, AccountPreferences, AccountSettings,
+        },
+        value_objects::{
+            AccountRole, AccountState, BetaTier, BirthDate, IpAddr, Locale, TrustScore,
+        },
+    },
+    infrastructure::postgres::models::PostgresBetaTier,
+};
+use chrono::{DateTime, NaiveDate, Utc};
 use shared_kernel::{
     domain::{
         Identifier,
@@ -24,30 +30,30 @@ pub struct PostgresAccountRow {
     pub email: Option<String>,
     pub phone_number: Option<String>,
     pub state: PostgresAccountState,
-    pub birth_date: Option<chrono::NaiveDate>,
+    pub birth_date: Option<NaiveDate>,
     pub locale: String,
     pub region_code: String,
     pub version: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub identity_updated_at: chrono::DateTime<chrono::Utc>,
-    pub aggregate_updated_at: chrono::DateTime<chrono::Utc>,
-    pub last_active_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub identity_updated_at: DateTime<Utc>,
+    pub aggregate_updated_at: DateTime<Utc>,
+    pub last_active_at: Option<DateTime<Utc>>,
 
     // --- Governance (Passage en Option pour gérer le LEFT JOIN vide) ---
     pub role: Option<PostgresAccountRole>,
-    pub is_beta_tester: Option<bool>,
+    pub beta_tier: Option<PostgresBetaTier>,
     pub is_shadowbanned: Option<bool>,
     pub trust_score: Option<i32>,
     pub moderation_notes: Option<String>,
-    pub last_moderation_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_moderation_at: Option<DateTime<Utc>>,
     pub last_ip_addr: Option<std::net::IpAddr>,
-    pub governance_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub governance_updated_at: Option<DateTime<Utc>>,
 
     // --- Settings (Passage en Option) ---
     pub preferences: Option<serde_json::Value>,
     pub timezone: Option<String>,
     pub push_tokens: Option<Vec<String>>,
-    pub settings_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub settings_updated_at: Option<DateTime<Utc>>,
 }
 
 impl PostgresAccountRow {
@@ -70,24 +76,22 @@ impl PostgresAccountRow {
             self.last_active_at,
         );
 
-        // 2. Reconstruction de Governance avec fallback
-        let governance = if let Some(role) = self.role {
-            AccountGovernance::restore(
-                account_id,
-                AccountRole::from(role),
-                self.is_beta_tester.unwrap_or(false),
-                self.is_shadowbanned.unwrap_or(false),
-                TrustScore::try_new(self.trust_score.unwrap_or(0))?,
-                self.last_moderation_at,
-                self.moderation_notes,
-                self.last_ip_addr.map(IpAddr::from_raw),
-                self.governance_updated_at
-                    .unwrap_or(self.aggregate_updated_at),
-            )
-        } else {
-            // Audit Résilience : Si la table governance est vide, on crée un défaut
-            AccountGovernance::builder(account_id).build()?
-        };
+        let governance = AccountGovernance::restore(
+            account_id,
+            self.role
+                .map(AccountRole::from)
+                .unwrap_or(AccountRole::default()),
+            self.beta_tier
+                .map(BetaTier::from)
+                .unwrap_or(BetaTier::default()),
+            self.is_shadowbanned.unwrap_or(false),
+            TrustScore::try_new(self.trust_score.unwrap_or(100))?,
+            self.last_moderation_at,
+            self.moderation_notes,
+            self.last_ip_addr.map(IpAddr::from_raw),
+            self.governance_updated_at
+                .unwrap_or(self.aggregate_updated_at),
+        );
 
         // 3. Reconstruction de Settings avec fallback
         let settings = if let Some(prefs_val) = self.preferences {

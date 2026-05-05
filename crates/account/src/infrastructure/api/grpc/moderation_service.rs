@@ -1,8 +1,8 @@
 // crates/account/src/infrastructure/api/grpc/moderation_service.rs
 
 use shared_proto::account::v1::{
-    AccountGovernance as ProtoGovernance, AdjustTrustScoreRequest, ChangeRoleRequest,
-    ModerationRequest,
+    AccountGovernance as ProtoGovernance, AdjustTrustScoreRequest, ChangeBetaTierRequest,
+    ChangeRoleRequest, ModerationRequest,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -13,8 +13,9 @@ use crate::application::context::AccountAppContext;
 use crate::infrastructure::api::grpc::mapper;
 use crate::infrastructure::api::grpc::shared::GrpcServiceUtils;
 use crate::use_cases::{
-    BanCommand, ChangeRoleCommand, DecreaseTrustScoreCommand, IncreaseTrustScoreCommand,
-    LiftShadowbanCommand, ShadowbanCommand, SuspendCommand, UnbanCommand, UnsuspendCommand,
+    BanCommand, ChangeBetaTierCommand, ChangeRoleCommand, DecreaseTrustScoreCommand,
+    IncreaseTrustScoreCommand, LiftShadowbanCommand, ShadowbanCommand, SuspendCommand,
+    UnbanCommand, UnsuspendCommand,
 };
 use shared_kernel::application::CommandBus;
 
@@ -185,6 +186,23 @@ impl AccountModerationService for GrpcModerationService {
         let ctx = self.get_context(&request, &command.account_id).await?;
 
         self.execute_and_fetch::<ChangeRoleCommand, (), ProtoGovernance, _>(
+            &ctx,
+            command,
+            (),
+            mapper::map_account_to_governance_proto,
+        )
+        .await
+    }
+
+    async fn change_beta_tier(
+        &self,
+        request: Request<ChangeBetaTierRequest>,
+    ) -> Result<Response<ProtoGovernance>, Status> {
+        let command = ChangeBetaTierCommand::try_from_proto(request.get_ref().clone())
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let ctx = self.get_context(&request, &command.account_id).await?;
+
+        self.execute_and_fetch::<ChangeBetaTierCommand, (), ProtoGovernance, _>(
             &ctx,
             command,
             (),

@@ -88,3 +88,9 @@ impl From<TrustScore> for i32 {
         score.0
     }
 }
+
+impl Default for TrustScore {
+    fn default() -> Self {
+        Self::new_max()
+    }
+}

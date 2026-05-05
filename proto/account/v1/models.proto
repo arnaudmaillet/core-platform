@@ -28,7 +28,7 @@ message AccountIdentity {
 message AccountGovernance {
   string account_id = 1;
   AccountRole role = 2;
-  bool is_beta_tester = 3;
+  BetaTier beta_tier = 3;
   bool is_shadowbanned = 4;
   int32 trust_score = 5;
   google.protobuf.Timestamp last_moderation_at = 6;

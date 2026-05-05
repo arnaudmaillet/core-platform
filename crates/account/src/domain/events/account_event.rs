@@ -4,7 +4,7 @@ use crate::domain::preferences::models::{
     AppearancePreferences, NotificationPreferences, PrivacyPreferences,
 };
 use crate::domain::value_objects::{AccountRole, IpAddr, Locale, TrustDelta, TrustScore};
-use crate::value_objects::BirthDate;
+use crate::value_objects::{BetaTier, BirthDate};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -65,10 +65,11 @@ pub enum AccountEvent {
     },
 
     // --- SYSTEM & MODERATION EVENTS ---
-    BetaStatusUpdated {
+    BetaTierChanged {
         account_id: AccountId,
         region: RegionCode,
-        is_beta_tester: bool,
+        old_tier: BetaTier,
+        new_tier: BetaTier,
         occurred_at: DateTime<Utc>,
     },
     TrustScoreAdjusted {
@@ -192,7 +193,7 @@ impl AccountEvent {
     pub const LOCALE_UPDATED: &'static str = "account.identity.locale_updated";
 
     // Metadata & System
-    pub const BETA_STATUS_UPADTED: &'static str = "account.metadata.beta_status_updated";
+    pub const BETA_TIER_CHANGED: &'static str = "account.metadata.beta_tier_changed";
     pub const TRUST_SCORE_ADJUSTED: &'static str = "account.metadata.trust_score_adjusted";
     pub const SHADOWBAN_UPDATED: &'static str = "account.metadata.shadowban_updated";
     pub const ROLE_CHANGED: &'static str = "account.metadata.role_changed";
@@ -235,7 +236,7 @@ impl DomainEvent for AccountEvent {
             Self::PhoneNumberChanged { .. } => Self::PHONE_NUMBER_CHANGED,
             Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
             Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
-            Self::BetaStatusUpdated { .. } => Self::BETA_STATUS_UPADTED,
+            Self::BetaTierChanged { .. } => Self::BETA_TIER_CHANGED,
             Self::TrustScoreAdjusted { .. } => Self::TRUST_SCORE_ADJUSTED,
             Self::ShadowbanUpdated { .. } => Self::SHADOWBAN_UPDATED,
             Self::AccountRoleChanged { .. } => Self::ROLE_CHANGED,
@@ -269,7 +270,7 @@ impl DomainEvent for AccountEvent {
             | Self::PhoneNumberChanged { account_id, .. }
             | Self::BirthDateChanged { account_id, .. }
             | Self::LocaleUpdated { account_id, .. }
-            | Self::BetaStatusUpdated { account_id, .. }
+            | Self::BetaTierChanged { account_id, .. }
             | Self::TrustScoreAdjusted { account_id, .. }
             | Self::ShadowbanUpdated { account_id, .. }
             | Self::AccountRoleChanged { account_id, .. }
@@ -297,7 +298,7 @@ impl DomainEvent for AccountEvent {
             | Self::PhoneNumberChanged { occurred_at, .. }
             | Self::BirthDateChanged { occurred_at, .. }
             | Self::LocaleUpdated { occurred_at, .. }
-            | Self::BetaStatusUpdated { occurred_at, .. }
+            | Self::BetaTierChanged { occurred_at, .. }
             | Self::TrustScoreAdjusted { occurred_at, .. }
             | Self::ShadowbanUpdated { occurred_at, .. }
             | Self::AccountRoleChanged { occurred_at, .. }
@@ -324,7 +325,7 @@ impl DomainEvent for AccountEvent {
             | Self::EmailChanged { region, .. }
             | Self::PhoneNumberChanged { region, .. }
             | Self::LocaleUpdated { region, .. }
-            | Self::BetaStatusUpdated { region, .. }
+            | Self::BetaTierChanged { region, .. }
             | Self::TrustScoreAdjusted { region, .. }
             | Self::ShadowbanUpdated { region, .. }
             | Self::AccountRoleChanged { region, .. }
