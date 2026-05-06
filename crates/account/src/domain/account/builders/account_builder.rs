@@ -26,10 +26,9 @@ pub struct AccountBuilder {
 impl AccountBuilder {
     pub(crate) fn new(
         account_id: AccountId,
-        region: RegionCode,
         identifier: RegistrationIdentifier,
     ) -> Self {
-        let mut identity_builder = AccountIdentityBuilder::new(account_id.clone(), region);
+        let mut identity_builder = AccountIdentityBuilder::new(account_id.clone());
         let governance_builder = AccountGovernanceBuilder::new(account_id.clone());
         let settings_builder = AccountSettingsBuilder::new(account_id);
 

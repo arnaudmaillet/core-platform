@@ -22,12 +22,7 @@ impl UnsuspendCommand {
                 reason: "Invalid UUID format".to_string(),
             })?,
 
-            account_id: AccountId::try_new(&req.account_id).map_err(|e| {
-                DomainError::Validation {
-                    field: "account_id",
-                    reason: e.to_string(),
-                }
-            })?,
+            account_id: req.account_id.parse().map_err(|e: DomainError| e)?,
             reason: AuditReason::try_from(req.reason).map_err(|e| DomainError::Validation {
                 field: "account_id",
                 reason: e.to_string(),

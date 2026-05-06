@@ -144,15 +144,33 @@ impl AccountRepository for AccountRepositoryStub {
         self.check_error()?;
 
         let mut map = self.accounts.lock().unwrap();
-        let id = account.identity().account_id().clone();
+        let new_id = account.identity().account_id().clone();
         let new_version = account.metadata().version();
-        let existing_opt = map.get(&id);
+
+        // 1. DÉTECTION DE MIGRATION (Changement de Région)
+        // On cherche si l'UUID existe déjà sous une autre clé (une autre région)
+        let old_id_opt = map
+            .iter()
+            .find(|(_, a)| {
+                a.identity().account_id().uuid() == new_id.uuid()
+                    && a.identity().account_id() != &new_id
+            })
+            .map(|(id, _)| id.clone());
+
+        if let Some(old_id) = old_id_opt.clone() {
+            // Si on a trouvé l'ancien ID, on le supprime pour simuler le déplacement
+            map.remove(&old_id);
+            // On continue en mode "Update" car techniquement le compte existe déjà
+        }
+
+        // 2. RÉCUPÉRATION DU COMPTE (soit l'actuel, soit None si c'est une pure création)
+        let existing_opt = map.get(&new_id);
 
         match existing_opt {
             None => {
                 // --- MODE INSERT (Logique identique à create) ---
                 // Vérifier que c'est bien une création (version initiale)
-                if new_version > 1 {
+                if new_version > 1 && old_id_opt.is_none() {
                     return Err(DomainError::ConcurrencyConflict {
                         reason: format!("Cannot insert new account with version {}", new_version),
                     });
@@ -172,24 +190,17 @@ impl AccountRepository for AccountRepositoryStub {
             Some(existing) => {
                 // --- MODE UPDATE (OCC) ---
                 let current_version = existing.metadata().version();
-
-                // Vérification OCC
                 if new_version < current_version || new_version > current_version + 1 {
                     return Err(DomainError::ConcurrencyConflict {
-                        reason: format!(
-                            "OCC mismatch: Stub v{}, Input v{} (Expected v{} or v{})",
-                            current_version,
-                            new_version,
-                            current_version,
-                            current_version + 1
-                        ),
+                        reason: format!("OCC mismatch: v{} -> v{}", current_version, new_version),
                     });
                 }
 
                 // Vérification de l'unicité du sub_id (au cas où il a changé)
                 if let Some(new_sub) = account.identity().sub_id() {
                     let duplicate_exists = map.values().any(|a| {
-                        a.identity().account_id() != &id && a.identity().sub_id() == Some(new_sub)
+                        a.identity().account_id() != &new_id
+                            && a.identity().sub_id() == Some(new_sub)
                     });
 
                     if duplicate_exists {
@@ -204,7 +215,7 @@ impl AccountRepository for AccountRepositoryStub {
         }
 
         // Dans tous les cas, on insère/écrase
-        map.insert(id, account.clone());
+        map.insert(new_id, account.clone());
         Ok(())
     }
 

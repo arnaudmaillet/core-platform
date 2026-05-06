@@ -30,8 +30,8 @@ impl PostgresAccountRepository {
     }
 
     pub fn cache_key(id: &AccountId) -> String {
-        format!("account:aggregate:{}", id.as_uuid())
-    }
+    format!("account:aggregate:{}:{}", id.region().as_str(), id.uuid())
+}
 }
 
 #[async_trait]
@@ -68,10 +68,9 @@ impl AccountRepository for PostgresAccountRepository {
                            s.preferences, s.timezone, s.push_tokens, s.updated_at as settings_updated_at,
                            g.role, g.beta_tier, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
                            g.last_moderation_at, g.last_ip_addr, g.updated_at as governance_updated_at
-                    FROM account_identity i
-                    LEFT JOIN account_settings s ON i.account_id = s.account_id
-                    LEFT JOIN account_governance g ON i.account_id = g.account_id
-                    WHERE i.account_id = $1"#;
+                    LEFT JOIN account_settings s ON i.account_id = s.account_id AND i.region_code = s.region_code
+                    LEFT JOIN account_governance g ON i.account_id = g.account_id AND i.region_code = g.region_code
+                    WHERE i.account_id = $1 AND i.region_code = $2"#;
 
                 let row_opt = sqlx::query_as::<_, PostgresAccountRow>(sql)
                     .bind(uid)
@@ -126,7 +125,6 @@ impl AccountRepository for PostgresAccountRepository {
         let gov_row = PostgresAccountGovernanceRow::from_domain(account);
         let sett_row = PostgresAccountSettingsRow::from_domain(account);
 
-        let uid = ident_row.account_id;
         let next_version = account.metadata().version() as i64;
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
@@ -134,9 +132,10 @@ impl AccountRepository for PostgresAccountRepository {
                 // 1. On vérifie si le compte existe et on verrouille la ligne (FOR UPDATE) 
                 // pour garantir que personne ne modifie la version entre le check et l'écriture
                 let db_v: Option<i64> = sqlx::query_scalar(
-                    "SELECT version FROM account_identity WHERE account_id = $1 FOR UPDATE"
+                    "SELECT version FROM account_identity WHERE account_id = $1 AND region_code = $2 FOR UPDATE"
                 )
-                .bind(uid)
+                .bind(&ident_row.account_id)
+                .bind(&ident_row.region_code)
                 .fetch_optional(&mut *conn)
                 .await
                 .map_domain_infra("Account: check version for upsert")?;
@@ -147,10 +146,10 @@ impl AccountRepository for PostgresAccountRepository {
                         // On insère l'identité
                         sqlx::query(
                             r#"INSERT INTO account_identity 
-                                (account_id, sub_id, region_code, email, state, locale, version, last_active_at)
+                                (account_id, region_code, sub_id, email, state, locale, version, last_active_at)
                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
                         )
-                        .bind(uid).bind(ident_row.sub_id).bind(ident_row.region_code).bind(ident_row.email)
+                        .bind(&ident_row.account_id).bind(&ident_row.region_code).bind(ident_row.sub_id).bind(ident_row.email)
                         .bind(ident_row.state).bind(ident_row.locale)
                         .bind(next_version).bind(ident_row.last_active_at)
                         .execute(&mut *conn).await.map_domain_infra("Account: insert identity")?;
@@ -158,10 +157,10 @@ impl AccountRepository for PostgresAccountRepository {
                         // On insère la gouvernance
                         sqlx::query(
                             r#"INSERT INTO account_governance 
-                                (account_id, role, beta_tier, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
+                                (account_id, region_code, role, beta_tier, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#
                         )
-                        .bind(uid).bind(gov_row.role).bind(gov_row.beta_tier)
+                        .bind(&ident_row.account_id).bind(&ident_row.region_code).bind(gov_row.role).bind(gov_row.beta_tier)
                         .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
                         .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
                         .bind(gov_row.last_ip_addr)
@@ -169,10 +168,10 @@ impl AccountRepository for PostgresAccountRepository {
 
                         // On insère les settings
                         sqlx::query(
-                            r#"INSERT INTO account_settings (account_id, preferences, timezone, push_tokens)
-                               VALUES ($1, $2, $3, $4)"#
+                            r#"INSERT INTO account_settings (account_id, region_code, preferences, timezone, push_tokens)
+                               VALUES ($1, $2, $3, $4, $5)"#
                         )
-                        .bind(uid).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens)
+                        .bind(&ident_row.account_id).bind(&ident_row.region_code).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens)
                         .execute(&mut *conn).await.map_domain_infra("Account: insert settings")?;
                     }
                     Some(v) => {
@@ -180,41 +179,62 @@ impl AccountRepository for PostgresAccountRepository {
                         let current_version_expected = next_version - 1;
                         if v != current_version_expected {
                             return Err(DomainError::ConcurrencyConflict {
-                                reason: format!("Account {}: OCC mismatch (DB v{}, App expected v{})", uid, v, current_version_expected),
+                                reason: format!("Account {}: OCC mismatch (DB v{}, App expected v{})", &ident_row.account_id, v, current_version_expected),
                             });
                         }
 
                         // Update Identity
                         sqlx::query(
-                            r#"UPDATE account_identity SET 
-                                sub_id = $2, email = $3, state = $4, locale = $5, version = $6, last_active_at = $7
-                               WHERE account_id = $1"#
-                        )
-                        .bind(uid).bind(ident_row.sub_id).bind(ident_row.email)
-                        .bind(ident_row.state).bind(ident_row.locale)
-                        .bind(next_version).bind(ident_row.last_active_at)
-                        .execute(&mut *conn).await.map_domain_infra("Account: update identity")?;
+                                r#"UPDATE account_identity SET 
+                                    sub_id = $3, email = $4, state = $5, locale = $6, version = $7, last_active_at = $8
+                                WHERE account_id = $1 AND region_code = $2"#
+                            )
+                        .bind(&ident_row.account_id)
+                        .bind(&ident_row.region_code)
+                        .bind(ident_row.sub_id)
+                        .bind(ident_row.email)
+                        .bind(ident_row.state)
+                        .bind(ident_row.locale)
+                        .bind(next_version)
+                        .bind(ident_row.last_active_at)
+                        .execute(&mut *conn)
+                        .await
+                        .map_domain_infra("Account: update identity")?;
 
                         // Update Governance
                         sqlx::query(
                             r#"UPDATE account_governance SET
-                                role = $2, beta_tier = $3, is_shadowbanned = $4, trust_score = $5, 
-                                moderation_notes = $6, last_moderation_at = $7, last_ip_addr = $8
-                               WHERE account_id = $1"#
+                                role = $3, beta_tier = $4, is_shadowbanned = $5, trust_score = $6, 
+                                moderation_notes = $7, last_moderation_at = $8, last_ip_addr = $9
+                            WHERE account_id = $1 AND region_code = $2"#
                         )
-                        .bind(uid).bind(gov_row.role).bind(gov_row.beta_tier)
-                        .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
-                        .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
+                        .bind(&ident_row.account_id)
+                        .bind(&ident_row.region_code)
+                        .bind(gov_row.role)
+                        .bind(gov_row.beta_tier)
+                        .bind(gov_row.is_shadowbanned)
+                        .bind(gov_row.trust_score)
+                        .bind(gov_row.moderation_notes)
+                        .bind(gov_row.last_moderation_at)
                         .bind(gov_row.last_ip_addr)
-                        .execute(&mut *conn).await.map_domain_infra("Account: update governance")?;
+                        .execute(&mut *conn)
+                        .await
+                        .map_domain_infra("Account: update governance")?;
 
                         // Update Settings
                         sqlx::query(
-                            r#"UPDATE account_settings SET preferences = $2, timezone = $3, push_tokens = $4
-                               WHERE account_id = $1"#
+                            r#"UPDATE account_settings SET 
+                                preferences = $3, timezone = $4, push_tokens = $5
+                            WHERE account_id = $1 AND region_code = $2"#
                         )
-                        .bind(uid).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens)
-                        .execute(&mut *conn).await.map_domain_infra("Account: insert settings")?;
+                        .bind(&ident_row.account_id)
+                        .bind(&ident_row.region_code)
+                        .bind(sett_row.preferences)
+                        .bind(sett_row.timezone) 
+                        .bind(sett_row.push_tokens)
+                        .execute(&mut *conn)
+                        .await
+                        .map_domain_infra("Account: update settings")?;
                     }
                 }
                 Ok(())

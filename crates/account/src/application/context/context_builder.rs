@@ -67,7 +67,6 @@ impl AccountContextBuilder {
                 .expect("AccountAppContext is required. Use .with_app()"),
             self.account_id
                 .expect("account_id is required for AccountContext"),
-            self.region.expect("region is required for AccountContext"),
         )
     }
 }

@@ -58,12 +58,12 @@ pub struct PostgresAccountRow {
 
 impl PostgresAccountRow {
     pub fn to_domain(self) -> Result<Account> {
-        let account_id = AccountId::from_uuid(self.account_id);
+        let region = RegionCode::try_new(self.region_code)?;
+        let account_id = AccountId::new(self.account_id, region);
 
         // 1. Reconstruction de Identity
         let identity = AccountIdentity::restore(
-            account_id,
-            RegionCode::try_new(self.region_code)?,
+            account_id.clone(),
             self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
             self.phone_number.map(PhoneNumber::try_new).transpose()?,
@@ -77,7 +77,7 @@ impl PostgresAccountRow {
         );
 
         let governance = AccountGovernance::restore(
-            account_id,
+            account_id.clone(),
             self.role
                 .map(AccountRole::from)
                 .unwrap_or(AccountRole::default()),

@@ -20,12 +20,7 @@ impl DeactivateCommand {
                 reason: "Invalid UUID format".to_string(),
             })?,
 
-            account_id: AccountId::from_str(&req.account_id).map_err(|e| {
-                DomainError::Validation {
-                    field: "account_id",
-                    reason: e.to_string(),
-                }
-            })?,
+            account_id: req.account_id.parse().map_err(|e: DomainError| e)?,
 
             reason: req
                 .reason

@@ -40,12 +40,7 @@ impl ChangeBirthDateCommand {
                 reason: "Invalid UUID format".to_string(),
             })?,
 
-            account_id: AccountId::try_new(&req.account_id).map_err(|e| {
-                DomainError::Validation {
-                    field: "account_id",
-                    reason: e.to_string(),
-                }
-            })?,
+            account_id: req.account_id.parse().map_err(|e: DomainError| e)?,
 
             new_birth_date,
         })

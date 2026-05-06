@@ -113,36 +113,4 @@ mod tests {
         f.assert_outbox(0, None); // Pas d'événement produit
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("US");
-
-        // Compte créé en US alors que le contexte TestFixture est EU par défaut
-        let account = f.account_builder_for(wrong_region)?.build()?;
-        let version_snapshot = account.version();
-
-        f.account_repo().insert(account);
-
-        let cmd = ChangeBetaTierCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            new_tier: BetaTier::INTERNAL,
-        };
-
-        let result = f
-            .bus()
-            .execute::<AccountContext, ChangeBetaTierCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        // Le UseCase ne doit pas trouver le compte car il filtre par région
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
-
-        // Vérification directe pour confirmer que rien n'a bougé
-        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
-        assert_eq!(saved.version(), version_snapshot);
-        f.assert_outbox(0, None);
-        Ok(())
-    }
 }

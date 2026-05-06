@@ -11,7 +11,7 @@ mod tests {
     };
 
     fn create_test_settings() -> Result<AccountSettings> {
-        let account_id = AccountId::new();
+        let account_id = AccountId::generate(RegionCode::default());
         let preferences = AccountPreferences::new(
             PrivacyPreferences::default(),
             NotificationPreferences::default(),

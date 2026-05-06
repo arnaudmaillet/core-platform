@@ -153,36 +153,4 @@ mod tests {
 
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let wrong_region = RegionCode::try_new("US")?;
-
-        // Arrange : On insère un compte qui n'est pas dans la région du contexte (eu)
-        let account = f.account_builder_for(wrong_region)?.build()?;
-        let version_snapshot = account.version();
-        f.account_repo().insert(account);
-
-        let cmd = ActivateCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-        };
-
-        // 2. Act
-        let result = f
-            .bus()
-            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        // 3. Assert
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
-
-        // Vérification directe via le repo (car le contexte ne le trouvera pas)
-        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
-        assert_eq!(saved.version(), version_snapshot);
-        f.assert_outbox(0, None);
-
-        Ok(())
-    }
 }

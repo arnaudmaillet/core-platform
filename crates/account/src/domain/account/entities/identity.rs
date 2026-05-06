@@ -21,7 +21,6 @@ use crate::domain::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountIdentity {
     account_id: AccountId,
-    region_code: RegionCode,
     sub_id: Option<SubId>,
     email: Option<Email>,
     phone_number: Option<PhoneNumber>,
@@ -35,15 +34,14 @@ pub struct AccountIdentity {
 }
 
 impl AccountIdentity {
-    pub fn builder(account_id: AccountId, region_code: RegionCode) -> AccountIdentityBuilder {
-        AccountIdentityBuilder::new(account_id, region_code)
+    pub fn builder(account_id: AccountId) -> AccountIdentityBuilder {
+        AccountIdentityBuilder::new(account_id)
     }
 
     /// Utilisé par le Builder ou le Repository pour restaurer l'état.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
         account_id: AccountId,
-        region_code: RegionCode,
         sub_id: Option<SubId>,
         email: Option<Email>,
         phone_number: Option<PhoneNumber>,
@@ -57,7 +55,6 @@ impl AccountIdentity {
     ) -> Self {
         Self {
             account_id,
-            region_code,
             sub_id,
             email,
             phone_number,
@@ -77,7 +74,7 @@ impl AccountIdentity {
         &self.account_id
     }
     pub fn region_code(&self) -> &RegionCode {
-        &self.region_code
+        self.account_id.region()
     }
     pub fn sub_id(&self) -> Option<&SubId> {
         self.sub_id.as_ref()
@@ -112,10 +109,11 @@ impl AccountIdentity {
     // ==========================================
 
     pub(crate) fn apply_region_change(&mut self, new_region: RegionCode) -> Result<bool> {
-        if self.region_code == new_region {
+        if self.region_code() == &new_region {
             return Ok(false);
         }
-        self.region_code = new_region;
+
+        self.account_id = AccountId::new(self.account_id.uuid(), new_region);
         Ok(true)
     }
 

@@ -4,7 +4,6 @@ mod tests {
     use crate::application::use_cases::settings::ChangeRegionCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::repositories::AccountRepository;
     use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::events::AggregateRoot;
     use shared_kernel::domain::value_objects::RegionCode;
@@ -14,48 +13,52 @@ mod tests {
     #[tokio::test]
     async fn test_change_region_success() -> Result<()> {
         let f = TestFixture::new();
+        let old_id = f.account_id(); // ex: EU:uuid
         let new_region = RegionCode::from_raw("US");
+
+        // L'ID attendu après le changement
+        let expected_new_id =
+            shared_kernel::domain::value_objects::AccountId::new(old_id.uuid(), new_region.clone());
 
         let account = f
             .account_builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
-        let version_snapshot = account.version();
-        // DEBUG pour confirmer
-        assert_eq!(account.identity().region_code().as_str(), "EU");
 
+        let version_snapshot = account.version();
         f.account_repo().insert(account.clone());
 
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
+            account_id: old_id.clone(),
             new_region: new_region.clone(),
         };
 
-        // 1. On vérifie manuellement si le stub a l'objet
-        let direct_check = f.account_repo().find_direct(&f.account_id());
-
-        // 2. On vérifie via le trait (ce que le Bus utilise)
-        let trait_check = f.account_repo().find_by_id(&f.account_id(), None).await?;
-
+        // Act
         f.bus()
             .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
             .await?;
 
-        assert_eq!(
-            account.identity().account_id().to_string(),
-            f.account_id().to_string(),
-            "L'ID de l'objet ne correspond pas à l'ID de la fixture !"
-        );
-        f.assert_account(|acc| {
+        // ASSERTION CORRIGÉE :
+        // On ne peut plus utiliser f.assert_account car elle cherche l'ancien ID (EU:uuid)
+        // On doit chercher le compte via son NOUVEL ID (US:uuid)
+        f.assert_account_by_id(&expected_new_id, |acc| {
             assert_eq!(acc.identity().region_code(), &new_region);
+            assert_eq!(acc.identity().account_id(), &expected_new_id);
             assert_eq!(acc.version(), version_snapshot + 1);
         })
         .await?;
 
+        // On vérifie aussi que l'ancien ID n'existe plus (facultatif mais propre)
+        assert!(
+            f.account_repo().find_direct(&old_id).is_none(),
+            "L'ancien ID devrait avoir disparu"
+        );
+
         f.assert_outbox(1, Some(AccountEvent::REGION_CHANGED));
         Ok(())
     }
+
 
     #[tokio::test]
     async fn test_change_region_business_idempotency() -> Result<()> {
@@ -149,28 +152,6 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(DomainError::Forbidden { .. })));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let db_region = RegionCode::from_raw("US");
-        let account = f.account_builder_for(db_region.clone())?.build()?;
-        f.account_repo().insert(account);
-
-        let cmd = ChangeRegionCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            new_region: RegionCode::from_raw("EU"),
-        };
-
-        let result = f
-            .bus()
-            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
         Ok(())
     }
 }

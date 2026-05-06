@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::access_management::{
-        LinkSubIdentityCommand,
-    };
+    use crate::application::use_cases::access_management::LinkSubIdentityCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use shared_kernel::domain::events::AggregateRoot;
@@ -145,32 +143,6 @@ mod tests {
         })
         .await?;
 
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("US");
-
-        // Arrange : Donnée aux US, contexte de test en EU
-        let account = f.account_builder_for(wrong_region)?.build()?;
-        f.account_repo().insert(account);
-
-        let cmd = LinkSubIdentityCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            sub_id: SubId::try_new("steam_456")?,
-        };
-
-        // 2. Act
-        let result = f
-            .bus()
-            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        // 3. Assert : Isolation régionale (NotFound)
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
         Ok(())
     }
 }

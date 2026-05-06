@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-    use shared_kernel::domain::value_objects::{AccountId, Email, SubId};
+    use shared_kernel::domain::value_objects::{AccountId, Email, RegionCode, SubId};
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
@@ -31,7 +31,7 @@ mod tests {
             ip_addr: ip.clone(),
         };
 
-        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        let ctx = f.app_ctx().create_context(f.account_id());
         let result = f
             .bus()
             .execute::<AccountContext, RegisterCommand, AccountId>(f.account_ctx().clone(), cmd)
@@ -75,7 +75,7 @@ mod tests {
         // 1. Arrange : On pré-enregistre un compte existant dans le repo
         let existing_acc = f
             .account_builder()?
-            .with_account_id(AccountId::new())
+            .with_account_id(AccountId::generate(RegionCode::default()))
             .with_sub_id(existing_ext_id.clone())
             .build()?;
         f.account_repo().insert(existing_acc.clone());
@@ -91,7 +91,7 @@ mod tests {
         };
 
         // 2. Act
-        f.app_ctx().create_context(f.account_id(), f.region());
+        f.app_ctx().create_context(f.account_id());
 
         let result = f
             .bus()
@@ -128,7 +128,7 @@ mod tests {
         };
 
         // 2. Act
-        let ctx = f.app_ctx().create_context(f.account_id(), f.region());
+        let ctx = f.app_ctx().create_context(f.account_id());
         let result = f
             .bus()
             .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)

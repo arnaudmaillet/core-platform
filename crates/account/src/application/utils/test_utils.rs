@@ -59,9 +59,8 @@ impl TestFixture {
             idempotency_repo.clone(),
         );
 
-        let account_id = AccountId::new();
-        let region = RegionCode::from_raw("EU");
-        let account_ctx = AccountContext::new(app_ctx.clone(), account_id, region);
+        let account_id = AccountId::generate(RegionCode::default());
+        let account_ctx = AccountContext::new(app_ctx.clone(), account_id);
 
         let mut bus = CommandBus::new();
 
@@ -171,7 +170,6 @@ impl TestFixture {
     pub fn account_builder_for(&self, region: RegionCode) -> Result<AccountBuilder> {
         Ok(Account::builder(
             self.account_id(),
-            region,
             RegistrationIdentifier::try_from_email("test@example.com")?,
         ))
     }

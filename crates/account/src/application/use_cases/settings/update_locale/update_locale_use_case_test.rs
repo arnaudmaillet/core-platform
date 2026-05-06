@@ -131,40 +131,4 @@ mod tests {
 
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("US");
-
-        // Compte aux US, Contexte en EU
-        let account = f
-            .account_builder_for(wrong_region)?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
-
-        let version_snapshot = account.version();
-        f.account_repo().insert(account);
-
-        let cmd = UpdateLocaleCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            new_locale: Locale::from_raw("US"),
-        };
-
-        // Act
-        let result = f
-            .bus()
-            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        // Assert
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
-
-        // Vérification directe via le repo
-        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
-        assert_eq!(saved.version(), version_snapshot);
-
-        Ok(())
-    }
 }

@@ -194,37 +194,4 @@ mod tests {
         // Note: Le stub doit être configuré pour ne pas persister si check_error fail
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("US");
-
-        let account = f.account_builder_for(wrong_region)?.build()?;
-        let version_snapshot = account.version();
-        f.account_repo().insert(account);
-
-        let cmd = BanCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            reason: AuditReason::try_new("System ban")?,
-        };
-
-        let result = f
-            .bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
-
-        assert_eq!(
-            saved.version(),
-            version_snapshot,
-            "La version ne doit pas avoir bougé"
-        );
-
-        f.assert_outbox(0, None);
-        Ok(())
-    }
 }

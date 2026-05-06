@@ -28,10 +28,7 @@ pub trait GrpcServiceUtils {
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| Status::unauthenticated("Missing x-region header"))?;
 
-        let region = RegionCode::try_new(region_str)
-            .map_err(|_| Status::invalid_argument("Invalid region format"))?;
-
-        Ok(self.app_ctx().create_context(account_id.clone(), region))
+        Ok(self.app_ctx().create_context(account_id.clone()))
     }
 
     /// Exécute une commande et recharge l'agrégat pour renvoyer la réponse

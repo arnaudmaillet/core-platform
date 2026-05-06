@@ -20,7 +20,7 @@ impl CommandHandler for RegisterHandler {
 
     async fn handle(&self, ctx: &AccountContext, cmd: RegisterCommand) -> Result<Self::Output> {
         let account_id = cmd.account_id.clone();
-        let mut builder = Account::builder(account_id.clone(), cmd.region.clone(), cmd.identifier);
+        let mut builder = Account::builder(account_id.clone(), cmd.identifier);
 
         if let Some(ext_id) = cmd.sub_id {
             builder = builder.with_sub_id(ext_id);

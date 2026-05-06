@@ -16,12 +16,11 @@ mod tests {
     };
 
     fn create_test_account() -> Account {
-        let id = AccountId::new();
-        let region = RegionCode::try_new("EU").unwrap();
+        let account_id: AccountId = AccountId::generate(RegionCode::default());
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@example.com").unwrap());
 
-        Account::builder(id, region, identifier)
+        Account::builder(account_id, identifier)
             .build()
             .expect("Failed to build test account")
     }

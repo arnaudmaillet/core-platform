@@ -200,41 +200,4 @@ mod tests {
         f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_ADJUSTED));
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_region_mismatch_returns_not_found() -> Result<()> {
-        let f = TestFixture::new();
-        let wrong_region = RegionCode::from_raw("US");
-
-        // Compte aux US, Contexte en EU
-        let account = f
-            .account_builder_for(wrong_region)?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
-        let version_snapshot = account.version();
-        f.account_repo().insert(account);
-
-        let cmd = DecreaseTrustScoreCommand {
-            command_id: Uuid::new_v4(),
-            account_id: f.account_id(),
-            amount: TrustDelta::from_raw(1),
-            reason: AuditReason::try_new("Test")?,
-        };
-
-        let result = f
-            .bus()
-            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-        let saved = f.account_repo().find_direct(&f.account_id()).unwrap();
-        assert!(matches!(result, Err(DomainError::NotFound { .. })));
-
-        assert_eq!(
-            saved.version(),
-            version_snapshot,
-            "La version ne doit pas avoir bougé"
-        );
-
-        f.assert_outbox(0, None);
-        Ok(())
-    }
 }
