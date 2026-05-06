@@ -37,10 +37,9 @@ pub struct Account {
 impl Account {
     pub fn builder(
         account_id: AccountId,
-        region: RegionCode,
         identifier: RegistrationIdentifier,
     ) -> AccountBuilder {
-        AccountBuilder::new(account_id, region, identifier)
+        AccountBuilder::new(account_id, identifier)
     }
 
     pub(crate) fn restore(

@@ -5,7 +5,6 @@ use serde::Deserialize;
 use shared_kernel::domain::value_objects::AccountId;
 use shared_kernel::errors::{DomainError, Result};
 use shared_proto::account::v1::UpdatePreferencesRequest;
-use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -18,16 +17,15 @@ pub struct UpdatePreferencesCommand {
 }
 
 impl UpdatePreferencesCommand {
-    pub fn try_from_proto(proto: UpdatePreferencesRequest) -> Result<Self> {
-        let command_id =
-            Uuid::parse_str(&proto.command_id).map_err(|_| DomainError::Validation {
-                field: "command_id",
-                reason: "Invalid UUID format".to_string(),
-            })?;
+    pub fn try_from_proto(req: UpdatePreferencesRequest) -> Result<Self> {
+        let command_id = Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
+            field: "command_id",
+            reason: "Invalid UUID format".to_string(),
+        })?;
 
-        let account_id = AccountId::from_str(&proto.account_id)?;
+        let account_id = req.account_id.parse().map_err(|e: DomainError| e)?;
 
-        let privacy = proto.privacy.map(|p| {
+        let privacy = req.privacy.map(|p| {
             PrivacyPreferences::restore(
                 p.profile_visible_to_public,
                 p.show_last_active,
@@ -35,7 +33,7 @@ impl UpdatePreferencesCommand {
             )
         });
 
-        let notifications = proto.notifications.map(|n| {
+        let notifications = req.notifications.map(|n| {
             NotificationPreferences::restore(
                 n.email_enabled,
                 n.push_enabled,
@@ -44,7 +42,7 @@ impl UpdatePreferencesCommand {
             )
         });
 
-        let appearance = proto.appearance.map(|a| {
+        let appearance = req.appearance.map(|a| {
             AppearancePreferences::restore(
                 // On cast l'i32 du proto vers ton enum de domaine (ex: Theme)
                 a.theme.try_into().unwrap_or_default(),

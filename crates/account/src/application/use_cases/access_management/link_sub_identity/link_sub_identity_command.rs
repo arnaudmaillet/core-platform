@@ -22,17 +22,10 @@ impl LinkSubIdentityCommand {
                 reason: "Invalid UUID format".to_string(),
             })?,
 
-            account_id: AccountId::try_new(&req.account_id).map_err(|e| {
-                DomainError::Validation {
-                    field: "account_id",
-                    reason: e.to_string(),
-                }
-            })?,
-            sub_id: SubId::try_from(req.sub_id).map_err(|e| {
-                DomainError::Validation {
-                    field: "sub_id",
-                    reason: e.to_string(),
-                }
+            account_id: req.account_id.parse().map_err(|e: DomainError| e)?,
+            sub_id: SubId::try_from(req.sub_id).map_err(|e| DomainError::Validation {
+                field: "sub_id",
+                reason: e.to_string(),
             })?,
         })
     }

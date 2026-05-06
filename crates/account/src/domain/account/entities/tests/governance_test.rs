@@ -4,7 +4,7 @@ mod tests {
     use shared_kernel::{
         domain::{
             entities::Entity,
-            value_objects::{AccountId, AuditReason, TrustContext},
+            value_objects::{AccountId, AuditReason, RegionCode, TrustContext},
         },
         errors::Result,
     };
@@ -18,7 +18,7 @@ mod tests {
     };
 
     fn create_test_governance() -> Result<AccountGovernance> {
-        let account_id = AccountId::new();
+        let account_id = AccountId::generate(RegionCode::default());
         let ip_addr = IpAddr::try_new("127.0.0.1")?;
 
         // Utilisation du restore simplifié (sans metadata/version/updated_at)

@@ -1,7 +1,7 @@
 // crates/account/src/infrastructure/api/grpc/access_service.rs
 
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -46,19 +46,23 @@ impl AccountAccessService for GrpcAccessService {
     ) -> Result<Response<AccountIdentity>, Status> {
         let req = request.into_inner();
 
+        let region = RegionCode::try_new(req.region_code.clone())
+            .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
+
         let account_id = match &req.sub_id {
-            Some(id) if !id.is_empty() => AccountId::try_new(id.clone())
-                .map_err(|e| Status::invalid_argument(e.to_string()))?,
-            _ => AccountId::new(),
+            Some(id) if !id.is_empty() => {
+                // Si on reçoit un UUID de Keycloak, on l'associe à la région
+                let uuid = uuid::Uuid::parse_str(id)
+                    .map_err(|_| Status::invalid_argument("Invalid sub_id UUID"))?;
+                AccountId::new(uuid, region.clone())
+            }
+            _ => AccountId::generate(region.clone()),
         };
 
-        let command = RegisterCommand::try_from_proto(req, account_id)
+        let command = RegisterCommand::try_from_proto(req, account_id.clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        // 2. Le contexte utilisera maintenant l'ID stable
-        let ctx = self
-            .app_ctx
-            .create_context(command.account_id.clone(), command.region.clone());
+        let ctx = self.app_ctx.create_context(command.account_id.clone());
 
         self.execute_and_fetch::<RegisterCommand, AccountId, AccountIdentity, _>(
             &ctx,

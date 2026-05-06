@@ -1,6 +1,9 @@
 // crates/account/src/application/unban_account/unban_command.rs
 use serde::Deserialize;
-use shared_kernel::{domain::value_objects::{AccountId, AuditReason}, errors::{DomainError, Result}};
+use shared_kernel::{
+    domain::value_objects::{AccountId, AuditReason},
+    errors::{DomainError, Result},
+};
 use shared_proto::account::v1::ModerationRequest;
 use uuid::Uuid;
 
@@ -19,12 +22,7 @@ impl UnbanCommand {
                 reason: "Invalid UUID format".to_string(),
             })?,
 
-            account_id: AccountId::try_new(&req.account_id).map_err(|e| {
-                DomainError::Validation {
-                    field: "account_id",
-                    reason: e.to_string(),
-                }
-            })?,
+            account_id: req.account_id.parse().map_err(|e: DomainError| e)?,
 
             reason: AuditReason::try_from(req.reason).map_err(|e| DomainError::Validation {
                 field: "reason",

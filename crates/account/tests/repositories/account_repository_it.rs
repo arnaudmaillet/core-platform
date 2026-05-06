@@ -36,13 +36,11 @@ async fn get_test_context() -> (
 #[tokio::test]
 async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
-    let account_id = AccountId::new();
-    let region = RegionCode::from_raw("EU");
+    let account_id = AccountId::generate(RegionCode::default());
     let email = Email::try_new("full@lifecycle.com")?;
 
     let account = Account::builder(
         account_id.clone(),
-        region.clone(),
         RegistrationIdentifier::try_from_email(email.to_string())?,
     )
     .build()?;
@@ -101,10 +99,9 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
 #[tokio::test]
 async fn test_concurrency_protection_occ() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
-    let account_id = AccountId::new();
+    let account_id = AccountId::generate(RegionCode::default());
     let account = Account::builder(
         account_id,
-        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("occ@test.com")?,
     )
     .build()?;
@@ -136,12 +133,11 @@ async fn test_concurrency_protection_occ() -> Result<()> {
 async fn test_cache_logic_integrity() -> Result<()> {
     let (repo, pg_ctx, redis_ctx) = get_test_context().await;
     let cache = redis_ctx.repository();
-    let account_id = AccountId::new();
+    let account_id = AccountId::generate(RegionCode::default());
     let cache_key = format!("account:aggregate:{}", account_id.as_uuid());
 
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("cache@test.com")?,
     )
     .build()?;
@@ -178,14 +174,12 @@ async fn test_unique_constraints() -> Result<()> {
     let identifier = RegistrationIdentifier::try_from_email("unique@test.com")?;
 
     let acc1 = Account::builder(
-        AccountId::new(),
-        RegionCode::from_raw("EU"),
+        AccountId::generate(RegionCode::default()),
         identifier.clone(),
     )
     .build()?;
     let acc2 = Account::builder(
-        AccountId::new(),
-        RegionCode::from_raw("EU"),
+        AccountId::generate(RegionCode::default()),
         identifier.clone(),
     )
     .build()?;
@@ -208,9 +202,9 @@ async fn test_lookups() -> Result<()> {
     let email = Email::try_new("lookup@test.com")?;
     let identifier = RegistrationIdentifier::try_from_email(email.to_string())?;
     let ext_id = SubId::from_raw("ext_123");
-    let account_id = AccountId::new();
+    let account_id = AccountId::generate(RegionCode::default());
 
-    let account = Account::builder(account_id.clone(), RegionCode::from_raw("EU"), identifier)
+    let account = Account::builder(account_id.clone(), identifier)
         .with_sub_id(ext_id.clone())
         .with_email(email.clone())
         .build()?;
@@ -237,10 +231,9 @@ async fn test_lookups() -> Result<()> {
 #[tokio::test]
 async fn test_rollback_works_properly() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
-    let account_id = AccountId::new();
+    let account_id = AccountId::generate(RegionCode::default());
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("rollback@test.com")?,
     )
     .build()?;
@@ -260,11 +253,10 @@ async fn test_rollback_works_properly() -> Result<()> {
 #[tokio::test]
 async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
     let (repo, pg_ctx, redis_ctx) = get_test_context().await;
-    let account_id = AccountId::new();
+    let account_id = AccountId::generate(RegionCode::default());
 
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("cache-check@test.com")?,
     )
     .build()?;
@@ -310,12 +302,11 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
 #[tokio::test]
 async fn test_cache_performance_benefit() -> Result<()> {
     let (repo, pg_ctx, redis_ctx) = get_test_context().await;
-    let account_id = AccountId::new();
+    let account_id = AccountId::generate(RegionCode::default());
 
     // On prépare un compte
     let account = Account::builder(
         account_id.clone(),
-        RegionCode::from_raw("EU"),
         RegistrationIdentifier::try_from_email("perf@test.com")?,
     )
     .build()?;
@@ -355,8 +346,7 @@ async fn test_cache_performance_benefit() -> Result<()> {
 #[tokio::test]
 async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
-    let account_id = AccountId::new();
-    let region = RegionCode::try_new("EU")?;
+    let account_id = AccountId::generate(RegionCode::default());
     let email = Email::try_new("partial@integrity.com")?;
 
     // --- 1. INSERTION MANUELLE PARTIELLE (SIMULATION BUG/LATENCE) ---
@@ -364,7 +354,7 @@ async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
     sqlx::query("INSERT INTO account_identity (account_id, region_code, email, locale, state, version, created_at, updated_at, aggregate_updated_at) 
                  VALUES ($1, $2, $3, 'fr-FR', 'ACTIVE'::account_state, 0, NOW(), NOW(), NOW())")
         .bind(account_id.as_uuid())
-        .bind(region.to_string())
+        .bind(account_id.region().to_string())
         .bind(email.to_string())
         .execute(&pg_ctx.pool())
         .await

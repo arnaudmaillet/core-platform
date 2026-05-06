@@ -36,8 +36,8 @@ impl AccountAppContext {
         }
     }
 
-    pub fn create_context(&self, account_id: AccountId, region: RegionCode) -> AccountContext {
-        AccountContext::new(self.clone(), account_id, region)
+    pub fn create_context(&self, account_id: AccountId) -> AccountContext {
+        AccountContext::new(self.clone(), account_id)
     }
 
     pub fn base(&self) -> &BaseAppContext {
@@ -62,16 +62,11 @@ impl AccountAppContext {
 pub struct AccountContext {
     app: AccountAppContext,
     account_id: AccountId,
-    region: RegionCode,
 }
 
 impl AccountContext {
-    pub(crate) fn new(app: AccountAppContext, account_id: AccountId, region: RegionCode) -> Self {
-        Self {
-            app,
-            account_id,
-            region,
-        }
+    pub(crate) fn new(app: AccountAppContext, account_id: AccountId) -> Self {
+        Self { app, account_id }
     }
 
     // --- Accès aux Repositories ---
@@ -81,7 +76,7 @@ impl AccountContext {
     }
 
     pub fn region(&self) -> &RegionCode {
-        &self.region
+        self.account_id.region()
     }
 
     pub fn account_repo(&self) -> Arc<dyn AccountRepository> {
@@ -111,21 +106,17 @@ impl AccountContext {
                 entity: "Account",
                 id: self.account_id.to_string(),
             })?;
-
-        self.ensure_region(&account)?;
-
         Ok(account)
     }
 
     pub async fn save(&self, account: &mut Account, command_id: Option<uuid::Uuid>) -> Result<()> {
         // 1. Isolation du contexte
-        if account.identity().account_id() != &self.account_id {
+        if account.identity().account_id().uuid() != self.account_id.uuid() {
             return Err(DomainError::Validation {
                 field: "account_id".into(),
-                reason: "Account ID mismatch for this context".into(),
+                reason: "Identity mismatch: cannot change the technical UUID of an account".into(),
             });
         }
-
         let mut tx = self.begin_transaction().await?;
 
         // 2. Idempotence Technique
@@ -183,20 +174,5 @@ impl AccountContext {
                 Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>)
             }
         }
-    }
-
-    // --- Sécurité ---
-
-    fn ensure_region(&self, account: &Account) -> Result<()> {
-        let account_region = account.identity().region_code();
-        let context_region = &self.region;
-
-        if account_region != context_region {
-            return Err(DomainError::NotFound {
-                entity: "Account",
-                id: account.identity().account_id().to_string(),
-            });
-        }
-        Ok(())
     }
 }

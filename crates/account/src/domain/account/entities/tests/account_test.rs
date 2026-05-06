@@ -8,12 +8,11 @@ mod tests {
 
     /// Helper pour créer un compte de test valide et actif
     fn create_test_account() -> Account {
-        let id = AccountId::new();
-        let region = RegionCode::try_new("EU").unwrap();
+        let id = AccountId::generate(RegionCode::default());
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@doe.com").unwrap());
 
-        Account::builder(id, region, identifier)
+        Account::builder(id, identifier)
             .build()
             .expect("Failed to build test account")
     }
