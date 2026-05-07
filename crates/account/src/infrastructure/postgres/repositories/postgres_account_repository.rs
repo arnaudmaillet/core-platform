@@ -59,7 +59,8 @@ impl AccountRepository for PostgresAccountRepository {
         }
 
         // 2. Fallback DB (Si pas en cache ou si transaction active)
-        let uid = id.as_uuid();
+        let uid = id.uuid().clone();
+        let region = id.region().clone();
 
         let account_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
@@ -68,12 +69,14 @@ impl AccountRepository for PostgresAccountRepository {
                            s.preferences, s.timezone, s.push_tokens, s.updated_at as settings_updated_at,
                            g.role, g.beta_tier, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
                            g.last_moderation_at, g.last_ip_addr, g.updated_at as governance_updated_at
+                    FROM account_identity i
                     LEFT JOIN account_settings s ON i.account_id = s.account_id AND i.region_code = s.region_code
                     LEFT JOIN account_governance g ON i.account_id = g.account_id AND i.region_code = g.region_code
                     WHERE i.account_id = $1 AND i.region_code = $2"#;
 
                 let row_opt = sqlx::query_as::<_, PostgresAccountRow>(sql)
                     .bind(uid)
+                    .bind(region.as_str())
                     .fetch_optional(conn)
                     .await
                     .map_domain_infra("Account: fetch aggregate join")?;
@@ -90,10 +93,11 @@ impl AccountRepository for PostgresAccountRepository {
             if let Some(account) = &account_opt {
                 let cache_handle = self.cache.clone();
                 let account_to_cache = account.clone();
+                let cache_key_owned = key.clone();
                 tokio::spawn(async move {
                     let _ = cache_handle
                         .set_obj(
-                            &key,
+                            &cache_key_owned,
                             &account_to_cache,
                             Some(std::time::Duration::from_secs(900)),
                         )

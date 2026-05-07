@@ -2,7 +2,7 @@ use crate::domain::value_objects::AccountState;
 
 /// Il permet de mapper l'ENUM PostgreSQL sans polluer le Domaine avec SQLx.
 #[derive(Debug, sqlx::Type)]
-#[sqlx(type_name = "account_state")]
+#[sqlx(type_name = "TEXT")]
 pub enum PostgresAccountState {
     PENDING,
     ACTIVE,

@@ -134,7 +134,15 @@ async fn test_cache_logic_integrity() -> Result<()> {
     let (repo, pg_ctx, redis_ctx) = get_test_context().await;
     let cache = redis_ctx.repository();
     let account_id = AccountId::generate(RegionCode::default());
-    let cache_key = format!("account:aggregate:{}", account_id.as_uuid());
+
+    // Utiliser la même logique de clé que le Repo ---
+    // Tu peux soit appeler PostgresAccountRepository::cache_key(&account_id)
+    // Soit reproduire exactement le format :
+    let cache_key = format!(
+        "account:aggregate:{}:{}",
+        account_id.region().as_str(),
+        account_id.uuid()
+    );
 
     let account = Account::builder(
         account_id.clone(),
@@ -142,28 +150,43 @@ async fn test_cache_logic_integrity() -> Result<()> {
     )
     .build()?;
 
-    // 1. Create + find_by_id -> Remplit le cache
+    // 1. Create + find_by_id
     let mut tx = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
     repo.create(&account, &mut tx).await?;
     tx.into_inner().commit().await.unwrap();
 
     let _ = repo.find_by_id(&account_id, None).await?;
 
-    // On attend que le tokio::spawn du cache finisse
-    tokio::time::sleep(Duration::from_millis(150)).await;
-    assert!(cache.exists(&cache_key).await?, "Cache should be filled");
+    // --- AJUSTEMENT 2 : Assertion robuste avec retries ---
+    let mut success = false;
+    for _ in 0..10 {
+        if cache.exists(&cache_key).await? {
+            success = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        success,
+        "Cache should be filled (checked with key: {})",
+        cache_key
+    );
 
     // 3. Save -> Invalide le cache
     let mut to_update = account.clone();
-
     to_update.activate()?;
     repo.save(&mut to_update, None).await?;
 
-    tokio::time::sleep(Duration::from_millis(150)).await;
-    assert!(
-        !cache.exists(&cache_key).await?,
-        "Cache must be invalidated after save"
-    );
+    // Même logique pour l'invalidation (on attend que ce soit supprimé)
+    let mut invalidated = false;
+    for _ in 0..10 {
+        if !cache.exists(&cache_key).await? {
+            invalidated = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(invalidated, "Cache must be invalidated after save");
 
     Ok(())
 }
@@ -352,7 +375,7 @@ async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
     // --- 1. INSERTION MANUELLE PARTIELLE (SIMULATION BUG/LATENCE) ---
     // On n'insère QUE l'identité, pas les settings ni la gouvernance.
     sqlx::query("INSERT INTO account_identity (account_id, region_code, email, locale, state, version, created_at, updated_at, aggregate_updated_at) 
-                 VALUES ($1, $2, $3, 'fr-FR', 'ACTIVE'::account_state, 0, NOW(), NOW(), NOW())")
+                 VALUES ($1, $2, $3, 'fr-FR', 'ACTIVE', 0, NOW(), NOW(), NOW())")
         .bind(account_id.as_uuid())
         .bind(account_id.region().to_string())
         .bind(email.to_string())

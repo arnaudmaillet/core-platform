@@ -5,7 +5,7 @@ use crate::domain::value_objects::AccountRole;
 
 /// Représentation technique du rôle pour PostgreSQL
 #[derive(Debug, Deserialize, Clone, Type)]
-#[sqlx(type_name = "internal_role")]
+#[sqlx(type_name = "TEXT")]
 pub enum PostgresAccountRole {
     USER,
     MODERATOR,
