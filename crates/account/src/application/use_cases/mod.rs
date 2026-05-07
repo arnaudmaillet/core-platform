@@ -1,7 +1,6 @@
 pub mod access_management;
 pub mod lifecycle;
 pub mod moderation;
-pub mod queries;
 pub mod settings;
 
 pub use access_management::{
