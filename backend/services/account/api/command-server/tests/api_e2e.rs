@@ -151,10 +151,14 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
 
     // ON RÉCUPÈRE L'ID RÉEL GÉNÉRÉ PAR LE SERVEUR
     let created_account_identity = res.unwrap().into_inner();
-    let real_account_id = created_account_identity.account_id; // C'est l'ID à utiliser pour la suite !
-    assert_eq!(
-        real_account_id, true_admin_id,
-        "L'ID retourné par le serveur doit matcher le sub_id envoyé"
+    let real_account_id = created_account_identity.account_id;
+    assert!(
+        real_account_id.contains(&true_admin_id),
+        "L'ID retourné doit contenir l'UUID original mais peut être préfixé par la région"
+    );
+    assert!(
+        real_account_id.starts_with(region_code),
+        "L'ID doit commencer par le code région"
     );
 
     // --- ÉTAPE 2 : REGISTER (DUPLICATED / IDEMPOTENCY) ---
@@ -189,13 +193,18 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
 
     // --- ÉTAPE 4 : VÉRIFICATIONS FINALES ---
 
+    let uuid_part = real_account_id.split(':').last().unwrap();
+    let parsed_uuid = sqlx::types::Uuid::parse_str(uuid_part).unwrap();
+
     // 1. Vérification Locale & Version
-    let row: (String, i64) =
-        sqlx::query_as("SELECT locale, version FROM account_identity WHERE account_id = $1")
-            .bind(sqlx::types::Uuid::parse_str(&real_account_id).unwrap())
-            .fetch_one(&ctx.postgres().pool())
-            .await
-            .expect("Account should exist");
+    let row: (String, i64) = sqlx::query_as(
+        "SELECT locale, version FROM account_identity WHERE account_id = $1 AND region_code = $2",
+    )
+    .bind(parsed_uuid)
+    .bind(region_code) // Sharding key
+    .fetch_one(&ctx.postgres().pool())
+    .await
+    .expect("Account should exist in DB");
 
     assert_eq!(row.0, new_locale);
     // On attend 2 car :
