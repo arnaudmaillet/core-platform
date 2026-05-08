@@ -15,7 +15,6 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use shared_kernel::{
     domain::{
-        Identifier,
         events::AggregateMetadata,
         value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },

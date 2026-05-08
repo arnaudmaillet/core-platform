@@ -34,8 +34,6 @@ pub trait DomainEvent: DynClone + Debug + Send + Sync {
     fn correlation_id(&self) -> Option<Uuid> {
         None
     }
-
-    fn region_code(&self) -> String;
 }
 
 dyn_clone::clone_trait_object!(DomainEvent);

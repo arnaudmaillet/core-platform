@@ -1,27 +1,45 @@
-//proto/profile/v1/profile.proto
-
 syntax = "proto3";
 
 package profile.v1;
 
-// Importation des types partagés et des wrappers Google
-import "profile/v1/types.proto";
+// Importation des models partagés (Profile, SocialLinks, etc.)
+import "profile/v1/models.proto";
 import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/core-platform/proto/profile/v1";
 
 // ==========================================
+// STRUCTURES DE CONTRÔLE
+// ==========================================
+
+// Metadata présentes dans chaque commande pour assurer 
+// l'idempotence (command_id) et le routage (region)
+message CommandMetadata {
+  string command_id = 1; // UUID unique généré par le client
+  string region = 2;     // Code région (ex: "fr", "us") pour le sharding
+}
+
+message ProfileTarget {
+  string profile_id = 1;
+  uint64 expected_version = 2;
+}
+
+message QueryMetadata {
+  string region = 1;
+}
+
+// ==========================================
 // SERVICES DE MODIFICATION (COMMANDES)
 // ==========================================
 
-// 1. SERVICE D'IDENTITÉ
+// 1. SERVICE D'IDENTITÉ : Gère les informations pivots du compte
 service ProfileIdentityService {
   rpc UpdateHandle(UpdateHandleRequest) returns (Profile);
   rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (Profile);
   rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
 }
 
-// 2. SERVICE DE MÉDIAS (ASSETS)
+// 2. SERVICE DE MÉDIAS (ASSETS) : Gère les images de profil
 service ProfileMediaService {
   rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
   rpc RemoveAvatar(RemoveAvatarRequest) returns (Profile);
@@ -29,85 +47,104 @@ service ProfileMediaService {
   rpc RemoveBanner(RemoveBannerRequest) returns (Profile);
 }
 
-// 3. SERVICE DE MÉTADONNÉES (INFOS ÉDITORIALES)
+// 3. SERVICE DE MÉTADONNÉES : Gère les infos éditoriales et sociales
 service ProfileMetadataService {
   rpc UpdateBio(UpdateBioRequest) returns (Profile);
   rpc UpdateLocationLabel(UpdateLocationLabelRequest) returns (Profile);
   rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
 }
 
-// 4. SERVICE INTERNE (AUTOMATISATION)
-service ProfileCounterService {
-  rpc IncrementPostCount(IncrementPostCountRequest) returns (Profile);
-  rpc DecrementPostCount(DecrementPostCountRequest) returns (Profile);
-}
 // ==========================================
-// MESSAGES DE REQUÊTES
+// SERVICE DE LECTURE (QUERIES)
+// ==========================================
+
+service ProfileQueryService {
+  rpc GetProfile(GetProfileRequest) returns (Profile);
+  rpc GetProfilesByAccount(GetProfilesByAccountRequest) returns (GetProfilesByAccountResponse);
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES (COMMANDS)
 // ==========================================
 
 // --- Identity ---
 
 message UpdateHandleRequest {
-  string profile_id = 1;
-  string new_handle = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  string new_handle = 3;
 }
 
 message UpdateDisplayNameRequest {
-  string profile_id = 1;
-  string new_display_name = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  string new_display_name = 3;
 }
 
-
 message UpdatePrivacyRequest {
-  string profile_id = 1;
-  bool is_private = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  bool is_private = 3;
 }
 
 // --- Medias ---
 
 message UpdateAvatarRequest {
-  string profile_id = 1;
-  string new_avatar_url = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  string new_avatar_url = 3;
 }
 
 message UpdateBannerRequest {
-  string profile_id = 1;
-  string new_banner_url = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  string new_banner_url = 3;
 }
 
 message RemoveAvatarRequest {
-  string profile_id = 1;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
 }
 
 message RemoveBannerRequest {
-  string profile_id = 1;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
 }
 
 // --- Metadata ---
 
 message UpdateBioRequest {
-  string profile_id = 1;
-  google.protobuf.StringValue new_bio = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  google.protobuf.StringValue new_bio = 3;
 }
 
 message UpdateLocationLabelRequest {
-  string profile_id = 1;
-  google.protobuf.StringValue new_location_label = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  google.protobuf.StringValue new_location_label = 3;
 }
 
 message UpdateSocialLinksRequest {
-  string profile_id = 1;
-  optional SocialLinks new_links = 2;
+  CommandMetadata metadata = 1;
+  ProfileTarget target = 2;
+  optional SocialLinks new_links = 3;
 }
 
-// --- Compteurs / Automation ---
+// ==========================================
+// MESSAGES DE REQUÊTES (QUERIES)
+// ==========================================
 
-message IncrementPostCountRequest {
-  string profile_id = 1;
-  string post_id = 2;
+message GetProfileRequest {
+  QueryMetadata metadata = 1;
+  string profile_id = 2;
 }
 
-message DecrementPostCountRequest {
-  string profile_id = 1;
-  string post_id = 2;
+message GetProfilesByAccountRequest {
+  QueryMetadata metadata = 1;
+  string account_id = 2;
+}
+
+message GetProfilesByAccountResponse {
+  repeated Profile profiles = 1;
 }

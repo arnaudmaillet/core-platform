@@ -5,8 +5,7 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, Locale};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::domain::entities::Versioned;
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 

@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     domain::{
-        events::{AggregateMetadata, AggregateRoot, DomainEvent},
+        entities::Versioned,
+        events::{AggregateMetadata, AggregateRoot, DomainEvent, EventEmitter, OperationTracker},
         value_objects::{
             AccountId, AuditReason, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone,
             TrustContext,
@@ -34,11 +35,41 @@ pub struct Account {
     metadata: AggregateMetadata,
 }
 
+impl Versioned for Account {
+    fn version(&self) -> u64 {
+        self.metadata.version()
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.metadata.updated_at()
+    }
+    fn record_change(&mut self) {
+        self.metadata.record_change();
+    }
+}
+
+impl EventEmitter for Account {
+    fn push_event(&mut self, event: Box<dyn DomainEvent>) {
+        self.metadata.push_event(event);
+    }
+    fn pull_events(&mut self) -> Vec<Box<dyn DomainEvent>> {
+        self.metadata.pull_events()
+    }
+}
+
+impl AggregateRoot for Account {
+    fn id(&self) -> String {
+        self.identity.account_id().to_string()
+    }
+    fn metadata(&self) -> &AggregateMetadata {
+        &self.metadata
+    }
+    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
+        &mut self.metadata
+    }
+}
+
 impl Account {
-    pub fn builder(
-        account_id: AccountId,
-        identifier: RegistrationIdentifier,
-    ) -> AccountBuilder {
+    pub fn builder(account_id: AccountId, identifier: RegistrationIdentifier) -> AccountBuilder {
         AccountBuilder::new(account_id, identifier)
     }
 
@@ -69,24 +100,40 @@ impl Account {
         self.identity.aggregate_updated_at()
     }
 
+    fn id_typed(&self) -> AccountId {
+        self.identity.account_id().clone()
+    }
+
+    pub fn record_activity(&mut self) -> Result<bool> {
+        let changed = self.identity.apply_activity_record()?;
+
+        if changed {
+            self.record_change();
+        }
+
+        Ok(changed)
+    }
+
     pub fn register(&mut self, region: RegionCode, ip_addr: IpAddr) -> Result<bool> {
-        self.identity.apply_registration()?;
-        self.governance.apply_ip_record(ip_addr.clone());
-
-        self.apply_change();
-
-        self.push_event(Box::new(AccountEvent::AccountRegistered {
-            account_id: self.id_typed(),
-            email: self.identity.email().cloned(),
-            phone: self.identity.phone_number().cloned(),
-            sub_id: self.identity.sub_id().cloned(),
-            locale: self.identity.locale().clone(),
-            region,
-            ip_addr,
-            occurred_at: self.updated_at(),
-        }));
-
-        Ok(true)
+        self.track_change(
+            |s| {
+                s.identity.apply_registration()?;
+                s.governance.apply_ip_record(ip_addr.clone());
+                Ok(true)
+            },
+            |s| {
+                Box::new(AccountEvent::AccountRegistered {
+                    account_id: s.id_typed(),
+                    email: s.identity.email().cloned(),
+                    phone: s.identity.phone_number().cloned(),
+                    sub_id: s.identity.sub_id().cloned(),
+                    locale: s.identity.locale().clone(),
+                    region,
+                    ip_addr,
+                    occurred_at: s.updated_at(),
+                })
+            },
+        )
     }
 
     pub fn change_region(&mut self, new_region: RegionCode) -> Result<bool> {
@@ -566,15 +613,6 @@ impl Account {
         )
     }
 
-    pub fn record_activity(&mut self) -> Result<bool> {
-        let changed = self.identity.apply_activity_record()?;
-        if changed {
-            self.apply_change();
-        }
-
-        Ok(changed)
-    }
-
     fn ensure_not_restricted(&self) -> Result<()> {
         if self.identity.is_blocked() {
             return Err(DomainError::Forbidden {
@@ -584,48 +622,5 @@ impl Account {
             });
         }
         Ok(())
-    }
-
-    // ==========================================
-    // INFRASTRUCTURE & MAPPING
-    // ==========================================
-
-    fn id_typed(&self) -> AccountId {
-        self.identity.account_id().clone()
-    }
-
-    fn apply_change(&mut self) {
-        self.record_change();
-    }
-
-    // --- HELPER DE COORDINATION ---
-    fn track_change<F>(
-        &mut self,
-        action: F,
-        event_factory: impl FnOnce(&Self) -> Box<dyn DomainEvent>,
-    ) -> Result<bool>
-    where
-        F: FnOnce(&mut Self) -> Result<bool>,
-    {
-        if action(self)? {
-            self.apply_change(); // Version +1
-            let event = event_factory(self);
-            self.push_event(event);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-}
-
-impl AggregateRoot for Account {
-    fn id(&self) -> String {
-        self.identity.account_id().to_string()
-    }
-    fn metadata(&self) -> &AggregateMetadata {
-        &self.metadata
-    }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
-        &mut self.metadata
     }
 }

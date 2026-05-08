@@ -12,7 +12,7 @@ use shared_kernel::domain::value_objects::{Email, PhoneNumber, SubId, Timezone};
 use shared_kernel::{
     domain::{
         events::AggregateMetadata,
-        value_objects::{AccountId, RegionCode},
+        value_objects::AccountId,
     },
     errors::Result,
 };

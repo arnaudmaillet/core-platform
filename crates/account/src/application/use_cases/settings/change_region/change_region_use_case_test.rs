@@ -5,7 +5,7 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
-    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::entities::Versioned;
     use shared_kernel::domain::value_objects::RegionCode;
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
@@ -58,7 +58,6 @@ mod tests {
         f.assert_outbox(1, Some(AccountEvent::REGION_CHANGED));
         Ok(())
     }
-
 
     #[tokio::test]
     async fn test_change_region_business_idempotency() -> Result<()> {

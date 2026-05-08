@@ -16,8 +16,7 @@ pub enum ProfileEvent {
     ProfileCreated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         display_name: DisplayName,
         handle: Handle,
         occurred_at: DateTime<Utc>,
@@ -27,8 +26,7 @@ pub enum ProfileEvent {
     HandleChanged {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_handle: Handle,
         new_handle: Handle,
         occurred_at: DateTime<Utc>,
@@ -37,8 +35,7 @@ pub enum ProfileEvent {
     DisplayNameChanged {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_display_name: DisplayName,
         new_display_name: DisplayName,
         occurred_at: DateTime<Utc>,
@@ -48,8 +45,7 @@ pub enum ProfileEvent {
     AvatarUpdated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_avatar_url: Option<Url>,
         new_avatar_url: Url,
         occurred_at: DateTime<Utc>,
@@ -58,8 +54,7 @@ pub enum ProfileEvent {
     AvatarRemoved {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_avatar_url: Option<Url>,
         occurred_at: DateTime<Utc>,
     },
@@ -67,8 +62,7 @@ pub enum ProfileEvent {
     BannerUpdated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_banner_url: Option<Url>,
         new_banner_url: Url,
         occurred_at: DateTime<Utc>,
@@ -77,8 +71,7 @@ pub enum ProfileEvent {
     BannerRemoved {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_banner_url: Option<Url>,
         occurred_at: DateTime<Utc>,
     },
@@ -86,8 +79,7 @@ pub enum ProfileEvent {
     BioUpdated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_bio: Option<Bio>,
         new_bio: Option<Bio>,
         occurred_at: DateTime<Utc>,
@@ -96,8 +88,7 @@ pub enum ProfileEvent {
     LocationLabelUpdated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_location: Option<LocationLabel>,
         new_location: Option<LocationLabel>,
         occurred_at: DateTime<Utc>,
@@ -107,8 +98,7 @@ pub enum ProfileEvent {
     SocialLinksUpdated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         old_links: Option<SocialLinks>,
         new_links: Option<SocialLinks>,
         occurred_at: DateTime<Utc>,
@@ -118,8 +108,7 @@ pub enum ProfileEvent {
     PrivacySettingsChanged {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         is_private: bool,
         occurred_at: DateTime<Utc>,
     },
@@ -127,8 +116,7 @@ pub enum ProfileEvent {
     PostCountIncremented {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         post_id: Uuid,
         new_count: u64,
         occurred_at: DateTime<Utc>,
@@ -137,8 +125,7 @@ pub enum ProfileEvent {
     PostCountDecremented {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         post_id: Uuid,
         new_count: u64,
         occurred_at: DateTime<Utc>,
@@ -148,8 +135,7 @@ pub enum ProfileEvent {
     StatsSnapshotUpdated {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         follower_count: u64,
         following_count: u64,
         post_count: u64,
@@ -160,8 +146,7 @@ pub enum ProfileEvent {
     ProfileDeleted {
         id: Uuid,
         profile_id: ProfileId,
-        owner_id: AccountId,
-        region: RegionCode,
+        account_id: AccountId,
         occurred_at: DateTime<Utc>,
     },
 }
@@ -203,26 +188,6 @@ impl DomainEvent for ProfileEvent {
             Self::PostCountDecremented { .. } => Cow::Borrowed("profile.post_count.decremented"),
             Self::StatsSnapshotUpdated { .. } => Cow::Borrowed("profile.stats.snapshot"),
             Self::ProfileDeleted { .. } => Cow::Borrowed("profile.deleted"),
-        }
-    }
-
-    fn region_code(&self) -> RegionCode {
-        match self {
-            Self::ProfileCreated { region, .. }
-            | Self::HandleChanged { region, .. }
-            | Self::DisplayNameChanged { region, .. }
-            | Self::AvatarUpdated { region, .. }
-            | Self::AvatarRemoved { region, .. }
-            | Self::BannerUpdated { region, .. }
-            | Self::BannerRemoved { region, .. }
-            | Self::BioUpdated { region, .. }
-            | Self::LocationLabelUpdated { region, .. }
-            | Self::SocialLinksUpdated { region, .. }
-            | Self::PrivacySettingsChanged { region, .. }
-            | Self::StatsSnapshotUpdated { region, .. }
-            | Self::PostCountIncremented { region, .. }
-            | Self::PostCountDecremented { region, .. }
-            | Self::ProfileDeleted { region, .. } => region.clone(),
         }
     }
 

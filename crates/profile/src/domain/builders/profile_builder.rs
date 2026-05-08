@@ -1,17 +1,15 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
 use crate::domain::entities::Profile;
-use crate::domain::events::ProfileEvent;
-use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, ProfileStats, SocialLinks};
+use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, SocialLinks};
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{AccountId, Counter, LocationLabel, RegionCode, Url };
-use uuid::Uuid;
+use shared_kernel::domain::events::AggregateMetadata;
+use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
+use shared_kernel::errors::Result;
 
 pub struct ProfileBuilder {
-    id: ProfileId,
-    owner_id: AccountId,
-    region_code: RegionCode,
+    profile_id: ProfileId,
+    account_id: AccountId,
     display_name: DisplayName,
     handle: Handle,
     bio: Option<Bio>,
@@ -19,24 +17,15 @@ pub struct ProfileBuilder {
     banner_url: Option<Url>,
     location_label: Option<LocationLabel>,
     social_links: Option<SocialLinks>,
-    stats: ProfileStats,
-    post_count: Counter,
     is_private: bool,
-    version: u64,
     created_at: Option<DateTime<Utc>>,
 }
 
 impl ProfileBuilder {
-    pub(crate) fn new(
-        owner_id: AccountId,
-        region_code: RegionCode,
-        display_name: DisplayName,
-        handle: Handle,
-    ) -> Self {
+    pub(crate) fn new(account_id: AccountId, display_name: DisplayName, handle: Handle) -> Self {
         Self {
-            id: ProfileId::new(),
-            owner_id,
-            region_code,
+            profile_id: ProfileId::new(),
+            account_id,
             display_name,
             handle,
             bio: None,
@@ -44,110 +33,62 @@ impl ProfileBuilder {
             banner_url: None,
             location_label: None,
             social_links: None,
-            stats: ProfileStats::default(),
-            post_count: Counter::default(),
             is_private: false,
-            version: 1,
             created_at: None,
         }
     }
 
-    /// Chemin 2 : RESTAURATION (Via Infrastructure / Repository)
-    /// Direct et sans détour pour la performance SQL
-    pub fn restore(
-        id: ProfileId,
-        owner_id: AccountId,
-        region_code: RegionCode,
-        display_name: DisplayName,
-        handle: Handle,
-        bio: Option<Bio>,
-        avatar_url: Option<Url>,
-        banner_url: Option<Url>,
-        location_label: Option<LocationLabel>,
-        social_links: Option<SocialLinks>,
-        post_count: Counter,
-        is_private: bool,
-        version: u64,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
-    ) -> Profile {
-        Profile::restore(
-            id,
-            owner_id,
-            region_code,
-            display_name,
-            handle,
-            bio,
-            avatar_url,
-            banner_url,
-            location_label,
-            social_links,
-            post_count,
-            is_private,
-            version,
-            created_at,
-            updated_at,
-        )
+    // --- SETTERS ---
+
+    pub fn with_profile_id(mut self, id: ProfileId) -> Self {
+        self.profile_id = id;
+        self
     }
-    // --- SETTERS (Uniquement utiles pour le chemin Création) ---
 
     pub fn with_bio(mut self, bio: Bio) -> Self {
         self.bio = Some(bio);
         self
     }
-    pub fn with_optional_bio(mut self, bio: Option<Bio>) -> Self {
-        self.bio = bio;
-        self
-    }
+
     pub fn with_avatar_url(mut self, url: Url) -> Self {
         self.avatar_url = Some(url);
         self
     }
-    pub fn with_optional_avatar_url(mut self, url: Option<Url>) -> Self {
-        self.avatar_url = url;
-        self
-    }
+
     pub fn with_banner_url(mut self, url: Url) -> Self {
         self.banner_url = Some(url);
         self
     }
-    pub fn with_optional_banner_url(mut self, url: Option<Url>) -> Self {
-        self.banner_url = url;
-        self
-    }
+
     pub fn with_location(mut self, label: LocationLabel) -> Self {
         self.location_label = Some(label);
         self
     }
-    pub fn with_optional_location(mut self, label: Option<LocationLabel>) -> Self {
-        self.location_label = label;
+
+    pub fn with_social_links(mut self, links: SocialLinks) -> Self {
+        self.social_links = Some(links);
         self
     }
-    pub fn with_optional_social_links(mut self, links: Option<SocialLinks>) -> Self {
-        self.social_links = links;
-        self
-    }
-    pub fn with_stats(mut self, stats: ProfileStats) -> Self {
-        self.stats = stats;
-        self
-    }
-    pub fn with_post_count(mut self, count: Counter) -> Self {
-        self.post_count = count;
-        self
-    }
+
     pub fn with_privacy(mut self, private: bool) -> Self {
         self.is_private = private;
         self
     }
 
-    pub fn build(self) -> Profile {
+    pub fn with_created_at(mut self, date: DateTime<Utc>) -> Self {
+        self.created_at = Some(date);
+        self
+    }
+
+    /// Construit l'instance (Pure création mémoire)
+    pub fn build(self) -> Result<Profile> {
         let now = Utc::now();
 
-        // On crée l'instance via le restore interne de Profile
-        let mut profile = Profile::restore(
-            self.id,
-            self.owner_id,
-            self.region_code,
+        let metadata = AggregateMetadata::default();
+
+        Ok(Profile::restore(
+            self.profile_id,
+            self.account_id,
             self.display_name,
             self.handle,
             self.bio,
@@ -155,24 +96,10 @@ impl ProfileBuilder {
             self.banner_url,
             self.location_label,
             self.social_links,
-            self.post_count,
             self.is_private,
-            self.version,
+            metadata.version(),
             self.created_at.unwrap_or(now),
             now,
-        );
-
-        // Le builder de création génère TOUJOURS l'événement
-        profile.push_event(Box::new(ProfileEvent::ProfileCreated {
-            id: Uuid::now_v7(),
-            profile_id: profile.id().clone(),
-            owner_id: profile.owner_id().clone(),
-            region: profile.region_code().clone(),
-            display_name: profile.display_name().clone(),
-            handle: profile.handle().clone(),
-            occurred_at: profile.created_at(),
-        }));
-
-        profile
+        ))
     }
 }

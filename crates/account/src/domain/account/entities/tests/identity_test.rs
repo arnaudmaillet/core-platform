@@ -2,6 +2,7 @@
 mod tests {
     use shared_kernel::{
         domain::{
+            entities::Versioned,
             events::{AggregateMetadata, AggregateRoot},
             value_objects::{AccountId, AuditReason, Email, RegionCode},
         },

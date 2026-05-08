@@ -318,34 +318,6 @@ impl DomainEvent for AccountEvent {
         }
     }
 
-    fn region_code(&self) -> String {
-        match self {
-            Self::AccountRegistered { region, .. }
-            | Self::SubIdentityLinked { region, .. }
-            | Self::EmailChanged { region, .. }
-            | Self::PhoneNumberChanged { region, .. }
-            | Self::LocaleUpdated { region, .. }
-            | Self::BetaTierChanged { region, .. }
-            | Self::TrustScoreAdjusted { region, .. }
-            | Self::ShadowbanUpdated { region, .. }
-            | Self::AccountRoleChanged { region, .. }
-            | Self::AccountDeactivated { region, .. }
-            | Self::AccountActivated { region, .. }
-            | Self::AccountBanned { region, .. }
-            | Self::AccountUnbanned { region, .. }
-            | Self::AccountSuspended { region, .. }
-            | Self::AccountUnsuspended { region, .. }
-            | Self::NotificationsPreferencesUpdated { region, .. }
-            | Self::AppearancePreferencesUpdated { region, .. }
-            | Self::PrivacyPreferencesUpdated { region, .. }
-            | Self::PushTokenAdded { region, .. }
-            | Self::PushTokenRemoved { region, .. }
-            | Self::TimezoneUpdated { region, .. } => region.to_string(),
-            Self::AccountRegionChanged { new_region, .. } => new_region.to_string(),
-            Self::BirthDateChanged { region, .. } => region.to_string(),
-        }
-    }
-
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
     }
