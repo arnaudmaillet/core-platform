@@ -2,7 +2,10 @@ use crate::domain::account::entities::Account;
 use crate::domain::value_objects::AccountState as DomainState;
 use chrono::{DateTime, Utc};
 use prost_types::Timestamp;
-use shared_kernel::domain::{entities::Entity, events::AggregateRoot};
+use shared_kernel::domain::{
+    entities::{Entity, Versioned},
+    events::AggregateRoot,
+};
 use shared_proto::account::v1::{
     AccountGovernance as ProtoGovernance, AccountIdentity as ProtoIdentity,
     AccountSettings as ProtoSettings, AccountState as ProtoState,

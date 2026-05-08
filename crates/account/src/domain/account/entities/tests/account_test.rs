@@ -2,7 +2,7 @@
 mod tests {
     use crate::domain::account::entities::Account;
     use crate::domain::value_objects::*;
-    use shared_kernel::domain::events::AggregateRoot;
+    use shared_kernel::domain::events::{AggregateRoot, EventEmitter};
     use shared_kernel::domain::value_objects::*;
     use shared_kernel::errors::{DomainError, Result};
 

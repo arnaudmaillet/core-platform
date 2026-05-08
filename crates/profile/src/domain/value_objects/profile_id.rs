@@ -1,14 +1,12 @@
 // crates/profile/src/domain/value_objects/profile_id.rs
 
-use shared_kernel::domain::entities::EntityMetadata;
-use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::domain::Identifier;
-use shared_kernel::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
+use shared_kernel::domain::Identifier;
+use shared_kernel::domain::value_objects::ValueObject;
+use shared_kernel::errors::{DomainError, Result};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
-
 
 /// Identifiant unique pour un profil, basé sur UUID v7.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -90,11 +88,5 @@ impl FromStr for ProfileId {
 impl fmt::Display for ProfileId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl EntityMetadata for ProfileId {
-    fn entity_name() -> &'static str {
-        "ProfileId"
     }
 }

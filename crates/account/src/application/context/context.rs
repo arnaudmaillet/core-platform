@@ -1,7 +1,7 @@
 use shared_kernel::{
     application::BaseAppContext,
     domain::{
-        events::{AggregateRoot, DomainEvent},
+        events::{DomainEvent, EventEmitter},
         repositories::{IdempotencyRepository, OutboxRepository},
         transaction::{FakeTransaction, Transaction},
         value_objects::{AccountId, RegionCode},

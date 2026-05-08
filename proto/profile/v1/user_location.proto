@@ -1,89 +1,89 @@
-// proto/profile/v1/user_location.proto
+// // proto/profile/v1/user_location.proto
 
-syntax = "proto3";
+// syntax = "proto3";
 
-package location.v1;
+// package location.v1;
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/wrappers.proto";
+// import "google/protobuf/timestamp.proto";
+// import "google/protobuf/wrappers.proto";
 
-option go_package = "github.com/core-platform/proto/location/v1";
+// option go_package = "github.com/core-platform/proto/location/v1";
 
-// ==========================================
-// VALUE OBJECTS GÉOGRAPHIQUES
-// ==========================================
+// // ==========================================
+// // VALUE OBJECTS GÉOGRAPHIQUES
+// // ==========================================
 
-message GeoPoint {
-  double latitude = 1;
-  double longitude = 2;
-}
+// message GeoPoint {
+//   double latitude = 1;
+//   double longitude = 2;
+// }
 
-message LocationMetrics {
-  float accuracy = 1;
-  google.protobuf.FloatValue altitude = 2;
-}
+// message LocationMetrics {
+//   float accuracy = 1;
+//   google.protobuf.FloatValue altitude = 2;
+// }
 
-message MovementMetrics {
-  float speed = 1;
-  float heading = 2;
-}
+// message MovementMetrics {
+//   float speed = 1;
+//   float heading = 2;
+// }
 
-// ==========================================
-// MODÈLE DE DONNÉES (AGRÉGAT LOCATION)
-// ==========================================
+// // ==========================================
+// // MODÈLE DE DONNÉES (AGRÉGAT LOCATION)
+// // ==========================================
 
-message UserLocation {
-  string profile_id = 1;
-  string owner_id = 2;
-  string region_code = 3;
+// message UserLocation {
+//   string profile_id = 1;
+//   string owner_id = 2;
+//   string region_code = 3;
 
-  GeoPoint coordinates = 4;
-  LocationMetrics metrics = 5;
-  MovementMetrics movement = 6;
+//   GeoPoint coordinates = 4;
+//   LocationMetrics metrics = 5;
+//   MovementMetrics movement = 6;
 
-  bool is_ghost_mode = 7;
-  int32 privacy_radius_meters = 8;
+//   bool is_ghost_mode = 7;
+//   int32 privacy_radius_meters = 8;
 
-  google.protobuf.Timestamp updated_at = 9;
-  int32 version = 10;
-}
+//   google.protobuf.Timestamp updated_at = 9;
+//   int32 version = 10;
+// }
 
-// ==========================================
-// SERVICE DE LOCALISATION
-// ==========================================
+// // ==========================================
+// // SERVICE DE LOCALISATION
+// // ==========================================
 
-service LocationService {
-  rpc GetUserLocation(GetUserLocationRequest) returns (UserLocation);
-  rpc UpdatePosition(UpdatePositionRequest) returns (UserLocation);
-  rpc SetGhostMode(SetGhostModeRequest) returns (UserLocation);
-  rpc UpdatePrivacyRadius(UpdatePrivacyRadiusRequest) returns (UserLocation);
-}
+// service LocationService {
+//   rpc GetUserLocation(GetUserLocationRequest) returns (UserLocation);
+//   rpc UpdatePosition(UpdatePositionRequest) returns (UserLocation);
+//   rpc SetGhostMode(SetGhostModeRequest) returns (UserLocation);
+//   rpc UpdatePrivacyRadius(UpdatePrivacyRadiusRequest) returns (UserLocation);
+// }
 
-// ==========================================
-// MESSAGES DE REQUÊTES
-// ==========================================
+// // ==========================================
+// // MESSAGES DE REQUÊTES
+// // ==========================================
 
-message GetUserLocationRequest {
-  string account_id = 1;
-  string region_code = 2;
-}
+// message GetUserLocationRequest {
+//   string account_id = 1;
+//   string region_code = 2;
+// }
 
-message UpdatePositionRequest {
-  string profile_id = 1;
-  string region_code = 2;
-  GeoPoint coordinates = 3;
-  optional LocationMetrics metrics = 4;
-  optional MovementMetrics movement = 5;
-}
+// message UpdatePositionRequest {
+//   string profile_id = 1;
+//   string region_code = 2;
+//   GeoPoint coordinates = 3;
+//   optional LocationMetrics metrics = 4;
+//   optional MovementMetrics movement = 5;
+// }
 
-message SetGhostModeRequest {
-  string profile_id = 1;
-  string region_code = 2;
-  bool enabled = 3;
-}
+// message SetGhostModeRequest {
+//   string profile_id = 1;
+//   string region_code = 2;
+//   bool enabled = 3;
+// }
 
-message UpdatePrivacyRadiusRequest {
-  string profile_id = 1;
-  string region_code = 2;
-  int32 radius_meters = 3;
-}
+// message UpdatePrivacyRadiusRequest {
+//   string profile_id = 1;
+//   string region_code = 2;
+//   int32 radius_meters = 3;
+// }

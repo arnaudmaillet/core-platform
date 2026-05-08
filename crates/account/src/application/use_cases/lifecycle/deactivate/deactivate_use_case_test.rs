@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::lifecycle::{DeactivateCommand, DeactivateHandler};
+    use crate::application::use_cases::lifecycle::DeactivateCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::RegionCode;
+    use shared_kernel::domain::entities::Versioned;
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 

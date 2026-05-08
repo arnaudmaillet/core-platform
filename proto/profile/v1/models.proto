@@ -1,4 +1,4 @@
-//proto/profile/v1/types.proto
+//proto/profile/v1/models.proto
 
 syntax = "proto3";
 package profile.v1;
@@ -23,15 +23,9 @@ message SocialLinks {
   map<string, string> others = 12;
 }
 
-message ProfileStats {
-  uint64 follower_count = 1;
-  uint64 following_count = 2;
-  uint64 post_count = 3;
-}
-
 message Profile {
   string profile_id = 1;
-  string owner_id = 2;
+  string account_id = 2;
   string region_code = 3;
   string handle = 4;
   string display_name = 5;
@@ -42,19 +36,17 @@ message Profile {
   google.protobuf.StringValue location_label = 9;
 
   SocialLinks social_links = 10;
-  ProfileStats stats = 11;
-  uint64 post_count = 12;
 
-  bool is_private = 13;
-  google.protobuf.Timestamp created_at = 14;
-  google.protobuf.Timestamp updated_at = 15;
-  uint64 version = 16;
+  bool is_private = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  uint64 version = 14;
 }
 
-message ProfileSummary {
-  string profile_id = 1;
-  string owner_id = 2;
-  string handle = 3;
-  string display_name = 4;
-  string avatar_url = 5;
-}
+// message ProfileSummary {
+//   string profile_id = 1;
+//   string owner_id = 2;
+//   string handle = 3;
+//   string display_name = 4;
+//   string avatar_url = 5;
+// }

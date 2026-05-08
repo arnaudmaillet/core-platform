@@ -15,6 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "account/v1/settings.proto",
         "account/v1/moderation.proto",
         "account/v1/query.proto",
+        "profile/v1/profile.proto",
+        "profile/v1/models.proto",
     ];
 
     let proto_root_str = proto_root.to_str().expect("Chemin non valide UTF-8");

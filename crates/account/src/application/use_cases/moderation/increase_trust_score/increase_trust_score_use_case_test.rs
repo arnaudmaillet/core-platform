@@ -1,14 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::application::context::AccountContext;
-    use crate::application::use_cases::moderation::{
-        IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
-    };
+    use crate::application::use_cases::moderation::IncreaseTrustScoreCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, TrustDelta, TrustScore};
-    use shared_kernel::domain::events::AggregateRoot;
-    use shared_kernel::domain::value_objects::{AuditReason, RegionCode};
+    use shared_kernel::domain::entities::Versioned;
+    use shared_kernel::domain::value_objects::AuditReason;
     use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 

@@ -3,6 +3,7 @@ use account::db::PostgresAccountRepository;
 use account::repositories::AccountRepository;
 use account::value_objects::{AccountRole, AccountState, RegistrationIdentifier};
 use shared_kernel::domain::Identifier;
+use shared_kernel::domain::entities::Versioned;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio;
@@ -74,7 +75,7 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     // --- 3. UPDATE ---
     let mut to_update = found.clone();
     to_update.deactivate(Some(AuditReason::system("deactivate test")))?;
-    to_update.change_role(AccountRole::ADMIN, AuditReason::system("Change Governance"));
+    let _ = to_update.change_role(AccountRole::ADMIN, AuditReason::system("Change Governance"));
 
     repo.save(&mut to_update, None).await?;
 

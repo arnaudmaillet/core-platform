@@ -103,3 +103,19 @@ impl fmt::Display for AccountId {
         write!(f, "{}:{}", self.region, self.uuid)
     }
 }
+
+impl TryFrom<String> for AccountId {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::from_str(&value)
+    }
+}
+
+impl TryFrom<&str> for AccountId {
+    type Error = DomainError;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::from_str(value)
+    }
+}

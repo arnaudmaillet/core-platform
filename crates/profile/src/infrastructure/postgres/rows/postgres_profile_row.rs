@@ -1,22 +1,22 @@
 // crates/profile/src/infrastructure/postgres/rows/postgres_profile_row.rs
 
+use std::str::FromStr;
+
 use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Bio, DisplayName, ProfileId, Handle, ProfileStats, SocialLinks};
+use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, SocialLinks};
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use shared_kernel::domain::Identifier;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{
-    AccountId, Counter, LocationLabel, RegionCode, Url,
-};
+use shared_kernel::domain::entities::Versioned;
+use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Url};
 use shared_kernel::errors::{DomainError, Result};
 use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(FromRow, Debug)]
 pub struct PostgresProfileRow {
-    pub id: Uuid,
-    pub owner_id: Uuid,
+    pub profile_id: Uuid,
+    pub account_id: Uuid,
     pub region_code: String,
     pub display_name: String,
     pub handle: String,
@@ -25,20 +25,19 @@ pub struct PostgresProfileRow {
     pub banner_url: Option<String>,
     pub location_label: Option<String>,
     pub social_links: JsonValue,
-    pub post_count: i64,
     pub is_private: bool,
     pub version: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-
-impl From<&Profile> for PostgresProfileRow {
-    fn from(p: &Profile) -> Self {
+impl PostgresProfileRow {
+    /// Mappe le domaine vers l'infrastructure (pour le save)
+    pub fn from_domain(p: &Profile) -> Self {
         Self {
-            id: p.id().as_uuid(),
-            owner_id: p.owner_id().as_uuid(),
-            region_code: p.region_code().to_string(),
+            profile_id: p.profile_id().as_uuid(),
+            account_id: p.account_id().uuid().clone(),
+            region_code: p.account_id().region().as_str().to_string(),
             display_name: p.display_name().to_string(),
             handle: p.handle().as_str().to_string(),
             bio: p.bio().as_ref().map(|b| b.to_string()),
@@ -46,47 +45,43 @@ impl From<&Profile> for PostgresProfileRow {
             banner_url: p.banner_url().as_ref().map(|u| u.to_string()),
             location_label: p.location_label().as_ref().map(|l| l.to_string()),
             social_links: serde_json::to_value(p.social_links()).unwrap_or(JsonValue::Null),
-            post_count: p.post_count() as i64,
             is_private: p.is_private(),
             version: p.version() as i64,
             created_at: p.created_at(),
             updated_at: p.updated_at(),
         }
     }
-}
 
+    /// Mappe l'infrastructure vers le domaine (pour le fetch)
+    pub fn to_domain(self) -> Result<Profile> {
+        let social_links = serde_json::from_value::<Option<SocialLinks>>(self.social_links)
+            .map_err(|e| {
+                DomainError::Internal(format!("Failed to deserialize social_links: {}", e))
+            })?;
 
-impl TryFrom<PostgresProfileRow> for Profile {
-    type Error = DomainError;
-
-    fn try_from(row: PostgresProfileRow) -> Result<Self> {
-        let social_links = serde_json::from_value::<Option<SocialLinks>>(row.social_links.clone())
-            .map_err(|e| DomainError::Internal(format!("Failed to deserialize social_links: {}", e)))?;
-
-        // --- Conversions sécurisées try_into ---
-        // On convertit les i64 signés de la DB en u64 non-signés du domaine
-        let post_count_u64: u64 = row.post_count.try_into()
-            .map_err(|_| DomainError::Internal("Negative post_count in database".into()))?;
-
-        let version_u64: u64 = row.version.try_into()
+        let version_u64: u64 = self
+            .version
+            .try_into()
             .map_err(|_| DomainError::Internal("Negative version in database".into()))?;
 
+        // Reconstruction de l'AccountId avec sa région
+        let region = RegionCode::from_str(&self.region_code)?;
+        let account_id = AccountId::new(self.account_id, region);
+
         Ok(Profile::restore(
-            ProfileId::from_uuid(row.id),
-            AccountId::from_uuid(row.owner_id),
-            RegionCode::from_raw(row.region_code),
-            DisplayName::from_raw(row.display_name),
-            Handle::from_raw(row.handle),
-            row.bio.map(Bio::from_raw),
-            row.avatar_url.map(Url::from_raw),
-            row.banner_url.map(Url::from_raw),
-            row.location_label.map(LocationLabel::from_raw),
+            ProfileId::from_uuid(self.profile_id),
+            account_id,
+            DisplayName::from_raw(self.display_name),
+            Handle::from_raw(self.handle),
+            self.bio.map(Bio::from_raw),
+            self.avatar_url.map(Url::from_raw),
+            self.banner_url.map(Url::from_raw),
+            self.location_label.map(LocationLabel::from_raw),
             social_links,
-            Counter::from_raw(post_count_u64),
-            row.is_private,
+            self.is_private,
             version_u64,
-            row.created_at,
-            row.updated_at,
+            self.created_at,
+            self.updated_at,
         ))
     }
 }
