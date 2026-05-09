@@ -1,3 +1,4 @@
+use crate::application::IdentifiableCommand;
 use crate::domain::utils::with_retry;
 use crate::errors::{DomainError, Result};
 use async_trait::async_trait;
@@ -17,7 +18,6 @@ pub trait AnyCommandHandler: Send + Sync {
 
 #[derive(Default)]
 pub struct CommandBus {
-    // On stocke les handlers avec le type AnyCommandHandler "effacé"
     handlers: HashMap<TypeId, Arc<dyn AnyCommandHandler>>,
 }
 
@@ -31,21 +31,18 @@ impl CommandBus {
     pub fn register<TContext, TCommand, THandler>(&mut self, handler: THandler)
     where
         TContext: 'static + Send + Sync + Clone,
-        TCommand: 'static + Send + Sync + Clone,
+        TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
         THandler: crate::application::CommandHandler<Context = TContext, Command = TCommand>
             + 'static
             + Send
             + Sync,
         THandler::Output: 'static + Send,
     {
-        // Création explicite du wrapper
         let wrapper = HandlerWrapper {
             handler,
-            _phantom: PhantomData::<(TContext, TCommand)>, // On utilise un tuple simple
+            _phantom: PhantomData::<(TContext, TCommand)>,
         };
 
-        // Conversion explicite en Arc<dyn AnyCommandHandler>
-        // C'est cette ligne qui fait le "type erasure"
         let arc_handler: Arc<dyn AnyCommandHandler> = Arc::new(wrapper);
 
         self.handlers.insert(TypeId::of::<TCommand>(), arc_handler);
@@ -58,7 +55,7 @@ impl CommandBus {
     ) -> Result<TOutput>
     where
         TContext: 'static + Send + Sync + Clone,
-        TCommand: 'static + Send + Sync + Clone,
+        TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
         TOutput: 'static + Send,
     {
         let type_id = TypeId::of::<TCommand>();
@@ -93,7 +90,7 @@ impl<THandler, TContext, TCommand> AnyCommandHandler
     for HandlerWrapper<THandler, TContext, TCommand>
 where
     TContext: 'static + Send + Sync + Clone,
-    TCommand: 'static + Send + Sync + Clone,
+    TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone, // Ajout des bounds ici
     THandler:
         crate::application::CommandHandler<Context = TContext, Command = TCommand> + Send + Sync,
     THandler::Output: 'static + Send,
@@ -103,7 +100,8 @@ where
         ctx: Box<dyn Any + Send + Sync>,
         cmd: Box<dyn Any + Send>,
     ) -> Result<Box<dyn Any + Send>> {
-        // Cast des types Boxés vers les types concrets
+        use tracing::{Instrument, info_span};
+
         let concrete_cmd = cmd
             .downcast::<TCommand>()
             .map_err(|_| DomainError::Internal("AnyCommandHandler: Invalid command type".into()))?;
@@ -112,15 +110,38 @@ where
             .downcast::<TContext>()
             .map_err(|_| DomainError::Internal("AnyCommandHandler: Invalid context type".into()))?;
 
+        // 1. Préparation des métadonnées de logging (venant du trait IdentifiableCommand)
+        let span = info_span!(
+            "handle_command",
+            command_type = %std::any::type_name::<TCommand>(),
+            command_id = %concrete_cmd.command_id(),
+            profile_id = %concrete_cmd.profile_id(),
+            region = %concrete_cmd.region()
+        );
+
+        // 2. Exécution enveloppée dans la span et le retry
         let config = self.handler.retry_config();
 
-        // Application de la logique de retry
-        let output = with_retry(config, || {
-            let c = concrete_ctx.clone();
-            let command = concrete_cmd.clone();
-            async move { self.handler.handle(&c, *command).await }
-        })
-        .await?;
+        let result_fut = async {
+            tracing::info!("starting command execution");
+
+            let output = with_retry(config, || {
+                let c = concrete_ctx.clone();
+                let command = concrete_cmd.clone();
+                async move { self.handler.handle(&c, *command).await }
+            })
+            .await;
+
+            match &output {
+                Ok(_) => tracing::info!("command executed successfully"),
+                Err(e) => tracing::error!(error = %e, "command execution failed"),
+            }
+
+            output
+        };
+
+        // On instrumente le futur et on attend le résultat
+        let output = result_fut.instrument(span).await?;
 
         Ok(Box::new(output))
     }

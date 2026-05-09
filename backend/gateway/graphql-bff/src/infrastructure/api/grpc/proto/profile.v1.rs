@@ -63,19 +63,12 @@ pub struct Profile {
 /// Metadata présentes dans chaque commande pour assurer
 /// l'idempotence (command_id) et le routage (region)
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CommandMetadata {
-    /// UUID unique généré par le client
-    #[prost(string, tag = "1")]
-    pub command_id: ::prost::alloc::string::String,
-    /// Code région (ex: "fr", "us") pour le sharding
-    #[prost(string, tag = "2")]
-    pub region: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ProfileTarget {
     #[prost(string, tag = "1")]
     pub profile_id: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "2")]
+    #[prost(string, tag = "2")]
+    pub region: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
     pub expected_version: u64,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -85,8 +78,8 @@ pub struct QueryMetadata {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateHandleRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(string, tag = "3")]
@@ -94,8 +87,8 @@ pub struct UpdateHandleRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateDisplayNameRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(string, tag = "3")]
@@ -103,8 +96,8 @@ pub struct UpdateDisplayNameRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdatePrivacyRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(bool, tag = "3")]
@@ -112,8 +105,8 @@ pub struct UpdatePrivacyRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateAvatarRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(string, tag = "3")]
@@ -121,8 +114,8 @@ pub struct UpdateAvatarRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateBannerRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(string, tag = "3")]
@@ -130,22 +123,22 @@ pub struct UpdateBannerRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RemoveAvatarRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RemoveBannerRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateBioRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(message, optional, tag = "3")]
@@ -153,8 +146,8 @@ pub struct UpdateBioRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateLocationLabelRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(message, optional, tag = "3")]
@@ -162,8 +155,8 @@ pub struct UpdateLocationLabelRequest {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpdateSocialLinksRequest {
-    #[prost(message, optional, tag = "1")]
-    pub metadata: ::core::option::Option<CommandMetadata>,
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub target: ::core::option::Option<ProfileTarget>,
     #[prost(message, optional, tag = "3")]
