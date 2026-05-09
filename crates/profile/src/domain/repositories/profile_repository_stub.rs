@@ -1,6 +1,7 @@
 // crates/profile/src/utils/test_utils.rs
 
 use async_trait::async_trait;
+use shared_kernel::domain::entities::Versioned;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -42,7 +43,7 @@ impl ProfileRepository for ProfileRepositoryStub {
         let mut store = self.profiles.lock().unwrap();
         let key = ProfileKey {
             id: profile.profile_id().clone(),
-            region: profile.region().clone(),
+            region: profile.account_id().region().clone(),
         };
 
         // 2. Logique de Concurrence Optimiste (OCC) - Strictement identique à Postgres
@@ -89,7 +90,7 @@ impl ProfileRepository for ProfileRepositoryStub {
         // Simulation d'un scan de table avec respect de la région
         let profile = store
             .values()
-            .find(|p| p.handle() == handle && p.region() == region)
+            .find(|p| p.handle() == handle && p.account_id().region() == region)
             .cloned();
         Ok(profile)
     }

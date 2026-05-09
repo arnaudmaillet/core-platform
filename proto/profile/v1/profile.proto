@@ -14,14 +14,10 @@ option go_package = "github.com/core-platform/proto/profile/v1";
 
 // Metadata présentes dans chaque commande pour assurer 
 // l'idempotence (command_id) et le routage (region)
-message CommandMetadata {
-  string command_id = 1; // UUID unique généré par le client
-  string region = 2;     // Code région (ex: "fr", "us") pour le sharding
-}
-
 message ProfileTarget {
   string profile_id = 1;
-  uint64 expected_version = 2;
+  string region = 2;
+  uint64 expected_version = 3;
 }
 
 message QueryMetadata {
@@ -70,19 +66,19 @@ service ProfileQueryService {
 // --- Identity ---
 
 message UpdateHandleRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   string new_handle = 3;
 }
 
 message UpdateDisplayNameRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   string new_display_name = 3;
 }
 
 message UpdatePrivacyRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   bool is_private = 3;
 }
@@ -90,43 +86,43 @@ message UpdatePrivacyRequest {
 // --- Medias ---
 
 message UpdateAvatarRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   string new_avatar_url = 3;
 }
 
 message UpdateBannerRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   string new_banner_url = 3;
 }
 
 message RemoveAvatarRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
 }
 
 message RemoveBannerRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
 }
 
 // --- Metadata ---
 
 message UpdateBioRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   google.protobuf.StringValue new_bio = 3;
 }
 
 message UpdateLocationLabelRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   google.protobuf.StringValue new_location_label = 3;
 }
 
 message UpdateSocialLinksRequest {
-  CommandMetadata metadata = 1;
+  string command_id = 1;
   ProfileTarget target = 2;
   optional SocialLinks new_links = 3;
 }

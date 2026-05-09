@@ -1,43 +1,55 @@
 // crates/profile/src/presentation/grpc/profile_service.rs
 
-use tonic::{Request, Response, Status};
-use shared_proto::profile::v1::profile_service_server::ProfileService;
-use shared_proto::profile::v1::{GetProfileRequest, ProfileResponse};
-use crate::application::ProfileContext;
-use crate::domain::value_objects::ProfileId;
-use shared_kernel::domain::value_objects::RegionCode;
 
-pub struct GrpcProfileService {
-    // On injecte ce qu'il faut pour créer des contextes
-    // ou on injecte directement un orchestrateur
+use shared_kernel::application::LoggingMiddleware;
+use shared_proto::profile::v1::{UpdateBioRequest, UpdateDisplayNameRequest};
+use tonic::{Request, Response, Status};
+
+use crate::{commands::{UpdateBioCommand, UpdateBioHandler, UpdateDisplayNameCommand, UpdateDisplayNameHandler}, context::ProfileContext};
+
+pub struct ProfileGrpcService {
+    ctx: ProfileContext,
+}
+
+impl ProfileGrpcService {
+    pub fn new(ctx: ProfileContext) -> Self {
+        Self { ctx }
+    }
 }
 
 #[tonic::async_trait]
-impl ProfileService for GrpcProfileService {
-    async fn get_profile(
+impl ProfileService for ProfileGrpcService {
+    async fn update_display_name(
         &self,
-        request: Request<GetProfileRequest>,
-    ) -> Result<Response<ProfileResponse>, Status> {
+        request: Request<UpdateDisplayNameRequest>,
+    ) -> std::result::Result<Response<UpdateDisplayNameResponse>, Status> {
         let req = request.into_inner();
 
-        // 1. Mapping Entrant (Proto -> Domain)
-        let profile_id = ProfileId::try_from(req.profile_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        let region = RegionCode::from_str(&req.region)
+        // 1. Traduction Proto -> Command
+        let cmd = UpdateDisplayNameCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        // 2. Initialisation du contexte (via ton Builder)
-        // Ici, on imagine que tu as un service qui te donne le contexte
-        let ctx = self.app_factory.create_context(profile_id, region);
+        // 2. Exécution via le Middleware (Logging + Handler)
+        LoggingMiddleware::execute(&UpdateDisplayNameHandler, &self.ctx, cmd)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?; // Idéalement, mapper l'erreur plus finement
 
-        // 3. Appel métier
-        let profile = ctx.profile(None).await
-            .map_err(|e| match e {
-                DomainError::NotFound { .. } => Status::not_found("Profile not found"),
-                _ => Status::internal("Internal error"),
-            })?;
+        Ok(Response::new(UpdateDisplayNameResponse {}))
+    }
 
-        // 4. Mapping Sortant (Domain -> Proto)
-        Ok(Response::new(ProfileResponse::from_domain(profile)))
+    async fn update_bio(
+        &self,
+        request: Request<UpdateBioRequest>,
+    ) -> std::result::Result<Response<UpdateBioResponse>, Status> {
+        let req = request.into_inner();
+
+        let cmd = UpdateBioCommand::try_from_proto(req)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        LoggingMiddleware::execute(&UpdateBioHandler, &self.ctx, cmd)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(UpdateBioResponse {}))
     }
 }

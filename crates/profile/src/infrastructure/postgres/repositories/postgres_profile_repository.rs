@@ -39,67 +39,90 @@ impl ProfileRepository for PostgresProfileRepository {
     async fn save(&self, profile: &mut Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
         let row = PostgresProfileRow::from_domain(profile);
         let key = Self::cache_key(profile.profile_id(), profile.account_id().region());
+
         let next_version = profile.version() as i64;
+        let expected_db_version = next_version - 1;
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| Box::pin(async move {
-            // 1. Verrouillage et lecture de la version actuelle pour OCC
-            let db_v: Option<i64> = sqlx::query_scalar(
-                "SELECT version FROM user_profiles WHERE profile_id = $1 AND region_code = $2 FOR UPDATE"
-            )
-            .bind(row.profile_id)
-            .bind(&row.region_code)
-            .fetch_optional(&mut *conn)
-            .await
-            .map_domain_infra("Profile: check version for save")?;
+        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+            Box::pin(async move {
+                // 1. On tente l'UPDATE avec la condition OCC directement dans le WHERE
+                // C'est plus performant qu'un SELECT + IF
+                let result = sqlx::query(
+                    r#"UPDATE user_profiles SET
+                display_name = $1, handle = $2, bio = $3,
+                avatar_url = $4, banner_url = $5, location_label = $6,
+                social_links = $7, is_private = $8,
+                updated_at = $9, version = $10
+            WHERE profile_id = $11 AND region_code = $12 AND version = $13"#,
+                )
+                .bind(&row.display_name)
+                .bind(&row.handle)
+                .bind(&row.bio)
+                .bind(&row.avatar_url)
+                .bind(&row.banner_url)
+                .bind(&row.location_label)
+                .bind(&row.social_links)
+                .bind(row.is_private)
+                .bind(row.updated_at)
+                .bind(next_version)
+                .bind(row.profile_id)
+                .bind(&row.region_code)
+                .bind(expected_db_version)
+                .execute(&mut *conn)
+                .await
+                .map_domain_infra("Profile: update OCC")?;
 
-            match db_v {
-                None => {
-                    // 2. INSERT (Première création)
+                if result.rows_affected() == 0 {
+                    // Si 0 ligne modifiée, soit le profil n'existe pas (INSERT), soit conflit OCC
+                    let exists: bool = sqlx::query_scalar(
+                        "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE profile_id = $1)",
+                    )
+                    .bind(row.profile_id)
+                    .fetch_one(&mut *conn)
+                    .await
+                    .map_domain_infra("Profile: check existence")?;
+
+                    if exists {
+                        return Err(DomainError::ConcurrencyConflict {
+                            reason: format!(
+                                "Profile {}: version mismatch (Expected v{})",
+                                row.profile_id, expected_db_version
+                            ),
+                        });
+                    }
+
+                    // 2. INSERT (si n'existe pas)
                     sqlx::query(
                         r#"INSERT INTO user_profiles (
-                            profile_id, account_id, region_code, display_name, handle,
-                            bio, avatar_url, banner_url, location_label,
-                            social_links, is_private, version,
-                            created_at, updated_at
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#
+                    profile_id, account_id, region_code, display_name, handle,
+                    bio, avatar_url, banner_url, location_label,
+                    social_links, is_private, version,
+                    created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#,
                     )
-                    .bind(row.profile_id).bind(row.account_id).bind(&row.region_code)
-                    .bind(&row.display_name).bind(&row.handle).bind(&row.bio)
-                    .bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label)
-                    .bind(&row.social_links).bind(row.is_private).bind(next_version)
-                    .bind(row.created_at).bind(row.updated_at)
+                    .bind(row.profile_id)
+                    .bind(row.account_id)
+                    .bind(&row.region_code)
+                    .bind(&row.display_name)
+                    .bind(&row.handle)
+                    .bind(&row.bio)
+                    .bind(&row.avatar_url)
+                    .bind(&row.banner_url)
+                    .bind(&row.location_label)
+                    .bind(&row.social_links)
+                    .bind(row.is_private)
+                    .bind(next_version)
+                    .bind(row.created_at)
+                    .bind(row.updated_at)
                     .execute(&mut *conn)
                     .await
                     .map_domain_infra("Profile: insert")?;
                 }
-                Some(v) => {
-                    // 3. UPDATE (OCC Check)
-                    let current_version_expected = next_version - 1;
-                    if v != current_version_expected {
-                        return Err(DomainError::ConcurrencyConflict {
-                            reason: format!("Profile {}: OCC mismatch (DB v{}, App expected v{})", row.profile_id, v, current_version_expected)
-                        });
-                    }
 
-                    sqlx::query(
-                        r#"UPDATE user_profiles SET
-                            display_name = $1, handle = $2, bio = $3,
-                            avatar_url = $4, banner_url = $5, location_label = $6,
-                            social_links = $7, is_private = $8,
-                            updated_at = $9, version = $10
-                        WHERE profile_id = $11 AND region_code = $12"#
-                    )
-                    .bind(&row.display_name).bind(&row.handle).bind(&row.bio)
-                    .bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label)
-                    .bind(&row.social_links).bind(row.is_private).bind(row.updated_at)
-                    .bind(next_version).bind(row.profile_id).bind(&row.region_code)
-                    .execute(&mut *conn)
-                    .await
-                    .map_domain_infra("Profile: update")?;
-                }
-            }
-            Ok(())
-        })).await?;
+                Ok(())
+            })
+        })
+        .await?;
 
         // 4. Invalidation du cache (Après transaction réussie)
         let cache_handle = self.cache.clone();

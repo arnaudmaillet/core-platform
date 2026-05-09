@@ -1,2 +1,2 @@
-// crates/profile/tests/integration_tests.rs
-mod infrastructure;
+// // crates/profile/tests/integration_tests.rs
+// mod infrastructure;

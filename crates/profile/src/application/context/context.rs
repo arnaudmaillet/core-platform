@@ -2,9 +2,14 @@
 
 use crate::domain::{entities::Profile, repositories::ProfileRepository, value_objects::ProfileId};
 use shared_kernel::{
-    application::BaseAppContext,
+    application::{BaseAppContext, CommandTarget},
     domain::{
-        Identifier, events::{DomainEvent, EventEmitter}, repositories::{IdempotencyRepository, OutboxRepository}, transaction::{FakeTransaction, Transaction}, value_objects::RegionCode
+        Identifier,
+        entities::Versioned,
+        events::{DomainEvent, EventEmitter},
+        repositories::{IdempotencyRepository, OutboxRepository},
+        transaction::{FakeTransaction, Transaction},
+        value_objects::RegionCode,
     },
     errors::{DomainError, Result},
     infrastructure::postgres::transactions::PostgresTransaction,
@@ -84,7 +89,7 @@ impl ProfileContext {
     /// Récupère l'agrégat Profile depuis le Repo
     pub async fn profile(&self) -> Result<Profile> {
         self.profile_repo()
-            .fetch(&self.profile_id, &self.region)
+            .find_by_id(&self.profile_id, &self.region, None)
             .await?
             .ok_or_else(|| DomainError::NotFound {
                 entity: "Profile",
@@ -155,5 +160,37 @@ impl ProfileContext {
             }
             None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
         }
+    }
+
+    pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
+        if target.id != self.profile_id || target.region != self.region {
+            return Err(DomainError::Validation {
+                field: "target",
+                reason: "Command target mismatch with execution context".into(),
+            });
+        }
+
+        let profile = self.profile().await?;
+
+        if profile.account_id().region() != &self.region {
+            return Err(DomainError::Infrastructure(format!(
+                "Data Integrity Violation: Profile {} belongs to account region {}, but was loaded in context {}",
+                self.profile_id,
+                profile.account_id().region(),
+                self.region
+            )));
+        }
+
+        if profile.version() != target.expected_version {
+            return Err(DomainError::ConcurrencyConflict {
+                reason: format!(
+                    "OCC Mismatch: DB v{}, Expected v{}",
+                    profile.version(),
+                    target.expected_version
+                ),
+            });
+        }
+
+        Ok(profile)
     }
 }
