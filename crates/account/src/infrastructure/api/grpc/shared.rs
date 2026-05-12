@@ -18,15 +18,10 @@ pub trait GrpcServiceUtils {
         &self,
         request: &Request<T>,
         account_id: &AccountId,
-    ) -> Result<AccountContext, Status>
-    where
-        T: Send + Sync + 'static,
-    {
-        let region_str = request
-            .metadata()
-            .get("x-region")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| Status::unauthenticated("Missing x-region header"))?;
+    ) -> Result<AccountContext, Status> {
+        let region = request.extensions().get::<RegionCode>().ok_or_else(|| {
+            Status::unauthenticated("Missing region context (not injected by interceptor)")
+        })?;
 
         Ok(self.app_ctx().create_context(account_id.clone()))
     }

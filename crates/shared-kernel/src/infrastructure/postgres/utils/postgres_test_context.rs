@@ -147,7 +147,7 @@ impl PostgresTestContext {
                 .with_timeout(cfg.connect_timeout);
         }
 
-        let context = context_builder
+        let context: PostgresContext = context_builder
             .build()
             .await
             .expect("Failed to build context");

@@ -1,2 +1,0 @@
-pub mod update_location_label_command;
-pub mod update_location_label_handler;

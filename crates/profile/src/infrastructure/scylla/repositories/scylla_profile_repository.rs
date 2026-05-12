@@ -7,8 +7,8 @@ use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::errors::{DomainError, Result};
 use std::sync::Arc;
-use crate::domain::repositories::ProfileStatsRepository;
-use crate::domain::value_objects::{ProfileId, ProfileStats};
+use crate::repositories::ProfileStatsRepository;
+use crate::value_objects::{ProfileId, ProfileStats};
 
 pub struct ScyllaProfileRepository {
     session: Arc<Session>,

@@ -1,7 +1,7 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
-use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, SocialLinks};
+use crate::entities::Profile;
+use crate::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
@@ -16,15 +16,17 @@ pub struct ProfileBuilder {
     avatar_url: Option<Url>,
     banner_url: Option<Url>,
     location_label: Option<LocationLabel>,
-    social_links: Option<SocialLinks>,
+    social_links: Option<Socials>,
     is_private: bool,
     created_at: Option<DateTime<Utc>>,
 }
 
 impl ProfileBuilder {
-    pub(crate) fn new(account_id: AccountId, display_name: DisplayName, handle: Handle) -> Self {
-        Self {
-            profile_id: ProfileId::new(),
+    pub(crate) fn new(account_id: AccountId, handle: Handle) -> Result<Self> {
+        let display_name = DisplayName::try_new(handle.as_str())?;
+
+        Ok(Self {
+            profile_id: ProfileId::generate(),
             account_id,
             display_name,
             handle,
@@ -35,7 +37,7 @@ impl ProfileBuilder {
             social_links: None,
             is_private: false,
             created_at: None,
-        }
+        })
     }
 
     // --- SETTERS ---
@@ -45,17 +47,22 @@ impl ProfileBuilder {
         self
     }
 
+    pub fn with_display_name(mut self, display_name: DisplayName) -> Self {
+        self.display_name = display_name;
+        self
+    }
+
     pub fn with_bio(mut self, bio: Bio) -> Self {
         self.bio = Some(bio);
         self
     }
 
-    pub fn with_avatar_url(mut self, url: Url) -> Self {
+    pub fn with_avatar(mut self, url: Url) -> Self {
         self.avatar_url = Some(url);
         self
     }
 
-    pub fn with_banner_url(mut self, url: Url) -> Self {
+    pub fn with_banner(mut self, url: Url) -> Self {
         self.banner_url = Some(url);
         self
     }
@@ -65,7 +72,7 @@ impl ProfileBuilder {
         self
     }
 
-    pub fn with_social_links(mut self, links: SocialLinks) -> Self {
+    pub fn with_socials(mut self, links: Socials) -> Self {
         self.social_links = Some(links);
         self
     }

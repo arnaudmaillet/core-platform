@@ -15,7 +15,7 @@ pub struct ProfileId(Uuid);
 
 impl ProfileId {
     /// Génère un nouvel identifiant unique (UUID v7).
-    pub fn new() -> Self {
+    pub fn generate() -> Self {
         Self(Uuid::now_v7())
     }
 
@@ -54,7 +54,7 @@ impl ValueObject for ProfileId {
 
 impl Default for ProfileId {
     fn default() -> Self {
-        Self::new()
+        Self::generate()
     }
 }
 

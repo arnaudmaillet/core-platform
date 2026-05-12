@@ -1,4 +1,4 @@
-use shared_kernel::domain::value_objects::JwtToken;
+use shared_kernel::domain::value_objects::{JwtToken, RegionCode};
 use std::sync::Arc;
 use tonic::{Request, Status, service::Interceptor};
 
@@ -17,6 +17,7 @@ impl AuthInterceptor {
 
 impl Interceptor for AuthInterceptor {
     fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
+        // 1. Extraction du Token (Ton code existant)
         let token_str = request
             .metadata()
             .get("authorization")
@@ -24,26 +25,26 @@ impl Interceptor for AuthInterceptor {
             .and_then(|s| s.strip_prefix("Bearer "))
             .ok_or_else(|| Status::unauthenticated("Missing or malformed authorization header"))?;
 
-        // On utilise from_raw ici car si le token est malformé,
-        // le validator.validate() s'en occupera de toute façon.
+        // 2. EXTRACTION DE LA RÉGION (Le chaînon manquant)
+        let region_str = request
+            .metadata()
+            .get("x-region")
+            .and_then(|m| m.to_str().ok())
+            .ok_or_else(|| Status::unauthenticated("Missing region context (x-region header)"))?;
+
+        let region_code = RegionCode::try_new(region_str)
+            .map_err(|_| Status::invalid_argument("Invalid region code"))?;
+
+        // 3. Validation du Token
         let token = JwtToken::from_raw(token_str);
 
         match self.validator.validate(&token) {
             Ok(claims) => {
-                // --- AJOUT DES LOGS DE DEBUG ---
-                println!("DEBUG AUTH: Token validé avec succès");
-                println!("DEBUG AUTH: Subject (sub) du token: {}", claims.sub_id);
-                if let Some(ref access) = claims.realm_access {
-                    println!("DEBUG AUTH: Roles trouvés: {:?}", access.roles);
-                } else {
-                    println!("DEBUG AUTH: Aucun role trouvé (realm_access est None)");
-                }
-
                 request.extensions_mut().insert(claims);
+                request.extensions_mut().insert(region_code);
                 Ok(request)
             }
             Err(e) => {
-                println!("DEBUG AUTH: ❌ Échec de validation du token: {:?}", e);
                 match e {
                     AuthError::InvalidToken => Err(Status::unauthenticated("Token invalide")),
                     AuthError::DiscoveryFailed => {

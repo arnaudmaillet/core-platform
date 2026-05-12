@@ -1,6 +1,6 @@
 // crates/profile/src/application/commands/identity/update_handle/update_handle_command.rs
 
-use crate::domain::value_objects::{DisplayName, ProfileId};
+use crate::value_objects::{DisplayName, ProfileId};
 use serde::Deserialize;
 use shared_kernel::application::{CommandTarget, IdentifiableCommand};
 use shared_kernel::domain::value_objects::RegionCode;

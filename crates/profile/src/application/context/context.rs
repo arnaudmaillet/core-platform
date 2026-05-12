@@ -1,6 +1,6 @@
 // crates/profile/src/application/context.rs
 
-use crate::domain::{entities::Profile, repositories::ProfileRepository, value_objects::ProfileId};
+use crate::{entities::Profile, repositories::ProfileRepository, value_objects::ProfileId};
 use shared_kernel::{
     application::{BaseAppContext, CommandTarget},
     domain::{
@@ -192,5 +192,10 @@ impl ProfileContext {
         }
 
         Ok(profile)
+    }
+
+    #[cfg(test)]
+    pub fn set_profile_id_for_test(&mut self, id: ProfileId) {
+        self.profile_id = id;
     }
 }

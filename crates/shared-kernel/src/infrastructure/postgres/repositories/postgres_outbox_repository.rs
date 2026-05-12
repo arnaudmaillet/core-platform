@@ -36,6 +36,7 @@ impl OutboxRepository for PostgresOutboxRepository {
 
         query_builder.push_values(envelopes, |mut b, env| {
             b.push_bind(env.id)
+                .push_bind(env.region_code)
                 .push_bind(env.aggregate_type)
                 .push_bind(env.aggregate_id)
                 .push_bind(env.event_type)
@@ -72,6 +73,7 @@ impl OutboxRepository for PostgresOutboxRepository {
             .into_iter()
             .map(|row| EventEnvelope {
                 id: row.get("id"),
+                region_code: row.get("region_code"),
                 aggregate_type: row.get("aggregate_type"),
                 aggregate_id: row.get("aggregate_id"),
                 event_type: row.get("event_type"),

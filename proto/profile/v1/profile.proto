@@ -30,24 +30,24 @@ message QueryMetadata {
 
 // 1. SERVICE D'IDENTITÉ : Gère les informations pivots du compte
 service ProfileIdentityService {
-  rpc UpdateHandle(UpdateHandleRequest) returns (Profile);
-  rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (Profile);
-  rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Profile);
+  rpc ChangeHandle(ChangeHandleRequest) returns (ChangeHandleResponse);
+  rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (UpdateDisplayNameResponse);
+  rpc UpdatePrivacy(UpdatePrivacyRequest) returns (UpdatePrivacyResponse);
 }
 
 // 2. SERVICE DE MÉDIAS (ASSETS) : Gère les images de profil
 service ProfileMediaService {
-  rpc UpdateAvatar(UpdateAvatarRequest) returns (Profile);
-  rpc RemoveAvatar(RemoveAvatarRequest) returns (Profile);
-  rpc UpdateBanner(UpdateBannerRequest) returns (Profile);
-  rpc RemoveBanner(RemoveBannerRequest) returns (Profile);
+  rpc UpdateAvatar(UpdateAvatarRequest) returns (UpdateAvatarResponse);
+  rpc RemoveAvatar(RemoveAvatarRequest) returns (RemoveAvatarResponse);
+  rpc UpdateBanner(UpdateBannerRequest) returns (UpdateBannerResponse);
+  rpc RemoveBanner(RemoveBannerRequest) returns (RemoveBannerResponse);
 }
 
 // 3. SERVICE DE MÉTADONNÉES : Gère les infos éditoriales et sociales
 service ProfileMetadataService {
-  rpc UpdateBio(UpdateBioRequest) returns (Profile);
-  rpc UpdateLocationLabel(UpdateLocationLabelRequest) returns (Profile);
-  rpc UpdateSocialLinks(UpdateSocialLinksRequest) returns (Profile);
+  rpc UpdateBio(UpdateBioRequest) returns (UpdateBioResponse);
+  rpc UpdateLocation(UpdateLocationRequest) returns (UpdateLocationResponse);
+  rpc UpdateSocials(UpdateSocialsRequest) returns (UpdateSocialsResponse);
 }
 
 // ==========================================
@@ -65,7 +65,7 @@ service ProfileQueryService {
 
 // --- Identity ---
 
-message UpdateHandleRequest {
+message ChangeHandleRequest {
   string command_id = 1;
   ProfileTarget target = 2;
   string new_handle = 3;
@@ -115,16 +115,16 @@ message UpdateBioRequest {
   google.protobuf.StringValue new_bio = 3;
 }
 
-message UpdateLocationLabelRequest {
+message UpdateLocationRequest {
   string command_id = 1;
   ProfileTarget target = 2;
-  google.protobuf.StringValue new_location_label = 3;
+  google.protobuf.StringValue new_location = 3;
 }
 
-message UpdateSocialLinksRequest {
+message UpdateSocialsRequest {
   string command_id = 1;
   ProfileTarget target = 2;
-  optional SocialLinks new_links = 3;
+  optional Socials new_socials = 3;
 }
 
 // ==========================================
@@ -143,4 +143,48 @@ message GetProfilesByAccountRequest {
 
 message GetProfilesByAccountResponse {
   repeated Profile profiles = 1;
+}
+
+message GetProfileResponse {
+  Profile profile = 1;
+}
+
+message ChangeHandleResponse {
+  Profile profile = 1;
+}
+
+message UpdateDisplayNameResponse {
+  Profile profile = 1;
+}
+
+message UpdatePrivacyResponse {
+  Profile profile = 1;
+}
+
+message UpdateAvatarResponse {
+  Profile profile = 1;
+}
+
+message RemoveAvatarResponse {
+  Profile profile = 1;
+}
+
+message UpdateBannerResponse {
+  Profile profile = 1;
+}
+
+message RemoveBannerResponse {
+  Profile profile = 1;
+}
+
+message UpdateBioResponse {
+  Profile profile = 1;
+}
+
+message UpdateLocationResponse {
+  Profile profile = 1;
+}
+
+message UpdateSocialsResponse {
+  Profile profile = 1;
 }

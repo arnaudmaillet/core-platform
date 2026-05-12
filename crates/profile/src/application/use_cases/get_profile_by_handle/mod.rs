@@ -1,6 +1,0 @@
-mod get_profile_by_handle_command;
-mod get_profile_by_handle_use_case;
-mod get_profile_by_handle_use_case_test;
-
-pub use get_profile_by_handle_command::GetProfileByHandleCommand;
-pub use get_profile_by_handle_use_case::GetProfileByHandleUseCase;

@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, SocialLinks};
+use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use shared_kernel::domain::Identifier;
@@ -41,10 +41,10 @@ impl PostgresProfileRow {
             display_name: p.display_name().to_string(),
             handle: p.handle().as_str().to_string(),
             bio: p.bio().as_ref().map(|b| b.to_string()),
-            avatar_url: p.avatar_url().as_ref().map(|u| u.to_string()),
-            banner_url: p.banner_url().as_ref().map(|u| u.to_string()),
-            location_label: p.location_label().as_ref().map(|l| l.to_string()),
-            social_links: serde_json::to_value(p.social_links()).unwrap_or(JsonValue::Null),
+            avatar_url: p.avatar().as_ref().map(|u| u.to_string()),
+            banner_url: p.banner().as_ref().map(|u| u.to_string()),
+            location_label: p.location().as_ref().map(|l| l.to_string()),
+            social_links: serde_json::to_value(p.socials()).unwrap_or(JsonValue::Null),
             is_private: p.is_private(),
             version: p.version() as i64,
             created_at: p.created_at(),
@@ -54,8 +54,8 @@ impl PostgresProfileRow {
 
     /// Mappe l'infrastructure vers le domaine (pour le fetch)
     pub fn to_domain(self) -> Result<Profile> {
-        let social_links = serde_json::from_value::<Option<SocialLinks>>(self.social_links)
-            .map_err(|e| {
+        let social_links =
+            serde_json::from_value::<Option<Socials>>(self.social_links).map_err(|e| {
                 DomainError::Internal(format!("Failed to deserialize social_links: {}", e))
             })?;
 

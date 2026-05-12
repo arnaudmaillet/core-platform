@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/infrastructure/postgres/factories/postgres_builder.rs
 
-use std::time::Duration;
 use crate::errors::{AppError, AppResult, ErrorCode};
 use crate::infrastructure::postgres::factories::PostgresContext;
+use std::time::Duration;
 
 pub struct PostgresContextBuilder {
     pub(crate) url: String,
@@ -10,7 +10,6 @@ pub struct PostgresContextBuilder {
     pub(crate) min_connections: u32,
     pub(crate) connect_timeout: Duration,
 }
-
 
 impl Default for PostgresContextBuilder {
     fn default() -> Self {
@@ -29,13 +28,19 @@ impl PostgresContextBuilder {
             .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_DB_URL must be set"))?;
 
         let max_connections = std::env::var("PROFILE_DB_MAX_CONNECTIONS")
-            .ok().and_then(|v| v.parse().ok()).unwrap_or(10);
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10);
 
         let min_connections = std::env::var("PROFILE_DB_MIN_CONNECTIONS")
-            .ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2);
 
         let timeout_secs = std::env::var("PROFILE_DB_CONNECT_TIMEOUT")
-            .ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3);
 
         Ok(Self {
             url,

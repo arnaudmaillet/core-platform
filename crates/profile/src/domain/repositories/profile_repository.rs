@@ -1,7 +1,7 @@
 // crates/profile/src/domain/repositories/profile_repository.rs
 
-use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Handle, ProfileId};
+use crate::entities::Profile;
+use crate::value_objects::{Handle, ProfileId};
 use async_trait::async_trait;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
