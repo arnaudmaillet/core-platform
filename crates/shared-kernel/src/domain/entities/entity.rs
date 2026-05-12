@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/domain/entity.rs
+use crate::core::DomainError;
 use crate::domain::Identifier;
-use crate::errors::DomainError;
 use chrono::{DateTime, Utc};
 
 pub trait Entity {

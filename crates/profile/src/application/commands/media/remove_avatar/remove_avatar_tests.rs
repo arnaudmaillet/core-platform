@@ -7,9 +7,9 @@ mod tests {
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
     use shared_kernel::application::CommandTarget;
+    use shared_kernel::core::{Error, ErrorCode, Result};
     use shared_kernel::domain::entities::Versioned;
     use shared_kernel::domain::value_objects::Url;
-    use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -108,10 +108,13 @@ mod tests {
 
         // Assert
         // On s'attend à une erreur AlreadyExists sur l'entité "Command"
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { entity, .. }) if entity == "Command"
-        ));
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Command"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
 
         // On vérifie que l'avatar est toujours là (car la commande a été stoppée net)
         f.assert_profile(|p| {
@@ -146,7 +149,7 @@ mod tests {
         // Assert
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
 
         Ok(())

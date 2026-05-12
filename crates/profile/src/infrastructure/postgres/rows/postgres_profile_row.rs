@@ -6,10 +6,10 @@ use crate::domain::entities::Profile;
 use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
+use shared_kernel::core::{Error, Result};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::Versioned;
 use shared_kernel::domain::value_objects::{AccountId, LocationLabel, RegionCode, Url};
-use shared_kernel::errors::{DomainError, Result};
 use sqlx::FromRow;
 use uuid::Uuid;
 
@@ -54,15 +54,13 @@ impl PostgresProfileRow {
 
     /// Mappe l'infrastructure vers le domaine (pour le fetch)
     pub fn to_domain(self) -> Result<Profile> {
-        let social_links =
-            serde_json::from_value::<Option<Socials>>(self.social_links).map_err(|e| {
-                DomainError::Internal(format!("Failed to deserialize social_links: {}", e))
-            })?;
+        let social_links = serde_json::from_value::<Option<Socials>>(self.social_links)
+            .map_err(|e| Error::internal(format!("Failed to deserialize social_links: {}", e)))?;
 
         let version_u64: u64 = self
             .version
             .try_into()
-            .map_err(|_| DomainError::Internal("Negative version in database".into()))?;
+            .map_err(|_| Error::internal("Negative version in database"))?;
 
         // Reconstruction de l'AccountId avec sa région
         let region = RegionCode::from_str(&self.region_code)?;

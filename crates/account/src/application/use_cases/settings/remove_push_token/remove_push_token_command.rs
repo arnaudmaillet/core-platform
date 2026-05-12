@@ -2,7 +2,7 @@
 
 use shared_kernel::{
     domain::value_objects::{AccountId, PushToken},
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 use shared_proto::account::v1::RemovePushTokenRequest;
 use uuid::Uuid;

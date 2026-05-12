@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/domain/events/metadata.rs
 
+use crate::core::{Error, Result};
 use crate::domain::events::DomainEvent;
-use crate::errors::{DomainError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -51,9 +51,7 @@ impl AggregateMetadata {
     pub fn version_i64(&self) -> Result<i64> {
         use std::convert::TryInto;
         self.version.try_into().map_err(|_| {
-            DomainError::Internal(
-                "Version overflow: cannot fit u64 version into i64 database storage".into(),
-            )
+            Error::internal("Version overflow: cannot fit u64 version into i64 database storage")
         })
     }
 
@@ -97,14 +95,15 @@ impl Clone for AggregateMetadata {
 
 /// Conversion pratique depuis un tuple venant de la base de données
 impl TryFrom<(i64, DateTime<Utc>)> for AggregateMetadata {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: (i64, DateTime<Utc>)) -> Result<Self> {
         let (version, updated_at) = value;
         if version < 0 {
-            return Err(DomainError::Internal(
-                "Database returned a negative version number".into(),
-            ));
+            return Err(Error::internal(format!(
+                "Database returned a negative version number: {}",
+                version
+            )));
         }
         Ok(Self::restore(version as u64, updated_at))
     }

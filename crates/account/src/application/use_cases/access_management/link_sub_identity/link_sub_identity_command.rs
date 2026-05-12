@@ -2,7 +2,7 @@
 
 use shared_kernel::{
     domain::value_objects::{AccountId, SubId},
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 use shared_proto::account::v1::LinkSubIdentityRequest;
 use uuid::Uuid;

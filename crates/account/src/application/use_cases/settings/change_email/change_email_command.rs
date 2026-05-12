@@ -2,7 +2,7 @@
 
 use shared_kernel::{
     domain::value_objects::{AccountId, Email},
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 use shared_proto::account::v1::ChangeEmailRequest;
 use uuid::Uuid;

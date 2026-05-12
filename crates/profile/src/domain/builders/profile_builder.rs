@@ -5,7 +5,7 @@ use crate::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use shared_kernel::domain::events::AggregateMetadata;
 use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 pub struct ProfileBuilder {
     profile_id: ProfileId,

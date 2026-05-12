@@ -3,7 +3,7 @@ use crate::application::context::AccountContext;
 use crate::application::use_cases::settings::RemovePushTokenCommand;
 use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 pub struct RemovePushTokenHandler;
 

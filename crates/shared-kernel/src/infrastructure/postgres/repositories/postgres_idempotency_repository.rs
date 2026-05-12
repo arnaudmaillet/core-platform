@@ -1,9 +1,8 @@
 // crates/shared-kernel/src/infrastructure/postgres/repositories/postgres_idempotency_repository.rs
 
+use crate::core::{Error, Result};
 use crate::domain::repositories::IdempotencyRepository;
 use crate::domain::transaction::Transaction;
-use crate::errors::Result;
-use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::transactions::TransactionExt;
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -32,7 +31,7 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
             .bind(&self.namespace)
             .fetch_one(&mut **sqlx_tx)
             .await
-            .map_domain_infra("Idempotency Check")?;
+            .map_err(|e| Error::database(format!("Idempotency check failed: {}", e.to_string())))?;
 
         Ok(row.0)
     }
@@ -50,7 +49,7 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
             .bind(&self.namespace)
             .execute(&mut **sqlx_tx)
             .await
-            .map_domain_infra("Idempotency Save")?;
+            .map_err(|e| Error::database(format!("Idempotency save failed: {}", e.to_string())))?;
 
         Ok(())
     }

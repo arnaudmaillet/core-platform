@@ -1,12 +1,12 @@
 // crates/shared-kernel/src/domain/value_objects/slug.rs
 
+use crate::core::{Error, Result};
 use regex::Regex;
 use seahash::SeaHasher;
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
-use crate::errors::{DomainError, Result};
 
 static SLUG_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-z0-9][a-z0-9._]*[a-z0-9]$").unwrap());
@@ -35,38 +35,52 @@ impl Slug {
         let inner = value.into();
         let mut hasher = SeaHasher::new();
         inner.hash(&mut hasher);
-        Self { inner, hash: hasher.finish() }
+        Self {
+            inner,
+            hash: hasher.finish(),
+        }
     }
 
     fn validate_with_name(&self, field: &'static str) -> Result<()> {
         let len = self.inner.chars().count();
 
         if !(Self::MIN_LEN..=Self::MAX_LEN).contains(&len) {
-            return Err(DomainError::Validation {
-                field: field.into(),
-                reason: format!("Must be between {} and {} characters", Self::MIN_LEN, Self::MAX_LEN),
-            });
+            return Err(Error::validation(
+                field.into(),
+                format!(
+                    "Must be between {} and {} characters",
+                    Self::MIN_LEN,
+                    Self::MAX_LEN
+                ),
+            ));
         }
 
         if !SLUG_REGEX.is_match(&self.inner) {
-            return Err(DomainError::Validation {
-                field: field.into(),
-                reason: "Invalid format: lowercase, numbers, dots or underscores only. Cannot start/end with special chars.".into(),
-            });
+            return Err(Error::validation(
+                field.into(),
+                "Invalid format: lowercase, numbers, dots or underscores only. Cannot start/end with special chars.",
+            ));
         }
 
-        if self.inner.contains("..") || self.inner.contains("__") ||
-            self.inner.contains("._") || self.inner.contains("_.") {
-            return Err(DomainError::Validation {
-                field: field.into(),
-                reason: "Cannot contain consecutive special characters".into(),
-            });
+        if self.inner.contains("..")
+            || self.inner.contains("__")
+            || self.inner.contains("._")
+            || self.inner.contains("_.")
+        {
+            return Err(Error::validation(
+                field.into(),
+                "Cannot contain consecutive special characters",
+            ));
         }
         Ok(())
     }
 
-    pub fn as_str(&self) -> &str { &self.inner }
-    pub fn hash_value(&self) -> u64 { self.hash }
+    pub fn as_str(&self) -> &str {
+        &self.inner
+    }
+    pub fn hash_value(&self) -> u64 {
+        self.hash
+    }
 }
 
 impl Serialize for Slug {

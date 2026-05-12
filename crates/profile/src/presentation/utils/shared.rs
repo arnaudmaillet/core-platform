@@ -5,7 +5,7 @@ use crate::entities::Profile;
 use crate::value_objects::ProfileId;
 use shared_kernel::application::{CommandBus, IdentifiableCommand};
 use shared_kernel::domain::value_objects::RegionCode;
-use shared_kernel::errors::{AppError, DomainError, ErrorCode};
+use shared_kernel::core::{Error, ErrorCode};
 use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]
@@ -46,10 +46,10 @@ pub trait GrpcServiceUtils {
             .await;
 
         if let Err(err) = execution_result {
-            let app_error: AppError = err.clone().into();
+            let error: Error = err.clone().into();
 
             // Gestion de l'idempotence technique (Command déjà traitée)
-            if app_error.code == ErrorCode::AlreadyExists && app_error.message.contains("Command") {
+            if error.code == ErrorCode::AlreadyExists && error.message.contains("Command") {
                 tracing::info!(
                     profile_id = %ctx.region(),
                     "🔁 Idempotency hit. Fetching current state."
@@ -72,13 +72,13 @@ pub trait GrpcServiceUtils {
     }
 }
 
-pub fn map_domain_err_to_status(err: DomainError) -> Status {
-    let app_error: AppError = err.into();
-    match app_error.code {
-        ErrorCode::NotFound => Status::not_found(app_error.message),
-        ErrorCode::AlreadyExists => Status::already_exists(app_error.message),
-        ErrorCode::ValidationFailed => Status::invalid_argument(app_error.message),
-        ErrorCode::ConcurrencyConflict => Status::aborted(app_error.message),
-        _ => Status::internal(app_error.message),
+pub fn map_domain_err_to_status(err: Error) -> Status {
+    let error: Error = err.into();
+    match error.code {
+        ErrorCode::NotFound => Status::not_found(error.message),
+        ErrorCode::AlreadyExists => Status::already_exists(error.message),
+        ErrorCode::ValidationFailed => Status::invalid_argument(error.message),
+        ErrorCode::ConcurrencyConflict => Status::aborted(error.message),
+        _ => Status::internal(error.message),
     }
 }

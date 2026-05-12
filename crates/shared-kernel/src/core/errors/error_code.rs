@@ -14,4 +14,5 @@ pub enum ErrorCode {
     InfrastructureFailure,
     ServiceUnavailable,
     PreconditionFailed,
+    MaxRetriesExceeded,
 }

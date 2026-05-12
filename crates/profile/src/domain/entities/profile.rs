@@ -10,7 +10,7 @@ use shared_kernel::domain::events::{
     AggregateMetadata, AggregateRoot, DomainEvent, EventEmitter, OperationTracker,
 };
 use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -1,5 +1,5 @@
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -27,17 +27,14 @@ impl Speed {
 impl ValueObject for Speed {
     fn validate(&self) -> Result<()> {
         if self.0 < 0.0 {
-            return Err(DomainError::Validation {
-                field: "speed",
-                reason: "Speed cannot be negative".to_string(),
-            });
+            return Err(Error::validation("speed", "Speed cannot be negative"));
         }
         Ok(())
     }
 }
 
 impl TryFrom<f32> for Speed {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: f32) -> Result<Self> {
         let safe_val = if value < 0.0 { 0.0 } else { value };

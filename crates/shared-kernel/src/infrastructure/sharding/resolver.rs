@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use crate::domain::Identifier;
-use crate::errors::InfrastructureError;
+use crate::core::InfrastructureError;
 use crate::infrastructure::sharding::ShardNode;
 use crate::domain::value_objects::{AccountId, RegionCode};
 

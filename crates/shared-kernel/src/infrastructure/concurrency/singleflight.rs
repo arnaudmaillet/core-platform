@@ -18,14 +18,14 @@
 //! - Prévient les pics de latence lors de l'expiration de caches.
 //! - Utilise `DashMap` pour une gestion thread-safe et performante des requêtes en cours.
 
-use crate::errors::{AppError, AppResult, ErrorCode};
+use crate::core::{Error, Result};
 use dashmap::DashMap;
 use futures::future::{FutureExt, Shared};
 use std::future::Future;
 use tokio::sync::oneshot;
 
 pub struct Singleflight<K, T> {
-    requests: DashMap<K, Shared<oneshot::Receiver<AppResult<T>>>>,
+    requests: DashMap<K, Shared<oneshot::Receiver<Result<T>>>>,
 }
 
 impl<K, T> Singleflight<K, T>
@@ -39,10 +39,10 @@ where
         }
     }
 
-    pub async fn execute<F, Fut>(&self, key: K, factory: F) -> AppResult<T>
+    pub async fn execute<F, Fut>(&self, key: K, factory: F) -> Result<T>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = AppResult<T>> + Send + 'static,
+        Fut: Future<Output = Result<T>> + Send + 'static,
     {
         use dashmap::mapref::entry::Entry;
 
@@ -75,10 +75,7 @@ where
         // Si on arrive ici, on est un "suiveur", on attend le résultat du leader
         match shared_fut.await {
             Ok(result) => result,
-            Err(_) => Err(AppError::new(
-                ErrorCode::InternalError,
-                "Singleflight leader panicked or dropped".to_string(),
-            )),
+            Err(_) => Err(Error::internal("Singleflight leader panicked or dropped")),
         }
     }
 }

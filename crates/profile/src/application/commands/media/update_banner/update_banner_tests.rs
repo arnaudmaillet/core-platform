@@ -2,15 +2,14 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateBannerCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
     use shared_kernel::application::CommandTarget;
+    use shared_kernel::core::{ErrorCode, Result};
     use shared_kernel::domain::entities::Versioned;
     use shared_kernel::domain::value_objects::Url;
-    use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -69,10 +68,13 @@ mod tests {
             .await;
 
         // Assert
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { entity, .. }) if entity == "Command"
-        ));
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Command"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
         f.assert_outbox(0, None);
 
         Ok(())
@@ -134,7 +136,7 @@ mod tests {
         // Assert
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
 
         Ok(())

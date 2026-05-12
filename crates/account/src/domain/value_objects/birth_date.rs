@@ -3,7 +3,7 @@
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{DomainError, Result};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

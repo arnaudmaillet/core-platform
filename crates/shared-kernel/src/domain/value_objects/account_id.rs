@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/domain/value_object/account_id.rs
 
+use crate::core::{Error, Result};
 use crate::domain::identifier::Identifier;
 use crate::domain::value_objects::{RegionCode, ValueObject};
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -60,12 +60,11 @@ impl Identifier for AccountId {
 impl ValueObject for AccountId {
     fn validate(&self) -> Result<()> {
         if self.uuid.is_nil() {
-            return Err(DomainError::Validation {
-                field: "account_id",
-                reason: "UUID part cannot be nil".to_string(),
-            });
+            return Err(Error::validation(
+                "account_id",
+                "UUID part cannot be nil".to_string(),
+            ));
         }
-        // La validation de la région est déléguée au VO RegionCode
         self.region.validate()
     }
 }
@@ -73,25 +72,24 @@ impl ValueObject for AccountId {
 // --- CONVERSIONS ---
 
 impl FromStr for AccountId {
-    type Err = DomainError;
+    type Err = Error;
 
     /// Parse une chaîne au format "REGION:UUID"
     fn from_str(s: &str) -> Result<Self> {
         let parts: Vec<&str> = s.split(':').collect();
 
         if parts.len() != 2 {
-            return Err(DomainError::Validation {
-                field: "account_id",
-                reason: format!("'{}' is not a valid AccountId. Expected 'REGION:UUID'", s),
-            });
+            return Err(Error::validation(
+                "account_id",
+                format!("'{}' is not a valid AccountId. Expected 'REGION:UUID'", s),
+            ));
         }
 
         // On utilise FromStr de RegionCode qui valide déjà le code
         let region = RegionCode::from_str(parts[0])?;
 
-        let uuid = Uuid::parse_str(parts[1]).map_err(|_| DomainError::Validation {
-            field: "account_id",
-            reason: format!("'{}' is not a valid UUID", parts[1]),
+        let uuid = Uuid::parse_str(parts[1]).map_err(|_| {
+            Error::validation("account_id", format!("'{}' is not a valid UUID", parts[1]))
         })?;
 
         Ok(Self { uuid, region })
@@ -105,7 +103,7 @@ impl fmt::Display for AccountId {
 }
 
 impl TryFrom<String> for AccountId {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
         Self::from_str(&value)
@@ -113,7 +111,7 @@ impl TryFrom<String> for AccountId {
 }
 
 impl TryFrom<&str> for AccountId {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: &str) -> Result<Self> {
         Self::from_str(value)

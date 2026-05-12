@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
+use shared_kernel::core::{Error, Result};
 use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -41,17 +41,17 @@ impl ValueObject for DisplayName {
         let count = self.0.chars().count();
 
         if count < Self::MIN_LENGTH {
-            return Err(DomainError::Validation {
-                field: "display_name",
-                reason: "Display name cannot be empty".into(),
-            });
+            return Err(Error::validation(
+                "display_name",
+                "Display name cannot be empty",
+            ));
         }
 
         if count > Self::MAX_LENGTH {
-            return Err(DomainError::Validation {
-                field: "display_name",
-                reason: format!("Display name too long (max {})", Self::MAX_LENGTH),
-            });
+            return Err(Error::validation(
+                "display_name",
+                format!("Display name too long (max {})", Self::MAX_LENGTH),
+            ));
         }
 
         Ok(())
@@ -73,7 +73,7 @@ impl fmt::Display for DisplayName {
 }
 
 impl TryFrom<String> for DisplayName {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

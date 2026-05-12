@@ -7,7 +7,7 @@ use shared_kernel::{
         entities::Entity,
         value_objects::{AccountId, AuditReason, TrustContext},
     },
-    errors::Result,
+    core::Result,
 };
 
 use crate::{

@@ -2,7 +2,7 @@
 
 use crate::domain::events::{DomainEvent, EventEnvelope};
 use crate::domain::transaction::Transaction;
-use crate::errors::Result;
+use crate::core::Result;
 use async_trait::async_trait;
 
 #[async_trait]

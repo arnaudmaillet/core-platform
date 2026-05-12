@@ -8,7 +8,7 @@ use shared_kernel::domain::repositories::{
     CacheRepositoryStub, IdempotencyRepositoryStub, OutboxRepositoryStub,
 };
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 // Account Domain & Application
 // Note : Importation directe depuis application::context (structure plate)

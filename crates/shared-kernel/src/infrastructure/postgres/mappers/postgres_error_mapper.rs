@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/infrastructure/postgres/mappers/postgres_error_mapper.rs
 
-use crate::{domain::entities::Entity, errors::DomainError};
+use crate::{core::DomainError, domain::entities::Entity};
 use sqlx::postgres::PgDatabaseError;
 
 pub trait SqlxErrorExt<T> {
@@ -21,7 +21,10 @@ impl<T> SqlxErrorExt<T> for std::result::Result<T, sqlx::Error> {
                     if db_err.code().map(|c| c == "23505").unwrap_or(false) {
                         let mut field = "unique_constraint";
 
-                        if let Some(constraint_name) = db_err.try_downcast_ref::<PgDatabaseError>().and_then(|pg| pg.constraint()) {
+                        if let Some(constraint_name) = db_err
+                            .try_downcast_ref::<PgDatabaseError>()
+                            .and_then(|pg| pg.constraint())
+                        {
                             field = E::map_constraint_to_field(constraint_name);
                         }
 

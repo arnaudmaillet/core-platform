@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/infrastructure/postgres/factories/postgres_builder.rs
 
-use crate::errors::{AppError, AppResult, ErrorCode};
+use crate::core::{Error, Result};
 use crate::infrastructure::postgres::factories::PostgresContext;
 use std::time::Duration;
 
@@ -23,9 +23,9 @@ impl Default for PostgresContextBuilder {
 }
 
 impl PostgresContextBuilder {
-    pub fn new() -> AppResult<Self> {
+    pub fn new() -> Result<Self> {
         let url = std::env::var("PROFILE_DB_URL")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_DB_URL must be set"))?;
+            .map_err(|_| Error::internal("PROFILE_DB_URL must be set"))?;
 
         let max_connections = std::env::var("PROFILE_DB_MAX_CONNECTIONS")
             .ok()
@@ -70,7 +70,7 @@ impl PostgresContextBuilder {
         self
     }
 
-    pub async fn build(self) -> AppResult<PostgresContext> {
+    pub async fn build(self) -> Result<PostgresContext> {
         PostgresContext::restore(self).await
     }
 }

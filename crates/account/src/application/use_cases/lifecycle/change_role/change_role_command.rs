@@ -4,7 +4,7 @@ use crate::domain::value_objects::AccountRole;
 use serde::Deserialize;
 use shared_kernel::{
     domain::value_objects::{AccountId, AuditReason},
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 use shared_proto::account::v1::ChangeRoleRequest;
 use uuid::Uuid;

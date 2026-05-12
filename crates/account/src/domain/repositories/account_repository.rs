@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use shared_kernel::{
     domain::{transaction::Transaction, value_objects::{AccountId, Email, PhoneNumber, SubId}},
-    errors::Result,
+    core::Result,
 };
 
 use crate::domain::{

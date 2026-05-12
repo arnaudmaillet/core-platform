@@ -1,7 +1,7 @@
 // crates/shared_kernel/src/domain/repositories/idempotency_repository.rs
 
 use crate::domain::transaction::Transaction;
-use crate::errors::Result;
+use crate::core::Result;
 use async_trait::async_trait;
 use uuid::Uuid;
 

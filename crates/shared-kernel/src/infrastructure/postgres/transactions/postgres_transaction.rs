@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/infrastructure/postgres/postgres_transaction.rs
 
+use crate::core::{Error, Result};
 use crate::domain::transaction::Transaction;
-use crate::errors::{DomainError, Result};
 use sqlx::{PgConnection, PgPool, Postgres, Transaction as PostgresTx};
 use std::pin::Pin;
 
@@ -35,9 +35,9 @@ impl Transaction for PostgresTransaction {
 
         Box::pin(async move {
             if let Some(t) = tx {
-                t.commit().await.map_err(|e| {
-                    DomainError::Internal(format!("Commit failed: {}", e))
-                })?;
+                t.commit()
+                    .await
+                    .map_err(|e| Error::internal(format!("Commit failed: {}", e)))?;
             }
             Ok(())
         })
@@ -48,9 +48,9 @@ impl Transaction for PostgresTransaction {
 
         Box::pin(async move {
             if let Some(t) = tx {
-                t.rollback().await.map_err(|e| {
-                    DomainError::Internal(format!("Rollback failed: {}", e))
-                })?;
+                t.rollback()
+                    .await
+                    .map_err(|e| Error::internal(format!("Rollback failed: {}", e)))?;
             }
             Ok(())
         })
@@ -77,9 +77,10 @@ impl dyn Transaction + '_ {
             }
             // Sinon, on prend une connexion simple au pool
             None => {
-                let mut conn = pool.acquire().await.map_err(|e| {
-                    DomainError::Internal(format!("Pool acquisition failed: {}", e))
-                })?;
+                let mut conn = pool
+                    .acquire()
+                    .await
+                    .map_err(|e| Error::internal(format!("Pool acquisition failed: {}", e)))?;
                 f(&mut conn).await
             }
         }
@@ -96,8 +97,6 @@ impl TransactionExt for dyn Transaction + '_ {
         self.as_any_mut()
             .downcast_mut::<PostgresTransaction>()
             .map(|tx| tx.get_mut())
-            .ok_or_else(|| {
-                DomainError::Internal("Type mismatch: Expected PostgresTransaction".into())
-            })
+            .ok_or_else(|| Error::internal("Type mismatch: Expected PostgresTransaction"))
     }
 }

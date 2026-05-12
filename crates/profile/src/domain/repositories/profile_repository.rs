@@ -5,7 +5,7 @@ use crate::value_objects::{Handle, ProfileId};
 use async_trait::async_trait;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 #[async_trait]
 #[async_trait]

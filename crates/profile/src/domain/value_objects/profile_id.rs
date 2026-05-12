@@ -1,9 +1,9 @@
 // crates/profile/src/domain/value_objects/profile_id.rs
 
 use serde::{Deserialize, Serialize};
+use shared_kernel::core::{Error, Result};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -43,10 +43,7 @@ impl Identifier for ProfileId {
 impl ValueObject for ProfileId {
     fn validate(&self) -> Result<()> {
         if self.0.is_nil() {
-            return Err(DomainError::Validation {
-                field: "profile_id",
-                reason: "Profile ID cannot be nil".to_string(),
-            });
+            return Err(Error::validation("profile_id", "Profile ID cannot be nil"));
         }
         Ok(())
     }
@@ -67,21 +64,21 @@ impl From<Uuid> for ProfileId {
 }
 
 impl TryFrom<String> for ProfileId {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::from_str(&value)
     }
 }
 
 impl FromStr for ProfileId {
-    type Err = DomainError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
-        Uuid::parse_str(s)
-            .map(Self)
-            .map_err(|_| DomainError::Validation {
-                field: "profile_id",
-                reason: format!("'{}' is not a valid UUID for ProfileId", s),
-            })
+        Uuid::parse_str(s).map(Self).map_err(|_| {
+            Error::validation(
+                "profile_id",
+                format!("'{}' is not a valid UUID for ProfileId", s)
+            )
+        })
     }
 }
 

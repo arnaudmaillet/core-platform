@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::pin::Pin;
 use crate::domain::transaction::Transaction;
-use crate::errors::Result;
+use crate::core::Result;
 
 pub struct FakeTransaction {
     pub committed: Arc<Mutex<bool>>,

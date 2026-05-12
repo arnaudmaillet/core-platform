@@ -1,5 +1,5 @@
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use regex::Regex;
 use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
@@ -71,10 +71,10 @@ impl ValueObject for PhoneNumber {
     fn validate(&self) -> Result<()> {
         // 1. Format Regex E.164
         if !PHONE_REGEX.is_match(&self.inner) {
-            return Err(DomainError::Validation {
-                field: "phone_number",
-                reason: "Must be in E.164 format (e.g., +33612345678)".into(),
-            });
+            return Err(Error::validation(
+                "phone_number",
+                "Must be in E.164 format (e.g., +33612345678)",
+            ));
         }
 
         // 2. Sécurité supplémentaire : interdire les suites de chiffres absurdes
@@ -86,7 +86,7 @@ impl ValueObject for PhoneNumber {
 // --- CONVERSIONS ---
 
 impl TryFrom<String> for PhoneNumber {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

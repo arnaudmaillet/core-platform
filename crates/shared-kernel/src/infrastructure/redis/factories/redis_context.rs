@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/infrastructure/redis/factories/redis_context.rs
 
 use std::sync::Arc;
-use crate::errors::AppResult;
+use crate::core::Result;
 use crate::infrastructure::redis::repositories::RedisCacheRepository;
 use crate::infrastructure::redis::factories::{RedisConfig, RedisContextBuilder};
 
@@ -12,7 +12,7 @@ pub struct RedisContext {
 }
 
 impl RedisContext {
-    pub fn builder() -> AppResult<RedisContextBuilder> {
+    pub fn builder() -> Result<RedisContextBuilder> {
         RedisContextBuilder::new()
     }
 
@@ -34,10 +34,10 @@ impl RedisContext {
         }
     }
 
-    pub(crate) async fn restore(builder: RedisContextBuilder) -> AppResult<Self> {
+    pub(crate) async fn restore(builder: RedisContextBuilder) -> Result<Self> {
         let repository = RedisCacheRepository::new(&builder.url).await
-            .map_err(|e| crate::errors::AppError::new(
-                crate::errors::ErrorCode::InternalError,
+            .map_err(|e| crate::core::Error::new(
+                crate::core::ErrorCode::InternalError,
                 format!("Failed to connect to Redis at {}: {}", builder.url, e)
             ))?;
 

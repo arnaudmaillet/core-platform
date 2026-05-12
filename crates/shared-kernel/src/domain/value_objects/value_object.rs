@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::core::Result;
 
 pub trait ValueObject: PartialEq + Clone {
     fn validate(&self) -> Result<()>;

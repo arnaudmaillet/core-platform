@@ -1,21 +1,21 @@
 // crates/shared-kernel/src/infrastructure/postgres/factories/postgres_context.rs
 
-use std::time::Duration;
+use crate::core::{Error, Result};
+use crate::infrastructure::postgres::factories::{PostgresConfig, PostgresContextBuilder};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use crate::errors::{AppError, AppResult, ErrorCode};
-use crate::infrastructure::postgres::factories::{PostgresConfig, PostgresContextBuilder};
+use std::time::Duration;
 
 pub struct PostgresContext {
     pool: PgPool,
     url: String,
     max_connections: u32,
     min_connections: u32,
-    connect_timeout: Duration
+    connect_timeout: Duration,
 }
 
 impl PostgresContext {
-    pub fn builder() -> AppResult<PostgresContextBuilder> {
+    pub fn builder() -> Result<PostgresContextBuilder> {
         PostgresContextBuilder::new()
     }
 
@@ -39,14 +39,14 @@ impl PostgresContext {
         }
     }
 
-    pub(crate) async fn restore(builder: PostgresContextBuilder) -> AppResult<Self> {
+    pub(crate) async fn restore(builder: PostgresContextBuilder) -> Result<Self> {
         let pool = PgPoolOptions::new()
             .max_connections(builder.max_connections)
             .min_connections(builder.min_connections)
             .acquire_timeout(builder.connect_timeout)
             .connect(&builder.url)
             .await
-            .map_err(|e| AppError::new(ErrorCode::InternalError, format!("Postgres Connection Failed: {}", e)))?;
+            .map_err(|e| Error::internal(format!("Postgres Connection Failed: {}", e)))?;
 
         Ok(Self {
             pool,

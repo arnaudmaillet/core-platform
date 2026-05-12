@@ -1,10 +1,9 @@
 // crates/shared-kernel/src/infrastructure/postgres/repositories/postgres_outbox_repository.rs
 
+use crate::core::{Error, Result};
 use crate::domain::events::{DomainEvent, EventEnvelope};
 use crate::domain::repositories::OutboxRepository;
 use crate::domain::transaction::Transaction;
-use crate::errors::Result;
-use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::transactions::TransactionExt;
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
@@ -49,7 +48,7 @@ impl OutboxRepository for PostgresOutboxRepository {
         query
             .execute(&mut **sqlx_tx)
             .await
-            .map_domain_infra("Outbox Bulk Insert")?;
+            .map_err(|e| Error::database("Outbox Bulk Insert"))?;
 
         Ok(())
     }
@@ -67,7 +66,7 @@ impl OutboxRepository for PostgresOutboxRepository {
             .bind(limit)
             .fetch_all(&self.pool)
             .await
-            .map_domain_infra("Outbox")?;
+            .map_err(|e| Error::database("Outbox"))?;
 
         let envelopes = rows
             .into_iter()

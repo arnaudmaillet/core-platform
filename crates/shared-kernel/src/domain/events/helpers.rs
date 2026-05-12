@@ -1,6 +1,6 @@
 use crate::domain::entities::Versioned;
 use crate::domain::events::{DomainEvent, traits::EventEmitter};
-use crate::errors::Result;
+use crate::core::Result;
 
 pub trait OperationTracker: Versioned + EventEmitter {
     /// Coordonne : Action métier -> Versioning -> Événement

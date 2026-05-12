@@ -5,8 +5,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 
 // Regex optimisée compilée une seule fois
 static USERNAME_REGEX: LazyLock<Regex> =
@@ -67,22 +67,22 @@ impl ValueObject for Username {
 
         // 1. Longueur
         if !(Self::MIN_LEN..=Self::MAX_LEN).contains(&len) {
-            return Err(DomainError::Validation {
-                field: "username",
-                reason: format!(
+            return Err(Error::validation(
+                "username",
+                format!(
                     "Username must be between {} and {} characters",
                     Self::MIN_LEN,
                     Self::MAX_LEN
                 ),
-            });
+            ));
         }
 
         // 2. Format Regex
         if !USERNAME_REGEX.is_match(&self.inner) {
-            return Err(DomainError::Validation {
-                field: "username",
-                reason: "Invalid format: only lowercase, numbers, dots or underscores allowed. Cannot start/end with special chars.".into(),
-            });
+            return Err(Error::validation(
+                "username",
+                "Invalid format: only lowercase, numbers, dots or underscores allowed. Cannot start/end with special chars.",
+            ));
         }
 
         // 3. Protection contre les séquences spéciales (Anti-obfuscation)
@@ -91,10 +91,10 @@ impl ValueObject for Username {
             || self.inner.contains("._")
             || self.inner.contains("_.")
         {
-            return Err(DomainError::Validation {
-                field: "username",
-                reason: "Username cannot contain consecutive special characters".into(),
-            });
+            return Err(Error::validation(
+                "username",
+                "Username cannot contain consecutive special characters",
+            ));
         }
 
         Ok(())
@@ -104,7 +104,7 @@ impl ValueObject for Username {
 // --- CONVERSIONS ---
 
 impl TryFrom<String> for Username {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

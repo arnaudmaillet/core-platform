@@ -4,7 +4,7 @@ use crate::domain::value_objects::BirthDate;
 use serde::Deserialize;
 use shared_kernel::{
     domain::value_objects::AccountId,
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
     infrastructure::grpc::ProtoTimestampExt,
 };
 use shared_proto::account::v1::ChangeBirthDateRequest;

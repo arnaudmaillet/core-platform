@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/application/workers/cache_worker.rs
 
 use crate::application::ports::{MessageConsumer, MessageHandler};
+use crate::core::Result;
 use crate::domain::repositories::CacheRepository;
-use crate::errors::AppResult;
 use std::sync::Arc;
 
 pub struct CacheWorker {
@@ -18,7 +18,7 @@ impl CacheWorker {
         }
     }
 
-    pub async fn start(&self, topic: &str) -> AppResult<()> {
+    pub async fn start(&self, topic: &str) -> Result<()> {
         log::info!("🚀 CacheWorker starting for topic: {}", topic);
 
         let repo = Arc::clone(&self.cache_repo);

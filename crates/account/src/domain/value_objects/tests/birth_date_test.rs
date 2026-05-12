@@ -4,7 +4,7 @@ mod tests {
     use std::str::FromStr;
     use super::*;
     use chrono::{Datelike, Duration, NaiveDate, Utc};
-    use shared_kernel::errors::DomainError;
+    use shared_kernel::core::DomainError;
     use crate::domain::value_objects::BirthDate;
 
     /// Helper pour obtenir la date du jour (Naive)

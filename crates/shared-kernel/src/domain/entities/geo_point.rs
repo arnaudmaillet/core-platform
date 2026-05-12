@@ -1,6 +1,6 @@
 // crates/shared_kernel/src/domain/value_objects/geo_point.rs
+use crate::core::{Error, Result};
 use crate::domain::value_objects::{Latitude, Longitude, ValueObject};
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -60,15 +60,12 @@ impl ValueObject for GeoPoint {
 }
 
 impl std::str::FromStr for GeoPoint {
-    type Err = DomainError;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
         let parts: Vec<&str> = s.split(',').collect();
         if parts.len() != 2 {
-            return Err(DomainError::Validation {
-                field: "geopoint",
-                reason: "Format 'lon,lat' expected".to_string(),
-            });
+            return Err(Error::validation("geopoint", "Format 'lon,lat' expected"));
         }
 
         // On inverse ici pour être cohérent avec le reste du struct

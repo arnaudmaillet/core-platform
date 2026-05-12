@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/infrastructure/redis/factories/redis_context_builder.rs
 
-use crate::errors::{AppError, AppResult, ErrorCode};
+use crate::core::{Error, Result};
 use crate::infrastructure::redis::factories::RedisContext;
 
 pub struct RedisContextBuilder {
@@ -18,11 +18,11 @@ impl Default for RedisContextBuilder {
 }
 
 impl RedisContextBuilder {
-    pub fn new() -> AppResult<Self> {
+    pub fn new() -> Result<Self> {
         let mut builder = Self::default();
 
         builder.url = std::env::var("PROFILE_REDIS_URL")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_REDIS_URL must be set"))?;
+            .map_err(|_| Error::internal("PROFILE_REDIS_URL must be set"))?;
 
         if let Ok(max) = std::env::var("PROFILE_REDIS_MAX_CLIENTS") {
             if let Ok(val) = max.parse::<usize>() {
@@ -43,7 +43,7 @@ impl RedisContextBuilder {
         self
     }
 
-    pub async fn build(self) -> AppResult<RedisContext> {
+    pub async fn build(self) -> Result<RedisContext> {
         RedisContext::restore(self).await
     }
 }

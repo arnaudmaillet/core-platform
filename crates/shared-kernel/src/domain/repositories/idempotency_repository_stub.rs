@@ -2,7 +2,7 @@
 
 use crate::domain::repositories::IdempotencyRepository;
 use crate::domain::transaction::Transaction;
-use crate::errors::{DomainError, Result};
+use crate::core::{Error, Result};
 use async_trait::async_trait;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -12,7 +12,7 @@ use std::collections::HashSet;
 pub struct IdempotencyRepositoryStub {
     // On utilise un HashSet pour simuler la table unique en DB
     processed_ids: Mutex<HashSet<Uuid>>,
-    error_to_return: Mutex<Option<DomainError>>,
+    error_to_return: Mutex<Option<Error>>,
 }
 
 impl IdempotencyRepositoryStub {
@@ -26,7 +26,7 @@ impl IdempotencyRepositoryStub {
         ids.insert(command_id);
     }
 
-    pub fn set_error(&self, err: DomainError) {
+    pub fn set_error(&self, err: Error) {
         let mut slot = self.error_to_return.lock().expect("Lock failed");
         *slot = Some(err);
     }

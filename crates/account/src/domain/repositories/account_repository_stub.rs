@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, SubId};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{DomainError, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

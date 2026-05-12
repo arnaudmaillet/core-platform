@@ -5,7 +5,7 @@ use crate::application::{
     use_cases::access_management::LinkSubIdentityCommand,
 };
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, domain::utils::RetryConfig, errors::Result};
+use shared_kernel::{application::CommandHandler, domain::utils::RetryConfig, core::Result};
 
 pub struct LinkSubIdentityHandler;
 

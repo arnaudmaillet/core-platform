@@ -1,6 +1,6 @@
 use auth::{KeycloakTestContext, TokenValidator};
 use shared_kernel::domain::value_objects::JwtToken;
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 #[tokio::test]
 async fn test_keycloak_discovery_works_with_singleton() {

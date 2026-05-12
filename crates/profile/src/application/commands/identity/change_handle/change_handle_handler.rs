@@ -3,8 +3,7 @@
 use async_trait::async_trait;
 use shared_kernel::{
     application::CommandHandler,
-    domain::entities::Versioned,
-    errors::{DomainError, Result},
+    core::{Error, Result},
 };
 
 use crate::{commands::ChangeHandleCommand, context::ProfileContext};
@@ -34,11 +33,11 @@ impl CommandHandler for ChangeHandleHandler {
             .await?
             .is_some()
         {
-            return Err(DomainError::AlreadyExists {
-                entity: "Profile",
-                field: "handle".into(),
-                value: cmd.new_handle.as_str().to_string(),
-            });
+            return Err(Error::already_exists(
+                "Profile",
+                "handle".into(),
+                cmd.new_handle.as_str().to_string(),
+            ));
         }
         profile.change_handle(cmd.new_handle)?;
 

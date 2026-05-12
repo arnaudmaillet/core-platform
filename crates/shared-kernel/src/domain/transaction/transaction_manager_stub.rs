@@ -12,11 +12,11 @@ impl TransactionManager for StubTxManager {
         f: Box<
             dyn FnOnce(
                 Box<dyn Transaction>,
-            ) -> Pin<Box<dyn std::future::Future<Output =crate::errors::Result<()>> + Send + 'a>>
+            ) -> Pin<Box<dyn std::future::Future<Output =crate::core::Result<()>> + Send + 'a>>
             + Send
             + 'a,
         >,
-    ) -> Pin<Box<dyn Future<Output =crate::errors::Result<()>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output =crate::core::Result<()>> + Send + 'a>> {
         // On crée l'instance ici pour qu'elle soit trouvée dans le scope
         let tx = Box::new(FakeTransaction::new());
         Box::pin(async move { f(tx).await })

@@ -8,9 +8,9 @@ use std::sync::Mutex;
 use crate::entities::Profile;
 use crate::repositories::ProfileRepository;
 use crate::value_objects::{Handle, ProfileId};
+use shared_kernel::core::{Error, Result};
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::{DomainError, Result};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct ProfileKey {
@@ -20,7 +20,7 @@ pub(crate) struct ProfileKey {
 
 pub struct ProfileRepositoryStub {
     profiles: Mutex<HashMap<ProfileKey, Profile>>,
-    error_to_return: Mutex<Option<DomainError>>,
+    error_to_return: Mutex<Option<Error>>,
 }
 
 impl Default for ProfileRepositoryStub {
@@ -55,7 +55,7 @@ impl ProfileRepositoryStub {
     }
 
     /// Force une erreur pour le prochain appel au repository
-    pub fn set_error(&self, err: DomainError) {
+    pub fn set_error(&self, err: Error) {
         let mut slot = self.error_to_return.lock().unwrap();
         *slot = Some(err);
     }
@@ -116,13 +116,11 @@ impl ProfileRepository for ProfileRepositoryStub {
             let current_db_version = existing.version();
 
             if current_db_version != (next_version - 1) {
-                return Err(DomainError::ConcurrencyConflict {
-                    reason: format!(
-                        "Stub OCC mismatch: DB v{}, App v{}",
-                        current_db_version,
-                        next_version - 1
-                    ),
-                });
+                return Err(Error::concurrency_conflict(format!(
+                    "Stub OCC mismatch: DB v{}, App v{}",
+                    current_db_version,
+                    next_version - 1
+                )));
             }
         }
 

@@ -1,9 +1,8 @@
 // crates/shared-kernel/src/infrastructure/postgres/storage/postgres_outbox_store.rs
 
+use crate::core::{Error, Result};
 use crate::domain::events::EventEnvelope;
 use crate::domain::repositories::OutboxStore;
-use crate::errors::Result;
-use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::rows::OutboxRow;
 use async_trait::async_trait;
 use sqlx::PgPool;
@@ -43,7 +42,7 @@ impl OutboxStore for PostgresOutboxStore {
             .bind(limit as i64)
             .fetch_all(&self.pool)
             .await
-            .map_domain_infra("Failed to fetch unprocessed outbox messages")?;
+            .map_err(|e| Error::database("Failed to fetch unprocessed outbox messages"))?;
 
         Ok(rows.into_iter().map(EventEnvelope::from).collect())
     }
@@ -57,7 +56,7 @@ impl OutboxStore for PostgresOutboxStore {
             .bind(ids)
             .execute(&self.pool)
             .await
-            .map_domain_infra("Failed to mark outbox as processed")?;
+            .map_err(|e| Error::database("Failed to mark outbox as processed"))?;
 
         Ok(())
     }
@@ -70,7 +69,7 @@ impl OutboxStore for PostgresOutboxStore {
             .bind(error) // $2
             .execute(&self.pool)
             .await
-            .map_domain_infra("Failed to mark outbox as failed")?;
+            .map_err(|e| Error::database("Failed to mark outbox as failed"))?;
 
         Ok(())
     }

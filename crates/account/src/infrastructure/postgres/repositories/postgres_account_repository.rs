@@ -9,7 +9,7 @@ use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
 use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, SubId};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 
 use crate::domain::account::entities::Account;

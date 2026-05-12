@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/application/workers/outbox_processor.rs
 
 use crate::application::ports::MessageProducer;
+use crate::core::Result;
 use crate::domain::repositories::OutboxStore;
-use crate::errors::AppResult;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -70,7 +70,7 @@ where
         tracing::info!("Outbox processor stopped gracefully");
     }
 
-    async fn process_batch(&self) -> AppResult<usize> {
+    async fn process_batch(&self) -> Result<usize> {
         let envelopes = self.store.fetch_unprocessed(self.batch_size).await?;
 
         if envelopes.is_empty() {

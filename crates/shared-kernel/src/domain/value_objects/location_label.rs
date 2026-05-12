@@ -1,7 +1,7 @@
 // crates/shared_kernel/src/domain/value_objects/location_label.rs
 
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -53,17 +53,17 @@ impl ValueObject for LocationLabel {
         let count = self.0.chars().count();
 
         if count < Self::MIN_LENGTH {
-            return Err(DomainError::Validation {
-                field: "location_label",
-                reason: format!("Location too short (min {})", Self::MIN_LENGTH),
-            });
+            return Err(Error::validation(
+                "location_label",
+                format!("Location too short (min {})", Self::MIN_LENGTH),
+            ));
         }
 
         if count > Self::MAX_LENGTH {
-            return Err(DomainError::Validation {
-                field: "location_label",
-                reason: format!("Location too long (max {})", Self::MAX_LENGTH),
-            });
+            return Err(Error::validation(
+                "location_label",
+                format!("Location too long (max {})", Self::MAX_LENGTH),
+            ));
         }
 
         Ok(())
@@ -79,14 +79,14 @@ impl fmt::Display for LocationLabel {
 // --- Conversions ---
 
 impl FromStr for LocationLabel {
-    type Err = DomainError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         Self::try_new(s)
     }
 }
 
 impl TryFrom<String> for LocationLabel {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/persistence/outbox_store.rs
 
 use crate::domain::events::EventEnvelope;
-use crate::errors::Result;
+use crate::core::Result;
 use async_trait::async_trait;
 use uuid::Uuid;
 

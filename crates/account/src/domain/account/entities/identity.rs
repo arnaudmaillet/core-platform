@@ -7,7 +7,7 @@ use shared_kernel::{
         entities::Entity,
         value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },
-    errors::Result,
+    core::Result,
 };
 
 use crate::domain::{

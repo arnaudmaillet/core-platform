@@ -1,5 +1,5 @@
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
+use crate::core::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -26,7 +26,7 @@ impl ValueObject for Altitude {
 }
 
 impl TryFrom<f32> for Altitude {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: f32) -> Result<Self> {
         Self::try_new(value)

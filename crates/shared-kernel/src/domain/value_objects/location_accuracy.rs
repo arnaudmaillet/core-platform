@@ -1,5 +1,5 @@
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -24,17 +24,14 @@ impl LocationAccuracy {
 impl ValueObject for LocationAccuracy {
     fn validate(&self) -> Result<()> {
         if self.0 < 0.0 {
-            return Err(DomainError::Validation {
-                field: "accuracy",
-                reason: "Accuracy cannot be negative".to_string(),
-            });
+            return Err(Error::validation("accuracy", "Accuracy cannot be negative"));
         }
         Ok(())
     }
 }
 
 impl TryFrom<f32> for LocationAccuracy {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: f32) -> Result<Self> {
         let safe_val = if value < 0.0 { 0.0 } else { value };

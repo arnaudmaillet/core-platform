@@ -9,9 +9,9 @@ mod tests {
     use crate::events::ProfileEvent;
     use crate::value_objects::{Handle, ProfileId};
     use shared_kernel::application::CommandTarget;
+    use shared_kernel::core::{Error, ErrorCode, Result};
     use shared_kernel::domain::entities::Versioned;
     use shared_kernel::domain::value_objects::AccountId;
-    use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -80,11 +80,14 @@ mod tests {
             .await;
 
         // Assert
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { entity, field, .. })
-            if entity == "Profile" && field == "handle"
-        ));
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Profile"));
+                assert!(e.message.contains("handle"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
 
         f.assert_outbox(0, None);
 
@@ -145,7 +148,7 @@ mod tests {
         // Assert
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
 
         Ok(())

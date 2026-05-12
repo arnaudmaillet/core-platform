@@ -1,5 +1,5 @@
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -37,25 +37,25 @@ impl ValueObject for PushToken {
         let len = self.0.len();
 
         if len < Self::MIN_LENGTH {
-            return Err(DomainError::Validation {
-                field: "push_token",
-                reason: format!("Push token is abnormally short (min {})", Self::MIN_LENGTH),
-            });
+            return Err(Error::validation(
+                "push_token",
+                format!("Push token is abnormally short (min {})", Self::MIN_LENGTH),
+            ));
         }
 
         if len > Self::MAX_LENGTH {
-            return Err(DomainError::Validation {
-                field: "push_token",
-                reason: format!("Push token is too long (max {})", Self::MAX_LENGTH),
-            });
+            return Err(Error::validation(
+                "push_token",
+                format!("Push token is too long (max {})", Self::MAX_LENGTH),
+            ));
         }
 
         // On vérifie que la chaîne ne contient pas de caractères de contrôle
         if self.0.chars().any(|c| c.is_control()) {
-            return Err(DomainError::Validation {
-                field: "push_token",
-                reason: "Push token contains invalid control characters".into(),
-            });
+            return Err(Error::validation(
+                "push_token",
+                "Push token contains invalid control characters",
+            ));
         }
 
         Ok(())
@@ -71,7 +71,7 @@ impl fmt::Display for PushToken {
 // --- Conversions ---
 
 impl TryFrom<String> for PushToken {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

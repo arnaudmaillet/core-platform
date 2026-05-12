@@ -1,7 +1,7 @@
 // crates/account/src/domain/value_objects/email.rs
 
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use regex::Regex;
 use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
@@ -75,18 +75,15 @@ impl ValueObject for Email {
     fn validate(&self) -> Result<()> {
         let len = self.address.len();
         if len == 0 || len > Self::MAX_LEN {
-            return Err(DomainError::Validation {
-                field: "email",
-                reason: format!("Email length must be between 1 and {} chars", Self::MAX_LEN),
-            });
+            return Err(Error::validation(
+                "email",
+                format!("Email length must be between 1 and {} chars", Self::MAX_LEN),
+            ));
         }
 
         let parts: Vec<&str> = self.address.split('@').collect();
         if parts.len() != 2 {
-            return Err(DomainError::Validation {
-                field: "email",
-                reason: "Must contain one @".into(),
-            });
+            return Err(Error::validation("email", "Must contain one @"));
         }
 
         let local = parts[0];
@@ -98,18 +95,12 @@ impl ValueObject for Email {
             || local.ends_with('.')
             || local.contains("..")
         {
-            return Err(DomainError::Validation {
-                field: "email",
-                reason: "Invalid local part structure".into(),
-            });
+            return Err(Error::validation("email", "Invalid local part structure"));
         }
 
         // Validation Domaine (Regex ASCII = 100% Stable)
         if !EMAIL_REGEX.is_match(domain) {
-            return Err(DomainError::Validation {
-                field: "email",
-                reason: "Invalid domain format".into(),
-            });
+            return Err(Error::validation("email", "Invalid domain format"));
         }
 
         Ok(())
@@ -119,7 +110,7 @@ impl ValueObject for Email {
 // --- CONVERSIONS ---
 
 impl TryFrom<String> for Email {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

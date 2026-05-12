@@ -5,7 +5,7 @@ use scylla::client::session::Session;
 use scylla::value::Counter;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::value_objects::RegionCode;
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{DomainError, Result};
 use std::sync::Arc;
 use crate::repositories::ProfileStatsRepository;
 use crate::value_objects::{ProfileId, ProfileStats};

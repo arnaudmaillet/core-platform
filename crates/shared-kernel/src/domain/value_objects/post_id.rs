@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/domain/post_id.rs
 
+use crate::core::{Error, Result};
 use crate::domain::Identifier;
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -41,10 +41,7 @@ impl Identifier for PostId {
 impl ValueObject for PostId {
     fn validate(&self) -> Result<()> {
         if self.0.is_nil() {
-            return Err(DomainError::Validation {
-                field: "post_id",
-                reason: "Post ID cannot be nil".to_string(),
-            });
+            return Err(Error::validation("post_id", "Post ID cannot be nil"));
         }
         Ok(())
     }
@@ -65,19 +62,16 @@ impl From<Uuid> for PostId {
 }
 
 impl FromStr for PostId {
-    type Err = DomainError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
-        Uuid::parse_str(s)
-            .map(Self)
-            .map_err(|_| DomainError::Validation {
-                field: "post_id",
-                reason: format!("'{}' is not a valid UUID for a post", s),
-            })
+        Uuid::parse_str(s).map(Self).map_err(|_| {
+            Error::validation("post_id", format!("'{}' is not a valid UUID for a post", s))
+        })
     }
 }
 
 impl TryFrom<String> for PostId {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(s: String) -> Result<Self> {
         Self::from_str(&s)
@@ -86,7 +80,7 @@ impl TryFrom<String> for PostId {
 
 // Optionnel mais pratique : TryFrom<&str>
 impl TryFrom<&str> for PostId {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(s: &str) -> Result<Self> {
         Self::from_str(s)

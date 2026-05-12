@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/domain/region_code
 
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -36,16 +36,16 @@ impl ValueObject for RegionCode {
     fn validate(&self) -> Result<()> {
         match self.0.as_str() {
             Self::EU | Self::US | Self::ASIA => Ok(()),
-            _ => Err(DomainError::Validation {
-                field: "region_code",
-                reason: format!(
+            _ => Err(Error::validation(
+                "region_code",
+                format!(
                     "Region '{}' not supported. Valid: {}, {}, {}",
                     self.0,
                     Self::EU,
                     Self::US,
                     Self::ASIA
                 ),
-            }),
+            )),
         }
     }
 }
@@ -59,14 +59,14 @@ impl Default for RegionCode {
 // --- CONVERSIONS ---
 
 impl FromStr for RegionCode {
-    type Err = DomainError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         Self::try_new(s)
     }
 }
 
 impl TryFrom<String> for RegionCode {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

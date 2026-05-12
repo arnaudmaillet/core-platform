@@ -5,12 +5,12 @@ use crate::infrastructure::postgres::rows::PostgresProfileRow;
 use crate::repositories::ProfileRepository;
 use crate::value_objects::{Handle, ProfileId};
 use async_trait::async_trait;
+use shared_kernel::core::{Error, Result};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::Versioned;
 use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -77,18 +77,18 @@ impl ProfileRepository for PostgresProfileRepository {
 .execute(&mut *conn)
 .await;
 
-    let result = res.map_domain_infra("Profile: update OCC")?;
+    let result = res.map_err(|e| Error::database(e.to_string()))?;
             if result.rows_affected() == 0 {
                 let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE profile_id = $1)")
                     .bind(row.profile_id)
                     .fetch_one(&mut *conn)
                     .await
-                    .map_domain_infra("Profile: check existence")?;
+                    .map_err(|e| Error::database(format!("Profile save repository: {}", e.to_string())))?;
 
                 if exists {
-                    return Err(DomainError::ConcurrencyConflict {
-                        reason: format!("Profile {}: version mismatch", row.profile_id),
-                    });
+                    return Err(Error::concurrency_conflict(
+                        format!("Profile {}: version mismatch", row.profile_id),
+                    ));
                 }
 
                 sqlx::query(
@@ -98,7 +98,7 @@ impl ProfileRepository for PostgresProfileRepository {
                 .bind(row.profile_id).bind(row.account_id).bind(&row.region_code).bind(&row.display_name).bind(&row.handle).bind(&row.bio).bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label).bind(&row.social_links).bind(row.is_private).bind(next_version).bind(row.created_at).bind(row.updated_at)
                 .execute(&mut *conn)
                 .await
-                .map_domain_infra("Profile: insert")?;
+                .map_err(|e| Error::database(format!("Profile save repository: {}", e.to_string())))?;
             }
             Ok(())
         })
@@ -148,7 +148,9 @@ impl ProfileRepository for PostgresProfileRepository {
                 .bind(r_str)
                 .fetch_optional(conn)
                 .await
-                .map_domain_infra("Profile: fetch by id")?;
+                .map_err(|e| {
+                    Error::database(format!("Profile fetch_by_id repository: {}", e.to_string()))
+                })?;
 
                 row_opt.map(|r| r.to_domain()).transpose()
             })
@@ -194,7 +196,12 @@ impl ProfileRepository for PostgresProfileRepository {
                     .bind(r)
                     .fetch_optional(conn)
                     .await
-                    .map_domain_infra("Profile: fetch by handle")?;
+                    .map_err(|e| {
+                        Error::database(format!(
+                            "Profile fetch_by_handle repository: {}",
+                            e.to_string()
+                        ))
+                    })?;
 
                 row_opt.map(|r| r.to_domain()).transpose()
             })
@@ -220,7 +227,7 @@ impl ProfileRepository for PostgresProfileRepository {
                 .bind(r)
                 .fetch_all(conn)
                 .await
-                .map_domain_infra("Profile: fetch_all_by_account_id")?;
+                .map_err(|e| Error::database(format!("Profile find_all_by_account_id repository: {}", e.to_string())))?;
 
             rows.into_iter().map(|r| r.to_domain()).collect()
         })
@@ -246,7 +253,9 @@ impl ProfileRepository for PostgresProfileRepository {
                     .bind(r)
                     .execute(conn)
                     .await
-                    .map_domain_infra("Profile: delete")?;
+                    .map_err(|e| {
+                        Error::database(format!("Profile delete repository: {}", e.to_string()))
+                    })?;
                 Ok(())
             })
         })

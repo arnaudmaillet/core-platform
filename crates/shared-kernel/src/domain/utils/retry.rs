@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/domain/utils/retry.rs
 
-use crate::errors::{DomainError, Result};
+use crate::core::{DomainError, Error, ErrorCode, Result};
 use rand::Rng;
 
 pub struct RetryConfig {
@@ -24,10 +24,11 @@ where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T>>,
 {
+    let mut last_error: Option<Error> = None;
     for attempt in 0..=config.max_retries {
         match action().await {
             Ok(res) => return Ok(res),
-            Err(e) if e.is_concurrency_conflict() && attempt < config.max_retries => {
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict && attempt < config.max_retries => {
                 // Calcul de l'exponentiel : 2^attempt * base
                 let base_backoff = config.initial_backoff_ms * 2u64.pow(attempt);
 
@@ -43,6 +44,7 @@ where
                     backoff
                 );
 
+                last_error = Some(e);
                 tokio::time::sleep(backoff).await;
                 continue;
             }
@@ -50,8 +52,9 @@ where
         }
     }
 
-    Err(DomainError::TooManyConflicts(format!(
-        "Operation failed after {} retries due to persistent conflicts",
-        config.max_retries
-    )))
+    let final_msg = last_error
+        .map(|e| e.message)
+        .unwrap_or_else(|| "Unknown conflict".to_string());
+
+    Err(Error::max_retries_exceeded(config.max_retries, final_msg))
 }

@@ -1,8 +1,7 @@
 // crates/shared-kernel/src/infrastructure/postgres/postgres_transaction_manager.rs
 
+use crate::core::{Error, Result};
 use crate::domain::transaction::{Transaction, TransactionManager};
-use crate::errors::Result;
-use crate::infrastructure::postgres::mappers::SqlxErrorExt;
 use crate::infrastructure::postgres::transactions::PostgresTransaction;
 use sqlx::{Pool, Postgres};
 use std::future::Future;
@@ -34,7 +33,7 @@ impl TransactionManager for PostgresTransactionManager {
             let tx = pool
                 .begin()
                 .await
-                .map_domain_infra("Failed to begin transaction")?;
+                .map_err(|e| Error::database("Failed to begin transaction"))?;
             let sqlx_tx = Box::new(PostgresTransaction::new(tx));
             f(sqlx_tx as Box<dyn Transaction>).await
         })

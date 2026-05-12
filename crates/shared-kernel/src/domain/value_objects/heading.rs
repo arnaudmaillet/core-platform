@@ -1,5 +1,5 @@
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -24,17 +24,17 @@ impl Heading {
 impl ValueObject for Heading {
     fn validate(&self) -> Result<()> {
         if !(0.0..=360.0).contains(&self.0) {
-            return Err(DomainError::Validation {
-                field: "heading",
-                reason: format!("Value {} must be between 0 and 360", self.0),
-            });
+            return Err(Error::validation(
+                "heading",
+                format!("Value {} must be between 0 and 360", self.0),
+            ));
         }
         Ok(())
     }
 }
 
 impl TryFrom<f32> for Heading {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(value: f32) -> Result<Self> {
         // L'INFRASTRUCTURE accepte de redresser la donnée

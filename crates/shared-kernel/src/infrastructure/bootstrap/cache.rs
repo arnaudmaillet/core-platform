@@ -3,17 +3,18 @@
 #![cfg(all(feature = "kafka", feature = "redis"))]
 
 use crate::application::workers::CacheWorker;
-use crate::errors::AppResult;
+use crate::core::Result;
 use crate::infrastructure::kafka::KafkaMessageConsumer;
 use crate::infrastructure::redis::repositories::RedisCacheRepository;
 use std::env;
 use std::sync::Arc;
 
-pub async fn run_cache_worker(service_name: &str, topic: &str, group_id: &str) -> AppResult<()> {
+pub async fn run_cache_worker(service_name: &str, topic: &str, group_id: &str) -> Result<()> {
     tracing_subscriber::fmt::init();
     log::info!("🚀 Starting {} Cache Worker...", service_name);
 
-    let redis_url = env::var("PROFILE_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+    let redis_url =
+        env::var("PROFILE_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".into());
 
     // Limite de parallélisme pour Redis

@@ -14,7 +14,7 @@ use shared_kernel::{
         events::AggregateMetadata,
         value_objects::AccountId,
     },
-    errors::Result,
+    core::Result,
 };
 
 pub struct AccountBuilder {

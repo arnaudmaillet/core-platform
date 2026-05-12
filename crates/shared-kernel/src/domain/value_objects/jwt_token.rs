@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    core::{Error, Result},
     domain::value_objects::ValueObject,
-    errors::{DomainError, Result},
 };
 
 use std::fmt;
@@ -38,18 +38,15 @@ impl ValueObject for JwtToken {
         let len = self.0.len();
 
         if len < Self::MIN_LENGTH || len > Self::MAX_LENGTH {
-            return Err(DomainError::Validation {
-                field: "jwt_token",
-                reason: "Invalid JWT length".into(),
-            });
+            return Err(Error::validation("jwt_token", "Invalid JWT length"));
         }
 
         // Vérification basique du format JWT (doit contenir au moins deux '.')
         if self.0.chars().filter(|&c| c == '.').count() < 2 {
-            return Err(DomainError::Validation {
-                field: "jwt_token",
-                reason: "Malformed JWT: missing parts".into(),
-            });
+            return Err(Error::validation(
+                "jwt_token",
+                "Malformed JWT: missing parts",
+            ));
         }
 
         Ok(())

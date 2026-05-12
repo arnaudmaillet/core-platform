@@ -1,7 +1,7 @@
 // crates/shared_kernel/src/domain/value_objects/counter.rs
 
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
+use crate::core::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ impl ValueObject for Counter {
 }
 
 impl TryFrom<u64> for Counter {
-    type Error = DomainError;
+    type Error = Error;
 
     fn try_from(val: u64) -> Result<Self> {
         Self::try_new(val)

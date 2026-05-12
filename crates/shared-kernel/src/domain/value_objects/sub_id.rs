@@ -2,9 +2,9 @@
 
 // crates/account/src/domain/value_objects/locale.rs
 
-use serde::{Deserialize, Serialize};
+use crate::core::{Error, Result};
 use crate::domain::value_objects::ValueObject;
-use crate::errors::{DomainError, Result};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
@@ -36,18 +36,15 @@ impl SubId {
 impl ValueObject for SubId {
     fn validate(&self) -> Result<()> {
         if self.0.is_empty() {
-            return Err(DomainError::Validation {
-                field: "sub_id",
-                reason: "Sub provider ID cannot be empty".into(),
-            });
+            return Err(Error::validation(
+                "sub_id",
+                "Sub provider ID cannot be empty",
+            ));
         }
 
         // Sécurité : On limite la taille pour éviter les injections de payloads massifs
         if self.0.len() > 128 {
-            return Err(DomainError::Validation {
-                field: "sub_id",
-                reason: "Sub ID is suspiciously long".into(),
-            });
+            return Err(Error::validation("sub_id", "Sub ID is suspiciously long"));
         }
 
         Ok(())
@@ -57,14 +54,14 @@ impl ValueObject for SubId {
 // --- CONVERSIONS ---
 
 impl FromStr for SubId {
-    type Err = DomainError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         Self::try_new(s)
     }
 }
 
 impl TryFrom<String> for SubId {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

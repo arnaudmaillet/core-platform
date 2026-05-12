@@ -1,7 +1,7 @@
 // crates/profile/src/application/commands/metadata/update_social_links/mapper.rs
 
 use crate::value_objects::Socials;
-use shared_kernel::{domain::value_objects::Url, errors::Result};
+use shared_kernel::{domain::value_objects::Url, core::Result};
 use shared_proto::profile::v1::Socials as ProtoSocials;
 
 pub fn from_proto_to_social_links(proto: ProtoSocials) -> Result<Option<Socials>> {

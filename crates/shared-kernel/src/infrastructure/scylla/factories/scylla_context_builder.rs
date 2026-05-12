@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/infrastructure/scylla/factories/scylla_context_builder.rs
-use std::time::Duration;
-use crate::errors::{AppError, AppResult, ErrorCode};
+use crate::core::{Error, Result};
 use crate::infrastructure::scylla::factories::ScyllaContext;
+use std::time::Duration;
 
 pub struct ScyllaContextBuilder {
     pub(crate) nodes: Vec<String>,
@@ -20,17 +20,17 @@ impl Default for ScyllaContextBuilder {
 }
 
 impl ScyllaContextBuilder {
-    pub fn new() -> AppResult<Self> {
+    pub fn new() -> Result<Self> {
         let nodes_str = std::env::var("PROFILE_SCYLLA_NODES")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_SCYLLA_NODES must be set"))?;
+            .map_err(|_| Error::internal("PROFILE_SCYLLA_NODES must be set"))?;
 
         let keyspace = std::env::var("PROFILE_SCYLLA_KEYSPACE")
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "PROFILE_SCYLLA_KEYSPACE must be set"))?;
+            .map_err(|_| Error::internal("PROFILE_SCYLLA_KEYSPACE must be set"))?;
 
         let timeout_secs = std::env::var("PROFILE_SCYLLA_CONNECT_TIMEOUT")
             .unwrap_or_else(|_| "5".to_string())
             .parse::<u64>()
-            .map_err(|_| AppError::new(ErrorCode::InternalError, "Invalid PROFILE_SCYLLA_CONNECT_TIMEOUT"))?;
+            .map_err(|_| Error::internal("Invalid PROFILE_SCYLLA_CONNECT_TIMEOUT"))?;
 
         Ok(Self {
             nodes: nodes_str.split(',').map(|s| s.trim().to_string()).collect(),
@@ -54,7 +54,7 @@ impl ScyllaContextBuilder {
         self
     }
 
-    pub async fn build(self) -> AppResult<ScyllaContext> {
+    pub async fn build(self) -> Result<ScyllaContext> {
         ScyllaContext::restore(self).await
     }
 }

@@ -7,7 +7,7 @@ mod tests {
     use crate::domain::preferences::models::{AppearancePreferences, ThemeMode};
     use crate::domain::value_objects::AccountState;
     use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]

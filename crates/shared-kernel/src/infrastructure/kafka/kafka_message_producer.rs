@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/infrastructure/kafka/kafka_message_producer.rs
 
 use crate::application::ports::MessageProducer;
+use crate::core::{Error, ErrorCode, Result};
 use crate::domain::events::EventEnvelope;
-use crate::errors::{AppError, AppResult, ErrorCode};
 use async_trait::async_trait;
 use rdkafka::config::ClientConfig;
 use rdkafka::message::{Header, OwnedHeaders};
@@ -15,7 +15,7 @@ pub struct KafkaMessageProducer {
 }
 
 impl KafkaMessageProducer {
-    pub async fn new(brokers: &str, default_topic: String) -> AppResult<Self> {
+    pub async fn new(brokers: &str, default_topic: String) -> Result<Self> {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", brokers)
             .set("message.timeout.ms", "5000")
@@ -26,9 +26,7 @@ impl KafkaMessageProducer {
             .set("batch.num.messages", "1000") // Taille de batch idéale
             .set("linger.ms", "10") // Laisse le temps au batch de se remplir
             .create()
-            .map_err(|e| {
-                AppError::new(ErrorCode::InternalError, format!("Kafka config error: {e}"))
-            })?;
+            .map_err(|e| Error::internal(format!("Kafka config error: {}", e.to_string())))?;
 
         Ok(Self {
             producer,
@@ -39,9 +37,9 @@ impl KafkaMessageProducer {
 
 #[async_trait]
 impl MessageProducer for KafkaMessageProducer {
-    async fn publish(&self, event: &EventEnvelope) -> AppResult<()> {
+    async fn publish(&self, event: &EventEnvelope) -> Result<()> {
         let payload = serde_json::to_string(event)
-            .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+            .map_err(|e| Error::new(ErrorCode::InternalError, e.to_string()))?;
 
         let record = FutureRecord::to(&self.default_topic)
             .payload(&payload)
@@ -54,12 +52,12 @@ impl MessageProducer for KafkaMessageProducer {
         self.producer
             .send(record, Duration::from_secs(5))
             .await
-            .map_err(|(e, _)| AppError::from(e))?;
+            .map_err(|(e, _)| Error::from(e))?;
 
         Ok(())
     }
 
-    async fn publish_batch(&self, events: &[EventEnvelope]) -> AppResult<()> {
+    async fn publish_batch(&self, events: &[EventEnvelope]) -> Result<()> {
         // 1. On pré-sérialise tout.
         // On doit posséder ces Strings pour qu'elles ne soient pas détruites
         // pendant que les futures tournent.
@@ -85,7 +83,7 @@ impl MessageProducer for KafkaMessageProducer {
         // 3. On attend les confirmations.
         // 'payloads' est toujours vivant ici, donc les références sont valides.
         for future in futures {
-            future.await.map_err(|(e, _)| AppError::from(e))?;
+            future.await.map_err(|(e, _)| Error::from(e))?;
         }
 
         Ok(())

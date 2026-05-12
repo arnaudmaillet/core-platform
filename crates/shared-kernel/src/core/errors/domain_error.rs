@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/errors/domain_error.rs
 
-use crate::errors::AppError;
+use crate::core::AppError;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -66,7 +66,7 @@ impl From<AppError> for DomainError {
         match err.code {
             // Si l'AppError était un Not Found technique (ex: Redis),
             // on peut le transformer en Not Found domaine.
-            crate::errors::ErrorCode::NotFound => DomainError::NotFound {
+            crate::core::ErrorCode::NotFound => DomainError::NotFound {
                 entity: "Resource",
                 id: "unknown".into(),
             },

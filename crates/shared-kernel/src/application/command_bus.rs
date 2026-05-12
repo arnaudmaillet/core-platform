@@ -1,6 +1,6 @@
 use crate::application::IdentifiableCommand;
+use crate::core::{Error, Result};
 use crate::domain::utils::with_retry;
-use crate::errors::{DomainError, Result};
 use async_trait::async_trait;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ impl CommandBus {
     {
         let type_id = TypeId::of::<TCommand>();
         let handler = self.handlers.get(&type_id).ok_or_else(|| {
-            DomainError::Internal(format!(
+            Error::internal(format!(
                 "No handler registered for {}",
                 std::any::type_name::<TCommand>()
             ))
@@ -73,7 +73,7 @@ impl CommandBus {
 
         let output = result
             .downcast::<TOutput>()
-            .map_err(|_| DomainError::Internal("CommandBus: Downcast output failed".to_string()))?;
+            .map_err(|_| Error::internal("CommandBus: Downcast output failed"))?;
 
         Ok(*output)
     }
@@ -104,11 +104,11 @@ where
 
         let concrete_cmd = cmd
             .downcast::<TCommand>()
-            .map_err(|_| DomainError::Internal("AnyCommandHandler: Invalid command type".into()))?;
+            .map_err(|_| Error::internal("AnyCommandHandler: Invalid command type"))?;
 
         let concrete_ctx = ctx
             .downcast::<TContext>()
-            .map_err(|_| DomainError::Internal("AnyCommandHandler: Invalid context type".into()))?;
+            .map_err(|_| Error::internal("AnyCommandHandler: Invalid context type"))?;
 
         // 1. Préparation des métadonnées de logging (venant du trait IdentifiableCommand)
         let span = info_span!(

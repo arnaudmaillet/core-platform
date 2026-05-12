@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/domain/transaction/transaction_manager.rs
 
 use crate::domain::transaction::Transaction;
-use crate::errors::Result;
+use crate::core::Result;
 use std::future::Future;
 use std::pin::Pin;
 

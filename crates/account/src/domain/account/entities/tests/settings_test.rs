@@ -7,7 +7,7 @@ mod tests {
     use chrono::Utc;
     use shared_kernel::{
         domain::value_objects::{AccountId, PushToken, RegionCode, Timezone},
-        errors::Result,
+        core::Result,
     };
 
     fn create_test_settings() -> Result<AccountSettings> {

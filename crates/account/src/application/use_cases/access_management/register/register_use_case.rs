@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
 use shared_kernel::domain::utils::RetryConfig;
 use shared_kernel::domain::value_objects::AccountId;
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 use crate::application::context::AccountContext;
 use crate::application::use_cases::access_management::RegisterCommand;

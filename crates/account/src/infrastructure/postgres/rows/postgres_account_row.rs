@@ -18,7 +18,7 @@ use shared_kernel::{
         events::AggregateMetadata,
         value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
     },
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 
 #[derive(Debug, sqlx::FromRow)]

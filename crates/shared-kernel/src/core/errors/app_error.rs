@@ -1,4 +1,4 @@
-use crate::errors::{DomainError, ErrorCode, InfrastructureError};
+use crate::core::{DomainError, ErrorCode, InfrastructureError};
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt;

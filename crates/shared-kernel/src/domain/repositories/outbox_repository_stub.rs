@@ -3,14 +3,14 @@
 use crate::domain::events::{DomainEvent, EventEnvelope};
 use crate::domain::repositories::OutboxRepository;
 use crate::domain::transaction::Transaction;
-use crate::errors::{DomainError, Result};
+use crate::core::{Error, Result};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct OutboxRepositoryStub {
     saved_events: Arc<Mutex<Vec<String>>>,
-    error_to_return: Arc<Mutex<Option<DomainError>>>,
+    error_to_return: Arc<Mutex<Option<Error>>>,
 }
 
 impl OutboxRepositoryStub {
@@ -21,7 +21,7 @@ impl OutboxRepositoryStub {
     // --- Helpers pour l'Arrange ---
 
     /// Force une erreur lors du prochain save_all (ex: simulate Kafka/DB failure)
-    pub fn set_error(&self, err: DomainError) {
+    pub fn set_error(&self, err: Error) {
         let mut slot = self.error_to_return.lock().expect("Lock failed");
         *slot = Some(err);
     }

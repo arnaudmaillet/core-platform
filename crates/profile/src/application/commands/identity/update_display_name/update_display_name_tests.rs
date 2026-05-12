@@ -8,8 +8,8 @@ mod tests {
     use crate::events::ProfileEvent;
     use crate::value_objects::DisplayName;
     use shared_kernel::application::CommandTarget;
+    use shared_kernel::core::{Error, ErrorCode, Result};
     use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::errors::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -71,7 +71,10 @@ mod tests {
             .await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::AlreadyExists { .. })));
+        assert!(matches!(
+            result,
+            Err(e) if e.code == ErrorCode::AlreadyExists
+        ));
         f.assert_outbox(0, None); // Rien ne doit sortir
 
         Ok(())
@@ -132,7 +135,7 @@ mod tests {
         // Doit échouer avec une ConcurrencyConflict (levée par fetch_verified dans le handler)
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
 
         Ok(())

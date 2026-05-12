@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::{
+    core::{Error, Result},
     domain::value_objects::ValueObject,
-    errors::{DomainError, Result},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -48,17 +48,17 @@ impl ValueObject for AuditReason {
         let length = self.inner.len();
 
         if length < Self::MIN_LENGTH {
-            return Err(DomainError::Validation {
-                field: "audit_reason",
-                reason: format!("Reason is too short (min {} chars)", Self::MIN_LENGTH).into(),
-            });
+            return Err(Error::validation(
+                "audit_reason",
+                format!("Reason is too short (min {} chars)", Self::MIN_LENGTH),
+            ));
         }
 
         if length > Self::MAX_LENGTH {
-            return Err(DomainError::Validation {
-                field: "audit_reason",
-                reason: format!("Reason is too long (max {} chars)", Self::MAX_LENGTH).into(),
-            });
+            return Err(Error::validation(
+                "audit_reason",
+                format!("Reason is too long (max {} chars)", Self::MAX_LENGTH),
+            ));
         }
 
         // Optionnel : On peut ici rejeter des patterns suspects (HTML tags, etc.)
@@ -69,7 +69,7 @@ impl ValueObject for AuditReason {
 // --- CONVERSIONS & TRAITS ---
 
 impl TryFrom<String> for AuditReason {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

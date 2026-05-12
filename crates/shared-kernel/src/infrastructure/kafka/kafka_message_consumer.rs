@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/infrastructure/messaging/kafka_consumer.rs
 
 use crate::application::ports::{MessageConsumer, MessageHandler};
+use crate::core::{Error, ErrorCode, Result};
 use crate::domain::events::EventEnvelope;
-use crate::errors::{AppError, AppResult, ErrorCode};
 use async_trait::async_trait;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -46,11 +46,11 @@ impl KafkaMessageConsumer {
 
 #[async_trait]
 impl MessageConsumer for KafkaMessageConsumer {
-    async fn consume(&self, topic: &str, handler: MessageHandler) -> AppResult<()> {
+    async fn consume(&self, topic: &str, handler: MessageHandler) -> Result<()> {
         let consumer: StreamConsumer = self.client_config.create()?;
         consumer
             .subscribe(&[topic])
-            .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+            .map_err(|e| Error::internal(e.to_string()))?;
 
         let handler = Arc::new(handler);
 
@@ -71,7 +71,7 @@ impl MessageConsumer for KafkaMessageConsumer {
 
                             let h = Arc::clone(&handler);
                             let permit = self.concurrency_limit.clone().acquire_owned().await
-                                .map_err(|e| AppError::new(ErrorCode::InternalError, e.to_string()))?;
+                                .map_err(|e| Error::internal(e.to_string()))?;
 
                             tokio::spawn(async move {
                                 // Désérialisation

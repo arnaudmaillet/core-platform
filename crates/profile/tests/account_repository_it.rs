@@ -9,11 +9,11 @@ use tokio;
 
 use profile::entities::Profile;
 
+use shared_kernel::core::{Error, ErrorCode, Result};
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::entities::Versioned;
 use shared_kernel::domain::repositories::CacheRepository;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
 use shared_kernel::infrastructure::redis::utils::RedisTestContext;
@@ -82,7 +82,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
             .pool()
             .begin()
             .await
-            .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+            .map_err(|e| Error::internal(e.to_string()))?;
         let mut tx = PostgresTransaction::new(tx_sqlx);
 
         repo.delete(&profile_id, &region, Some(&mut tx)).await?;
@@ -90,7 +90,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
         tx.into_inner()
             .commit()
             .await
-            .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+            .map_err(|e| Error::internal(e.to_string()))?;
     }
 
     // --- Assert: Final State ---
@@ -129,9 +129,8 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 
     assert!(matches!(
         result,
-        Err(DomainError::ConcurrencyConflict { .. })
+        Err(e) if e.code == ErrorCode::ConcurrencyConflict
     ));
-
     Ok(())
 }
 
@@ -192,14 +191,14 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
         .pool()
         .begin()
         .await
-        .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+        .map_err(|e| Error::internal(e.to_string()))?;
     let mut tx = PostgresTransaction::new(tx_sqlx);
 
     repo.save(&mut profile, Some(&mut tx)).await?;
     tx.into_inner()
         .rollback()
         .await
-        .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+        .map_err(|e| Error::internal(e.to_string()))?;
 
     let found = repo
         .find_by_id(profile.profile_id(), account_id.region(), None)
@@ -258,7 +257,7 @@ async fn test_cache_hit_proven_by_db_sabotage() -> Result<()> {
         .bind(profile.profile_id().as_uuid())
         .execute(&pg_ctx.pool())
         .await
-        .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+        .map_err(|e| Error::database(e.to_string()))?;
 
     // 4. Lecture (Bypass DB car déjà en cache)
     let found_from_cache = repo
@@ -285,7 +284,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
         .pool()
         .begin()
         .await
-        .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+        .map_err(|e| Error::internal(e.to_string()))?;
     let mut tx = PostgresTransaction::new(tx_sqlx);
     repo.save(&mut profile, Some(&mut tx)).await?;
 
@@ -293,7 +292,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
     tx.into_inner()
         .rollback()
         .await
-        .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+        .map_err(|e| Error::internal(e.to_string()))?;
 
     // 3. Le profil ne doit pas exister
     let found = repo
@@ -319,7 +318,7 @@ async fn test_profile_partial_data_resilience() -> Result<()> {
     .bind(account_id)
     .execute(&pg_ctx.pool())
     .await
-    .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+    .map_err(|e| Error::database(e.to_string()))?;
 
     // On tente de charger cet agrégat "incomplet"
     let result = repo
