@@ -130,11 +130,6 @@ impl KeycloakTestContext {
                     last_error = format!("Connection error: {}", e);
                 }
             }
-
-            println!(
-                "DEBUG AUTH: Keycloak not ready (Attempt {}/10), waiting...",
-                i + 1
-            );
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
 

@@ -1,15 +1,15 @@
 mod update_bio;
-mod update_location_label;
-mod update_social_links;
+mod update_location;
+mod update_socials;
 
 pub use update_bio::{update_bio_command::UpdateBioCommand, update_bio_handler::UpdateBioHandler};
 
-pub use update_location_label::{
-    update_location_label_command::UpdateLocationLabelCommand,
-    update_location_label_handler::UpdateLocationLabelHandler,
+pub use update_location::{
+    update_location_command::UpdateLocationCommand,
+    update_location_handler::UpdateLocationHandler,
 };
 
-pub use update_social_links::{
-    update_social_links_command::UpdateSocialLinksCommand,
-    update_social_links_handler::UpdateSocialLinksHandler,
+pub use update_socials::{
+    update_socials_command::UpdateSocialsCommand,
+    update_socials_handler::UpdateSocialsHandler,
 };

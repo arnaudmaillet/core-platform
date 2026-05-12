@@ -1,6 +1,6 @@
 // crates/profile/src/application/commands/media/remove_banner/remove_banner_command.rs
 
-use crate::domain::value_objects::ProfileId;
+use crate::value_objects::ProfileId;
 use serde::Deserialize;
 use shared_kernel::application::{CommandTarget, IdentifiableCommand};
 use shared_kernel::domain::value_objects::RegionCode;

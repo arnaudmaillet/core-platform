@@ -1,4 +1,4 @@
-use crate::domain::events::ProfileEvent;
+use crate::events::ProfileEvent;
 use crate::infrastructure::elasticsearch::{AutocompleteSuggest, ProfileSearchDocument};
 use chrono::{DateTime, Utc};
 use elasticsearch::{

@@ -1,8 +1,8 @@
 // crates/profile/src/domain/entities/profile.rs
 
-use crate::domain::builders::ProfileBuilder;
-use crate::domain::events::ProfileEvent;
-use crate::domain::value_objects::{Bio, DisplayName, Handle, ProfileId, SocialLinks};
+use crate::builders::ProfileBuilder;
+use crate::events::ProfileEvent;
+use crate::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::domain::entities::{Entity, Versioned};
@@ -20,10 +20,10 @@ pub struct Profile {
     display_name: DisplayName,
     handle: Handle,
     bio: Option<Bio>,
-    avatar_url: Option<Url>,
-    banner_url: Option<Url>,
-    location_label: Option<LocationLabel>,
-    social_links: Option<SocialLinks>,
+    avatar: Option<Url>,
+    banner: Option<Url>,
+    location: Option<LocationLabel>,
+    socials: Option<Socials>,
     is_private: bool,
     created_at: DateTime<Utc>,
     metadata: AggregateMetadata,
@@ -86,12 +86,8 @@ impl Entity for Profile {
 }
 
 impl Profile {
-    pub fn builder(
-        account_id: AccountId,
-        display_name: DisplayName,
-        handle: Handle,
-    ) -> ProfileBuilder {
-        ProfileBuilder::new(account_id, display_name, handle)
+    pub fn builder(account_id: AccountId, handle: Handle) -> Result<ProfileBuilder> {
+        ProfileBuilder::new(account_id, handle)
     }
 
     pub(crate) fn restore(
@@ -100,10 +96,10 @@ impl Profile {
         display_name: DisplayName,
         handle: Handle,
         bio: Option<Bio>,
-        avatar_url: Option<Url>,
-        banner_url: Option<Url>,
-        location_label: Option<LocationLabel>,
-        social_links: Option<SocialLinks>,
+        avatar: Option<Url>,
+        banner: Option<Url>,
+        location: Option<LocationLabel>,
+        socials: Option<Socials>,
         is_private: bool,
         version: u64,
         created_at: DateTime<Utc>,
@@ -115,10 +111,10 @@ impl Profile {
             display_name,
             handle,
             bio,
-            avatar_url,
-            banner_url,
-            location_label,
-            social_links,
+            avatar,
+            banner,
+            location,
+            socials,
             is_private,
             created_at,
             metadata: AggregateMetadata::restore(version, updated_at),
@@ -142,17 +138,17 @@ impl Profile {
     pub fn bio(&self) -> Option<&Bio> {
         self.bio.as_ref()
     }
-    pub fn avatar_url(&self) -> Option<&Url> {
-        self.avatar_url.as_ref()
+    pub fn avatar(&self) -> Option<&Url> {
+        self.avatar.as_ref()
     }
-    pub fn banner_url(&self) -> Option<&Url> {
-        self.banner_url.as_ref()
+    pub fn banner(&self) -> Option<&Url> {
+        self.banner.as_ref()
     }
-    pub fn location_label(&self) -> Option<&LocationLabel> {
-        self.location_label.as_ref()
+    pub fn location(&self) -> Option<&LocationLabel> {
+        self.location.as_ref()
     }
-    pub fn social_links(&self) -> Option<&SocialLinks> {
-        self.social_links.as_ref()
+    pub fn socials(&self) -> Option<&Socials> {
+        self.socials.as_ref()
     }
     pub fn is_private(&self) -> bool {
         self.is_private
@@ -162,10 +158,6 @@ impl Profile {
     }
     pub fn updated_at(&self) -> DateTime<Utc> {
         Versioned::updated_at(self)
-    }
-
-    fn create_event_id() -> Uuid {
-        Uuid::now_v7()
     }
 
     // --- MUTATEURS MÉTIER
@@ -186,7 +178,7 @@ impl Profile {
         )
     }
 
-    pub fn update_handle(&mut self, new_handle: Handle) -> Result<bool> {
+    pub fn change_handle(&mut self, new_handle: Handle) -> Result<bool> {
         if self.handle == new_handle {
             return Ok(false);
         }
@@ -224,7 +216,7 @@ impl Profile {
                 Ok(true)
             },
             |s| {
-                Box::new(ProfileEvent::DisplayNameChanged {
+                Box::new(ProfileEvent::DisplayNameUpdated {
                     id: Uuid::now_v7(),
                     profile_id: s.profile_id.clone(),
                     account_id: s.account_id.clone(),
@@ -262,14 +254,14 @@ impl Profile {
     }
 
     pub fn update_avatar(&mut self, new_avatar_url: Url) -> Result<bool> {
-        let old_avatar_url = self.avatar_url.clone();
+        let old_avatar_url = self.avatar.clone();
 
         self.track_change(
             |s| {
-                if s.avatar_url == Some(new_avatar_url.clone()) {
+                if s.avatar == Some(new_avatar_url.clone()) {
                     return Ok(false);
                 }
-                s.avatar_url = Some(new_avatar_url);
+                s.avatar = Some(new_avatar_url);
                 Ok(true)
             },
             |s| {
@@ -278,7 +270,7 @@ impl Profile {
                     profile_id: s.profile_id.clone(),
                     account_id: s.account_id.clone(),
                     old_avatar_url,
-                    new_avatar_url: s.avatar_url.clone().unwrap(),
+                    new_avatar_url: s.avatar.clone().unwrap(),
                     occurred_at: s.updated_at(),
                 })
             },
@@ -286,15 +278,15 @@ impl Profile {
     }
 
     pub fn remove_avatar(&mut self) -> Result<bool> {
-        if self.avatar_url.is_none() {
+        if self.avatar.is_none() {
             return Ok(false);
         }
 
-        let old_avatar_url = self.avatar_url.clone();
+        let old_avatar_url = self.avatar.clone();
 
         self.track_change(
             |s| {
-                s.avatar_url = None;
+                s.avatar = None;
                 Ok(true)
             },
             |s| {
@@ -310,15 +302,15 @@ impl Profile {
     }
 
     pub fn update_banner(&mut self, new_banner_url: Url) -> Result<bool> {
-        if self.banner_url == Some(new_banner_url.clone()) {
+        if self.banner == Some(new_banner_url.clone()) {
             return Ok(false);
         }
 
-        let old_banner_url = self.banner_url.clone();
+        let old_banner_url = self.banner.clone();
 
         self.track_change(
             |s| {
-                s.banner_url = Some(new_banner_url);
+                s.banner = Some(new_banner_url);
                 Ok(true)
             },
             |s| {
@@ -327,7 +319,7 @@ impl Profile {
                     profile_id: s.profile_id.clone(),
                     account_id: s.account_id.clone(),
                     old_banner_url,
-                    new_banner_url: s.banner_url.clone().unwrap(),
+                    new_banner_url: s.banner.clone().unwrap(),
                     occurred_at: s.updated_at(),
                 })
             },
@@ -335,15 +327,15 @@ impl Profile {
     }
 
     pub fn remove_banner(&mut self) -> Result<bool> {
-        if self.banner_url.is_none() {
+        if self.banner.is_none() {
             return Ok(false);
         }
 
-        let old_banner_url = self.banner_url.clone();
+        let old_banner_url = self.banner.clone();
 
         self.track_change(
             |s| {
-                s.banner_url = None;
+                s.banner = None;
                 Ok(true)
             },
             |s| {
@@ -359,50 +351,50 @@ impl Profile {
     }
 
     /// Mise à jour des Metadata
-    pub fn update_social_links(&mut self, new_links: Option<SocialLinks>) -> Result<bool> {
-        if self.social_links == new_links {
+    pub fn update_socials(&mut self, new_socials: Option<Socials>) -> Result<bool> {
+        if self.socials == new_socials {
             return Ok(false);
         }
 
-        let old_links = self.social_links.clone();
+        let old_socials = self.socials.clone();
 
         self.track_change(
             |s| {
-                s.social_links = new_links;
+                s.socials = new_socials;
                 Ok(true)
             },
             |s| {
-                Box::new(ProfileEvent::SocialLinksUpdated {
+                Box::new(ProfileEvent::SocialsUpdated {
                     id: Uuid::now_v7(),
                     profile_id: s.profile_id.clone(),
                     account_id: s.account_id.clone(),
-                    old_links,
-                    new_links: s.social_links.clone(),
+                    old_socials,
+                    new_socials: s.socials.clone(),
                     occurred_at: s.updated_at(),
                 })
             },
         )
     }
 
-    pub fn update_location_label(&mut self, new_label: Option<LocationLabel>) -> Result<bool> {
-        if self.location_label == new_label {
+    pub fn update_location(&mut self, new_label: Option<LocationLabel>) -> Result<bool> {
+        if self.location == new_label {
             return Ok(false);
         }
 
-        let old_location = self.location_label.clone();
+        let old_location = self.location.clone();
 
         self.track_change(
             |s| {
-                s.location_label = new_label;
+                s.location = new_label;
                 Ok(true)
             },
             |s| {
-                Box::new(ProfileEvent::LocationLabelUpdated {
+                Box::new(ProfileEvent::LocationUpdated {
                     id: Uuid::now_v7(),
                     profile_id: s.profile_id.clone(),
                     account_id: s.account_id.clone(),
                     old_location,
-                    new_location: s.location_label.clone(),
+                    new_location: s.location.clone(),
                     occurred_at: s.updated_at(),
                 })
             },
@@ -420,7 +412,7 @@ impl Profile {
                 Ok(true)
             },
             |s| {
-                Box::new(ProfileEvent::PrivacySettingsChanged {
+                Box::new(ProfileEvent::PrivacyChanged {
                     id: Uuid::now_v7(),
                     profile_id: s.profile_id.clone(),
                     account_id: s.account_id.clone(),

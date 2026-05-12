@@ -1,6 +1,6 @@
 // crates/profile/src/application/commands/metadata/update_bio/update_bio_command.rs
 
-use crate::domain::value_objects::{Bio, ProfileId};
+use crate::value_objects::{Bio, ProfileId};
 use serde::Deserialize;
 use shared_kernel::application::{CommandTarget, IdentifiableCommand};
 use shared_kernel::domain::value_objects::RegionCode;

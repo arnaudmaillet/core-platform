@@ -5,7 +5,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::application::use_cases::create_profile::{CreateProfileUseCase, CreateProfileCommand};
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use crate::domain::value_objects::{DisplayName, Handle};
+use crate::value_objects::{DisplayName, Handle};
 
 /// Le contrat local : on ne définit que ce qui nous intéresse.
 #[derive(Deserialize)]

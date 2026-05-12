@@ -15,6 +15,16 @@ pub struct CommandTarget<ID> {
     pub expected_version: u64,
 }
 
+impl<ID> CommandTarget<ID> {
+    pub fn new(id: ID, region: RegionCode, expected_version: u64) -> Self {
+        Self {
+            id,
+            region,
+            expected_version,
+        }
+    }
+}
+
 pub trait IdentifiableCommand {
     fn command_id(&self) -> Uuid;
     fn profile_id(&self) -> String;

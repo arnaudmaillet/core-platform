@@ -1,121 +1,184 @@
-// // backend/services/profile/api/command-server/tests/e2e_it.rs
+// backend/services/profile/api/command-server/tests/e2e_it.rs
 
-// use std::net::SocketAddr;
-// use tonic::{Request, Code};
-// use tonic::metadata::MetadataValue;
+use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator, TokenValidator};
+use profile::ProfileServiceBuilder;
+use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use shared_kernel::domain::repositories::CacheRepository;
+use shared_kernel::infrastructure::utils::{E2EServerStarter, InfrastructureKernelTestContext};
+use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
+use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
+use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
+use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataServiceServer;
+use shared_proto::profile::v1::{ChangeHandleRequest, ProfileTarget};
+use std::net::SocketAddr;
+use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::oneshot;
+use tonic::async_trait;
+use tonic::transport::Server;
+use tonic::{Request, metadata::MetadataValue};
 
-// use profile::infrastructure::api::grpc::profile_v1::profile_identity_service_client::ProfileIdentityServiceClient;
-// use profile::infrastructure::api::grpc::profile_v1::profile_metadata_service_client::ProfileMetadataServiceClient;
-// use profile::infrastructure::api::grpc::profile_v1::profile_media_service_client::ProfileMediaServiceClient;
-// use profile::infrastructure::api::grpc::profile_v1::{UpdateHandleRequest, UpdateBioRequest, UpdateAvatarRequest};
+struct ProfileServerStarter;
 
-// use profile::domain::entities::Profile;
-// use profile::domain::repositories::ProfileIdentityRepository;
-// use profile::domain::value_objects::{DisplayName, Handle};
-// use profile::infrastructure::postgres::repositories::PostgresIdentityRepository;
-// use profile::infrastructure::utils::InfrastructureProfileTestContext;
-// use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+#[async_trait]
+impl E2EServerStarter for ProfileServerStarter {
+    async fn start_server(
+        &self,
+        pg_pool: sqlx::PgPool,
+        redis_repo: Arc<dyn CacheRepository>,
+        addr: SocketAddr,
+        shutdown_rx: oneshot::Receiver<()>,
+    ) {
+        // 1. Setup Auth (comme dans main.rs mais via Keycloak de test)
+        let auth_ctx = KeycloakTestContext::restore("master").await;
+        let validator = Arc::new(
+            KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
+                .await
+                .unwrap(),
+        );
+        let interceptor = AuthInterceptor::new(validator);
 
-// #[path = "../src/main.rs"]
-// mod server_binary;
+        // 2. Setup Domaine
+        let builder = ProfileServiceBuilder::new(pg_pool, redis_repo);
+        let app_ctx = builder.build_context();
+        let bus = builder.build_command_bus();
 
-// async fn start_test_server(infra: &InfrastructureProfileTestContext) -> String {
-//     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-//     let listener = std::net::TcpListener::bind(addr).unwrap();
-//     let actual_addr = listener.local_addr().unwrap();
-//     drop(listener);
+        let identity_svc = ProfileIdentityService::new(bus.clone(), app_ctx.clone());
+        let media_svc = ProfileMediaService::new(bus.clone(), app_ctx.clone());
+        let metadata_svc = ProfileMetadataService::new(bus, app_ctx);
 
-//     unsafe {
-//         std::env::set_var("PROFILE_DB_URL", infra.kernel().postgres().url());
-//         std::env::set_var("PROFILE_SCYLLA_NODES", infra.kernel().scylla().uri());
-//         std::env::set_var("PROFILE_SCYLLA_KEYSPACE", infra.kernel().scylla().keyspace());
-//         std::env::set_var("PROFILE_REDIS_URL", infra.kernel().redis().url());
-//     }
+        // 3. Serveur gRPC
+        Server::builder()
+            .add_service(ProfileIdentityServiceServer::with_interceptor(
+                identity_svc,
+                interceptor.clone(),
+            ))
+            .add_service(ProfileMediaServiceServer::with_interceptor(
+                media_svc,
+                interceptor.clone(),
+            ))
+            .add_service(ProfileMetadataServiceServer::with_interceptor(
+                metadata_svc,
+                interceptor,
+            ))
+            .serve_with_shutdown(addr, async {
+                shutdown_rx.await.ok();
+            })
+            .await
+            .unwrap();
+    }
+}
 
-//     tokio::spawn(async move {
-//         server_binary::run_server(actual_addr)
-//             .await
-//             .expect("Server failed");
-//     });
+// Helper Auth
+fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
+    let mut request = Request::new(payload);
+    let token_val = format!("Bearer {}", token)
+        .parse::<MetadataValue<_>>()
+        .unwrap();
+    request.metadata_mut().insert("authorization", token_val);
+    request
+        .metadata_mut()
+        .insert("x-region", region.parse().unwrap());
+    request
+}
 
-//     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-//     format!("http://{}", actual_addr)
-// }
+#[tokio::test]
+async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::errors::Result<()> {
+    // 1. SETUP INFRA
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let kernel_migs = manifest_dir.join("../../../../../crates/shared-kernel/migrations/postgres");
+    let profile_migs = manifest_dir.join("../../../../../crates/profile/migrations/postgres");
 
-// #[tokio::test]
-// async fn test_profile_e2e_comprehensive() {
-//     let infra = InfrastructureProfileTestContext::setup().await;
-//     let server_url = start_test_server(&infra).await;
+    let ctx = InfrastructureKernelTestContext::builder()
+        .with_postgres(&[
+            kernel_migs.to_str().unwrap(),
+            profile_migs.to_str().unwrap(),
+        ])
+        .with_redis()
+        .with_server(ProfileServerStarter)
+        .build_e2e()
+        .await;
 
-//     // Initialisation des clients
-//     let mut identity_client = ProfileIdentityServiceClient::connect(server_url.clone()).await.unwrap();
-//     let mut metadata_client = ProfileMetadataServiceClient::connect(server_url.clone()).await.unwrap();
-//     let mut media_client = ProfileMediaServiceClient::connect(server_url.clone()).await.unwrap();
+    let mut identity_client = ProfileIdentityServiceClient::connect(ctx.grpc_url())
+        .await
+        .unwrap();
 
-//     // --- SEED INITIAL ---
-//     let owner_id = AccountId::new();
-//     let region = RegionCode::try_new("EU").unwrap();
-//     let profile = Profile::builder(
-//         owner_id.clone(),
-//         region.clone(),
-//         DisplayName::try_new("Initial Name").unwrap(),
-//         Handle::try_new("initial_handle").unwrap(),
-//     ).build();
+    // 2. AUTH & IDENTITY EXTRACTION
+    let auth_ctx = KeycloakTestContext::restore("master").await;
+    let auth_response = auth_ctx.get_admin_token().await?;
 
-//     let pg_repo = PostgresIdentityRepository::new(infra.kernel().postgres().pool());
-//     pg_repo.save(&profile, None).await.expect("Seed failed");
+    let claims = auth_ctx
+        .validator
+        .validate(&auth_response.token)
+        .expect("Token must be valid");
 
-//     // --- CASE 1: IDENTITY SERVICE (IdentityHandler) ---
-//     let mut req = Request::new(UpdateHandleRequest {
-//         profile_id: profile.id().to_string(),
-//         new_handle: "new_handle_ok".into(),
-//     });
-//     req.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
-//     let res = identity_client.update_handle(req).await.expect("Identity service failed");
-//     assert_eq!(res.into_inner().handle, "new_handle_ok");
+    let sub_id_str = claims.sub_id.as_str();
+    let sub_uuid = uuid::Uuid::parse_str(sub_id_str)
+        .expect("Le sub_id de Keycloak doit être un UUID valide pour ce test");
+    let true_sub_id = claims.sub_id.to_string(); // String pour le gRPC
+    let region = "EU";
 
-//     // --- CASE 2: METADATA SERVICE (MetadataHandler) ---
-//     // Vérifie que le MetadataHandler est bien branché dans le main.rs
-//     let mut req_bio = Request::new(UpdateBioRequest {
-//         profile_id: profile.id().to_string(),
-//         new_bio: Some("Hello, I am a test profile".into()),
-//     });
-//     req_bio.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
-//     let res_bio = metadata_client.update_bio(req_bio).await.expect("Metadata service failed");
-//     assert_eq!(res_bio.into_inner().bio, Some("Hello, I am a test profile".into()));
+    // 3. PRÉPARATION : Simulation d'un profil existant (v0)
+    // On simule l'arrivée d'un utilisateur qui vient de s'enregistrer
+    sqlx::query(
+        "INSERT INTO user_profiles (profile_id, account_id, region_code, handle, display_name, version, is_private, created_at, updated_at) 
+         VALUES ($1, $1, $2, $3, $4, 0, false, NOW(), NOW())"
+    )
+    .bind(sub_uuid)
+    .bind(region)
+    .bind("alice_rocks")
+    .bind("Alice")
+    .execute(&ctx.postgres().pool())
+    .await
+    .unwrap();
 
-//     // --- CASE 3: MEDIA SERVICE (MediaHandler) ---
-//     // Vérifie que le MediaHandler est bien branché dans le main.rs
-//     let mut req_avatar = Request::new(UpdateAvatarRequest {
-//         profile_id: profile.id().to_string(),
-//         new_avatar_url: "https://cdn.test.com/avatar.png".into(),
-//     });
-//     req_avatar.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
-//     let res_avatar = media_client.update_avatar(req_avatar).await.expect("Media service failed");
-//     assert_eq!(res_avatar.into_inner().avatar_url, Some("https://cdn.test.com/avatar.png".into()));
+    // 4. ACT : Changement de Handle (v0 -> v1)
+    let command_id = uuid::Uuid::now_v7().to_string();
+    let target = ProfileTarget {
+        profile_id: true_sub_id.clone(),
+        region: region.to_string(),
+        expected_version: 0,
+    };
 
-//     // --- CASE 4: ERRORS & SECURITY ---
-//     // Missing Region Header
-//     let req_no_header = Request::new(UpdateHandleRequest {
-//         profile_id: profile.id().to_string(),
-//         new_handle: "fail".into(),
-//     });
-//     let err = identity_client.update_handle(req_no_header).await.unwrap_err();
-//     assert_eq!(err.code(), Code::InvalidArgument);
+    let change_handle_req = ChangeHandleRequest {
+        command_id: command_id.clone(),
+        target: Some(target),
+        new_handle: "alice_wonderland".to_string(),
+    };
 
-//     // Not Found
-//     let mut req_not_found = Request::new(UpdateHandleRequest {
-//         profile_id: uuid::Uuid::new_v4().to_string(),
-//         new_handle: "ghost".into(),
-//     });
-//     req_not_found.metadata_mut().insert("x-region", MetadataValue::from_static("EU"));
-//     let res_err = identity_client.update_handle(req_not_found).await.unwrap_err();
-//     assert_eq!(res_err.code(), Code::NotFound);
+    let res = identity_client
+        .change_handle(with_auth(
+            change_handle_req,
+            &auth_response.token.as_str(),
+            region,
+        ))
+        .await;
 
-//     // --- FINAL DB VERIFICATION ---
-//     // On vérifie que toutes les mutations (Handle + Bio + Avatar) sont bien persistées
-//     let db_profile = pg_repo.fetch(profile.id(), &region).await.unwrap().unwrap();
-//     assert_eq!(db_profile.handle().as_str(), "new_handle_ok");
-//     assert_eq!(db_profile.bio().map(|b| b.as_str()), Some("Hello, I am a test profile"));
-//     assert_eq!(db_profile.avatar_url().map(|a| a.as_str()), Some("https://cdn.test.com/avatar.png"));
-// }
+    assert!(res.is_ok());
+
+    // 6. VÉRIFICATIONS FINALES EN DB
+    let row: (String, i64) = sqlx::query_as(
+        "SELECT handle, version FROM user_profiles WHERE profile_id = $1 AND region_code = $2",
+    )
+    .bind(sub_uuid)
+    .bind(region)
+    .fetch_one(&ctx.postgres().pool())
+    .await
+    .expect("Profile should exist in DB");
+
+    assert_eq!(row.0, "alice_wonderland");
+    assert_eq!(row.1, 1, "Version should be 1 after one update");
+
+    // Vérification de l'idempotence (processed_commands)
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM processed_commands WHERE command_id = $1")
+            .bind(uuid::Uuid::parse_str(&command_id).unwrap())
+            .fetch_one(&ctx.postgres().pool())
+            .await
+            .unwrap();
+
+    assert_eq!(count.0, 1, "Command should be recorded once");
+
+    ctx.shutdown().await;
+    Ok(())
+}

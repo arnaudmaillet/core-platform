@@ -5,22 +5,22 @@ use shared_kernel::domain::entities::Versioned;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use crate::domain::entities::Profile;
-use crate::domain::repositories::ProfileRepository;
-use crate::domain::value_objects::{Handle, ProfileId};
+use crate::entities::Profile;
+use crate::repositories::ProfileRepository;
+use crate::value_objects::{Handle, ProfileId};
 use shared_kernel::domain::transaction::Transaction;
 use shared_kernel::domain::value_objects::{AccountId, RegionCode};
 use shared_kernel::errors::{DomainError, Result};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
-struct ProfileKey {
-    id: ProfileId,
-    region: RegionCode,
+pub(crate) struct ProfileKey {
+    pub id: ProfileId,
+    pub region: RegionCode,
 }
 
 pub struct ProfileRepositoryStub {
-    pub profiles: Mutex<HashMap<ProfileKey, Profile>>,
-    pub error_to_return: Mutex<Option<DomainError>>,
+    profiles: Mutex<HashMap<ProfileKey, Profile>>,
+    error_to_return: Mutex<Option<DomainError>>,
 }
 
 impl Default for ProfileRepositoryStub {
@@ -29,6 +29,70 @@ impl Default for ProfileRepositoryStub {
             profiles: Mutex::new(HashMap::new()),
             error_to_return: Mutex::new(None),
         }
+    }
+}
+
+// Dans crates/profile/src/utils/test_utils.rs (ou là où se trouve ton stub)
+
+impl ProfileRepositoryStub {
+    pub fn new() -> Self {
+        Self {
+            profiles: Mutex::new(HashMap::new()),
+            error_to_return: Mutex::new(None),
+        }
+    }
+
+    // --- Helpers de Configuration (Arrange) ---
+
+    /// Insère un profil directement sans vérifier l'OCC ou les erreurs forcées
+    pub async fn save_direct(&self, profile: Profile) {
+        let mut store = self.profiles.lock().unwrap();
+        let key = ProfileKey {
+            id: profile.profile_id().clone(),
+            region: profile.account_id().region().clone(),
+        };
+        store.insert(key, profile);
+    }
+
+    /// Force une erreur pour le prochain appel au repository
+    pub fn set_error(&self, err: DomainError) {
+        let mut slot = self.error_to_return.lock().unwrap();
+        *slot = Some(err);
+    }
+
+    // --- Helpers d'Assertion (Assert) ---
+
+    /// Récupère un profil sans passer par le Result/async du trait
+    pub async fn find_direct(&self, id: &ProfileId) -> Option<Profile> {
+        let store = self.profiles.lock().unwrap();
+        // Comme on ne veut pas forcer la région dans l'assertion (souvent on teste justement si elle est bonne)
+        // On cherche le profil par ID peu importe la région dans le stub
+        store.values().find(|p| p.profile_id() == id).cloned()
+    }
+
+    /// Récupère un profil avec une clé précise
+    pub async fn find_with_key_direct(
+        &self,
+        id: &ProfileId,
+        region: &RegionCode,
+    ) -> Option<Profile> {
+        let store = self.profiles.lock().unwrap();
+        let key = ProfileKey {
+            id: id.clone(),
+            region: region.clone(),
+        };
+        store.get(&key).cloned()
+    }
+
+    pub fn count(&self) -> usize {
+        self.profiles.lock().unwrap().len()
+    }
+
+    /// Vide le repository
+    pub fn clear(&self) {
+        self.profiles.lock().unwrap().clear();
+        let mut slot = self.error_to_return.lock().unwrap();
+        *slot = None;
     }
 }
 

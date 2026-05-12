@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     location_label VARCHAR(100),
     social_links JSONB DEFAULT '{}'::jsonb NOT NULL,
     is_private BOOLEAN DEFAULT FALSE NOT NULL,
-    version BIGINT NOT NULL DEFAULT 1,
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
 

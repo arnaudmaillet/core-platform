@@ -3,7 +3,7 @@ mod media;
 mod metadata;
 
 pub use identity::{
-    UpdateDisplayNameCommand, UpdateDisplayNameHandler, UpdateHandleCommand, UpdateHandleHandler,
+    ChangeHandleCommand, ChangeHandleHandler, UpdateDisplayNameCommand, UpdateDisplayNameHandler,
     UpdatePrivacyCommand, UpdatePrivacyHandler,
 };
 
@@ -13,6 +13,6 @@ pub use media::{
 };
 
 pub use metadata::{
-    UpdateBioCommand, UpdateBioHandler, UpdateLocationLabelCommand, UpdateLocationLabelHandler,
-    UpdateSocialLinksCommand, UpdateSocialLinksHandler,
+    UpdateBioCommand, UpdateBioHandler, UpdateLocationCommand, UpdateLocationHandler,
+    UpdateSocialsCommand, UpdateSocialsHandler,
 };
