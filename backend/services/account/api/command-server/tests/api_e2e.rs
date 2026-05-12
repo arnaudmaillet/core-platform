@@ -1,5 +1,5 @@
 // use account::grpc::GrpcPersonalService;
-// use shared_kernel::errors::Result;
+// use shared_kernel::core::Result;
 // use shared_kernel::infrastructure::utils::E2EServerStarter;
 // use shared_proto::account::v1::account_personal_service_client::AccountPersonalServiceClient;
 // use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;

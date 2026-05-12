@@ -83,7 +83,7 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 }
 
 #[tokio::test]
-async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::errors::Result<()> {
+async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::core::Result<()> {
     // 1. SETUP INFRA
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let kernel_migs = manifest_dir.join("../../../../../crates/shared-kernel/migrations/postgres");
