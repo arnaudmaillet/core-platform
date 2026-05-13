@@ -3,7 +3,7 @@
 use crate::domain::account::entities::AccountIdentity;
 use crate::domain::value_objects::{AccountState, BirthDate, Locale};
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, SubId};
+use shared_kernel::types::{AccountId, Email, PhoneNumber, SubId};
 use shared_kernel::core::{DomainError, Result};
 
 pub struct AccountIdentityBuilder {

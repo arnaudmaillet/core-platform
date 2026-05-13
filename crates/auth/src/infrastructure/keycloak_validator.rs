@@ -1,5 +1,5 @@
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
-use shared_kernel::domain::value_objects::JwtToken;
+use shared_kernel::security::JwtToken;
 
 use crate::{
     Claims,

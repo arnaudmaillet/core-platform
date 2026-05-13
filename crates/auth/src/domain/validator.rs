@@ -1,5 +1,5 @@
 use crate::domain::claims::Claims;
-use shared_kernel::domain::value_objects::JwtToken;
+use shared_kernel::security::JwtToken;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]

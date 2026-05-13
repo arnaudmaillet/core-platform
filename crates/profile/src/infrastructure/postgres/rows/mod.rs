@@ -1,2 +1,2 @@
-mod postgres_profile_row;
-pub use postgres_profile_row::PostgresProfileRow;
+mod profile_row;
+pub use profile_row::PostgresProfileRow;

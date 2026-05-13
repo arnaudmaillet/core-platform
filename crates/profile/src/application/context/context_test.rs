@@ -3,8 +3,7 @@ mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::value_objects::ProfileId;
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::core::{ErrorCode, Result};
-    use shared_kernel::domain::entities::Versioned;
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
 
     #[tokio::test]
     async fn test_context_fetch_verified_occ_conflict() -> Result<()> {

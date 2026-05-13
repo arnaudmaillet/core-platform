@@ -3,7 +3,7 @@
 use crate::application::context::{AccountAppContext, AccountContext};
 use crate::domain::account::entities::Account;
 use shared_kernel::application::{CommandBus, CommandHandler};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, RegionCode};
 use shared_kernel::core::{AppError, DomainError, ErrorCode};
 use tonic::{Request, Response, Status};
 

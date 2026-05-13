@@ -3,7 +3,7 @@
 use crate::domain::value_objects::{
     IpAddr, Locale, RegistrationIdentifier
 };
-use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId};
+use shared_kernel::types::{AccountId, Email, PhoneNumber, RegionCode, SubId};
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
 use tonic::Status;
 use uuid::Uuid;

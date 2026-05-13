@@ -4,8 +4,8 @@ use crate::application::context::{ProfileAppContext, ProfileContext};
 use crate::entities::Profile;
 use crate::value_objects::ProfileId;
 use shared_kernel::application::{CommandBus, IdentifiableCommand};
-use shared_kernel::domain::value_objects::RegionCode;
 use shared_kernel::core::{Error, ErrorCode};
+use shared_kernel::types::RegionCode;
 use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]

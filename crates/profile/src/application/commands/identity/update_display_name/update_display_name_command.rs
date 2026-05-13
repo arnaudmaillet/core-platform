@@ -4,7 +4,7 @@ use crate::value_objects::{DisplayName, ProfileId};
 use serde::Deserialize;
 use shared_kernel::application::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::value_objects::RegionCode;
+use shared_kernel::types::RegionCode;
 use shared_proto::profile::v1::UpdateDisplayNameRequest;
 use uuid::Uuid;
 

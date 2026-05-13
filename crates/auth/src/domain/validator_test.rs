@@ -7,7 +7,8 @@ mod tests {
     use crate::infrastructure::keycloak_test_context::KeycloakTestContext;
     use crate::{Claims, KeycloakValidator};
     use jsonwebtoken::{EncodingKey, Header, Validation, encode};
-    use shared_kernel::domain::value_objects::{Email, JwtToken, SubId};
+    use shared_kernel::types::{Email, SubId};
+    use shared_kernel::security::JwtToken;
 
     // Helper pour créer des Claims valides sans Default::default()
     fn create_test_claims(sub: &str, email: &str) -> Claims {

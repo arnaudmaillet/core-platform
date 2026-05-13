@@ -2,7 +2,7 @@
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
 use crate::{repositories::ProfileRepository, value_objects::ProfileId};
-use shared_kernel::domain::value_objects::RegionCode;
+use shared_kernel::types::RegionCode;
 use std::sync::Arc;
 
 pub struct ProfileContextBuilder {

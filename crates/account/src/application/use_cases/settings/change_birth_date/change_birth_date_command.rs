@@ -3,9 +3,8 @@
 use crate::domain::value_objects::BirthDate;
 use serde::Deserialize;
 use shared_kernel::{
-    domain::value_objects::AccountId,
     core::{DomainError, Result},
-    infrastructure::grpc::ProtoTimestampExt,
+    domain::value_objects::AccountId,
 };
 use shared_proto::account::v1::ChangeBirthDateRequest;
 use tonic::Status;

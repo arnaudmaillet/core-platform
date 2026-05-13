@@ -1,10 +1,10 @@
 // crates/profile/src/application/commands/metadata/update_location_label/update_location_label_command.rs
 
-use crate::value_objects::ProfileId;
+use crate::value_objects::{Location, ProfileId};
 use serde::Deserialize;
 use shared_kernel::application::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::value_objects::{LocationLabel, RegionCode};
+use shared_kernel::types::RegionCode;
 use shared_proto::profile::v1::UpdateLocationRequest;
 use uuid::Uuid;
 
@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub struct UpdateLocationCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
-    pub new_location: Option<LocationLabel>,
+    pub new_location: Option<Location>,
 }
 
 impl IdentifiableCommand for UpdateLocationCommand {
@@ -47,7 +47,7 @@ impl UpdateLocationCommand {
         let new_location = req
             .new_location
             .filter(|s| !s.trim().is_empty())
-            .map(|s| LocationLabel::try_new(s))
+            .map(|s| Location::try_new(s))
             .transpose()?;
 
         Ok(Self {

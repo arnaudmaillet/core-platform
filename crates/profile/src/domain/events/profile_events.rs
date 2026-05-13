@@ -1,11 +1,13 @@
 // crates/profile/src/domain/events.rs
 
-use crate::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
+use crate::value_objects::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
+use shared_kernel::{
+    messaging::Event,
+    types::{AccountId, Url},
+};
 use std::borrow::Cow;
 use uuid::Uuid;
 
@@ -89,8 +91,8 @@ pub enum ProfileEvent {
         id: Uuid,
         profile_id: ProfileId,
         account_id: AccountId,
-        old_location: Option<LocationLabel>,
-        new_location: Option<LocationLabel>,
+        old_location: Option<Location>,
+        new_location: Option<Location>,
         occurred_at: DateTime<Utc>,
     },
 
@@ -137,7 +139,7 @@ impl ProfileEvent {
     pub const PRIVACY_UPDATED: &'static str = "profile.privacy.updated";
 }
 
-impl DomainEvent for ProfileEvent {
+impl Event for ProfileEvent {
     fn event_id(&self) -> Uuid {
         match self {
             Self::ProfileCreated { id, .. }

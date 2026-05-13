@@ -3,7 +3,7 @@ use async_trait::async_trait;
 
 use shared_kernel::application::CommandHandler;
 use shared_kernel::domain::utils::RetryConfig;
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::types::AccountId;
 use shared_kernel::core::Result;
 
 use crate::application::context::AccountContext;

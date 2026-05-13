@@ -1,7 +1,9 @@
 // crates/shared-kernel/src/application/command.rs
 
-use crate::core::Result;
-use crate::domain::{utils::RetryConfig, value_objects::RegionCode};
+use crate::{
+    core::{Result, RetryConfig},
+    types::RegionCode,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

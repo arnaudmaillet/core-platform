@@ -9,14 +9,11 @@ use tokio;
 
 use profile::entities::Profile;
 
-use shared_kernel::core::{Error, ErrorCode, Result};
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::entities::Versioned;
-use shared_kernel::domain::repositories::CacheRepository;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
-use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
-use shared_kernel::infrastructure::redis::utils::RedisTestContext;
+use shared_kernel::cache::CacheRepository;
+use shared_kernel::core::{Error, ErrorCode, Identifier, Result, Versioned};
+use shared_kernel::postgres::PostgresTransaction;
+use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
+use shared_kernel::types::{AccountId, RegionCode};
 
 /// Helper pour instancier le repo et les infrastructures de test
 async fn get_test_context() -> (

@@ -9,9 +9,8 @@ mod tests {
     use crate::events::ProfileEvent;
     use crate::value_objects::{Handle, ProfileId};
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::core::{Error, ErrorCode, Result};
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::domain::value_objects::AccountId;
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
+    use shared_kernel::types::AccountId;
     use uuid::Uuid;
 
     #[tokio::test]

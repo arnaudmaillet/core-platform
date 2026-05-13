@@ -1,3 +1,3 @@
-mod postgres_migrations;
+mod migrations;
 
-pub use postgres_migrations::run_postgres_migrations;
+pub use migrations::run_postgres_migrations;

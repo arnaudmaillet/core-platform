@@ -5,9 +5,8 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
-    use shared_kernel::domain::entities::Versioned;
     use shared_kernel::domain::events::EventEmitter;
-    use shared_kernel::domain::value_objects::PushToken;
+    use shared_kernel::types::PushToken;
     use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 

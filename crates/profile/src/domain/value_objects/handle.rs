@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::value_objects::Slug;
+use shared_kernel::types::Slug;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

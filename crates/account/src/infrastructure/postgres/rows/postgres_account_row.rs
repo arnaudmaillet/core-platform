@@ -101,13 +101,13 @@ impl PostgresAccountRow {
                 .push_tokens
                 .unwrap_or_default()
                 .into_iter()
-                .map(shared_kernel::domain::value_objects::PushToken::try_new)
+                .map(shared_kernel::types::PushToken::try_new)
                 .collect::<Result<Vec<_>>>()?;
 
             AccountSettings::restore(
                 account_id,
                 preferences,
-                shared_kernel::domain::value_objects::Timezone::try_new(
+                shared_kernel::types::Timezone::try_new(
                     &self.timezone.unwrap_or_else(|| "UTC".to_string()),
                 )?,
                 tokens,

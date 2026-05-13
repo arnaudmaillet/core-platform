@@ -3,16 +3,11 @@
 use crate::{entities::Profile, repositories::ProfileRepository, value_objects::ProfileId};
 use shared_kernel::{
     application::{BaseAppContext, CommandTarget},
-    core::{Error, Result},
-    domain::{
-        Identifier,
-        entities::Versioned,
-        events::{DomainEvent, EventEmitter},
-        repositories::{IdempotencyRepository, OutboxRepository},
-        transaction::{FakeTransaction, Transaction},
-        value_objects::RegionCode,
-    },
-    infrastructure::postgres::transactions::PostgresTransaction,
+    core::{Error, FakeTransaction, Identifier, Result, Transaction, Versioned},
+    idempotency::IdempotencyRepository,
+    messaging::{Event, EventEmitter, OutboxRepository},
+    postgres::PostgresTransaction,
+    types::RegionCode,
 };
 use std::sync::Arc;
 
@@ -130,7 +125,7 @@ impl ProfileContext {
 
         // 5. Outbox pattern
         if !events.is_empty() {
-            let event_refs: Vec<&dyn DomainEvent> = events.iter().map(|e| e.as_ref()).collect();
+            let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
             self.app
                 .outbox_repo()
                 .save_all(&mut *tx, &event_refs)

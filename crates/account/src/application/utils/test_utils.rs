@@ -7,7 +7,7 @@ use shared_kernel::application::{BaseAppContext, CommandBus};
 use shared_kernel::domain::repositories::{
     CacheRepositoryStub, IdempotencyRepositoryStub, OutboxRepositoryStub,
 };
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, RegionCode};
 use shared_kernel::core::Result;
 
 // Account Domain & Application

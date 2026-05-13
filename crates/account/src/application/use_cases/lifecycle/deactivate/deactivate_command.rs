@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::{AccountId, AuditReason};
+use shared_kernel::types::{AccountId, AuditReason};
 use shared_kernel::core::{DomainError, Result}; // Utilisation de ton Result métier
 use shared_proto::account::v1::DeactivateRequest;
 use std::str::FromStr;

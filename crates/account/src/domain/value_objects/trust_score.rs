@@ -1,7 +1,7 @@
 // crates/account/src/domain/value_objects/trust_score.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::ValueObject;
+use shared_kernel::types::ValueObject;
 use shared_kernel::core::{DomainError, Result};
 
 use crate::domain::value_objects::TrustDelta;

@@ -1,6 +1,5 @@
 use crate::application::IdentifiableCommand;
-use crate::core::{Error, Result};
-use crate::domain::utils::with_retry;
+use crate::core::{Error, Result, with_retry};
 use async_trait::async_trait;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;

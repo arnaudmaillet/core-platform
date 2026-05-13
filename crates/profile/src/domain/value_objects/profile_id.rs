@@ -1,9 +1,7 @@
 // crates/profile/src/domain/value_objects/profile_id.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::value_objects::ValueObject;
+use shared_kernel::core::{Error, Identifier, Result, ValueObject};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -76,7 +74,7 @@ impl FromStr for ProfileId {
         Uuid::parse_str(s).map(Self).map_err(|_| {
             Error::validation(
                 "profile_id",
-                format!("'{}' is not a valid UUID for ProfileId", s)
+                format!("'{}' is not a valid UUID for ProfileId", s),
             )
         })
     }

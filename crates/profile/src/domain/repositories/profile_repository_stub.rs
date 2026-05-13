@@ -1,16 +1,14 @@
 // crates/profile/src/utils/test_utils.rs
 
 use async_trait::async_trait;
-use shared_kernel::domain::entities::Versioned;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::entities::Profile;
 use crate::repositories::ProfileRepository;
 use crate::value_objects::{Handle, ProfileId};
-use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::core::{Error, Result, Transaction, Versioned};
+use shared_kernel::types::{AccountId, RegionCode};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct ProfileKey {

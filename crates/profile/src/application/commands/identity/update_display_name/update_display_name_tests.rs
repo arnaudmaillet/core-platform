@@ -8,8 +8,7 @@ mod tests {
     use crate::events::ProfileEvent;
     use crate::value_objects::DisplayName;
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::core::{Error, ErrorCode, Result};
-    use shared_kernel::domain::entities::Versioned;
+    use shared_kernel::core::{Versioned, ErrorCode, Result};
     use uuid::Uuid;
 
     #[tokio::test]

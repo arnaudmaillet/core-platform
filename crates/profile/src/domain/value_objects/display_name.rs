@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::value_objects::ValueObject;
+use shared_kernel::core::{Error, Result, ValueObject};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]

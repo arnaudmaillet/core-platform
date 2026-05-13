@@ -1,8 +1,10 @@
 // crates/profile/src/domain/value_objects.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::value_objects::Url;
+use shared_kernel::{
+    core::{Error, Result},
+    types::Url,
+};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

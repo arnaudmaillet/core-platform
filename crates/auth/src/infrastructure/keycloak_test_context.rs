@@ -1,7 +1,8 @@
 #![cfg(feature = "test-utils")]
 
 use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::value_objects::{JwtToken, SubId};
+use shared_kernel::types::SubId;
+use shared_kernel::security::JwtToken;
 use std::sync::Arc;
 use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;

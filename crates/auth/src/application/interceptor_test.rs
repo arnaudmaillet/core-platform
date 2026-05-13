@@ -5,7 +5,7 @@ mod tests {
         application::interceptor::AuthInterceptor,
         domain::validator::{AuthError, TokenValidator},
     };
-    use shared_kernel::domain::value_objects::{JwtToken, SubId};
+    use shared_kernel::{security::JwtToken, types::SubId};
     use std::{
         sync::Arc,
         time::{SystemTime, UNIX_EPOCH},

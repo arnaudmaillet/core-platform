@@ -1,7 +1,7 @@
 // crates/account/src/infrastructure/api/grpc/access_service.rs
 
 use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, RegionCode};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
