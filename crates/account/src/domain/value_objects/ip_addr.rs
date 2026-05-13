@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{DomainError, Result};
 use std::fmt;
 use std::net::IpAddr as StdIpAddr;
 use std::str::FromStr;

@@ -2,7 +2,7 @@
 
 use crate::entities::Profile;
 use crate::value_objects::Socials;
-use shared_kernel::domain::{entities::Versioned, events::AggregateRoot};
+use shared_kernel::core::{AggregateRoot, Versioned};
 use shared_proto::profile::v1::{Profile as ProfileProto, Socials as SocialsProto};
 
 pub fn map_profile_to_proto(profile: Profile) -> ProfileProto {

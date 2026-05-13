@@ -1,8 +1,10 @@
 // crates/profile/src/domain/value_objects.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::Url;
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::{
+    core::{Error, Result},
+    types::Url,
+};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -135,10 +137,10 @@ impl Socials {
 
     pub fn validate(&self) -> Result<()> {
         if self.others.len() > 10 {
-            return Err(DomainError::Validation {
-                field: "social_links",
-                reason: "Too many custom links (max 10)".into(),
-            });
+            return Err(Error::validation(
+                "social_links",
+                "Too many custom links (max 10)",
+            ));
         }
         Ok(())
     }
@@ -146,10 +148,10 @@ impl Socials {
     pub fn try_build(mut self) -> Result<Option<Self>> {
         // 1. Validation : Règle métier sur le nombre de liens personnalisés
         if self.others.len() > 10 {
-            return Err(DomainError::Validation {
-                field: "social_links",
-                reason: "Too many custom links (max 10)".into(),
-            });
+            return Err(Error::validation(
+                "social_links",
+                "Too many custom links (max 10)",
+            ));
         }
 
         // 2. Nettoyage : On retire les clés vides ou composées d'espaces dans 'others'

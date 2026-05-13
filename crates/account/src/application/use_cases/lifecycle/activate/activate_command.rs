@@ -1,6 +1,6 @@
 // crates/account/src/application/reactivate_account/command.rs
 use serde::Deserialize;
-use shared_kernel::{domain::value_objects::AccountId, errors::{DomainError, Result}};
+use shared_kernel::{domain::value_objects::AccountId, core::{DomainError, Result}};
 use shared_proto::account::v1::ActivateRequest;
 use uuid::Uuid;
 

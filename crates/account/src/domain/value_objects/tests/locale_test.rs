@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::domain::value_objects::locale::Locale;
-    use shared_kernel::domain::value_objects::ValueObject;
+    use shared_kernel::types::ValueObject;
     use std::str::FromStr;
 
     #[test]

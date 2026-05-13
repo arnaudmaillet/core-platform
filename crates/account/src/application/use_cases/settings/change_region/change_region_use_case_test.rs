@@ -5,9 +5,8 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::domain::value_objects::RegionCode;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::types::RegionCode;
+    use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -18,7 +17,7 @@ mod tests {
 
         // L'ID attendu après le changement
         let expected_new_id =
-            shared_kernel::domain::value_objects::AccountId::new(old_id.uuid(), new_region.clone());
+            shared_kernel::types::AccountId::new(old_id.uuid(), new_region.clone());
 
         let account = f
             .account_builder()?

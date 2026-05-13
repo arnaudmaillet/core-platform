@@ -1,11 +1,10 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
 use crate::entities::Profile;
-use crate::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
+use crate::value_objects::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::events::AggregateMetadata;
-use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
-use shared_kernel::errors::Result;
+use shared_kernel::core::{AggregateMetadata, Result};
+use shared_kernel::types::{AccountId, Url};
 
 pub struct ProfileBuilder {
     profile_id: ProfileId,
@@ -15,7 +14,7 @@ pub struct ProfileBuilder {
     bio: Option<Bio>,
     avatar_url: Option<Url>,
     banner_url: Option<Url>,
-    location_label: Option<LocationLabel>,
+    location_label: Option<Location>,
     social_links: Option<Socials>,
     is_private: bool,
     created_at: Option<DateTime<Utc>>,
@@ -67,7 +66,7 @@ impl ProfileBuilder {
         self
     }
 
-    pub fn with_location(mut self, label: LocationLabel) -> Self {
+    pub fn with_location(mut self, label: Location) -> Self {
         self.location_label = Some(label);
         self
     }

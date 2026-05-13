@@ -1,7 +1,8 @@
 #![cfg(feature = "test-utils")]
 
-use shared_kernel::domain::value_objects::{JwtToken, SubId};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{Error, Result};
+use shared_kernel::types::SubId;
+use shared_kernel::security::JwtToken;
 use std::sync::Arc;
 use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
@@ -89,14 +90,12 @@ impl KeycloakTestContext {
             match response {
                 Ok(res) if res.status().is_success() => {
                     let json: serde_json::Value = res.json().await.map_err(|_| {
-                        DomainError::Infrastructure(
-                            "Invalid JSON response from Keycloak".to_string(),
-                        )
+                        Error::internal("Invalid JSON response from Keycloak".to_string())
                     })?;
 
-                    let raw_token = json["access_token"].as_str().ok_or_else(|| {
-                        DomainError::Infrastructure("access_token missing".to_string())
-                    })?;
+                    let raw_token = json["access_token"]
+                        .as_str()
+                        .ok_or_else(|| Error::internal("access_token missing".to_string()))?;
 
                     let jwt_token = JwtToken::try_new(raw_token)?;
 
@@ -105,10 +104,7 @@ impl KeycloakTestContext {
                         Some(s) => s.to_string(),
                         None => {
                             let claims = self.validator.validate(&jwt_token).map_err(|e| {
-                                DomainError::Infrastructure(format!(
-                                    "JWT Validation failed: {:?}",
-                                    e
-                                ))
+                                Error::internal(format!("JWT Validation failed: {:?}", e))
                             })?;
                             claims.sub_id.to_string()
                         }
@@ -133,7 +129,7 @@ impl KeycloakTestContext {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
 
-        Err(DomainError::Infrastructure(format!(
+        Err(Error::internal(format!(
             "Keycloak admin auth failed after multiple retries. Last error: {}",
             last_error
         )))

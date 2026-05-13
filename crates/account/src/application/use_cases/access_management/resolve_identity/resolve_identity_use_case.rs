@@ -7,7 +7,7 @@ use crate::domain::repositories::{AccountIdentityRepository, AccountMetadataRepo
 use crate::domain::value_objects::AccountState;
 use shared_kernel::domain::entities::EntityOptionExt;
 use shared_kernel::domain::utils::{RetryConfig, with_retry};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{DomainError, Result};
 use std::sync::Arc;
 
 pub struct ResolveIdentityUseCase {

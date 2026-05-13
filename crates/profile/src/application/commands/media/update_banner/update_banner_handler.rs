@@ -1,7 +1,7 @@
 // crates/profile/src/application/commands/media/update_banner/update_banner_handler.rs
 
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, errors::Result};
+use shared_kernel::{application::CommandHandler, core::Result};
 use tracing::info;
 
 use crate::{commands::UpdateBannerCommand, context::ProfileContext};

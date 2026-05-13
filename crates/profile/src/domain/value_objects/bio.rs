@@ -1,8 +1,7 @@
 // crates/shared_kernel/src/domain/value_objects/bio.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::ValueObject;
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{Error, Result, ValueObject};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -18,10 +17,10 @@ impl Bio {
         let trimmed = raw.trim();
 
         if trimmed.is_empty() {
-            return Err(DomainError::Validation {
-                field: "bio",
-                reason: "Bio cannot be empty. Use Option::None for no bio.".into(),
-            });
+            return Err(Error::validation(
+                "bio",
+                "Bio cannot be empty. Use Option::None for no bio.",
+            ));
         }
 
         // Normalisation des sauts de ligne avant validation de longueur
@@ -67,22 +66,22 @@ impl ValueObject for Bio {
         let count = self.0.chars().count();
 
         if count > Self::MAX_LENGTH {
-            return Err(DomainError::Validation {
-                field: "bio",
-                reason: format!(
+            return Err(Error::validation(
+                "bio",
+                format!(
                     "Bio is too long (max {} chars, got {})",
                     Self::MAX_LENGTH,
                     count
                 ),
-            });
+            ));
         }
 
         // Sécurité : Interdire les caractères de contrôle non autorisés (hors sauts de ligne)
         if self.0.chars().any(|c| c.is_control() && c != '\n') {
-            return Err(DomainError::Validation {
-                field: "bio",
-                reason: "Bio contains invalid control characters".into(),
-            });
+            return Err(Error::validation(
+                "bio",
+                "Bio contains invalid control characters",
+            ));
         }
 
         Ok(())
@@ -92,7 +91,7 @@ impl ValueObject for Bio {
 // --- CONVERSIONS ---
 
 impl TryFrom<String> for Bio {
-    type Error = DomainError;
+    type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }

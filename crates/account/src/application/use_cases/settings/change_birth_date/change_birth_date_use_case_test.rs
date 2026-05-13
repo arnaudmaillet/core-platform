@@ -6,8 +6,7 @@ mod tests {
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::{AccountState, BirthDate};
     use chrono::NaiveDate;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 
     fn adult_birth_date() -> BirthDate {

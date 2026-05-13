@@ -9,7 +9,7 @@ use shared_kernel::{
             TrustContext,
         },
     },
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 
 use crate::{

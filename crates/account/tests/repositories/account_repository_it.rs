@@ -10,8 +10,8 @@ use tokio;
 
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::CacheRepository;
-use shared_kernel::domain::value_objects::{AccountId, AuditReason, Email, RegionCode, SubId};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::types::{AccountId, AuditReason, Email, RegionCode, SubId};
+use shared_kernel::core::{DomainError, Result};
 use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
 use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
 use shared_kernel::infrastructure::redis::utils::RedisTestContext;

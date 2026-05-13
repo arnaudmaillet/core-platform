@@ -1,9 +1,9 @@
 // backend/services/profile/cache_invalidator/src/main.rs
 
-use shared_kernel::errors::AppResult;
-use shared_kernel::infrastructure::bootstrap::run_cache_worker;
+use shared_kernel::core::Result;
+use shared_kernel::cache::run_cache_worker;
 
 #[tokio::main]
-async fn main() -> AppResult<()> {
+async fn main() -> Result<()> {
     run_cache_worker("Account", "profile.events", "profile-cache-group").await
 }

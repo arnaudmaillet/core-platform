@@ -3,7 +3,7 @@
 use serde::Deserialize;
 use shared_kernel::{
     domain::value_objects::AccountId,
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
 };
 use shared_proto::account::v1::ChangeBetaTierRequest;
 use uuid::Uuid;

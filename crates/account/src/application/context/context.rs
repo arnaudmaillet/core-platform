@@ -6,7 +6,7 @@ use shared_kernel::{
         transaction::{FakeTransaction, Transaction},
         value_objects::{AccountId, RegionCode},
     },
-    errors::{DomainError, Result},
+    core::{DomainError, Result},
     infrastructure::postgres::transactions::PostgresTransaction,
 };
 use std::sync::Arc;

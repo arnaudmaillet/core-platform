@@ -3,8 +3,8 @@ mod tests {
     use crate::domain::account::entities::Account;
     use crate::domain::value_objects::*;
     use shared_kernel::domain::events::{AggregateRoot, EventEmitter};
-    use shared_kernel::domain::value_objects::*;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::types::*;
+    use shared_kernel::core::{DomainError, Result};
 
     /// Helper pour créer un compte de test valide et actif
     fn create_test_account() -> Account {

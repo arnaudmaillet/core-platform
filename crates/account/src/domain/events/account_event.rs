@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use shared_kernel::domain::events::DomainEvent;
-use shared_kernel::domain::value_objects::{
+use shared_kernel::types::{
     AccountId, Email, PhoneNumber, PushToken, RegionCode, SubId, Timezone,
 };
 use std::borrow::Cow;

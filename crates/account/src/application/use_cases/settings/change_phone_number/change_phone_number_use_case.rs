@@ -1,7 +1,7 @@
 // crates/account/src/application/change_email/change_phone_number_use_case.rs
 use async_trait::async_trait;
 use shared_kernel::application::CommandHandler;
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 
 use crate::application::context::AccountContext;
 use crate::application::use_cases::settings::ChangePhoneNumberCommand;

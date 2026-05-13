@@ -1,7 +1,7 @@
 // crates/profile/src/application/commands/identity/update_privacy/update_privacy_handler.rs
 
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, errors::Result};
+use shared_kernel::{application::CommandHandler, core::Result};
 use tracing::info;
 
 use crate::{commands::UpdatePrivacyCommand, context::ProfileContext};

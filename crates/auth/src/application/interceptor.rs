@@ -1,4 +1,4 @@
-use shared_kernel::domain::value_objects::{JwtToken, RegionCode};
+use shared_kernel::{security::JwtToken, types::RegionCode};
 use std::sync::Arc;
 use tonic::{Request, Status, service::Interceptor};
 
@@ -44,15 +44,13 @@ impl Interceptor for AuthInterceptor {
                 request.extensions_mut().insert(region_code);
                 Ok(request)
             }
-            Err(e) => {
-                match e {
-                    AuthError::InvalidToken => Err(Status::unauthenticated("Token invalide")),
-                    AuthError::DiscoveryFailed => {
-                        Err(Status::internal("Erreur serveur d'authentification"))
-                    }
-                    AuthError::Expired => Err(Status::unauthenticated("Token expiré")),
+            Err(e) => match e {
+                AuthError::InvalidToken => Err(Status::unauthenticated("Token invalide")),
+                AuthError::DiscoveryFailed => {
+                    Err(Status::internal("Erreur serveur d'authentification"))
                 }
-            }
+                AuthError::Expired => Err(Status::unauthenticated("Token expiré")),
+            },
         }
     }
 }

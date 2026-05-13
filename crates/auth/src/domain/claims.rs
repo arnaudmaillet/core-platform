@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::{Email, PhoneNumber, SubId};
+use shared_kernel::types::{Email, PhoneNumber, SubId};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {

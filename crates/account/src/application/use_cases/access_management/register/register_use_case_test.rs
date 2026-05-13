@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod tests {
     use shared_kernel::domain::events::{AggregateMetadata, AggregateRoot};
-    use shared_kernel::domain::value_objects::{AccountId, Email, RegionCode, SubId};
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::types::{AccountId, Email, RegionCode, SubId};
+    use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 
     use crate::application::context::AccountContext;

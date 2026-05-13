@@ -8,9 +8,8 @@ use std::sync::Arc;
 use shared_kernel::domain::Identifier;
 use shared_kernel::domain::events::AggregateRoot;
 use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
-use shared_kernel::domain::value_objects::{AccountId, Email, PhoneNumber, SubId};
-use shared_kernel::errors::{DomainError, Result};
-use shared_kernel::infrastructure::postgres::mappers::SqlxErrorExt;
+use shared_kernel::types::{AccountId, Email, PhoneNumber, SubId};
+use shared_kernel::core::{DomainError, Result};
 
 use crate::domain::account::entities::Account;
 use crate::domain::repositories::AccountRepository;

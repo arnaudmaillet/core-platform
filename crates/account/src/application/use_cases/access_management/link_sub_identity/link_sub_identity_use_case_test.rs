@@ -4,10 +4,9 @@ mod tests {
     use crate::application::use_cases::access_management::LinkSubIdentityCommand;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use shared_kernel::domain::entities::Versioned;
     use shared_kernel::domain::events::EventEmitter;
-    use shared_kernel::domain::value_objects::SubId;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::types::SubId;
+    use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]

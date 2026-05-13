@@ -6,7 +6,7 @@ mod tests {
             events::{AggregateMetadata, AggregateRoot},
             value_objects::{AccountId, AuditReason, Email, RegionCode},
         },
-        errors::Result,
+        core::Result,
     };
 
     use crate::domain::{

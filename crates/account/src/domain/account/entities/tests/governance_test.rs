@@ -6,7 +6,7 @@ mod tests {
             entities::Entity,
             value_objects::{AccountId, AuditReason, RegionCode, TrustContext},
         },
-        errors::Result,
+        core::Result,
     };
 
     use crate::{

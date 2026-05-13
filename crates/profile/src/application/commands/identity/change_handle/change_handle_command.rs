@@ -3,8 +3,8 @@
 use crate::value_objects::{Handle, ProfileId};
 use serde::Deserialize;
 use shared_kernel::application::{CommandTarget, IdentifiableCommand};
-use shared_kernel::domain::value_objects::RegionCode;
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::core::{Error, Result};
+use shared_kernel::types::RegionCode;
 use shared_proto::profile::v1::ChangeHandleRequest;
 use uuid::Uuid;
 
@@ -31,15 +31,12 @@ impl IdentifiableCommand for ChangeHandleCommand {
 
 impl ChangeHandleCommand {
     pub fn try_from_proto(req: ChangeHandleRequest) -> Result<Self> {
-        let proto_target = req.target.ok_or_else(|| DomainError::Validation {
-            field: "target",
-            reason: "Missing profile target".to_string(),
-        })?;
+        let proto_target = req
+            .target
+            .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
 
-        let command_id = Uuid::parse_str(&req.command_id).map_err(|_| DomainError::Validation {
-            field: "command_id",
-            reason: "Invalid UUID format".to_string(),
-        })?;
+        let command_id = Uuid::parse_str(&req.command_id)
+            .map_err(|_| Error::validation("command_id", "Invalid UUID format"))?;
 
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,

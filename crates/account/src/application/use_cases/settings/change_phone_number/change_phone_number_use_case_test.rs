@@ -5,9 +5,8 @@ mod tests {
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::value_objects::AccountState;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::domain::value_objects::PhoneNumber;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::types::PhoneNumber;
+    use shared_kernel::core::{DomainError, Result};
     use uuid::Uuid;
 
     #[tokio::test]

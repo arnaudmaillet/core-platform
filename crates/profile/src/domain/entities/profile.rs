@@ -2,15 +2,13 @@
 
 use crate::builders::ProfileBuilder;
 use crate::events::ProfileEvent;
-use crate::value_objects::{Bio, DisplayName, Handle, ProfileId, Socials};
+use crate::value_objects::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::entities::{Entity, Versioned};
-use shared_kernel::domain::events::{
-    AggregateMetadata, AggregateRoot, DomainEvent, EventEmitter, OperationTracker,
-};
-use shared_kernel::domain::value_objects::{AccountId, LocationLabel, Url};
-use shared_kernel::errors::Result;
+use shared_kernel::core::{AggregateMetadata, AggregateRoot, Result};
+use shared_kernel::core::{Entity, Versioned};
+use shared_kernel::messaging::{Event, EventEmitter, OperationTracker};
+use shared_kernel::types::{AccountId, Url};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -22,7 +20,7 @@ pub struct Profile {
     bio: Option<Bio>,
     avatar: Option<Url>,
     banner: Option<Url>,
-    location: Option<LocationLabel>,
+    location: Option<Location>,
     socials: Option<Socials>,
     is_private: bool,
     created_at: DateTime<Utc>,
@@ -42,10 +40,10 @@ impl Versioned for Profile {
 }
 
 impl EventEmitter for Profile {
-    fn push_event(&mut self, event: Box<dyn DomainEvent>) {
+    fn push_event(&mut self, event: Box<dyn Event>) {
         self.metadata.push_event(event);
     }
-    fn pull_events(&mut self) -> Vec<Box<dyn DomainEvent>> {
+    fn pull_events(&mut self) -> Vec<Box<dyn Event>> {
         self.metadata.pull_events()
     }
 }
@@ -98,7 +96,7 @@ impl Profile {
         bio: Option<Bio>,
         avatar: Option<Url>,
         banner: Option<Url>,
-        location: Option<LocationLabel>,
+        location: Option<Location>,
         socials: Option<Socials>,
         is_private: bool,
         version: u64,
@@ -144,7 +142,7 @@ impl Profile {
     pub fn banner(&self) -> Option<&Url> {
         self.banner.as_ref()
     }
-    pub fn location(&self) -> Option<&LocationLabel> {
+    pub fn location(&self) -> Option<&Location> {
         self.location.as_ref()
     }
     pub fn socials(&self) -> Option<&Socials> {
@@ -376,7 +374,7 @@ impl Profile {
         )
     }
 
-    pub fn update_location(&mut self, new_label: Option<LocationLabel>) -> Result<bool> {
+    pub fn update_location(&mut self, new_label: Option<Location>) -> Result<bool> {
         if self.location == new_label {
             return Ok(false);
         }

@@ -8,9 +8,8 @@ mod tests {
     use crate::events::ProfileEvent;
     use crate::value_objects::Socials;
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::domain::value_objects::Url;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
+    use shared_kernel::types::Url;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -62,9 +61,7 @@ mod tests {
 
         // On crée un changement REEL pour forcer le handler à aller jusqu'au ctx.save()
         let new_socials = Socials::builder()
-            .with_x(Url::try_new(
-                "https://x.com/alice",
-            )?)
+            .with_x(Url::try_new("https://x.com/alice")?)
             .build();
 
         let cmd = UpdateSocialsCommand {
@@ -80,11 +77,14 @@ mod tests {
             .await;
 
         // Assert
-        // Maintenant, le handler appelle ctx.save(), qui lui, détecte le doublon technique
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { entity, .. }) if entity == "Command"
-        ));
+
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Command"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
 
         f.assert_outbox(0, None);
 
@@ -116,7 +116,7 @@ mod tests {
 
         // Assert
         f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot);  
+            assert_eq!(p.version(), version_snapshot);
         })
         .await;
         f.assert_outbox(0, None);
@@ -146,7 +146,7 @@ mod tests {
         // Assert
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
 
         Ok(())

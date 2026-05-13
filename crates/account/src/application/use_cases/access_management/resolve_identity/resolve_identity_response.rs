@@ -1,7 +1,7 @@
 // crates/account/src/application/resolve_identity/dto.rs
 
 use crate::domain::value_objects::{AccountRole, AccountState};
-use shared_kernel::domain::value_objects::AccountId;
+use shared_kernel::types::AccountId;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedIdentityResponse {

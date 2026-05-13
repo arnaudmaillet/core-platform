@@ -3,8 +3,8 @@
 use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator, TokenValidator};
 use profile::ProfileServiceBuilder;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
-use shared_kernel::domain::repositories::CacheRepository;
-use shared_kernel::infrastructure::utils::{E2EServerStarter, InfrastructureKernelTestContext};
+use shared_kernel::cache::CacheRepository;
+use shared_kernel::test_utils::{E2EServerStarter, TestContext};
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
@@ -83,13 +83,13 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 }
 
 #[tokio::test]
-async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::errors::Result<()> {
+async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::core::Result<()> {
     // 1. SETUP INFRA
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let kernel_migs = manifest_dir.join("../../../../../crates/shared-kernel/migrations/postgres");
     let profile_migs = manifest_dir.join("../../../../../crates/profile/migrations/postgres");
 
-    let ctx = InfrastructureKernelTestContext::builder()
+    let ctx = TestContext::builder()
         .with_postgres(&[
             kernel_migs.to_str().unwrap(),
             profile_migs.to_str().unwrap(),

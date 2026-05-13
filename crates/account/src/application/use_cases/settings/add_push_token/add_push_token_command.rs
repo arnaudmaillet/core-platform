@@ -1,6 +1,6 @@
 // crates/account/src/application/add_push_token/add_push_token_command.rs
-use shared_kernel::domain::value_objects::{AccountId, PushToken};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::types::{AccountId, PushToken};
+use shared_kernel::core::{DomainError, Result};
 use shared_proto::account::v1::AddPushTokenRequest;
 use uuid::Uuid;
 

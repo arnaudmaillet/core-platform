@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 use crate::application::use_cases::create_profile::{CreateProfileUseCase, CreateProfileCommand};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, RegionCode};
 use crate::value_objects::{DisplayName, Handle};
 
 /// Le contrat local : on ne définit que ce qui nous intéresse.
@@ -67,7 +67,7 @@ impl AccountConsumer {
                 match self.use_case.execute(command).await {
                     Ok(_) => Ok(()),
                     // Si le profil existe déjà (ex: message rejoué), on acquitte sans erreur
-                    Err(shared_kernel::errors::DomainError::AlreadyExists { .. }) => Ok(()),
+                    Err(shared_kernel::core::DomainError::AlreadyExists { .. }) => Ok(()),
                     Err(e) => {
                         eprintln!("KAFKA CONSUMER ERROR: {:?}", e);
                         Err(Box::new(e))

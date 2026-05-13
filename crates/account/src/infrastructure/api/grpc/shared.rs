@@ -3,8 +3,8 @@
 use crate::application::context::{AccountAppContext, AccountContext};
 use crate::domain::account::entities::Account;
 use shared_kernel::application::{CommandBus, CommandHandler};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::{AppError, DomainError, ErrorCode};
+use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::core::{AppError, DomainError, ErrorCode};
 use tonic::{Request, Response, Status};
 
 // crates/account/src/infrastructure/api/grpc/shared.rs

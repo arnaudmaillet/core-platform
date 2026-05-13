@@ -1,8 +1,8 @@
 // crates/profile/src/domain/value_objects/handle.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::domain::value_objects::Slug;
-use shared_kernel::errors::Result;
+use shared_kernel::core::{Error, Result};
+use shared_kernel::types::Slug;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -17,15 +17,19 @@ impl Handle {
         Self(Slug::from_raw(value))
     }
 
-    pub fn as_str(&self) -> &str { self.0.as_str() }
-    pub fn hash_value(&self) -> u64 { self.0.hash_value() }
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+    pub fn hash_value(&self) -> u64 {
+        self.0.hash_value()
+    }
 }
 
 // --- AJOUTS CI-DESSOUS ---
 
 /// Permet la conversion faillible (ex: depuis une API ou un input utilisateur)
 impl TryFrom<String> for Handle {
-    type Error = shared_kernel::errors::DomainError;
+    type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)

@@ -3,9 +3,8 @@
 use crate::entities::Profile;
 use crate::value_objects::{Handle, ProfileId};
 use async_trait::async_trait;
-use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
-use shared_kernel::errors::Result;
+use shared_kernel::core::{Result, Transaction};
+use shared_kernel::types::{AccountId, RegionCode};
 
 #[async_trait]
 #[async_trait]

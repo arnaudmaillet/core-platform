@@ -2,15 +2,13 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateLocationCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
+    use crate::value_objects::Location;
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::domain::value_objects::LocationLabel;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -21,7 +19,7 @@ mod tests {
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
-        let new_location = Some(LocationLabel::try_new("Paris, France")?);
+        let new_location = Some(Location::try_new("Paris, France")?);
 
         let cmd = UpdateLocationCommand {
             command_id: Uuid::new_v4(),
@@ -59,7 +57,7 @@ mod tests {
         let cmd = UpdateLocationCommand {
             command_id: cmd_id,
             target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
-            new_location: Some(LocationLabel::try_new("Tokyo, Japan")?),
+            new_location: Some(Location::try_new("Tokyo, Japan")?),
         };
 
         // Act
@@ -69,10 +67,13 @@ mod tests {
             .await;
 
         // Assert
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { entity, .. }) if entity == "Command"
-        ));
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Command"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
         f.assert_outbox(0, None);
 
         Ok(())
@@ -82,7 +83,7 @@ mod tests {
     async fn test_update_location_business_idempotency() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let location = LocationLabel::try_new("Montreal, Canada")?;
+        let location = Location::try_new("Montreal, Canada")?;
 
         let profile = f.builder("alice").with_location(location.clone()).build()?;
         let version_snapshot = profile.version();
@@ -119,7 +120,7 @@ mod tests {
         let cmd = UpdateLocationCommand {
             command_id: Uuid::new_v4(),
             target: CommandTarget::new(f.profile_id().clone(), f.region(), 123), // Version dans le futur
-            new_location: Some(LocationLabel::try_new("Nowhere")?),
+            new_location: Some(Location::try_new("Nowhere")?),
         };
 
         // Act
@@ -131,7 +132,7 @@ mod tests {
         // Assert
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
 
         Ok(())

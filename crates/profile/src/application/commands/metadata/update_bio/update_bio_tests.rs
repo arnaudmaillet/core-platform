@@ -8,8 +8,7 @@ mod tests {
     use crate::events::ProfileEvent;
     use crate::value_objects::Bio;
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -62,15 +61,18 @@ mod tests {
         };
 
         // Act
-        let result = f.bus()
+        let result = f
+            .bus()
             .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
             .await;
 
-        // Assert
-        assert!(matches!(
-            result,
-            Err(DomainError::AlreadyExists { entity, .. }) if entity == "Command"
-        ));
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Command"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
         f.assert_outbox(0, None);
 
         Ok(())
@@ -82,10 +84,8 @@ mod tests {
         let f = ProfileTestFixture::new();
         let bio_text = "Already my bio";
         let bio = Bio::try_new(bio_text)?;
-        
-        let profile = f.builder("alice")
-            .with_bio(bio.clone())
-            .build()?;
+
+        let profile = f.builder("alice").with_bio(bio.clone()).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -124,12 +124,16 @@ mod tests {
         };
 
         // Act
-        let result = f.bus()
+        let result = f
+            .bus()
             .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
             .await;
 
         // Assert
-        assert!(matches!(result, Err(DomainError::ConcurrencyConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
+        ));
 
         Ok(())
     }

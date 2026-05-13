@@ -18,10 +18,8 @@ use crate::{
 
 use shared_kernel::{
     application::{BaseAppContext, CommandBus},
-    domain::repositories::CacheRepository,
-    infrastructure::postgres::repositories::{
-        PostgresIdempotencyRepository, PostgresOutboxRepository,
-    },
+    cache::CacheRepository,
+    postgres::{PostgresIdempotencyRepository, PostgresOutboxRepository},
 };
 
 pub struct ProfileServiceBuilder {

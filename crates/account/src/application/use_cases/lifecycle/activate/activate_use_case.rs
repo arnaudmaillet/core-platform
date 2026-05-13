@@ -1,7 +1,7 @@
 // crates/account/src/application/reactivate_account/reactivate_account_use_case.rs
 
 use shared_kernel::application::CommandHandler;
-use shared_kernel::errors::Result;
+use shared_kernel::core::Result;
 use async_trait::async_trait;
 
 use crate::application::context::AccountContext;

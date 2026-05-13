@@ -8,13 +8,13 @@ use crate::domain::{
     },
     value_objects::{Locale, RegistrationIdentifier, TrustScore},
 };
-use shared_kernel::domain::value_objects::{Email, PhoneNumber, SubId, Timezone};
+use shared_kernel::types::{Email, PhoneNumber, SubId, Timezone};
 use shared_kernel::{
     domain::{
         events::AggregateMetadata,
         value_objects::AccountId,
     },
-    errors::Result,
+    core::Result,
 };
 
 pub struct AccountBuilder {

@@ -3,15 +3,15 @@
 use std::sync::Arc;
 // Shared Kernel
 use shared_kernel::application::{BaseAppContext, CommandBus};
-use shared_kernel::domain::repositories::{
-    CacheRepositoryStub, IdempotencyRepositoryStub, OutboxRepositoryStub,
-};
-use shared_kernel::domain::value_objects::{AccountId, RegionCode};
+use shared_kernel::cache::CacheRepositoryStub;
+use shared_kernel::idempotency::IdempotencyRepositoryStub;
+use shared_kernel::messaging::OutboxRepositoryStub;
+use shared_kernel::types::{AccountId, RegionCode};
 
 // Profile Domain & Application
 use crate::application::context::{ProfileAppContext, ProfileContext};
-use crate::commands::*;
 use crate::builders::ProfileBuilder;
+use crate::commands::*;
 use crate::entities::Profile;
 use crate::repositories::ProfileRepositoryStub;
 use crate::value_objects::{Handle, ProfileId};

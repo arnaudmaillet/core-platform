@@ -1,6 +1,6 @@
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::{AccountId, Timezone};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::types::{AccountId, Timezone};
+use shared_kernel::core::{DomainError, Result};
 use shared_proto::account::v1::UpdateTimezoneRequest;
 use uuid::Uuid;
 

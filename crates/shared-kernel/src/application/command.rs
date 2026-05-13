@@ -1,8 +1,8 @@
 // crates/shared-kernel/src/application/command.rs
 
 use crate::{
-    domain::{utils::RetryConfig, value_objects::RegionCode},
-    errors::Result,
+    core::{Result, RetryConfig},
+    types::RegionCode,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

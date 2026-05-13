@@ -1,7 +1,7 @@
 // crates/account/src/application/ban_account/ban_account_command.rs
 use serde::Deserialize;
-use shared_kernel::domain::value_objects::{AccountId, AuditReason};
-use shared_kernel::errors::{DomainError, Result};
+use shared_kernel::types::{AccountId, AuditReason};
+use shared_kernel::core::{DomainError, Result};
 use shared_proto::account::v1::ModerationRequest;
 use uuid::Uuid;
 

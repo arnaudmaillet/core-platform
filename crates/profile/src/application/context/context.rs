@@ -3,16 +3,11 @@
 use crate::{entities::Profile, repositories::ProfileRepository, value_objects::ProfileId};
 use shared_kernel::{
     application::{BaseAppContext, CommandTarget},
-    domain::{
-        Identifier,
-        entities::Versioned,
-        events::{DomainEvent, EventEmitter},
-        repositories::{IdempotencyRepository, OutboxRepository},
-        transaction::{FakeTransaction, Transaction},
-        value_objects::RegionCode,
-    },
-    errors::{DomainError, Result},
-    infrastructure::postgres::transactions::PostgresTransaction,
+    core::{Error, FakeTransaction, Identifier, Result, Transaction, Versioned},
+    idempotency::IdempotencyRepository,
+    messaging::{Event, EventEmitter, OutboxRepository},
+    postgres::PostgresTransaction,
+    types::RegionCode,
 };
 use std::sync::Arc;
 
@@ -91,20 +86,17 @@ impl ProfileContext {
         self.profile_repo()
             .find_by_id(&self.profile_id, &self.region, None)
             .await?
-            .ok_or_else(|| DomainError::NotFound {
-                entity: "Profile",
-                id: self.profile_id.to_string(),
-            })
+            .ok_or_else(|| Error::not_found("Profile", self.profile_id.to_string()))
     }
 
     /// Sauvegarde atomique : Persistance + Outbox + Idempotence
     pub async fn save(&self, profile: &mut Profile, command_id: Option<uuid::Uuid>) -> Result<()> {
         // 1. Garde-fou technique : l'ID ne doit pas avoir changé
         if profile.profile_id().as_uuid() != self.profile_id.as_uuid() {
-            return Err(DomainError::Validation {
-                field: "profile_id".into(),
-                reason: "Identity mismatch: cannot change the technical UUID of a profile".into(),
-            });
+            return Err(Error::validation(
+                "profile_id",
+                "Identity mismatch: cannot change the technical UUID of a profile",
+            ));
         }
 
         let mut tx = self.begin_transaction().await?;
@@ -117,11 +109,11 @@ impl ProfileContext {
                 .exists(&mut *tx, &cmd_id)
                 .await?
             {
-                return Err(DomainError::AlreadyExists {
-                    entity: "Command",
-                    field: "id".into(),
-                    value: cmd_id.to_string(),
-                });
+                return Err(Error::already_exists(
+                    "Command",
+                    "id".into(),
+                    cmd_id.to_string(),
+                ));
             }
         }
 
@@ -133,7 +125,7 @@ impl ProfileContext {
 
         // 5. Outbox pattern
         if !events.is_empty() {
-            let event_refs: Vec<&dyn DomainEvent> = events.iter().map(|e| e.as_ref()).collect();
+            let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
             self.app
                 .outbox_repo()
                 .save_all(&mut *tx, &event_refs)
@@ -155,7 +147,7 @@ impl ProfileContext {
                 let tx = pool
                     .begin()
                     .await
-                    .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+                    .map_err(|e| Error::internal(e.to_string()))?;
                 Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
             }
             None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
@@ -164,16 +156,16 @@ impl ProfileContext {
 
     pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
         if target.id != self.profile_id || target.region != self.region {
-            return Err(DomainError::Validation {
-                field: "target",
-                reason: "Command target mismatch with execution context".into(),
-            });
+            return Err(Error::validation(
+                "target",
+                "Command target mismatch with execution context",
+            ));
         }
 
         let profile = self.profile().await?;
 
         if profile.account_id().region() != &self.region {
-            return Err(DomainError::Infrastructure(format!(
+            return Err(Error::internal(format!(
                 "Data Integrity Violation: Profile {} belongs to account region {}, but was loaded in context {}",
                 self.profile_id,
                 profile.account_id().region(),
@@ -182,13 +174,11 @@ impl ProfileContext {
         }
 
         if profile.version() != target.expected_version {
-            return Err(DomainError::ConcurrencyConflict {
-                reason: format!(
-                    "OCC Mismatch: DB v{}, Expected v{}",
-                    profile.version(),
-                    target.expected_version
-                ),
-            });
+            return Err(Error::concurrency_conflict(format!(
+                "OCC Mismatch: DB v{}, Expected v{}",
+                profile.version(),
+                target.expected_version
+            )));
         }
 
         Ok(profile)

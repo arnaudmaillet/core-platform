@@ -5,8 +5,8 @@ use crate::domain::preferences::models::{
     AppearancePreferences, NotificationPreferences, PrivacyPreferences,
 };
 use chrono::Utc;
-use shared_kernel::domain::value_objects::{AccountId, PushToken, Timezone};
-use shared_kernel::errors::Result;
+use shared_kernel::types::{AccountId, PushToken, Timezone};
+use shared_kernel::core::Result;
 
 pub struct AccountSettingsBuilder {
     account_id: AccountId,

@@ -3,11 +3,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
+    core::{DomainError, Result},
     domain::{
         entities::Entity,
         value_objects::{AccountId, PushToken, RegionCode, Timezone},
     },
-    errors::{DomainError, Result},
 };
 
 use crate::domain::{

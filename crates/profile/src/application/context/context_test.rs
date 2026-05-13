@@ -3,8 +3,7 @@ mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::value_objects::ProfileId;
     use shared_kernel::application::CommandTarget;
-    use shared_kernel::domain::entities::Versioned;
-    use shared_kernel::errors::{DomainError, Result};
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
 
     #[tokio::test]
     async fn test_context_fetch_verified_occ_conflict() -> Result<()> {
@@ -21,7 +20,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(DomainError::ConcurrencyConflict { .. })
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
         ));
         Ok(())
     }
@@ -39,9 +38,13 @@ mod tests {
 
         let result = corrupted_context.save(&mut profile, None).await;
 
-        assert!(
-            matches!(result, Err(DomainError::Validation { field, .. }) if field == "profile_id")
-        );
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::ValidationFailed);
+                assert!(e.message.contains("profile_id"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
         Ok(())
     }
 
@@ -59,9 +62,13 @@ mod tests {
         // 2. On essaie de sauvegarder avec ce même ID
         let result = f.profile_ctx().save(&mut profile, Some(cmd_id)).await;
 
-        assert!(
-            matches!(result, Err(DomainError::AlreadyExists { entity, .. }) if entity == "Command")
-        );
+        match result {
+            Err(e) => {
+                assert_eq!(e.code, ErrorCode::AlreadyExists);
+                assert!(e.message.contains("Command"));
+            }
+            Ok(_) => panic!("Should have failed with AlreadyExists"),
+        }
         Ok(())
     }
 }

@@ -6,9 +6,7 @@ use std::sync::Arc;
 use tonic::transport::Server;
 
 // Imports du Shared Kernel (Socle technique)
-use shared_kernel::infrastructure::{
-    postgres::factories::PostgresContext, redis::factories::RedisContext,
-};
+use shared_kernel::{postgres::PostgresContext, redis::RedisContext};
 
 // Imports de la crate Profile (on utilise nos réexportations propres)
 use profile::ProfileServiceBuilder;

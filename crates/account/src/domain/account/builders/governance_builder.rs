@@ -4,8 +4,8 @@ use crate::domain::account::entities::AccountGovernance;
 use crate::domain::value_objects::{AccountRole, IpAddr, TrustScore};
 use crate::value_objects::BetaTier;
 use chrono::Utc;
-use shared_kernel::domain::value_objects::AccountId;
-use shared_kernel::errors::Result;
+use shared_kernel::types::AccountId;
+use shared_kernel::core::Result;
 
 pub struct AccountGovernanceBuilder {
     account_id: AccountId,
