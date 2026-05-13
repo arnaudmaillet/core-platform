@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/utils/infrastructure_test_context.rs
+// crates/shared-kernel/src/test_utils/test_context.rs
 
 use crate::test_utils::{
     PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContextBuilder,

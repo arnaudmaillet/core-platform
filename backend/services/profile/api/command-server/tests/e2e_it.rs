@@ -3,15 +3,16 @@
 use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator, TokenValidator};
 use profile::ProfileServiceBuilder;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use profile::test_utils::ProfileTestContext;
 use shared_kernel::cache::CacheRepository;
-use shared_kernel::test_utils::{E2EServerStarter, TestContext};
+use shared_kernel::core::Result;
+use shared_kernel::test_utils::E2EServerStarter;
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataServiceServer;
 use shared_proto::profile::v1::{ChangeHandleRequest, ProfileTarget};
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tonic::async_trait;
@@ -83,23 +84,14 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 }
 
 #[tokio::test]
-async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::core::Result<()> {
+async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     // 1. SETUP INFRA
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let kernel_migs = manifest_dir.join("../../../../../crates/shared-kernel/migrations/postgres");
-    let profile_migs = manifest_dir.join("../../../../../crates/profile/migrations/postgres");
-
-    let ctx = TestContext::builder()
-        .with_postgres(&[
-            kernel_migs.to_str().unwrap(),
-            profile_migs.to_str().unwrap(),
-        ])
-        .with_redis()
+    let ctx = ProfileTestContext::builder()
         .with_server(ProfileServerStarter)
         .build_e2e()
         .await;
 
-    let mut identity_client = ProfileIdentityServiceClient::connect(ctx.grpc_url())
+    let mut identity_client = ProfileIdentityServiceClient::connect(ctx.kernel().grpc_url())
         .await
         .unwrap();
 
@@ -128,7 +120,7 @@ async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::core::Result<()
     .bind(region)
     .bind("alice_rocks")
     .bind("Alice")
-    .execute(&ctx.postgres().pool())
+    .execute(&ctx.pg_pool())
     .await
     .unwrap();
 
@@ -162,7 +154,7 @@ async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::core::Result<()
     )
     .bind(sub_uuid)
     .bind(region)
-    .fetch_one(&ctx.postgres().pool())
+    .fetch_one(&ctx.pg_pool())
     .await
     .expect("Profile should exist in DB");
 
@@ -173,7 +165,7 @@ async fn test_e2e_complete_profile_lifecycle() -> shared_kernel::core::Result<()
     let count: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM processed_commands WHERE command_id = $1")
             .bind(uuid::Uuid::parse_str(&command_id).unwrap())
-            .fetch_one(&ctx.postgres().pool())
+            .fetch_one(&ctx.pg_pool())
             .await
             .unwrap();
 

@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/utils/infrastructure_kernel_test_context_builder.rs
+// crates/shared-kernel/src/test_utils/test_context_builder.rs
 
 use crate::cache::CacheRepository;
 use crate::test_utils::{PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContext};
@@ -121,14 +121,14 @@ impl TestContextBuilder<()> {
             server_starter: None,
         }
     }
+}
 
+impl<S> TestContextBuilder<S> {
     pub async fn build(self) -> TestContext {
         let (pg, redis, scylla) = self.build_infrastructure().await;
         TestContext::new(pg, redis, scylla, None, None, None)
     }
-}
 
-impl<S> TestContextBuilder<S> {
     pub fn with_postgres(mut self, migrations: &[&str]) -> Self {
         self.pg_migrations = Some(migrations.iter().map(|&s| s.to_string()).collect());
         self

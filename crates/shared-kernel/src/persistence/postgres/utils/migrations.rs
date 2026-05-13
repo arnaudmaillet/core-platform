@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/postgres/utils/postgres_migrations.rs
+// crates/shared-kernel/src/persistence/postgres/utils/migrations.rs
 
 use sqlx::Executor;
 

@@ -1,4 +1,3 @@
 mod postgres;
-mod utils;
 
-pub use postgres::repositories;
+pub use postgres::{repositories, utils};
