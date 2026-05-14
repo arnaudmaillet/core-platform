@@ -6,9 +6,9 @@ mod tests {
     use crate::commands::UpdateDisplayNameCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use crate::value_objects::DisplayName;
-    use shared_kernel::application::CommandTarget;
-    use shared_kernel::core::{Versioned, ErrorCode, Result};
+    use crate::types::DisplayName;
+    use shared_kernel::command::CommandTarget;
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -33,7 +33,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.display_name(), &new_name);
             assert_eq!(p.version(), version_snapshot + 1);
         })
@@ -70,10 +70,10 @@ mod tests {
             .await;
 
         // Assert
-        assert!(matches!(
-            result,
-            Err(e) if e.code == ErrorCode::AlreadyExists
-        ));
+        assert!(
+            result.is_ok(),
+            "L'idempotence technique doit être transparente (Ok)"
+        );
         f.assert_outbox(0, None); // Rien ne doit sortir
 
         Ok(())

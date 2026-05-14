@@ -1,7 +1,7 @@
 // crates/profile/src/application/commands/metadata/update_location_label/update_location_label_handler.rs
 
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, core::Result};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
 use crate::{commands::UpdateLocationCommand, context::ProfileContext};

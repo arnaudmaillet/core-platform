@@ -1,8 +1,8 @@
 // crates/profile/src/application/commands/media/update_banner/update_banner_command.rs
 
-use crate::value_objects::ProfileId;
+use crate::types::ProfileId;
 use serde::Deserialize;
-use shared_kernel::application::{CommandTarget, IdentifiableCommand};
+use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{RegionCode, Url};
 use shared_proto::profile::v1::UpdateBannerRequest;
@@ -20,7 +20,7 @@ impl IdentifiableCommand for UpdateBannerCommand {
         self.command_id
     }
 
-    fn profile_id(&self) -> String {
+    fn aggregate_id(&self) -> String {
         self.target.id.to_string()
     }
 

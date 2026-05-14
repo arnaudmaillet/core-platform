@@ -27,7 +27,7 @@ prost = { workspace = true }
 tonic = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
-
+anyhow = { workspace = true }
 
 [dev-dependencies]
 testcontainers = { workspace = true }
@@ -35,3 +35,6 @@ testcontainers-modules = { workspace = true }
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }
+
+[features]
+test-utils = ["shared-kernel/test-utils"]

@@ -2,13 +2,11 @@
 
 use async_trait::async_trait;
 use shared_kernel::{
-    domain::{transaction::Transaction, value_objects::{AccountId, Email, PhoneNumber, SubId}},
-    core::Result,
+    core::{Result, Transaction},
+    types::{AccountId, Email, PhoneNumber, SubId},
 };
 
-use crate::domain::{
-    account::entities::Account
-};
+use crate::domain::entities::Account;
 
 #[async_trait]
 pub trait AccountRepository: Send + Sync {

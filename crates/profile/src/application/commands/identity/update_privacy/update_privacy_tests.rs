@@ -6,7 +6,7 @@ mod tests {
     use crate::commands::UpdatePrivacyCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use shared_kernel::application::CommandTarget;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use uuid::Uuid;
 

@@ -1,17 +1,15 @@
 use shared_kernel::{
-    application::BaseAppContext,
-    domain::{
-        events::{DomainEvent, EventEmitter},
-        repositories::{IdempotencyRepository, OutboxRepository},
-        transaction::{FakeTransaction, Transaction},
-        value_objects::{AccountId, RegionCode},
-    },
-    core::{DomainError, Result},
-    infrastructure::postgres::transactions::PostgresTransaction,
+    command::CommandTarget,
+    context::BaseAppContext,
+    core::{Error, FakeTransaction, Result, Transaction, Versioned},
+    idempotency::IdempotencyRepository,
+    messaging::{Event, EventEmitter, OutboxRepository},
+    postgres::PostgresTransaction,
+    types::{AccountId, RegionCode},
 };
 use std::sync::Arc;
 
-use crate::domain::{account::entities::Account, repositories::AccountRepository};
+use crate::domain::{entities::Account, repositories::AccountRepository};
 
 #[derive(Clone)]
 pub struct AccountAppContext {
@@ -102,20 +100,17 @@ impl AccountContext {
             .account_repo()
             .find_by_id(&self.account_id, None)
             .await?
-            .ok_or_else(|| DomainError::NotFound {
-                entity: "Account",
-                id: self.account_id.to_string(),
-            })?;
+            .ok_or_else(|| Error::not_found("Account", self.account_id.to_string()))?;
         Ok(account)
     }
 
     pub async fn save(&self, account: &mut Account, command_id: Option<uuid::Uuid>) -> Result<()> {
         // 1. Isolation du contexte
-        if account.identity().account_id().uuid() != self.account_id.uuid() {
-            return Err(DomainError::Validation {
-                field: "account_id".into(),
-                reason: "Identity mismatch: cannot change the technical UUID of an account".into(),
-            });
+        if account.account_id().uuid() != self.account_id.uuid() {
+            return Err(Error::validation(
+                "account_id",
+                "Identity mismatch: cannot change the technical UUID of an account",
+            ));
         }
         let mut tx = self.begin_transaction().await?;
 
@@ -127,11 +122,7 @@ impl AccountContext {
                 .exists(&mut *tx, &cmd_id)
                 .await?
             {
-                return Err(DomainError::AlreadyExists {
-                    entity: "Command",
-                    field: "id".into(),
-                    value: cmd_id.to_string(),
-                });
+                return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
             }
         }
 
@@ -144,7 +135,7 @@ impl AccountContext {
 
         // 5. Outbox
         if !events.is_empty() {
-            let event_refs: Vec<&dyn DomainEvent> = events.iter().map(|e| e.as_ref()).collect();
+            let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
             self.outbox_repo().save_all(&mut *tx, &event_refs).await?;
         }
 
@@ -165,7 +156,7 @@ impl AccountContext {
                 let tx = pool
                     .begin()
                     .await
-                    .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+                    .map_err(|e| Error::internal(e.to_string()))?;
 
                 Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
             }
@@ -174,5 +165,61 @@ impl AccountContext {
                 Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>)
             }
         }
+    }
+
+    pub async fn check_idempotency(&self, command_id: uuid::Uuid) -> Result<()> {
+        let mut tx = self.begin_transaction().await?;
+
+        let exists = self
+            .app
+            .idempotency_repo()
+            .exists(&mut *tx, &command_id)
+            .await?;
+
+        if exists {
+            return Err(Error::already_exists(
+                "Command",
+                "id",
+                command_id.to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
+        // 1. Vérification de cohérence avec le contexte de l'unité de travail
+        // Ici, on vérifie que l'ID et la Région du compte correspondent au contexte
+        if target.id.uuid() != self.account_id.uuid() || target.id.region() != self.region() {
+            return Err(Error::validation(
+                "target",
+                "Command target mismatch with execution context",
+            ));
+        }
+
+        // 2. Chargement depuis le repository
+        let account = self.account().await?;
+
+        // 3. Vérification d'intégrité régionale (Sécurité anti-corruption)
+        // On s'assure que la donnée en DB est bien là où le contexte l'attend
+        if account.identity().region_code() != self.region() {
+            return Err(Error::internal(format!(
+                "Data Integrity Violation: Account {} belongs to region {}, but was loaded in context {}",
+                self.account_id,
+                account.identity().region_code(),
+                self.region()
+            )));
+        }
+
+        // 4. Contrôle de Concurrence Optimiste (OCC)
+        if account.version() != target.expected_version {
+            return Err(Error::concurrency_conflict(format!(
+                "OCC Mismatch: DB v{}, Expected v{}",
+                account.version(),
+                target.expected_version
+            )));
+        }
+
+        Ok(account)
     }
 }

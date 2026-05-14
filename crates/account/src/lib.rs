@@ -1,16 +1,21 @@
-// mod application;
-// mod bootstrap;
-// mod domain;
-// mod infrastructure;
+// crates/account/src/lib.rs
 
-// pub use bootstrap::AccountServiceBuilder;
+mod application;
+mod bootstrap;
+mod domain;
+mod infrastructure;
+mod presentation;
 
-// pub use domain::account;
-// pub use domain::repositories;
-// pub use domain::value_objects;
+pub use bootstrap::AccountServiceBuilder;
 
-// pub use application::context;
-// pub use application::use_cases;
+pub use domain::{entities, events, repositories, types};
 
-// pub use infrastructure::api::grpc;
-// pub use infrastructure::postgres::repositories as db;
+pub use application::commands;
+pub use application::context;
+
+pub use infrastructure::{postgres::repositories as db, utils};
+
+pub use presentation::services;
+
+#[cfg(feature = "test-utils")]
+pub mod test_utils;

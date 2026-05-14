@@ -2,19 +2,20 @@
 
 use std::sync::Arc;
 // Shared Kernel
-use shared_kernel::application::{BaseAppContext, CommandBus};
 use shared_kernel::cache::CacheRepositoryStub;
+use shared_kernel::command::CommandBus;
+use shared_kernel::context::BaseAppContext;
+use shared_kernel::core::{Error, Result};
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::messaging::OutboxRepositoryStub;
 use shared_kernel::types::{AccountId, RegionCode};
 
 // Profile Domain & Application
 use crate::application::context::{ProfileAppContext, ProfileContext};
-use crate::builders::ProfileBuilder;
 use crate::commands::*;
-use crate::entities::Profile;
+use crate::entities::{Profile, ProfileBuilder};
 use crate::repositories::ProfileRepositoryStub;
-use crate::value_objects::{Handle, ProfileId};
+use crate::types::{Handle, ProfileId};
 
 pub struct ProfileTestFixture {
     bus: CommandBus,
@@ -134,7 +135,7 @@ impl ProfileTestFixture {
     pub fn builder(&self, handle: &str) -> ProfileBuilder {
         let handle_vo = Handle::try_new(handle).expect("Handle invalide dans la fixture");
 
-        crate::domain::entities::Profile::builder(self.account_id(), handle_vo)
+        Profile::builder(self.account_id(), handle_vo)
             .expect("Erreur lors de l'initialisation du builder")
             .with_profile_id(self.profile_id().clone()) // On force l'ID de la fixture
     }
@@ -156,15 +157,18 @@ impl ProfileTestFixture {
         }
     }
 
-    pub async fn assert_profile<F>(&self, check: F)
+    pub async fn assert_profile<F>(&self, check: F) -> Result<()>
     where
         F: FnOnce(&Profile),
     {
-        let saved = self
-            .profile_repo
-            .find_direct(self.profile_id())
-            .await
-            .expect("Le profil devrait exister");
+        let saved_option = self.profile_repo.find_direct(self.profile_id()).await;
+
+        let saved = saved_option.ok_or_else(|| {
+            shared_kernel::core::Error::not_found("Profile", self.profile_id().to_string())
+        })?;
+
         check(&saved);
+
+        Ok(())
     }
 }

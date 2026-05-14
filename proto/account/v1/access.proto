@@ -14,16 +14,16 @@ service AccountAccessService {
 
 message RegisterRequest {
   string command_id = 1;
-  optional string sub_id = 2;
-  RegistrationIdentifier identifier = 3;
-  string region_code = 4;
+  string region_code = 2;
+  optional string sub_id = 3;
+  RegistrationIdentifier identifier = 4;
   string locale = 5;
   string ip_addr = 6;
 }
 
 message LinkSubIdentityRequest { 
-  string command_id = 1; 
-  string account_id = 2; 
+  string command_id = 1;
+  AccountTarget target = 2;
   string sub_id = 3; 
 }
 

@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use std::net::IpAddr as StdIpAddr;
 
 use crate::{
-    account::entities::Account,
+    entities::Account,
     infrastructure::postgres::models::{PostgresAccountRole, PostgresBetaTier},
 };
 
@@ -34,7 +34,7 @@ impl PostgresAccountGovernanceRow {
             last_moderation_at: gov.last_moderation_at(),
             moderation_notes: gov.moderation_notes().map(|s| s.to_string()),
             last_ip_addr: gov.last_ip_addr().map(|ip| ip.to_std()),
-            // account_id: account.identity().account_id().as_uuid(),
+            // account_id: account.account_id().as_uuid(),
             // updated_at: gov.updated_at(),
         }
     }

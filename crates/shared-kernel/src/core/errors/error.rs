@@ -121,6 +121,9 @@ impl Error {
         )
         .with_source(source)
     }
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
 }
 
 // --- CONVERSIONS AUTOMATIQUES (Traits From) ---
@@ -156,4 +159,8 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}

@@ -3,22 +3,19 @@
 use crate::infrastructure::postgres::models::{PostgresAccountRole, PostgresAccountState};
 use crate::{
     domain::{
-        account::entities::{
+        entities::{
             Account, AccountGovernance, AccountIdentity, AccountPreferences, AccountSettings,
         },
-        value_objects::{
-            AccountRole, AccountState, BetaTier, BirthDate, IpAddr, Locale, TrustScore,
-        },
+        types::{AccountRole, AccountState, BetaTier, BirthDate, IpAddr, Locale, TrustScore},
     },
     infrastructure::postgres::models::PostgresBetaTier,
 };
 use chrono::{DateTime, NaiveDate, Utc};
+use shared_kernel::geo::Timezone;
+use shared_kernel::security::PushToken;
 use shared_kernel::{
-    domain::{
-        events::AggregateMetadata,
-        value_objects::{AccountId, Email, PhoneNumber, RegionCode, SubId},
-    },
-    core::{DomainError, Result},
+    core::{AggregateMetadata, Error, Result},
+    types::{AccountId, Email, PhoneNumber, RegionCode, SubId},
 };
 
 #[derive(Debug, sqlx::FromRow)]
@@ -95,21 +92,19 @@ impl PostgresAccountRow {
         // 3. Reconstruction de Settings avec fallback
         let settings = if let Some(prefs_val) = self.preferences {
             let preferences: AccountPreferences = serde_json::from_value(prefs_val)
-                .map_err(|e| DomainError::Internal(format!("JSON settings error: {}", e)))?;
+                .map_err(|e| Error::internal(format!("JSON settings error: {}", e)))?;
 
             let tokens = self
                 .push_tokens
                 .unwrap_or_default()
                 .into_iter()
-                .map(shared_kernel::types::PushToken::try_new)
+                .map(PushToken::try_new)
                 .collect::<Result<Vec<_>>>()?;
 
             AccountSettings::restore(
                 account_id,
                 preferences,
-                shared_kernel::types::Timezone::try_new(
-                    &self.timezone.unwrap_or_else(|| "UTC".to_string()),
-                )?,
+                Timezone::try_new(&self.timezone.unwrap_or_else(|| "UTC".to_string()))?,
                 tokens,
                 self.settings_updated_at
                     .unwrap_or(self.aggregate_updated_at),

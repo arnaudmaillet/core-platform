@@ -7,7 +7,7 @@ mod persistence;
 pub mod test_utils;
 mod transport;
 
-pub use application::{idempotency, sharding};
+pub use application::{idempotency, sharding, command, context};
 pub use building_blocks::{geo, messaging, security, types};
 pub use persistence::{cache, postgres, redis, scylla};
 

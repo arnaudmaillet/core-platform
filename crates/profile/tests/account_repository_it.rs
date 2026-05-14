@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use profile::repositories::ProfileRepository;
 use profile::repositories_impl::PostgresProfileRepository;
-use profile::value_objects::{DisplayName, Handle, ProfileId};
+use profile::types::{DisplayName, Handle, ProfileId};
 use tokio;
 
 use profile::entities::Profile;

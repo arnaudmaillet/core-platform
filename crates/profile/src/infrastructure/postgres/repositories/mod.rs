@@ -1,3 +1,3 @@
-mod profile_repository;
+mod repository;
 
-pub use profile_repository::PostgresProfileRepository;
+pub use repository::PostgresProfileRepository;

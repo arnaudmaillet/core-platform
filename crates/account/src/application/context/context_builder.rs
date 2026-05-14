@@ -6,9 +6,9 @@ use crate::{
     application::context::{AccountAppContext, AccountContext},
     domain::repositories::AccountRepository,
 };
-use shared_kernel::domain::{
-    repositories::OutboxRepository,
-    value_objects::{AccountId, RegionCode},
+use shared_kernel::{
+    messaging::OutboxRepository,
+    types::{AccountId, RegionCode},
 };
 
 pub struct AccountContextBuilder {

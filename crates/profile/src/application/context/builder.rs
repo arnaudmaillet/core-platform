@@ -1,7 +1,7 @@
 // crates/profile/src/application/context_builder.rs
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
-use crate::{repositories::ProfileRepository, value_objects::ProfileId};
+use crate::{repositories::ProfileRepository, types::ProfileId};
 use shared_kernel::types::RegionCode;
 use std::sync::Arc;
 

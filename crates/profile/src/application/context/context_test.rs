@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::application::utils::ProfileTestFixture;
-    use crate::value_objects::ProfileId;
-    use shared_kernel::application::CommandTarget;
+    use crate::types::ProfileId;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
 
     #[tokio::test]
@@ -55,19 +55,13 @@ mod tests {
         f.given_profile(profile.clone()).await;
 
         let cmd_id = uuid::Uuid::new_v4();
-
-        // 1. On "seed" le repo d'idempotence manuellement
         f.idempotency_repo().seed(cmd_id);
 
-        // 2. On essaie de sauvegarder avec ce même ID
         let result = f.profile_ctx().save(&mut profile, Some(cmd_id)).await;
 
         match result {
-            Err(e) => {
-                assert_eq!(e.code, ErrorCode::AlreadyExists);
-                assert!(e.message.contains("Command"));
-            }
-            Ok(_) => panic!("Should have failed with AlreadyExists"),
+            Err(e) => assert_eq!(e.code, ErrorCode::AlreadyExists),
+            Ok(_) => panic!("Le contexte devrait signaler le doublon au Bus"),
         }
         Ok(())
     }

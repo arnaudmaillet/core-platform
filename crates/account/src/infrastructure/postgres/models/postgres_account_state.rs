@@ -1,4 +1,4 @@
-use crate::domain::value_objects::AccountState;
+use crate::domain::types::AccountState;
 
 /// Il permet de mapper l'ENUM PostgreSQL sans polluer le Domaine avec SQLx.
 #[derive(Debug, sqlx::Type)]

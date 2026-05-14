@@ -7,8 +7,8 @@ mod tests {
     use crate::context::ProfileContext;
     use crate::entities::Profile;
     use crate::events::ProfileEvent;
-    use crate::value_objects::{Handle, ProfileId};
-    use shared_kernel::application::CommandTarget;
+    use crate::types::{Handle, ProfileId};
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use shared_kernel::types::AccountId;
     use uuid::Uuid;

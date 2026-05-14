@@ -6,7 +6,7 @@
 //     application::BaseAppContext,
 //     domain::{
 //         repositories::{CacheRepositoryStub, OutboxRepositoryStub},
-//         value_objects::{AccountId, RegionCode},
+//         types::{AccountId, RegionCode},
 //     },
 // };
 

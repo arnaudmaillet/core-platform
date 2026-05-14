@@ -13,7 +13,7 @@ use crate::commands::{ChangeHandleCommand, UpdateDisplayNameCommand, UpdatePriva
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::mapper::map_profile_to_proto;
 use crate::presentation::utils::shared::GrpcServiceUtils;
-use shared_kernel::application::CommandBus;
+use shared_kernel::command::CommandBus;
 
 pub struct ProfileIdentityService {
     bus: Arc<CommandBus>,
@@ -78,7 +78,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target"))?;
-        let profile_id: crate::value_objects::ProfileId = target
+        let profile_id: crate::types::ProfileId = target
             .profile_id
             .parse()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;

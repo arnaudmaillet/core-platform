@@ -1,3 +1,3 @@
-mod account_event;
+mod event;
 
-pub use account_event::AccountEvent;
+pub use event::AccountEvent;
