@@ -1,8 +1,8 @@
 // crates/profile/src/domain/entities/profile.rs
 
-use crate::builders::ProfileBuilder;
+use crate::entities::ProfileBuilder;
 use crate::events::ProfileEvent;
-use crate::value_objects::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{AggregateMetadata, AggregateRoot, Result};

@@ -1,8 +1,9 @@
 // crates/profile/src/application/context.rs
 
-use crate::{entities::Profile, repositories::ProfileRepository, value_objects::ProfileId};
+use crate::{entities::Profile, repositories::ProfileRepository, types::ProfileId};
 use shared_kernel::{
-    application::{BaseAppContext, CommandTarget},
+    command::CommandTarget,
+    context::BaseAppContext,
     core::{Error, FakeTransaction, Identifier, Result, Transaction, Versioned},
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
@@ -152,6 +153,26 @@ impl ProfileContext {
             }
             None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
         }
+    }
+
+    pub async fn check_idempotency(&self, command_id: uuid::Uuid) -> Result<()> {
+        let mut tx = self.begin_transaction().await?;
+
+        let exists = self
+            .app
+            .idempotency_repo()
+            .exists(&mut *tx, &command_id)
+            .await?;
+
+        if exists {
+            return Err(Error::already_exists(
+                "Command",
+                "id",
+                command_id.to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {

@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use crate::entities::Profile;
 use crate::repositories::ProfileRepository;
-use crate::value_objects::{Handle, ProfileId};
+use crate::types::{Handle, ProfileId};
 use shared_kernel::core::{Error, Result, Transaction, Versioned};
 use shared_kernel::types::{AccountId, RegionCode};
 

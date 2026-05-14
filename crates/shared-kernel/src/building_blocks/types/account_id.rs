@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/domain/value_object/account_id.rs
+// crates/shared-kernel/src/building_blocks/types/account_id.rs
 
 use crate::core::{Error, Identifier, Result, ValueObject};
 use crate::types::RegionCode;

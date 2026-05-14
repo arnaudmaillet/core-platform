@@ -6,8 +6,8 @@ mod tests {
     use crate::commands::UpdateSocialsCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use crate::value_objects::Socials;
-    use shared_kernel::application::CommandTarget;
+    use crate::types::Socials;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use shared_kernel::types::Url;
     use uuid::Uuid;
@@ -38,7 +38,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.socials(), Some(&socials));
             assert_eq!(p.version(), version_snapshot + 1);
         })
@@ -78,13 +78,10 @@ mod tests {
 
         // Assert
 
-        match result {
-            Err(e) => {
-                assert_eq!(e.code, ErrorCode::AlreadyExists);
-                assert!(e.message.contains("Command"));
-            }
-            Ok(_) => panic!("Should have failed with AlreadyExists"),
-        }
+        assert!(
+            result.is_ok(),
+            "L'idempotence technique doit être transparente (Ok)"
+        );
 
         f.assert_outbox(0, None);
 

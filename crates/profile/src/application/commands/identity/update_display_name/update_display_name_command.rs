@@ -1,8 +1,8 @@
 // crates/profile/src/application/commands/identity/update_handle/update_handle_command.rs
 
-use crate::value_objects::{DisplayName, ProfileId};
+use crate::types::{DisplayName, ProfileId};
 use serde::Deserialize;
-use shared_kernel::application::{CommandTarget, IdentifiableCommand};
+use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::RegionCode;
 use shared_proto::profile::v1::UpdateDisplayNameRequest;
@@ -20,7 +20,7 @@ impl IdentifiableCommand for UpdateDisplayNameCommand {
         self.command_id
     }
 
-    fn profile_id(&self) -> String {
+    fn aggregate_id(&self) -> String {
         self.target.id.to_string()
     }
 

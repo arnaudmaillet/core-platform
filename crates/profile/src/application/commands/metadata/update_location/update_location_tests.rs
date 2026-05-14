@@ -6,8 +6,8 @@ mod tests {
     use crate::commands::UpdateLocationCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use crate::value_objects::Location;
-    use shared_kernel::application::CommandTarget;
+    use crate::types::Location;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use uuid::Uuid;
 
@@ -67,13 +67,10 @@ mod tests {
             .await;
 
         // Assert
-        match result {
-            Err(e) => {
-                assert_eq!(e.code, ErrorCode::AlreadyExists);
-                assert!(e.message.contains("Command"));
-            }
-            Ok(_) => panic!("Should have failed with AlreadyExists"),
-        }
+        assert!(
+            result.is_ok(),
+            "L'idempotence technique doit être transparente (Ok)"
+        );
         f.assert_outbox(0, None);
 
         Ok(())

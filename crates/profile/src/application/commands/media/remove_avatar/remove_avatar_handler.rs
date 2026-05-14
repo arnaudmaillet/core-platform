@@ -1,7 +1,7 @@
 // crates/profile/src/application/commands/media/remove_avatar/remove_avatar_handler.rs
 
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, core::Result};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
 use crate::{commands::RemoveAvatarCommand, context::ProfileContext};

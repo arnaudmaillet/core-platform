@@ -1,5 +1,5 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
-use crate::account::entities::Account;
+use crate::entities::Account;
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountSettingsRow {
@@ -28,7 +28,7 @@ impl PostgresAccountSettingsRow {
             preferences,
             timezone: settings.timezone().as_str().to_string(),
             push_tokens,
-            // account_id: account.identity().account_id().as_uuid(),
+            // account_id: account.account_id().as_uuid(),
             // updated_at: settings.updated_at(),
         }
     }

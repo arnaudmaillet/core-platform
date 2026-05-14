@@ -1,20 +1,20 @@
 // crates/account/src/domain/repositories/stubs/account_repository_stub.rs
 
 use async_trait::async_trait;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::transaction::Transaction;
-use shared_kernel::types::{AccountId, Email, PhoneNumber, SubId};
-use shared_kernel::core::{DomainError, Result};
+use shared_kernel::{
+    core::{AggregateRoot, Error, Result, Transaction},
+    types::{AccountId, Email, PhoneNumber, SubId},
+};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::domain::account::entities::Account;
+use crate::domain::entities::Account;
 use crate::domain::repositories::AccountRepository;
 
 #[derive(Default)]
 pub struct AccountRepositoryStub {
     accounts: Arc<Mutex<HashMap<AccountId, Account>>>,
-    error_to_return: Arc<Mutex<Option<DomainError>>>,
+    error_to_return: Arc<Mutex<Option<Error>>>,
 }
 
 impl AccountRepositoryStub {
@@ -26,15 +26,15 @@ impl AccountRepositoryStub {
 
     pub fn insert(&self, account: Account) {
         let mut map = self.accounts.lock().unwrap();
-        map.insert(account.identity().account_id().clone(), account);
+        map.insert(account.account_id().clone(), account);
     }
 
-    pub fn set_error(&self, err: DomainError) {
+    pub fn set_error(&self, err: Error) {
         let mut slot = self.error_to_return.lock().unwrap();
         *slot = Some(err);
     }
 
-    pub fn set_error_once(&self, err: DomainError) {
+    pub fn set_error_once(&self, err: Error) {
         let mut slot = self.error_to_return.lock().unwrap();
         *slot = Some(err);
     }
@@ -144,7 +144,7 @@ impl AccountRepository for AccountRepositoryStub {
         self.check_error()?;
 
         let mut map = self.accounts.lock().unwrap();
-        let new_id = account.identity().account_id().clone();
+        let new_id = account.account_id().clone();
         let new_version = account.metadata().version();
 
         // 1. DÉTECTION DE MIGRATION (Changement de Région)
@@ -171,18 +171,19 @@ impl AccountRepository for AccountRepositoryStub {
                 // --- MODE INSERT (Logique identique à create) ---
                 // Vérifier que c'est bien une création (version initiale)
                 if new_version > 1 && old_id_opt.is_none() {
-                    return Err(DomainError::ConcurrencyConflict {
-                        reason: format!("Cannot insert new account with version {}", new_version),
-                    });
+                    return Err(Error::concurrency_conflict(format!(
+                        "Cannot insert new account with version {}",
+                        new_version
+                    )));
                 }
                 // On vérifie quand même l'unicité du sub_id pour les nouveaux comptes
                 if let Some(new_sub) = account.identity().sub_id() {
                     if map.values().any(|a| a.identity().sub_id() == Some(new_sub)) {
-                        return Err(DomainError::AlreadyExists {
-                            entity: "Account",
-                            field: "sub_id",
-                            value: new_sub.to_string(),
-                        });
+                        return Err(Error::already_exists(
+                            "Account",
+                            "sub_id",
+                            new_sub.to_string(),
+                        ));
                     }
                 }
                 // Note : Ici on pourrait vérifier si new_version == 1 pour être strict
@@ -191,9 +192,10 @@ impl AccountRepository for AccountRepositoryStub {
                 // --- MODE UPDATE (OCC) ---
                 let current_version = existing.metadata().version();
                 if new_version < current_version || new_version > current_version + 1 {
-                    return Err(DomainError::ConcurrencyConflict {
-                        reason: format!("OCC mismatch: v{} -> v{}", current_version, new_version),
-                    });
+                    return Err(Error::concurrency_conflict(format!(
+                        "OCC mismatch: v{} -> v{}",
+                        current_version, new_version
+                    )));
                 }
 
                 // Vérification de l'unicité du sub_id (au cas où il a changé)
@@ -204,11 +206,11 @@ impl AccountRepository for AccountRepositoryStub {
                     });
 
                     if duplicate_exists {
-                        return Err(DomainError::AlreadyExists {
-                            entity: "Account",
-                            field: "sub_id",
-                            value: new_sub.to_string(),
-                        });
+                        return Err(Error::already_exists(
+                            "Account",
+                            "sub_id",
+                            new_sub.to_string(),
+                        ));
                     }
                 }
             }
@@ -229,10 +231,7 @@ impl AccountRepository for AccountRepositoryStub {
         self.check_error()?;
         let mut map = self.accounts.lock().unwrap();
         if map.remove(id).is_none() {
-            return Err(DomainError::NotFound {
-                entity: "Account",
-                id: id.to_string(),
-            });
+            return Err(Error::not_found("Account", id.to_string()));
         }
         Ok(())
     }

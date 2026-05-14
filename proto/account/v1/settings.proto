@@ -14,11 +14,11 @@ service AccountSettingsService {
 
 message UpdatePreferencesRequest { 
   string command_id = 1; 
-  string account_id = 2; 
+  AccountTarget target = 2;
   AccountSettings.Privacy privacy = 3;
   AccountSettings.Notifications notifications = 4;
   AccountSettings.Appearance appearance = 5;
 }
-message UpdateTimezoneRequest { string command_id = 1; string account_id = 2; string timezone = 3; }
-message AddPushTokenRequest { string command_id = 1; string account_id = 2; string token = 3; }
-message RemovePushTokenRequest { string command_id = 1; string account_id = 2; string token = 3; }
+message UpdateTimezoneRequest { string command_id = 1; AccountTarget target = 2; string timezone = 3; }
+message AddPushTokenRequest { string command_id = 1; AccountTarget target = 2; string token = 3; }
+message RemovePushTokenRequest { string command_id = 1; AccountTarget target = 2; string token = 3; }

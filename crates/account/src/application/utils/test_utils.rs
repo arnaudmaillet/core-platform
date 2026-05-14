@@ -3,22 +3,19 @@
 use std::sync::Arc;
 
 // Shared Kernel
-use shared_kernel::application::{BaseAppContext, CommandBus};
-use shared_kernel::domain::repositories::{
-    CacheRepositoryStub, IdempotencyRepositoryStub, OutboxRepositoryStub,
-};
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::cache::CacheRepositoryStub;
+use shared_kernel::command::CommandBus;
+use shared_kernel::context::BaseAppContext;
 use shared_kernel::core::Result;
+use shared_kernel::idempotency::IdempotencyRepositoryStub;
+use shared_kernel::messaging::OutboxRepositoryStub;
+use shared_kernel::types::{AccountId, RegionCode};
 
 // Account Domain & Application
 // Note : Importation directe depuis application::context (structure plate)
 use crate::application::context::{AccountAppContext, AccountContext};
-use crate::domain::account::builders::AccountBuilder;
-use crate::domain::account::entities::Account;
-use crate::domain::repositories::AccountRepositoryStub;
-use crate::domain::value_objects::RegistrationIdentifier;
-use crate::use_cases::lifecycle::change_beta_tier::change_beta_tier_use_case::ChangeBetaTierHandler;
-use crate::use_cases::{
+use crate::commands::lifecycle::change_beta_tier::change_beta_tier_use_case::ChangeBetaTierHandler;
+use crate::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
     BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,
     ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
@@ -31,6 +28,9 @@ use crate::use_cases::{
     UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler, UpdatePreferencesCommand,
     UpdatePreferencesHandler, UpdateTimezoneCommand, UpdateTimezoneHandler,
 };
+use crate::domain::repositories::AccountRepositoryStub;
+use crate::domain::types::RegistrationIdentifier;
+use crate::entities::{Account, AccountBuilder};
 
 // --- Imports des Use Cases ---
 

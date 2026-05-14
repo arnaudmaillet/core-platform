@@ -17,8 +17,9 @@ use crate::{
 };
 
 use shared_kernel::{
-    application::{BaseAppContext, CommandBus},
     cache::CacheRepository,
+    command::CommandBus,
+    context::BaseAppContext,
     postgres::{PostgresIdempotencyRepository, PostgresOutboxRepository},
 };
 

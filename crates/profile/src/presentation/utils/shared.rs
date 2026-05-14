@@ -2,8 +2,8 @@
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
 use crate::entities::Profile;
-use crate::value_objects::ProfileId;
-use shared_kernel::application::{CommandBus, IdentifiableCommand};
+use crate::types::ProfileId;
+use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::RegionCode;
 use tonic::{Request, Response, Status};
@@ -18,7 +18,6 @@ pub trait GrpcServiceUtils {
         request: &Request<T>,
         profile_id: &ProfileId,
     ) -> Result<ProfileContext, Status> {
-        // On récupère l'objet RegionCode que l'intercepteur a mis dedans
         let region = request
             .extensions()
             .get::<RegionCode>()
@@ -36,29 +35,17 @@ pub trait GrpcServiceUtils {
     ) -> Result<Response<R>, Status>
     where
         C: IdentifiableCommand + std::fmt::Debug + Send + Sync + 'static + Clone,
-        Output: Send + 'static,
+        Output: Send + Default + 'static, // On ajoute Default pour le Bus
         R: Send,
         F: FnOnce(Profile) -> R + Send + 'static,
     {
-        let execution_result = self
-            .bus()
+        // 1. Exécution (Le Bus gère le AlreadyExists et renvoie Ok)
+        self.bus()
             .execute::<ProfileContext, C, Output>(ctx.clone(), cmd)
-            .await;
+            .await
+            .map_err(|err| map_domain_err_to_status(err))?;
 
-        if let Err(err) = execution_result {
-            let error: Error = err.clone().into();
-
-            // Gestion de l'idempotence technique (Command déjà traitée)
-            if error.code == ErrorCode::AlreadyExists && error.message.contains("Command") {
-                tracing::info!(
-                    profile_id = %ctx.region(),
-                    "🔁 Idempotency hit. Fetching current state."
-                );
-            } else {
-                return Err(map_domain_err_to_status(err));
-            }
-        }
-
+        // 2. Fetch de l'état actuel
         let profile = self
             .app_ctx()
             .profile_repo()
@@ -67,7 +54,7 @@ pub trait GrpcServiceUtils {
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?
             .ok_or_else(|| Status::not_found("Profile not found"))?;
 
-        // 3. Map vers le proto de réponse
+        // 3. Mapping
         Ok(Response::new(mapper(profile)))
     }
 }

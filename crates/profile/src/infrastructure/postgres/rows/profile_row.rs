@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use crate::domain::entities::Profile;
-use crate::domain::value_objects::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::domain::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use shared_kernel::{

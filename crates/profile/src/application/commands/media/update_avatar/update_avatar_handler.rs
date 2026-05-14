@@ -1,7 +1,7 @@
 // crates/profile/src/application/commands/media/update_avatar/update_avatar_handler.rs
 
 use async_trait::async_trait;
-use shared_kernel::{application::CommandHandler, core::Result};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
 use crate::{commands::UpdateAvatarCommand, context::ProfileContext};

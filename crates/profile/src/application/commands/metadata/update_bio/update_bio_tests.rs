@@ -6,8 +6,8 @@ mod tests {
     use crate::commands::UpdateBioCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use crate::value_objects::Bio;
-    use shared_kernel::application::CommandTarget;
+    use crate::types::Bio;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use uuid::Uuid;
 
@@ -46,34 +46,42 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_bio_technical_idempotency() -> Result<()> {
-        // Arrange
+        // 1. Arrange
         let f = ProfileTestFixture::new();
         let cmd_id = Uuid::new_v4();
+
         f.idempotency_repo().seed(cmd_id);
 
         let profile = f.builder("alice").build()?;
+        let initial_version = profile.version();
         f.given_profile(profile).await;
 
         let cmd = UpdateBioCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id().clone(), f.region(), initial_version),
             new_bio: Some(Bio::try_new("Duplicate bio")?),
         };
 
-        // Act
         let result = f
             .bus()
             .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
             .await;
 
-        match result {
-            Err(e) => {
-                assert_eq!(e.code, ErrorCode::AlreadyExists);
-                assert!(e.message.contains("Command"));
-            }
-            Ok(_) => panic!("Should have failed with AlreadyExists"),
-        }
+        assert!(
+            result.is_ok(),
+            "L'idempotence technique devrait être gérée comme un succès transparent"
+        );
+
         f.assert_outbox(0, None);
+
+        f.assert_profile(|p| {
+            assert_eq!(
+                p.version(),
+                initial_version,
+                "La version ne doit pas avoir augmenté"
+            );
+        })
+        .await?;
 
         Ok(())
     }

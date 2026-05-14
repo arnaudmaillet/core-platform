@@ -13,7 +13,7 @@ use crate::commands::{UpdateBioCommand, UpdateLocationCommand, UpdateSocialsComm
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::mapper::map_profile_to_proto;
 use crate::presentation::utils::shared::GrpcServiceUtils;
-use shared_kernel::application::CommandBus;
+use shared_kernel::command::CommandBus;
 
 pub struct ProfileMetadataService {
     bus: Arc<CommandBus>,

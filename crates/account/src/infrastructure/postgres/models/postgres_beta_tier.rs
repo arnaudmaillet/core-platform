@@ -1,4 +1,4 @@
-use crate::domain::value_objects::BetaTier;
+use crate::domain::types::BetaTier;
 
 /// Mappe l'ENUM PostgreSQL `beta_tier` vers une structure compatible SQLx.
 #[derive(Debug, sqlx::Type)]

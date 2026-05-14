@@ -1,10 +1,10 @@
 // crates/account/src/infrastructure/postgres/rows/postgres_account_row
 
 use chrono::{DateTime, Utc};
-use shared_kernel::domain::Identifier;
+use shared_kernel::core::Identifier;
 use uuid::Uuid;
 
-use crate::{account::entities::Account, infrastructure::postgres::models::PostgresAccountState};
+use crate::{entities::Account, infrastructure::postgres::models::PostgresAccountState};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountIdentityRow {

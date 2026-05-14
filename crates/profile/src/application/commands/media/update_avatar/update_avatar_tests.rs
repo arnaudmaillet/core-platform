@@ -6,7 +6,7 @@ mod tests {
     use crate::commands::UpdateAvatarCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use shared_kernel::application::CommandTarget;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use shared_kernel::types::Url;
     use uuid::Uuid;
@@ -72,13 +72,10 @@ mod tests {
 
         // Assert
         // Doit retourner une erreur AlreadyExists (Command id)
-        match result {
-            Err(e) => {
-                assert_eq!(e.code, ErrorCode::AlreadyExists);
-                assert!(e.message.contains("Command"));
-            }
-            Ok(_) => panic!("Should have failed with AlreadyExists"),
-        }
+        assert!(
+            result.is_ok(),
+            "L'idempotence technique doit être transparente (Ok)"
+        );
         // On vérifie que rien n'a été émis
         f.assert_outbox(0, None);
 

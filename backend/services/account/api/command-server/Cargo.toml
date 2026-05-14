@@ -12,10 +12,11 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true }
-account = { workspace = true }
+account = { workspace = true, features = ["test-utils"] }
 shared-proto = { workspace = true }
 auth = { workspace = true }
 async-trait = { workspace = true }
+uuid = { workspace = true }
 
 # Serveur & Async
 tonic = { workspace = true }

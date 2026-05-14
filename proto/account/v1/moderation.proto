@@ -27,26 +27,26 @@ service AccountModerationService {
 
 message ModerationRequest { 
   string command_id = 1; 
-  string account_id = 2; 
+  AccountTarget target = 2; 
   string reason = 3; 
 }
 
 message AdjustTrustScoreRequest {
   string command_id = 1; 
-  string account_id = 2;
+  AccountTarget target = 2;
   int32 delta = 3; // On utilise un delta (ex: -10 ou +5)
   string reason = 4;
 }
 
 message ChangeRoleRequest { 
   string command_id = 1; 
-  string account_id = 2; 
+  AccountTarget target = 2;
   AccountRole new_role = 3; 
   string reason = 4; 
 }
 
 message ChangeBetaTierRequest {
   string command_id = 1;
-  string account_id = 2;
+  AccountTarget target = 2;
   BetaTier new_tier = 3;
 }

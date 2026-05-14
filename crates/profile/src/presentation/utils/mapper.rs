@@ -1,7 +1,7 @@
 // crates/profile/src/presentation/utils/mapper.rs
 
 use crate::entities::Profile;
-use crate::value_objects::Socials;
+use crate::types::Socials;
 use shared_kernel::core::{AggregateRoot, Versioned};
 use shared_proto::profile::v1::{Profile as ProfileProto, Socials as SocialsProto};
 

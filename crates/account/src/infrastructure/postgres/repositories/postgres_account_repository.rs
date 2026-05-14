@@ -1,17 +1,12 @@
 // crates/account/src/infrastructure/postgres/repositories/account_repository.rs
 
 use async_trait::async_trait;
-use shared_kernel::domain::transaction::Transaction;
 use sqlx::{Pool, Postgres, query_scalar};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::repositories::{CacheRepository, CacheRepositoryExt};
-use shared_kernel::types::{AccountId, Email, PhoneNumber, SubId};
-use shared_kernel::core::{DomainError, Result};
+use shared_kernel::{cache::{CacheRepository, CacheRepositoryExt}, core::{AggregateRoot, Error, Identifier, Result, Transaction}, types::{AccountId, Email, PhoneNumber, SubId}};
 
-use crate::domain::account::entities::Account;
+use crate::domain::entities::Account;
 use crate::domain::repositories::AccountRepository;
 use crate::infrastructure::postgres::rows::{
     PostgresAccountGovernanceRow, PostgresAccountIdentityRow, PostgresAccountRow,
@@ -78,7 +73,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(region.as_str())
                     .fetch_optional(conn)
                     .await
-                    .map_domain_infra("Account: fetch aggregate join")?;
+                    .map_err(|e| Error::database(format!("Account find_by_id repository: {}", e.to_string())))?;
 
                 match row_opt {
                     Some(row) => Ok(Some(row.to_domain()?)),
@@ -141,7 +136,7 @@ impl AccountRepository for PostgresAccountRepository {
                 .bind(&ident_row.region_code)
                 .fetch_optional(&mut *conn)
                 .await
-                .map_domain_infra("Account: check version for upsert")?;
+                .map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
 
                 match db_v {
                     None => {
@@ -155,7 +150,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(&ident_row.account_id).bind(&ident_row.region_code).bind(ident_row.sub_id).bind(ident_row.email)
                         .bind(ident_row.state).bind(ident_row.locale)
                         .bind(next_version).bind(ident_row.last_active_at)
-                        .execute(&mut *conn).await.map_domain_infra("Account: insert identity")?;
+                        .execute(&mut *conn).await.map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
 
                         // On insère la gouvernance
                         sqlx::query(
@@ -167,7 +162,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
                         .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
                         .bind(gov_row.last_ip_addr)
-                        .execute(&mut *conn).await.map_domain_infra("Account: governance identity")?;
+                        .execute(&mut *conn).await.map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
 
                         // On insère les settings
                         sqlx::query(
@@ -175,15 +170,15 @@ impl AccountRepository for PostgresAccountRepository {
                                VALUES ($1, $2, $3, $4, $5)"#
                         )
                         .bind(&ident_row.account_id).bind(&ident_row.region_code).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens)
-                        .execute(&mut *conn).await.map_domain_infra("Account: insert settings")?;
+                        .execute(&mut *conn).await.map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
                     }
                     Some(v) => {
                         // --- MODE UPDATE (OCC) ---
                         let current_version_expected = next_version - 1;
                         if v != current_version_expected {
-                            return Err(DomainError::ConcurrencyConflict {
-                                reason: format!("Account {}: OCC mismatch (DB v{}, App expected v{})", &ident_row.account_id, v, current_version_expected),
-                            });
+                            return Err(Error::concurrency_conflict(
+                                format!("Account {}: OCC mismatch (DB v{}, App expected v{})", &ident_row.account_id, v, current_version_expected),
+                            ));
                         }
 
                         // Update Identity
@@ -202,7 +197,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(ident_row.last_active_at)
                         .execute(&mut *conn)
                         .await
-                        .map_domain_infra("Account: update identity")?;
+                        .map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
 
                         // Update Governance
                         sqlx::query(
@@ -222,7 +217,8 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(gov_row.last_ip_addr)
                         .execute(&mut *conn)
                         .await
-                        .map_domain_infra("Account: update governance")?;
+                        .map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
+
 
                         // Update Settings
                         sqlx::query(
@@ -237,7 +233,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(sett_row.push_tokens)
                         .execute(&mut *conn)
                         .await
-                        .map_domain_infra("Account: update settings")?;
+                        .map_err(|e| Error::database(format!("Account save repository: {}", e.to_string())))?;
                     }
                 }
                 Ok(())
@@ -247,10 +243,10 @@ impl AccountRepository for PostgresAccountRepository {
         // --- POST-TRANSACTION (Cache & Metadata) ---
         account.metadata_mut().record_change();
         let cache_handle = self.cache.clone();
-        let key = Self::cache_key(account.identity().account_id());
+        let key = Self::cache_key(account.account_id());
         tokio::spawn(async move {
             let _ = tokio::time::timeout(
-                std::time::Duration::from_millis(100),
+                Duration::from_millis(100),
                 cache_handle.delete(&key),
             )
             .await;
@@ -273,7 +269,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(email_owned)
                     .fetch_optional(conn)
                     .await
-                    .map_domain_infra("Account: find_id_by_email")?;
+                    .map_err(|e| Error::database(format!("Account find_id_by_email repository: {}", e.to_string())))?;
                 Ok(res.map(AccountId::from_uuid))
             })
         })
@@ -295,7 +291,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(ext_id_owned)
                     .fetch_optional(conn)
                     .await
-                    .map_domain_infra("Account: find_id_by_sub_id")?;
+                    .map_err(|e| Error::database(format!("Account find_id_by_sub_id repository: {}", e.to_string())))?;
 
                 Ok(res.map(AccountId::from_uuid))
             })
@@ -317,7 +313,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(email_owned)
                     .fetch_one(conn)
                     .await
-                    .map_domain_infra("Account: exists_by_email")?;
+                    .map_err(|e| Error::database(format!("Account exists_by_email repository: {}", e.to_string())))?;
                 Ok(exists)
             })
         })
@@ -339,7 +335,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(phone_owned)
                     .fetch_one(conn)
                     .await
-                    .map_domain_infra("Account: exists_by_phone")?;
+                    .map_err(|e| Error::database(format!("Account exists_by_phone repository: {}", e.to_string())))?;
                 Ok(exists)
             })
         })
@@ -361,7 +357,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(ext_id_owned)
                     .fetch_one(conn) // 3. Utilisation de conn
                     .await
-                    .map_domain_infra("Account: exists_by_sub_id")?;
+                    .map_err(|e| Error::database(format!("Account exists_by_sub_id repository: {}", e.to_string())))?;
                 Ok(exists)
             })
         })
@@ -384,7 +380,7 @@ impl AccountRepository for PostgresAccountRepository {
                     .bind(uid)
                     .execute(conn)
                     .await
-                    .map_domain_infra("Account: delete")?;
+                    .map_err(|e| Error::database(format!("Account delete repository: {}", e.to_string())))?;
 
                 Ok(())
             })

@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    context::{AccountAppContext, AccountContext},
-    db::PostgresAccountRepository,
-    use_cases::{
+    commands::{
         ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
         BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
         ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
@@ -17,13 +15,14 @@ use crate::{
         UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
         UpdateTimezoneHandler,
     },
+    context::{AccountAppContext, AccountContext},
+    db::PostgresAccountRepository,
 };
 use shared_kernel::{
-    application::{BaseAppContext, CommandBus},
-    domain::repositories::CacheRepository,
-    infrastructure::postgres::repositories::{
-        PostgresIdempotencyRepository, PostgresOutboxRepository,
-    },
+    cache::CacheRepository,
+    command::CommandBus,
+    context::BaseAppContext,
+    postgres::{PostgresIdempotencyRepository, PostgresOutboxRepository},
 };
 use sqlx::PgPool;
 

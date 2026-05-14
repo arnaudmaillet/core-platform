@@ -6,8 +6,8 @@ mod tests {
     use crate::commands::RemoveAvatarCommand;
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
-    use shared_kernel::application::CommandTarget;
-    use shared_kernel::core::{Versioned, ErrorCode, Result};
+    use shared_kernel::command::CommandTarget;
+    use shared_kernel::core::{ErrorCode, Result, Versioned};
     use shared_kernel::types::Url;
     use uuid::Uuid;
 
@@ -107,13 +107,10 @@ mod tests {
 
         // Assert
         // On s'attend à une erreur AlreadyExists sur l'entité "Command"
-        match result {
-            Err(e) => {
-                assert_eq!(e.code, ErrorCode::AlreadyExists);
-                assert!(e.message.contains("Command"));
-            }
-            Ok(_) => panic!("Should have failed with AlreadyExists"),
-        }
+        assert!(
+            result.is_ok(),
+            "L'idempotence technique doit être transparente (Ok)"
+        );
 
         // On vérifie que l'avatar est toujours là (car la commande a été stoppée net)
         f.assert_profile(|p| {

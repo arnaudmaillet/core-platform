@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use sqlx::Type;
 
-use crate::domain::value_objects::AccountRole;
+use crate::domain::types::AccountRole;
 
 /// Représentation technique du rôle pour PostgreSQL
 #[derive(Debug, Deserialize, Clone, Type)]

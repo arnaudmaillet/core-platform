@@ -1,6 +1,6 @@
 // crates/profile/src/domain/events.rs
 
-use crate::value_objects::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

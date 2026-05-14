@@ -1,8 +1,8 @@
 // crates/profile/src/application/commands/metadata/update_location_label/update_location_label_command.rs
 
-use crate::value_objects::{Location, ProfileId};
+use crate::types::{Location, ProfileId};
 use serde::Deserialize;
-use shared_kernel::application::{CommandTarget, IdentifiableCommand};
+use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::RegionCode;
 use shared_proto::profile::v1::UpdateLocationRequest;
@@ -20,7 +20,7 @@ impl IdentifiableCommand for UpdateLocationCommand {
         self.command_id
     }
 
-    fn profile_id(&self) -> String {
+    fn aggregate_id(&self) -> String {
         self.target.id.to_string()
     }
 
