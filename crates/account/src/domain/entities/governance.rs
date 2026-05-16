@@ -10,7 +10,7 @@ use shared_kernel::{
 
 use crate::{
     entities::AccountGovernanceBuilder,
-    types::{AccountRole, BetaTier, IpAddr, TrustDelta, TrustScore},
+    types::{AccountRole, BetaTier, IpAddr, TrustAmount, TrustScore},
 };
 
 /// Entité Metadata (Interne à l'Agrégat Account)
@@ -92,7 +92,7 @@ impl AccountGovernance {
 
     pub(crate) fn apply_trust_reward(
         &mut self,
-        amount: TrustDelta,
+        amount: TrustAmount,
         context: TrustContext,
         reason: &AuditReason,
     ) -> Result<bool> {
@@ -103,14 +103,13 @@ impl AccountGovernance {
             return Ok(false);
         }
 
-        // Log structuré : "Email verified: [SYSTEM] Automatic (Reward +5)"
-        self.record_moderation_log(&format!("{}: {} (Reward +{})", context, reason, amount));
+        self.record_moderation_log(&format!("{}: {} (+{})", context, reason, amount));
         Ok(true)
     }
 
     pub(crate) fn apply_trust_penalty(
         &mut self,
-        amount: TrustDelta,
+        amount: TrustAmount,
         context: TrustContext,
         reason: &AuditReason,
     ) -> Result<bool> {
@@ -120,7 +119,7 @@ impl AccountGovernance {
         let changed = self.trust_score != previous_score;
 
         if changed {
-            self.record_moderation_log(&format!("{}: {} (Penalty -{})", context, reason, amount));
+            self.record_moderation_log(&format!("{}: {} (-{})", context, reason, amount));
         }
 
         Ok(changed)

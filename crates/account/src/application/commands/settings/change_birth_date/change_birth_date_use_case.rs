@@ -20,6 +20,12 @@ impl CommandHandler for ChangeBirthDateHandler {
         ctx: &AccountContext,
         cmd: ChangeBirthDateCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.change_birth_date(cmd.new_birth_date)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

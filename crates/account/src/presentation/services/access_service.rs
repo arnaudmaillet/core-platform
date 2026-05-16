@@ -1,22 +1,21 @@
 // crates/account/src/infrastructure/api/grpc/access_service.rs
 
-use shared_kernel::core::AggregateRoot;
-use shared_kernel::types::{AccountId, RegionCode, SubId};
-use uuid::Uuid;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
+
+use shared_kernel::command::CommandBus;
+use shared_kernel::types::{AccountId, RegionCode, SubId};
 
 use shared_proto::account::v1::account_access_service_server::AccountAccessService as ProtoAccountAccessService;
 use shared_proto::account::v1::{
-    AccountIdentity, LinkSubIdentityRequest, RegisterRequest, ResolveIdentityRequest,
-    ResolveIdentityResponse,
+    LinkSubIdentityRequest, LinkSubIdentityResponse, RegisterRequest, RegisterResponse,
+    ResolveIdentityRequest, ResolveIdentityResponse,
 };
 
 use crate::application::context::AccountAppContext;
-
 use crate::commands::{LinkSubIdentityCommand, RegisterCommand};
-use crate::presentation::utils::{GrpcServiceUtils, map_account_to_identity_proto};
-use shared_kernel::command::CommandBus;
+use crate::presentation::utils::GrpcServiceUtils;
 
 pub struct AccountAccessService {
     bus: Arc<CommandBus>,
@@ -43,10 +42,9 @@ impl ProtoAccountAccessService for AccountAccessService {
     async fn register(
         &self,
         request: Request<RegisterRequest>,
-    ) -> Result<Response<AccountIdentity>, Status> {
-        let req = request.into_inner();
+    ) -> Result<Response<RegisterResponse>, Status> {
+        let (_metadata, extensions, req) = request.into_parts();
 
-        // 1. Détermination de l'ID (Généré ou mappé depuis le sub_id)
         let region = RegionCode::try_new(req.region_code.clone())
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
@@ -54,23 +52,25 @@ impl ProtoAccountAccessService for AccountAccessService {
             Some(id) if !id.is_empty() => {
                 let uuid = Uuid::parse_str(id)
                     .map_err(|_| Status::invalid_argument("Invalid sub_id UUID"))?;
-                AccountId::new(uuid, region)
+                AccountId::new(uuid, region.clone())
             }
-            _ => AccountId::generate(region),
+            _ => AccountId::generate(region.clone()),
         };
 
-        // 2. Création de la commande (on retire account_id de l'argument si tu as mis à jour try_from_proto)
-        let command = RegisterCommand::try_from_proto(req)
+        let mut command = RegisterCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        command.account_id = account_id.clone();
 
-        // 3. Création du contexte avec l'ID qui va être créé
-        let ctx = self.app_ctx.create_context(account_id);
+        let ctx = self.build_creation_context(&extensions)?;
 
-        // 4. Exécution (Le handler renvoie l'AccountId créé)
-        self.execute_and_fetch::<RegisterCommand, (), AccountIdentity, _>(
+        let response_payload = RegisterResponse {
+            account_id: account_id.uuid().to_string(),
+        };
+
+        self.dispatch_command::<RegisterCommand, (), RegisterResponse>(
             &ctx,
             command,
-            map_account_to_identity_proto,
+            response_payload,
         )
         .await
     }
@@ -78,17 +78,20 @@ impl ProtoAccountAccessService for AccountAccessService {
     async fn link_sub_identity(
         &self,
         request: Request<LinkSubIdentityRequest>,
-    ) -> Result<Response<AccountIdentity>, Status> {
-        let command = LinkSubIdentityCommand::try_from_proto(request.get_ref().clone())
+    ) -> Result<Response<LinkSubIdentityResponse>, Status> {
+        let (_metadata, _extensions, req) = request.into_parts();
+
+        let command = LinkSubIdentityCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        // Pattern standard : command.target.id
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&Request::new(()), &command.target.id)?;
 
-        self.execute_and_fetch::<LinkSubIdentityCommand, (), AccountIdentity, _>(
+        let response_payload = LinkSubIdentityResponse {};
+
+        self.dispatch_command::<LinkSubIdentityCommand, (), LinkSubIdentityResponse>(
             &ctx,
             command,
-            map_account_to_identity_proto,
+            response_payload,
         )
         .await
     }
@@ -99,7 +102,6 @@ impl ProtoAccountAccessService for AccountAccessService {
     ) -> Result<Response<ResolveIdentityResponse>, Status> {
         let req = request.into_inner();
 
-        // Correction de la lecture du sub_id (ValueObject SubId)
         let sub_id =
             SubId::try_new(req.sub_id).map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -112,7 +114,7 @@ impl ProtoAccountAccessService for AccountAccessService {
             .ok_or_else(|| Status::not_found("No account associated with this sub identity"))?;
 
         Ok(Response::new(ResolveIdentityResponse {
-            account_id: account.id().to_string(),
+            account_id: account.account_id().to_string(),
             state: *account.identity().state() as i32,
             role: account.governance().role() as i32,
         }))

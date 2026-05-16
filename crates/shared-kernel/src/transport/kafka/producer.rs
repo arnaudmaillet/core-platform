@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/kafka/kafka_message_producer.rs
+// crates/shared-kernel/src/transport/kafka/producer.rs
 
 use crate::core::{Error, ErrorCode, Result};
 use crate::messaging::{EventEnvelope, EventProducer};
@@ -18,12 +18,14 @@ impl KafkaEventProducer {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", brokers)
             .set("message.timeout.ms", "5000")
-            // --- OPTIMISATIONS  ---
-            .set("compression.type", "snappy") // Compromis idéal CPU/Taille
-            .set("acks", "all") // Sécurité maximale
-            .set("queue.buffering.max.ms", "5") // Attente minime pour grouper les messages
-            .set("batch.num.messages", "1000") // Taille de batch idéale
-            .set("linger.ms", "10") // Laisse le temps au batch de se remplir
+            // --- OPTIMISATIONS DE PRODUCTION ---
+            .set("compression.type", "snappy")
+            .set("acks", "all")
+            // GARANTIE DU SHARDING : Aligne le calcul de hash par clé de librdkafka avec Java/Go
+            .set("partitioner", "consistent_random")
+            .set("queue.buffering.max.ms", "5")
+            .set("batch.num.messages", "1000")
+            .set("linger.ms", "10")
             .create()
             .map_err(|e| Error::internal(format!("Kafka config error: {}", e.to_string())))?;
 
@@ -45,7 +47,7 @@ impl EventProducer for KafkaEventProducer {
             .key(&event.aggregate_id)
             .headers(OwnedHeaders::new().insert(Header {
                 key: "event_type",
-                value: Some(&event.event_type), // ex: "account.created"
+                value: Some(&event.event_type),
             }));
 
         self.producer
@@ -57,9 +59,6 @@ impl EventProducer for KafkaEventProducer {
     }
 
     async fn publish_batch(&self, events: &[EventEnvelope]) -> Result<()> {
-        // 1. On pré-sérialise tout.
-        // On doit posséder ces Strings pour qu'elles ne soient pas détruites
-        // pendant que les futures tournent.
         let payloads: Vec<String> = events
             .iter()
             .map(|e| serde_json::to_string(e).unwrap_or_default())
@@ -67,7 +66,6 @@ impl EventProducer for KafkaEventProducer {
 
         let mut futures = Vec::with_capacity(events.len());
 
-        // 2. On envoie vers le buffer interne de librdkafka
         for (i, event) in events.iter().enumerate() {
             let record = FutureRecord::to(&self.default_topic)
                 .payload(&payloads[i])
@@ -76,11 +74,10 @@ impl EventProducer for KafkaEventProducer {
                     key: "event_type",
                     value: Some(&event.event_type),
                 }));
-            futures.push(self.producer.send(record, Duration::from_secs(0)));
+
+            futures.push(self.producer.send(record, Duration::from_secs(5))); // Changé 0 à 5s pour éviter les blocages silencieux
         }
 
-        // 3. On attend les confirmations.
-        // 'payloads' est toujours vivant ici, donc les références sont valides.
         for future in futures {
             future.await.map_err(|(e, _)| Error::from(e))?;
         }

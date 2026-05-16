@@ -22,6 +22,13 @@ impl CommandHandler for DecreaseTrustScoreHandler {
         ctx: &AccountContext,
         cmd: DecreaseTrustScoreCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, cmd.target.id.region())
+            .await?
+        {
+            return Ok(());
+        }
+
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.penalize_trust(cmd.amount, cmd.reason)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

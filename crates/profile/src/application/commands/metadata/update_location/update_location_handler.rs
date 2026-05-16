@@ -19,6 +19,13 @@ impl CommandHandler for UpdateLocationHandler {
         ctx: &ProfileContext,
         cmd: UpdateLocationCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
+
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_location(cmd.new_location)? {

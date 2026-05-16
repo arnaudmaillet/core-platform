@@ -1,10 +1,10 @@
-// crates/shared-kernel/src/infrastructure/messaging/kafka_consumer.rs
+// crates/shared-kernel/src/transport/kafka/consumer.rs
 
 use crate::core::{Error, Result};
 use crate::messaging::{EventConsumer, EventEnvelope, EventHandler};
 use async_trait::async_trait;
 use rdkafka::config::ClientConfig;
-use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::Message;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -13,7 +13,6 @@ use tokio_util::sync::CancellationToken;
 pub struct KafkaEventConsumer {
     client_config: ClientConfig,
     shutdown_token: CancellationToken,
-    // Limite le nombre de messages traités en parallèle (ex: 1000)
     concurrency_limit: Arc<Semaphore>,
 }
 
@@ -23,10 +22,9 @@ impl KafkaEventConsumer {
         config
             .set("bootstrap.servers", brokers)
             .set("group.id", group_id)
-            .set("enable.auto.commit", "true")
-            .set("auto.commit.interval.ms", "5000") // Commit toutes les 5s
-            .set("auto.offset.reset", "earliest") // Ne rate rien au démarrage
-            // Sécurité pour ne pas perdre de messages si le processing est lent
+            // PASSAGE EN COMMIT MANUEL POUR ÉVITER LES PERTES DE DONNÉES
+            .set("enable.auto.commit", "false")
+            .set("auto.offset.reset", "earliest")
             .set("session.timeout.ms", "45000")
             .set("max.poll.interval.ms", "300000");
 
@@ -38,7 +36,7 @@ impl KafkaEventConsumer {
     }
 
     pub fn stop(&self) {
-        log::info!("Sinaling Kafka consumer to stop...");
+        log::info!("Signaling Kafka consumer to stop...");
         self.shutdown_token.cancel();
     }
 }
@@ -47,6 +45,8 @@ impl KafkaEventConsumer {
 impl EventConsumer for KafkaEventConsumer {
     async fn consume(&self, topic: &str, handler: EventHandler) -> Result<()> {
         let consumer: StreamConsumer = self.client_config.create()?;
+        let consumer = Arc::new(consumer);
+
         consumer
             .subscribe(&[topic])
             .map_err(|e| Error::internal(e.to_string()))?;
@@ -59,25 +59,35 @@ impl EventConsumer for KafkaEventConsumer {
                 result = consumer.recv() => {
                     match result {
                         Ok(message) => {
-                            // Extraction propre du payload
                             let payload = match message.payload() {
                                 Some(p) => p.to_vec(),
                                 None => continue,
                             };
 
-                            // On récupère le header 'event_type' si besoin (optionnel ici)
-                            // let _event_type = message.headers().and_then(|h| h.get("event_type"));
+                            let topic_name = message.topic().to_string();
+                            let partition = message.partition();
+                            let next_offset = rdkafka::Offset::Offset(message.offset() + 1);
 
                             let h = Arc::clone(&handler);
+                            let c = Arc::clone(&consumer);
+
                             let permit = self.concurrency_limit.clone().acquire_owned().await
                                 .map_err(|e| Error::internal(e.to_string()))?;
 
                             tokio::spawn(async move {
-                                // Désérialisation
                                 match serde_json::from_slice::<EventEnvelope>(&payload) {
                                     Ok(envelope) => {
                                         if let Err(e) = (h)(envelope).await {
                                             log::error!("❌ Handler failed for event: {:?}", e);
+                                        } else {
+                                            let mut tpo = rdkafka::TopicPartitionList::new();
+                                            if let Err(err) = tpo.add_partition_offset(&topic_name, partition, next_offset) {
+                                                log::error!("⚠️ Failed to create partition list: {}", err);
+                                            } else {
+                                                if let Err(err) = c.commit(&tpo, CommitMode::Async) {
+                                                    log::error!("⚠️ Failed to commit offset for topic {}, partition {}: {}", topic_name, partition, err);
+                                                }
+                                            }
                                         }
                                     },
                                     Err(e) => log::error!("⚠️ Failed to deserialize envelope: {}", e),

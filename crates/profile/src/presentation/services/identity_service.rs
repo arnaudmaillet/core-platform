@@ -1,18 +1,23 @@
 // crates/profile/src/presentation/services/profile_identity_service.rs
 
+use shared_kernel::core::Identifier;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityService as ProtoProfileIdentityService;
 use shared_proto::profile::v1::{
-    ChangeHandleRequest, ChangeHandleResponse, UpdateDisplayNameRequest, UpdateDisplayNameResponse,
-    UpdatePrivacyRequest, UpdatePrivacyResponse,
+    ChangeHandleRequest, ChangeHandleResponse, CreateProfileRequest, CreateProfileResponse,
+    UpdateDisplayNameRequest, UpdateDisplayNameResponse, UpdatePrivacyRequest,
+    UpdatePrivacyResponse,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
 // Kernel & Application imports
-use crate::commands::{ChangeHandleCommand, UpdateDisplayNameCommand, UpdatePrivacyCommand};
+use crate::commands::{
+    ChangeHandleCommand, CreateProfileCommand, UpdateDisplayNameCommand, UpdatePrivacyCommand,
+};
 use crate::context::ProfileAppContext;
-use crate::presentation::utils::mapper::map_profile_to_proto;
 use crate::presentation::utils::shared::GrpcServiceUtils;
+use crate::types::ProfileId;
 use shared_kernel::command::CommandBus;
 
 pub struct ProfileIdentityService {
@@ -37,33 +42,45 @@ impl GrpcServiceUtils for ProfileIdentityService {
 
 #[tonic::async_trait]
 impl ProtoProfileIdentityService for ProfileIdentityService {
+    async fn create_profile(
+        &self,
+        request: Request<CreateProfileRequest>,
+    ) -> Result<Response<CreateProfileResponse>, Status> {
+        let (_, extensions, req_inner) = request.into_parts();
+
+        let command = CreateProfileCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let ctx = self.build_context(ProfileId::from_uuid(Uuid::nil()), &extensions)?;
+
+        self.dispatch_command::<CreateProfileCommand, (), CreateProfileResponse>(
+            &ctx,
+            command,
+            CreateProfileResponse {},
+        )
+        .await
+    }
+
     async fn update_display_name(
         &self,
         request: Request<UpdateDisplayNameRequest>,
     ) -> Result<Response<UpdateDisplayNameResponse>, Status> {
-        let proto_req = request.get_ref();
-
-        let target = proto_req
+        let (_metadata, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?;
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+
         let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = UpdateDisplayNameCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdateDisplayNameCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        self.execute_and_fetch::<UpdateDisplayNameCommand, (), UpdateDisplayNameResponse, _>(
+        self.dispatch_command::<UpdateDisplayNameCommand, (), UpdateDisplayNameResponse>(
             &ctx,
             command,
-            |profile| UpdateDisplayNameResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdateDisplayNameResponse {},
         )
         .await
     }
@@ -72,29 +89,24 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
         &self,
         request: Request<ChangeHandleRequest>,
     ) -> Result<Response<ChangeHandleResponse>, Status> {
-        let proto_req = request.get_ref();
-
-        let target = proto_req
+        let (_metadata, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?;
-        let profile_id: crate::types::ProfileId = target
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
 
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = ChangeHandleCommand::try_from_proto(req)
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = ChangeHandleCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<ChangeHandleCommand, (), ChangeHandleResponse, _>(
+        self.dispatch_command::<ChangeHandleCommand, (), ChangeHandleResponse>(
             &ctx,
             command,
-            |profile| ChangeHandleResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            ChangeHandleResponse {},
         )
         .await
     }
@@ -103,29 +115,23 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
         &self,
         request: Request<UpdatePrivacyRequest>,
     ) -> Result<Response<UpdatePrivacyResponse>, Status> {
-        let proto_req = request.get_ref();
-
-        let target = proto_req
+        let (_metadata, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?;
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
         let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = UpdatePrivacyCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdatePrivacyCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<UpdatePrivacyCommand, (), UpdatePrivacyResponse, _>(
+        self.dispatch_command::<UpdatePrivacyCommand, (), UpdatePrivacyResponse>(
             &ctx,
             command,
-            |profile| UpdatePrivacyResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdatePrivacyResponse {},
         )
         .await
     }

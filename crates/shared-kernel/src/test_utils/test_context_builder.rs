@@ -1,7 +1,9 @@
 // crates/shared-kernel/src/test_utils/test_context_builder.rs
 
 use crate::cache::CacheRepository;
-use crate::test_utils::{PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContext};
+use crate::test_utils::{
+    KafkaTestContext, PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContext,
+}; // AJOUT : KafkaTestContext
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use tokio::sync::oneshot;
@@ -20,7 +22,7 @@ pub trait E2EServerStarter: Send + Sync + 'static {
 /// 3. Bloc spécifique pour le démarrage AVEC serveur (E2E)
 impl<S: E2EServerStarter> TestContextBuilder<S> {
     pub async fn build_e2e(self) -> TestContext {
-        let (pg, redis, scylla) = self.build_infrastructure().await;
+        let (pg, redis, scylla, kafka) = self.build_infrastructure().await; // AJOUT : Récupération de kafka
 
         let starter = self.server_starter.expect("Server starter missing");
 
@@ -35,7 +37,6 @@ impl<S: E2EServerStarter> TestContextBuilder<S> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
         // --- Préparation des dépendances pour le thread ---
-        // On récupère les pools/repos seulement s'ils existent
         let pg_pool = pg
             .as_ref()
             .expect("E2E Server requires Postgres. Did you call .with_postgres()?")
@@ -57,7 +58,7 @@ impl<S: E2EServerStarter> TestContextBuilder<S> {
         if !Self::wait_for_server(actual_addr, 30000).await {
             panic!(
                 "❌ E2E Server failed to start on {} within 30s. \
-             Check if Keycloak is reachable or if the server crashed.",
+              Check if Keycloak is reachable or if the server crashed.",
                 actual_addr
             );
         }
@@ -66,6 +67,7 @@ impl<S: E2EServerStarter> TestContextBuilder<S> {
             pg,
             redis,
             scylla,
+            kafka, // AJOUT : Injection dans le contexte final
             Some(actual_addr),
             Some(shutdown_tx),
             Some(server_handle),
@@ -109,6 +111,7 @@ pub struct TestContextBuilder<S = ()> {
     pg_migrations: Option<Vec<String>>,
     scylla_migrations: Option<Vec<String>>,
     with_redis: bool,
+    with_kafka: bool, // AJOUT
     server_starter: Option<S>,
 }
 
@@ -118,6 +121,7 @@ impl TestContextBuilder<()> {
             pg_migrations: None,
             scylla_migrations: None,
             with_redis: false,
+            with_kafka: false, // AJOUT
             server_starter: None,
         }
     }
@@ -125,8 +129,8 @@ impl TestContextBuilder<()> {
 
 impl<S> TestContextBuilder<S> {
     pub async fn build(self) -> TestContext {
-        let (pg, redis, scylla) = self.build_infrastructure().await;
-        TestContext::new(pg, redis, scylla, None, None, None)
+        let (pg, redis, scylla, kafka) = self.build_infrastructure().await; // AJOUT : kafka
+        TestContext::new(pg, redis, scylla, kafka, None, None, None) // AJOUT : kafka
     }
 
     pub fn with_postgres(mut self, migrations: &[&str]) -> Self {
@@ -144,22 +148,30 @@ impl<S> TestContextBuilder<S> {
         self
     }
 
+    // AJOUT : Activation fluide de Kafka
+    pub fn with_kafka(mut self) -> Self {
+        self.with_kafka = true;
+        self
+    }
+
     pub fn with_server<NS: E2EServerStarter>(self, starter: NS) -> TestContextBuilder<NS> {
         TestContextBuilder {
             pg_migrations: self.pg_migrations,
             scylla_migrations: self.scylla_migrations,
             with_redis: self.with_redis,
+            with_kafka: self.with_kafka, // AJOUT
             server_starter: Some(starter),
         }
     }
 
-    /// La méthode build_infrastructure devient intelligente
+    /// La méthode build_infrastructure démarre désormais l'intégralité de la pile de test de manière asynchrone
     async fn build_infrastructure(
         &self,
     ) -> (
         Option<PostgresTestContext>,
         Option<RedisTestContext>,
         Option<ScyllaTestContext>,
+        Option<KafkaTestContext>, // AJOUT
     ) {
         let pg_future = async {
             if let Some(migs) = &self.pg_migrations {
@@ -197,7 +209,17 @@ impl<S> TestContextBuilder<S> {
             }
         };
 
-        // On lance uniquement ce qui est nécessaire en parallèle
-        tokio::join!(pg_future, redis_future, scylla_future)
+        let kafka_future = async {
+            if self.with_kafka {
+                Some(KafkaTestContext::builder().build().await)
+            } else {
+                None
+            }
+        };
+
+        let (pg, redis, scylla, kafka) =
+            tokio::join!(pg_future, redis_future, scylla_future, kafka_future);
+
+        (pg, redis, scylla, kafka)
     }
 }

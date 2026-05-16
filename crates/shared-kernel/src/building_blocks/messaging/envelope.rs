@@ -29,7 +29,6 @@ impl EventEnvelope {
             event_type: event.event_name().into_owned(),
             payload: event.payload(),
             occurred_at: event.occurred_at(),
-            // Utilise l'ID de corrélation s'il existe
             metadata: event
                 .correlation_id()
                 .map(|id| serde_json::json!({ "correlation_id": id })),

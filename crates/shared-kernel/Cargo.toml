@@ -8,6 +8,7 @@ edition.workspace = true
 [features]
 default = []
 test-utils = [
+    "kafka",
     "postgres",
     "scylla",
     "once_cell",
@@ -83,6 +84,7 @@ testcontainers = { workspace = true, optional = true }
 testcontainers-modules = { workspace = true, optional = true, features = [
     "postgres",
     "redis",
+    "kafka"
 ] }
 
 # --- Utils (Core) ---

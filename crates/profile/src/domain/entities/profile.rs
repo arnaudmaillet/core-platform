@@ -160,7 +160,7 @@ impl Profile {
 
     // --- MUTATEURS MÉTIER
 
-    pub fn register(&mut self) -> Result<bool> {
+    pub fn create_profile(&mut self) -> Result<bool> {
         self.track_change(
             |_s| Ok(true),
             |s| {

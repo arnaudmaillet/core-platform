@@ -17,6 +17,12 @@ impl CommandHandler for ChangeRoleHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &AccountContext, cmd: ChangeRoleCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.change_role(cmd.new_role, cmd.reason)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

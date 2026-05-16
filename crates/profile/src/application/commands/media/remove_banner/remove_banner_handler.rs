@@ -15,6 +15,13 @@ impl CommandHandler for RemoveBannerHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &ProfileContext, cmd: RemoveBannerCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
+
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.remove_banner()? {

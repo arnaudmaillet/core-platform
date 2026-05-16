@@ -6,16 +6,16 @@ use shared_kernel::{
     core::{Error, Result},
     types::{AccountId, AuditReason, RegionCode},
 };
-use shared_proto::account::v1::AdjustTrustScoreRequest;
+use shared_proto::account::v1::DecreaseTrustScoreRequest;
 use uuid::Uuid;
 
-use crate::domain::types::TrustDelta;
+use crate::domain::types::TrustAmount;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct DecreaseTrustScoreCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
-    pub amount: TrustDelta,
+    pub amount: TrustAmount,
     pub reason: AuditReason,
 }
 
@@ -34,7 +34,7 @@ impl IdentifiableCommand for DecreaseTrustScoreCommand {
 }
 
 impl DecreaseTrustScoreCommand {
-    pub fn try_from_proto(req: AdjustTrustScoreRequest) -> Result<Self> {
+    pub fn try_from_proto(req: DecreaseTrustScoreRequest) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -51,8 +51,7 @@ impl DecreaseTrustScoreCommand {
         let reason = AuditReason::try_from(req.reason)
             .map_err(|e| Error::validation("reason", e.to_string()))?;
 
-        let amount = TrustDelta::try_from(req.delta)
-            .map_err(|e| Error::validation("delta", e.to_string()))?;
+        let amount = TrustAmount::try_from(req.amount)?;
 
         Ok(Self {
             command_id,

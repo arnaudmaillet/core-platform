@@ -102,7 +102,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.version(), version_snapshot); // La version ne doit PAS bouger
         })
         .await;
@@ -115,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_display_name_conflict() -> Result<()> {
-        let f = ProfileTestFixture::new();
+        let f: ProfileTestFixture = ProfileTestFixture::new();
         let profile = f.builder("alice").build()?;
         f.given_profile(profile).await;
 

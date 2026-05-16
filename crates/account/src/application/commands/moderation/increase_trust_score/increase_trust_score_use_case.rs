@@ -21,6 +21,12 @@ impl CommandHandler for IncreaseTrustScoreHandler {
         ctx: &AccountContext,
         cmd: IncreaseTrustScoreCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.reward_trust(cmd.amount, cmd.reason)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

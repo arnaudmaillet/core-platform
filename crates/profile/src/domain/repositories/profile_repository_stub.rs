@@ -184,4 +184,32 @@ impl ProfileRepository for ProfileRepositoryStub {
         store.remove(&key);
         Ok(())
     }
+
+    async fn exists(&self, id: &ProfileId, region: &RegionCode) -> Result<bool> {
+        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+            return Err(err);
+        }
+
+        let store = self.profiles.lock().unwrap();
+        let key = ProfileKey {
+            id: id.clone(),
+            region: region.clone(),
+        };
+
+        Ok(store.contains_key(&key))
+    }
+
+    async fn exists_by_handle(&self, handle: &Handle, region: &RegionCode) -> Result<bool> {
+        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+            return Err(err);
+        }
+
+        let store = self.profiles.lock().unwrap();
+
+        let exists = store
+            .values()
+            .any(|p| p.handle() == handle && p.account_id().region() == region);
+
+        Ok(exists)
+    }
 }

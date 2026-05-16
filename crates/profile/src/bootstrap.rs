@@ -5,12 +5,12 @@ use std::sync::Arc;
 
 use crate::{
     commands::{
-        ChangeHandleCommand, ChangeHandleHandler, RemoveAvatarCommand, RemoveAvatarHandler,
-        RemoveBannerCommand, RemoveBannerHandler, UpdateAvatarCommand, UpdateAvatarHandler,
-        UpdateBannerCommand, UpdateBannerHandler, UpdateBioCommand, UpdateBioHandler,
-        UpdateDisplayNameCommand, UpdateDisplayNameHandler, UpdateLocationCommand,
-        UpdateLocationHandler, UpdatePrivacyCommand, UpdatePrivacyHandler, UpdateSocialsCommand,
-        UpdateSocialsHandler,
+        ChangeHandleCommand, ChangeHandleHandler, CreateProfileCommand, CreateProfileHandler,
+        RemoveAvatarCommand, RemoveAvatarHandler, RemoveBannerCommand, RemoveBannerHandler,
+        UpdateAvatarCommand, UpdateAvatarHandler, UpdateBannerCommand, UpdateBannerHandler,
+        UpdateBioCommand, UpdateBioHandler, UpdateDisplayNameCommand, UpdateDisplayNameHandler,
+        UpdateLocationCommand, UpdateLocationHandler, UpdatePrivacyCommand, UpdatePrivacyHandler,
+        UpdateSocialsCommand, UpdateSocialsHandler,
     },
     context::{ProfileAppContext, ProfileContext},
     repositories_impl::PostgresProfileRepository,
@@ -57,6 +57,9 @@ impl ProfileServiceBuilder {
         let mut bus = CommandBus::new();
 
         // --- Identity Section ---
+        bus.register::<ProfileContext, CreateProfileCommand, CreateProfileHandler>(
+            CreateProfileHandler,
+        );
         bus.register::<ProfileContext, UpdateDisplayNameCommand, UpdateDisplayNameHandler>(
             UpdateDisplayNameHandler,
         );

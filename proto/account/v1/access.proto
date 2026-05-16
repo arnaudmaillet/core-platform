@@ -7,10 +7,12 @@ import "account/v1/enums.proto";
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
 service AccountAccessService {
-  rpc Register(RegisterRequest) returns (AccountIdentity);
-  rpc LinkSubIdentity(LinkSubIdentityRequest) returns (AccountIdentity);
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc LinkSubIdentity(LinkSubIdentityRequest) returns (LinkSubIdentityResponse);
   rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
 }
+
+// --- FLUX D'INSCRIPTION (REGISTER) ---
 
 message RegisterRequest {
   string command_id = 1;
@@ -21,13 +23,25 @@ message RegisterRequest {
   string ip_addr = 6;
 }
 
-message LinkSubIdentityRequest { 
-  string command_id = 1;
-  AccountTarget target = 2;
-  string sub_id = 3; 
+message RegisterResponse {
+  string account_id = 1;
 }
 
-message ResolveIdentityRequest { string sub_id = 1; }
+// --- FLUX DE LIAISON D'IDENTITÉ (LINK SUB IDENTITY) ---
+
+message LinkSubIdentityRequest {
+  string command_id = 1;
+  AccountTarget target = 2;
+  string sub_id = 3;
+}
+
+message LinkSubIdentityResponse {}
+
+// --- FLUX DE RÉSOLUTION (RESOLVE IDENTITY) ---
+
+message ResolveIdentityRequest { 
+  string sub_id = 1; 
+}
 
 message ResolveIdentityResponse {
   string account_id = 1;

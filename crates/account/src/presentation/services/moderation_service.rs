@@ -1,13 +1,16 @@
 // crates/account/src/infrastructure/api/grpc/moderation_service.rs
 
-use shared_proto::account::v1::{
-    AccountGovernance as ProtoGovernance, AdjustTrustScoreRequest, ChangeBetaTierRequest,
-    ChangeRoleRequest, ModerationRequest,
-};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 use shared_proto::account::v1::account_moderation_service_server::AccountModerationService as ProtoAccountModerationService;
+use shared_proto::account::v1::{
+    BanRequest, BanResponse, ChangeBetaTierRequest, ChangeBetaTierResponse, ChangeRoleRequest,
+    ChangeRoleResponse, DecreaseTrustScoreRequest, DecreaseTrustScoreResponse,
+    IncreaseTrustScoreRequest, IncreaseTrustScoreResponse, LiftShadowbanRequest,
+    LiftShadowbanResponse, ShadowbanRequest, ShadowbanResponse, SuspendRequest, SuspendResponse,
+    UnbanRequest, UnbanResponse, UnsuspendRequest, UnsuspendResponse,
+};
 
 use crate::application::context::AccountAppContext;
 use crate::commands::{
@@ -15,7 +18,7 @@ use crate::commands::{
     IncreaseTrustScoreCommand, LiftShadowbanCommand, ShadowbanCommand, SuspendCommand,
     UnbanCommand, UnsuspendCommand,
 };
-use crate::presentation::utils::{GrpcServiceUtils, map_account_to_governance_proto};
+use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 
 pub struct AccountModerationService {
@@ -40,163 +43,169 @@ impl GrpcServiceUtils for AccountModerationService {
 
 #[tonic::async_trait]
 impl ProtoAccountModerationService for AccountModerationService {
-    async fn ban(
-        &self,
-        request: Request<ModerationRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+    // --- SANCTIONS ---
+
+    async fn ban(&self, request: Request<BanRequest>) -> Result<Response<BanResponse>, Status> {
         let command = BanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        // Utilisation du target.id
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<BanCommand, (), ProtoGovernance, _>(
-            &ctx,
-            command,
-            map_account_to_governance_proto,
-        )
-        .await
+        self.dispatch_command::<BanCommand, (), BanResponse>(&ctx, command, BanResponse {})
+            .await
     }
 
     async fn unban(
         &self,
-        request: Request<ModerationRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+        request: Request<UnbanRequest>,
+    ) -> Result<Response<UnbanResponse>, Status> {
         let command = UnbanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<UnbanCommand, (), ProtoGovernance, _>(
-            &ctx,
-            command,
-            map_account_to_governance_proto,
-        )
-        .await
+        self.dispatch_command::<UnbanCommand, (), UnbanResponse>(&ctx, command, UnbanResponse {})
+            .await
     }
 
     async fn suspend(
         &self,
-        request: Request<ModerationRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+        request: Request<SuspendRequest>,
+    ) -> Result<Response<SuspendResponse>, Status> {
         let command = SuspendCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<SuspendCommand, (), ProtoGovernance, _>(
+        self.dispatch_command::<SuspendCommand, (), SuspendResponse>(
             &ctx,
             command,
-            map_account_to_governance_proto,
+            SuspendResponse {},
         )
         .await
     }
 
     async fn unsuspend(
         &self,
-        request: Request<ModerationRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+        request: Request<UnsuspendRequest>,
+    ) -> Result<Response<UnsuspendResponse>, Status> {
         let command = UnsuspendCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<UnsuspendCommand, (), ProtoGovernance, _>(
+        self.dispatch_command::<UnsuspendCommand, (), UnsuspendResponse>(
             &ctx,
             command,
-            map_account_to_governance_proto,
+            UnsuspendResponse {},
         )
         .await
     }
 
+    // --- VISIBILITÉ ---
+
     async fn shadowban(
         &self,
-        request: Request<ModerationRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+        request: Request<ShadowbanRequest>,
+    ) -> Result<Response<ShadowbanResponse>, Status> {
         let command = ShadowbanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<ShadowbanCommand, (), ProtoGovernance, _>(
+        self.dispatch_command::<ShadowbanCommand, (), ShadowbanResponse>(
             &ctx,
             command,
-            map_account_to_governance_proto,
+            ShadowbanResponse {},
         )
         .await
     }
 
     async fn lift_shadowban(
         &self,
-        request: Request<ModerationRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+        request: Request<LiftShadowbanRequest>,
+    ) -> Result<Response<LiftShadowbanResponse>, Status> {
         let command = LiftShadowbanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<LiftShadowbanCommand, (), ProtoGovernance, _>(
+        self.dispatch_command::<LiftShadowbanCommand, (), LiftShadowbanResponse>(
             &ctx,
             command,
-            map_account_to_governance_proto,
+            LiftShadowbanResponse {},
         )
         .await
     }
 
-    async fn adjust_trust_score(
+    // --- REPUTATION & ROLES ---
+
+    async fn increase_trust_score(
         &self,
-        request: Request<AdjustTrustScoreRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
-        let req_ref = request.get_ref();
+        request: Request<IncreaseTrustScoreRequest>,
+    ) -> Result<Response<IncreaseTrustScoreResponse>, Status> {
+        let command = IncreaseTrustScoreCommand::try_from_proto(request.get_ref().clone())
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        if req_ref.delta >= 0 {
-            let command = IncreaseTrustScoreCommand::try_from_proto(req_ref.clone())
-                .map_err(|e| Status::invalid_argument(e.to_string()))?;
-            let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, &command.target.id)?;
 
-            self.execute_and_fetch::<IncreaseTrustScoreCommand, (), ProtoGovernance, _>(
-                &ctx,
-                command,
-                map_account_to_governance_proto,
-            )
-            .await
-        } else {
-            let command = DecreaseTrustScoreCommand::try_from_proto(req_ref.clone())
-                .map_err(|e| Status::invalid_argument(e.to_string()))?;
-            let ctx = self.get_context(&request, &command.target.id)?;
+        self.dispatch_command::<IncreaseTrustScoreCommand, (), IncreaseTrustScoreResponse>(
+            &ctx,
+            command,
+            IncreaseTrustScoreResponse {},
+        )
+        .await
+    }
 
-            self.execute_and_fetch::<DecreaseTrustScoreCommand, (), ProtoGovernance, _>(
-                &ctx,
-                command,
-                map_account_to_governance_proto,
-            )
-            .await
-        }
+    async fn decrease_trust_score(
+        &self,
+        request: Request<DecreaseTrustScoreRequest>,
+    ) -> Result<Response<DecreaseTrustScoreResponse>, Status> {
+        let command = DecreaseTrustScoreCommand::try_from_proto(request.get_ref().clone())
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        let ctx = self.get_context(&request, &command.target.id)?;
+
+        self.dispatch_command::<DecreaseTrustScoreCommand, (), DecreaseTrustScoreResponse>(
+            &ctx,
+            command,
+            DecreaseTrustScoreResponse {},
+        )
+        .await
     }
 
     async fn change_role(
         &self,
         request: Request<ChangeRoleRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+    ) -> Result<Response<ChangeRoleResponse>, Status> {
         let command = ChangeRoleCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<ChangeRoleCommand, (), ProtoGovernance, _>(
+        self.dispatch_command::<ChangeRoleCommand, (), ChangeRoleResponse>(
             &ctx,
             command,
-            map_account_to_governance_proto,
+            ChangeRoleResponse {},
         )
         .await
     }
 
+    // --- BETA ACCESS ---
+
     async fn change_beta_tier(
         &self,
         request: Request<ChangeBetaTierRequest>,
-    ) -> Result<Response<ProtoGovernance>, Status> {
+    ) -> Result<Response<ChangeBetaTierResponse>, Status> {
         let command = ChangeBetaTierCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<ChangeBetaTierCommand, (), ProtoGovernance, _>(
+        self.dispatch_command::<ChangeBetaTierCommand, (), ChangeBetaTierResponse>(
             &ctx,
             command,
-            map_account_to_governance_proto,
+            ChangeBetaTierResponse {},
         )
         .await
     }

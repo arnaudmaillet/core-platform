@@ -30,6 +30,7 @@ message QueryMetadata {
 
 // 1. SERVICE D'IDENTITÉ : Gère les informations pivots du compte
 service ProfileIdentityService {
+  rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse);
   rpc ChangeHandle(ChangeHandleRequest) returns (ChangeHandleResponse);
   rpc UpdateDisplayName(UpdateDisplayNameRequest) returns (UpdateDisplayNameResponse);
   rpc UpdatePrivacy(UpdatePrivacyRequest) returns (UpdatePrivacyResponse);
@@ -64,6 +65,13 @@ service ProfileQueryService {
 // ==========================================
 
 // --- Identity ---
+
+message CreateProfileRequest {
+  string command_id = 1;
+  string account_id = 2;
+  string handle = 3;
+  string region = 4;
+}
 
 message ChangeHandleRequest {
   string command_id = 1;
@@ -149,42 +157,18 @@ message GetProfileResponse {
   Profile profile = 1;
 }
 
-message ChangeHandleResponse {
-  Profile profile = 1;
-}
+// ==========================================
+// RESPONSES (COMMANDS)
+// ==========================================
 
-message UpdateDisplayNameResponse {
-  Profile profile = 1;
-}
-
-message UpdatePrivacyResponse {
-  Profile profile = 1;
-}
-
-message UpdateAvatarResponse {
-  Profile profile = 1;
-}
-
-message RemoveAvatarResponse {
-  Profile profile = 1;
-}
-
-message UpdateBannerResponse {
-  Profile profile = 1;
-}
-
-message RemoveBannerResponse {
-  Profile profile = 1;
-}
-
-message UpdateBioResponse {
-  Profile profile = 1;
-}
-
-message UpdateLocationResponse {
-  Profile profile = 1;
-}
-
-message UpdateSocialsResponse {
-  Profile profile = 1;
-}
+message CreateProfileResponse {}
+message ChangeHandleResponse {}
+message UpdateDisplayNameResponse {}
+message UpdatePrivacyResponse {}
+message UpdateAvatarResponse {}
+message RemoveAvatarResponse {}
+message UpdateBannerResponse {}
+message RemoveBannerResponse {}
+message UpdateBioResponse {}
+message UpdateLocationResponse {}
+message UpdateSocialsResponse {}

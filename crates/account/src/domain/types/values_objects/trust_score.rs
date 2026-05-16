@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{Error, Result, ValueObject};
 
-use crate::domain::types::TrustDelta;
+use crate::domain::types::TrustAmount; // 💡 ALIGNEMENT : Importation de ton nouveau VO
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "i32", into = "i32")]
@@ -15,7 +15,7 @@ impl TrustScore {
     pub const DEFAULT: i32 = 100;
 
     // --- CONSTANTES DE RÈGLES MÉTIER ---
-    pub const CRITICAL_THRESHOLD: i32 = 20; // Seuil sous lequel l'utilisateur est considéré "à risque"
+    pub const CRITICAL_THRESHOLD: i32 = 20;
 
     /// Création sécurisée avec validation
     pub fn try_new(value: i32) -> Result<Self> {
@@ -43,13 +43,21 @@ impl TrustScore {
     }
 
     /// Permet de diminuer le score de manière sécurisée (ne descend jamais sous 0)
-    pub fn penalize(&mut self, delta: TrustDelta) {
-        self.0 = (self.0 - delta.abs()).max(Self::MIN);
+    pub fn penalize(&mut self, amount: TrustAmount) {
+        // 💡 PLUS DE .abs() ! Un cast propre en u32 et l'utilisation de saturating_sub
+        // garantit qu'on ne subit aucun overflow ou valeur négative incohérente.
+        let current = self.0 as u32;
+        let new_score = current.saturating_sub(amount.value());
+
+        self.0 = (new_score as i32).max(Self::MIN);
     }
 
     /// Permet d'augmenter le score de manière sécurisée (ne dépasse jamais 100)
-    pub fn reward(&mut self, delta: TrustDelta) {
-        self.0 = (self.0 + delta.abs()).min(Self::MAX);
+    pub fn reward(&mut self, amount: TrustAmount) {
+        let current = self.0 as u32;
+        let new_score = current.saturating_add(amount.value());
+
+        self.0 = (new_score as i32).min(Self::MAX);
     }
 
     pub fn is_critical(&self) -> bool {

@@ -4,7 +4,7 @@ mod tests {
     use crate::application::context::AccountContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
-    use crate::domain::types::{AccountState, TrustDelta, TrustScore};
+    use crate::domain::types::{AccountState, TrustAmount, TrustScore};
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
     use shared_kernel::types::AuditReason;
@@ -26,7 +26,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            amount: TrustDelta::from_raw(30),
+            amount: TrustAmount::try_from(30)?,
             reason: AuditReason::try_new("Suspicious activity")?,
         };
 
@@ -43,7 +43,7 @@ mod tests {
         .await?;
 
         // Vérification de l'événement exact produit par penalize_trust
-        f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_ADJUSTED));
+        f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_PENALIZED));
 
         Ok(())
     }
@@ -65,7 +65,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            amount: TrustDelta::from_raw(50), // 20 - 50 -> Clamping à 0
+            amount: TrustAmount::try_from(50)?, // 20 - 50 -> Clamping à 0
             reason: AuditReason::try_new("Heavy violation")?,
         };
 
@@ -105,7 +105,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: cmd_id,
             target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            amount: TrustDelta::from_raw(10),
+            amount: TrustAmount::try_from(10)?,
             reason: AuditReason::try_new("Duplicate")?,
         };
 
@@ -143,7 +143,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            amount: TrustDelta::from_raw(10),
+            amount: TrustAmount::try_from(10)?,
             reason: AuditReason::try_new("Already at zero")?,
         };
 
@@ -185,7 +185,7 @@ mod tests {
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
             target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            amount: TrustDelta::from_raw(1),
+            amount: TrustAmount::try_from(1)?,
             reason: AuditReason::try_new("Test")?,
         };
 
@@ -197,7 +197,7 @@ mod tests {
 
         // ASSERT
         assert!(result.is_ok(), "Le retry aurait dû sauver l'opération");
-        f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_ADJUSTED));
+        f.assert_outbox(1, Some(AccountEvent::TRUST_SCORE_PENALIZED));
         Ok(())
     }
 }

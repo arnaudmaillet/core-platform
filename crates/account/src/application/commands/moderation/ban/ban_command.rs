@@ -3,7 +3,7 @@ use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{AccountId, AuditReason, RegionCode};
-use shared_proto::account::v1::ModerationRequest;
+use shared_proto::account::v1::BanRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -28,7 +28,7 @@ impl IdentifiableCommand for BanCommand {
 }
 
 impl BanCommand {
-    pub fn try_from_proto(req: ModerationRequest) -> Result<Self> {
+    pub fn try_from_proto(req: BanRequest) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;

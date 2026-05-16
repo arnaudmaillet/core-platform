@@ -7,24 +7,71 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
 service AccountPersonalService {
-  // Informations personnelles
-  rpc ChangeEmail(ChangeEmailRequest) returns (AccountIdentity);
-  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (AccountIdentity);
-  rpc ChangeBirthDate(ChangeBirthDateRequest) returns (AccountIdentity);
+  // --- INFORMATIONS PERSONNELLES ---
+  rpc ChangeEmail(ChangeEmailRequest) returns (ChangeEmailResponse);
+  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (ChangePhoneNumberResponse);
+  rpc ChangeBirthDate(ChangeBirthDateRequest) returns (ChangeBirthDateResponse);
   
-  // Localisation
-  rpc ChangeRegion(ChangeRegionRequest) returns (AccountIdentity);
-  rpc UpdateLocale(UpdateLocaleRequest) returns (AccountIdentity);
+  // --- LOCALISATION ---
+  rpc ChangeRegion(ChangeRegionRequest) returns (ChangeRegionResponse);
+  rpc UpdateLocale(UpdateLocaleRequest) returns (UpdateLocaleResponse);
 
-  // Cycle de vie utilisateur
-  rpc Activate(ActivateRequest) returns (AccountIdentity);
-  rpc Deactivate(DeactivateRequest) returns (AccountIdentity);
+  // --- CYCLE DE VIE UTILISATEUR ---
+  rpc Activate(ActivateRequest) returns (ActivateResponse);
+  rpc Deactivate(DeactivateRequest) returns (DeactivateResponse);
 }
 
-message ChangeEmailRequest { string command_id = 1; AccountTarget target = 2; string new_email = 3; }
-message ChangePhoneNumberRequest { string command_id = 1; AccountTarget target = 2; string new_phone = 3; }
-message ChangeBirthDateRequest { string command_id = 1; AccountTarget target = 2; google.protobuf.Timestamp new_birth_date = 3; }
-message ChangeRegionRequest { string command_id = 1; AccountTarget target = 2; string new_region = 3; }
-message UpdateLocaleRequest { string command_id = 1; AccountTarget target = 2; string locale = 3; }
-message ActivateRequest { string command_id = 1; AccountTarget target = 2; optional string reason = 3; }
-message DeactivateRequest { string command_id = 1; AccountTarget target = 2; optional string reason = 3; }
+// --- MESSAGES (INFORMATIONS PERSONNELLES) ---
+
+message ChangeEmailRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string new_email = 3; 
+}
+message ChangeEmailResponse {} 
+
+message ChangePhoneNumberRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string new_phone = 3; 
+}
+message ChangePhoneNumberResponse {}
+
+message ChangeBirthDateRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  google.protobuf.Timestamp new_birth_date = 3; 
+}
+message ChangeBirthDateResponse {}
+
+// --- MESSAGES (LOCALISATION) ---
+
+message ChangeRegionRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string new_region = 3; 
+}
+message ChangeRegionResponse {}
+
+message UpdateLocaleRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string locale = 3; 
+}
+message UpdateLocaleResponse {}
+
+// --- MESSAGES (CYCLE DE VIE UTILISATEUR) ---
+
+message ActivateRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  optional string reason = 3; 
+}
+message ActivateResponse {}
+
+message DeactivateRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  optional string reason = 3; 
+}
+message DeactivateResponse {}

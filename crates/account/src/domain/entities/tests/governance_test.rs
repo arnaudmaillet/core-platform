@@ -10,7 +10,7 @@ mod tests {
     use crate::{
         domain::{
             entities::AccountGovernance,
-            types::{AccountRole, IpAddr, TrustDelta, TrustScore},
+            types::{AccountRole, IpAddr, TrustAmount, TrustScore},
         },
         types::BetaTier,
     };
@@ -54,7 +54,7 @@ mod tests {
 
         // Déjà à 100, une récompense ne doit rien changer (idempotence)
         let changed = gov.apply_trust_reward(
-            TrustDelta::from_raw(10),
+            TrustAmount::try_from(10)?,
             TrustContext::ManualAdjustment,
             &reason,
         )?;
@@ -65,7 +65,7 @@ mod tests {
 
         // On baisse pour tester la remontée
         gov.apply_trust_penalty(
-            TrustDelta::from_raw(20),
+            TrustAmount::try_from(20)?,
             TrustContext::ManualAdjustment,
             &reason,
         )?;
@@ -74,7 +74,7 @@ mod tests {
         reason = AuditReason::try_new("Bouncing back")?;
 
         let changed = gov.apply_trust_reward(
-            TrustDelta::from_raw(10),
+            TrustAmount::try_from(10)?,
             TrustContext::ManualAdjustment,
             &reason,
         )?;

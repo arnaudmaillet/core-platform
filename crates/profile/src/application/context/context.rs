@@ -1,6 +1,10 @@
-// crates/profile/src/application/context.rs
+// crates/profile/src/application/context/context.rs
 
-use crate::{entities::Profile, repositories::ProfileRepository, types::ProfileId};
+use crate::{
+    entities::Profile,
+    repositories::ProfileRepository,
+    types::{Handle, ProfileId},
+};
 use shared_kernel::{
     command::CommandTarget,
     context::BaseAppContext,
@@ -11,6 +15,7 @@ use shared_kernel::{
     types::RegionCode,
 };
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct ProfileAppContext {
@@ -36,7 +41,11 @@ impl ProfileAppContext {
     }
 
     pub fn create_context(&self, profile_id: ProfileId, region: RegionCode) -> ProfileContext {
-        ProfileContext::new(self.clone(), profile_id, region)
+        ProfileContext::new(self.clone(), Some(profile_id), region)
+    }
+
+    pub fn create_creation_context(&self, region: RegionCode) -> ProfileContext {
+        ProfileContext::new(self.clone(), None, region)
     }
 
     pub fn base(&self) -> &BaseAppContext {
@@ -56,12 +65,16 @@ impl ProfileAppContext {
 #[derive(Clone)]
 pub struct ProfileContext {
     app: ProfileAppContext,
-    profile_id: ProfileId,
+    profile_id: Option<ProfileId>, // Gère le cycle de vie complet (None = Création, Some = Modif)
     region: RegionCode,
 }
 
 impl ProfileContext {
-    pub(crate) fn new(app: ProfileAppContext, profile_id: ProfileId, region: RegionCode) -> Self {
+    pub(crate) fn new(
+        app: ProfileAppContext,
+        profile_id: Option<ProfileId>,
+        region: RegionCode,
+    ) -> Self {
         Self {
             app,
             profile_id,
@@ -69,40 +82,113 @@ impl ProfileContext {
         }
     }
 
-    pub fn profile_id(&self) -> &ProfileId {
-        &self.profile_id
-    }
     pub fn region(&self) -> &RegionCode {
         &self.region
     }
     pub fn profile_repo(&self) -> Arc<dyn ProfileRepository> {
         self.app.profile_repo()
     }
-    pub fn outbox_repo(&self) -> Arc<dyn OutboxRepository> {
-        self.app.outbox_repo()
+
+    pub fn profile_id(&self) -> Result<&ProfileId> {
+        self.profile_id
+            .as_ref()
+            .ok_or_else(|| Error::validation("profile_id", "Profile ID missing in this context"))
     }
 
-    /// Récupère l'agrégat Profile depuis le Repo
-    pub async fn profile(&self) -> Result<Profile> {
-        self.profile_repo()
-            .find_by_id(&self.profile_id, &self.region, None)
-            .await?
-            .ok_or_else(|| Error::not_found("Profile", self.profile_id.to_string()))
-    }
-
-    /// Sauvegarde atomique : Persistance + Outbox + Idempotence
-    pub async fn save(&self, profile: &mut Profile, command_id: Option<uuid::Uuid>) -> Result<()> {
-        // 1. Garde-fou technique : l'ID ne doit pas avoir changé
-        if profile.profile_id().as_uuid() != self.profile_id.as_uuid() {
+    // --- FLUX DE CRÉATION ---
+    pub async fn ensure_creatable(
+        &self,
+        command_id: Uuid,
+        region: &RegionCode,
+        handle: &Handle,
+    ) -> Result<bool> {
+        if region != &self.region {
             return Err(Error::validation(
-                "profile_id",
-                "Identity mismatch: cannot change the technical UUID of a profile",
+                "region",
+                "Region mismatch for profile creation",
             ));
+        }
+        if !self.ensure_executable(command_id, region).await? {
+            return Ok(false);
+        }
+        if self
+            .profile_repo()
+            .exists_by_handle(handle, &self.region)
+            .await?
+        {
+            return Err(Error::already_exists(
+                "Profile",
+                "handle",
+                handle.as_str().to_string(),
+            ));
+        }
+        if self
+            .profile_repo()
+            .exists_by_handle(handle, &self.region)
+            .await?
+        {
+            return Err(Error::already_exists(
+                "Profile",
+                "handle",
+                handle.as_str().to_string(),
+            ));
+        }
+        Ok(true)
+    }
+
+    // --- FLUX DE MODIFICATION ---
+    pub async fn ensure_executable(&self, command_id: Uuid, region: &RegionCode) -> Result<bool> {
+        if region != &self.region {
+            return Err(Error::validation(
+                "region",
+                "Region mismatch (sharding violation prevention)",
+            ));
+        }
+        let mut tx = self.begin_transaction().await?;
+        let exists = self
+            .app
+            .idempotency_repo()
+            .exists(&mut *tx, &command_id)
+            .await?;
+        if exists {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
+        if &target.region != &self.region || Some(&target.id) != self.profile_id.as_ref() {
+            return Err(Error::validation("target", "Context/Target mismatch"));
+        }
+        let profile = self
+            .profile_repo()
+            .find_by_id(&target.id, &self.region, None)
+            .await?
+            .ok_or_else(|| Error::not_found("Profile", target.id.to_string()))?;
+
+        if profile.version() != target.expected_version {
+            return Err(Error::concurrency_conflict(format!(
+                "OCC Mismatch: DB v{}, Expected v{}",
+                profile.version(),
+                target.expected_version
+            )));
+        }
+        Ok(profile)
+    }
+
+    // --- SAUVEGARDE MUTUELLE ---
+    pub async fn save(&self, profile: &mut Profile, command_id: Option<Uuid>) -> Result<()> {
+        if let Some(ref expected_id) = self.profile_id {
+            if profile.profile_id().as_uuid() != expected_id.as_uuid() {
+                return Err(Error::validation(
+                    "profile_id",
+                    "Identity mismatch violation",
+                ));
+            }
         }
 
         let mut tx = self.begin_transaction().await?;
 
-        // 2. Idempotence
         if let Some(cmd_id) = command_id {
             if self
                 .app
@@ -110,21 +196,13 @@ impl ProfileContext {
                 .exists(&mut *tx, &cmd_id)
                 .await?
             {
-                return Err(Error::already_exists(
-                    "Command",
-                    "id".into(),
-                    cmd_id.to_string(),
-                ));
+                return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
             }
         }
 
-        // 3. Cycle de vie des événements
         let events = profile.pull_events();
-
-        // 4. Persistance (Repository gère l'OCC avec la version)
         self.profile_repo().save(profile, Some(&mut *tx)).await?;
 
-        // 5. Outbox pattern
         if !events.is_empty() {
             let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
             self.app
@@ -133,7 +211,6 @@ impl ProfileContext {
                 .await?;
         }
 
-        // 6. Enregistrement Idempotence
         if let Some(cmd_id) = command_id {
             self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
         }
@@ -153,60 +230,5 @@ impl ProfileContext {
             }
             None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
         }
-    }
-
-    pub async fn check_idempotency(&self, command_id: uuid::Uuid) -> Result<()> {
-        let mut tx = self.begin_transaction().await?;
-
-        let exists = self
-            .app
-            .idempotency_repo()
-            .exists(&mut *tx, &command_id)
-            .await?;
-
-        if exists {
-            return Err(Error::already_exists(
-                "Command",
-                "id",
-                command_id.to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
-        if target.id != self.profile_id || target.region != self.region {
-            return Err(Error::validation(
-                "target",
-                "Command target mismatch with execution context",
-            ));
-        }
-
-        let profile = self.profile().await?;
-
-        if profile.account_id().region() != &self.region {
-            return Err(Error::internal(format!(
-                "Data Integrity Violation: Profile {} belongs to account region {}, but was loaded in context {}",
-                self.profile_id,
-                profile.account_id().region(),
-                self.region
-            )));
-        }
-
-        if profile.version() != target.expected_version {
-            return Err(Error::concurrency_conflict(format!(
-                "OCC Mismatch: DB v{}, Expected v{}",
-                profile.version(),
-                target.expected_version
-            )));
-        }
-
-        Ok(profile)
-    }
-
-    #[cfg(test)]
-    pub fn set_profile_id_for_test(&mut self, id: ProfileId) {
-        self.profile_id = id;
     }
 }

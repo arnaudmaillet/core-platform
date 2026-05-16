@@ -156,12 +156,19 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
 
     // --- ÉTAPE 3 : UPDATE LOCALE (v1 -> v2) ---
     let update_command_id = uuid::Uuid::now_v7().to_string();
+    let current_version: i64 = sqlx::query_scalar(
+        "SELECT version FROM account_identity WHERE account_id = $1 AND region_code = $2",
+    )
+    .bind(sub_uuid)
+    .bind(region)
+    .fetch_one(&ctx.pg_pool())
+    .await
+    .expect("Failed to fetch current version for optimistic locking");
 
-    // On utilise AccountTarget calqué sur ProfileTarget
     let target = AccountTarget {
         account_id: real_account_id.clone(),
         region: region.to_string(),
-        expected_version: created_identity.version as u64, // Doit être 1
+        expected_version: current_version as u64, // Sera dynamiquement à 1
     };
 
     let update_payload = UpdateLocaleRequest {

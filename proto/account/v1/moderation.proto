@@ -7,36 +7,90 @@ import "account/v1/enums.proto";
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
 service AccountModerationService {
-  // Sanctions
-  rpc Ban(ModerationRequest) returns (AccountGovernance);
-  rpc Unban(ModerationRequest) returns (AccountGovernance);
-  rpc Suspend(ModerationRequest) returns (AccountGovernance);
-  rpc Unsuspend(ModerationRequest) returns (AccountGovernance);
+  // --- SANCTIONS ---
+  rpc Ban(BanRequest) returns (BanResponse);
+  rpc Unban(UnbanRequest) returns (UnbanResponse);
+  rpc Suspend(SuspendRequest) returns (SuspendResponse);
+  rpc Unsuspend(UnsuspendRequest) returns (UnsuspendResponse);
   
-  // Visibilité
-  rpc Shadowban(ModerationRequest) returns (AccountGovernance);
-  rpc LiftShadowban(ModerationRequest) returns (AccountGovernance);
+  // --- VISIBILITÉ ---
+  rpc Shadowban(ShadowbanRequest) returns (ShadowbanResponse);
+  rpc LiftShadowban(LiftShadowbanRequest) returns (LiftShadowbanResponse);
 
-  // Trust Score & Role
-  rpc AdjustTrustScore(AdjustTrustScoreRequest) returns (AccountGovernance);
-  rpc ChangeRole(ChangeRoleRequest) returns (AccountGovernance);
+  // --- REPUTATION & ROLES ---
+  rpc IncreaseTrustScore(IncreaseTrustScoreRequest) returns (IncreaseTrustScoreResponse);
+  rpc DecreaseTrustScore(DecreaseTrustScoreRequest) returns (DecreaseTrustScoreResponse);
+  rpc ChangeRole(ChangeRoleRequest) returns (ChangeRoleResponse);
 
-  // Beta Access
-  rpc ChangeBetaTier(ChangeBetaTierRequest) returns (AccountGovernance);
+  // --- BETA ACCESS ---
+  rpc ChangeBetaTier(ChangeBetaTierRequest) returns (ChangeBetaTierResponse);
 }
 
-message ModerationRequest { 
+// --- MESSAGES DE REQUÊTES ET RÉPONSES (SANCTIONS) ---
+
+message BanRequest { 
   string command_id = 1; 
   AccountTarget target = 2; 
   string reason = 3; 
 }
+message BanResponse {} // 💡 CQRS Pure : Réponse vide (Ok)
 
-message AdjustTrustScoreRequest {
+message UnbanRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string reason = 3; 
+}
+message UnbanResponse {}
+
+message SuspendRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  int64 duration_seconds = 3;
+  string reason = 4; 
+}
+message SuspendResponse {}
+
+message UnsuspendRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string reason = 3; 
+}
+message UnsuspendResponse {}
+
+// --- MESSAGES DE REQUÊTES ET RÉPONSES (VISIBILITÉ) ---
+
+message ShadowbanRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string reason = 3; 
+}
+message ShadowbanResponse {}
+
+message LiftShadowbanRequest { 
+  string command_id = 1; 
+  AccountTarget target = 2; 
+  string reason = 3; 
+}
+message LiftShadowbanResponse {}
+
+// --- MESSAGES DE REQUÊTES ET RÉPONSES (REPUTATION & ROLES) ---
+
+// Split explicite pour coller à tes commandes du Domain (Increase / Decrease)
+message IncreaseTrustScoreRequest {
   string command_id = 1; 
   AccountTarget target = 2;
-  int32 delta = 3; // On utilise un delta (ex: -10 ou +5)
+  uint32 amount = 3; 
   string reason = 4;
 }
+message IncreaseTrustScoreResponse {}
+
+message DecreaseTrustScoreRequest {
+  string command_id = 1; 
+  AccountTarget target = 2;
+  uint32 amount = 3; 
+  string reason = 4;
+}
+message DecreaseTrustScoreResponse {}
 
 message ChangeRoleRequest { 
   string command_id = 1; 
@@ -44,9 +98,13 @@ message ChangeRoleRequest {
   AccountRole new_role = 3; 
   string reason = 4; 
 }
+message ChangeRoleResponse {}
+
+// --- MESSAGES DE REQUÊTES ET RÉPONSES (BETA ACCESS) ---
 
 message ChangeBetaTierRequest {
   string command_id = 1;
   AccountTarget target = 2;
   BetaTier new_tier = 3;
 }
+message ChangeBetaTierResponse {}

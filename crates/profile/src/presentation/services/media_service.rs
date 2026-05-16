@@ -13,8 +13,8 @@ use crate::commands::{
     RemoveAvatarCommand, RemoveBannerCommand, UpdateAvatarCommand, UpdateBannerCommand,
 };
 use crate::context::ProfileAppContext;
-use crate::presentation::utils::mapper::map_profile_to_proto;
 use crate::presentation::utils::shared::GrpcServiceUtils;
+use crate::types::ProfileId;
 use shared_kernel::command::CommandBus;
 
 pub struct ProfileMediaService {
@@ -43,30 +43,23 @@ impl ProtoProfileMediaService for ProfileMediaService {
         &self,
         request: Request<UpdateAvatarRequest>,
     ) -> Result<Response<UpdateAvatarResponse>, Status> {
-        // 1. Extraire l'ID sans consommer la request
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        // 2. Contexte synchrone
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        // 3. Traitement
-        let req = request.into_inner();
-        let command = UpdateAvatarCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdateAvatarCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<UpdateAvatarCommand, (), UpdateAvatarResponse, _>(
+        self.dispatch_command::<UpdateAvatarCommand, (), UpdateAvatarResponse>(
             &ctx,
             command,
-            |profile| UpdateAvatarResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdateAvatarResponse {},
         )
         .await
     }
@@ -75,27 +68,24 @@ impl ProtoProfileMediaService for ProfileMediaService {
         &self,
         request: Request<UpdateBannerRequest>,
     ) -> Result<Response<UpdateBannerResponse>, Status> {
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = UpdateBannerCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdateBannerCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<UpdateBannerCommand, (), UpdateBannerResponse, _>(
+        self.dispatch_command::<UpdateBannerCommand, (), UpdateBannerResponse>(
             &ctx,
             command,
-            |profile| UpdateBannerResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdateBannerResponse {},
         )
         .await
     }
@@ -104,27 +94,23 @@ impl ProtoProfileMediaService for ProfileMediaService {
         &self,
         request: Request<RemoveAvatarRequest>,
     ) -> Result<Response<RemoveAvatarResponse>, Status> {
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = RemoveAvatarCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = RemoveAvatarCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<RemoveAvatarCommand, (), RemoveAvatarResponse, _>(
+        self.dispatch_command::<RemoveAvatarCommand, (), RemoveAvatarResponse>(
             &ctx,
             command,
-            |profile| RemoveAvatarResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            RemoveAvatarResponse {},
         )
         .await
     }
@@ -133,27 +119,23 @@ impl ProtoProfileMediaService for ProfileMediaService {
         &self,
         request: Request<RemoveBannerRequest>,
     ) -> Result<Response<RemoveBannerResponse>, Status> {
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = RemoveBannerCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = RemoveBannerCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<RemoveBannerCommand, (), RemoveBannerResponse, _>(
+        self.dispatch_command::<RemoveBannerCommand, (), RemoveBannerResponse>(
             &ctx,
             command,
-            |profile| RemoveBannerResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            RemoveBannerResponse {},
         )
         .await
     }

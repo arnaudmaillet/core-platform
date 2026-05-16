@@ -7,7 +7,7 @@ mod presentation;
 pub use application::{commands, context};
 pub use bootstrap::ProfileServiceBuilder;
 pub use domain::{entities, events, repositories, types};
-pub use infrastructure::{repositories as repositories_impl, utils};
+pub use infrastructure::{kafka, repositories as repositories_impl, utils};
 pub use presentation::services;
 
 #[cfg(feature = "test-utils")]

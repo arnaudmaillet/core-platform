@@ -77,6 +77,17 @@ pub struct QueryMetadata {
     pub region: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CreateProfileRequest {
+    #[prost(string, tag = "1")]
+    pub command_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub account_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub handle: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub region: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ChangeHandleRequest {
     #[prost(string, tag = "1")]
     pub command_id: ::prost::alloc::string::String,
@@ -186,56 +197,28 @@ pub struct GetProfileResponse {
     #[prost(message, optional, tag = "1")]
     pub profile: ::core::option::Option<Profile>,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ChangeHandleResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateDisplayNameResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdatePrivacyResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateAvatarResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RemoveAvatarResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateBannerResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RemoveBannerResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateBioResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateLocationResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateSocialsResponse {
-    #[prost(message, optional, tag = "1")]
-    pub profile: ::core::option::Option<Profile>,
-}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CreateProfileResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ChangeHandleResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateDisplayNameResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdatePrivacyResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateAvatarResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RemoveAvatarResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateBannerResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RemoveBannerResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateBioResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateLocationResponse {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateSocialsResponse {}
 /// Generated client implementations.
 pub mod profile_identity_service_client {
     #![allow(
@@ -329,6 +312,32 @@ pub mod profile_identity_service_client {
         pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
+        }
+        pub async fn create_profile(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreateProfileRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CreateProfileResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileIdentityService/CreateProfile",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileIdentityService", "CreateProfile"),
+                );
+            self.inner.unary(req, path, codec).await
         }
         pub async fn change_handle(
             &mut self,
@@ -426,6 +435,13 @@ pub mod profile_identity_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with ProfileIdentityServiceServer.
     #[async_trait]
     pub trait ProfileIdentityService: std::marker::Send + std::marker::Sync + 'static {
+        async fn create_profile(
+            &self,
+            request: tonic::Request<super::CreateProfileRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CreateProfileResponse>,
+            tonic::Status,
+        >;
         async fn change_handle(
             &self,
             request: tonic::Request<super::ChangeHandleRequest>,
@@ -526,6 +542,55 @@ pub mod profile_identity_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
+                "/profile.v1.ProfileIdentityService/CreateProfile" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreateProfileSvc<T: ProfileIdentityService>(pub Arc<T>);
+                    impl<
+                        T: ProfileIdentityService,
+                    > tonic::server::UnaryService<super::CreateProfileRequest>
+                    for CreateProfileSvc<T> {
+                        type Response = super::CreateProfileResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CreateProfileRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileIdentityService>::create_profile(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = CreateProfileSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/profile.v1.ProfileIdentityService/ChangeHandle" => {
                     #[allow(non_camel_case_types)]
                     struct ChangeHandleSvc<T: ProfileIdentityService>(pub Arc<T>);

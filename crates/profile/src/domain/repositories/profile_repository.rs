@@ -37,4 +37,7 @@ pub trait ProfileRepository: Send + Sync {
         region: &RegionCode,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()>;
+
+    async fn exists(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<bool>;
+    async fn exists_by_handle(&self, handle: &Handle, region: &RegionCode) -> Result<bool>;
 }

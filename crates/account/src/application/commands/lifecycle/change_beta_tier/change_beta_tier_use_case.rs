@@ -20,6 +20,12 @@ impl CommandHandler for ChangeBetaTierHandler {
         ctx: &AccountContext,
         cmd: ChangeBetaTierCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
 
         if account.change_beta_tier(cmd.new_tier)? {

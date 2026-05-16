@@ -13,11 +13,6 @@ impl ProfileTestContext {
         ProfileTestContextBuilder::new()
     }
 
-    /// Raccourci pour le cas le plus courant (setup standard du profil)
-    pub async fn setup() -> Self {
-        Self::builder().build().await
-    }
-
     /// Getter pour accéder aux ressources du noyau (Postgres, Scylla, Redis)
     pub fn kernel(&self) -> &TestContext {
         &self.kernel_context

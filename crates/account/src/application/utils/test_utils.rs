@@ -59,8 +59,9 @@ impl TestFixture {
             idempotency_repo.clone(),
         );
 
-        let account_id = AccountId::generate(RegionCode::default());
-        let account_ctx = AccountContext::new(app_ctx.clone(), account_id);
+        let default_region = RegionCode::default();
+        let account_id = AccountId::generate(default_region.clone());
+        let account_ctx = AccountContext::new(app_ctx.clone(), Some(account_id), default_region);
 
         let mut bus = CommandBus::new();
 
@@ -140,7 +141,10 @@ impl TestFixture {
     }
 
     pub fn account_id(&self) -> AccountId {
-        self.account_ctx.account_id().clone()
+        self.account_ctx
+            .account_id()
+            .expect("TestFixture context must contain an account_id")
+            .clone()
     }
 
     pub fn region(&self) -> RegionCode {

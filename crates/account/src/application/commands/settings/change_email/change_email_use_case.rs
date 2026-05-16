@@ -16,6 +16,12 @@ impl CommandHandler for ChangeEmailHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &AccountContext, cmd: ChangeEmailCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.change_email(cmd.new_email)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::domain::entities::Account;
-    use crate::types::{RegistrationIdentifier, TrustDelta, TrustScore};
-    use shared_kernel::core::{AggregateRoot, Error, ErrorCode, Result};
+    use crate::types::{RegistrationIdentifier, TrustAmount, TrustScore};
+    use shared_kernel::core::{AggregateRoot, ErrorCode, Result};
     use shared_kernel::geo::Timezone;
     use shared_kernel::messaging::EventEmitter;
     use shared_kernel::security::PushToken;
@@ -44,7 +44,7 @@ mod tests {
 
         // Act: On inflige une pénalité qui fait tomber le score à 0
         // Le score initial est 100. Une pénalité de 100 active le shadowban auto.
-        account.penalize_trust(TrustDelta::PENALTY_BAN, reason)?;
+        account.penalize_trust(TrustAmount::PENALTY_BAN, reason)?;
 
         // Assert
         assert_eq!(account.governance().trust_score().value(), 0);
@@ -76,12 +76,12 @@ mod tests {
         let reason = AuditReason::try_new("Test floor")?;
 
         // On met d'abord le compte au plancher
-        account.penalize_trust(TrustDelta::PENALTY_BAN, reason.clone())?;
-        account.pull_events(); // Clear events
+        account.penalize_trust(TrustAmount::PENALTY_BAN, reason.clone())?;
+        account.pull_events();
         let version_before = account.metadata().version();
 
-        // Act: On pénalise encore alors qu'il est déjà à 0
-        let changed = account.penalize_trust(TrustDelta::from_raw(10), reason)?;
+        let penalty_amount = TrustAmount::try_from(10)?;
+        let changed = account.penalize_trust(penalty_amount, reason)?;
 
         // Assert
         assert!(!changed);
@@ -204,7 +204,8 @@ mod tests {
 
         // 2. Act : On passe par la méthode de la racine
         // On inflige une pénalité qui fait tomber le score à 0 (Score initial 100 - 150)
-        let changed = account.penalize_trust(TrustDelta::from_raw(150), reason)?;
+        let penalty_amount = TrustAmount::try_from(150)?;
+        let changed = account.penalize_trust(penalty_amount, reason)?;
 
         // 3. Assert
         assert!(changed);
