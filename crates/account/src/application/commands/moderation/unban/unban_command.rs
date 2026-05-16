@@ -5,7 +5,7 @@ use shared_kernel::{
     core::{Error, Result},
     types::{AccountId, AuditReason, RegionCode},
 };
-use shared_proto::account::v1::ModerationRequest;
+use shared_proto::account::v1::UnbanRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -30,7 +30,7 @@ impl IdentifiableCommand for UnbanCommand {
 }
 
 impl UnbanCommand {
-    pub fn try_from_proto(req: ModerationRequest) -> Result<Self> {
+    pub fn try_from_proto(req: UnbanRequest) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;

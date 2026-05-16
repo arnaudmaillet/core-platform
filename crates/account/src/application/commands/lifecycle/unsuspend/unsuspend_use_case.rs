@@ -18,6 +18,12 @@ impl CommandHandler for UnsuspendHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &AccountContext, cmd: UnsuspendCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.unsuspend(cmd.reason)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

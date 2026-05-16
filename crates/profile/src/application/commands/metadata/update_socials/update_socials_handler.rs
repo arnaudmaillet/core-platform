@@ -19,6 +19,13 @@ impl CommandHandler for UpdateSocialsHandler {
         ctx: &ProfileContext,
         cmd: UpdateSocialsCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
+
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_socials(cmd.new_socials)? {

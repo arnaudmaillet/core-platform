@@ -3,8 +3,8 @@ mod media;
 mod metadata;
 
 pub use identity::{
-    ChangeHandleCommand, ChangeHandleHandler, UpdateDisplayNameCommand, UpdateDisplayNameHandler,
-    UpdatePrivacyCommand, UpdatePrivacyHandler,
+    ChangeHandleCommand, ChangeHandleHandler, CreateProfileCommand, CreateProfileHandler,
+    UpdateDisplayNameCommand, UpdateDisplayNameHandler, UpdatePrivacyCommand, UpdatePrivacyHandler,
 };
 
 pub use media::{

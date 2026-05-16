@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use shared_kernel::core::{AggregateMetadata, Error, ErrorCode, Result, Versioned};
-    use shared_kernel::types::{AccountId, Email, SubId};
+    use shared_kernel::types::{Email, SubId};
     use uuid::Uuid;
 
     use crate::application::commands::access_management::RegisterCommand;
@@ -19,19 +19,20 @@ mod tests {
         let email = Email::try_new("new-user@example.com")?;
         let ext_id = SubId::from_raw("keycloak|12345");
         let ip = IpAddr::try_new("127.0.0.1")?;
-        let expected_account_id = f.account_id().clone();
-        // Note: Plus de CommandTarget ici
+
+        // La source unique de vérité pour l'identité de ce test
+        let expected_account_id = f.account_id();
+
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
+            account_id: expected_account_id.clone(),
             sub_id: Some(ext_id.clone()),
             identifier: RegistrationIdentifier::from_email(email.clone()),
-            region: f.region(),
             locale: Locale::try_new("en-US")?,
             ip_addr: ip.clone(),
         };
 
         // 2. Act
-        // On utilise l'ID généré par la fixture/contexte pour l'exécution
         let result = f
             .bus()
             .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
@@ -73,11 +74,12 @@ mod tests {
             .build()?;
         f.account_repo().insert(existing_acc);
 
+        // 💡 ALIGNEMENT : Remplacement de 'region' par le Value Object 'account_id'
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
             sub_id: Some(existing_ext_id),
             identifier: RegistrationIdentifier::try_from_email("new@test.com")?,
-            region: f.region(),
             locale: Locale::try_new("en-US")?,
             ip_addr: IpAddr::try_new("127.0.0.1")?,
         };
@@ -105,14 +107,14 @@ mod tests {
         let f = TestFixture::new();
         let error_msg = "Outbox DB Crash";
 
-        // 1. Arrange : On force une erreur d'infrastructure
+        // 1. Arrange : On force une erreur d'infrastructure dans l'outbox stub
         f.outbox_repo().set_error(Error::internal(error_msg));
 
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
+            account_id: f.account_id(),
             sub_id: Some(SubId::from_raw("atomic_ext")),
             identifier: RegistrationIdentifier::try_from_email("atomic@test.com")?,
-            region: f.region(),
             locale: Locale::try_new("en-US")?,
             ip_addr: IpAddr::try_new("127.0.0.1")?,
         };
@@ -130,7 +132,7 @@ mod tests {
                 assert_eq!(e.message, "An internal server error occurred");
                 assert_eq!(e.source(), Some(error_msg));
             }
-            Ok(_) => panic!("Should have failed"),
+            Ok(_) => panic!("Should have failed due to atomic transactional rollback"),
         }
 
         Ok(())

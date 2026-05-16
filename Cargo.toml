@@ -8,6 +8,7 @@ members = [
     "backend/services/profile/workers/outbox-processor",
     "backend/services/profile/workers/cache-invalidator",
     "backend/services/profile/api/command-server",
+    "backend/services/profile/api/event-worker",
     "common/rust/shared-proto",
     "crates/account",
     "crates/auth",
@@ -16,7 +17,6 @@ members = [
     "crates/gamification",
     "backend/gateway/graphql-bff",
 ]
-exclude = ["backend/services/profile"]
 resolver = "2"
 
 [workspace.package]
@@ -123,7 +123,7 @@ reqwest = { version = "0.12.28", features = ["json", "rustls-tls"] }
 
 # Tests
 testcontainers = "0.26"
-testcontainers-modules = { version = "0.14", features = ["postgres"] }
+testcontainers-modules = { version = "0.14" }
 
 
 [workspace.dev-dependencies]

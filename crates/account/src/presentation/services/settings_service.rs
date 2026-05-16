@@ -5,15 +5,16 @@ use tonic::{Request, Response, Status};
 
 use shared_proto::account::v1::account_settings_service_server::AccountSettingsService as ProtoAccountSettingsService;
 use shared_proto::account::v1::{
-    AccountSettings as ProtoSettings, AddPushTokenRequest, RemovePushTokenRequest,
-    UpdatePreferencesRequest, UpdateTimezoneRequest,
+    AddPushTokenRequest, AddPushTokenResponse, RemovePushTokenRequest, RemovePushTokenResponse,
+    UpdatePreferencesRequest, UpdatePreferencesResponse, UpdateTimezoneRequest,
+    UpdateTimezoneResponse,
 };
 
 use crate::application::context::AccountAppContext;
 use crate::commands::{
     AddPushTokenCommand, RemovePushTokenCommand, UpdatePreferencesCommand, UpdateTimezoneCommand,
 };
-use crate::presentation::utils::{GrpcServiceUtils, map_account_to_settings_proto};
+use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 
 pub struct AccountSettingsService {
@@ -41,15 +42,16 @@ impl ProtoAccountSettingsService for AccountSettingsService {
     async fn update_preferences(
         &self,
         request: Request<UpdatePreferencesRequest>,
-    ) -> Result<Response<ProtoSettings>, Status> {
+    ) -> Result<Response<UpdatePreferencesResponse>, Status> {
         let command = UpdatePreferencesCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let ctx = self.get_context(&request, &command.target.id)?;
-        self.execute_and_fetch::<UpdatePreferencesCommand, (), ProtoSettings, _>(
+
+        self.dispatch_command::<UpdatePreferencesCommand, (), UpdatePreferencesResponse>(
             &ctx,
             command,
-            map_account_to_settings_proto,
+            UpdatePreferencesResponse {},
         )
         .await
     }
@@ -57,16 +59,16 @@ impl ProtoAccountSettingsService for AccountSettingsService {
     async fn update_timezone(
         &self,
         request: Request<UpdateTimezoneRequest>,
-    ) -> Result<Response<ProtoSettings>, Status> {
+    ) -> Result<Response<UpdateTimezoneResponse>, Status> {
         let command = UpdateTimezoneCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<UpdateTimezoneCommand, (), ProtoSettings, _>(
+        self.dispatch_command::<UpdateTimezoneCommand, (), UpdateTimezoneResponse>(
             &ctx,
             command,
-            map_account_to_settings_proto,
+            UpdateTimezoneResponse {},
         )
         .await
     }
@@ -74,16 +76,16 @@ impl ProtoAccountSettingsService for AccountSettingsService {
     async fn add_push_token(
         &self,
         request: Request<AddPushTokenRequest>,
-    ) -> Result<Response<ProtoSettings>, Status> {
+    ) -> Result<Response<AddPushTokenResponse>, Status> {
         let command = AddPushTokenCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<AddPushTokenCommand, (), ProtoSettings, _>(
+        self.dispatch_command::<AddPushTokenCommand, (), AddPushTokenResponse>(
             &ctx,
             command,
-            map_account_to_settings_proto,
+            AddPushTokenResponse {},
         )
         .await
     }
@@ -91,16 +93,16 @@ impl ProtoAccountSettingsService for AccountSettingsService {
     async fn remove_push_token(
         &self,
         request: Request<RemovePushTokenRequest>,
-    ) -> Result<Response<ProtoSettings>, Status> {
+    ) -> Result<Response<RemovePushTokenResponse>, Status> {
         let command = RemovePushTokenCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let ctx = self.get_context(&request, &command.target.id)?;
 
-        self.execute_and_fetch::<RemovePushTokenCommand, (), ProtoSettings, _>(
+        self.dispatch_command::<RemovePushTokenCommand, (), RemovePushTokenResponse>(
             &ctx,
             command,
-            map_account_to_settings_proto,
+            RemovePushTokenResponse {},
         )
         .await
     }

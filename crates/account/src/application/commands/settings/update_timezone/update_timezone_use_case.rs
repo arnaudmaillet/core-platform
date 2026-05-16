@@ -19,6 +19,12 @@ impl CommandHandler for UpdateTimezoneHandler {
         ctx: &AccountContext,
         cmd: UpdateTimezoneCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.update_timezone(cmd.new_timezone)? {
             ctx.save(&mut account, Some(cmd.command_id)).await?;

@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/test_utils/test_context.rs
 
 use crate::test_utils::{
-    PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContextBuilder,
+    KafkaTestContext, PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContextBuilder
 };
 use std::net::SocketAddr;
 use tokio::sync::oneshot;
@@ -11,6 +11,7 @@ pub struct TestContext {
     postgres_ctx: Option<PostgresTestContext>,
     redis_ctx: Option<RedisTestContext>,
     scylla_ctx: Option<ScyllaTestContext>,
+    kafka_ctx: Option<KafkaTestContext>,
 
     // Champs optionnels pour le mode E2E
     server_addr: Option<SocketAddr>,
@@ -23,6 +24,7 @@ impl TestContext {
         postgres_ctx: Option<PostgresTestContext>,
         redis_ctx: Option<RedisTestContext>,
         scylla_ctx: Option<ScyllaTestContext>,
+        kafka_ctx: Option<KafkaTestContext>,
         server_addr: Option<SocketAddr>,
         shutdown_tx: Option<oneshot::Sender<()>>,
         server_handle: Option<JoinHandle<()>>,
@@ -31,6 +33,7 @@ impl TestContext {
             postgres_ctx,
             redis_ctx,
             scylla_ctx,
+            kafka_ctx,
             server_addr,
             shutdown_tx,
             server_handle,
@@ -55,6 +58,12 @@ impl TestContext {
         self.scylla_ctx
             .as_ref()
             .expect("ScyllaContext not initialized. Did you call .with_scylla() in the builder?")
+    }
+
+    pub fn kafka(&self) -> &KafkaTestContext {
+        self.kafka_ctx
+            .as_ref()
+            .expect("KafkaContext not initialized. Did you call .with_kafka() in the builder?")
     }
 
     // --- Getters E2E ---
@@ -86,5 +95,6 @@ impl TestContext {
         drop(self.postgres_ctx);
         drop(self.redis_ctx);
         drop(self.scylla_ctx);
+        drop(self.kafka_ctx);
     }
 }

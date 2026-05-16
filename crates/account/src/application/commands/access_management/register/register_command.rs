@@ -1,9 +1,9 @@
-// crates/account/src/application/register_account/register_account_command
+// crates/account/src/application/register_account/register_account_command.rs
 
 use crate::domain::types::{IpAddr, Locale, RegistrationIdentifier};
 use shared_kernel::{
     command::IdentifiableCommand,
-    types::{Email, PhoneNumber, RegionCode, SubId},
+    types::{AccountId, Email, PhoneNumber, RegionCode, SubId},
 };
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
 use tonic::Status;
@@ -12,7 +12,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct RegisterCommand {
     pub command_id: Uuid,
-    pub region: RegionCode,
+    pub account_id: AccountId,
     pub sub_id: Option<SubId>,
     pub identifier: RegistrationIdentifier,
     pub locale: Locale,
@@ -25,11 +25,11 @@ impl IdentifiableCommand for RegisterCommand {
     }
 
     fn aggregate_id(&self) -> String {
-        self.identifier.to_string()
+        self.account_id.uuid().to_string()
     }
 
     fn region(&self) -> String {
-        self.region.to_string()
+        self.account_id.region().to_string()
     }
 }
 
@@ -50,9 +50,15 @@ impl RegisterCommand {
             None => return Err(Status::invalid_argument("Missing registration identifier")),
         };
 
+        // On extrait temporairement la région pour instancier un AccountId factice.
+        // Cet ID sera immédiatement écrasé à la volée dans ton access_service.rs.
+        let temp_region = RegionCode::try_new(req.region_code)
+            .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
+
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
+            account_id: AccountId::new(Uuid::nil(), temp_region), // 💡 Jeton temporaire écrasé par gRPC
             sub_id: match req.sub_id {
                 Some(id) if !id.is_empty() => {
                     Some(SubId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?)
@@ -60,8 +66,6 @@ impl RegisterCommand {
                 _ => None,
             },
             identifier,
-            region: RegionCode::try_new(req.region_code)
-                .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?,
             locale: Locale::try_new(req.locale)
                 .map_err(|e| Status::invalid_argument(format!("Invalid locale: {}", e)))?,
             ip_addr: IpAddr::try_new(req.ip_addr)

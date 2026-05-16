@@ -52,6 +52,7 @@ impl AccountContextBuilder {
     }
 
     pub fn with_account_id(mut self, id: AccountId) -> Self {
+        self.region = Some(id.region().clone());
         self.account_id = Some(id);
         self
     }
@@ -62,12 +63,14 @@ impl AccountContextBuilder {
     }
 
     pub fn build(self) -> AccountContext {
-        AccountContext::new(
-            self.app
-                .expect("AccountAppContext is required. Use .with_app()"),
-            self.account_id
-                .expect("account_id is required for AccountContext"),
-        )
+        let app = self
+            .app
+            .expect("AccountAppContext is required. Use .with_app()");
+
+        let region = self.region.expect(
+            "Routage impossible : Fournissez un account_id (via .with_account_id()) ou une région (via .with_region())"
+        );
+        AccountContext::new(app, self.account_id, region)
     }
 }
 

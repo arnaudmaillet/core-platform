@@ -11,5 +11,5 @@ pub use builders::{
 pub use values_objects::{
     AccountRole, AccountState, AccountType, AppearancePreferences, BetaTier, BirthDate, IpAddr,
     Locale, NotificationPreferences, PrivacyPreferences, RegistrationIdentifier, ThemeMode,
-    TrustDelta, TrustScore, VerificationCode, VerificationToken,
+    TrustDelta, TrustScore, VerificationCode, VerificationToken, TrustAmount
 };

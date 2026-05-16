@@ -22,7 +22,11 @@ impl<S> ProfileTestContextBuilder<S> {
         }
     }
 
-    /// Build classique (Unit/Integration)
+    pub fn with_kafka(mut self) -> Self {
+        self.kernel_builder = self.kernel_builder.with_kafka();
+        self
+    }
+
     pub async fn build(self) -> ProfileTestContext {
         let kernel = self.kernel_builder.build().await;
         let ctx = ProfileTestContext::new(kernel);
@@ -38,7 +42,7 @@ impl<S> ProfileTestContextBuilder<S> {
 /// Extension pour le mode E2E
 impl<S: E2EServerStarter> ProfileTestContextBuilder<S> {
     pub async fn build_e2e(self) -> ProfileTestContext {
-        let kernel = self.kernel_builder.build_e2e().await;
+        let kernel = self.kernel_builder.build_e2e().await; // 💡 Conserve .build_e2e() pour les serveurs
         let ctx = ProfileTestContext::new(kernel);
 
         run_postgres_migrations(&ctx.kernel().postgres().pool())

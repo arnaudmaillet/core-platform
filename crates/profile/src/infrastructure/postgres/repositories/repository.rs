@@ -265,4 +265,36 @@ impl ProfileRepository for PostgresProfileRepository {
 
         Ok(())
     }
+
+    async fn exists(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<bool> {
+        let uid = profile_id.as_uuid();
+        let r_str = region.as_str().to_string();
+
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE profile_id = $1 AND region_code = $2)",
+        )
+        .bind(uid)
+        .bind(r_str)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| Error::database(format!("Profile exists repository: {}", e)))?;
+
+        Ok(exists)
+    }
+
+    async fn exists_by_handle(&self, handle: &Handle, region: &RegionCode) -> Result<bool> {
+        let h_str = handle.as_str().to_string();
+        let r_str = region.as_str().to_string();
+
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE handle = $1 AND region_code = $2)",
+        )
+        .bind(h_str)
+        .bind(r_str)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| Error::database(format!("Profile exists_by_handle repository: {}", e)))?;
+
+        Ok(exists)
+    }
 }

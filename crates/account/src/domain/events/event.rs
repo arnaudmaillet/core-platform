@@ -2,7 +2,7 @@
 
 use crate::types::{
     AccountRole, AppearancePreferences, BetaTier, BirthDate, IpAddr, Locale,
-    NotificationPreferences, PrivacyPreferences, TrustDelta, TrustScore,
+    NotificationPreferences, PrivacyPreferences, TrustAmount, TrustDelta, TrustScore,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -73,11 +73,20 @@ pub enum AccountEvent {
         new_tier: BetaTier,
         occurred_at: DateTime<Utc>,
     },
-    TrustScoreAdjusted {
+    TrustScoreRewarded {
         id: Uuid,
         account_id: AccountId,
         region: RegionCode,
-        delta: TrustDelta,
+        amount: TrustAmount,
+        new_score: TrustScore,
+        reason: String,
+        occurred_at: DateTime<Utc>,
+    },
+    TrustScorePenalized {
+        id: Uuid,
+        account_id: AccountId,
+        region: RegionCode,
+        amount: TrustAmount,
         new_score: TrustScore,
         reason: String,
         occurred_at: DateTime<Utc>,
@@ -195,7 +204,8 @@ impl AccountEvent {
 
     // Metadata & System
     pub const BETA_TIER_CHANGED: &'static str = "account.metadata.beta_tier_changed";
-    pub const TRUST_SCORE_ADJUSTED: &'static str = "account.metadata.trust_score_adjusted";
+    pub const TRUST_SCORE_REWARDED: &'static str = "account.metadata.trust_score_rewarded";
+    pub const TRUST_SCORE_PENALIZED: &'static str = "account.metadata.trust_score_penalized";
     pub const SHADOWBAN_UPDATED: &'static str = "account.metadata.shadowban_updated";
     pub const ROLE_CHANGED: &'static str = "account.metadata.role_changed";
     pub const REGION_CHANGED: &'static str = "account.system.region_changed";
@@ -222,9 +232,7 @@ impl AccountEvent {
 impl Event for AccountEvent {
     fn event_id(&self) -> Uuid {
         match self {
-            // Pour les ajustements de score, on utilise l'ID déterministe
-            // qui vient de la commande (action_id).
-            Self::TrustScoreAdjusted { id, .. } => *id,
+            Self::TrustScoreRewarded { id, .. } | Self::TrustScorePenalized { id, .. } => *id,
             _ => Uuid::now_v7(),
         }
     }
@@ -238,7 +246,8 @@ impl Event for AccountEvent {
             Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
             Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
             Self::BetaTierChanged { .. } => Self::BETA_TIER_CHANGED,
-            Self::TrustScoreAdjusted { .. } => Self::TRUST_SCORE_ADJUSTED,
+            Self::TrustScoreRewarded { .. } => Self::TRUST_SCORE_REWARDED,
+            Self::TrustScorePenalized { .. } => Self::TRUST_SCORE_PENALIZED,
             Self::ShadowbanUpdated { .. } => Self::SHADOWBAN_UPDATED,
             Self::AccountRoleChanged { .. } => Self::ROLE_CHANGED,
             Self::AccountRegionChanged { .. } => Self::REGION_CHANGED,
@@ -267,7 +276,8 @@ impl Event for AccountEvent {
             | Self::BirthDateChanged { account_id, .. }
             | Self::LocaleUpdated { account_id, .. }
             | Self::BetaTierChanged { account_id, .. }
-            | Self::TrustScoreAdjusted { account_id, .. }
+            | Self::TrustScoreRewarded { account_id, .. }
+            | Self::TrustScorePenalized { account_id, .. }
             | Self::ShadowbanUpdated { account_id, .. }
             | Self::AccountRoleChanged { account_id, .. }
             | Self::AccountRegionChanged { account_id, .. }
@@ -302,7 +312,8 @@ impl Event for AccountEvent {
             | Self::BirthDateChanged { account_id, .. }
             | Self::LocaleUpdated { account_id, .. }
             | Self::BetaTierChanged { account_id, .. }
-            | Self::TrustScoreAdjusted { account_id, .. }
+            | Self::TrustScoreRewarded { account_id, .. }
+            | Self::TrustScorePenalized { account_id, .. }
             | Self::ShadowbanUpdated { account_id, .. }
             | Self::AccountRoleChanged { account_id, .. }
             | Self::AccountRegionChanged { account_id, .. }
@@ -330,7 +341,8 @@ impl Event for AccountEvent {
             | Self::BirthDateChanged { occurred_at, .. }
             | Self::LocaleUpdated { occurred_at, .. }
             | Self::BetaTierChanged { occurred_at, .. }
-            | Self::TrustScoreAdjusted { occurred_at, .. }
+            | Self::TrustScoreRewarded { occurred_at, .. }
+            | Self::TrustScorePenalized { occurred_at, .. }
             | Self::ShadowbanUpdated { occurred_at, .. }
             | Self::AccountRoleChanged { occurred_at, .. }
             | Self::AccountRegionChanged { occurred_at, .. }

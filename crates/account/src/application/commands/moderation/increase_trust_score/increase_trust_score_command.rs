@@ -6,16 +6,16 @@ use shared_kernel::{
     core::{Error, Result},
     types::{AccountId, AuditReason, RegionCode},
 };
-use shared_proto::account::v1::AdjustTrustScoreRequest;
+use shared_proto::account::v1::IncreaseTrustScoreRequest;
 use uuid::Uuid;
 
-use crate::domain::types::TrustDelta;
+use crate::types::TrustAmount;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct IncreaseTrustScoreCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
-    pub amount: TrustDelta,
+    pub amount: TrustAmount,
     pub reason: AuditReason,
 }
 
@@ -34,7 +34,7 @@ impl IdentifiableCommand for IncreaseTrustScoreCommand {
 }
 
 impl IncreaseTrustScoreCommand {
-    pub fn try_from_proto(req: AdjustTrustScoreRequest) -> Result<Self> {
+    pub fn try_from_proto(req: IncreaseTrustScoreRequest) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -47,8 +47,8 @@ impl IncreaseTrustScoreCommand {
             region: RegionCode::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
-        let amount = TrustDelta::try_from(req.delta)
-            .map_err(|e| Error::validation("delta", e.to_string()))?;
+        let amount = TrustAmount::try_from(req.amount)
+            .map_err(|e| Error::validation("amount", e.to_string()))?;
 
         let reason = AuditReason::try_from(req.reason)
             .map_err(|e| Error::validation("reason", e.to_string()))?;

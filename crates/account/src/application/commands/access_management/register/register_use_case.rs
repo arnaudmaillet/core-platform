@@ -17,14 +17,12 @@ impl CommandHandler for RegisterHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &AccountContext, cmd: RegisterCommand) -> Result<Self::Output> {
-        ctx.check_idempotency(cmd.command_id).await?;
+        if !ctx.ensure_creatable(cmd.command_id).await? {
+            return Ok(());
+        }
         // 1. VÉRIFICATION D'UNICITÉ
         if let Some(ref ext_id) = cmd.sub_id {
-            let existing = ctx
-                .app_ctx()
-                .account_repo()
-                .find_by_sub_id(ext_id, None)
-                .await?;
+            let existing = ctx.account_repo().find_by_sub_id(ext_id, None).await?;
 
             if existing.is_some() {
                 return Err(Error::already_exists(
@@ -36,7 +34,7 @@ impl CommandHandler for RegisterHandler {
         }
 
         // 2. Construction de l'agrégat
-        let account_id = ctx.account_id().clone();
+        let account_id = cmd.account_id.clone();
         let mut builder = Account::builder(account_id, cmd.identifier);
 
         if let Some(ext_id) = cmd.sub_id {
@@ -46,7 +44,7 @@ impl CommandHandler for RegisterHandler {
         let mut account = builder.with_locale(cmd.locale).build()?;
 
         // 3. Logique métier
-        account.register(cmd.region.clone(), cmd.ip_addr)?;
+        account.register(cmd.account_id.region().clone(), cmd.ip_addr)?;
 
         // 4. Persistance (atomique avec Outbox et Idempotence)
         ctx.save(&mut account, Some(cmd.command_id)).await?;

@@ -13,8 +13,15 @@ use crate::{
         entities::{AccountBuilder, AccountGovernance, AccountIdentity, AccountSettings},
         events::AccountEvent,
         types::{
-            AccountRole, AppearancePreferences, BirthDate, IpAddr, Locale, NotificationPreferences,
-            PrivacyPreferences, RegistrationIdentifier, TrustDelta,
+            AccountRole,
+            AppearancePreferences,
+            BirthDate,
+            IpAddr,
+            Locale,
+            NotificationPreferences,
+            PrivacyPreferences,
+            RegistrationIdentifier,
+            TrustAmount, // 💡 ALIGNEMENT : Remplacement de TrustDelta
         },
     },
     types::BetaTier,
@@ -153,20 +160,16 @@ impl Account {
     pub fn link_sub_identity(&mut self, new_id: SubId) -> Result<bool> {
         let current_id = self.identity.sub_id().cloned();
 
-        // 1. Idempotence métier : si l'ID est déjà le même, on ne fait rien
         if current_id.as_ref() == Some(&new_id) {
             return Ok(false);
         }
 
-        // 2. Garde de sécurité : on interdit d'écraser un lien existant
-        // C'est ce check qui faisait paniquer ton test "forbidden"
         if current_id.is_some() {
             return Err(Error::forbidden(
                 "Account is already linked to an sub provider",
             ));
         }
 
-        // 3. Application du changement (Transition de None vers Some)
         self.track_change(
             |s| {
                 s.identity.apply_sub_id_change(new_id.clone())?;
@@ -176,7 +179,7 @@ impl Account {
                 Box::new(AccountEvent::SubIdentityLinked {
                     account_id: s.id_typed(),
                     region: s.identity.region_code().clone(),
-                    old_sub_id: current_id, // Sera None
+                    old_sub_id: current_id,
                     new_sub_id: new_id.clone(),
                     occurred_at: s.updated_at(),
                 })
@@ -251,8 +254,9 @@ impl Account {
         )?;
 
         if changed {
+            // 💡 ALIGNEMENT : Utilisation de TrustAmount::PENALTY_BAN
             self.governance.apply_trust_penalty(
-                TrustDelta::PENALTY_BAN,
+                TrustAmount::PENALTY_BAN,
                 TrustContext::AccountBanned,
                 &reason,
             )?;
@@ -274,8 +278,9 @@ impl Account {
         )?;
 
         if changed {
+            // 💡 ALIGNEMENT : Utilisation de TrustAmount::REWARD_UNBAN
             self.governance.apply_trust_reward(
-                TrustDelta::REWARD_UNBAN,
+                TrustAmount::REWARD_UNBAN,
                 TrustContext::UnbanBonus,
                 &reason,
             )?;
@@ -311,8 +316,9 @@ impl Account {
         )?;
 
         if changed {
+            // 💡 ALIGNEMENT : Utilisation de TrustAmount::REWARD_UNSUSPEND
             self.governance.apply_trust_reward(
-                TrustDelta::REWARD_UNSUSPEND,
+                TrustAmount::REWARD_UNSUSPEND,
                 TrustContext::SuspensionLifted,
                 &reason,
             )?;
@@ -363,18 +369,18 @@ impl Account {
         )
     }
 
-    pub fn reward_trust(&mut self, amount: TrustDelta, reason: AuditReason) -> Result<bool> {
+    pub fn reward_trust(&mut self, amount: TrustAmount, reason: AuditReason) -> Result<bool> {
         self.track_change(
             |s| {
                 s.governance
                     .apply_trust_reward(amount, TrustContext::ManualAdjustment, &reason)
             },
             |s| {
-                Box::new(AccountEvent::TrustScoreAdjusted {
+                Box::new(AccountEvent::TrustScoreRewarded {
                     id: uuid::Uuid::new_v4(),
                     account_id: s.id_typed(),
                     region: s.identity.region_code().clone(),
-                    delta: amount,
+                    amount,
                     new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
@@ -383,22 +389,7 @@ impl Account {
         )
     }
 
-    pub fn shadowban(&mut self, reason: AuditReason) -> Result<bool> {
-        self.track_change(
-            |s| s.governance.apply_shadowban(&reason),
-            |s| {
-                Box::new(AccountEvent::ShadowbanUpdated {
-                    account_id: s.id_typed(),
-                    region: s.identity.region_code().clone(),
-                    is_shadowbanned: true,
-                    reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
-                })
-            },
-        )
-    }
-
-    pub fn penalize_trust(&mut self, amount: TrustDelta, reason: AuditReason) -> Result<bool> {
+    pub fn penalize_trust(&mut self, amount: TrustAmount, reason: AuditReason) -> Result<bool> {
         let mut extra_event: Option<Box<dyn Event>> = None;
         let auto_reason = AuditReason::system("Trust score critical threshold reached");
 
@@ -425,11 +416,11 @@ impl Account {
                 Ok(score_changed)
             },
             |s| {
-                Box::new(AccountEvent::TrustScoreAdjusted {
+                Box::new(AccountEvent::TrustScorePenalized {
                     id: uuid::Uuid::new_v4(),
                     account_id: s.id_typed(),
                     region: s.identity.region_code().clone(),
-                    delta: -amount,
+                    amount,
                     new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
                     occurred_at: s.updated_at(),
@@ -442,6 +433,21 @@ impl Account {
         }
 
         Ok(changed)
+    }
+
+    pub fn shadowban(&mut self, reason: AuditReason) -> Result<bool> {
+        self.track_change(
+            |s| s.governance.apply_shadowban(&reason),
+            |s| {
+                Box::new(AccountEvent::ShadowbanUpdated {
+                    account_id: s.id_typed(),
+                    region: s.identity.region_code().clone(),
+                    is_shadowbanned: true,
+                    reason: reason.clone().into(),
+                    occurred_at: s.updated_at(),
+                })
+            },
+        )
     }
 
     pub fn lift_shadowban(&mut self, reason: AuditReason) -> Result<bool> {

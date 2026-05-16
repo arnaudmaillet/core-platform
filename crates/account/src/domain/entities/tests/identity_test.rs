@@ -7,7 +7,7 @@ mod tests {
 
     use crate::domain::{
         entities::Account,
-        types::{AccountState, RegistrationIdentifier, TrustDelta, TrustScore},
+        types::{AccountState, RegistrationIdentifier, TrustAmount, TrustScore},
     };
 
     fn create_test_account() -> Account {
@@ -80,14 +80,14 @@ mod tests {
 
         // On baisse manuellement le score
         account.penalize_trust(
-            TrustDelta::from_raw(30),
+            TrustAmount::try_from(30)?,
             AuditReason::try_new("Minor warning")?,
         )?;
         assert_eq!(account.governance().trust_score().value(), 70);
 
         // On remonte
         account.reward_trust(
-            TrustDelta::from_raw(10),
+            TrustAmount::try_from(10)?,
             AuditReason::try_new("Good behavior")?,
         )?;
         assert_eq!(account.governance().trust_score().value(), 80);

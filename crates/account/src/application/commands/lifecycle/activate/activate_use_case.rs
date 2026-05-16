@@ -17,6 +17,12 @@ impl CommandHandler for ActivateHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &AccountContext, cmd: ActivateCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
 
         if account.activate()? {

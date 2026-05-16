@@ -1,3 +1,6 @@
+// crates/account/src/application/context/context.rs
+
+use crate::domain::{entities::Account, repositories::AccountRepository};
 use shared_kernel::{
     command::CommandTarget,
     context::BaseAppContext,
@@ -8,8 +11,7 @@ use shared_kernel::{
     types::{AccountId, RegionCode},
 };
 use std::sync::Arc;
-
-use crate::domain::{entities::Account, repositories::AccountRepository};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct AccountAppContext {
@@ -34,8 +36,15 @@ impl AccountAppContext {
         }
     }
 
+    /// Crée un contexte pour la modification ou la lecture : la région est extraite automatiquement de l'ID autoportant.
     pub fn create_context(&self, account_id: AccountId) -> AccountContext {
-        AccountContext::new(self.clone(), account_id)
+        let region = account_id.region().clone();
+        AccountContext::new(self.clone(), Some(account_id), region)
+    }
+
+    /// Crée un contexte pour la création : l'ID n'existe pas encore, on passe la région cible pour router la DB.
+    pub fn create_creation_context(&self, region: RegionCode) -> AccountContext {
+        AccountContext::new(self.clone(), None, region)
     }
 
     pub fn base(&self) -> &BaseAppContext {
@@ -55,66 +64,139 @@ impl AccountAppContext {
     }
 }
 
-/// Le contexte d'exécution "Scoped" pour une requête unique sur un compte.
+/// Le contexte d'exécution "Scoped" unifié pour le domaine Account (Unit of Work)
 #[derive(Clone)]
 pub struct AccountContext {
     app: AccountAppContext,
-    account_id: AccountId,
+    account_id: Option<AccountId>,
+    region: RegionCode,
 }
 
 impl AccountContext {
-    pub(crate) fn new(app: AccountAppContext, account_id: AccountId) -> Self {
-        Self { app, account_id }
-    }
-
-    // --- Accès aux Repositories ---
-
-    pub fn account_id(&self) -> &AccountId {
-        &self.account_id
+    pub(crate) fn new(
+        app: AccountAppContext,
+        account_id: Option<AccountId>,
+        region: RegionCode,
+    ) -> Self {
+        Self {
+            app,
+            account_id,
+            region,
+        }
     }
 
     pub fn region(&self) -> &RegionCode {
-        self.account_id.region()
+        &self.region
     }
 
     pub fn account_repo(&self) -> Arc<dyn AccountRepository> {
         self.app.account_repo()
     }
 
-    pub fn outbox_repo(&self) -> Arc<dyn OutboxRepository> {
-        self.app.outbox_repo()
+    pub fn account_id(&self) -> Result<&AccountId> {
+        self.account_id.as_ref().ok_or_else(|| {
+            Error::validation("account_id", "Account ID missing in this execution context")
+        })
     }
 
-    pub fn pool(&self) -> Option<&sqlx::PgPool> {
-        self.app.base.pool()
+    // --- FLUX DE CRÉATION ---
+    /// Valide l'idempotence technique en amont de la création de l'agrégat.
+    pub async fn ensure_creatable(&self, command_id: Uuid) -> Result<bool> {
+        let mut tx = self.begin_transaction().await?;
+        let exists = self
+            .app
+            .idempotency_repo()
+            .exists(&mut *tx, &command_id)
+            .await?;
+        if exists {
+            return Ok(false);
+        }
+        Ok(true)
     }
 
-    pub fn app_ctx(&self) -> &AccountAppContext {
-        &self.app
-    }
-    // --- Logique Métier ---
+    // --- FLUX DE MODIFICATION / VALIDATION IDEMPOTENCE ---
+    /// Valide l'idempotence technique et la cohérence géographique d'une commande sur un agrégat existant.
+    pub async fn ensure_executable(
+        &self,
+        command_id: Uuid,
+        command_region: &RegionCode,
+    ) -> Result<bool> {
+        if command_region != &self.region {
+            return Err(Error::validation(
+                "region",
+                &format!(
+                    "Sharding violation prevention: Command region '{}' mismatch with context region '{}'",
+                    command_region, self.region
+                ),
+            ));
+        }
 
-    /// Récupère l'agrégat complet.
-    pub async fn account(&self) -> Result<Account> {
+        let mut tx = self.begin_transaction().await?;
+        let exists = self
+            .app
+            .idempotency_repo()
+            .exists(&mut *tx, &command_id)
+            .await?;
+        if exists {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    // --- LECTURE SÉCURISÉE (OCC & SHARDING) ---
+    /// Charge un compte et valide son intégrité territoriale ainsi que sa concurrence optimiste (OCC).
+    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
+        // Validation immédiate via l'ID autoportant : pas de désalignement possible
+        if target.id.region() != &self.region || Some(&target.id) != self.account_id.as_ref() {
+            return Err(Error::validation(
+                "target",
+                "Context/Target identity or sharding mismatch",
+            ));
+        }
+
         let account = self
             .account_repo()
-            .find_by_id(&self.account_id, None)
+            .find_by_id(&target.id, None)
             .await?
-            .ok_or_else(|| Error::not_found("Account", self.account_id.to_string()))?;
+            .ok_or_else(|| Error::not_found("Account", target.id.to_string()))?;
+
+        // Double sécurité anti-corruption de données
+        if account.identity().region_code() != &self.region {
+            return Err(Error::internal(format!(
+                "Data Integrity Violation: Account {} belongs to region {}, but context is sharded on {}",
+                target.id,
+                account.identity().region_code(),
+                self.region
+            )));
+        }
+
+        // Contrôle de concurrence optimiste (OCC)
+        if account.version() != target.expected_version {
+            return Err(Error::concurrency_conflict(format!(
+                "OCC Mismatch: DB v{}, Expected v{}",
+                account.version(),
+                target.expected_version
+            )));
+        }
+
         Ok(account)
     }
 
-    pub async fn save(&self, account: &mut Account, command_id: Option<uuid::Uuid>) -> Result<()> {
-        // 1. Isolation du contexte
-        if account.account_id().uuid() != self.account_id.uuid() {
-            return Err(Error::validation(
-                "account_id",
-                "Identity mismatch: cannot change the technical UUID of an account",
-            ));
+    // --- SAUVEGARDE ATOMIQUE (OUTBOX + IDEMPOTENCE) ---
+    /// Persiste l'agrégat, extrait ses événements pour l'outbox et valide définitivement l'idempotence dans une seule transaction.
+    pub async fn save(&self, account: &mut Account, command_id: Option<Uuid>) -> Result<()> {
+        if let Some(ref expected_id) = self.account_id {
+            if account.account_id().uuid() != expected_id.uuid() {
+                return Err(Error::validation(
+                    "account_id",
+                    "Identity mismatch violation",
+                ));
+            }
         }
+
         let mut tx = self.begin_transaction().await?;
 
-        // 2. Idempotence Technique
+        // SÉCURITÉ CONCURRENCE : Lock d'idempotence strict avant toute écriture métier
         if let Some(cmd_id) = command_id {
             if self
                 .app
@@ -126,20 +208,19 @@ impl AccountContext {
             }
         }
 
-        // 3. Extraction des événements (une seule fois pour éviter de vider l'objet en cas de retry)
         let events = account.pull_events();
+        self.account_repo().save(account, Some(&mut *tx)).await?;
 
-        // 4. Persistance (Le Repository gère l'INSERT ou l'UPDATE selon l'existence de l'ID)
-        let repo_res = self.account_repo().save(account, Some(&mut *tx)).await;
-        repo_res?;
-
-        // 5. Outbox
+        // Sauvegarde transactionnelle dans la table Outbox
         if !events.is_empty() {
             let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
-            self.outbox_repo().save_all(&mut *tx, &event_refs).await?;
+            self.app
+                .outbox_repo()
+                .save_all(&mut *tx, &event_refs)
+                .await?;
         }
 
-        // 6. Enregistrement de l'ID de commande (pour que le prochain appel soit bloqué)
+        // Consommation définitive du jeton d'idempotence
         if let Some(cmd_id) = command_id {
             self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
         }
@@ -148,8 +229,7 @@ impl AccountContext {
         Ok(())
     }
 
-    // --- Gestion des Transactions ---
-
+    // --- GESTION DES TRANSACTIONS ---
     pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
         match self.app.base.pool() {
             Some(pool) => {
@@ -157,69 +237,9 @@ impl AccountContext {
                     .begin()
                     .await
                     .map_err(|e| Error::internal(e.to_string()))?;
-
                 Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
             }
-            None => {
-                // En test, on tombe ici !
-                Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>)
-            }
+            None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
         }
-    }
-
-    pub async fn check_idempotency(&self, command_id: uuid::Uuid) -> Result<()> {
-        let mut tx = self.begin_transaction().await?;
-
-        let exists = self
-            .app
-            .idempotency_repo()
-            .exists(&mut *tx, &command_id)
-            .await?;
-
-        if exists {
-            return Err(Error::already_exists(
-                "Command",
-                "id",
-                command_id.to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
-        // 1. Vérification de cohérence avec le contexte de l'unité de travail
-        // Ici, on vérifie que l'ID et la Région du compte correspondent au contexte
-        if target.id.uuid() != self.account_id.uuid() || target.id.region() != self.region() {
-            return Err(Error::validation(
-                "target",
-                "Command target mismatch with execution context",
-            ));
-        }
-
-        // 2. Chargement depuis le repository
-        let account = self.account().await?;
-
-        // 3. Vérification d'intégrité régionale (Sécurité anti-corruption)
-        // On s'assure que la donnée en DB est bien là où le contexte l'attend
-        if account.identity().region_code() != self.region() {
-            return Err(Error::internal(format!(
-                "Data Integrity Violation: Account {} belongs to region {}, but was loaded in context {}",
-                self.account_id,
-                account.identity().region_code(),
-                self.region()
-            )));
-        }
-
-        // 4. Contrôle de Concurrence Optimiste (OCC)
-        if account.version() != target.expected_version {
-            return Err(Error::concurrency_conflict(format!(
-                "OCC Mismatch: DB v{}, Expected v{}",
-                account.version(),
-                target.expected_version
-            )));
-        }
-
-        Ok(account)
     }
 }

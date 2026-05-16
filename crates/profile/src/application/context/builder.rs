@@ -35,7 +35,6 @@ impl ProfileContextBuilder {
         self
     }
 
-    // Getters utiles pour les Middlewares ou Tests
     pub fn profile_id(&self) -> Option<&ProfileId> {
         self.profile_id.as_ref()
     }
@@ -52,12 +51,10 @@ impl ProfileContextBuilder {
         let app = self
             .app
             .expect("ProfileAppContext is required. Use .with_app()");
-        let profile_id = self
-            .profile_id
-            .expect("profile_id is required for ProfileContext");
+
         let region = self.region.expect("region is required for ProfileContext");
 
-        ProfileContext::new(app, profile_id, region)
+        ProfileContext::new(app, self.profile_id, region)
     }
 }
 

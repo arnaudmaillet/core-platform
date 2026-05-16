@@ -15,6 +15,13 @@ impl CommandHandler for UpdateBannerHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &ProfileContext, cmd: UpdateBannerCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
+
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_banner(cmd.new_banner_url)? {

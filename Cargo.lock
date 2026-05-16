@@ -2788,6 +2788,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "profile-event-worker"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth",
+ "chrono",
+ "dotenvy",
+ "futures",
+ "profile",
+ "rdkafka",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tonic-health",
+ "tonic-reflection",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "profile-outbox-processor"
 version = "0.1.0"
 dependencies = [

@@ -1,7 +1,7 @@
 // crates/account/src/application/link_sub_identity/link_sub_identity_handler.rs
 
 use crate::application::{
-    context::AccountContext, commands::access_management::LinkSubIdentityCommand,
+    commands::access_management::LinkSubIdentityCommand, context::AccountContext,
 };
 use async_trait::async_trait;
 use shared_kernel::{
@@ -22,6 +22,12 @@ impl CommandHandler for LinkSubIdentityHandler {
         ctx: &AccountContext,
         cmd: LinkSubIdentityCommand,
     ) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         account.link_sub_identity(cmd.sub_id)?;
         ctx.save(&mut account, Some(cmd.command_id)).await?;

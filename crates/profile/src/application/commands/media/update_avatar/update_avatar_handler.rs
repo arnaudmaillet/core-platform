@@ -15,6 +15,13 @@ impl CommandHandler for UpdateAvatarHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &ProfileContext, cmd: UpdateAvatarCommand) -> Result<Self::Output> {
+        if !ctx
+            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .await?
+        {
+            return Ok(());
+        }
+
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_avatar(cmd.new_avatar_url)? {

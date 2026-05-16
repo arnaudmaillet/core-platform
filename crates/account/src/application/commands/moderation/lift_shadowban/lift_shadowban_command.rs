@@ -6,7 +6,7 @@ use shared_kernel::{
     core::{Error, Result},
     types::{AccountId, AuditReason, RegionCode},
 };
-use shared_proto::account::v1::ModerationRequest;
+use shared_proto::account::v1::LiftShadowbanRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -31,7 +31,7 @@ impl IdentifiableCommand for LiftShadowbanCommand {
 }
 
 impl LiftShadowbanCommand {
-    pub fn try_from_proto(req: ModerationRequest) -> Result<Self> {
+    pub fn try_from_proto(req: LiftShadowbanRequest) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;

@@ -11,8 +11,8 @@ use tonic::{Request, Response, Status};
 // Kernel & Application imports
 use crate::commands::{UpdateBioCommand, UpdateLocationCommand, UpdateSocialsCommand};
 use crate::context::ProfileAppContext;
-use crate::presentation::utils::mapper::map_profile_to_proto;
 use crate::presentation::utils::shared::GrpcServiceUtils;
+use crate::types::ProfileId;
 use shared_kernel::command::CommandBus;
 
 pub struct ProfileMetadataService {
@@ -41,27 +41,23 @@ impl ProtoProfileMetadataService for ProfileMetadataService {
         &self,
         request: Request<UpdateBioRequest>,
     ) -> Result<Response<UpdateBioResponse>, Status> {
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = UpdateBioCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdateBioCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<UpdateBioCommand, (), UpdateBioResponse, _>(
+        self.dispatch_command::<UpdateBioCommand, (), UpdateBioResponse>(
             &ctx,
             command,
-            |profile| UpdateBioResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdateBioResponse {},
         )
         .await
     }
@@ -70,27 +66,23 @@ impl ProtoProfileMetadataService for ProfileMetadataService {
         &self,
         request: Request<UpdateLocationRequest>,
     ) -> Result<Response<UpdateLocationResponse>, Status> {
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = UpdateLocationCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdateLocationCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<UpdateLocationCommand, (), UpdateLocationResponse, _>(
+        self.dispatch_command::<UpdateLocationCommand, (), UpdateLocationResponse>(
             &ctx,
             command,
-            |profile| UpdateLocationResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdateLocationResponse {},
         )
         .await
     }
@@ -99,27 +91,23 @@ impl ProtoProfileMetadataService for ProfileMetadataService {
         &self,
         request: Request<UpdateSocialsRequest>,
     ) -> Result<Response<UpdateSocialsResponse>, Status> {
-        let profile_id = request
-            .get_ref()
+        let (_, extensions, req_inner) = request.into_parts();
+        let target = req_inner
             .target
             .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing target"))?
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let profile_id = target
             .profile_id
-            .parse()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id: {}", e)))?;
-
-        let ctx = self.get_context(&request, &profile_id)?;
-
-        let req = request.into_inner();
-        let command = UpdateSocialsCommand::try_from_proto(req)
+            .parse::<ProfileId>()
+            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let ctx = self.build_context(profile_id, &extensions)?;
+        let command = UpdateSocialsCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.execute_and_fetch::<UpdateSocialsCommand, (), UpdateSocialsResponse, _>(
+        self.dispatch_command::<UpdateSocialsCommand, (), UpdateSocialsResponse>(
             &ctx,
             command,
-            |profile| UpdateSocialsResponse {
-                profile: Some(map_profile_to_proto(profile)),
-            },
+            UpdateSocialsResponse {},
         )
         .await
     }

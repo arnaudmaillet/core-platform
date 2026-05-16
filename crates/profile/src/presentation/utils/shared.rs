@@ -1,7 +1,6 @@
 // crates/profile/src/presentation/utils/shared.rs
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
-use crate::entities::Profile;
 use crate::types::ProfileId;
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
@@ -18,44 +17,47 @@ pub trait GrpcServiceUtils {
         request: &Request<T>,
         profile_id: &ProfileId,
     ) -> Result<ProfileContext, Status> {
-        let region = request
-            .extensions()
-            .get::<RegionCode>()
-            .cloned()
-            .ok_or_else(|| Status::unauthenticated("Missing region context"))?;
-
+        let region = self.extract_region(request)?;
         Ok(self.app_ctx().create_context(profile_id.clone(), region))
     }
 
-    async fn execute_and_fetch<C, Output, R, F>(
+    fn build_context(
+        &self,
+        profile_id: ProfileId,
+        extensions: &tonic::Extensions,
+    ) -> Result<ProfileContext, Status> {
+        let region = extensions
+            .get::<RegionCode>()
+            .cloned()
+            .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))?;
+        Ok(self.app_ctx().create_context(profile_id, region))
+    }
+
+    async fn dispatch_command<C, Output, R>(
         &self,
         ctx: &ProfileContext,
         cmd: C,
-        mapper: F,
+        response_payload: R,
     ) -> Result<Response<R>, Status>
     where
         C: IdentifiableCommand + std::fmt::Debug + Send + Sync + 'static + Clone,
-        Output: Send + Default + 'static, // On ajoute Default pour le Bus
+        Output: Send + Default + 'static,
         R: Send,
-        F: FnOnce(Profile) -> R + Send + 'static,
     {
-        // 1. Exécution (Le Bus gère le AlreadyExists et renvoie Ok)
         self.bus()
             .execute::<ProfileContext, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(|err| map_domain_err_to_status(err))?;
+        Ok(Response::new(response_payload))
+    }
 
-        // 2. Fetch de l'état actuel
-        let profile = self
-            .app_ctx()
-            .profile_repo()
-            .find_by_id(ctx.profile_id(), ctx.region(), None)
-            .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| Status::not_found("Profile not found"))?;
-
-        // 3. Mapping
-        Ok(Response::new(mapper(profile)))
+    /// Helper privé pour factoriser l'extraction de la région depuis les extensions de la requête
+    fn extract_region<T>(&self, request: &Request<T>) -> Result<RegionCode, Status> {
+        request
+            .extensions()
+            .get::<RegionCode>()
+            .cloned()
+            .ok_or_else(|| Status::unauthenticated("Missing region context in request extensions"))
     }
 }
 

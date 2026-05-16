@@ -8,6 +8,7 @@ edition.workspace = true
 [dependencies]
 shared-kernel = { workspace = true, features = [
     "postgres",
+    "kafka",
     "elasticsearch",
     "concurrency",
     "runtime",
