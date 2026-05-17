@@ -87,7 +87,7 @@ impl Account {
         }
     }
 
-    pub fn account_id(&self) -> &AccountId {
+    pub fn account_id(&self) -> AccountId {
         self.identity.account_id()
     }
 
@@ -105,7 +105,7 @@ impl Account {
     }
 
     fn id_typed(&self) -> AccountId {
-        self.identity.account_id().clone()
+        self.identity.account_id()
     }
 
     pub fn record_activity(&mut self) -> Result<bool> {
@@ -145,12 +145,18 @@ impl Account {
         let old_region = self.identity.region_code().clone();
 
         self.track_change(
-            |s| s.identity.apply_region_change(new_region.clone()),
+            |s| {
+                if old_region == new_region {
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
+            },
             |s| {
                 Box::new(AccountEvent::AccountRegionChanged {
                     account_id: s.id_typed(),
                     old_region,
-                    new_region: new_region.clone(),
+                    new_region: new_region,
                     occurred_at: s.updated_at(),
                 })
             },

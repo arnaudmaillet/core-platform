@@ -15,9 +15,9 @@ pub trait GrpcServiceUtils {
     fn get_context<T>(
         &self,
         _request: &Request<T>,
-        account_id: &AccountId,
+        account_id: AccountId,
     ) -> Result<AccountContext, Status> {
-        Ok(self.app_ctx().create_context(account_id.clone()))
+        Ok(self.app_ctx().create_context(account_id))
     }
 
     /// Construit le contexte à partir des extensions (utile pour le flux de création sans ID initial)

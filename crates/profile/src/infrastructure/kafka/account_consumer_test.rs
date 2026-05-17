@@ -5,7 +5,8 @@ mod tests {
         repositories::ProfileRepository, types::Handle,
     };
     use serde_json::json;
-    use uuid::Uuid;
+    use shared_kernel::types::AccountId;
+use uuid::Uuid;
 
     #[tokio::test]
     async fn test_on_message_received_success() -> Result<(), Box<dyn std::error::Error>> {
@@ -13,12 +14,13 @@ mod tests {
         let f = ProfileTestFixture::new();
         let consumer = AccountConsumer::new(f.bus(), f.app_ctx().clone());
 
-        let account_id = Uuid::new_v4();
-        // 💡 Ajusté : Utilise le tag exact "AccountRegistered" et les bons champs
+        let domain_account_id = AccountId::generate(f.region().clone());
+        let raw_uuid = domain_account_id.uuid();
+
         let payload = json!({
             "type": "AccountRegistered",
             "data": {
-                "account_id": account_id,
+                "account_id": domain_account_id.to_string(),
                 "region": f.region().to_string(),
                 "email": "jean.dupont@test.com"
             }
@@ -34,17 +36,17 @@ mod tests {
             "Le consommateur aurait dû traiter le message avec succès"
         );
 
-        let expected_handle_str = format!("user_{}", &account_id.to_string()[0..8]);
+        // 💡 FIX : Le handle autogénéré doit se baser sur le même UUID
+        let expected_handle_str = format!("user_{}", &raw_uuid.to_string()[0..8]);
         let expected_handle = Handle::try_new(expected_handle_str)?;
 
-        // On vérifie que le profil a bien été poussé en base avec le handle autogénéré
         let saved_profile = f
             .profile_repo()
-            .find_by_handle(&expected_handle, &f.region(), None)
+            .find_by_handle(&expected_handle, f.region(), None)
             .await?
             .expect("Le profil aurait dû être créé en base de données avec le handle autogénéré");
 
-        assert_eq!(saved_profile.account_id().uuid(), account_id);
+        assert_eq!(saved_profile.account_id().uuid(), raw_uuid);
         Ok(())
     }
 

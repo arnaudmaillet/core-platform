@@ -1,10 +1,10 @@
 // crates/profile/src/application/commands/identity/update_handle/update_handle_command.rs
 
-use crate::types::{DisplayName, ProfileId};
+use crate::types::DisplayName;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::RegionCode;
+use shared_kernel::types::{ProfileId, RegionCode};
 use shared_proto::profile::v1::UpdateDisplayNameRequest;
 use uuid::Uuid;
 

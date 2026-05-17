@@ -295,7 +295,7 @@ impl Event for AccountEvent {
             | Self::TimezoneUpdated { account_id, .. } => account_id,
         };
 
-        account_id.region().as_str()
+        account_id.region().as_static_str()
     }
 
     fn aggregate_type(&self) -> Cow<'_, str> {

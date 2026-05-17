@@ -1,10 +1,6 @@
 // crates/profile/src/application/context/context.rs
 
-use crate::{
-    entities::Profile,
-    repositories::ProfileRepository,
-    types::{Handle, ProfileId},
-};
+use crate::{entities::Profile, repositories::ProfileRepository, types::Handle};
 use shared_kernel::{
     command::CommandTarget,
     context::BaseAppContext,
@@ -12,7 +8,7 @@ use shared_kernel::{
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
     postgres::PostgresTransaction,
-    types::RegionCode,
+    types::{ProfileId, RegionCode},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -65,7 +61,7 @@ impl ProfileAppContext {
 #[derive(Clone)]
 pub struct ProfileContext {
     app: ProfileAppContext,
-    profile_id: Option<ProfileId>, // Gère le cycle de vie complet (None = Création, Some = Modif)
+    profile_id: Option<ProfileId>,
     region: RegionCode,
 }
 
@@ -82,8 +78,8 @@ impl ProfileContext {
         }
     }
 
-    pub fn region(&self) -> &RegionCode {
-        &self.region
+    pub fn region(&self) -> RegionCode {
+        self.region
     }
     pub fn profile_repo(&self) -> Arc<dyn ProfileRepository> {
         self.app.profile_repo()
@@ -113,7 +109,7 @@ impl ProfileContext {
         }
         if self
             .profile_repo()
-            .exists_by_handle(handle, &self.region)
+            .exists_by_handle(handle, self.region)
             .await?
         {
             return Err(Error::already_exists(
@@ -124,7 +120,7 @@ impl ProfileContext {
         }
         if self
             .profile_repo()
-            .exists_by_handle(handle, &self.region)
+            .exists_by_handle(handle, self.region)
             .await?
         {
             return Err(Error::already_exists(
@@ -162,7 +158,7 @@ impl ProfileContext {
         }
         let profile = self
             .profile_repo()
-            .find_by_id(&target.id, &self.region, None)
+            .find_by_id(target.id, self.region, None)
             .await?
             .ok_or_else(|| Error::not_found("Profile", target.id.to_string()))?;
 
@@ -178,8 +174,8 @@ impl ProfileContext {
 
     // --- SAUVEGARDE MUTUELLE ---
     pub async fn save(&self, profile: &mut Profile, command_id: Option<Uuid>) -> Result<()> {
-        if let Some(ref expected_id) = self.profile_id {
-            if profile.profile_id().as_uuid() != expected_id.as_uuid() {
+        if let Some(expected_id) = self.profile_id {
+            if profile.profile_id() != expected_id {
                 return Err(Error::validation(
                     "profile_id",
                     "Identity mismatch violation",

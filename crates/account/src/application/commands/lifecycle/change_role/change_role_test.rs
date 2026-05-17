@@ -21,7 +21,7 @@ mod tests {
 
         let cmd = ChangeRoleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("Joined the safety team")?,
         };
@@ -57,7 +57,7 @@ mod tests {
 
         let cmd = ChangeRoleCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("Duplicate promotion")?,
         };
@@ -96,7 +96,7 @@ mod tests {
 
         let cmd = ChangeRoleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_role: AccountRole::MODERATOR,
             reason: AuditReason::try_new("Duplicate promotion")?,
         };

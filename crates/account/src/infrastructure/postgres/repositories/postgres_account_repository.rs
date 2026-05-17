@@ -23,7 +23,7 @@ impl PostgresAccountRepository {
         Self { pool, cache }
     }
 
-    pub fn cache_key(id: &AccountId) -> String {
+    pub fn cache_key(id: AccountId) -> String {
     format!("account:aggregate:{}:{}", id.region().as_str(), id.uuid())
 }
 }
@@ -33,7 +33,7 @@ impl AccountRepository for PostgresAccountRepository {
     /// Récupère l'agrégat complet (Identity + Governance + Settings)
     async fn find_by_id(
         &self,
-        id: &AccountId,
+        id: AccountId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
         let key = Self::cache_key(id);
@@ -53,8 +53,8 @@ impl AccountRepository for PostgresAccountRepository {
         }
 
         // 2. Fallback DB (Si pas en cache ou si transaction active)
-        let uid = id.uuid().clone();
-        let region = id.region().clone();
+        let uid = id.uuid();
+        let region = id.region();
 
         let account_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
@@ -111,7 +111,7 @@ impl AccountRepository for PostgresAccountRepository {
         let account_id_opt = self.find_id_by_sub_id(ext_id, tx.as_deref_mut()).await?;
 
         match account_id_opt {
-            Some(id) => self.find_by_id(&id, tx).await,
+            Some(id) => self.find_by_id(id, tx).await,
             None => Ok(None),
         }
     }
@@ -124,6 +124,7 @@ impl AccountRepository for PostgresAccountRepository {
         let sett_row = PostgresAccountSettingsRow::from_domain(account);
 
         let next_version = account.metadata().version() as i64;
+        let is_events_empty = account.metadata().is_events_empty();
 
         <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             Box::pin(async move {
@@ -174,8 +175,14 @@ impl AccountRepository for PostgresAccountRepository {
                     }
                     Some(v) => {
                         // --- MODE UPDATE (OCC) ---
-                        let current_version_expected = next_version - 1;
-                        if v != current_version_expected {
+                        // Si l'application soumet la même version que la DB,
+                        // c'est une écriture technique d'idempotence. La version cible reste `v`.
+                        let is_noop = next_version == v && is_events_empty;
+                        
+                        let target_version = if is_noop { v } else { next_version };
+                        let current_version_expected = target_version - 1;
+
+                        if !is_noop && v != current_version_expected {
                             return Err(Error::concurrency_conflict(
                                 format!("Account {}: OCC mismatch (DB v{}, App expected v{})", &ident_row.account_id, v, current_version_expected),
                             ));
@@ -193,7 +200,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(ident_row.email)
                         .bind(ident_row.state)
                         .bind(ident_row.locale)
-                        .bind(next_version)
+                        .bind(target_version)
                         .bind(ident_row.last_active_at)
                         .execute(&mut *conn)
                         .await
@@ -239,9 +246,7 @@ impl AccountRepository for PostgresAccountRepository {
                 Ok(())
             })
         }).await?;
-
-        // --- POST-TRANSACTION (Cache & Metadata) ---
-        account.metadata_mut().record_change();
+        
         let cache_handle = self.cache.clone();
         let key = Self::cache_key(account.account_id());
         tokio::spawn(async move {
@@ -369,7 +374,7 @@ impl AccountRepository for PostgresAccountRepository {
         self.save(&mut acc, Some(tx)).await
     }
 
-    async fn delete(&self, id: &AccountId, tx: &mut dyn Transaction) -> Result<()> {
+    async fn delete(&self, id: AccountId, tx: &mut dyn Transaction) -> Result<()> {
         let uid = id.as_uuid();
 
         <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {

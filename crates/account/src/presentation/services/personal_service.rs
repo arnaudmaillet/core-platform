@@ -50,7 +50,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = ChangeEmailCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ChangeEmailCommand, (), ChangeEmailResponse>(
             &ctx,
@@ -67,7 +67,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = ChangePhoneNumberCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ChangePhoneNumberCommand, (), ChangePhoneNumberResponse>(
             &ctx,
@@ -84,7 +84,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = ChangeBirthDateCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ChangeBirthDateCommand, (), ChangeBirthDateResponse>(
             &ctx,
@@ -103,7 +103,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = ChangeRegionCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ChangeRegionCommand, (), ChangeRegionResponse>(
             &ctx,
@@ -120,7 +120,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = UpdateLocaleCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<UpdateLocaleCommand, (), UpdateLocaleResponse>(
             &ctx,
@@ -139,7 +139,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = ActivateCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ActivateCommand, (), ActivateResponse>(
             &ctx,
@@ -156,7 +156,7 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         let command = DeactivateCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<DeactivateCommand, (), DeactivateResponse>(
             &ctx,

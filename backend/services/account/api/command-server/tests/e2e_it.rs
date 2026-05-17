@@ -156,17 +156,19 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
 
     // --- ÉTAPE 3 : UPDATE LOCALE (v1 -> v2) ---
     let update_command_id = uuid::Uuid::now_v7().to_string();
+    let account_id = Uuid::parse_str(&real_account_id)
+        .expect("Invalid account_id UUID returned by gRPC");
     let current_version: i64 = sqlx::query_scalar(
         "SELECT version FROM account_identity WHERE account_id = $1 AND region_code = $2",
     )
-    .bind(sub_uuid)
+    .bind(account_id)
     .bind(region)
     .fetch_one(&ctx.pg_pool())
     .await
     .expect("Failed to fetch current version for optimistic locking");
 
     let target = AccountTarget {
-        account_id: real_account_id.clone(),
+        account_id: real_account_id,
         region: region.to_string(),
         expected_version: current_version as u64, // Sera dynamiquement à 1
     };
@@ -193,7 +195,7 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     let row: (String, i64) = sqlx::query_as(
         "SELECT locale, version FROM account_identity WHERE account_id = $1 AND region_code = $2",
     )
-    .bind(sub_uuid)
+    .bind(account_id)
     .bind(region)
     .fetch_one(&ctx.pg_pool())
     .await

@@ -67,10 +67,10 @@ impl AccountIdentity {
 
     // --- GETTERS ---
 
-    pub fn account_id(&self) -> &AccountId {
-        &self.account_id
+    pub fn account_id(&self) -> AccountId {
+        self.account_id
     }
-    pub fn region_code(&self) -> &RegionCode {
+    pub fn region_code(&self) -> RegionCode {
         self.account_id.region()
     }
     pub fn sub_id(&self) -> Option<&SubId> {
@@ -106,11 +106,11 @@ impl AccountIdentity {
     // ==========================================
 
     pub(crate) fn apply_region_change(&mut self, new_region: RegionCode) -> Result<bool> {
-        if self.region_code() == &new_region {
+        if self.region_code() == new_region {
             return Ok(false);
         }
 
-        self.account_id = AccountId::new(self.account_id.uuid(), new_region);
+        self.account_id = AccountId::generate(new_region);
         Ok(true)
     }
 

@@ -1,10 +1,9 @@
 // crates/profile/src/application/commands/identity/update_privacy/update_privacy_command.rs
 
-use crate::types::ProfileId;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::RegionCode;
+use shared_kernel::types::{ProfileId, RegionCode};
 use shared_proto::profile::v1::UpdatePrivacyRequest;
 use uuid::Uuid;
 

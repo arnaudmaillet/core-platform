@@ -5,9 +5,10 @@ mod tests {
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
     use crate::repositories::ProfileRepository;
-    use crate::types::{Handle, ProfileId};
+    use crate::types::Handle;
     use crate::{application::utils::ProfileTestFixture, commands::CreateProfileCommand};
     use shared_kernel::core::{ErrorCode, Result, Versioned};
+    use shared_kernel::types::ProfileId;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -20,7 +21,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             command_id: Uuid::new_v4(),
-            account_id: f.account_id().clone(),
+            account_id: f.account_id(),
             handle: Handle::try_new("bob_dev")?,
             region: f.region(),
         };
@@ -33,7 +34,7 @@ mod tests {
         // Assert
         let saved_profile = f
             .profile_repo()
-            .find_by_handle(&cmd.handle, &f.region(), None)
+            .find_by_handle(&cmd.handle, f.region(), None)
             .await?
             .expect("Le profil aurait dû être enregistré en base");
 
@@ -60,7 +61,7 @@ mod tests {
 
         let cmd = CreateProfileCommand {
             command_id: cmd_id, // Même ID de commande -> Va forcer le court-circuit
-            account_id: f.account_id().clone(),
+            account_id: f.account_id(),
             handle: Handle::try_new("bob_dev")?,
             region: f.region(),
         };
@@ -91,7 +92,7 @@ mod tests {
 
         // 1. On sème un profil en base qui possède déjà ce handle
         // (Peu importe l'ID, l'unicité du handle est transverse sur la région)
-        let other_profile_id = ProfileId::generate();
+        let other_profile_id = ProfileId::generate(f.region());
         let f_other = f.clone_with_profile_id(other_profile_id);
 
         let profile_with_handle = f_other.builder(duplicated_handle).build()?;
@@ -103,7 +104,7 @@ mod tests {
         // 2. On tente de créer un NOUVEAU profil avec le même handle usurpé
         let cmd = CreateProfileCommand {
             command_id: Uuid::new_v4(),
-            account_id: f.account_id().clone(),
+            account_id: f.account_id(),
             handle: Handle::try_new(duplicated_handle)?,
             region: f.region(),
         };

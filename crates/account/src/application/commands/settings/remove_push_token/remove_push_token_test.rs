@@ -30,7 +30,7 @@ mod tests {
 
         let cmd = RemovePushTokenCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             token: token_to_remove.clone(),
         };
 
@@ -76,7 +76,7 @@ mod tests {
 
         let cmd = RemovePushTokenCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             token: token.clone(),
         };
 
@@ -120,7 +120,7 @@ mod tests {
 
         let cmd = RemovePushTokenCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             token: non_existent_token.clone(),
         };
 

@@ -1,10 +1,10 @@
 // crates/profile/src/application/commands/metadata/update_location_label/update_location_label_command.rs
 
-use crate::types::{Location, ProfileId};
+use crate::types::Location;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::RegionCode;
+use shared_kernel::types::{ProfileId, RegionCode};
 use shared_proto::profile::v1::UpdateLocationRequest;
 use uuid::Uuid;
 

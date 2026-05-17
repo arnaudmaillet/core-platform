@@ -26,7 +26,7 @@ mod tests {
 
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(20)?, // 50 + 20 = 70
             reason: AuditReason::try_new("Good behavior")?,
         };
@@ -64,7 +64,7 @@ mod tests {
 
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(50)?, // 90 + 50 -> Saturé à 100
             reason: AuditReason::try_new("High activity")?,
         };
@@ -100,7 +100,7 @@ mod tests {
 
         let cmd = IncreaseTrustScoreCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(10)?,
             reason: AuditReason::try_new("Duplicate")?,
         };
@@ -149,7 +149,7 @@ mod tests {
 
         let cmd = IncreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(10)?,
             reason: AuditReason::try_new("Should do nothing")?,
         };

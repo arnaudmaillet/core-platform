@@ -58,7 +58,7 @@ impl RegisterCommand {
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
-            account_id: AccountId::new(Uuid::nil(), temp_region), // 💡 Jeton temporaire écrasé par gRPC
+            account_id: AccountId::generate(temp_region),
             sub_id: match req.sub_id {
                 Some(id) if !id.is_empty() => {
                     Some(SubId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?)

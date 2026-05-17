@@ -45,21 +45,21 @@ impl ProtoAccountAccessService for AccountAccessService {
     ) -> Result<Response<RegisterResponse>, Status> {
         let (_metadata, extensions, req) = request.into_parts();
 
-        let region = RegionCode::try_new(req.region_code.clone())
+        let region = RegionCode::try_new(&req.region_code)
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
         let account_id = match &req.sub_id {
             Some(id) if !id.is_empty() => {
                 let uuid = Uuid::parse_str(id)
                     .map_err(|_| Status::invalid_argument("Invalid sub_id UUID"))?;
-                AccountId::new(uuid, region.clone())
+                AccountId::from_external_uuid(uuid, region)
             }
-            _ => AccountId::generate(region.clone()),
+            _ => AccountId::generate(region),
         };
 
         let mut command = RegisterCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        command.account_id = account_id.clone();
+        command.account_id = account_id;
 
         let ctx = self.build_creation_context(&extensions)?;
 
@@ -84,7 +84,7 @@ impl ProtoAccountAccessService for AccountAccessService {
         let command = LinkSubIdentityCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&Request::new(()), &command.target.id)?;
+        let ctx = self.get_context(&Request::new(()), command.target.id)?;
 
         let response_payload = LinkSubIdentityResponse {};
 

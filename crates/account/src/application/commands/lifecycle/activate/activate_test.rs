@@ -29,7 +29,7 @@ mod tests {
 
         let cmd = ActivateCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         };
 
         f.bus()
@@ -64,7 +64,7 @@ mod tests {
 
         let cmd = ActivateCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         };
 
         // 2. Act
@@ -103,7 +103,7 @@ mod tests {
 
         let cmd = ActivateCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         };
 
         // 2. Act
@@ -135,7 +135,7 @@ mod tests {
 
         let cmd = ActivateCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         };
 
         // 2. Act

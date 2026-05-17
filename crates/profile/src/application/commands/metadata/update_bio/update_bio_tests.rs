@@ -23,7 +23,7 @@ mod tests {
 
         let cmd = UpdateBioCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_bio: new_bio.clone(),
         };
 
@@ -58,7 +58,7 @@ mod tests {
 
         let cmd = UpdateBioCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), initial_version),
+            target: CommandTarget::new(f.profile_id(), f.region(), initial_version),
             new_bio: Some(Bio::try_new("Duplicate bio")?),
         };
 
@@ -99,7 +99,7 @@ mod tests {
 
         let cmd = UpdateBioCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_bio: Some(bio), // Même contenu
         };
 
@@ -127,7 +127,7 @@ mod tests {
 
         let cmd = UpdateBioCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 42), // Version obsolète
+            target: CommandTarget::new(f.profile_id(), f.region(), 42), // Version obsolète
             new_bio: Some(Bio::try_new("Conflict bio")?),
         };
 

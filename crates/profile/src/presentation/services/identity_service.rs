@@ -1,6 +1,7 @@
 // crates/profile/src/presentation/services/profile_identity_service.rs
 
 use shared_kernel::core::Identifier;
+use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityService as ProtoProfileIdentityService;
 use shared_proto::profile::v1::{
     ChangeHandleRequest, ChangeHandleResponse, CreateProfileRequest, CreateProfileResponse,
@@ -17,7 +18,6 @@ use crate::commands::{
 };
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::shared::GrpcServiceUtils;
-use crate::types::ProfileId;
 use shared_kernel::command::CommandBus;
 
 pub struct ProfileIdentityService {

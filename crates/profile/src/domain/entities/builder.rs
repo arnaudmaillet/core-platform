@@ -1,10 +1,10 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
 use crate::entities::Profile;
-use crate::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use shared_kernel::core::{AggregateMetadata, Result};
-use shared_kernel::types::{AccountId, Url};
+use shared_kernel::types::{AccountId, ProfileId, Url};
 
 pub struct ProfileBuilder {
     profile_id: ProfileId,
@@ -23,9 +23,11 @@ pub struct ProfileBuilder {
 impl ProfileBuilder {
     pub(crate) fn new(account_id: AccountId, handle: Handle) -> Result<Self> {
         let display_name = DisplayName::try_new(handle.as_str())?;
+        let region: shared_kernel::types::RegionCode = account_id.region();
+        let profile_id = ProfileId::generate(region);
 
         Ok(Self {
-            profile_id: ProfileId::generate(),
+            profile_id,
             account_id,
             display_name,
             handle,

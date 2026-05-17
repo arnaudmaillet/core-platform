@@ -49,7 +49,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = BanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<BanCommand, (), BanResponse>(&ctx, command, BanResponse {})
             .await
@@ -62,7 +62,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = UnbanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<UnbanCommand, (), UnbanResponse>(&ctx, command, UnbanResponse {})
             .await
@@ -75,7 +75,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = SuspendCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<SuspendCommand, (), SuspendResponse>(
             &ctx,
@@ -92,7 +92,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = UnsuspendCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<UnsuspendCommand, (), UnsuspendResponse>(
             &ctx,
@@ -111,7 +111,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = ShadowbanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ShadowbanCommand, (), ShadowbanResponse>(
             &ctx,
@@ -128,7 +128,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = LiftShadowbanCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<LiftShadowbanCommand, (), LiftShadowbanResponse>(
             &ctx,
@@ -147,7 +147,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = IncreaseTrustScoreCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<IncreaseTrustScoreCommand, (), IncreaseTrustScoreResponse>(
             &ctx,
@@ -164,7 +164,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = DecreaseTrustScoreCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<DecreaseTrustScoreCommand, (), DecreaseTrustScoreResponse>(
             &ctx,
@@ -181,7 +181,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = ChangeRoleCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ChangeRoleCommand, (), ChangeRoleResponse>(
             &ctx,
@@ -200,7 +200,7 @@ impl ProtoAccountModerationService for AccountModerationService {
         let command = ChangeBetaTierCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<ChangeBetaTierCommand, (), ChangeBetaTierResponse>(
             &ctx,

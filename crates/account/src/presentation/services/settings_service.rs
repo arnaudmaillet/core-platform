@@ -46,7 +46,7 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         let command = UpdatePreferencesCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<UpdatePreferencesCommand, (), UpdatePreferencesResponse>(
             &ctx,
@@ -63,7 +63,7 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         let command = UpdateTimezoneCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<UpdateTimezoneCommand, (), UpdateTimezoneResponse>(
             &ctx,
@@ -80,7 +80,7 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         let command = AddPushTokenCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<AddPushTokenCommand, (), AddPushTokenResponse>(
             &ctx,
@@ -97,7 +97,7 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         let command = RemovePushTokenCommand::try_from_proto(request.get_ref().clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.get_context(&request, &command.target.id)?;
+        let ctx = self.get_context(&request, command.target.id)?;
 
         self.dispatch_command::<RemovePushTokenCommand, (), RemovePushTokenResponse>(
             &ctx,

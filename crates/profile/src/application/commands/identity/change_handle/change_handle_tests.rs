@@ -7,10 +7,10 @@ mod tests {
     use crate::context::ProfileContext;
     use crate::entities::Profile;
     use crate::events::ProfileEvent;
-    use crate::types::{Handle, ProfileId};
+    use crate::types::Handle;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
-    use shared_kernel::types::AccountId;
+    use shared_kernel::types::{AccountId, ProfileId};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -25,7 +25,7 @@ mod tests {
 
         let cmd = ChangeHandleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_handle: new_handle.clone(),
         };
 
@@ -35,11 +35,12 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
-            assert_eq!(p.handle(), &new_handle);
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.handle(), &new_handle);
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::HANDLE_CHANGED));
 
@@ -56,7 +57,7 @@ mod tests {
         f.given_profile(profile).await;
 
         // 2. On crée un AUTRE profil qui possède déjà le handle "taken.handle"
-        let other_id = ProfileId::generate();
+        let other_id = ProfileId::generate(f.region());
         let taken_handle = Handle::try_new("taken.handle")?;
         let other_profile =
             Profile::builder(AccountId::generate(f.region()), taken_handle.clone())?
@@ -68,7 +69,7 @@ mod tests {
         // 3. On essaie de donner le handle déjà pris à notre profil initial
         let cmd = ChangeHandleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
             new_handle: taken_handle,
         };
 
@@ -105,7 +106,7 @@ mod tests {
 
         let cmd = ChangeHandleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_handle: handle,
         };
 
@@ -134,7 +135,7 @@ mod tests {
 
         let cmd = ChangeHandleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 99), // Mauvaise version
+            target: CommandTarget::new(f.profile_id(), f.region(), 99), // Mauvaise version
             new_handle: Handle::try_new("new.alice")?,
         };
 
