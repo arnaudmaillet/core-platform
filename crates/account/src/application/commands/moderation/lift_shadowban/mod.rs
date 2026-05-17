@@ -1,3 +1,3 @@
 pub mod lift_shadowban_command;
-pub mod lift_shadowban_use_case;
-pub mod lift_shadowban_use_case_test;
+pub mod lift_shadowban_handler;
+pub mod lift_shadowban_test;

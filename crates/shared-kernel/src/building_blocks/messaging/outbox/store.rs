@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/persistence/outbox_store.rs
+// crates/shared-kernel/src/building_blocks/messaging/outbox/store.rs
 
 use crate::{core::Result, messaging::EventEnvelope};
 use async_trait::async_trait;

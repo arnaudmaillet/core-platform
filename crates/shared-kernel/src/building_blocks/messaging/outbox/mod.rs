@@ -1,4 +1,5 @@
 mod processor;
+mod processor_test;
 mod repository;
 mod store;
 

@@ -8,6 +8,7 @@ mod transport;
 
 pub use application::{command, context, idempotency, sharding};
 pub use building_blocks::{geo, messaging, security, types};
+pub use persistence::cache;
 
 #[cfg(feature = "postgres")]
 pub use persistence::postgres;
@@ -16,7 +17,7 @@ pub use persistence::postgres;
 pub use persistence::scylla;
 
 #[cfg(feature = "redis")]
-pub use persistence::{cache, redis};
+pub use persistence::redis;
 
 #[cfg(feature = "kafka")]
 pub use transport::kafka;
