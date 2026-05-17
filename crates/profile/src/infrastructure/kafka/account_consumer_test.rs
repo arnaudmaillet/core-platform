@@ -11,16 +11,16 @@ mod tests {
     async fn test_on_message_received_success() -> Result<(), Box<dyn std::error::Error>> {
         // Arrange
         let f = ProfileTestFixture::new();
-        // On récupère l'app_ctx et le bus mocké/stubbé depuis notre fixture de test standard
         let consumer = AccountConsumer::new(f.bus(), f.app_ctx().clone());
 
         let account_id = Uuid::new_v4();
+        // 💡 Ajusté : Utilise le tag exact "AccountRegistered" et les bons champs
         let payload = json!({
-            "type": "account.created",
+            "type": "AccountRegistered",
             "data": {
                 "account_id": account_id,
                 "region": f.region().to_string(),
-                "username": "jean_dupont"
+                "email": "jean.dupont@test.com"
             }
         });
         let raw_payload = serde_json::to_vec(&payload)?;
@@ -34,12 +34,15 @@ mod tests {
             "Le consommateur aurait dû traiter le message avec succès"
         );
 
-        // On vérifie que le profil a bien été poussé en base par le bus suite à l'événement
+        let expected_handle_str = format!("user_{}", &account_id.to_string()[0..8]);
+        let expected_handle = Handle::try_new(expected_handle_str)?;
+
+        // On vérifie que le profil a bien été poussé en base avec le handle autogénéré
         let saved_profile = f
             .profile_repo()
-            .find_by_handle(&Handle::try_new("jean_dupont")?, &f.region(), None)
+            .find_by_handle(&expected_handle, &f.region(), None)
             .await?
-            .expect("Le profil aurait dû être créé en base de données");
+            .expect("Le profil aurait dû être créé en base de données avec le handle autogénéré");
 
         assert_eq!(saved_profile.account_id().uuid(), account_id);
         Ok(())
@@ -52,16 +55,20 @@ mod tests {
         let f = ProfileTestFixture::new();
         let consumer = AccountConsumer::new(f.bus().clone(), f.app_ctx().clone());
 
-        // On simule qu'un profil possède déjà ce handle en base
-        let existing_profile = f.builder("jean_dupont").build()?;
+        let account_id = Uuid::new_v4();
+        let generated_handle_str = format!("user_{}", &account_id.to_string()[0..8]);
+
+        // On simule qu'un profil possède déjà EXACTEMENT ce handle généré en base
+        let existing_profile = f.builder(&generated_handle_str).build()?;
         f.profile_repo().save_direct(existing_profile).await;
 
+        // On rejoue le même événement (déclencheur de l'idempotence)
         let payload = json!({
-            "type": "account.created",
+            "type": "AccountRegistered",
             "data": {
-                "account_id": Uuid::new_v4(),
+                "account_id": account_id,
                 "region": f.region().to_string(),
-                "username": "jean_dupont" // Conflit de handle !
+                "email": "jean.dupont@test.com"
             }
         });
         let raw_payload = serde_json::to_vec(&payload)?;
@@ -70,10 +77,9 @@ mod tests {
         let result = consumer.on_message_received(&raw_payload).await;
 
         // Assert
-        // Doit renvoyer Ok(()) et ne pas crasher car l'erreur AlreadyExists est attrapée et ignorée de manière idempotente
         assert!(
             result.is_ok(),
-            "Un doublon Kafka doit être acquitté sans erreur de manière idempotente"
+            "Un doublon Kafka générant le même handle doit être acquitté sans erreur (idempotence)"
         );
         Ok(())
     }
@@ -83,10 +89,8 @@ mod tests {
         // Arrange
         let f = ProfileTestFixture::new();
         let consumer = AccountConsumer::new(f.bus().clone(), f.app_ctx().clone());
-
-        // Un événement que le domaine profile ignore complètement
         let payload = json!({
-            "type": "account.password_changed",
+            "type": "AccountPasswordChanged", // 💡 Aligné sur les types d'events PascalCase d'Account
             "data": {
                 "account_id": Uuid::new_v4()
             }
@@ -99,7 +103,7 @@ mod tests {
         // Assert
         assert!(
             result.is_ok(),
-            "Les événements inconnus doivent être ignorés silencieusement"
+            "Les événements inconnus doivent tomber dans le #[serde(other)] et être ignorés silencieusement"
         );
         Ok(())
     }
@@ -116,10 +120,9 @@ mod tests {
         let result = consumer.on_message_received(raw_payload).await;
 
         // Assert
-        // Ici on s'attend à une erreur de parsing (Err) car le payload est structurellement corrompu
         assert!(
             result.is_err(),
-            "Un payload JSON corrompu doit remonter une erreur"
+            "Un payload JSON structurellement corrompu doit remonter une erreur pour ne pas perdre le message"
         );
         Ok(())
     }

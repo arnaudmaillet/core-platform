@@ -1,19 +1,14 @@
-use account::account::entities::Account;
 use account::db::PostgresAccountRepository;
+use account::entities::Account;
 use account::repositories::AccountRepository;
 use account::types::{AccountRole, AccountState, RegistrationIdentifier};
-use shared_kernel::domain::Identifier;
-use shared_kernel::domain::entities::Versioned;
-use std::str::FromStr;
+use shared_kernel::cache::CacheRepository;
+use shared_kernel::postgres::PostgresTransaction;
+use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
 use std::time::Duration;
 use tokio;
 
-use shared_kernel::core::{Error, Result};
-use shared_kernel::domain::events::AggregateRoot;
-use shared_kernel::domain::repositories::CacheRepository;
-use shared_kernel::infrastructure::postgres::transactions::PostgresTransaction;
-use shared_kernel::infrastructure::postgres::utils::PostgresTestContext;
-use shared_kernel::infrastructure::redis::utils::RedisTestContext;
+use shared_kernel::core::{Error, Identifier, Result, Versioned};
 use shared_kernel::types::{AccountId, AuditReason, Email, RegionCode, SubId};
 
 /// Helper pour instancier le repo et les infrastructures de test (Postgres + Redis)
@@ -52,7 +47,7 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
             .pool()
             .begin()
             .await
-            .map_err(|e| Error::Infrastructure(e.to_string()))?;
+            .map_err(|e| Error::internal(e.to_string()))?;
         let mut tx = PostgresTransaction::new(tx_sqlx);
 
         repo.create(&account, &mut tx).await?;
@@ -60,7 +55,7 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
         tx.into_inner()
             .commit()
             .await
-            .map_err(|e| Error::Infrastructure(e.to_string()))?;
+            .map_err(|e| Error::internal(e.to_string()))?;
     }
 
     // --- 2. FETCH ---
@@ -295,7 +290,7 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
         .bind(account_id.as_uuid())
         .execute(&pg_ctx.pool())
         .await
-        .map_err(|e| Error::Infrastructure(e.to_string()))?;
+        .map_err(|e| Error::internal(e.to_string()))?;
 
     // 4. Tentative de récupération (doit être un Cache Hit)
     let found_from_cache = repo.find_by_id(&account_id, None).await?;

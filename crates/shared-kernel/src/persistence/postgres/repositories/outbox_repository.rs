@@ -1,10 +1,11 @@
-// crates/shared-kernel/src/infrastructure/postgres/repositories/postgres_outbox_repository.rs
+// crates/shared-kernel/src/persistence/postgres/repositories/outbox_repository.rs
 
 use crate::core::{Error, Result, Transaction};
-use crate::messaging::{Event, EventEnvelope, OutboxRepository};
-use crate::postgres::TransactionExt;
+use crate::messaging::{Event, EventEnvelope, OutboxRepository, OutboxStore}; // 💡 Ajout du trait OutboxStore
+use crate::postgres::{OutboxRow, TransactionExt};
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use sqlx::{Pool, Postgres, QueryBuilder};
+use uuid::Uuid;
 
 pub struct PostgresOutboxRepository {
     pool: Pool<Postgres>,
@@ -16,6 +17,79 @@ impl PostgresOutboxRepository {
     }
 }
 
+// 1. Implémentation du trait OutboxStore pour ton OutboxProcessor générique !
+#[async_trait]
+impl OutboxStore for PostgresOutboxRepository {
+    async fn fetch_unprocessed(&self, limit: u32) -> Result<Vec<EventEnvelope>> {
+        // 💡 Utilisation d'une transaction interne pour sécuriser le verrou 'FOR UPDATE SKIP LOCKED'
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| Error::database(format!("Outbox tx begin failed: {}", e)))?;
+
+        let sql = r#"
+            SELECT id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
+            FROM outbox_events
+            WHERE status = 'PENDING'
+            ORDER BY occurred_at ASC
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED
+        "#;
+
+        let rows = sqlx::query_as::<_, OutboxRow>(sql)
+            .bind(limit as i32)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| Error::database(format!("Outbox fetch pending failed: {}", e)))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| Error::database(format!("Outbox tx commit failed: {}", e)))?;
+
+        Ok(rows.into_iter().map(EventEnvelope::from).collect())
+    }
+
+    async fn mark_as_processed(&self, ids: &[Uuid]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+
+        sqlx::query(
+            r#"
+            UPDATE outbox_events 
+            SET status = 'PROCESSED', processed_at = NOW() 
+            WHERE id = ANY($1)
+            "#,
+        )
+        .bind(ids)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| Error::database(format!("Outbox mark processed failed: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn mark_as_failed(&self, id: Uuid, last_error: String) -> Result<()> {
+        // Optionnel : si tu veux stocker les logs d'erreurs d'envoi Kafka dans l'outbox
+        sqlx::query(
+            r#"
+            UPDATE outbox_events 
+            SET status = 'FAILED', metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{last_error}', to_jsonb($2::text))
+            WHERE id = $1
+            "#
+        )
+        .bind(id)
+        .bind(last_error)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| Error::database(format!("Outbox mark failed stepped: {}", e)))?;
+
+        Ok(())
+    }
+}
+
+// 2. Ton trait classique pour la couche d'écriture (save_all)
 #[async_trait]
 impl OutboxRepository for PostgresOutboxRepository {
     async fn save_all(&self, tx: &mut dyn Transaction, events: &[&dyn Event]) -> Result<()> {
@@ -42,11 +116,11 @@ impl OutboxRepository for PostgresOutboxRepository {
                 .push_bind(env.occurred_at);
         });
 
-        let query = query_builder.build();
-        query
+        query_builder
+            .build()
             .execute(&mut **sqlx_tx)
             .await
-            .map_err(|e| Error::database("Outbox Bulk Insert"))?;
+            .map_err(|_| Error::database("Outbox Bulk Insert"))?;
 
         Ok(())
     }
@@ -55,31 +129,17 @@ impl OutboxRepository for PostgresOutboxRepository {
         let sql = r#"
             SELECT id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
             FROM outbox_events
-            WHERE processed_at IS NULL
+            WHERE status = 'PENDING'
             ORDER BY occurred_at ASC
             LIMIT $1
         "#;
 
-        let rows = sqlx::query(sql)
+        let rows = sqlx::query_as::<_, OutboxRow>(sql)
             .bind(limit)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| Error::database(e.to_string()))?;
 
-        let envelopes = rows
-            .into_iter()
-            .map(|row| EventEnvelope {
-                id: row.get("id"),
-                region_code: row.get("region_code"),
-                aggregate_type: row.get("aggregate_type"),
-                aggregate_id: row.get("aggregate_id"),
-                event_type: row.get("event_type"),
-                payload: row.get("payload"),
-                metadata: row.get("metadata"),
-                occurred_at: row.get("occurred_at"),
-            })
-            .collect();
-
-        Ok(envelopes)
+        Ok(rows.into_iter().map(EventEnvelope::from).collect())
     }
 }

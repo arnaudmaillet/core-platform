@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/postgres/rows/postgres_outbox_row.rs
+// crates/shared-kernel/src/persistence/postgres/rows/outbox_row.rs
 
 use crate::messaging::EventEnvelope;
 use chrono::{DateTime, Utc};

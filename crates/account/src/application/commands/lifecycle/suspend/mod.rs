@@ -1,3 +1,3 @@
 pub mod suspend_command;
-pub mod suspend_use_case;
-pub mod suspend_use_case_test;
+pub mod suspend_handler;
+pub mod suspend_test;

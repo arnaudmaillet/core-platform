@@ -1,11 +1,11 @@
-// crates/shared-kernel/src/infrastructure/bootstrap/outbox.rs
+// crates/shared-kernel/src/building_blocks/messaging/outbox/relay.rs
 
 #![cfg(all(feature = "postgres", feature = "kafka"))]
 
 use crate::core::{Error, Result};
 use crate::kafka::KafkaEventProducer;
 use crate::messaging::OutboxProcessor;
-use crate::postgres::PostgresOutboxStore;
+use crate::postgres::PostgresOutboxRepository;
 use sqlx::PgPool;
 use std::env;
 use std::time::Duration;
@@ -35,7 +35,7 @@ pub async fn run_outbox_relay(domain_name: &str, default_topic: &str) -> Result<
         .await
         .map_err(|e| Error::internal(e.to_string()))?;
 
-    let store = PostgresOutboxStore::new(pool);
+    let store = PostgresOutboxRepository::new(pool);
     let producer = KafkaEventProducer::new(&brokers, default_topic.to_string()).await?;
 
     // 4. Configuration du processeur avec les paramètres extraits

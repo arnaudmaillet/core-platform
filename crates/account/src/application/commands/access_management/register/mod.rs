@@ -1,3 +1,3 @@
 pub mod register_command;
-pub mod register_use_case;
-pub mod register_use_case_test;
+pub mod register_handler;
+pub mod register_test;

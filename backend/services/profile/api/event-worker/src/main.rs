@@ -6,10 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 // Imports du Shared Kernel (Socle technique & Transport de la plateforme)
 use shared_kernel::{
-    kafka::KafkaEventConsumer,
-    messaging::{EventConsumer, EventEnvelope},
-    postgres::PostgresContext,
-    redis::RedisContext,
+    core::Error, kafka::KafkaEventConsumer, messaging::{EventConsumer, EventEnvelope}, postgres::PostgresContext, redis::RedisContext
 };
 
 // Imports de la crate Profile
@@ -88,12 +85,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // On ré-encode temporairement en bytes pour que ton AccountConsumer local
                 // puisse désérialiser son contrat d'enum interne (AccountIncomingEvent) de manière isolée.
                 let raw_payload = serde_json::to_vec(&envelope.payload)
-                    .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
+                    .map_err(|e| Error::internal(e.to_string()))?;
 
                 consumer
                     .on_message_received(&raw_payload)
                     .await
-                    .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
+                    .map_err(|e| Error::internal(e.to_string()))?;
 
                 Ok(())
             });
@@ -103,7 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 9. Lancement de la boucle d'écoute infinie sur le topic cible
-    let topic_target = "account.events"; // Modifie si ton topic a un autre nom
+    let topic_target = "account.events.v1"; // Modifie si ton topic a un autre nom
     tracing::info!(
         "📡 Écoute active sur le topic : '{}' (Groupe : '{}')",
         topic_target,

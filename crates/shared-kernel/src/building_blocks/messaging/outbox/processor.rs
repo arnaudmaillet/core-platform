@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/application/workers/outbox_processor.rs
+// crates/shared-kernel/src/building_blocks/messaging/outbox/processor.rs
 
 use crate::core::Result;
 use crate::messaging::EventProducer;

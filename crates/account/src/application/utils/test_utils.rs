@@ -14,7 +14,7 @@ use shared_kernel::types::{AccountId, RegionCode};
 // Account Domain & Application
 // Note : Importation directe depuis application::context (structure plate)
 use crate::application::context::{AccountAppContext, AccountContext};
-use crate::commands::lifecycle::change_beta_tier::change_beta_tier_use_case::ChangeBetaTierHandler;
+use crate::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
 use crate::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
     BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,

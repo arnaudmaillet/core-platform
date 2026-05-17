@@ -1,3 +1,3 @@
 pub mod unban_command;
-pub mod unban_use_case;
-pub mod unban_use_case_test;
+pub mod unban_handler;
+pub mod unban_test;

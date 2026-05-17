@@ -1,3 +1,3 @@
 pub mod update_preferences_command;
-pub mod update_preferences_use_case;
-pub mod update_preferences_use_case_test;
+pub mod update_preferences_handler;
+pub mod update_preferences_test;
