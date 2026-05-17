@@ -15,7 +15,7 @@ use shared_kernel::geo::Timezone;
 use shared_kernel::security::PushToken;
 use shared_kernel::{
     core::{AggregateMetadata, Error, Result},
-    types::{AccountId, Email, PhoneNumber, RegionCode, SubId},
+    types::{AccountId, Email, PhoneNumber, SubId},
 };
 
 #[derive(Debug, sqlx::FromRow)]
@@ -54,12 +54,20 @@ pub struct PostgresAccountRow {
 
 impl PostgresAccountRow {
     pub fn to_domain(self) -> Result<Account> {
-        let region = RegionCode::try_new(self.region_code)?;
-        let account_id = AccountId::new(self.account_id, region);
+        let account_id = AccountId::new(self.account_id);
+
+        if account_id.region().as_static_str() != self.region_code {
+            tracing::warn!(
+                account_id = %self.account_id,
+                db_region = %self.region_code,
+                smart_id_region = %account_id.region(),
+                "Data consistency warning: Smart ID region bits mismatch with table regional column"
+            );
+        }
 
         // 1. Reconstruction de Identity
         let identity = AccountIdentity::restore(
-            account_id.clone(),
+            account_id,
             self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
             self.phone_number.map(PhoneNumber::try_new).transpose()?,
@@ -73,7 +81,7 @@ impl PostgresAccountRow {
         );
 
         let governance = AccountGovernance::restore(
-            account_id.clone(),
+            account_id,
             self.role
                 .map(AccountRole::from)
                 .unwrap_or(AccountRole::default()),

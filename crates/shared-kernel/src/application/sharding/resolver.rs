@@ -16,7 +16,7 @@ impl ShardResolver {
 
         for node in nodes {
             nodes_by_region
-                .entry(node.region.clone())
+                .entry(node.region)
                 .or_default()
                 .push(node);
         }

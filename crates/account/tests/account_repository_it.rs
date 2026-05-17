@@ -36,7 +36,7 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     let email = Email::try_new("full@lifecycle.com")?;
 
     let account = Account::builder(
-        account_id.clone(),
+        account_id,
         RegistrationIdentifier::try_from_email(email.to_string())?,
     )
     .build()?;
@@ -60,11 +60,11 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
 
     // --- 2. FETCH ---
     let found = repo
-        .find_by_id(&account_id, None)
+        .find_by_id(account_id, None)
         .await?
         .expect("Account should exist");
 
-    assert_eq!(found.identity().account_id(), &account_id);
+    assert_eq!(found.identity().account_id(), account_id);
     assert_eq!(found.version(), 0);
 
     // --- 3. UPDATE ---
@@ -75,18 +75,18 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     repo.save(&mut to_update, None).await?;
 
     // --- 4. VERIFY UPDATE ---
-    let updated = repo.find_by_id(&account_id, None).await?.unwrap();
+    let updated = repo.find_by_id(account_id, None).await?.unwrap();
     assert_eq!(*updated.identity().state(), AccountState::DEACTIVATED);
     assert_eq!(updated.version(), 1);
 
     // --- 5. DELETE (Scope isolé) ---
     {
         let mut tx_del = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-        repo.delete(&account_id, &mut tx_del).await?;
+        repo.delete(account_id, &mut tx_del).await?;
         tx_del.into_inner().commit().await.unwrap();
     }
 
-    let deleted = repo.find_by_id(&account_id, None).await?;
+    let deleted = repo.find_by_id(account_id, None).await?;
     assert!(deleted.is_none());
 
     Ok(())
@@ -126,7 +126,7 @@ async fn test_cache_logic_integrity() -> Result<()> {
     let account_id = AccountId::generate(RegionCode::default());
 
     // Utiliser la même logique de clé que le Repo ---
-    // Tu peux soit appeler PostgresAccountRepository::cache_key(&account_id)
+    // Tu peux soit appeler PostgresAccountRepository::cache_key(account_id)
     // Soit reproduire exactement le format :
     let cache_key = format!(
         "account:aggregate:{}:{}",
@@ -135,7 +135,7 @@ async fn test_cache_logic_integrity() -> Result<()> {
     );
 
     let account = Account::builder(
-        account_id.clone(),
+        account_id,
         RegistrationIdentifier::try_from_email("cache@test.com")?,
     )
     .build()?;
@@ -145,7 +145,7 @@ async fn test_cache_logic_integrity() -> Result<()> {
     repo.create(&account, &mut tx).await?;
     tx.into_inner().commit().await.unwrap();
 
-    let _ = repo.find_by_id(&account_id, None).await?;
+    let _ = repo.find_by_id(account_id, None).await?;
 
     // --- AJUSTEMENT 2 : Assertion robuste avec retries ---
     let mut success = false;
@@ -217,7 +217,7 @@ async fn test_lookups() -> Result<()> {
     let ext_id = SubId::from_raw("ext_123");
     let account_id = AccountId::generate(RegionCode::default());
 
-    let account = Account::builder(account_id.clone(), identifier)
+    let account = Account::builder(account_id, identifier)
         .with_sub_id(ext_id.clone())
         .with_email(email.clone())
         .build()?;
@@ -243,10 +243,10 @@ async fn test_lookups() -> Result<()> {
 
 #[tokio::test]
 async fn test_rollback_works_properly() -> Result<()> {
-    let (repo, pg_ctx, _) = get_test_context().await;
+    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
     let account = Account::builder(
-        account_id.clone(),
+        account_id,
         RegistrationIdentifier::try_from_email("rollback@test.com")?,
     )
     .build()?;
@@ -257,7 +257,7 @@ async fn test_rollback_works_properly() -> Result<()> {
     repo.create(&account, &mut tx).await?;
     tx.into_inner().rollback().await.unwrap();
 
-    let found = repo.find_by_id(&account_id, None).await?;
+    let found = repo.find_by_id(account_id, None).await?;
     assert!(found.is_none(), "Account should not exist after rollback");
 
     Ok(())
@@ -265,11 +265,11 @@ async fn test_rollback_works_properly() -> Result<()> {
 
 #[tokio::test]
 async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
-    let (repo, pg_ctx, redis_ctx) = get_test_context().await;
+    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
 
     let account = Account::builder(
-        account_id.clone(),
+        account_id,
         RegistrationIdentifier::try_from_email("cache-check@test.com")?,
     )
     .build()?;
@@ -280,7 +280,7 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
     tx.into_inner().commit().await.unwrap();
 
     // 2. Premier find_by_id : remplit le cache
-    let _ = repo.find_by_id(&account_id, None).await?;
+    let _ = repo.find_by_id(account_id, None).await?;
 
     // Attendre le spawn asynchrone du cache
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -293,7 +293,7 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
         .map_err(|e| Error::internal(e.to_string()))?;
 
     // 4. Tentative de récupération (doit être un Cache Hit)
-    let found_from_cache = repo.find_by_id(&account_id, None).await?;
+    let found_from_cache = repo.find_by_id(account_id, None).await?;
 
     assert!(
         found_from_cache.is_some(),
@@ -302,7 +302,7 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
 
     // 5. Verification du bypass en transaction
     let mut tx_check = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-    let found_in_tx = repo.find_by_id(&account_id, Some(&mut tx_check)).await?;
+    let found_in_tx = repo.find_by_id(account_id, Some(&mut tx_check)).await?;
 
     assert!(
         found_in_tx.is_none(),
@@ -314,12 +314,12 @@ async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
 
 #[tokio::test]
 async fn test_cache_performance_benefit() -> Result<()> {
-    let (repo, pg_ctx, redis_ctx) = get_test_context().await;
+    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
 
     // On prépare un compte
     let account = Account::builder(
-        account_id.clone(),
+        account_id,
         RegistrationIdentifier::try_from_email("perf@test.com")?,
     )
     .build()?;
@@ -329,20 +329,20 @@ async fn test_cache_performance_benefit() -> Result<()> {
     tx.into_inner().commit().await.unwrap();
 
     // --- ÉTAPE 1 : Premier appel (Remplit le cache) ---
-    let _ = repo.find_by_id(&account_id, None).await?;
+    let _ = repo.find_by_id(account_id, None).await?;
 
     // On attend un peu pour être SÛR que le cache est prêt et écrit
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     // --- ÉTAPE 2 : Mesure de l'appel Cache ---
     let start_cache = std::time::Instant::now();
-    let _ = repo.find_by_id(&account_id, None).await?;
+    let _ = repo.find_by_id(account_id, None).await?;
     let duration_cache = start_cache.elapsed();
 
     // --- ÉTAPE 3 : Mesure de l'appel DB (en forçant une transaction pour bypass le cache) ---
     let mut tx_force = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
     let start_db = std::time::Instant::now();
-    let _ = repo.find_by_id(&account_id, Some(&mut tx_force)).await?;
+    let _ = repo.find_by_id(account_id, Some(&mut tx_force)).await?;
     let duration_db = start_db.elapsed();
 
     println!("⏱️ Cache: {:?}, ⏱️ DB: {:?}", duration_cache, duration_db);
@@ -358,7 +358,7 @@ async fn test_cache_performance_benefit() -> Result<()> {
 
 #[tokio::test]
 async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
-    let (repo, pg_ctx, _) = get_test_context().await;
+    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
     let email = Email::try_new("partial@integrity.com")?;
 
@@ -374,7 +374,7 @@ async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
         .unwrap();
 
     // --- 2. TENTATIVE DE FETCH DE L'AGRÉGAT COMPLET ---
-    let result = repo.find_by_id(&account_id, None).await?;
+    let result = repo.find_by_id(account_id, None).await?;
     assert!(
         result.is_some(),
         "Le repo devrait être capable de reconstruire un compte même si les tables satellites sont vides (Audit: Résilience)"

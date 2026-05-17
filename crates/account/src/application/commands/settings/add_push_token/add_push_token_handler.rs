@@ -16,7 +16,7 @@ impl CommandHandler for AddPushTokenHandler {
 
     async fn handle(&self, ctx: &AccountContext, cmd: AddPushTokenCommand) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

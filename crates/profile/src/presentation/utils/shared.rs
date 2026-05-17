@@ -1,10 +1,9 @@
 // crates/profile/src/presentation/utils/shared.rs
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
-use crate::types::ProfileId;
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
-use shared_kernel::types::RegionCode;
+use shared_kernel::types::{ProfileId, RegionCode};
 use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]
@@ -15,10 +14,10 @@ pub trait GrpcServiceUtils {
     fn get_context<T>(
         &self,
         request: &Request<T>,
-        profile_id: &ProfileId,
+        profile_id: ProfileId,
     ) -> Result<ProfileContext, Status> {
         let region = self.extract_region(request)?;
-        Ok(self.app_ctx().create_context(profile_id.clone(), region))
+        Ok(self.app_ctx().create_context(profile_id, region))
     }
 
     fn build_context(

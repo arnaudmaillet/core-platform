@@ -29,7 +29,7 @@ mod tests {
         let new_date = adult_birth_date();
         let cmd = ChangeBirthDateCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_birth_date: new_date.clone(),
         };
 
@@ -66,7 +66,7 @@ mod tests {
         let new_date = adult_birth_date();
         let cmd = ChangeBirthDateCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_birth_date: new_date.clone(),
         };
 
@@ -106,7 +106,7 @@ mod tests {
         let new_date = adult_birth_date();
         let cmd = ChangeBirthDateCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_birth_date: new_date.clone(),
         };
 
@@ -150,7 +150,7 @@ mod tests {
         let new_date = adult_birth_date();
         let cmd = ChangeBirthDateCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_birth_date: new_date.clone(),
         };
 

@@ -1,10 +1,9 @@
 // crates/profile/src/application/commands/media/update_banner/update_banner_command.rs
 
-use crate::types::ProfileId;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{RegionCode, Url};
+use shared_kernel::types::{ProfileId, RegionCode, Url};
 use shared_proto::profile::v1::UpdateBannerRequest;
 use uuid::Uuid;
 

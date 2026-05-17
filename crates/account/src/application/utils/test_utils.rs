@@ -60,7 +60,7 @@ impl TestFixture {
         );
 
         let default_region = RegionCode::default();
-        let account_id = AccountId::generate(default_region.clone());
+        let account_id = AccountId::generate(default_region);
         let account_ctx = AccountContext::new(app_ctx.clone(), Some(account_id), default_region);
 
         let mut bus = CommandBus::new();
@@ -148,7 +148,7 @@ impl TestFixture {
     }
 
     pub fn region(&self) -> RegionCode {
-        self.account_ctx.region().clone()
+        self.account_ctx.region()
     }
 
     pub fn account_repo(&self) -> &AccountRepositoryStub {
@@ -199,10 +199,10 @@ impl TestFixture {
     where
         F: FnOnce(&Account),
     {
-        self.assert_account_by_id(&self.account_id(), check).await
+        self.assert_account_by_id(self.account_id(), check).await
     }
 
-    pub async fn assert_account_by_id<F>(&self, id: &AccountId, check: F) -> Result<()>
+    pub async fn assert_account_by_id<F>(&self, id: AccountId, check: F) -> Result<()>
     where
         F: FnOnce(&Account),
     {
@@ -214,7 +214,7 @@ impl TestFixture {
         Ok(())
     }
 
-    pub async fn assert_account_exists(&self, id: &AccountId) -> Result<()> {
+    pub async fn assert_account_exists(&self, id: AccountId) -> Result<()> {
         assert!(self.account_repo().find_direct(id).is_some());
         Ok(())
     }

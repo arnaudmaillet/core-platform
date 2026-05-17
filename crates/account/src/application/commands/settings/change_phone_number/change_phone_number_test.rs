@@ -28,7 +28,7 @@ mod tests {
 
         let cmd = ChangePhoneNumberCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_phone: new_phone.clone(),
         };
 
@@ -67,7 +67,7 @@ mod tests {
 
         let cmd = ChangePhoneNumberCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_phone: requested_phone.clone(),
         };
 
@@ -111,7 +111,7 @@ mod tests {
 
         let cmd = ChangePhoneNumberCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_phone: phone.clone(),
         };
 
@@ -151,7 +151,7 @@ mod tests {
         let requested_phone = PhoneNumber::try_new("+33611223344")?;
         let cmd = ChangePhoneNumberCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.account_id(), f.region(), 0),
             new_phone: requested_phone.clone(),
         };
 

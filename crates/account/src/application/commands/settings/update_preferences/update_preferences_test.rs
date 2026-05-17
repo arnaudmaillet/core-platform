@@ -29,7 +29,7 @@ mod tests {
 
         let cmd = UpdatePreferencesCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             privacy: None,
             notifications: None,
             appearance: Some(new_appearance.clone()),
@@ -72,7 +72,7 @@ mod tests {
 
         let cmd = UpdatePreferencesCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             privacy: None,
             notifications: None,
             appearance: None,
@@ -120,7 +120,7 @@ mod tests {
 
         let cmd = UpdatePreferencesCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             privacy: None,
             notifications: None,
             appearance: Some(initial_appearance),

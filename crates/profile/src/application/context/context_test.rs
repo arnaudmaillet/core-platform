@@ -3,9 +3,9 @@
 #[cfg(test)]
 mod tests {
     use crate::application::utils::ProfileTestFixture;
-    use crate::types::ProfileId;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
+    use shared_kernel::types::ProfileId;
 
     #[tokio::test]
     async fn test_context_fetch_verified_occ_conflict() -> Result<()> {
@@ -17,7 +17,7 @@ mod tests {
 
         // On crée une version qui est forcément différente pour déclencher l'OCC
         let wrong_version = current_version + 1;
-        let target = CommandTarget::new(f.profile_id().clone(), f.region(), wrong_version);
+        let target = CommandTarget::new(f.profile_id(), f.region(), wrong_version);
 
         // Act
         let result = f.profile_ctx().fetch_verified(&target).await;
@@ -42,7 +42,7 @@ mod tests {
 
         // NETTOYAGE PLUS DE HACK MUTABLE :
         // On génère un ID totalement distinct
-        let mismatched_id = ProfileId::generate();
+        let mismatched_id = ProfileId::generate(f.region());
 
         // On utilise l'usine officielle de la fixture pour créer un contexte
         // lié à cet ID distinct. C'est propre, immuable et réaliste.

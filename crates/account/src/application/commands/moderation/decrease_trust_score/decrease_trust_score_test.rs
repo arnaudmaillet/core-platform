@@ -25,7 +25,7 @@ mod tests {
 
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(30)?,
             reason: AuditReason::try_new("Suspicious activity")?,
         };
@@ -64,7 +64,7 @@ mod tests {
 
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(50)?, // 20 - 50 -> Clamping à 0
             reason: AuditReason::try_new("Heavy violation")?,
         };
@@ -104,7 +104,7 @@ mod tests {
 
         let cmd = DecreaseTrustScoreCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(10)?,
             reason: AuditReason::try_new("Duplicate")?,
         };
@@ -142,7 +142,7 @@ mod tests {
 
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(10)?,
             reason: AuditReason::try_new("Already at zero")?,
         };
@@ -184,7 +184,7 @@ mod tests {
 
         let cmd = DecreaseTrustScoreCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             amount: TrustAmount::try_from(1)?,
             reason: AuditReason::try_new("Test")?,
         };

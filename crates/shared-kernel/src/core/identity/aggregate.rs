@@ -61,6 +61,10 @@ impl AggregateMetadata {
         self.updated_at
     }
 
+    pub fn is_events_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
     /// Helper pour le stockage en base de données (souvent i64)
     pub fn version_i64(&self) -> Result<i64> {
         use std::convert::TryInto;

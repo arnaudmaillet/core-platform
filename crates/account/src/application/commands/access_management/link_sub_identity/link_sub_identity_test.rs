@@ -59,7 +59,7 @@ mod tests {
 
         let cmd = LinkSubIdentityCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             sub_id: ext_id,
         };
 
@@ -91,7 +91,7 @@ mod tests {
 
         let cmd = LinkSubIdentityCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             // On met une valeur qui ne devrait pas poser de problème
             sub_id: SubId::try_new("apple_789")?,
         };
@@ -128,7 +128,7 @@ mod tests {
 
         let cmd = LinkSubIdentityCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             sub_id: SubId::try_new("discord_000")?,
         };
 

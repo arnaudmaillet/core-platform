@@ -25,7 +25,7 @@ mod tests {
 
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
-            account_id: expected_account_id.clone(),
+            account_id: expected_account_id,
             sub_id: Some(ext_id.clone()),
             identifier: RegistrationIdentifier::from_email(email.clone()),
             locale: Locale::try_new("en-US")?,
@@ -44,9 +44,9 @@ mod tests {
             "Le register devrait réussir : {:?}",
             result.err()
         );
-        f.assert_account_exists(&expected_account_id).await?;
+        f.assert_account_exists(expected_account_id).await?;
 
-        f.assert_account_by_id(&expected_account_id, |acc| {
+        f.assert_account_by_id(expected_account_id, |acc| {
             assert_eq!(acc.identity().email(), Some(&email));
             assert_eq!(acc.identity().sub_id(), Some(&ext_id));
             assert_eq!(acc.identity().state(), &AccountState::ACTIVE);

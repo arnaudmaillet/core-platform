@@ -30,7 +30,7 @@ mod tests {
 
         let cmd = UpdateTimezoneCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_timezone: new_tz.clone(),
         };
 
@@ -69,7 +69,7 @@ mod tests {
 
         let cmd = UpdateTimezoneCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_timezone: requested_tz.clone(),
         };
 
@@ -113,7 +113,7 @@ mod tests {
 
         let cmd = UpdateTimezoneCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_timezone: current_tz,
         };
 
@@ -152,7 +152,7 @@ mod tests {
         // Tentative d'injecter une Timezone US alors que le compte est en EU
         let cmd = UpdateTimezoneCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_timezone: Timezone::from_raw("America/New_York"),
         };
 

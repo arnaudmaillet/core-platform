@@ -22,7 +22,7 @@ mod tests {
 
         let cmd = UnsuspendCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             reason: AuditReason::try_new("Good behavior")?,
         };
 
@@ -59,7 +59,7 @@ mod tests {
 
         let cmd = UnsuspendCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             reason: AuditReason::try_new("Duplicate call")?,
         };
 
@@ -97,7 +97,7 @@ mod tests {
 
         let cmd = UnsuspendCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             reason: AuditReason::try_new("Already good")?,
         };
 

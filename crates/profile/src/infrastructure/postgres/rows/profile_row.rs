@@ -1,14 +1,12 @@
 // crates/profile/src/infrastructure/postgres/rows/postgres_profile_row.rs
 
-use std::str::FromStr;
-
 use crate::domain::entities::Profile;
-use crate::domain::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::domain::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use shared_kernel::{
     core::{Error, Identifier, Result, Versioned},
-    types::{AccountId, RegionCode, Url},
+    types::{AccountId, ProfileId, Url},
 };
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -24,7 +22,7 @@ pub struct PostgresProfileRow {
     pub avatar_url: Option<String>,
     pub banner_url: Option<String>,
     pub location_label: Option<String>,
-    pub social_links: JsonValue,
+    pub social_links: Option<JsonValue>,
     pub is_private: bool,
     pub version: i64,
     pub created_at: DateTime<Utc>,
@@ -44,7 +42,7 @@ impl PostgresProfileRow {
             avatar_url: p.avatar().as_ref().map(|u| u.to_string()),
             banner_url: p.banner().as_ref().map(|u| u.to_string()),
             location_label: p.location().as_ref().map(|l| l.to_string()),
-            social_links: serde_json::to_value(p.socials()).unwrap_or(JsonValue::Null),
+            social_links: Some(serde_json::to_value(p.socials()).unwrap_or(JsonValue::Null)),
             is_private: p.is_private(),
             version: p.version() as i64,
             created_at: p.created_at(),
@@ -54,7 +52,9 @@ impl PostgresProfileRow {
 
     /// Mappe l'infrastructure vers le domaine (pour le fetch)
     pub fn to_domain(self) -> Result<Profile> {
-        let social_links = serde_json::from_value::<Option<Socials>>(self.social_links)
+        let raw_json = self.social_links.unwrap_or(JsonValue::Null);
+
+        let social_links = serde_json::from_value::<Option<Socials>>(raw_json)
             .map_err(|e| Error::internal(format!("Failed to deserialize social_links: {}", e)))?;
 
         let version_u64: u64 = self
@@ -63,11 +63,24 @@ impl PostgresProfileRow {
             .map_err(|_| Error::internal("Negative version in database"))?;
 
         // Reconstruction de l'AccountId avec sa région
-        let region = RegionCode::from_str(&self.region_code)?;
-        let account_id = AccountId::new(self.account_id, region);
+        let account_id = AccountId::new(self.account_id);
+        let profile_id = ProfileId::from_uuid(self.profile_id);
+
+        if profile_id.region_str() != self.region_code
+            || account_id.region().as_static_str() != self.region_code
+        {
+            tracing::warn!(
+                profile_id = %self.profile_id,
+                account_id = %self.account_id,
+                db_region = %self.region_code,
+                profile_smart_region = %profile_id.region_str(),
+                account_smart_region = %account_id.region(),
+                "Data consistency warning: Regional shard mismatch detected between Smart IDs and SQL rows"
+            );
+        }
 
         Ok(Profile::restore(
-            ProfileId::from_uuid(self.profile_id),
+            profile_id,
             account_id,
             DisplayName::from_raw(self.display_name),
             Handle::from_raw(self.handle),

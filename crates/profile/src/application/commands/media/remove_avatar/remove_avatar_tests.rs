@@ -25,7 +25,7 @@ mod tests {
 
         let cmd = RemoveAvatarCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
         };
 
         // Act
@@ -59,7 +59,7 @@ mod tests {
 
         let cmd = RemoveAvatarCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
         };
 
         // Act
@@ -96,7 +96,7 @@ mod tests {
 
         let cmd = RemoveAvatarCommand {
             command_id: cmd_id, // Même ID que celui enregistré en "seed"
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
         };
 
         // Act
@@ -133,7 +133,7 @@ mod tests {
 
         let cmd = RemoveAvatarCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 42), // Version erronée
+            target: CommandTarget::new(f.profile_id(), f.region(), 42), // Version erronée
         };
 
         // Act

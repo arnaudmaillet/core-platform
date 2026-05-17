@@ -23,7 +23,7 @@ mod tests {
 
         let cmd = ChangeBetaTierCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_tier: BetaTier::BETA,
         };
 
@@ -60,7 +60,7 @@ mod tests {
 
         let cmd = ChangeBetaTierCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_tier: BetaTier::ALPHA,
         };
 
@@ -99,7 +99,7 @@ mod tests {
 
         let cmd = ChangeBetaTierCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_tier: BetaTier::ALPHA, // On redemande ALPHA
         };
 

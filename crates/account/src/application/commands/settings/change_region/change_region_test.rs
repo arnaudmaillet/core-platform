@@ -1,3 +1,5 @@
+// crates/account/src/application/commands/settings/change_region_tests.rs
+
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::ChangeRegionCommand;
@@ -8,20 +10,21 @@ mod tests {
     use crate::repositories::AccountRepository;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
-    use shared_kernel::types::{AccountId, RegionCode};
+    use shared_kernel::types::{RegionCode, SubId};
     use uuid::Uuid;
 
     #[tokio::test]
     async fn test_change_region_success() -> Result<()> {
         let f = TestFixture::new();
-        let old_id = f.account_id().clone();
-        let new_region = RegionCode::from_raw("US");
-        let expected_new_id = AccountId::new(old_id.uuid(), new_region.clone());
+        let old_id = f.account_id();
+        let new_region = RegionCode::try_new("US")?;
+        let test_sub_id = SubId::try_new("google-oauth2|123456")?;
 
         // 1. Arrange
         let account = f
             .account_builder()?
-            .with_account_id(old_id.clone()) // On s'assure qu'il part de l'ancien
+            .with_account_id(old_id)
+            .with_sub_id(test_sub_id.clone())
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -30,8 +33,8 @@ mod tests {
 
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(old_id.clone(), f.region(), version_snapshot),
-            new_region: new_region.clone(),
+            target: CommandTarget::new(old_id, f.region(), version_snapshot),
+            new_region,
         };
 
         // 2. Act
@@ -40,19 +43,27 @@ mod tests {
             .await?;
 
         // 3. Assert
-        // On vérifie le nouvel ID
-        f.assert_account_by_id(&expected_new_id, |acc| {
-            assert_eq!(acc.account_id().region(), &new_region);
-            assert_eq!(acc.account_id(), &expected_new_id);
-            assert_eq!(acc.version(), version_snapshot + 1);
-        })
-        .await?;
 
-        // Vérification de la suppression de l'ancien (Crucial pour éviter les fantômes)
-        let old_exists = f.account_repo().find_by_id(&old_id, None).await?.is_some();
-        assert!(!old_exists, "L'ancien ID (EU) devrait avoir été supprimé");
+        // 💡 ALIGNEMENT : Le compte d'origine est toujours là sur le shard source,
+        // mais sa version a été incrémentée suite à l'enregistrement du changement (OCC).
+        let current_account = f
+            .account_repo()
+            .find_by_id(old_id, None)
+            .await?
+            .expect("Le compte d'origine doit toujours exister");
 
+        assert_eq!(
+            current_account.account_id(),
+            old_id,
+            "L'ID n'a pas encore changé à ce stade"
+        );
+        assert_eq!(current_account.version(), version_snapshot + 1);
+
+        // 💡 LE RIGUEUR : C'est ici qu'on valide la réussite fonctionnelle du pattern Outbox.
+        // On s'assure qu'un unique événement a bien été persisté dans la transaction,
+        // prêt à être consommé par le worker pour exécuter le vrai déménagement physique.
         f.assert_outbox(1, Some(AccountEvent::REGION_CHANGED));
+
         Ok(())
     }
 
@@ -70,7 +81,7 @@ mod tests {
 
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_region: current_region,
         };
 
@@ -84,7 +95,7 @@ mod tests {
             assert_eq!(
                 acc.version(),
                 version_snapshot,
-                "La version ne doit pas bouger si la région est identique"
+                "La version ne doit pas bouger si la région demandée est strictement identique"
             );
         })
         .await?;
@@ -106,8 +117,8 @@ mod tests {
 
         let cmd = ChangeRegionCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            new_region: RegionCode::from_raw("US"),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+            new_region: RegionCode::try_new("US")?,
         };
 
         let result = f
@@ -117,7 +128,7 @@ mod tests {
 
         assert!(
             result.is_ok(),
-            "L'idempotence technique doit être transparente (Ok)"
+            "L'idempotence technique doit être transparente et renvoyer Ok"
         );
 
         Ok(())
@@ -136,8 +147,8 @@ mod tests {
 
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
-            new_region: RegionCode::from_raw("US"),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+            new_region: RegionCode::try_new("US")?,
         };
 
         let result = f

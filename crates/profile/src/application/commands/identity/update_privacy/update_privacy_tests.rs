@@ -22,7 +22,7 @@ mod tests {
 
         let cmd = UpdatePrivacyCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             is_private: true, // On passe en privé
         };
 
@@ -55,7 +55,7 @@ mod tests {
 
         let cmd = UpdatePrivacyCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             is_private: true, // On demande encore du privé
         };
 
@@ -84,7 +84,7 @@ mod tests {
 
         let cmd = UpdatePrivacyCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 99), // Mauvaise version attendue
+            target: CommandTarget::new(f.profile_id(), f.region(), 99), // Mauvaise version attendue
             is_private: true,
         };
 

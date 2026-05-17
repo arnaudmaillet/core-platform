@@ -23,7 +23,7 @@ mod tests {
 
         let cmd = UpdateLocationCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_location: new_location.clone(),
         };
 
@@ -56,7 +56,7 @@ mod tests {
 
         let cmd = UpdateLocationCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
             new_location: Some(Location::try_new("Tokyo, Japan")?),
         };
 
@@ -88,7 +88,7 @@ mod tests {
 
         let cmd = UpdateLocationCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_location: Some(location),
         };
 
@@ -116,7 +116,7 @@ mod tests {
 
         let cmd = UpdateLocationCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 123), // Version dans le futur
+            target: CommandTarget::new(f.profile_id(), f.region(), 123), // Version dans le futur
             new_location: Some(Location::try_new("Nowhere")?),
         };
 
