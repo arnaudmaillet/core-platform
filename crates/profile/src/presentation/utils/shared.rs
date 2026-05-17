@@ -1,10 +1,9 @@
 // crates/profile/src/presentation/utils/shared.rs
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
-use crate::types::ProfileId;
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
-use shared_kernel::types::RegionCode;
+use shared_kernel::types::{ProfileId, RegionCode};
 use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]

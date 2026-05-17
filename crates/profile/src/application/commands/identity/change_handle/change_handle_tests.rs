@@ -7,10 +7,10 @@ mod tests {
     use crate::context::ProfileContext;
     use crate::entities::Profile;
     use crate::events::ProfileEvent;
-    use crate::types::{Handle, ProfileId};
+    use crate::types::Handle;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
-    use shared_kernel::types::AccountId;
+    use shared_kernel::types::{AccountId, ProfileId};
     use uuid::Uuid;
 
     #[tokio::test]

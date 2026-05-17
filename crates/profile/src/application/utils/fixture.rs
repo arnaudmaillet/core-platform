@@ -8,14 +8,14 @@ use shared_kernel::context::BaseAppContext;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::messaging::OutboxRepositoryStub;
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, RegionCode};
 
 // Profile Domain & Application
 use crate::application::context::{ProfileAppContext, ProfileContext};
 use crate::commands::*;
 use crate::entities::{Profile, ProfileBuilder};
 use crate::repositories::ProfileRepositoryStub;
-use crate::types::{Handle, ProfileId};
+use crate::types::Handle;
 
 pub struct ProfileTestFixture {
     bus: Arc<CommandBus>,

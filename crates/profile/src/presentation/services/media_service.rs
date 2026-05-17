@@ -1,5 +1,6 @@
 // crates/profile/src/presentation/services/profile_media_service.rs
 
+use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaService as ProtoProfileMediaService;
 use shared_proto::profile::v1::{
     RemoveAvatarRequest, RemoveAvatarResponse, RemoveBannerRequest, RemoveBannerResponse,
@@ -14,7 +15,6 @@ use crate::commands::{
 };
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::shared::GrpcServiceUtils;
-use crate::types::ProfileId;
 use shared_kernel::command::CommandBus;
 
 pub struct ProfileMediaService {

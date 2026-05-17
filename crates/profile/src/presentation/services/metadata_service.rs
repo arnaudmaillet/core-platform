@@ -1,5 +1,6 @@
 // crates/profile/src/presentation/services/profile_metadata_service.rs
 
+use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataService as ProtoProfileMetadataService;
 use shared_proto::profile::v1::{
     UpdateBioRequest, UpdateBioResponse, UpdateLocationRequest, UpdateLocationResponse,
@@ -12,7 +13,6 @@ use tonic::{Request, Response, Status};
 use crate::commands::{UpdateBioCommand, UpdateLocationCommand, UpdateSocialsCommand};
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::shared::GrpcServiceUtils;
-use crate::types::ProfileId;
 use shared_kernel::command::CommandBus;
 
 pub struct ProfileMetadataService {

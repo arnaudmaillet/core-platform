@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use profile::repositories::ProfileRepository;
 use profile::repositories_impl::PostgresProfileRepository;
-use profile::types::{DisplayName, Handle, ProfileId};
+use profile::types::{DisplayName, Handle};
 use tokio;
 
 use profile::entities::Profile;
@@ -13,7 +13,7 @@ use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::{Error, ErrorCode, Identifier, Result, Versioned};
 use shared_kernel::postgres::PostgresTransaction;
 use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, RegionCode};
 
 /// Helper pour instancier le repo et les infrastructures de test
 async fn get_test_context() -> (

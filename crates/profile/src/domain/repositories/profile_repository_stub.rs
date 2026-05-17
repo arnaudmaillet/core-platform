@@ -6,9 +6,9 @@ use std::sync::Mutex;
 
 use crate::entities::Profile;
 use crate::repositories::ProfileRepository;
-use crate::types::{Handle, ProfileId};
+use crate::types::Handle;
 use shared_kernel::core::{Error, Result, Transaction, Versioned};
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, RegionCode};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct ProfileKey {

@@ -5,9 +5,10 @@ mod tests {
     use crate::context::ProfileContext;
     use crate::events::ProfileEvent;
     use crate::repositories::ProfileRepository;
-    use crate::types::{Handle, ProfileId};
+    use crate::types::Handle;
     use crate::{application::utils::ProfileTestFixture, commands::CreateProfileCommand};
     use shared_kernel::core::{ErrorCode, Result, Versioned};
+    use shared_kernel::types::ProfileId;
     use uuid::Uuid;
 
     #[tokio::test]

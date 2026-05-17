@@ -1,12 +1,12 @@
 // crates/profile/src/domain/events.rs
 
-use crate::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use shared_kernel::{
     messaging::Event,
-    types::{AccountId, Url},
+    types::{AccountId, ProfileId, Url},
 };
 use std::borrow::Cow;
 use uuid::Uuid;

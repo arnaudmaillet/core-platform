@@ -1,10 +1,10 @@
 // crates/profile/src/domain/builders/profile_builder.rs
 
 use crate::entities::Profile;
-use crate::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use shared_kernel::core::{AggregateMetadata, Result};
-use shared_kernel::types::{AccountId, Url};
+use shared_kernel::types::{AccountId, ProfileId, Url};
 
 pub struct ProfileBuilder {
     profile_id: ProfileId,

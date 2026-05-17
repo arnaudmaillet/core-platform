@@ -3,11 +3,11 @@
 use crate::entities::Profile;
 use crate::infrastructure::postgres::rows::PostgresProfileRow;
 use crate::repositories::ProfileRepository;
-use crate::types::{Handle, ProfileId};
+use crate::types::Handle;
 use async_trait::async_trait;
 use shared_kernel::cache::{CacheRepository, CacheRepositoryExt};
 use shared_kernel::core::{Error, Identifier, Result, Transaction, Versioned};
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, RegionCode};
 use sqlx::PgPool;
 use std::sync::Arc;
 

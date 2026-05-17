@@ -1,7 +1,7 @@
-// crates/profile/src/domain/types/profile_id.rs
+// crates/shared-kernel/src/building_blocks/types/profile_id.rs
 
+use crate::core::{Error, Identifier, Result, ValueObject};
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{Error, Identifier, Result, ValueObject};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;

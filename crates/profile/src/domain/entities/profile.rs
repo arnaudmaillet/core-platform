@@ -2,13 +2,13 @@
 
 use crate::entities::ProfileBuilder;
 use crate::events::ProfileEvent;
-use crate::types::{Bio, DisplayName, Handle, Location, ProfileId, Socials};
+use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{AggregateMetadata, AggregateRoot, Result};
 use shared_kernel::core::{Entity, Versioned};
 use shared_kernel::messaging::{Event, EventEmitter, OperationTracker};
-use shared_kernel::types::{AccountId, Url};
+use shared_kernel::types::{AccountId, ProfileId, Url};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

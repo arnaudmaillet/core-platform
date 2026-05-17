@@ -1,10 +1,6 @@
 // crates/profile/src/application/context/context.rs
 
-use crate::{
-    entities::Profile,
-    repositories::ProfileRepository,
-    types::{Handle, ProfileId},
-};
+use crate::{entities::Profile, repositories::ProfileRepository, types::Handle};
 use shared_kernel::{
     command::CommandTarget,
     context::BaseAppContext,
@@ -12,7 +8,7 @@ use shared_kernel::{
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
     postgres::PostgresTransaction,
-    types::RegionCode,
+    types::{ProfileId, RegionCode},
 };
 use std::sync::Arc;
 use uuid::Uuid;

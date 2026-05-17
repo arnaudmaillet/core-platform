@@ -1,10 +1,10 @@
 // crates/profile/src/domain/repositories/profile_repository.rs
 
 use crate::entities::Profile;
-use crate::types::{Handle, ProfileId};
+use crate::types::Handle;
 use async_trait::async_trait;
 use shared_kernel::core::{Result, Transaction};
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, RegionCode};
 
 #[async_trait]
 #[async_trait]

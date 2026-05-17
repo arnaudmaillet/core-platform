@@ -15,6 +15,7 @@ members = [
     "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
+    "crates/social",
     "backend/gateway/graphql-bff",
 ]
 resolver = "2"
