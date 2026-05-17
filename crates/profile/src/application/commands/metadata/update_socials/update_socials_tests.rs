@@ -28,7 +28,7 @@ mod tests {
 
         let cmd = UpdateSocialsCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_socials: Some(socials.clone()),
         };
 
@@ -66,7 +66,7 @@ mod tests {
 
         let cmd = UpdateSocialsCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
             new_socials: Some(new_socials), // Ici, c'est différent de l'état actuel (None)
         };
 
@@ -102,7 +102,7 @@ mod tests {
 
         let cmd = UpdateSocialsCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_socials: Some(socials), // Identique
         };
 
@@ -130,7 +130,7 @@ mod tests {
 
         let cmd = UpdateSocialsCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 42), // Version erronée
+            target: CommandTarget::new(f.profile_id(), f.region(), 42), // Version erronée
             new_socials: None,
         };
 

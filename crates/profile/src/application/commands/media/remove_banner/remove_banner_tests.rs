@@ -25,7 +25,7 @@ mod tests {
 
         let cmd = RemoveBannerCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
         };
 
         // Act
@@ -65,7 +65,7 @@ mod tests {
 
         let cmd = RemoveBannerCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
         };
 
         // Act
@@ -106,7 +106,7 @@ mod tests {
 
         let cmd = RemoveBannerCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
         };
 
         // Act
@@ -134,7 +134,7 @@ mod tests {
 
         let cmd = RemoveBannerCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 123), // Version désuète
+            target: CommandTarget::new(f.profile_id(), f.region(), 123), // Version désuète
         };
 
         // Act

@@ -3,11 +3,11 @@
 use crate::entities::Profile;
 use crate::infrastructure::postgres::rows::PostgresProfileRow;
 use crate::repositories::ProfileRepository;
-use crate::types::Handle;
+use crate::types::{Handle};
 use async_trait::async_trait;
 use shared_kernel::cache::{CacheRepository, CacheRepositoryExt};
-use shared_kernel::core::{Error, Identifier, Result, Transaction, Versioned};
-use shared_kernel::types::{AccountId, ProfileId, RegionCode};
+use shared_kernel::core::{AggregateRoot, Error, Identifier, Result, Transaction, Versioned};
+use shared_kernel::types::{AccountId, RegionCode, ProfileId};
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ impl PostgresProfileRepository {
         Self { pool, cache }
     }
 
-    pub fn cache_key(profile_id: &ProfileId, region: &RegionCode) -> String {
+    pub fn cache_key(profile_id: ProfileId, region: RegionCode) -> String {
         format!(
             "profile:aggregate:{}:{}",
             region.as_str(),
@@ -33,86 +33,108 @@ impl PostgresProfileRepository {
 #[async_trait]
 impl ProfileRepository for PostgresProfileRepository {
     async fn save(&self, profile: &mut Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
-        let row = PostgresProfileRow::from_domain(profile);
-        let key = Self::cache_key(profile.profile_id(), profile.account_id().region());
-        let next_version = profile.version() as i64;
-        let expected_db_version: i64 = next_version - 1;
+    let row = PostgresProfileRow::from_domain(profile);
+    let key = Self::cache_key(profile.profile_id(), profile.account_id().region());
+    let next_version = profile.version() as i64;
+    
+    // 1. EXTRACTION DU FLAG AVANT LA CLOSURE ASYNC (Lifetime Safe)
+    let is_events_empty = profile.metadata().is_events_empty();
 
-        let result = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+    let result = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
         Box::pin(async move {
+            // 2. ÉVALUATION DE L'IDEMPOTENCE
+            let current_db_v: Option<i64> = sqlx::query_scalar(
+                "SELECT version FROM user_profiles WHERE profile_id = $1 AND region_code = $2 FOR UPDATE"
+            )
+            .bind(row.profile_id)
+            .bind(&row.region_code)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| Error::database(format!("Profile save repository: {}", e.to_string())))?;
 
-    let res = sqlx::query(
-    "UPDATE user_profiles 
-     SET display_name = $1, 
-         handle = $2, 
-         bio = $3, 
-         avatar_url = $4, 
-         banner_url = $5, 
-         location_label = $6, 
-         social_links = $7, 
-         is_private = $8, 
-         updated_at = $9, 
-         version = $10
-     WHERE profile_id = $11 
-       AND region_code = $12 
-       AND version = $13"
-)
-.bind(&row.display_name)   // $1
-.bind(&row.handle)         // $2
-.bind(&row.bio)            // $3
-.bind(&row.avatar_url)     // $4
-.bind(&row.banner_url)     // $5
-.bind(&row.location_label) // $6
-.bind(&row.social_links)   // $7
-.bind(row.is_private)      // $8
-.bind(row.updated_at)      // $9
-.bind(next_version)        // $10
-.bind(row.profile_id)      // $11
-.bind(&row.region_code)    // $12
-.bind(expected_db_version) // $13
-.execute(&mut *conn)
-.await;
+            match current_db_v {
+                Some(v) => {
+                    // --- MODE UPDATE (OCC) ---
+                    let is_noop = next_version == v && is_events_empty;
+                    
+                    if is_noop {
+                        // C'est une écriture blanche d'idempotence technique, on court-circuite proprement !
+                        return Ok(());
+                    }
 
-    let result = res.map_err(|e| Error::database(e.to_string()))?;
-            if result.rows_affected() == 0 {
-                let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE profile_id = $1)")
-                    .bind(row.profile_id)
-                    .fetch_one(&mut *conn)
+                    let current_version_expected = next_version - 1;
+                    if v != current_version_expected {
+                        return Err(Error::concurrency_conflict(
+                            format!("Profile {}: OCC mismatch (DB v{}, App expected v{})", row.profile_id, v, current_version_expected),
+                        ));
+                    }
+
+                    // On applique l'update standard puisque les versions matchent
+                    sqlx::query(
+                        r#"UPDATE user_profiles 
+                           SET display_name = $1, 
+                               handle = $2, 
+                               bio = $3, 
+                               avatar_url = $4, 
+                               banner_url = $5, 
+                               location_label = $6, 
+                               social_links = $7, 
+                               is_private = $8, 
+                               updated_at = $9, 
+                               version = $10
+                           WHERE profile_id = $11 
+                             AND region_code = $12 
+                             AND version = $13"# // 💡 FIX : Ordre strict $11, $12, $13
+                    )
+                    .bind(&row.display_name)   // $1
+                    .bind(&row.handle)         // $2
+                    .bind(&row.bio)            // $3
+                    .bind(&row.avatar_url)     // $4
+                    .bind(&row.banner_url)     // $5
+                    .bind(&row.location_label) // $6
+                    .bind(&row.social_links)   // $7
+                    .bind(row.is_private)      // $8
+                    .bind(row.updated_at)      // $9
+                    .bind(next_version)        // $10
+                    .bind(row.profile_id)      // $11
+                    .bind(&row.region_code)    // $12
+                    .bind(v)                   // $13 (L'ancienne version lue sous verrou)
+                    .execute(&mut *conn)
                     .await
-                    .map_err(|e| Error::database(format!("Profile save repository: {}", e.to_string())))?;
-
-                if exists {
-                    return Err(Error::concurrency_conflict(
-                        format!("Profile {}: version mismatch", row.profile_id),
-                    ));
+                    .map_err(|e| Error::database(format!("Profile update failed: {}", e.to_string())))?;
                 }
-
-                sqlx::query(
-                    r#"INSERT INTO user_profiles (profile_id, account_id, region_code, display_name, handle, bio, avatar_url, banner_url, location_label, social_links, is_private, version, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#,
-                )
-                .bind(row.profile_id).bind(row.account_id).bind(&row.region_code).bind(&row.display_name).bind(&row.handle).bind(&row.bio).bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label).bind(&row.social_links).bind(row.is_private).bind(next_version).bind(row.created_at).bind(row.updated_at)
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| Error::database(format!("Profile save repository: {}", e.to_string())))?;
+                None => {
+                    // --- MODE INSERT ---
+                    sqlx::query(
+                        r#"INSERT INTO user_profiles (profile_id, account_id, region_code, display_name, handle, bio, avatar_url, banner_url, location_label, social_links, is_private, version, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#,
+                    )
+                    .bind(row.profile_id).bind(row.account_id).bind(&row.region_code).bind(&row.display_name).bind(&row.handle).bind(&row.bio).bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label).bind(&row.social_links).bind(row.is_private).bind(next_version).bind(row.created_at).bind(row.updated_at)
+                    .execute(&mut *conn)
+                    .await
+                    .map_err(|e| Error::database(format!("Profile insert failed: {}", e.to_string())))?;
+                }
             }
+
             Ok(())
         })
     })
     .await;
 
-        let cache_handle = self.cache.clone();
-        tokio::spawn(async move {
-            let _ = cache_handle.delete(&key).await;
-        });
+    // --- POST-TRANSACTION ---
+    // Infrastructure passive : aucun record_change() ici, le domaine gère sa vie.
+    let cache_handle = self.cache.clone();
+    tokio::spawn(async move {
+        let _ = cache_handle.delete(&key).await;
+    });
 
-        result
-    }
+    result
+}
 
     async fn find_by_id(
         &self,
-        id: &ProfileId,
-        region: &RegionCode,
+        id: ProfileId,
+        region: RegionCode,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let pid = id.as_uuid();
@@ -176,7 +198,7 @@ impl ProfileRepository for PostgresProfileRepository {
     async fn find_by_handle(
         &self,
         handle: &Handle,
-        region: &RegionCode,
+        region: RegionCode,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let handle_str = handle.as_str().to_string();
@@ -207,7 +229,7 @@ impl ProfileRepository for PostgresProfileRepository {
 
     async fn find_all_by_account_id(
         &self,
-        account_id: &AccountId,
+        account_id: AccountId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Vec<Profile>> {
         let uid = account_id.uuid().clone();
@@ -232,8 +254,8 @@ impl ProfileRepository for PostgresProfileRepository {
 
     async fn delete(
         &self,
-        id: &ProfileId,
-        region: &RegionCode,
+        id: ProfileId,
+        region: RegionCode,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let key = Self::cache_key(id, region);
@@ -266,7 +288,7 @@ impl ProfileRepository for PostgresProfileRepository {
         Ok(())
     }
 
-    async fn exists(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<bool> {
+    async fn exists(&self, profile_id: ProfileId, region: RegionCode) -> Result<bool> {
         let uid = profile_id.as_uuid();
         let r_str = region.as_str().to_string();
 
@@ -282,7 +304,7 @@ impl ProfileRepository for PostgresProfileRepository {
         Ok(exists)
     }
 
-    async fn exists_by_handle(&self, handle: &Handle, region: &RegionCode) -> Result<bool> {
+    async fn exists_by_handle(&self, handle: &Handle, region: RegionCode) -> Result<bool> {
         let h_str = handle.as_str().to_string();
         let r_str = region.as_str().to_string();
 

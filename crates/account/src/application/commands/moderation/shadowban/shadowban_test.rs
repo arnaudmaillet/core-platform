@@ -25,7 +25,7 @@ mod tests {
 
         let cmd = ShadowbanCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             reason: AuditReason::try_new("Spam behavior detected")?,
         };
 
@@ -63,7 +63,7 @@ mod tests {
 
         let cmd = ShadowbanCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             reason: AuditReason::try_new("Duplicate network call")?,
         };
 
@@ -99,7 +99,7 @@ mod tests {
 
         let cmd = ShadowbanCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             reason: AuditReason::try_new("Second report")?,
         };
 

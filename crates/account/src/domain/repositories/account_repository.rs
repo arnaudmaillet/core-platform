@@ -14,7 +14,7 @@ pub trait AccountRepository: Send + Sync {
 
     async fn find_by_id(
         &self,
-        id: &AccountId,
+        id: AccountId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>>;
 
@@ -59,5 +59,5 @@ pub trait AccountRepository: Send + Sync {
     // --- ÉCRITURE ---
     async fn save(&self, account: &mut Account, tx: Option<&mut dyn Transaction>) -> Result<()>;
     async fn create(&self, account: &Account, tx: &mut dyn Transaction) -> Result<()>;
-    async fn delete(&self, id: &AccountId, tx: &mut dyn Transaction) -> Result<()>;
+    async fn delete(&self, id: AccountId, tx: &mut dyn Transaction) -> Result<()>;
 }

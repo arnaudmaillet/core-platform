@@ -121,11 +121,11 @@ impl Profile {
 
     // --- GETTERS ---
 
-    pub fn profile_id(&self) -> &ProfileId {
-        &self.profile_id
+    pub fn profile_id(&self) -> ProfileId {
+        self.profile_id
     }
-    pub fn account_id(&self) -> &AccountId {
-        &self.account_id
+    pub fn account_id(&self) -> AccountId {
+        self.account_id
     }
     pub fn display_name(&self) -> &DisplayName {
         &self.display_name
@@ -166,8 +166,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::ProfileCreated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     display_name: s.display_name.clone(),
                     handle: s.handle.clone(),
                     occurred_at: s.updated_at(),
@@ -191,8 +191,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::HandleChanged {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_handle,
                     new_handle: s.handle.clone(),
                     occurred_at: s.updated_at(),
@@ -216,8 +216,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::DisplayNameUpdated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_display_name,
                     new_display_name: s.display_name.clone(),
                     occurred_at: s.updated_at(),
@@ -241,8 +241,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::BioUpdated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_bio,
                     new_bio: s.bio.clone(),
                     occurred_at: s.updated_at(),
@@ -265,8 +265,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::AvatarUpdated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_avatar_url,
                     new_avatar_url: s.avatar.clone().unwrap(),
                     occurred_at: s.updated_at(),
@@ -290,8 +290,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::AvatarRemoved {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_avatar_url,
                     occurred_at: s.updated_at(),
                 })
@@ -314,8 +314,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::BannerUpdated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_banner_url,
                     new_banner_url: s.banner.clone().unwrap(),
                     occurred_at: s.updated_at(),
@@ -339,8 +339,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::BannerRemoved {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_banner_url,
                     occurred_at: s.updated_at(),
                 })
@@ -364,8 +364,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::SocialsUpdated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_socials,
                     new_socials: s.socials.clone(),
                     occurred_at: s.updated_at(),
@@ -389,8 +389,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::LocationUpdated {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     old_location,
                     new_location: s.location.clone(),
                     occurred_at: s.updated_at(),
@@ -412,8 +412,8 @@ impl Profile {
             |s| {
                 Box::new(ProfileEvent::PrivacyChanged {
                     id: Uuid::now_v7(),
-                    profile_id: s.profile_id.clone(),
-                    account_id: s.account_id.clone(),
+                    profile_id: s.profile_id,
+                    account_id: s.account_id,
                     is_private,
                     occurred_at: s.updated_at(),
                 })

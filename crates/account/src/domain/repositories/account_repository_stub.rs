@@ -26,7 +26,7 @@ impl AccountRepositoryStub {
 
     pub fn insert(&self, account: Account) {
         let mut map = self.accounts.lock().unwrap();
-        map.insert(account.account_id().clone(), account);
+        map.insert(account.account_id(), account);
     }
 
     pub fn set_error(&self, err: Error) {
@@ -41,8 +41,8 @@ impl AccountRepositoryStub {
 
     // --- Helpers Assert ---
 
-    pub fn find_direct(&self, id: &AccountId) -> Option<Account> {
-        self.accounts.lock().unwrap().get(id).cloned()
+    pub fn find_direct(&self, id: AccountId) -> Option<Account> {
+        self.accounts.lock().unwrap().get(&id).cloned()
     }
 
     // --- Logique Interne ---
@@ -60,7 +60,7 @@ impl AccountRepositoryStub {
 impl AccountRepository for AccountRepositoryStub {
     async fn find_by_id(
         &self,
-        id: &AccountId,
+        id: AccountId,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
         self.check_error()?;
@@ -92,7 +92,7 @@ impl AccountRepository for AccountRepositoryStub {
         Ok(map
             .values()
             .find(|a| a.identity().email() == Some(email))
-            .map(|a| a.identity().account_id().clone()))
+            .map(|a| a.identity().account_id()))
     }
 
     async fn find_id_by_sub_id(
@@ -105,7 +105,7 @@ impl AccountRepository for AccountRepositoryStub {
         Ok(map
             .values()
             .find(|a| a.identity().sub_id() == Some(ext_id))
-            .map(|a| a.identity().account_id().clone()))
+            .map(|a| a.identity().account_id()))
     }
 
     async fn exists_by_email(
@@ -144,7 +144,7 @@ impl AccountRepository for AccountRepositoryStub {
         self.check_error()?;
 
         let mut map = self.accounts.lock().unwrap();
-        let new_id = account.account_id().clone();
+        let new_id = account.account_id();
         let new_version = account.metadata().version();
 
         // 1. DÉTECTION DE MIGRATION (Changement de Région)
@@ -153,7 +153,7 @@ impl AccountRepository for AccountRepositoryStub {
             .iter()
             .find(|(_, a)| {
                 a.identity().account_id().uuid() == new_id.uuid()
-                    && a.identity().account_id() != &new_id
+                    && a.identity().account_id() != new_id
             })
             .map(|(id, _)| id.clone());
 
@@ -186,11 +186,15 @@ impl AccountRepository for AccountRepositoryStub {
                         ));
                     }
                 }
-                // Note : Ici on pourrait vérifier si new_version == 1 pour être strict
             }
             Some(existing) => {
                 // --- MODE UPDATE (OCC) ---
                 let current_version = existing.metadata().version();
+
+                if new_version == current_version {
+                    return Ok(());
+                }
+
                 if new_version < current_version || new_version > current_version + 1 {
                     return Err(Error::concurrency_conflict(format!(
                         "OCC mismatch: v{} -> v{}",
@@ -201,7 +205,7 @@ impl AccountRepository for AccountRepositoryStub {
                 // Vérification de l'unicité du sub_id (au cas où il a changé)
                 if let Some(new_sub) = account.identity().sub_id() {
                     let duplicate_exists = map.values().any(|a| {
-                        a.identity().account_id() != &new_id
+                        a.identity().account_id() != new_id
                             && a.identity().sub_id() == Some(new_sub)
                     });
 
@@ -227,10 +231,10 @@ impl AccountRepository for AccountRepositoryStub {
         self.save(&mut acc, None).await
     }
 
-    async fn delete(&self, id: &AccountId, _tx: &mut dyn Transaction) -> Result<()> {
+    async fn delete(&self, id: AccountId, _tx: &mut dyn Transaction) -> Result<()> {
         self.check_error()?;
         let mut map = self.accounts.lock().unwrap();
-        if map.remove(id).is_none() {
+        if map.remove(&id).is_none() {
             return Err(Error::not_found("Account", id.to_string()));
         }
         Ok(())

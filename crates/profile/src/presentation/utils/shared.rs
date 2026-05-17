@@ -14,10 +14,10 @@ pub trait GrpcServiceUtils {
     fn get_context<T>(
         &self,
         request: &Request<T>,
-        profile_id: &ProfileId,
+        profile_id: ProfileId,
     ) -> Result<ProfileContext, Status> {
         let region = self.extract_region(request)?;
-        Ok(self.app_ctx().create_context(profile_id.clone(), region))
+        Ok(self.app_ctx().create_context(profile_id, region))
     }
 
     fn build_context(

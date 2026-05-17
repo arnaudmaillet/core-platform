@@ -27,7 +27,7 @@ mod tests {
 
         let cmd = UpdateLocaleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_locale: new_locale.clone(),
         };
 
@@ -66,7 +66,7 @@ mod tests {
 
         let cmd = UpdateLocaleCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_locale: requested_locale.clone(),
         };
 
@@ -110,7 +110,7 @@ mod tests {
 
         let cmd = UpdateLocaleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
             new_locale: current_locale,
         };
 

@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use crate::entities::Profile;
 use crate::repositories::ProfileRepository;
 use crate::types::Handle;
-use shared_kernel::core::{Error, Result, Transaction, Versioned};
+use shared_kernel::core::{AggregateRoot, Error, Result, Transaction, Versioned};
 use shared_kernel::types::{AccountId, ProfileId, RegionCode};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
@@ -46,8 +46,8 @@ impl ProfileRepositoryStub {
     pub async fn save_direct(&self, profile: Profile) {
         let mut store = self.profiles.lock().unwrap();
         let key = ProfileKey {
-            id: profile.profile_id().clone(),
-            region: profile.account_id().region().clone(),
+            id: profile.profile_id(),
+            region: profile.account_id().region(),
         };
         store.insert(key, profile);
     }
@@ -61,7 +61,7 @@ impl ProfileRepositoryStub {
     // --- Helpers d'Assertion (Assert) ---
 
     /// Récupère un profil sans passer par le Result/async du trait
-    pub async fn find_direct(&self, id: &ProfileId) -> Option<Profile> {
+    pub async fn find_direct(&self, id: ProfileId) -> Option<Profile> {
         let store = self.profiles.lock().unwrap();
         // Comme on ne veut pas forcer la région dans l'assertion (souvent on teste justement si elle est bonne)
         // On cherche le profil par ID peu importe la région dans le stub
@@ -69,16 +69,9 @@ impl ProfileRepositoryStub {
     }
 
     /// Récupère un profil avec une clé précise
-    pub async fn find_with_key_direct(
-        &self,
-        id: &ProfileId,
-        region: &RegionCode,
-    ) -> Option<Profile> {
+    pub async fn find_with_key_direct(&self, id: ProfileId, region: RegionCode) -> Option<Profile> {
         let store = self.profiles.lock().unwrap();
-        let key = ProfileKey {
-            id: id.clone(),
-            region: region.clone(),
-        };
+        let key = ProfileKey { id, region };
         store.get(&key).cloned()
     }
 
@@ -97,22 +90,35 @@ impl ProfileRepositoryStub {
 #[async_trait]
 impl ProfileRepository for ProfileRepositoryStub {
     async fn save(&self, profile: &mut Profile, _tx: Option<&mut dyn Transaction>) -> Result<()> {
-        // 1. Simulation d'erreur forcée (pour tester les cas limites)
+        // 1. Simulation d'erreur forcée
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }
 
         let mut store = self.profiles.lock().unwrap();
         let key = ProfileKey {
-            id: profile.profile_id().clone(),
-            region: profile.account_id().region().clone(),
+            id: profile.profile_id(),
+            region: profile.account_id().region(),
         };
 
-        // 2. Logique de Concurrence Optimiste (OCC) - Strictement identique à Postgres
+        let next_version = profile.version();
+
+        // 2. Logique de Concurrence Optimiste (OCC) - Strictement ISO Postgres
         if let Some(existing) = store.get(&key) {
-            let next_version = profile.version();
             let current_db_version = existing.version();
 
+            // 💡 FIX IDEMPOTENCE : C'est une écriture blanche technique si la version
+            // est identique en DB et qu'aucun événement métier n'a été produit.
+            let is_noop =
+                next_version == current_db_version && profile.metadata().is_events_empty();
+
+            if is_noop {
+                // On court-circuite immédiatement l'écriture pour ne pas corrompre
+                // l'état de l'entité ou du store de test.
+                return Ok(());
+            }
+
+            // Validation de l'OCC standard si ce n'est pas un Noop
             if current_db_version != (next_version - 1) {
                 return Err(Error::concurrency_conflict(format!(
                     "Stub OCC mismatch: DB v{}, App v{}",
@@ -122,28 +128,27 @@ impl ProfileRepository for ProfileRepositoryStub {
             }
         }
 
+        // 3. Persistance dans la map de test
         store.insert(key, profile.clone());
+
         Ok(())
     }
 
     async fn find_by_id(
         &self,
-        id: &ProfileId,
-        region: &RegionCode,
+        id: ProfileId,
+        region: RegionCode,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let store = self.profiles.lock().unwrap();
-        let key = ProfileKey {
-            id: id.clone(),
-            region: region.clone(),
-        };
+        let key = ProfileKey { id, region };
         Ok(store.get(&key).cloned())
     }
 
     async fn find_by_handle(
         &self,
         handle: &Handle,
-        region: &RegionCode,
+        region: RegionCode,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let store = self.profiles.lock().unwrap();
@@ -157,7 +162,7 @@ impl ProfileRepository for ProfileRepositoryStub {
 
     async fn find_all_by_account_id(
         &self,
-        account_id: &AccountId,
+        account_id: AccountId,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Vec<Profile>> {
         let store = self.profiles.lock().unwrap();
@@ -172,34 +177,28 @@ impl ProfileRepository for ProfileRepositoryStub {
 
     async fn delete(
         &self,
-        id: &ProfileId,
-        region: &RegionCode,
+        id: ProfileId,
+        region: RegionCode,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let mut store = self.profiles.lock().unwrap();
-        let key = ProfileKey {
-            id: id.clone(),
-            region: region.clone(),
-        };
+        let key = ProfileKey { id, region };
         store.remove(&key);
         Ok(())
     }
 
-    async fn exists(&self, id: &ProfileId, region: &RegionCode) -> Result<bool> {
+    async fn exists(&self, id: ProfileId, region: RegionCode) -> Result<bool> {
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }
 
         let store = self.profiles.lock().unwrap();
-        let key = ProfileKey {
-            id: id.clone(),
-            region: region.clone(),
-        };
+        let key = ProfileKey { id, region };
 
         Ok(store.contains_key(&key))
     }
 
-    async fn exists_by_handle(&self, handle: &Handle, region: &RegionCode) -> Result<bool> {
+    async fn exists_by_handle(&self, handle: &Handle, region: RegionCode) -> Result<bool> {
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }

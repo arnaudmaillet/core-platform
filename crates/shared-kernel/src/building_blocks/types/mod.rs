@@ -1,4 +1,5 @@
 mod account_id;
+mod profile_id;
 mod audit_reason;
 mod counter;
 mod email;
@@ -12,6 +13,7 @@ mod url;
 mod username;
 
 pub use account_id::AccountId;
+pub use profile_id::ProfileId;
 pub use audit_reason::AuditReason;
 pub use counter::Counter;
 pub use email::Email;

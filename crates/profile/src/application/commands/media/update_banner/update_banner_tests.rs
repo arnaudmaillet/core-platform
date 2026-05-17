@@ -23,7 +23,7 @@ mod tests {
 
         let cmd = UpdateBannerCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_banner_url: new_url.clone(),
         };
 
@@ -56,7 +56,7 @@ mod tests {
 
         let cmd = UpdateBannerCommand {
             command_id: cmd_id,
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
             new_banner_url: Url::try_new("https://cdn.test.com/any.png")?,
         };
 
@@ -91,7 +91,7 @@ mod tests {
 
         let cmd = UpdateBannerCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_banner_url: current_url, // Même URL
         };
 
@@ -119,7 +119,7 @@ mod tests {
 
         let cmd = UpdateBannerCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 10), // Version erronée
+            target: CommandTarget::new(f.profile_id(), f.region(), 10), // Version erronée
             new_banner_url: Url::try_new("https://cdn.test.com/fail.png")?,
         };
 

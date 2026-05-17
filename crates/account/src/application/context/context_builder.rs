@@ -52,7 +52,7 @@ impl AccountContextBuilder {
     }
 
     pub fn with_account_id(mut self, id: AccountId) -> Self {
-        self.region = Some(id.region().clone());
+        self.region = Some(id.region());
         self.account_id = Some(id);
         self
     }

@@ -40,16 +40,16 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     let account_id = AccountId::generate(RegionCode::default());
     let handle = Handle::try_new("alice_rocks")?;
 
-    let mut profile = Profile::builder(account_id.clone(), handle)?.build()?;
-    let profile_id = profile.profile_id().clone();
-    let region = account_id.region().clone();
+    let mut profile = Profile::builder(account_id, handle)?.build()?;
+    let profile_id = profile.profile_id();
+    let region = account_id.region();
 
     // --- Act: Step 1 (Initial Save) ---
     repo.save(&mut profile, None).await?;
 
     // --- Assert: Step 2 (Verification Initial State) ---
     let found = repo
-        .find_by_id(&profile_id, &region, None)
+        .find_by_id(profile_id, region, None)
         .await?
         .expect("Profile should exist after initial save");
 
@@ -66,7 +66,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 
     // --- Assert: Step 4 (Verification Updated State) ---
     let updated = repo
-        .find_by_id(&profile_id, &region, None)
+        .find_by_id(profile_id, region, None)
         .await?
         .expect("Profile should exist after update");
 
@@ -82,7 +82,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
             .map_err(|e| Error::internal(e.to_string()))?;
         let mut tx = PostgresTransaction::new(tx_sqlx);
 
-        repo.delete(&profile_id, &region, Some(&mut tx)).await?;
+        repo.delete(profile_id, region, Some(&mut tx)).await?;
 
         tx.into_inner()
             .commit()
@@ -91,7 +91,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     }
 
     // --- Assert: Final State ---
-    let deleted = repo.find_by_id(&profile_id, &region, None).await?;
+    let deleted = repo.find_by_id(profile_id, region, None).await?;
     assert!(deleted.is_none(), "Profile should be null after deletion");
 
     Ok(())
@@ -101,8 +101,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 async fn test_profile_concurrency_protection_occ() -> Result<()> {
     let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
-    let mut profile =
-        Profile::builder(account_id.clone(), Handle::try_new("ConcurrentUser")?)?.build()?;
+    let mut profile = Profile::builder(account_id, Handle::try_new("ConcurrentUser")?)?.build()?;
 
     repo.save(&mut profile, None).await?;
 
@@ -136,8 +135,7 @@ async fn test_profile_cache_logic_integrity() -> Result<()> {
     let (repo, _pg_ctx, redis_ctx) = get_test_context().await;
     let cache = redis_ctx.repository();
     let account_id = AccountId::generate(RegionCode::default());
-    let mut profile =
-        Profile::builder(account_id.clone(), Handle::try_new("cache_test")?)?.build()?;
+    let mut profile = Profile::builder(account_id, Handle::try_new("cache_test")?)?.build()?;
 
     let key = PostgresProfileRepository::cache_key(profile.profile_id(), account_id.region());
 
@@ -182,7 +180,7 @@ async fn test_profile_cache_logic_integrity() -> Result<()> {
 async fn test_profile_rollback_works_properly() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
-    let mut profile = Profile::builder(account_id.clone(), Handle::try_new("Ghost")?)?.build()?;
+    let mut profile = Profile::builder(account_id, Handle::try_new("Ghost")?)?.build()?;
 
     let tx_sqlx = pg_ctx
         .pool()
@@ -211,13 +209,13 @@ async fn test_find_all_by_account_id() -> Result<()> {
     let account_id = AccountId::generate(RegionCode::default());
 
     // Utilise "profile_1" (minuscules) pour correspondre à la sortie attendue
-    let mut p1 = Profile::builder(account_id.clone(), Handle::try_new("profile_1")?)?.build()?;
-    let mut p2 = Profile::builder(account_id.clone(), Handle::try_new("profile_2")?)?.build()?;
+    let mut p1 = Profile::builder(account_id, Handle::try_new("profile_1")?)?.build()?;
+    let mut p2 = Profile::builder(account_id, Handle::try_new("profile_2")?)?.build()?;
 
     repo.save(&mut p1, None).await?;
     repo.save(&mut p2, None).await?;
 
-    let profiles = repo.find_all_by_account_id(&account_id, None).await?;
+    let profiles = repo.find_all_by_account_id(account_id, None).await?;
 
     assert_eq!(profiles.len(), 2);
     // On compare avec "profile_2" (en minuscules)
@@ -230,7 +228,7 @@ async fn test_find_all_by_account_id() -> Result<()> {
 async fn test_cache_hit_proven_by_db_sabotage() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
-    let mut profile = Profile::builder(account_id.clone(), Handle::try_new("alice")?)?.build()?;
+    let mut profile = Profile::builder(account_id, Handle::try_new("alice")?)?.build()?;
 
     repo.save(&mut profile, None).await?;
     repo.find_by_id(profile.profile_id(), account_id.region(), None)
@@ -273,8 +271,8 @@ async fn test_cache_hit_proven_by_db_sabotage() -> Result<()> {
 async fn test_profile_rollback_integrity() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
     let account_id = AccountId::generate(RegionCode::default());
-    let mut profile = Profile::builder(account_id.clone(), Handle::try_new("ghost")?)?.build()?;
-    let profile_id = profile.profile_id().clone();
+    let mut profile = Profile::builder(account_id, Handle::try_new("ghost")?)?.build()?;
+    let profile_id = profile.profile_id();
 
     // 1. On ouvre une transaction et on save
     let tx_sqlx = pg_ctx
@@ -293,7 +291,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
 
     // 3. Le profil ne doit pas exister
     let found = repo
-        .find_by_id(&profile_id, account_id.region(), None)
+        .find_by_id(profile_id, account_id.region(), None)
         .await?;
     assert!(found.is_none(), "Profile should not exist after rollback");
 
@@ -303,30 +301,43 @@ async fn test_profile_rollback_integrity() -> Result<()> {
 #[tokio::test]
 async fn test_profile_partial_data_resilience() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let profile_id = uuid::Uuid::new_v4();
-    let account_id = uuid::Uuid::new_v4();
+    let region = RegionCode::try_new("EU")?;
 
-    // INSERTION MANUELLE avec le strict minimum (beaucoup de NULLs)
+    let domain_profile_id = ProfileId::generate(region.clone());
+    let domain_account_id = AccountId::generate(region.clone());
+
+    let profile_uuid = domain_profile_id.as_uuid();
+    let account_uuid = domain_account_id.uuid();
+
     sqlx::query(
         r#"INSERT INTO user_profiles (profile_id, account_id, region_code, display_name, handle, is_private, version, created_at, updated_at)
            VALUES ($1, $2, 'EU', 'Minimalist', 'mini', false, 1, NOW(), NOW())"#
     )
-    .bind(profile_id)
-    .bind(account_id)
+    .bind(profile_uuid)
+    .bind(account_uuid)
     .execute(&pg_ctx.pool())
     .await
     .map_err(|e| Error::database(e.to_string()))?;
 
-    // On tente de charger cet agrégat "incomplet"
-    let result = repo
-        .find_by_id(
-            &ProfileId::from(profile_id),
-            &RegionCode::try_new("EU")?,
-            None,
-        )
-        .await?;
+    let fetch_res = repo.find_by_id(domain_profile_id, region, None).await;
 
-    assert!(result.is_some());
+    let result = match fetch_res {
+        Ok(opt) => opt,
+        Err(e) => {
+            println!("\n💥 [DEBUG CRASH] find_by_id a renvoyé une ERREUR !");
+            println!("👉 Code d'erreur : {:?}", e.code);
+            println!("👉 Message complet : {}", e.message);
+            panic!(
+                "Le repository a échoué à charger les données partielles : {}",
+                e.message
+            );
+        }
+    };
+
+    assert!(
+        result.is_some(),
+        "Le profil aurait dû être trouvé (None renvoyé)"
+    );
     let p = result.unwrap();
     assert_eq!(p.display_name().as_str(), "Minimalist");
     assert!(p.avatar().is_none());

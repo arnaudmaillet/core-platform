@@ -34,7 +34,7 @@ impl CommandHandler for RegisterHandler {
         }
 
         // 2. Construction de l'agrégat
-        let account_id = cmd.account_id.clone();
+        let account_id = cmd.account_id;
         let mut builder = Account::builder(account_id, cmd.identifier);
 
         if let Some(ext_id) = cmd.sub_id {
@@ -44,7 +44,7 @@ impl CommandHandler for RegisterHandler {
         let mut account = builder.with_locale(cmd.locale).build()?;
 
         // 3. Logique métier
-        account.register(cmd.account_id.region().clone(), cmd.ip_addr)?;
+        account.register(cmd.account_id.region(), cmd.ip_addr)?;
 
         // 4. Persistance (atomique avec Outbox et Idempotence)
         ctx.save(&mut account, Some(cmd.command_id)).await?;

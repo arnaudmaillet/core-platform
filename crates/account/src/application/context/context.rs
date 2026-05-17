@@ -38,7 +38,7 @@ impl AccountAppContext {
 
     /// Crée un contexte pour la modification ou la lecture : la région est extraite automatiquement de l'ID autoportant.
     pub fn create_context(&self, account_id: AccountId) -> AccountContext {
-        let region = account_id.region().clone();
+        let region = account_id.region();
         AccountContext::new(self.clone(), Some(account_id), region)
     }
 
@@ -85,8 +85,8 @@ impl AccountContext {
         }
     }
 
-    pub fn region(&self) -> &RegionCode {
-        &self.region
+    pub fn region(&self) -> RegionCode {
+        self.region
     }
 
     pub fn account_repo(&self) -> Arc<dyn AccountRepository> {
@@ -119,9 +119,9 @@ impl AccountContext {
     pub async fn ensure_executable(
         &self,
         command_id: Uuid,
-        command_region: &RegionCode,
+        command_region: RegionCode,
     ) -> Result<bool> {
-        if command_region != &self.region {
+        if command_region != self.region {
             return Err(Error::validation(
                 "region",
                 &format!(
@@ -147,7 +147,7 @@ impl AccountContext {
     /// Charge un compte et valide son intégrité territoriale ainsi que sa concurrence optimiste (OCC).
     pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
         // Validation immédiate via l'ID autoportant : pas de désalignement possible
-        if target.id.region() != &self.region || Some(&target.id) != self.account_id.as_ref() {
+        if target.id.region() != self.region || Some(&target.id) != self.account_id.as_ref() {
             return Err(Error::validation(
                 "target",
                 "Context/Target identity or sharding mismatch",
@@ -156,12 +156,12 @@ impl AccountContext {
 
         let account = self
             .account_repo()
-            .find_by_id(&target.id, None)
+            .find_by_id(target.id, None)
             .await?
             .ok_or_else(|| Error::not_found("Account", target.id.to_string()))?;
 
         // Double sécurité anti-corruption de données
-        if account.identity().region_code() != &self.region {
+        if account.identity().region_code() != self.region {
             return Err(Error::internal(format!(
                 "Data Integrity Violation: Account {} belongs to region {}, but context is sharded on {}",
                 target.id,
@@ -185,8 +185,8 @@ impl AccountContext {
     // --- SAUVEGARDE ATOMIQUE (OUTBOX + IDEMPOTENCE) ---
     /// Persiste l'agrégat, extrait ses événements pour l'outbox et valide définitivement l'idempotence dans une seule transaction.
     pub async fn save(&self, account: &mut Account, command_id: Option<Uuid>) -> Result<()> {
-        if let Some(ref expected_id) = self.account_id {
-            if account.account_id().uuid() != expected_id.uuid() {
+        if let Some(expected_id) = self.account_id {
+            if account.account_id() != expected_id {
                 return Err(Error::validation(
                     "account_id",
                     "Identity mismatch violation",
@@ -208,25 +208,34 @@ impl AccountContext {
             }
         }
 
+        // 1. Extraction des événements produits par l'OperationTracker
         let events = account.pull_events();
-        self.account_repo().save(account, Some(&mut *tx)).await?;
 
-        // Sauvegarde transactionnelle dans la table Outbox
+        // 2. 💡 ÉCRITURE CONDITIONNELLE SÉCURISÉE
         if !events.is_empty() {
+            self.account_repo().save(account, Some(&mut *tx)).await?;
+
             let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
             self.app
                 .outbox_repo()
                 .save_all(&mut *tx, &event_refs)
                 .await?;
+        } else {
+            tracing::debug!(account_id = %account.account_id(), "Idempotence métier : écriture du compte court-circuitée");
         }
 
-        // Consommation définitive du jeton d'idempotence
         if let Some(cmd_id) = command_id {
             self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
         }
 
         tx.commit().await?;
         Ok(())
+    }
+
+    pub fn update_expected_identity(&mut self, new_account_id: AccountId) {
+        self.account_id = Some(new_account_id);
+        // Note: On ne change pas self.region ici car le commit de suppression/écriture
+        // se fait encore sur le Shard / Pool de connexion d'origine.
     }
 
     // --- GESTION DES TRANSACTIONS ---

@@ -1,5 +1,4 @@
 // crates/profile/src/application/commands/media/update_avatar/update_avatar_command.rs
-
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};

@@ -45,8 +45,8 @@ impl ProfileTestFixture {
 
         // Configuration par défaut pour les tests
         let region = RegionCode::default();
-        let account_id = AccountId::generate(region.clone());
-        let profile_id = ProfileId::generate();
+        let account_id = AccountId::generate(region);
+        let profile_id = ProfileId::generate(region);
         let profile_ctx = ProfileContext::new(app_ctx.clone(), Some(profile_id), region);
 
         let mut bus = CommandBus::new();
@@ -105,7 +105,7 @@ impl ProfileTestFixture {
         &self.app_ctx
     }
     pub fn account_id(&self) -> AccountId {
-        self.account_id.clone()
+        self.account_id
     }
     pub fn profile_ctx(&self) -> &ProfileContext {
         &self.profile_ctx
@@ -120,7 +120,7 @@ impl ProfileTestFixture {
     }
 
     pub fn region(&self) -> RegionCode {
-        self.profile_ctx.region().clone()
+        self.profile_ctx.region()
     }
     pub fn profile_repo(&self) -> &ProfileRepositoryStub {
         &self.profile_repo
@@ -170,7 +170,7 @@ impl ProfileTestFixture {
     where
         F: FnOnce(&Profile),
     {
-        let saved_option = self.profile_repo.find_direct(&self.profile_id()).await;
+        let saved_option = self.profile_repo.find_direct(self.profile_id()).await;
 
         let saved = saved_option.ok_or_else(|| {
             shared_kernel::core::Error::not_found("Profile", self.profile_id().to_string())

@@ -23,7 +23,7 @@ mod tests {
 
         let cmd = UpdateDisplayNameCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_display_name: new_name.clone(),
         };
 
@@ -59,7 +59,7 @@ mod tests {
 
         let cmd = UpdateDisplayNameCommand {
             command_id: cmd_id, // Même ID que seedé
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 0),
+            target: CommandTarget::new(f.profile_id(), f.region(), 0),
             new_display_name: DisplayName::try_new("New Name")?,
         };
 
@@ -92,7 +92,7 @@ mod tests {
 
         let cmd = UpdateDisplayNameCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), version_snapshot),
+            target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
             new_display_name: name,
         };
 
@@ -122,7 +122,7 @@ mod tests {
         let cmd = UpdateDisplayNameCommand {
             command_id: Uuid::new_v4(),
             // On envoie une version attendue de 5 alors que le profil est en version 0
-            target: CommandTarget::new(f.profile_id().clone(), f.region(), 5),
+            target: CommandTarget::new(f.profile_id(), f.region(), 5),
             new_display_name: DisplayName::try_new("wont_work")?,
         };
 

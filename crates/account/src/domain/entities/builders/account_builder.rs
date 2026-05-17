@@ -19,8 +19,8 @@ pub struct AccountBuilder {
 
 impl AccountBuilder {
     pub(crate) fn new(account_id: AccountId, identifier: RegistrationIdentifier) -> Self {
-        let mut identity_builder = AccountIdentityBuilder::new(account_id.clone());
-        let governance_builder = AccountGovernanceBuilder::new(account_id.clone());
+        let mut identity_builder = AccountIdentityBuilder::new(account_id);
+        let governance_builder = AccountGovernanceBuilder::new(account_id);
         let settings_builder = AccountSettingsBuilder::new(account_id);
 
         if let Some(email) = identifier.email() {

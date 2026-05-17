@@ -22,7 +22,7 @@ impl CommandHandler for LiftShadowbanHandler {
         cmd: LiftShadowbanCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

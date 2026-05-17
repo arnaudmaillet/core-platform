@@ -4,9 +4,11 @@ use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator, TokenValidat
 use profile::ProfileServiceBuilder;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
 use profile::test_utils::ProfileTestContext;
+use profile::types::ProfileId;
 use shared_kernel::cache::CacheRepository;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Identifier, Result};
 use shared_kernel::test_utils::E2EServerStarter;
+use shared_kernel::types::AccountId;
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
@@ -99,27 +101,30 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let auth_ctx = KeycloakTestContext::restore("master").await;
     let auth_response = auth_ctx.get_admin_token().await?;
 
-    let claims = auth_ctx
+    let _ = auth_ctx
         .validator
         .validate(&auth_response.token)
         .expect("Token must be valid");
 
-    let sub_id_str = claims.sub_id.as_str();
-    let sub_uuid = uuid::Uuid::parse_str(sub_id_str)
-        .expect("Le sub_id de Keycloak doit être un UUID valide pour ce test");
-    let true_sub_id = claims.sub_id.to_string(); // String pour le gRPC
-    let region = "EU";
+    let region_str = "EU";
+    let region = shared_kernel::types::RegionCode::try_new(region_str)?;
 
-    // 3. PRÉPARATION : Simulation d'un profil existant (v0)
-    // On simule l'arrivée d'un utilisateur qui vient de s'enregistrer
+    let real_profile_id = ProfileId::generate(region);
+    let real_account_id = AccountId::generate(region);
+
+    let profile_uuid = real_profile_id.as_uuid();
+    let account_uuid = real_account_id.uuid();
+
+    // 3. PRÉPARATION : Simulation d'un profil existant (v0) avec des Smart IDs conformes
     sqlx::query(
         "INSERT INTO user_profiles (profile_id, account_id, region_code, handle, display_name, version, is_private, created_at, updated_at) 
-         VALUES ($1, $1, $2, $3, $4, 0, false, NOW(), NOW())"
+         VALUES ($1, $2, $3, $4, $5, 0, false, NOW(), NOW())"
     )
-    .bind(sub_uuid)
-    .bind(region)
-    .bind("alice_rocks")
-    .bind("Alice")
+    .bind(profile_uuid)     // $1
+    .bind(account_uuid)     // $2
+    .bind(region_str)       // $3
+    .bind("alice_rocks")    // $4
+    .bind("Alice")          // $5
     .execute(&ctx.pg_pool())
     .await
     .unwrap();
@@ -127,8 +132,9 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     // 4. ACT : Changement de Handle (v0 -> v1)
     let command_id = uuid::Uuid::now_v7().to_string();
     let target = ProfileTarget {
-        profile_id: true_sub_id.clone(),
-        region: region.to_string(),
+        // 💡 FIX : On passe la version String du vrai ProfileId contenant la région
+        profile_id: real_profile_id.to_string(),
+        region: region_str.to_string(),
         expected_version: 0,
     };
 
@@ -142,18 +148,22 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
         .change_handle(with_auth(
             change_handle_req,
             &auth_response.token.as_str(),
-            region,
+            region_str,
         ))
         .await;
 
-    assert!(res.is_ok());
+    assert!(
+        res.is_ok(),
+        "Le changement de handle a échoué : {:?}",
+        res.err()
+    );
 
     // 6. VÉRIFICATIONS FINALES EN DB
     let row: (String, i64) = sqlx::query_as(
         "SELECT handle, version FROM user_profiles WHERE profile_id = $1 AND region_code = $2",
     )
-    .bind(sub_uuid)
-    .bind(region)
+    .bind(profile_uuid)
+    .bind(region_str)
     .fetch_one(&ctx.pg_pool())
     .await
     .expect("Profile should exist in DB");

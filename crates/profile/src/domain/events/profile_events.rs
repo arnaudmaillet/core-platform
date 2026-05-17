@@ -189,7 +189,7 @@ impl Event for ProfileEvent {
             | Self::PrivacyChanged { account_id, .. }
             | Self::ProfileDeleted { account_id, .. } => account_id,
         };
-        account_id.region().as_str()
+        account_id.region().as_static_str()
     }
 
     fn aggregate_type(&self) -> Cow<'_, str> {
