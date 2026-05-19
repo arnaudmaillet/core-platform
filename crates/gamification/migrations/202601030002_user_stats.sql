@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS user_stats (
                                           account_id UUID NOT NULL,
-                                          region_code VARCHAR(10) NOT NULL,
+                                          region VARCHAR(10) NOT NULL,
 
     -- Progression
     current_xp BIGINT NOT NULL DEFAULT 0,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS user_stats (
     version INT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    PRIMARY KEY (account_id, region_code)
+    PRIMARY KEY (account_id, region)
     );
 
 -- Trigger pour l'auto-update du timestamp

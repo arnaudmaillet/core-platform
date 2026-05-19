@@ -13,7 +13,7 @@ $$ LANGUAGE plpgsql;
 -- 2. IDENTITY (Table racine)
 CREATE TABLE IF NOT EXISTS account_identity (
     account_id UUID,
-    region_code VARCHAR(10) NOT NULL,
+    region VARCHAR(10) NOT NULL,
     sub_id TEXT,
     email TEXT,
     phone_number TEXT,
@@ -25,28 +25,28 @@ CREATE TABLE IF NOT EXISTS account_identity (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     aggregate_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_active_at TIMESTAMPTZ,
-    PRIMARY KEY (region_code, account_id),
-    CONSTRAINT uq_email UNIQUE (email, region_code),
-    CONSTRAINT uq_phone_number UNIQUE (phone_number, region_code),
+    PRIMARY KEY (region, account_id),
+    CONSTRAINT uq_email UNIQUE (email, region),
+    CONSTRAINT uq_phone_number UNIQUE (phone_number, region),
     CONSTRAINT uq_sub_id UNIQUE (sub_id)
 );
 
 -- 3. SETTINGS (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_settings (
     account_id UUID,
-    region_code VARCHAR(10) NOT NULL,
+    region VARCHAR(10) NOT NULL,
     preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (region_code, account_id),
-    CONSTRAINT fk_settings_identity FOREIGN KEY (region_code, account_id) REFERENCES account_identity(region_code, account_id) ON DELETE CASCADE
+    PRIMARY KEY (region, account_id),
+    CONSTRAINT fk_settings_identity FOREIGN KEY (region, account_id) REFERENCES account_identity(region, account_id) ON DELETE CASCADE
 );
 
 -- 4. GOVERNANCE (Relation 1:1 co-localisée)
 CREATE TABLE IF NOT EXISTS account_governance (
     account_id UUID,
-    region_code VARCHAR(10) NOT NULL,
+    region VARCHAR(10) NOT NULL,
     role TEXT NOT NULL DEFAULT 'USER',
     beta_tier TEXT NOT NULL DEFAULT 'NONE',
     is_shadowbanned BOOLEAN NOT NULL DEFAULT FALSE,
@@ -55,13 +55,13 @@ CREATE TABLE IF NOT EXISTS account_governance (
     last_moderation_at TIMESTAMPTZ,
     last_ip_addr INET,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (region_code, account_id),
-    CONSTRAINT fk_governance_identity FOREIGN KEY (region_code, account_id) REFERENCES account_identity(region_code, account_id) ON DELETE CASCADE
+    PRIMARY KEY (region, account_id),
+    CONSTRAINT fk_governance_identity FOREIGN KEY (region, account_id) REFERENCES account_identity(region, account_id) ON DELETE CASCADE
 );
 
 -- 5. INDEXATION
-CREATE INDEX IF NOT EXISTS idx_accounts_sub_id ON account_identity (region_code, sub_id);
-CREATE INDEX IF NOT EXISTS idx_governance_flagged ON account_governance (region_code, account_id) 
+CREATE INDEX IF NOT EXISTS idx_accounts_sub_id ON account_identity (region, sub_id);
+CREATE INDEX IF NOT EXISTS idx_governance_flagged ON account_governance (region, account_id) 
 WHERE is_shadowbanned IS TRUE OR trust_score < 50;
 
 -- 6. TRIGGERS (Automatisation du updated_at)

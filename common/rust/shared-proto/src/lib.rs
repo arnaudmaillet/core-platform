@@ -12,5 +12,11 @@ pub mod profile {
     }
 }
 
+pub mod social {
+    pub mod v1 {
+        tonic::include_proto!("social.v1");
+    }
+}
+
 pub const SERVICE_DESCRIPTOR_SET: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/service_descriptor.bin"));

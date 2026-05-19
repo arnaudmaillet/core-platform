@@ -9,12 +9,14 @@ members = [
     "backend/services/profile/workers/cache-invalidator",
     "backend/services/profile/api/command-server",
     "backend/services/profile/api/event-worker",
+    "backend/services/social/api/command-server",
     "common/rust/shared-proto",
     "crates/account",
     "crates/auth",
     "crates/profile",
     "crates/shared-kernel",
     "crates/gamification",
+    "crates/social",
     "backend/gateway/graphql-bff",
 ]
 resolver = "2"
@@ -32,6 +34,7 @@ description = "core-platform repo"
 shared-kernel = { path = "crates/shared-kernel" }
 shared-proto = { path = "common/rust/shared-proto" }
 account = { path = "crates/account" }
+social = { path = "crates/social" }
 profile = { path = "crates/profile" }
 auth = { path = "crates/auth" }
 

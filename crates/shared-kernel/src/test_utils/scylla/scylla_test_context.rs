@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/scylla/utils/scylla_test_context.rs
+// crates/shared-kernel/src/test_utils/scylla/scylla_test_context.rs
 
 use crate::scylla::ScyllaContext;
 use crate::test_utils::ScyllaTestContextBuilder;
@@ -38,7 +38,16 @@ impl ScyllaTestContext {
                 let node = GenericImage::new(&builder.image_name, &builder.image_tag)
                     .with_exposed_port(port)
                     .with_wait_for(WaitFor::message_on_either_std("init - serving"))
-                    .with_cmd(["--developer-mode", "1"])
+                    .with_cmd([
+                        "--developer-mode",
+                        "1",
+                        "--smp",
+                        "1", // Force 1 seul CPU virtuel (évite le calcul de Shards lourd)
+                        "--memory",
+                        "1G", // Limite la RAM pour éviter le swap agressif dans Docker
+                        "--overprovisioned",
+                        "1", // Indique à Scylla qu'il partage ses ressources
+                    ])
                     .start()
                     .await
                     .expect("Scylla failed to start");

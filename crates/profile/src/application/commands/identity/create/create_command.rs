@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::{
     command::IdentifiableCommand,
     core::{Error, Result},
-    types::{AccountId, RegionCode},
+    types::{AccountId, Region},
 };
 use shared_proto::profile::v1::CreateProfileRequest;
 use uuid::Uuid;
@@ -16,7 +16,7 @@ pub struct CreateProfileCommand {
     pub command_id: Uuid,
     pub account_id: AccountId,
     pub handle: Handle,
-    pub region: RegionCode,
+    pub region: Region,
 }
 
 impl IdentifiableCommand for CreateProfileCommand {
@@ -37,7 +37,7 @@ impl CreateProfileCommand {
             .map_err(|_| Error::validation("command_id", "Invalid UUID format".to_string()))?;
         let account_id = AccountId::try_from(req.account_id.as_str())?;
         let handle = Handle::try_new(&req.handle)?;
-        let region = RegionCode::try_new(&req.region)?;
+        let region = Region::try_new(&req.region)?;
 
         Ok(Self {
             command_id,

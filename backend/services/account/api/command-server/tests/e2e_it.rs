@@ -1,19 +1,18 @@
+// backend/services/account/api/command-server/tests/e2e_it.rs
+
 use account::services::{AccountAccessService, AccountPersonalService};
 use account::test_utils::AccountTestContext;
-use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::Result;
-use shared_kernel::test_utils::E2EServerStarter;
 use shared_proto::account::v1::AccountTarget;
 use shared_proto::account::v1::account_personal_service_client::AccountPersonalServiceClient;
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tonic::transport::Server;
 use tonic::{Request, metadata::MetadataValue};
 use uuid::Uuid;
 
 // Imports de ton architecture
-use auth::{KeycloakTestContext, KeycloakValidator, TokenValidator};
+use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator, TokenValidator};
 use shared_proto::account::v1::{
     RegisterRequest, RegistrationIdentifier, UpdateLocaleRequest,
     account_access_service_client::AccountAccessServiceClient,
@@ -21,51 +20,6 @@ use shared_proto::account::v1::{
 };
 
 use account::AccountServiceBuilder;
-
-struct AccountServerStarter;
-
-#[async_trait::async_trait]
-impl E2EServerStarter for AccountServerStarter {
-    async fn start_server(
-        &self,
-        pg_pool: sqlx::PgPool,
-        redis_repo: Arc<dyn CacheRepository>,
-        addr: SocketAddr,
-        shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    ) {
-        let auth_ctx = KeycloakTestContext::restore("master").await;
-        let validator = Arc::new(
-            KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
-                .await
-                .unwrap(),
-        );
-        let interceptor = auth::AuthInterceptor::new(validator);
-
-        let builder = AccountServiceBuilder::new(pg_pool, redis_repo);
-        let app_ctx = builder.build_context();
-        let bus = builder.build_command_bus();
-
-        // 3. Instanciation des services gRPC avec les mêmes composants
-        let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
-        let personal_svc = AccountPersonalService::new(bus, app_ctx);
-
-        // 4. Lancement du serveur gRPC unique
-        Server::builder()
-            .add_service(AccountAccessServiceServer::with_interceptor(
-                access_svc,
-                interceptor.clone(),
-            ))
-            .add_service(AccountPersonalServiceServer::with_interceptor(
-                personal_svc,
-                interceptor,
-            ))
-            .serve_with_shutdown(addr, async {
-                shutdown_rx.await.ok();
-            })
-            .await
-            .unwrap();
-    }
-}
 
 // --- HELPER POUR LE TOKEN ---
 fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
@@ -82,9 +36,48 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 
 #[tokio::test]
 async fn test_e2e_complete_account_lifecycle() -> Result<()> {
-    // 1. SETUP INFRA (via AccountTestContext pour l'isolation)
+    // 1. SETUP INFRA & SERVEUR GRPC VIA CLOSURE
     let ctx = AccountTestContext::builder()
-        .with_server(AccountServerStarter)
+        .with_server(
+            |pg_pool, redis_repo, _kafka_brokers, addr, shutdown_rx, ready_tx| {
+                async move {
+                    // 1. Setup Auth
+                    let auth_ctx = KeycloakTestContext::restore("master").await;
+                    let validator = Arc::new(
+                        KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
+                            .await
+                            .unwrap(),
+                    );
+                    let interceptor = AuthInterceptor::new(validator);
+
+                    // 2. Setup Domaine
+                    let builder = AccountServiceBuilder::new(pg_pool, redis_repo);
+                    let app_ctx = builder.build_context();
+                    let bus = builder.build_command_bus();
+
+                    // 3. Instanciation des services gRPC
+                    let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
+                    let personal_svc = AccountPersonalService::new(bus, app_ctx);
+                    ready_tx.send(()).ok();
+
+                    // 4. Lancement du serveur gRPC unique Tonic
+                    Server::builder()
+                        .add_service(AccountAccessServiceServer::with_interceptor(
+                            access_svc,
+                            interceptor.clone(),
+                        ))
+                        .add_service(AccountPersonalServiceServer::with_interceptor(
+                            personal_svc,
+                            interceptor,
+                        ))
+                        .serve_with_shutdown(addr, async {
+                            shutdown_rx.await.ok();
+                        })
+                        .await
+                        .unwrap();
+                }
+            },
+        )
         .build_e2e()
         .await;
 
@@ -104,7 +97,7 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
         .expect("Token invalid");
 
     let true_sub_id = claims.sub_id.to_string();
-    let sub_uuid = Uuid::parse_str(&true_sub_id).expect("Invalid UUID from Keycloak");
+    let _sub_uuid = Uuid::parse_str(&true_sub_id).expect("Invalid UUID from Keycloak");
     let region: &str = "EU";
 
     // --- ÉTAPE 1 : REGISTER (v0 -> v1) ---
@@ -115,7 +108,7 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
         identifier: Some(RegistrationIdentifier {
             method: Some(Method::Email("audit-e2e@test.com".to_string())),
         }),
-        region_code: region.to_string(),
+        region: region.to_string(),
         locale: "fr-FR".to_string(),
         ip_addr: "127.0.0.1".to_string(),
     };
@@ -138,11 +131,10 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
         .register(with_auth(
             register_payload,
             &auth_response.token.as_str(),
-            &region,
+            region,
         ))
         .await;
 
-    // DEBUG 3
     match &res_dup {
         Ok(_) => println!("DEBUG E2E: Idempotency call SUCCESS"),
         Err(e) => println!(
@@ -156,10 +148,10 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
 
     // --- ÉTAPE 3 : UPDATE LOCALE (v1 -> v2) ---
     let update_command_id = uuid::Uuid::now_v7().to_string();
-    let account_id = Uuid::parse_str(&real_account_id)
-        .expect("Invalid account_id UUID returned by gRPC");
+    let account_id =
+        Uuid::parse_str(&real_account_id).expect("Invalid account_id UUID returned by gRPC");
     let current_version: i64 = sqlx::query_scalar(
-        "SELECT version FROM account_identity WHERE account_id = $1 AND region_code = $2",
+        "SELECT version FROM account_identity WHERE account_id = $1 AND region = $2",
     )
     .bind(account_id)
     .bind(region)
@@ -170,7 +162,7 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     let target = AccountTarget {
         account_id: real_account_id,
         region: region.to_string(),
-        expected_version: current_version as u64, // Sera dynamiquement à 1
+        expected_version: current_version as u64,
     };
 
     let update_payload = UpdateLocaleRequest {
@@ -193,7 +185,7 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
 
     // 1. Vérification État & Version
     let row: (String, i64) = sqlx::query_as(
-        "SELECT locale, version FROM account_identity WHERE account_id = $1 AND region_code = $2",
+        "SELECT locale, version FROM account_identity WHERE account_id = $1 AND region = $2",
     )
     .bind(account_id)
     .bind(region)

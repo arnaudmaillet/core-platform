@@ -35,7 +35,7 @@
 // message UserLocation {
 //   string profile_id = 1;
 //   string owner_id = 2;
-//   string region_code = 3;
+//   string region = 3;
 
 //   GeoPoint coordinates = 4;
 //   LocationMetrics metrics = 5;
@@ -65,12 +65,12 @@
 
 // message GetUserLocationRequest {
 //   string account_id = 1;
-//   string region_code = 2;
+//   string region = 2;
 // }
 
 // message UpdatePositionRequest {
 //   string profile_id = 1;
-//   string region_code = 2;
+//   string region = 2;
 //   GeoPoint coordinates = 3;
 //   optional LocationMetrics metrics = 4;
 //   optional MovementMetrics movement = 5;
@@ -78,12 +78,12 @@
 
 // message SetGhostModeRequest {
 //   string profile_id = 1;
-//   string region_code = 2;
+//   string region = 2;
 //   bool enabled = 3;
 // }
 
 // message UpdatePrivacyRadiusRequest {
 //   string profile_id = 1;
-//   string region_code = 2;
+//   string region = 2;
 //   int32 radius_meters = 3;
 // }

@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package social.v1;
+
+// Service gRPC exposant les fonctionnalités sociales de l'écosystème
+service SocialService {
+  // --- WRITES ---
+  // Exécute l'action de suivi d'un profil par un autre
+  rpc FollowProfile(FollowProfileRequest) returns (FollowProfileResponse);
+
+  // Annule le suivi d'un profil
+  rpc UnfollowProfile(UnfollowProfileRequest) returns (UnfollowProfileResponse);
+
+  // --- READS ---
+  // Vérifie si une relation de suivi existe entre deux profils
+  rpc IsFollowing(IsFollowingRequest) returns (IsFollowingResponse);
+
+  // Récupère les compteurs consolidés (followers/following) d'un profil
+  rpc GetProfileCounters(GetProfileCountersRequest) returns (GetProfileCountersResponse);
+
+  // Récupère la liste paginée des IDs des profils suivis par cet utilisateur
+  rpc GetFollowing(GetFollowingRequest) returns (GetFollowingResponse);
+
+  // Récupère la liste paginée des IDs des profils qui suivent cet utilisateur
+  rpc GetFollowers(GetFollowersRequest) returns (GetFollowersResponse);
+}
+
+// --- MESSAGES INTERMÉDIAIRES ---
+
+message CommandTarget {
+  string profile_id = 1;
+  string region = 2;
+  uint64 expected_version = 3;
+}
+
+// --- MESSAGES REQUÊTES / RÉPONSES ---
+
+message FollowProfileRequest {
+  string command_id = 1;
+  string follower_id = 2;
+  CommandTarget target = 3;
+}
+
+message FollowProfileResponse {
+  bool success = 1;
+}
+
+message UnfollowProfileRequest {
+  string command_id = 1;
+  string follower_id = 2;
+  CommandTarget target = 3;
+}
+
+message UnfollowProfileResponse {
+  bool success = 1;
+}
+
+message IsFollowingRequest {
+  string follower_id = 1;
+  string following_id = 2;
+}
+
+message IsFollowingResponse {
+  bool is_following = 1;
+}
+
+message GetProfileCountersRequest {
+  string profile_id = 1;
+  string region = 2;
+}
+
+message GetProfileCountersResponse {
+  uint64 followers_count = 1;
+  uint64 following_count = 2;
+}
+
+message GetFollowingRequest {
+  string follower_id = 1;
+  string region = 2;
+  optional uint32 limit = 3;
+  optional uint32 offset = 4;
+}
+
+message GetFollowingResponse {
+  repeated string following_ids = 1;
+}
+
+message GetFollowersRequest {
+  string following_id = 1;
+  string region = 2;
+  optional uint32 limit = 3;
+  optional uint32 offset = 4;
+}
+
+message GetFollowersResponse {
+  repeated string followers_ids = 1;
+}

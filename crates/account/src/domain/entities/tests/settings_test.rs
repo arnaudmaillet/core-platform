@@ -9,11 +9,11 @@ mod tests {
         core::Result,
         geo::Timezone,
         security::PushToken,
-        types::{AccountId, RegionCode},
+        types::{AccountId, Region},
     };
 
     fn create_test_settings() -> Result<AccountSettings> {
-        let account_id = AccountId::generate(RegionCode::default());
+        let account_id = AccountId::generate(Region::default());
         let preferences = AccountPreferences::new(
             PrivacyPreferences::default(),
             NotificationPreferences::default(),
@@ -32,7 +32,7 @@ mod tests {
     #[test]
     fn test_timezone_update_logic_and_idempotency() -> Result<()> {
         let mut settings = create_test_settings()?;
-        let region = RegionCode::try_new("EU")?;
+        let region = Region::try_new("EU")?;
         let new_tz = Timezone::try_new("Europe/Paris")?;
 
         // 1. Premier passage : mutation acceptée
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_timezone_region_inconsistency() -> Result<()> {
         let mut settings = create_test_settings()?;
-        let region_eu = RegionCode::try_new("EU")?;
+        let region_eu = Region::try_new("EU")?;
 
         // Exemple d'une timezone incohérente avec la région (si ton VO implémente cette logique)
         let invalid_tz = Timezone::try_new("America/New_York")?;

@@ -1,4 +1,4 @@
-use shared_kernel::{security::JwtToken, types::RegionCode};
+use shared_kernel::{security::JwtToken, types::Region};
 use std::sync::Arc;
 use tonic::{Request, Status, service::Interceptor};
 
@@ -32,7 +32,7 @@ impl Interceptor for AuthInterceptor {
             .and_then(|m| m.to_str().ok())
             .ok_or_else(|| Status::unauthenticated("Missing region context (x-region header)"))?;
 
-        let region_code = RegionCode::try_new(region_str)
+        let region = Region::try_new(region_str)
             .map_err(|_| Status::invalid_argument("Invalid region code"))?;
 
         // 3. Validation du Token
@@ -41,7 +41,7 @@ impl Interceptor for AuthInterceptor {
         match self.validator.validate(&token) {
             Ok(claims) => {
                 request.extensions_mut().insert(claims);
-                request.extensions_mut().insert(region_code);
+                request.extensions_mut().insert(region);
                 Ok(request)
             }
             Err(e) => match e {

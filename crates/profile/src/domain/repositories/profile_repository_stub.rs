@@ -8,12 +8,12 @@ use crate::entities::Profile;
 use crate::repositories::ProfileRepository;
 use crate::types::Handle;
 use shared_kernel::core::{AggregateRoot, Error, Result, Transaction, Versioned};
-use shared_kernel::types::{AccountId, ProfileId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, Region};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct ProfileKey {
     pub id: ProfileId,
-    pub region: RegionCode,
+    pub region: Region,
 }
 
 pub struct ProfileRepositoryStub {
@@ -69,7 +69,7 @@ impl ProfileRepositoryStub {
     }
 
     /// Récupère un profil avec une clé précise
-    pub async fn find_with_key_direct(&self, id: ProfileId, region: RegionCode) -> Option<Profile> {
+    pub async fn find_with_key_direct(&self, id: ProfileId, region: Region) -> Option<Profile> {
         let store = self.profiles.lock().unwrap();
         let key = ProfileKey { id, region };
         store.get(&key).cloned()
@@ -137,7 +137,7 @@ impl ProfileRepository for ProfileRepositoryStub {
     async fn find_by_id(
         &self,
         id: ProfileId,
-        region: RegionCode,
+        region: Region,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let store = self.profiles.lock().unwrap();
@@ -148,7 +148,7 @@ impl ProfileRepository for ProfileRepositoryStub {
     async fn find_by_handle(
         &self,
         handle: &Handle,
-        region: RegionCode,
+        region: Region,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let store = self.profiles.lock().unwrap();
@@ -178,7 +178,7 @@ impl ProfileRepository for ProfileRepositoryStub {
     async fn delete(
         &self,
         id: ProfileId,
-        region: RegionCode,
+        region: Region,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let mut store = self.profiles.lock().unwrap();
@@ -187,7 +187,7 @@ impl ProfileRepository for ProfileRepositoryStub {
         Ok(())
     }
 
-    async fn exists(&self, id: ProfileId, region: RegionCode) -> Result<bool> {
+    async fn exists(&self, id: ProfileId, region: Region) -> Result<bool> {
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }
@@ -198,7 +198,7 @@ impl ProfileRepository for ProfileRepositoryStub {
         Ok(store.contains_key(&key))
     }
 
-    async fn exists_by_handle(&self, handle: &Handle, region: RegionCode) -> Result<bool> {
+    async fn exists_by_handle(&self, handle: &Handle, region: Region) -> Result<bool> {
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }

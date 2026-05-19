@@ -5,7 +5,7 @@ use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
 use shared_kernel::command::CommandBus;
-use shared_kernel::types::{AccountId, RegionCode, SubId};
+use shared_kernel::types::{AccountId, Region, SubId};
 
 use shared_proto::account::v1::account_access_service_server::AccountAccessService as ProtoAccountAccessService;
 use shared_proto::account::v1::{
@@ -45,7 +45,7 @@ impl ProtoAccountAccessService for AccountAccessService {
     ) -> Result<Response<RegisterResponse>, Status> {
         let (_metadata, extensions, req) = request.into_parts();
 
-        let region = RegionCode::try_new(&req.region_code)
+        let region = Region::try_new(&req.region)
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
         let account_id = match &req.sub_id {

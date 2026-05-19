@@ -6,9 +6,8 @@ pub mod core;
 mod persistence;
 mod transport;
 
-pub use application::{command, context, idempotency, sharding};
+pub use application::{cache, command, context, idempotency, sharding};
 pub use building_blocks::{geo, messaging, security, types};
-pub use persistence::cache;
 
 #[cfg(feature = "postgres")]
 pub use persistence::postgres;

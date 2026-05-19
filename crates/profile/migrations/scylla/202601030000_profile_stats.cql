@@ -2,9 +2,9 @@
 
 CREATE TABLE IF NOT EXISTS profile_stats (
                                              profile_id uuid,
-                                             region_code text,
+                                             region text,
                                              follower_count counter,
                                              following_count counter,
                                              post_count counter,
-                                             PRIMARY KEY (profile_id, region_code)
+                                             PRIMARY KEY (profile_id, region)
 );

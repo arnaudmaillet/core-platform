@@ -8,7 +8,7 @@ use shared_kernel::{
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
     postgres::PostgresTransaction,
-    types::{AccountId, RegionCode},
+    types::{AccountId, Region},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ impl AccountAppContext {
     }
 
     /// Crée un contexte pour la création : l'ID n'existe pas encore, on passe la région cible pour router la DB.
-    pub fn create_creation_context(&self, region: RegionCode) -> AccountContext {
+    pub fn create_creation_context(&self, region: Region) -> AccountContext {
         AccountContext::new(self.clone(), None, region)
     }
 
@@ -69,14 +69,14 @@ impl AccountAppContext {
 pub struct AccountContext {
     app: AccountAppContext,
     account_id: Option<AccountId>,
-    region: RegionCode,
+    region: Region,
 }
 
 impl AccountContext {
     pub(crate) fn new(
         app: AccountAppContext,
         account_id: Option<AccountId>,
-        region: RegionCode,
+        region: Region,
     ) -> Self {
         Self {
             app,
@@ -85,7 +85,7 @@ impl AccountContext {
         }
     }
 
-    pub fn region(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         self.region
     }
 
@@ -106,7 +106,7 @@ impl AccountContext {
         let exists = self
             .app
             .idempotency_repo()
-            .exists(&mut *tx, &command_id)
+            .exists(Some(&mut *tx), &command_id)
             .await?;
         if exists {
             return Ok(false);
@@ -119,7 +119,7 @@ impl AccountContext {
     pub async fn ensure_executable(
         &self,
         command_id: Uuid,
-        command_region: RegionCode,
+        command_region: Region,
     ) -> Result<bool> {
         if command_region != self.region {
             return Err(Error::validation(
@@ -135,7 +135,7 @@ impl AccountContext {
         let exists = self
             .app
             .idempotency_repo()
-            .exists(&mut *tx, &command_id)
+            .exists(Some(&mut *tx), &command_id)
             .await?;
         if exists {
             return Ok(false);
@@ -161,11 +161,11 @@ impl AccountContext {
             .ok_or_else(|| Error::not_found("Account", target.id.to_string()))?;
 
         // Double sécurité anti-corruption de données
-        if account.identity().region_code() != self.region {
+        if account.identity().region() != self.region {
             return Err(Error::internal(format!(
                 "Data Integrity Violation: Account {} belongs to region {}, but context is sharded on {}",
                 target.id,
-                account.identity().region_code(),
+                account.identity().region(),
                 self.region
             )));
         }
@@ -201,7 +201,7 @@ impl AccountContext {
             if self
                 .app
                 .idempotency_repo()
-                .exists(&mut *tx, &cmd_id)
+                .exists(Some(&mut *tx), &cmd_id)
                 .await?
             {
                 return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
@@ -225,7 +225,10 @@ impl AccountContext {
         }
 
         if let Some(cmd_id) = command_id {
-            self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
+            self.app
+                .idempotency_repo()
+                .save(Some(&mut *tx), &cmd_id)
+                .await?;
         }
 
         tx.commit().await?;

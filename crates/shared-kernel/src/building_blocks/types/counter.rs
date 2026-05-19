@@ -58,3 +58,23 @@ impl From<Counter> for u64 {
         counter.0
     }
 }
+
+impl TryFrom<i64> for Counter {
+    type Error = Error;
+
+    fn try_from(val: i64) -> Result<Self> {
+        if val < 0 {
+            return Err(Error::validation(
+                "counter",
+                "Counter value cannot be negative",
+            ));
+        }
+        Ok(Self::from_raw(val as u64))
+    }
+}
+
+impl std::fmt::Display for Counter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

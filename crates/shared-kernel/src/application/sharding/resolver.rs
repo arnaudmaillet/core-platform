@@ -2,17 +2,17 @@
 
 use crate::core::{Error, Identifier};
 use crate::sharding::ShardNode;
-use crate::types::{AccountId, RegionCode};
+use crate::types::{AccountId, Region};
 use std::collections::HashMap;
 
 pub struct ShardResolver {
     // On indexe par région, et chaque région a un vecteur de nodes (shards)
-    nodes_by_region: HashMap<RegionCode, Vec<ShardNode>>,
+    nodes_by_region: HashMap<Region, Vec<ShardNode>>,
 }
 
 impl ShardResolver {
     pub fn new(nodes: Vec<ShardNode>) -> Self {
-        let mut nodes_by_region: HashMap<RegionCode, Vec<ShardNode>> = HashMap::new();
+        let mut nodes_by_region: HashMap<Region, Vec<ShardNode>> = HashMap::new();
 
         for node in nodes {
             nodes_by_region
@@ -33,7 +33,7 @@ impl ShardResolver {
     pub fn resolve(
         &self,
         account_id: &AccountId,
-        region: &RegionCode,
+        region: &Region,
     ) -> Result<&ShardNode, Error> {
         // 1. On cherche les shards de la région
         let region_shards = self.nodes_by_region.get(region).ok_or_else(|| {

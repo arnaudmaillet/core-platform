@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[derive(FromRow)]
 pub struct OutboxRow {
     pub id: Uuid,
-    pub region_code: String,
+    pub region: String,
     pub aggregate_type: String,
     pub aggregate_id: String,
     pub event_type: String,
@@ -23,7 +23,7 @@ impl From<OutboxRow> for EventEnvelope {
     fn from(row: OutboxRow) -> Self {
         Self {
             id: row.id,
-            region_code: row.region_code,
+            region: row.region,
             aggregate_type: row.aggregate_type,
             aggregate_id: row.aggregate_id,
             event_type: row.event_type,

@@ -10,7 +10,7 @@ use shared_kernel::core::Identifier;
 use shared_kernel::{
     command::CommandBus,
     core::ErrorCode,
-    types::{AccountId, RegionCode},
+    types::{AccountId, Region},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -59,7 +59,7 @@ impl AccountConsumer {
                 let handle = Handle::try_new(default_username)
                     .map_err(|e| format!("Failed to generate default handle: {}", e))?;
 
-                let region_vo = RegionCode::try_new(region).map_err(|e| e.to_string())?;
+                let region_vo = Region::try_new(region).map_err(|e| e.to_string())?;
                 let creation_ctx = self.app_ctx.create_creation_context(region_vo.clone());
 
                 let command = CreateProfileCommand {

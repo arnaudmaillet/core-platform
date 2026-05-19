@@ -4,7 +4,7 @@ use serde::Deserialize;
 use shared_kernel::{
     command::{CommandTarget, IdentifiableCommand},
     core::{Error, Result},
-    types::{AccountId, AuditReason, RegionCode},
+    types::{AccountId, AuditReason, Region},
 };
 use shared_proto::account::v1::IncreaseTrustScoreRequest;
 use uuid::Uuid;
@@ -44,7 +44,7 @@ impl IncreaseTrustScoreCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
         let amount = TrustAmount::try_from(req.amount)

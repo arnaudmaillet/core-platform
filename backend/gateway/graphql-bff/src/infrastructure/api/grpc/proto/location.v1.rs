@@ -27,7 +27,7 @@ pub struct UserLocation {
     #[prost(string, tag = "2")]
     pub owner_id: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
-    pub region_code: ::prost::alloc::string::String,
+    pub region: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "4")]
     pub coordinates: ::core::option::Option<GeoPoint>,
     #[prost(message, optional, tag = "5")]
@@ -48,14 +48,14 @@ pub struct GetUserLocationRequest {
     #[prost(string, tag = "1")]
     pub account_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub region_code: ::prost::alloc::string::String,
+    pub region: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpdatePositionRequest {
     #[prost(string, tag = "1")]
     pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub region_code: ::prost::alloc::string::String,
+    pub region: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "3")]
     pub coordinates: ::core::option::Option<GeoPoint>,
     #[prost(message, optional, tag = "4")]
@@ -68,7 +68,7 @@ pub struct SetGhostModeRequest {
     #[prost(string, tag = "1")]
     pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub region_code: ::prost::alloc::string::String,
+    pub region: ::prost::alloc::string::String,
     #[prost(bool, tag = "3")]
     pub enabled: bool,
 }
@@ -77,7 +77,7 @@ pub struct UpdatePrivacyRadiusRequest {
     #[prost(string, tag = "1")]
     pub profile_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub region_code: ::prost::alloc::string::String,
+    pub region: ::prost::alloc::string::String,
     #[prost(int32, tag = "3")]
     pub radius_meters: i32,
 }

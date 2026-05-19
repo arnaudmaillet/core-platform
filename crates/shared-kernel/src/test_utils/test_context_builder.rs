@@ -1,28 +1,21 @@
 // crates/shared-kernel/src/test_utils/test_context_builder.rs
 
-use crate::cache::CacheRepository;
 use crate::test_utils::{
     KafkaTestContext, PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContext,
-}; // AJOUT : KafkaTestContext
+};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use tokio::sync::oneshot;
 
 #[async_trait]
 pub trait E2EServerStarter: Send + Sync + 'static {
-    async fn start_server(
-        &self,
-        pg_pool: sqlx::PgPool,
-        redis_repo: std::sync::Arc<dyn CacheRepository>,
-        addr: SocketAddr,
-        shutdown_rx: oneshot::Receiver<()>,
-    );
+    async fn start_server(&self, addr: SocketAddr, shutdown_rx: oneshot::Receiver<()>);
 }
 
 /// 3. Bloc spécifique pour le démarrage AVEC serveur (E2E)
 impl<S: E2EServerStarter> TestContextBuilder<S> {
     pub async fn build_e2e(self) -> TestContext {
-        let (pg, redis, scylla, kafka) = self.build_infrastructure().await; // AJOUT : Récupération de kafka
+        let (pg, redis, scylla, kafka) = self.build_infrastructure().await;
 
         let starter = self.server_starter.expect("Server starter missing");
 
@@ -36,23 +29,9 @@ impl<S: E2EServerStarter> TestContextBuilder<S> {
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
-        // --- Préparation des dépendances pour le thread ---
-        let pg_pool = pg
-            .as_ref()
-            .expect("E2E Server requires Postgres. Did you call .with_postgres()?")
-            .pool()
-            .clone();
-
-        let redis_repo = redis
-            .as_ref()
-            .expect("E2E Server requires Redis. Did you call .with_redis()?")
-            .repository();
-
-        // --- Lancement du serveur ---
+        // --- Lancement du serveur (Plus aucun argument lié à la DB !) ---
         let server_handle = tokio::spawn(async move {
-            starter
-                .start_server(pg_pool, redis_repo, actual_addr, shutdown_rx)
-                .await;
+            starter.start_server(actual_addr, shutdown_rx).await;
         });
 
         if !Self::wait_for_server(actual_addr, 30000).await {
@@ -67,7 +46,7 @@ impl<S: E2EServerStarter> TestContextBuilder<S> {
             pg,
             redis,
             scylla,
-            kafka, // AJOUT : Injection dans le contexte final
+            kafka,
             Some(actual_addr),
             Some(shutdown_tx),
             Some(server_handle),
@@ -108,33 +87,32 @@ impl<S: E2EServerStarter> TestContextBuilder<S> {
 }
 
 pub struct TestContextBuilder<S = ()> {
-    pg_migrations: Option<Vec<String>>,
-    scylla_migrations: Option<Vec<String>>,
+    with_postgres: bool,
+    with_scylla: bool,
     with_redis: bool,
-    with_kafka: bool, // AJOUT
+    with_kafka: bool,
     server_starter: Option<S>,
 }
 
 impl TestContextBuilder<()> {
     pub fn new() -> Self {
         Self {
-            pg_migrations: None,
-            scylla_migrations: None,
+            with_postgres: false,
+            with_scylla: false,
             with_redis: false,
-            with_kafka: false, // AJOUT
+            with_kafka: false,
             server_starter: None,
         }
     }
 }
-
 impl<S> TestContextBuilder<S> {
     pub async fn build(self) -> TestContext {
         let (pg, redis, scylla, kafka) = self.build_infrastructure().await; // AJOUT : kafka
         TestContext::new(pg, redis, scylla, kafka, None, None, None) // AJOUT : kafka
     }
 
-    pub fn with_postgres(mut self, migrations: &[&str]) -> Self {
-        self.pg_migrations = Some(migrations.iter().map(|&s| s.to_string()).collect());
+    pub fn with_postgres(mut self) -> Self {
+        self.with_postgres = true;
         self
     }
 
@@ -143,12 +121,11 @@ impl<S> TestContextBuilder<S> {
         self
     }
 
-    pub fn with_scylla(mut self, migrations: &[&str]) -> Self {
-        self.scylla_migrations = Some(migrations.iter().map(|&s| s.to_string()).collect());
+    pub fn with_scylla(mut self) -> Self {
+        self.with_scylla = true;
         self
     }
 
-    // AJOUT : Activation fluide de Kafka
     pub fn with_kafka(mut self) -> Self {
         self.with_kafka = true;
         self
@@ -156,32 +133,25 @@ impl<S> TestContextBuilder<S> {
 
     pub fn with_server<NS: E2EServerStarter>(self, starter: NS) -> TestContextBuilder<NS> {
         TestContextBuilder {
-            pg_migrations: self.pg_migrations,
-            scylla_migrations: self.scylla_migrations,
+            with_postgres: self.with_postgres,
+            with_scylla: self.with_scylla,
             with_redis: self.with_redis,
-            with_kafka: self.with_kafka, // AJOUT
+            with_kafka: self.with_kafka,
             server_starter: Some(starter),
         }
     }
 
-    /// La méthode build_infrastructure démarre désormais l'intégralité de la pile de test de manière asynchrone
     async fn build_infrastructure(
         &self,
     ) -> (
         Option<PostgresTestContext>,
         Option<RedisTestContext>,
         Option<ScyllaTestContext>,
-        Option<KafkaTestContext>, // AJOUT
+        Option<KafkaTestContext>,
     ) {
         let pg_future = async {
-            if let Some(migs) = &self.pg_migrations {
-                let migs_refs: Vec<&str> = migs.iter().map(|s| s.as_str()).collect();
-                Some(
-                    PostgresTestContext::builder()
-                        .with_migrations(&migs_refs)
-                        .build()
-                        .await,
-                )
+            if self.with_postgres {
+                Some(PostgresTestContext::builder().build().await)
             } else {
                 None
             }
@@ -196,14 +166,9 @@ impl<S> TestContextBuilder<S> {
         };
 
         let scylla_future = async {
-            if let Some(migs) = &self.scylla_migrations {
-                let migs_refs: Vec<&str> = migs.iter().map(|s| s.as_str()).collect();
-                Some(
-                    ScyllaTestContext::builder()
-                        .with_migrations(&migs_refs)
-                        .build()
-                        .await,
-                )
+            if self.with_scylla {
+                // Initialisation brute sans arguments de fichiers
+                Some(ScyllaTestContext::builder().build().await)
             } else {
                 None
             }

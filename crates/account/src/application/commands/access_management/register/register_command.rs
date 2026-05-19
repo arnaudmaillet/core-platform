@@ -3,7 +3,7 @@
 use crate::domain::types::{IpAddr, Locale, RegistrationIdentifier};
 use shared_kernel::{
     command::IdentifiableCommand,
-    types::{AccountId, Email, PhoneNumber, RegionCode, SubId},
+    types::{AccountId, Email, PhoneNumber, Region, SubId},
 };
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
 use tonic::Status;
@@ -52,7 +52,7 @@ impl RegisterCommand {
 
         // On extrait temporairement la région pour instancier un AccountId factice.
         // Cet ID sera immédiatement écrasé à la volée dans ton access_service.rs.
-        let temp_region = RegionCode::try_new(req.region_code)
+        let temp_region = Region::try_new(req.region)
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
         Ok(Self {

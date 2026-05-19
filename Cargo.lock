@@ -3773,6 +3773,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
 
 [[package]]
+name = "social"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "fred",
+ "scylla",
+ "serde",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tonic",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "social-command-server"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth",
+ "dotenvy",
+ "fred",
+ "futures",
+ "scylla",
+ "shared-kernel",
+ "shared-proto",
+ "social",
+ "tokio",
+ "tonic",
+ "tonic-health",
+ "tonic-reflection",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "socket2"
 version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

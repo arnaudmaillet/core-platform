@@ -15,7 +15,7 @@ use uuid::Uuid;
 pub struct PostgresProfileRow {
     pub profile_id: Uuid,
     pub account_id: Uuid,
-    pub region_code: String,
+    pub region: String,
     pub display_name: String,
     pub handle: String,
     pub bio: Option<String>,
@@ -35,7 +35,7 @@ impl PostgresProfileRow {
         Self {
             profile_id: p.profile_id().as_uuid(),
             account_id: p.account_id().uuid().clone(),
-            region_code: p.account_id().region().as_str().to_string(),
+            region: p.account_id().region().as_str().to_string(),
             display_name: p.display_name().to_string(),
             handle: p.handle().as_str().to_string(),
             bio: p.bio().as_ref().map(|b| b.to_string()),
@@ -66,13 +66,13 @@ impl PostgresProfileRow {
         let account_id = AccountId::new(self.account_id);
         let profile_id = ProfileId::from_uuid(self.profile_id);
 
-        if profile_id.region_str() != self.region_code
-            || account_id.region().as_static_str() != self.region_code
+        if profile_id.region_str() != self.region
+            || account_id.region().as_static_str() != self.region
         {
             tracing::warn!(
                 profile_id = %self.profile_id,
                 account_id = %self.account_id,
-                db_region = %self.region_code,
+                db_region = %self.region,
                 profile_smart_region = %profile_id.region_str(),
                 account_smart_region = %account_id.region(),
                 "Data consistency warning: Regional shard mismatch detected between Smart IDs and SQL rows"

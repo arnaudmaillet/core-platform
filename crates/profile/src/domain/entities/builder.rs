@@ -23,7 +23,7 @@ pub struct ProfileBuilder {
 impl ProfileBuilder {
     pub(crate) fn new(account_id: AccountId, handle: Handle) -> Result<Self> {
         let display_name = DisplayName::try_new(handle.as_str())?;
-        let region: shared_kernel::types::RegionCode = account_id.region();
+        let region: shared_kernel::types::Region = account_id.region();
         let profile_id = ProfileId::generate(region);
 
         Ok(Self {

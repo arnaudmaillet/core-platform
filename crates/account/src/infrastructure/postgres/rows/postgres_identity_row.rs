@@ -10,7 +10,7 @@ use crate::{entities::Account, infrastructure::postgres::models::PostgresAccount
 pub struct PostgresAccountIdentityRow {
     pub account_id: Uuid,
     pub sub_id: Option<String>,
-    pub region_code: String,
+    pub region: String,
     pub email: Option<String>,
     pub state: PostgresAccountState,
     pub locale: String,
@@ -30,7 +30,7 @@ impl PostgresAccountIdentityRow {
         Self {
             account_id: ident.account_id().as_uuid(),
             sub_id: ident.sub_id().as_ref().map(|id| id.to_string()),
-            region_code: ident.region_code().to_string(),
+            region: ident.region().to_string(),
             email: ident.email().as_ref().map(|e| e.to_string()),
             state: ident.state().into(),
             locale: ident.locale().to_string(),

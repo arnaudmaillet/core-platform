@@ -15,6 +15,10 @@ pub struct RedisCacheRepository {
 }
 
 impl RedisCacheRepository {
+    pub fn pool(&self) -> &Pool {
+        &self.pool
+    }
+
     pub async fn new(redis_url: &str) -> Result<Self> {
         let config = Config::from_url(redis_url).map_err(|e| Error::internal(e.to_string()))?;
 

@@ -16,7 +16,7 @@ $$ LANGUAGE plpgsql;
 -- Table centrale pour la livraison garantie des messages
 CREATE TABLE IF NOT EXISTS outbox_events (
                                              id UUID,
-                                             region_code VARCHAR(10) NOT NULL,
+                                             region VARCHAR(10) NOT NULL,
                                              aggregate_type TEXT NOT NULL,
                                              aggregate_id TEXT NOT NULL,
                                              event_type TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
                                              metadata JSONB,
                                              occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                                              processed_at TIMESTAMPTZ,
-                                             PRIMARY KEY (id, region_code)
+                                             PRIMARY KEY (id, region)
 );
 
 CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed

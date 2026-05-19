@@ -78,7 +78,7 @@ mod tests {
     fn create_dummy_envelope() -> EventEnvelope {
         EventEnvelope {
             id: Uuid::new_v4(),
-            region_code: "EU".to_string(),
+            region: "EU".to_string(),
             aggregate_type: "Test".to_string(),
             aggregate_id: Uuid::new_v4().to_string(),
             event_type: "test.event".to_string(),

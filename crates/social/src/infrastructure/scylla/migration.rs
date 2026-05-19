@@ -1,0 +1,1 @@
+// crates/social/src/infrastructure/scylla/migration.rs

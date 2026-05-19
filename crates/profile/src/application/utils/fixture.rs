@@ -8,7 +8,7 @@ use shared_kernel::context::BaseAppContext;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::messaging::OutboxRepositoryStub;
-use shared_kernel::types::{AccountId, ProfileId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, Region};
 
 // Profile Domain & Application
 use crate::application::context::{ProfileAppContext, ProfileContext};
@@ -44,7 +44,7 @@ impl ProfileTestFixture {
         );
 
         // Configuration par défaut pour les tests
-        let region = RegionCode::default();
+        let region = Region::default();
         let account_id = AccountId::generate(region);
         let profile_id = ProfileId::generate(region);
         let profile_ctx = ProfileContext::new(app_ctx.clone(), Some(profile_id), region);
@@ -119,7 +119,7 @@ impl ProfileTestFixture {
             .clone()
     }
 
-    pub fn region(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         self.profile_ctx.region()
     }
     pub fn profile_repo(&self) -> &ProfileRepositoryStub {

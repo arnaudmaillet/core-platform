@@ -28,7 +28,7 @@ pub struct PostgresAccountRow {
     pub state: PostgresAccountState,
     pub birth_date: Option<NaiveDate>,
     pub locale: String,
-    pub region_code: String,
+    pub region: String,
     pub version: i64,
     pub created_at: DateTime<Utc>,
     pub identity_updated_at: DateTime<Utc>,
@@ -56,10 +56,10 @@ impl PostgresAccountRow {
     pub fn to_domain(self) -> Result<Account> {
         let account_id = AccountId::new(self.account_id);
 
-        if account_id.region().as_static_str() != self.region_code {
+        if account_id.region().as_static_str() != self.region {
             tracing::warn!(
                 account_id = %self.account_id,
-                db_region = %self.region_code,
+                db_region = %self.region,
                 smart_id_region = %account_id.region(),
                 "Data consistency warning: Smart ID region bits mismatch with table regional column"
             );

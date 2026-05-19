@@ -6,5 +6,3 @@ pub mod redis;
 
 #[cfg(feature = "scylla")]
 pub mod scylla;
-
-pub mod cache;

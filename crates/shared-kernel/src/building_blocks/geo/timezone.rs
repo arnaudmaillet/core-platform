@@ -1,7 +1,7 @@
 // crates/shared_kernel/src/domain/value_objects/timezone.rs
 
 use crate::core::{Error, Result, ValueObject};
-use crate::types::RegionCode;
+use crate::types::Region;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -37,7 +37,7 @@ impl Timezone {
         self.0.split('/').next().unwrap_or("UTC")
     }
 
-    pub fn is_compatible_with(&self, region: &RegionCode) -> bool {
+    pub fn is_compatible_with(&self, region: &Region) -> bool {
         match region.as_str() {
             "EU" => self.super_region() == "Europe" || self.super_region() == "Africa",
             "US" | "CA" => self.super_region() == "America",

@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS user_profiles (
     profile_id UUID NOT NULL,
     account_id UUID NOT NULL,
-    region_code VARCHAR(10) NOT NULL,
+    region VARCHAR(10) NOT NULL,
     display_name VARCHAR(50) NOT NULL,
     handle VARCHAR(30) NOT NULL,
     bio VARCHAR(255),
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
 
-    PRIMARY KEY (region_code, profile_id),
+    PRIMARY KEY (region, profile_id),
     CONSTRAINT uq_user_profiles_handle UNIQUE (handle)
     );
 
@@ -33,7 +33,7 @@ CREATE TRIGGER trg_set_timestamp_profiles BEFORE UPDATE ON user_profiles FOR EAC
 -- LOCATIONS (High Frequency Updates)
 -- CREATE TABLE IF NOT EXISTS user_locations (
 --     profile_id UUID NOT NULL,
---     region_code VARCHAR(10) NOT NULL,
+--     region VARCHAR(10) NOT NULL,
 --     coordinates GEOGRAPHY(POINT, 4326) NOT NULL,
 --     accuracy_meters DOUBLE PRECISION,
 --     altitude DOUBLE PRECISION,
@@ -44,7 +44,7 @@ CREATE TRIGGER trg_set_timestamp_profiles BEFORE UPDATE ON user_profiles FOR EAC
 --     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 --     version BIGINT NOT NULL DEFAULT 1,
 
---     PRIMARY KEY (profile_id, region_code)
+--     PRIMARY KEY (profile_id, region)
 --     );
 
 -- CREATE INDEX IF NOT EXISTS idx_user_locations_gist ON user_locations USING GIST (coordinates);

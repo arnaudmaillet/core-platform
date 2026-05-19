@@ -4,11 +4,11 @@ use crate::{entities::Profile, repositories::ProfileRepository, types::Handle};
 use shared_kernel::{
     command::CommandTarget,
     context::BaseAppContext,
-    core::{Error, FakeTransaction, Identifier, Result, Transaction, Versioned},
+    core::{Error, FakeTransaction, Result, Transaction, Versioned},
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
     postgres::PostgresTransaction,
-    types::{ProfileId, RegionCode},
+    types::{ProfileId, Region},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -36,11 +36,11 @@ impl ProfileAppContext {
         }
     }
 
-    pub fn create_context(&self, profile_id: ProfileId, region: RegionCode) -> ProfileContext {
+    pub fn create_context(&self, profile_id: ProfileId, region: Region) -> ProfileContext {
         ProfileContext::new(self.clone(), Some(profile_id), region)
     }
 
-    pub fn create_creation_context(&self, region: RegionCode) -> ProfileContext {
+    pub fn create_creation_context(&self, region: Region) -> ProfileContext {
         ProfileContext::new(self.clone(), None, region)
     }
 
@@ -62,14 +62,14 @@ impl ProfileAppContext {
 pub struct ProfileContext {
     app: ProfileAppContext,
     profile_id: Option<ProfileId>,
-    region: RegionCode,
+    region: Region,
 }
 
 impl ProfileContext {
     pub(crate) fn new(
         app: ProfileAppContext,
         profile_id: Option<ProfileId>,
-        region: RegionCode,
+        region: Region,
     ) -> Self {
         Self {
             app,
@@ -78,7 +78,7 @@ impl ProfileContext {
         }
     }
 
-    pub fn region(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         self.region
     }
     pub fn profile_repo(&self) -> Arc<dyn ProfileRepository> {
@@ -95,7 +95,7 @@ impl ProfileContext {
     pub async fn ensure_creatable(
         &self,
         command_id: Uuid,
-        region: &RegionCode,
+        region: &Region,
         handle: &Handle,
     ) -> Result<bool> {
         if region != &self.region {
@@ -133,7 +133,7 @@ impl ProfileContext {
     }
 
     // --- FLUX DE MODIFICATION ---
-    pub async fn ensure_executable(&self, command_id: Uuid, region: &RegionCode) -> Result<bool> {
+    pub async fn ensure_executable(&self, command_id: Uuid, region: &Region) -> Result<bool> {
         if region != &self.region {
             return Err(Error::validation(
                 "region",
@@ -144,7 +144,7 @@ impl ProfileContext {
         let exists = self
             .app
             .idempotency_repo()
-            .exists(&mut *tx, &command_id)
+            .exists(Some(&mut *tx), &command_id)
             .await?;
         if exists {
             return Ok(false);
@@ -189,7 +189,7 @@ impl ProfileContext {
             if self
                 .app
                 .idempotency_repo()
-                .exists(&mut *tx, &cmd_id)
+                .exists(Some(&mut *tx), &cmd_id)
                 .await?
             {
                 return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
@@ -208,7 +208,10 @@ impl ProfileContext {
         }
 
         if let Some(cmd_id) = command_id {
-            self.app.idempotency_repo().save(&mut *tx, &cmd_id).await?;
+            self.app
+                .idempotency_repo()
+                .save(Some(&mut *tx), &cmd_id)
+                .await?;
         }
 
         tx.commit().await?;
