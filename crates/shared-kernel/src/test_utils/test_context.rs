@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/test_utils/test_context.rs
 
 use crate::test_utils::{
-    KafkaTestContext, PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContextBuilder
+    KafkaTestContext, PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContextBuilder,
 };
 use std::net::SocketAddr;
 use tokio::sync::oneshot;
@@ -20,7 +20,7 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    pub(crate) fn new(
+    pub fn new(
         postgres_ctx: Option<PostgresTestContext>,
         redis_ctx: Option<RedisTestContext>,
         scylla_ctx: Option<ScyllaTestContext>,
@@ -79,6 +79,22 @@ impl TestContext {
 
     pub fn builder() -> TestContextBuilder<()> {
         TestContextBuilder::new()
+    }
+
+    pub fn into_parts(
+        self,
+    ) -> (
+        Option<PostgresTestContext>,
+        Option<RedisTestContext>,
+        Option<ScyllaTestContext>,
+        Option<KafkaTestContext>,
+    ) {
+        (
+            self.postgres_ctx,
+            self.redis_ctx,
+            self.scylla_ctx,
+            self.kafka_ctx,
+        )
     }
 
     /// Arrête proprement toutes les ressources

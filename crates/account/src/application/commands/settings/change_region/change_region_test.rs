@@ -10,14 +10,14 @@ mod tests {
     use crate::repositories::AccountRepository;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
-    use shared_kernel::types::{RegionCode, SubId};
+    use shared_kernel::types::{Region, SubId};
     use uuid::Uuid;
 
     #[tokio::test]
     async fn test_change_region_success() -> Result<()> {
         let f = TestFixture::new();
         let old_id = f.account_id();
-        let new_region = RegionCode::try_new("US")?;
+        let new_region = Region::try_new("US")?;
         let test_sub_id = SubId::try_new("google-oauth2|123456")?;
 
         // 1. Arrange
@@ -118,7 +118,7 @@ mod tests {
         let cmd = ChangeRegionCommand {
             command_id: cmd_id,
             target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
-            new_region: RegionCode::try_new("US")?,
+            new_region: Region::try_new("US")?,
         };
 
         let result = f
@@ -148,7 +148,7 @@ mod tests {
         let cmd = ChangeRegionCommand {
             command_id: Uuid::new_v4(),
             target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
-            new_region: RegionCode::try_new("US")?,
+            new_region: Region::try_new("US")?,
         };
 
         let result = f

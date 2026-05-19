@@ -174,7 +174,7 @@ impl Event for ProfileEvent {
         Cow::Borrowed(s)
     }
 
-    fn region_code(&self) -> &str {
+    fn region(&self) -> &str {
         let account_id = match self {
             Self::ProfileCreated { account_id, .. }
             | Self::HandleChanged { account_id, .. }

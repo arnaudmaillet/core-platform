@@ -13,25 +13,25 @@ spec:
   template:
     spec:
       containers:
-      - name: seed
-        image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
-        env:
-        - name: PGPASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: dev-profile-db-app
-              key: password
-        - name: PGUSER
-          value: "app"
-        command: ["/bin/sh", "-c"]
-        args:
-          - |
-            RAW_DATA=$(cat /test/data.json | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            
-            VALUES=$(echo "$RAW_DATA" | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
-            
-            echo "Inserting values..."
-            psql -h dev-profile-db-rw.default.svc.cluster.local -U app -d profile -c "
-            INSERT INTO user_profiles (id, owner_id, region_code, display_name, handle)
-            VALUES $VALUES ON CONFLICT DO NOTHING;"
+        - name: seed
+          image: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-k6-tests:latest
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dev-profile-db-app
+                  key: password
+            - name: PGUSER
+              value: "app"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              RAW_DATA=$(cat /test/data.json | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+              VALUES=$(echo "$RAW_DATA" | sed "s/.*/('&', gen_random_uuid(), 'eu', 'LoadTestUser', 'handle_test')/" | paste -sd "," -)
+
+              echo "Inserting values..."
+              psql -h dev-profile-db-rw.default.svc.cluster.local -U app -d profile -c "
+              INSERT INTO user_profiles (id, owner_id, region, display_name, handle)
+              VALUES $VALUES ON CONFLICT DO NOTHING;"
       restartPolicy: OnFailure

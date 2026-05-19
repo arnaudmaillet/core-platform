@@ -22,3 +22,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+tracing = { workspace = true }
+fred = { workspace = true }
+tonic = { workspace = true }
+
+async-trait = { workspace = true }
+
+scylla = { workspace = true }
+
+[features]
+test-utils = ["shared-kernel/test-utils"]

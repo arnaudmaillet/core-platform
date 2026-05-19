@@ -20,8 +20,16 @@ impl PostgresIdempotencyRepository {
 
 #[async_trait]
 impl IdempotencyRepository for PostgresIdempotencyRepository {
-    async fn exists(&self, tx: &mut dyn Transaction, command_id: &Uuid) -> Result<bool> {
-        let sqlx_tx = tx.downcast_mut_sqlx()?;
+    async fn exists(
+        &self,
+        tx: Option<&mut (dyn Transaction + '_)>,
+        command_id: &Uuid,
+    ) -> Result<bool> {
+        let tx_ref = tx.ok_or_else(|| {
+            Error::internal("PostgresIdempotencyRepository requires an active transaction context")
+        })?;
+
+        let sqlx_tx = tx_ref.downcast_mut_sqlx()?;
 
         let sql = "SELECT EXISTS(SELECT 1 FROM processed_commands WHERE command_id = $1 AND namespace = $2)";
 
@@ -35,8 +43,13 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
         Ok(row.0)
     }
 
-    async fn save(&self, tx: &mut dyn Transaction, command_id: &Uuid) -> Result<()> {
-        let sqlx_tx = tx.downcast_mut_sqlx()?;
+    async fn save(&self, tx: Option<&mut (dyn Transaction + '_)>, command_id: &Uuid) -> Result<()> {
+        let tx_ref = tx.ok_or_else(|| {
+            Error::internal("PostgresIdempotencyRepository requires an active transaction context")
+        })?;
+
+        let sqlx_tx = tx_ref.downcast_mut_sqlx()?;
+
         let sql = r#"
             INSERT INTO processed_commands (command_id, namespace, occurred_at)
             VALUES ($1, $2, NOW())

@@ -36,7 +36,7 @@ pub struct Profile {
     #[prost(string, tag = "2")]
     pub account_id: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
-    pub region_code: ::prost::alloc::string::String,
+    pub region: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
     pub handle: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]

@@ -6,6 +6,10 @@ use uuid::Uuid;
 
 #[async_trait]
 pub trait IdempotencyRepository: Send + Sync {
-    async fn exists(&self, tx: &mut dyn Transaction, command_id: &Uuid) -> Result<bool>;
-    async fn save(&self, tx: &mut dyn Transaction, command_id: &Uuid) -> Result<()>;
+    async fn exists(
+        &self,
+        tx: Option<&mut (dyn Transaction + '_)>,
+        command_id: &Uuid,
+    ) -> Result<bool>;
+    async fn save(&self, tx: Option<&mut (dyn Transaction + '_)>, command_id: &Uuid) -> Result<()>;
 }

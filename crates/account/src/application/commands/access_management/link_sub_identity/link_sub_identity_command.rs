@@ -3,7 +3,7 @@
 use shared_kernel::{
     command::{CommandTarget, IdentifiableCommand},
     core::{Error, Result},
-    types::{AccountId, RegionCode, SubId},
+    types::{AccountId, Region, SubId},
 };
 use shared_proto::account::v1::LinkSubIdentityRequest;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ impl LinkSubIdentityCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
 

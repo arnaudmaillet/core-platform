@@ -1,5 +1,5 @@
-mod outbox_repository;
-mod idempotency_repository;
+mod outbox;
+mod idempotency;
 
-pub use outbox_repository::PostgresOutboxRepository;
-pub use idempotency_repository::PostgresIdempotencyRepository;
+pub use outbox::PostgresOutboxRepository;
+pub use idempotency::PostgresIdempotencyRepository;

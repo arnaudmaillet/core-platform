@@ -1,14 +1,14 @@
 // crates/profile/src/infrastructure/scylla/repositories/scylla_profile_repository.rs
 
+use crate::repositories::ProfileStatsRepository;
+use crate::value_objects::{ProfileId, ProfileStats};
 use async_trait::async_trait;
 use scylla::client::session::Session;
 use scylla::value::Counter;
+use shared_kernel::core::{DomainError, Result};
 use shared_kernel::domain::Identifier;
 use shared_kernel::types::RegionCode;
-use shared_kernel::core::{DomainError, Result};
 use std::sync::Arc;
-use crate::repositories::ProfileStatsRepository;
-use crate::value_objects::{ProfileId, ProfileStats};
 
 pub struct ScyllaProfileRepository {
     session: Arc<Session>,
@@ -27,10 +27,11 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
         profile_id: &ProfileId,
         region: &RegionCode,
     ) -> Result<Option<ProfileStats>> {
-        let query = "SELECT follower_count, following_count, post_count FROM profile_stats WHERE profile_id = ? AND region_code = ?";
+        let query = "SELECT follower_count, following_count, post_count FROM profile_stats WHERE profile_id = ? AND region = ?";
 
         // Exécuter la requête
-        let result = self.session
+        let result = self
+            .session
             .query_unpaged(query, (profile_id.as_uuid(), region.as_str().to_string()))
             .await
             .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
@@ -41,18 +42,21 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
             .map_err(|e| DomainError::Infrastructure(format!("Result conversion error: {}", e)))?;
 
         // Obtenir un itérateur typé sur les rows
-        let mut rows_iter = rows_result.rows::<(Counter, Counter, Counter)>().map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+        let mut rows_iter = rows_result
+            .rows::<(Counter, Counter, Counter)>()
+            .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
 
         // Prendre la première row
         if let Some(row_result) = rows_iter.next() {
             // 2. On récupère les objets Counter
-            let (followers_cnt, following_cnt, posts_cnt) = row_result.map_err(|e| DomainError::Infrastructure(e.to_string()))?;
+            let (followers_cnt, following_cnt, posts_cnt) =
+                row_result.map_err(|e| DomainError::Infrastructure(e.to_string()))?;
 
             // 3. On extrait la valeur .0 qui est le i64 interne
             let stats = ProfileStats::new(
                 followers_cnt.0.max(0) as u64,
                 following_cnt.0.max(0) as u64,
-                posts_cnt.0.max(0) as u64
+                posts_cnt.0.max(0) as u64,
             );
 
             return Ok(Some(stats));
@@ -73,7 +77,7 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
                      follower_count = follower_count + ?, \
                      following_count = following_count + ?, \
                      post_count = post_count + ? \
-                     WHERE profile_id = ? AND region_code = ?";
+                     WHERE profile_id = ? AND region = ?";
 
         let values = (
             Counter(follower_delta),
@@ -94,7 +98,7 @@ impl ProfileStatsRepository for ScyllaProfileRepository {
     async fn delete(&self, profile_id: &ProfileId, region: &RegionCode) -> Result<()> {
         let prepared = self
             .session
-            .prepare("DELETE FROM profile_stats WHERE profile_id = ? AND region_code = ?")
+            .prepare("DELETE FROM profile_stats WHERE profile_id = ? AND region = ?")
             .await
             .map_err(|e| DomainError::Infrastructure(e.to_string()))?;
 

@@ -10,6 +10,6 @@ pub async fn run_postgres_migrations(pool: &sqlx::PgPool) -> anyhow::Result<()> 
     // 2. On applique les migrations spécifiques au domaine Account
     let schema = include_str!("../../../migrations/postgres/202601020000_account.sql");
     pool.execute(schema).await?;
-    println!("✅ Account domain migrations applied (via include_str)");
+    tracing::info!("Account domain migrations successfully applied via include_str");
     Ok(())
 }

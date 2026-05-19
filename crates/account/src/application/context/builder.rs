@@ -8,13 +8,13 @@ use crate::{
 };
 use shared_kernel::{
     messaging::OutboxRepository,
-    types::{AccountId, RegionCode},
+    types::{AccountId, Region},
 };
 
 pub struct AccountContextBuilder {
     app: Option<AccountAppContext>,
     account_id: Option<AccountId>,
-    region: Option<RegionCode>,
+    region: Option<Region>,
 }
 
 impl AccountContextBuilder {
@@ -30,7 +30,7 @@ impl AccountContextBuilder {
         self.account_id.as_ref()
     }
 
-    pub fn region(&self) -> Option<&RegionCode> {
+    pub fn region(&self) -> Option<&Region> {
         self.region.as_ref()
     }
 
@@ -57,7 +57,7 @@ impl AccountContextBuilder {
         self
     }
 
-    pub fn with_region(mut self, region: RegionCode) -> Self {
+    pub fn with_region(mut self, region: Region) -> Self {
         self.region = Some(region);
         self
     }

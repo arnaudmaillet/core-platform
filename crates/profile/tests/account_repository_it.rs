@@ -13,7 +13,7 @@ use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::{Error, ErrorCode, Identifier, Result, Versioned};
 use shared_kernel::postgres::PostgresTransaction;
 use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
-use shared_kernel::types::{AccountId, ProfileId, RegionCode};
+use shared_kernel::types::{AccountId, ProfileId, Region};
 
 /// Helper pour instancier le repo et les infrastructures de test
 async fn get_test_context() -> (
@@ -37,7 +37,7 @@ async fn get_test_context() -> (
 async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     // --- Arrange ---
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
     let handle = Handle::try_new("alice_rocks")?;
 
     let mut profile = Profile::builder(account_id, handle)?.build()?;
@@ -100,7 +100,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 #[tokio::test]
 async fn test_profile_concurrency_protection_occ() -> Result<()> {
     let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("ConcurrentUser")?)?.build()?;
 
     repo.save(&mut profile, None).await?;
@@ -134,7 +134,7 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 async fn test_profile_cache_logic_integrity() -> Result<()> {
     let (repo, _pg_ctx, redis_ctx) = get_test_context().await;
     let cache = redis_ctx.repository();
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("cache_test")?)?.build()?;
 
     let key = PostgresProfileRepository::cache_key(profile.profile_id(), account_id.region());
@@ -179,7 +179,7 @@ async fn test_profile_cache_logic_integrity() -> Result<()> {
 #[tokio::test]
 async fn test_profile_rollback_works_properly() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("Ghost")?)?.build()?;
 
     let tx_sqlx = pg_ctx
@@ -206,7 +206,7 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
 #[tokio::test]
 async fn test_find_all_by_account_id() -> Result<()> {
     let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
 
     // Utilise "profile_1" (minuscules) pour correspondre à la sortie attendue
     let mut p1 = Profile::builder(account_id, Handle::try_new("profile_1")?)?.build()?;
@@ -227,7 +227,7 @@ async fn test_find_all_by_account_id() -> Result<()> {
 #[tokio::test]
 async fn test_cache_hit_proven_by_db_sabotage() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("alice")?)?.build()?;
 
     repo.save(&mut profile, None).await?;
@@ -270,7 +270,7 @@ async fn test_cache_hit_proven_by_db_sabotage() -> Result<()> {
 #[tokio::test]
 async fn test_profile_rollback_integrity() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(RegionCode::default());
+    let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("ghost")?)?.build()?;
     let profile_id = profile.profile_id();
 
@@ -301,7 +301,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
 #[tokio::test]
 async fn test_profile_partial_data_resilience() -> Result<()> {
     let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let region = RegionCode::try_new("EU")?;
+    let region = Region::try_new("EU")?;
 
     let domain_profile_id = ProfileId::generate(region.clone());
     let domain_account_id = AccountId::generate(region.clone());
@@ -310,7 +310,7 @@ async fn test_profile_partial_data_resilience() -> Result<()> {
     let account_uuid = domain_account_id.uuid();
 
     sqlx::query(
-        r#"INSERT INTO user_profiles (profile_id, account_id, region_code, display_name, handle, is_private, version, created_at, updated_at)
+        r#"INSERT INTO user_profiles (profile_id, account_id, region, display_name, handle, is_private, version, created_at, updated_at)
            VALUES ($1, $2, 'EU', 'Minimalist', 'mini', false, 1, NOW(), NOW())"#
     )
     .bind(profile_uuid)

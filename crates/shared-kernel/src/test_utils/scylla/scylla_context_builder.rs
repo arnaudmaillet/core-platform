@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/scylla/utils/scylla_test_builder.rs
+// crates/shared-kernel/src/test_utils/scylla/scylla_context_builder.rs
 use crate::{scylla::ScyllaConfig, test_utils::ScyllaTestContext};
 
 pub struct ScyllaTestContextBuilder {

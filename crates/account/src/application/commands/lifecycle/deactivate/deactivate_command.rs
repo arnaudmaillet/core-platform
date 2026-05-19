@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{AccountId, AuditReason, RegionCode};
+use shared_kernel::types::{AccountId, AuditReason, Region};
 use shared_proto::account::v1::DeactivateRequest;
 use uuid::Uuid;
 
@@ -43,7 +43,7 @@ impl DeactivateCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
 

@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     core::{Entity, Result},
-    types::{AccountId, Email, PhoneNumber, RegionCode, SubId},
+    types::{AccountId, Email, PhoneNumber, Region, SubId},
 };
 
 use crate::domain::{
@@ -70,7 +70,7 @@ impl AccountIdentity {
     pub fn account_id(&self) -> AccountId {
         self.account_id
     }
-    pub fn region_code(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         self.account_id.region()
     }
     pub fn sub_id(&self) -> Option<&SubId> {
@@ -105,8 +105,8 @@ impl AccountIdentity {
     // MUTATIONS INTERNES (pub(crate))
     // ==========================================
 
-    pub(crate) fn apply_region_change(&mut self, new_region: RegionCode) -> Result<bool> {
-        if self.region_code() == new_region {
+    pub(crate) fn apply_region_change(&mut self, new_region: Region) -> Result<bool> {
+        if self.region() == new_region {
             return Ok(false);
         }
 

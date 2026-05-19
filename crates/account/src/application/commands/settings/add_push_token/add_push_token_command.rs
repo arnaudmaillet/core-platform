@@ -2,7 +2,7 @@ use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 // crates/account/src/application/add_push_token/add_push_token_command.rs
 use shared_kernel::core::{Error, Result};
 use shared_kernel::security::PushToken;
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, Region};
 use shared_proto::account::v1::AddPushTokenRequest;
 use uuid::Uuid;
 
@@ -38,7 +38,7 @@ impl AddPushTokenCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
 

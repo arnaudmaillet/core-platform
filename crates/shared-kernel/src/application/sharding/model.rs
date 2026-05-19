@@ -1,12 +1,12 @@
 // crates/account/src/infrastructure/sharding/models.rs
 
 use crate::cache::CacheRepository;
-use crate::types::RegionCode;
+use crate::types::Region;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ShardNode {
-    pub region: RegionCode,
+    pub region: Region,
     pub shard_id: u16,
     pub storage: Arc<ShardStorage>,
 }

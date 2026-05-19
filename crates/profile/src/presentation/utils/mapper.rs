@@ -18,7 +18,7 @@ pub fn map_profile_to_proto(profile: Profile) -> ProfileProto {
         banner_url: profile.banner().map(|u| u.to_string()),
         socials: profile.socials().map(map_social_links_to_proto),
         version: profile.version(),
-        region_code: profile.account_id().region().to_string(),
+        region: profile.account_id().region().to_string(),
         created_at: Some(to_proto_timestamp(profile.created_at())),
         updated_at: Some(to_proto_timestamp(profile.updated_at())),
     }

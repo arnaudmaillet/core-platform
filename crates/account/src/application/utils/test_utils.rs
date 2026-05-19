@@ -9,7 +9,7 @@ use shared_kernel::context::BaseAppContext;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::messaging::OutboxRepositoryStub;
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, Region};
 
 // Account Domain & Application
 // Note : Importation directe depuis application::context (structure plate)
@@ -59,7 +59,7 @@ impl TestFixture {
             idempotency_repo.clone(),
         );
 
-        let default_region = RegionCode::default();
+        let default_region = Region::default();
         let account_id = AccountId::generate(default_region);
         let account_ctx = AccountContext::new(app_ctx.clone(), Some(account_id), default_region);
 
@@ -147,7 +147,7 @@ impl TestFixture {
             .clone()
     }
 
-    pub fn region(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         self.account_ctx.region()
     }
 
@@ -171,7 +171,7 @@ impl TestFixture {
         self.account_builder_for(self.region())
     }
 
-    pub fn account_builder_for(&self, region: RegionCode) -> Result<AccountBuilder> {
+    pub fn account_builder_for(&self, region: Region) -> Result<AccountBuilder> {
         Ok(Account::builder(
             self.account_id(),
             RegistrationIdentifier::try_from_email("test@example.com")?,

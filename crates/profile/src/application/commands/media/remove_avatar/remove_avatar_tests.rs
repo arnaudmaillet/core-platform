@@ -34,7 +34,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             // On vérifie que l'avatar est bien devenu None
             assert!(p.avatar().is_none());
             assert_eq!(p.version(), version_snapshot + 1);

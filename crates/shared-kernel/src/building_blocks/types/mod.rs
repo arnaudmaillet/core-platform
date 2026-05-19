@@ -1,26 +1,24 @@
 mod account_id;
-mod profile_id;
 mod audit_reason;
 mod counter;
 mod email;
 mod phone_number;
 mod post_id;
 mod profile_id;
-mod region_code;
+mod region;
 mod slug;
 mod sub_id;
 mod url;
 mod username;
 
 pub use account_id::AccountId;
-pub use profile_id::ProfileId;
 pub use audit_reason::AuditReason;
 pub use counter::Counter;
 pub use email::Email;
 pub use phone_number::PhoneNumber;
 pub use post_id::PostId;
 pub use profile_id::ProfileId;
-pub use region_code::RegionCode;
+pub use region::{Region, RegionCode};
 pub use slug::Slug;
 pub use sub_id::SubId;
 pub use url::Url;

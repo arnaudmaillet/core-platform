@@ -4,73 +4,16 @@ use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator, TokenValidat
 use profile::ProfileServiceBuilder;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
 use profile::test_utils::ProfileTestContext;
-use profile::types::ProfileId;
-use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::{Identifier, Result};
-use shared_kernel::test_utils::E2EServerStarter;
-use shared_kernel::types::AccountId;
+use shared_kernel::types::{AccountId, ProfileId};
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataServiceServer;
 use shared_proto::profile::v1::{ChangeHandleRequest, ProfileTarget};
-use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::oneshot;
-use tonic::async_trait;
 use tonic::transport::Server;
 use tonic::{Request, metadata::MetadataValue};
-
-struct ProfileServerStarter;
-
-#[async_trait]
-impl E2EServerStarter for ProfileServerStarter {
-    async fn start_server(
-        &self,
-        pg_pool: sqlx::PgPool,
-        redis_repo: Arc<dyn CacheRepository>,
-        addr: SocketAddr,
-        shutdown_rx: oneshot::Receiver<()>,
-    ) {
-        // 1. Setup Auth (comme dans main.rs mais via Keycloak de test)
-        let auth_ctx = KeycloakTestContext::restore("master").await;
-        let validator = Arc::new(
-            KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
-                .await
-                .unwrap(),
-        );
-        let interceptor = AuthInterceptor::new(validator);
-
-        // 2. Setup Domaine
-        let builder = ProfileServiceBuilder::new(pg_pool, redis_repo);
-        let app_ctx = builder.build_context();
-        let bus = builder.build_command_bus();
-
-        let identity_svc = ProfileIdentityService::new(bus.clone(), app_ctx.clone());
-        let media_svc = ProfileMediaService::new(bus.clone(), app_ctx.clone());
-        let metadata_svc = ProfileMetadataService::new(bus, app_ctx);
-
-        // 3. Serveur gRPC
-        Server::builder()
-            .add_service(ProfileIdentityServiceServer::with_interceptor(
-                identity_svc,
-                interceptor.clone(),
-            ))
-            .add_service(ProfileMediaServiceServer::with_interceptor(
-                media_svc,
-                interceptor.clone(),
-            ))
-            .add_service(ProfileMetadataServiceServer::with_interceptor(
-                metadata_svc,
-                interceptor,
-            ))
-            .serve_with_shutdown(addr, async {
-                shutdown_rx.await.ok();
-            })
-            .await
-            .unwrap();
-    }
-}
 
 // Helper Auth
 fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
@@ -89,7 +32,47 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     // 1. SETUP INFRA
     let ctx = ProfileTestContext::builder()
-        .with_server(ProfileServerStarter)
+        .with_server(|pg_pool, redis_repo, _kafka, addr, shutdown_rx, ready_tx| {
+            // 💡 Ajout de ready_tx
+            async move {
+                let auth_ctx = KeycloakTestContext::restore("master").await;
+                let validator = Arc::new(
+                    KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
+                        .await
+                        .unwrap(),
+                );
+                let interceptor = AuthInterceptor::new(validator);
+
+                let builder = ProfileServiceBuilder::new(pg_pool, redis_repo);
+                let app_ctx = builder.build_context();
+                let bus = builder.build_command_bus();
+
+                let identity_svc = ProfileIdentityService::new(bus.clone(), app_ctx.clone());
+                let media_svc = ProfileMediaService::new(bus.clone(), app_ctx.clone());
+                let metadata_svc = ProfileMetadataService::new(bus, app_ctx);
+
+                ready_tx.send(()).ok();
+
+                Server::builder()
+                    .add_service(ProfileIdentityServiceServer::with_interceptor(
+                        identity_svc,
+                        interceptor.clone(),
+                    ))
+                    .add_service(ProfileMediaServiceServer::with_interceptor(
+                        media_svc,
+                        interceptor.clone(),
+                    ))
+                    .add_service(ProfileMetadataServiceServer::with_interceptor(
+                        metadata_svc,
+                        interceptor,
+                    ))
+                    .serve_with_shutdown(addr, async {
+                        shutdown_rx.await.ok();
+                    })
+                    .await
+                    .unwrap();
+            }
+        })
         .build_e2e()
         .await;
 
@@ -107,7 +90,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
         .expect("Token must be valid");
 
     let region_str = "EU";
-    let region = shared_kernel::types::RegionCode::try_new(region_str)?;
+    let region = shared_kernel::types::Region::try_new(region_str)?;
 
     let real_profile_id = ProfileId::generate(region);
     let real_account_id = AccountId::generate(region);
@@ -117,7 +100,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
 
     // 3. PRÉPARATION : Simulation d'un profil existant (v0) avec des Smart IDs conformes
     sqlx::query(
-        "INSERT INTO user_profiles (profile_id, account_id, region_code, handle, display_name, version, is_private, created_at, updated_at) 
+        "INSERT INTO user_profiles (profile_id, account_id, region, handle, display_name, version, is_private, created_at, updated_at) 
          VALUES ($1, $2, $3, $4, $5, 0, false, NOW(), NOW())"
     )
     .bind(profile_uuid)     // $1
@@ -160,7 +143,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
 
     // 6. VÉRIFICATIONS FINALES EN DB
     let row: (String, i64) = sqlx::query_as(
-        "SELECT handle, version FROM user_profiles WHERE profile_id = $1 AND region_code = $2",
+        "SELECT handle, version FROM user_profiles WHERE profile_id = $1 AND region = $2",
     )
     .bind(profile_uuid)
     .bind(region_str)

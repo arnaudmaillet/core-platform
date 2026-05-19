@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::core::{Error, Identifier, Result, ValueObject};
-use crate::types::RegionCode;
+use crate::types::Region;
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -15,7 +15,7 @@ pub struct ProfileId(Uuid);
 
 impl ProfileId {
     /// Génère un nouvel identifiant unique (UUID v7) en y injectant dynamiquement la région.
-    pub fn generate(region: RegionCode) -> Self {
+    pub fn generate(region: Region) -> Self {
         // 1. Génération d'un UUID v7 standard (contient le timestamp actuel)
         let mut bytes = Uuid::now_v7().into_bytes();
 
@@ -37,19 +37,19 @@ impl ProfileId {
 
     /// Extrait le RegionCode depuis les bits de l'UUID.
     /// Panique uniquement si l'ID est structurellement corrompu (impossible si généré via le domaine).
-    pub fn region(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         let bytes = self.0.into_bytes();
 
         // Extraction et conversion sécurisée des octets 8 et 9
         let region_str = std::str::from_utf8(&bytes[8..10])
             .expect("ProfileId bytes 8..10 are corrupted or not valid UTF-8");
 
-        RegionCode::try_new(region_str)
+        Region::try_new(region_str)
             .expect("ProfileId contains an unmapped or invalid RegionCode")
     }
 
     /// Helper pour obtenir directement la chaîne de caractères statique de la région.
-    /// Idéal pour alimenter la méthode `region_code(&self)` de ton infrastructure d'événements.
+    /// Idéal pour alimenter la méthode `region(&self)` de ton infrastructure d'événements.
     pub fn region_str(&self) -> &'static str {
         self.region().as_static_str()
     }
@@ -81,7 +81,7 @@ impl ValueObject for ProfileId {
         let region_str = std::str::from_utf8(&bytes[8..10])
             .map_err(|_| Error::validation("profile_id", "Invalid UTF-8 in region bytes"))?;
 
-        RegionCode::try_new(region_str).map_err(|e| {
+        Region::try_new(region_str).map_err(|e| {
             Error::validation("profile_id", format!("Invalid region code in ID: {}", e))
         })?;
 
@@ -92,7 +92,7 @@ impl ValueObject for ProfileId {
 impl Default for ProfileId {
     /// Par défaut, génère un profil sur la région historique de référence
     fn default() -> Self {
-        Self::generate(RegionCode::default())
+        Self::generate(Region::default())
     }
 }
 

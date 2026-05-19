@@ -3,7 +3,7 @@
 use crate::application::context::{ProfileAppContext, ProfileContext};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
-use shared_kernel::types::{ProfileId, RegionCode};
+use shared_kernel::types::{ProfileId, Region};
 use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]
@@ -26,7 +26,7 @@ pub trait GrpcServiceUtils {
         extensions: &tonic::Extensions,
     ) -> Result<ProfileContext, Status> {
         let region = extensions
-            .get::<RegionCode>()
+            .get::<Region>()
             .cloned()
             .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))?;
         Ok(self.app_ctx().create_context(profile_id, region))
@@ -51,10 +51,10 @@ pub trait GrpcServiceUtils {
     }
 
     /// Helper privé pour factoriser l'extraction de la région depuis les extensions de la requête
-    fn extract_region<T>(&self, request: &Request<T>) -> Result<RegionCode, Status> {
+    fn extract_region<T>(&self, request: &Request<T>) -> Result<Region, Status> {
         request
             .extensions()
-            .get::<RegionCode>()
+            .get::<Region>()
             .cloned()
             .ok_or_else(|| Status::unauthenticated("Missing region context in request extensions"))
     }

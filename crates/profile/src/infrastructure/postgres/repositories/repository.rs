@@ -7,7 +7,7 @@ use crate::types::{Handle};
 use async_trait::async_trait;
 use shared_kernel::cache::{CacheRepository, CacheRepositoryExt};
 use shared_kernel::core::{AggregateRoot, Error, Identifier, Result, Transaction, Versioned};
-use shared_kernel::types::{AccountId, RegionCode, ProfileId};
+use shared_kernel::types::{AccountId, Region, ProfileId};
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ impl PostgresProfileRepository {
         Self { pool, cache }
     }
 
-    pub fn cache_key(profile_id: ProfileId, region: RegionCode) -> String {
+    pub fn cache_key(profile_id: ProfileId, region: Region) -> String {
         format!(
             "profile:aggregate:{}:{}",
             region.as_str(),
@@ -44,10 +44,10 @@ impl ProfileRepository for PostgresProfileRepository {
         Box::pin(async move {
             // 2. ÉVALUATION DE L'IDEMPOTENCE
             let current_db_v: Option<i64> = sqlx::query_scalar(
-                "SELECT version FROM user_profiles WHERE profile_id = $1 AND region_code = $2 FOR UPDATE"
+                "SELECT version FROM user_profiles WHERE profile_id = $1 AND region = $2 FOR UPDATE"
             )
             .bind(row.profile_id)
-            .bind(&row.region_code)
+            .bind(&row.region)
             .fetch_optional(&mut *conn)
             .await
             .map_err(|e| Error::database(format!("Profile save repository: {}", e.to_string())))?;
@@ -83,7 +83,7 @@ impl ProfileRepository for PostgresProfileRepository {
                                updated_at = $9, 
                                version = $10
                            WHERE profile_id = $11 
-                             AND region_code = $12 
+                             AND region = $12 
                              AND version = $13"# // 💡 FIX : Ordre strict $11, $12, $13
                     )
                     .bind(&row.display_name)   // $1
@@ -97,7 +97,7 @@ impl ProfileRepository for PostgresProfileRepository {
                     .bind(row.updated_at)      // $9
                     .bind(next_version)        // $10
                     .bind(row.profile_id)      // $11
-                    .bind(&row.region_code)    // $12
+                    .bind(&row.region)    // $12
                     .bind(v)                   // $13 (L'ancienne version lue sous verrou)
                     .execute(&mut *conn)
                     .await
@@ -106,10 +106,10 @@ impl ProfileRepository for PostgresProfileRepository {
                 None => {
                     // --- MODE INSERT ---
                     sqlx::query(
-                        r#"INSERT INTO user_profiles (profile_id, account_id, region_code, display_name, handle, bio, avatar_url, banner_url, location_label, social_links, is_private, version, created_at, updated_at)
+                        r#"INSERT INTO user_profiles (profile_id, account_id, region, display_name, handle, bio, avatar_url, banner_url, location_label, social_links, is_private, version, created_at, updated_at)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#,
                     )
-                    .bind(row.profile_id).bind(row.account_id).bind(&row.region_code).bind(&row.display_name).bind(&row.handle).bind(&row.bio).bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label).bind(&row.social_links).bind(row.is_private).bind(next_version).bind(row.created_at).bind(row.updated_at)
+                    .bind(row.profile_id).bind(row.account_id).bind(&row.region).bind(&row.display_name).bind(&row.handle).bind(&row.bio).bind(&row.avatar_url).bind(&row.banner_url).bind(&row.location_label).bind(&row.social_links).bind(row.is_private).bind(next_version).bind(row.created_at).bind(row.updated_at)
                     .execute(&mut *conn)
                     .await
                     .map_err(|e| Error::database(format!("Profile insert failed: {}", e.to_string())))?;
@@ -134,7 +134,7 @@ impl ProfileRepository for PostgresProfileRepository {
     async fn find_by_id(
         &self,
         id: ProfileId,
-        region: RegionCode,
+        region: Region,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let pid = id.as_uuid();
@@ -160,7 +160,7 @@ impl ProfileRepository for PostgresProfileRepository {
             let r_str = region.as_str().to_string();
             Box::pin(async move {
                 let row_opt = sqlx::query_as::<_, PostgresProfileRow>(
-                    "SELECT * FROM user_profiles WHERE profile_id = $1 AND region_code = $2",
+                    "SELECT * FROM user_profiles WHERE profile_id = $1 AND region = $2",
                 )
                 .bind(uid)
                 .bind(r_str)
@@ -198,7 +198,7 @@ impl ProfileRepository for PostgresProfileRepository {
     async fn find_by_handle(
         &self,
         handle: &Handle,
-        region: RegionCode,
+        region: Region,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let handle_str = handle.as_str().to_string();
@@ -208,7 +208,7 @@ impl ProfileRepository for PostgresProfileRepository {
             let h = handle_str.clone();
             let r = region_str.clone();
             Box::pin(async move {
-                let sql = "SELECT * FROM user_profiles WHERE handle = $1 AND region_code = $2";
+                let sql = "SELECT * FROM user_profiles WHERE handle = $1 AND region = $2";
                 let row_opt = sqlx::query_as::<_, PostgresProfileRow>(sql)
                     .bind(h)
                     .bind(r)
@@ -239,7 +239,7 @@ impl ProfileRepository for PostgresProfileRepository {
         let u = uid;
         let r = r_str.clone();
         Box::pin(async move {
-            let sql = "SELECT * FROM user_profiles WHERE account_id = $1 AND region_code = $2 ORDER BY created_at DESC";
+            let sql = "SELECT * FROM user_profiles WHERE account_id = $1 AND region = $2 ORDER BY created_at DESC";
             let rows = sqlx::query_as::<_, PostgresProfileRow>(sql)
                 .bind(u)
                 .bind(r)
@@ -255,7 +255,7 @@ impl ProfileRepository for PostgresProfileRepository {
     async fn delete(
         &self,
         id: ProfileId,
-        region: RegionCode,
+        region: Region,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let key = Self::cache_key(id, region);
@@ -266,7 +266,7 @@ impl ProfileRepository for PostgresProfileRepository {
             let u = uid;
             let r = r_str.clone();
             Box::pin(async move {
-                sqlx::query("DELETE FROM user_profiles WHERE profile_id = $1 AND region_code = $2")
+                sqlx::query("DELETE FROM user_profiles WHERE profile_id = $1 AND region = $2")
                     .bind(u)
                     .bind(r)
                     .execute(conn)
@@ -288,12 +288,12 @@ impl ProfileRepository for PostgresProfileRepository {
         Ok(())
     }
 
-    async fn exists(&self, profile_id: ProfileId, region: RegionCode) -> Result<bool> {
+    async fn exists(&self, profile_id: ProfileId, region: Region) -> Result<bool> {
         let uid = profile_id.as_uuid();
         let r_str = region.as_str().to_string();
 
         let exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE profile_id = $1 AND region_code = $2)",
+            "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE profile_id = $1 AND region = $2)",
         )
         .bind(uid)
         .bind(r_str)
@@ -304,12 +304,12 @@ impl ProfileRepository for PostgresProfileRepository {
         Ok(exists)
     }
 
-    async fn exists_by_handle(&self, handle: &Handle, region: RegionCode) -> Result<bool> {
+    async fn exists_by_handle(&self, handle: &Handle, region: Region) -> Result<bool> {
         let h_str = handle.as_str().to_string();
         let r_str = region.as_str().to_string();
 
         let exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE handle = $1 AND region_code = $2)",
+            "SELECT EXISTS(SELECT 1 FROM user_profiles WHERE handle = $1 AND region = $2)",
         )
         .bind(h_str)
         .bind(r_str)

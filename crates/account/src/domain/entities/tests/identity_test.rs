@@ -2,7 +2,7 @@
 mod tests {
     use shared_kernel::{
         core::{AggregateMetadata, AggregateRoot, Result, Versioned},
-        types::{AccountId, AuditReason, Email, RegionCode},
+        types::{AccountId, AuditReason, Email, Region},
     };
 
     use crate::domain::{
@@ -11,7 +11,7 @@ mod tests {
     };
 
     fn create_test_account() -> Account {
-        let account_id: AccountId = AccountId::generate(RegionCode::default());
+        let account_id: AccountId = AccountId::generate(Region::default());
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@example.com").unwrap());
 

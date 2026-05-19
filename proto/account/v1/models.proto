@@ -22,7 +22,7 @@ message QueryMetadata {
 
 message AccountIdentity {
   string account_id = 1;
-  string region_code = 2;
+  string region = 2;
   optional string sub_id = 3;
   string email = 4;
   google.protobuf.StringValue phone_number = 5;

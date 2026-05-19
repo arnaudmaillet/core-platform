@@ -16,7 +16,7 @@ service AccountAccessService {
 
 message RegisterRequest {
   string command_id = 1;
-  string region_code = 2;
+  string region = 2;
   optional string sub_id = 3;
   RegistrationIdentifier identifier = 4;
   string locale = 5;

@@ -29,7 +29,7 @@ impl OutboxStore for PostgresOutboxRepository {
             .map_err(|e| Error::database(format!("Outbox tx begin failed: {}", e)))?;
 
         let sql = r#"
-            SELECT id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
+            SELECT id, region, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
             FROM outbox_events
             WHERE status = 'PENDING'
             ORDER BY occurred_at ASC
@@ -102,12 +102,12 @@ impl OutboxRepository for PostgresOutboxRepository {
             events.iter().map(|e| EventEnvelope::wrap(*e)).collect();
 
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
-            "INSERT INTO outbox_events (id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at) ",
+            "INSERT INTO outbox_events (id, region, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at) ",
         );
 
         query_builder.push_values(envelopes, |mut b, env| {
             b.push_bind(env.id)
-                .push_bind(env.region_code)
+                .push_bind(env.region)
                 .push_bind(env.aggregate_type)
                 .push_bind(env.aggregate_id)
                 .push_bind(env.event_type)
@@ -127,7 +127,7 @@ impl OutboxRepository for PostgresOutboxRepository {
 
     async fn find_pending(&self, limit: i32) -> Result<Vec<EventEnvelope>> {
         let sql = r#"
-            SELECT id, region_code, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
+            SELECT id, region, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at
             FROM outbox_events
             WHERE status = 'PENDING'
             ORDER BY occurred_at ASC

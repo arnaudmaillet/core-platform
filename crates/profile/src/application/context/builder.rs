@@ -2,13 +2,13 @@
 
 use crate::application::context::{ProfileAppContext, ProfileContext};
 use crate::repositories::ProfileRepository;
-use shared_kernel::types::{ProfileId, RegionCode};
+use shared_kernel::types::{ProfileId, Region};
 use std::sync::Arc;
 
 pub struct ProfileContextBuilder {
     app: Option<ProfileAppContext>,
     profile_id: Option<ProfileId>,
-    region: Option<RegionCode>,
+    region: Option<Region>,
 }
 
 impl ProfileContextBuilder {
@@ -30,7 +30,7 @@ impl ProfileContextBuilder {
         self
     }
 
-    pub fn with_region(mut self, region: RegionCode) -> Self {
+    pub fn with_region(mut self, region: Region) -> Self {
         self.region = Some(region);
         self
     }
@@ -39,7 +39,7 @@ impl ProfileContextBuilder {
         self.profile_id.as_ref()
     }
 
-    pub fn region(&self) -> Option<&RegionCode> {
+    pub fn region(&self) -> Option<&Region> {
         self.region.as_ref()
     }
 

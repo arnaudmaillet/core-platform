@@ -6,7 +6,7 @@ use shared_kernel::{
     core::{Entity, Error, Result},
     geo::Timezone,
     security::PushToken,
-    types::{AccountId, RegionCode},
+    types::{AccountId, Region},
 };
 
 use crate::{
@@ -123,7 +123,7 @@ impl AccountSettings {
     pub(crate) fn apply_timezone_update(
         &mut self,
         new_tz: Timezone,
-        region: &RegionCode,
+        region: &Region,
     ) -> Result<bool> {
         if self.timezone == new_tz {
             return Ok(false);

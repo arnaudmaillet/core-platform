@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/building_blocks/types/region_code.rs
+// crates/shared-kernel/src/building_blocks/types/region.rs
 
 use crate::core::{Error, Result, ValueObject};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 /// Énumération stricte des régions physiques de l'infrastructure (Shards globaux).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum Region {
+pub enum RegionCode {
     EU,
     US,
     ASIA,
@@ -15,21 +15,21 @@ pub enum Region {
 
 /// Value Object encapsulant la région.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct RegionCode(Region);
+pub struct Region(RegionCode);
 
-impl RegionCode {
+impl Region {
     /// Constructeur sécurisé depuis n'importe quelle chaîne textuelle.
     /// Gère la normalisation (majuscules, espaces).
     pub fn try_new(code: impl AsRef<str>) -> Result<Self> {
         let normalized = code.as_ref().trim().to_uppercase();
 
         let region = match normalized.as_str() {
-            "EU" => Region::EU,
-            "US" => Region::US,
-            "ASIA" => Region::ASIA,
+            "EU" => RegionCode::EU,
+            "US" => RegionCode::US,
+            "ASIA" => RegionCode::ASIA,
             _ => {
                 return Err(Error::validation(
-                    "region_code",
+                    "region",
                     format!(
                         "Region '{}' is not supported. Valid regions: EU, US, ASIA",
                         normalized
@@ -41,11 +41,11 @@ impl RegionCode {
         Ok(Self(region))
     }
 
-    pub fn from_raw(region: Region) -> Self {
+    pub fn from_raw(region: RegionCode) -> Self {
         Self(region)
     }
 
-    pub fn inner(&self) -> Region {
+    pub fn inner(&self) -> RegionCode {
         self.0
     }
 
@@ -59,30 +59,30 @@ impl RegionCode {
     /// Résout à 100% les bugs de lifetimes dans les architectures d'événements.
     pub fn as_static_str(&self) -> &'static str {
         match self.0 {
-            Region::EU => "EU",
-            Region::US => "US",
-            Region::ASIA => "ASIA",
+            RegionCode::EU => "EU",
+            RegionCode::US => "US",
+            RegionCode::ASIA => "ASIA",
         }
     }
 }
 
-impl ValueObject for RegionCode {
+impl ValueObject for Region {
     /// Toujours valide par construction grâce au typage de l'enum Rust.
     fn validate(&self) -> Result<()> {
         Ok(())
     }
 }
 
-impl Default for RegionCode {
+impl Default for Region {
     /// Région historique / Shard principal par défaut
     fn default() -> Self {
-        Self(Region::EU)
+        Self(RegionCode::EU)
     }
 }
 
 // --- CONVERSIONS POUR LE FRAMEWORK ---
 
-impl FromStr for RegionCode {
+impl FromStr for Region {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
@@ -90,7 +90,7 @@ impl FromStr for RegionCode {
     }
 }
 
-impl TryFrom<String> for RegionCode {
+impl TryFrom<String> for Region {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
@@ -98,7 +98,7 @@ impl TryFrom<String> for RegionCode {
     }
 }
 
-impl TryFrom<&str> for RegionCode {
+impl TryFrom<&str> for Region {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self> {
@@ -106,7 +106,7 @@ impl TryFrom<&str> for RegionCode {
     }
 }
 
-impl fmt::Display for RegionCode {
+impl fmt::Display for Region {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_static_str())
     }

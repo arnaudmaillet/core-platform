@@ -1,3 +1,5 @@
-mod repository;
+mod cache;
+mod idempotency;
 
-pub use repository::RedisCacheRepository;
+pub use cache::RedisCacheRepository;
+pub use idempotency::RedisIdempotencyRepository;

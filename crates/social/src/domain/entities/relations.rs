@@ -1,10 +1,12 @@
-use crate::events::SocialDomainEvent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{AggregateMetadata, AggregateRoot, Entity, Result, Versioned};
 use shared_kernel::messaging::{Event, EventEmitter, OperationTracker};
 use shared_kernel::types::ProfileId;
 use uuid::Uuid;
+
+use crate::entities::FollowRelationBuilder;
+use crate::events::SocialEvent;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FollowRelation {
@@ -70,13 +72,8 @@ impl Entity for FollowRelation {
 }
 
 impl FollowRelation {
-    pub fn new(follower_id: ProfileId, following_id: ProfileId) -> Self {
-        FollowRelation {
-            follower_id,
-            following_id,
-            created_at: Utc::now(),
-            metadata: AggregateMetadata::default(),
-        }
+    pub fn builder(follower_id: ProfileId, following_id: ProfileId) -> FollowRelationBuilder {
+        FollowRelationBuilder::new(follower_id, following_id)
     }
 
     pub fn restore(
@@ -105,6 +102,9 @@ impl FollowRelation {
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        Versioned::updated_at(self)
+    }
 
     // --- MUTATEURS MÉTIERS ---
 
@@ -113,10 +113,11 @@ impl FollowRelation {
         self.track_change(
             |_s| Ok(true),
             |s| {
-                Box::new(SocialDomainEvent::UserFollowed {
+                Box::new(SocialEvent::ProfileFollowed {
+                    id: Uuid::now_v7(),
                     follower_id: s.follower_id,
                     following_id: s.following_id,
-                    followed_at: s.updated_at(),
+                    occurred_at: s.updated_at(),
                 })
             },
         )
@@ -127,10 +128,11 @@ impl FollowRelation {
         self.track_change(
             |_s| Ok(true),
             |s| {
-                Box::new(SocialDomainEvent::UserUnfollowed {
+                Box::new(SocialEvent::ProfileUnfollowed {
+                    id: Uuid::now_v7(),
                     follower_id: s.follower_id,
                     following_id: s.following_id,
-                    unfollowed_at: s.updated_at(),
+                    occurred_at: s.updated_at(),
                 })
             },
         )

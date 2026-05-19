@@ -3,7 +3,7 @@
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{ProfileId, RegionCode};
+use shared_kernel::types::{ProfileId, Region};
 use shared_proto::profile::v1::UpdatePrivacyRequest;
 use uuid::Uuid;
 
@@ -39,7 +39,7 @@ impl UpdatePrivacyCommand {
 
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
 

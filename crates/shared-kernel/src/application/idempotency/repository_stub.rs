@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 #[derive(Default)]
 pub struct IdempotencyRepositoryStub {
-    // On utilise un HashSet pour simuler la table unique en DB
     processed_ids: Mutex<HashSet<Uuid>>,
     error_to_return: Mutex<Option<Error>>,
 }
@@ -19,7 +18,6 @@ impl IdempotencyRepositoryStub {
         Self::default()
     }
 
-    /// Simule le fait qu'une commande a déjà été traitée (pour tester le rejet)
     pub fn seed(&self, command_id: Uuid) {
         let mut ids = self.processed_ids.lock().expect("Lock failed");
         ids.insert(command_id);
@@ -40,13 +38,21 @@ impl IdempotencyRepositoryStub {
 
 #[async_trait]
 impl IdempotencyRepository for IdempotencyRepositoryStub {
-    async fn exists(&self, _tx: &mut dyn Transaction, command_id: &Uuid) -> Result<bool> {
+    async fn exists(
+        &self,
+        _tx: Option<&mut (dyn Transaction + '_)>,
+        command_id: &Uuid,
+    ) -> Result<bool> {
         self.check_error()?;
         let ids = self.processed_ids.lock().expect("Lock failed");
         Ok(ids.contains(command_id))
     }
 
-    async fn save(&self, _tx: &mut dyn Transaction, command_id: &Uuid) -> Result<()> {
+    async fn save(
+        &self,
+        _tx: Option<&mut (dyn Transaction + '_)>,
+        command_id: &Uuid,
+    ) -> Result<()> {
         self.check_error()?;
         let mut ids = self.processed_ids.lock().expect("Lock failed");
         ids.insert(*command_id);

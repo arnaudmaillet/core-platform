@@ -38,7 +38,7 @@
 //   // Filtres avancés (Hyperscale ready)
 //   repeated string tags = 4;
 //   optional bool include_private = 5;
-//   optional string region_code = 6;
+//   optional string region = 6;
 // }
 
 // // ==========================================

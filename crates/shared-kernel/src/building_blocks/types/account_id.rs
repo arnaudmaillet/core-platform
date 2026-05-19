@@ -1,7 +1,7 @@
 // crates/shared-kernel/src/building_blocks/types/account_id.rs
 
 use crate::core::{Error, Identifier, Result, ValueObject};
-use crate::types::RegionCode;
+use crate::types::Region;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -19,7 +19,7 @@ impl AccountId {
     }
 
     /// Génère un nouvel AccountId (UUID v7) en y injectant dynamiquement la région
-    pub fn generate(region: RegionCode) -> Self {
+    pub fn generate(region: Region) -> Self {
         // 1. Génération d'un UUID v7 standard (contient le timestamp actuel)
         let mut bytes = Uuid::now_v7().into_bytes();
 
@@ -41,7 +41,7 @@ impl AccountId {
     }
 
     /// Extrait instantanément le RegionCode depuis les bits de l'UUID
-    pub fn region(&self) -> RegionCode {
+    pub fn region(&self) -> Region {
         let bytes = self.0.into_bytes();
 
         // 1. Extraction et conversion des octets 8 et 9 en chaîne
@@ -49,13 +49,13 @@ impl AccountId {
             .expect("AccountId bytes 8..10 are corrupted or not valid UTF-8");
 
         // 2. Reconstruction du Value Object de région
-        RegionCode::try_new(region_str.to_string())
+        Region::try_new(region_str.to_string())
             .expect("AccountId contains an unmapped or invalid RegionCode")
     }
 
     /// Construit un AccountId "Smart" à partir d'un UUID externe (ex: Fournisseur d'identité / OAuth)
     /// en y gravant de force les octets de la région de destination.
-    pub fn from_external_uuid(external_uuid: Uuid, region: RegionCode) -> Self {
+    pub fn from_external_uuid(external_uuid: Uuid, region: Region) -> Self {
         let mut bytes = external_uuid.into_bytes();
         let region_bytes = region.as_static_str().as_bytes();
 
@@ -95,7 +95,7 @@ impl ValueObject for AccountId {
         let region_str = std::str::from_utf8(&bytes[8..10])
             .map_err(|_| Error::validation("account_id", "Invalid UTF-8 in region bytes"))?;
 
-        RegionCode::try_new(region_str.to_string())
+        Region::try_new(region_str.to_string())
             .map_err(|e| Error::validation("account_id", format!("Invalid region code: {}", e)))?;
 
         Ok(())

@@ -2,7 +2,7 @@ use crate::types::{AppearancePreferences, NotificationPreferences, PrivacyPrefer
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{AccountId, RegionCode};
+use shared_kernel::types::{AccountId, Region};
 use shared_proto::account::v1::UpdatePreferencesRequest;
 use uuid::Uuid;
 
@@ -40,7 +40,7 @@ impl UpdatePreferencesCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
 

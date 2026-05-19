@@ -4,7 +4,7 @@ use serde::Deserialize;
 use shared_kernel::{
     command::{CommandTarget, IdentifiableCommand},
     core::{Error, Result},
-    types::{AccountId, RegionCode},
+    types::{AccountId, Region},
 };
 use shared_proto::account::v1::ChangeRegionRequest;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub struct ChangeRegionCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
-    pub new_region: RegionCode,
+    pub new_region: Region,
 }
 
 impl IdentifiableCommand for ChangeRegionCommand {
@@ -41,11 +41,11 @@ impl ChangeRegionCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: RegionCode::try_new(proto_target.region)?,
+            region: Region::try_new(proto_target.region)?,
             expected_version: proto_target.expected_version,
         };
 
-        let new_region = RegionCode::try_new(&req.new_region)
+        let new_region = Region::try_new(&req.new_region)
             .map_err(|e| Error::validation("new_region", e.to_string()))?;
 
         Ok(Self {
