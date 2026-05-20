@@ -99,6 +99,37 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
             .is_ok()
     );
 
+    // 5. VÉRIFICATION FINALE DE L'ÉTAT (Le "Reverse Cycle")
+
+    // A. Vérifier que la ligne a disparu de Scylla
+    let scylla_rows_after = ctx
+        .kernel()
+        .scylla()
+        .session()
+        .query_unpaged(
+            "SELECT follower_id FROM followings WHERE follower_id = ? AND following_id = ?",
+            (follower_id.as_uuid(), following_id.as_uuid()),
+        )
+        .await
+        .unwrap()
+        .into_rows_result()
+        .unwrap();
+    assert_eq!(
+        scylla_rows_after.rows_num(),
+        0,
+        "ScyllaDB: Link should be removed"
+    );
+
+    // B. Vérifier que le compteur Redis est revenu à 0
+    let redis_pool = ctx.kernel().redis().repository().pool().clone();
+    let final_count: Option<i64> = redis_pool
+        .hget(format!("profile:counters:{}", follower_id), "following")
+        .await
+        .unwrap();
+
+    // Soit le champ est supprimé, soit il est à 0
+    assert!(final_count.unwrap_or(0) == 0, "Redis: Counter should be 0");
+
     ctx.shutdown().await;
     Ok(())
 }
