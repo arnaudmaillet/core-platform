@@ -1,9 +1,9 @@
 // crates/shared-kernel/src/test_utils/test_context_builder.rs
 
-use crate::test_utils::PostgresTestContextBuilder;
 use crate::test_utils::{
     KafkaTestContext, PostgresTestContext, RedisTestContext, ScyllaTestContext, TestContext,
 };
+use crate::test_utils::{PostgresTestContextBuilder, ScyllaTestContextBuilder};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -20,6 +20,7 @@ pub trait E2EServerStarter: Send + Sync + 'static {
 }
 pub struct TestContextBuilder<S = ()> {
     postgres_builder: Option<PostgresTestContextBuilder>,
+    scylla_builder: Option<ScyllaTestContextBuilder>,
     with_scylla: bool,
     with_redis: bool,
     with_kafka: bool,
@@ -30,6 +31,7 @@ impl TestContextBuilder<()> {
     pub fn new() -> Self {
         Self {
             postgres_builder: None,
+            scylla_builder: None,
             with_scylla: false,
             with_redis: false,
             with_kafka: false,
@@ -65,13 +67,25 @@ impl<S> TestContextBuilder<S> {
         self
     }
 
-    pub fn with_redis(mut self) -> Self {
-        self.with_redis = true;
+    pub fn with_scylla<P: AsRef<std::path::Path>, I: IntoIterator<Item = P>>(
+        mut self,
+        migration_paths: I,
+    ) -> Self {
+        let scylla_builder = self
+            .scylla_builder
+            .get_or_insert_with(ScyllaTestContextBuilder::default);
+
+        for p in migration_paths {
+            let path_str = p.as_ref().to_string_lossy().into_owned();
+            if !scylla_builder.migrations.contains(&path_str) {
+                scylla_builder.migrations.push(path_str);
+            }
+        }
         self
     }
 
-    pub fn with_scylla(mut self) -> Self {
-        self.with_scylla = true;
+    pub fn with_redis(mut self) -> Self {
+        self.with_redis = true;
         self
     }
 
@@ -83,6 +97,7 @@ impl<S> TestContextBuilder<S> {
     pub fn with_server<NS: E2EServerStarter>(self, starter: NS) -> TestContextBuilder<NS> {
         TestContextBuilder {
             postgres_builder: self.postgres_builder,
+            scylla_builder: self.scylla_builder,
             with_scylla: self.with_scylla,
             with_redis: self.with_redis,
             with_kafka: self.with_kafka,
@@ -107,17 +122,17 @@ impl<S> TestContextBuilder<S> {
             }
         };
 
-        let redis_future = async {
-            if self.with_redis {
-                Some(RedisTestContext::builder().build().await)
+        let scylla_future = async {
+            if let Some(builder) = self.scylla_builder {
+                Some(builder.build().await)
             } else {
                 None
             }
         };
 
-        let scylla_future = async {
-            if self.with_scylla {
-                Some(ScyllaTestContext::builder().build().await)
+        let redis_future = async {
+            if self.with_redis {
+                Some(RedisTestContext::builder().build().await)
             } else {
                 None
             }

@@ -139,21 +139,16 @@ impl ScyllaTestContext {
 
         // 2. Chemins Module - Utilise les String du builder
         for p in paths {
-            if std::path::Path::new(p).exists() {
-                println!("✅ Scylla: Found Module migrations at: {}", p);
+            let path = std::path::Path::new(p);
+            if path.exists() {
+                println!("✅ Scylla: Found migrations at: {:?}", path);
                 all_paths.push(p.to_string());
             } else {
-                // Auto-fix Bazel (inchangé mais utile)
-                let bazel_path = format!("crates/profile/{}", p.trim_start_matches("./"));
-                if std::path::Path::new(&bazel_path).exists() {
-                    println!("✅ Scylla Bazel Auto-fix: Found at {}", bazel_path);
-                    all_paths.push(bazel_path);
-                } else {
-                    println!("⚠️ Scylla WARNING: Migration path not found: {}", p);
-                }
+                // Ajoute un log d'erreur plus explicite pour débugger
+                println!("❌ Scylla ERROR: Migration path does NOT exist: {:?}", path);
             }
         }
-
+        
         for path in all_paths {
             let mut entries = std::fs::read_dir(path).expect("Invalid Scylla migration path");
             let mut migrations = Vec::new();

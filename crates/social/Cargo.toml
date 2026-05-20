@@ -17,6 +17,7 @@ shared-kernel = { workspace = true, features = [
     "test-utils",
 ] }
 shared-proto = { workspace = true }
+auth = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -29,6 +30,7 @@ tonic = { workspace = true }
 async-trait = { workspace = true }
 
 scylla = { workspace = true }
+tokio-stream = { version = "0.1", features = ["net"] }
 
 [features]
 test-utils = ["shared-kernel/test-utils"]
