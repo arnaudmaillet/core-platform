@@ -3,22 +3,32 @@
 use crate::test_utils::AccountTestContextBuilder;
 use shared_kernel::test_utils::TestContext;
 use sqlx::PgPool;
+use std::net::SocketAddr;
+use tokio::sync::oneshot;
 
 pub struct AccountTestContext {
     kernel_context: TestContext,
+    pub server_addr: Option<SocketAddr>,
+    shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
 impl AccountTestContext {
+    pub(crate) fn new(
+        kernel_context: TestContext,
+        server_addr: Option<SocketAddr>,
+        shutdown_tx: Option<oneshot::Sender<()>>,
+    ) -> Self {
+        Self {
+            kernel_context,
+            server_addr,
+            shutdown_tx,
+        }
+    }
+
     pub fn builder() -> AccountTestContextBuilder {
         AccountTestContextBuilder::new()
     }
 
-    /// Raccourci pour le cas le plus courant (setup standard du profil)
-    pub async fn setup() -> Self {
-        Self::builder().build().await
-    }
-
-    /// Getter pour accéder aux ressources du noyau (Postgres, Scylla, Redis)
     pub fn kernel(&self) -> &TestContext {
         &self.kernel_context
     }
@@ -27,12 +37,17 @@ impl AccountTestContext {
         self.kernel_context.postgres().pool().clone()
     }
 
-    pub async fn shutdown(self) {
-        self.kernel_context.shutdown().await;
+    pub fn grpc_url(&self) -> String {
+        self.server_addr
+            .map(|addr| format!("http://{}", addr))
+            .expect("gRPC server address not set. Did you call .with_grpc_server()?")
     }
 
-    /// Constructeur interne utilisé par le builder
-    pub(crate) fn new(kernel_context: TestContext) -> Self {
-        Self { kernel_context }
+    pub async fn shutdown(self) {
+        // Envoi du signal de shutdown si le serveur a été lancé
+        if let Some(tx) = self.shutdown_tx {
+            let _ = tx.send(());
+        }
+        self.kernel_context.shutdown().await;
     }
 }

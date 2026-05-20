@@ -12,6 +12,7 @@ shared-kernel = { workspace = true, features = [
     "test-utils",
 ] }
 shared-proto = { workspace = true }
+auth = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
@@ -28,6 +29,8 @@ tonic = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
 anyhow = { workspace = true }
+tokio-stream = { version = "0.1", features = ["net"] }
+
 
 [dev-dependencies]
 testcontainers = { workspace = true }

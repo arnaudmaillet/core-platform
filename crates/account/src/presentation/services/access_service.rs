@@ -73,6 +73,12 @@ impl ProtoAccountAccessService for AccountAccessService {
             response_payload,
         )
         .await
+        .map_err(|e| {
+            // C'est ici que tu vas enfin voir l'erreur
+            tracing::error!(target: "account_debug", error = ?e, "CRASH DANS REGISTER");
+            // Reste sur le statut actuel pour ne pas casser le contrat gRPC
+            e
+        })
     }
 
     async fn link_sub_identity(

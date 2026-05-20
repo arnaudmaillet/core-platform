@@ -107,11 +107,14 @@ impl Error {
     }
 
     pub fn database(source: impl Into<String>) -> Self {
+        let source_str = source.into();
+        tracing::error!("Database operation failed. Raw source: {:#?}", source_str);
+
         Self::new(
             ErrorCode::InfrastructureFailure,
             "Database operation failed",
         )
-        .with_source(source)
+        .with_source(source_str)
     }
 
     pub fn messaging(source: impl Into<String>) -> Self {

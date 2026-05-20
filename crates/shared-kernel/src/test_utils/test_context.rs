@@ -114,3 +114,15 @@ impl TestContext {
         drop(self.kafka_ctx);
     }
 }
+
+impl std::fmt::Debug for TestContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TestContext")
+            .field("postgres", &self.postgres_ctx.is_some())
+            .field("redis", &self.redis_ctx.is_some())
+            .field("scylla", &self.scylla_ctx.is_some())
+            .field("kafka", &self.kafka_ctx.is_some())
+            .field("server_addr", &self.server_addr)
+            .finish()
+    }
+}

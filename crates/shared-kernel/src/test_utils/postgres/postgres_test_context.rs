@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/postgres/utils/test_utils.rs
+// crates/shared-kernel/src/test_utils/postgres/postgres_test_context.rs
 
 use crate::postgres::PostgresContext;
 use crate::test_utils::PostgresTestContextBuilder;
@@ -21,7 +21,7 @@ impl PostgresTestContext {
     }
 
     pub async fn restore(builder: PostgresTestContextBuilder) -> Self {
-        // 1. Démarrage container
+        // 1. Démarrage container (Identique à ton code)
         let container = PostgresImage::default()
             .with_user(&builder.user)
             .with_password(&builder.password)
@@ -30,7 +30,7 @@ impl PostgresTestContext {
             .with_tag(&builder.image_tag)
             .start()
             .await
-            .expect("Échec PostGIS");
+            .expect("Échec démarrage Postgres");
 
         let host_port = container.get_host_port_ipv4(5432).await.unwrap();
         let conn_str = format!(
@@ -38,108 +38,110 @@ impl PostgresTestContext {
             builder.user, builder.password, host_port, builder.db_name
         );
         let pool = PgPoolOptions::new().connect(&conn_str).await.unwrap();
+        tracing::info!(db_url = %conn_str, "Postgres container started, beginning migrations");
 
-        // 2. Initialisation système ET table de migration SQLx
-        pool.execute(
-            r#"
-        -- La fonction de timestamp
-        CREATE OR REPLACE FUNCTION public.trigger_set_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            NEW.updated_at = NOW();
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-
-        -- LA TABLE CRUCIALE POUR SQLX
-        CREATE TABLE IF NOT EXISTS _sqlx_migrations (
-            version BIGINT PRIMARY KEY,
-            description TEXT NOT NULL,
-            installed_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            success BOOLEAN NOT NULL,
-            checksum BYTEA NOT NULL,
-            execution_time BIGINT NOT NULL
-        );
-    "#,
-        )
-        .await
-        .expect("Failed to initialize system tables");
-
-        // 3. RÉSOLUTION DES CHEMINS
+        // 2. RÉSOLUTION DES CHEMINS (Identique à ton code, on garde juste la liste)
         let mut paths_to_run = Vec::new();
+        let mut root_path_buf = std::path::PathBuf::new();
 
-        // Résolution Kernel
         if builder.run_kernel_migrations {
-            let possible_kernel_paths = [
-                "crates/shared-kernel/migrations/postgres",
-                "../shared-kernel/migrations/postgres",
-            ];
-            if let Some(kp) = possible_kernel_paths.iter().find(|p| Path::new(p).exists()) {
-                paths_to_run.push(kp.to_string());
-            }
-        }
+            let manifest_dir =
+                std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR introuvable");
+            let current_path = Path::new(&manifest_dir);
 
-        // Résolution Module (On transforme les chemins relatifs en chemins Bazel si nécessaire)
-        for p in &builder.migrations {
-            if Path::new(p).exists() {
-                paths_to_run.push(p.to_string());
+            let mut root_path = current_path;
+            while !root_path.join("crates").exists() && root_path.parent().is_some() {
+                root_path = root_path.parent().unwrap();
+            }
+
+            // On sauvegarde la racine pour les domaines
+            root_path_buf = root_path.to_path_buf();
+
+            let kernel_path = root_path.join("crates/shared-kernel/migrations/postgres");
+            tracing::info!(resolved_kernel_path = ?kernel_path, "Résolution dynamique du chemin Kernel");
+
+            if kernel_path.exists() {
+                paths_to_run.push(kernel_path.to_string_lossy().into_owned());
             } else {
-                // HACK BAZEL: Si on ne trouve pas "./migrations/postgres",
-                // on cherche "crates/profile/migrations/postgres"
-                let bazel_path = format!("crates/profile/{}", p.trim_start_matches("./"));
-                if Path::new(&bazel_path).exists() {
-                    println!(
-                        "✅ Bazel Auto-fix: Found Module migrations at: {}",
-                        bazel_path
-                    );
-                    paths_to_run.push(bazel_path);
-                } else {
-                    println!(
-                        "⚠️ WARNING: Migration path not found: {} (tried {})",
-                        p, bazel_path
-                    );
-                }
+                panic!("❌ IMPOSSIBLE DE TROUVER LES MIGRATIONS KERNEL !");
+            }
+        } else {
+            // Sécurité au cas où run_kernel_migrations serait false, on calcule quand même la racine
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+            let mut root_path = Path::new(&manifest_dir);
+            while !root_path.join("crates").exists() && root_path.parent().is_some() {
+                root_path = root_path.parent().unwrap();
+            }
+            root_path_buf = root_path.to_path_buf();
+        }
+
+        for p in &builder.migrations {
+            let path = Path::new(p);
+
+            // Si le chemin est absolu ou valide localement, on le garde.
+            // Sinon, on le résout depuis la racine détectée du workspace.
+            let final_path = if path.exists() {
+                path.to_path_buf()
+            } else {
+                root_path_buf.join(p)
+            };
+
+            if final_path.exists() {
+                let path_str = final_path.to_string_lossy().into_owned();
+                paths_to_run.push(path_str);
+            } else {
+                panic!(
+                    "❌ MIGRATION PATH NOT FOUND: '{}'. \n\
+                    Vérifie la syntaxe depuis la racine du workspace.\n\
+                    Chemin tenté (canonicalized): {:?}",
+                    p,
+                    std::fs::canonicalize(&final_path)
+                );
             }
         }
 
-        // 4. EXÉCUTION UNITAIRE (Corrigé pour matcher exactement la table SQLx)
-        for path in paths_to_run {
-            let migrator = Migrator::new(Path::new(&path))
+        // 3. EXÉCUTION PROPRE AVEC LE MIGRATOR SQLX
+        if let Some(kernel_path) = paths_to_run.first() {
+            tracing::info!(migration_path = %kernel_path, "Applying Kernel migrations via SQLx Migrator");
+            let migrator = Migrator::new(Path::new(kernel_path)).await.unwrap();
+            migrator
+                .run(&pool)
                 .await
-                .expect("Invalid migration path");
+                .expect("Failed to apply Kernel migrations");
+        }
 
-            for migration in migrator.migrations.iter() {
-                let row: (bool,) = sqlx::query_as(
-                    "SELECT EXISTS (SELECT 1 FROM _sqlx_migrations WHERE version = $1)",
-                )
-                .bind(migration.version)
-                .fetch_one(&pool)
-                .await
-                .unwrap_or((false,));
+        // Les domaines suivants sont exécutés comme du SQL brut pour éviter l'erreur VersionMissing
+        for path in paths_to_run.iter().skip(1) {
+            tracing::info!(migration_path = %path, "Applying Domain migrations via raw SQL execution");
 
-                if !row.0 {
-                    // Application du SQL
-                    pool.execute(&*migration.sql)
-                        .await
-                        .expect("Failed to apply migration");
+            let mut entries = std::fs::read_dir(Path::new(path))
+                .expect("Failed to read domain migrations directory");
 
-                    // Log avec tous les champs requis par SQLx
-                    sqlx::query(
-                        "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
-                     VALUES ($1, $2, TRUE, $3, 0)"
-                    )
-                        .bind(migration.version)
-                        .bind(&*migration.description)
-                        .bind(&*migration.checksum)
-                        .execute(&pool)
-                        .await
-                        .expect("Failed to log migration");
+            // On trie les fichiers par nom pour respecter l'ordre chronologique
+            let mut files = Vec::new();
+            while let Some(Ok(entry)) = entries.next() {
+                if entry.path().extension().map_or(false, |ext| ext == "sql") {
+                    files.push(entry.path());
                 }
+            }
+            files.sort();
+
+            for file in files {
+                tracing::info!(file_path = ?file, "Executing domain migration file");
+                let sql = std::fs::read_to_string(&file).expect("Failed to read migration file");
+
+                pool.execute(sql.as_str())
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(file = ?file, error = %e, "Raw SQL migration failed");
+                        e
+                    })
+                    .expect("Failed to apply domain migration");
             }
         }
 
+        // 4. CONSTRUCTION DU CONTEXTE (Identique à ton code)
         let mut context_builder = PostgresContext::builder_raw().with_url(&conn_str);
-
         if let Some(cfg) = builder.config {
             context_builder = context_builder
                 .with_max_connections(cfg.max_connections)
@@ -147,11 +149,12 @@ impl PostgresTestContext {
                 .with_timeout(cfg.connect_timeout);
         }
 
-        let context: PostgresContext = context_builder
+        let context = context_builder
             .build()
             .await
             .expect("Failed to build context");
 
+        tracing::info!("PostgresTestContext fully initialized");
         Self { context, container }
     }
 
