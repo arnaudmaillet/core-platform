@@ -1,34 +1,38 @@
 // crates/social/src/test_utils/test_context_builder.rs
 
+use crate::SocialServiceBuilder;
+use crate::services::SocialService;
 use crate::test_utils::SocialTestContext;
-use fred::clients::Pool;
-use scylla::client::session::Session;
-use shared_kernel::test_utils::{TestContext, TestContextBuilder};
-use std::future::Future;
-use std::net::SocketAddr;
+use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator};
+use shared_kernel::{redis::RedisIdempotencyRepository, test_utils::TestContextBuilder};
+use shared_proto::social::v1::social_service_server::SocialServiceServer;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use tonic::transport::Server;
 
-pub struct SocialServerDeps {
-    pub scylla: Arc<Session>,
-    pub redis_repo: Arc<dyn shared_kernel::cache::CacheRepository>,
-    pub redis_pool: Pool,
-    pub kafka_brokers: Option<String>,
-}
-
-pub struct SocialTestContextBuilder<F = ()> {
+pub struct SocialTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
-    server_factory: Option<F>,
+    with_grpc: bool,
     has_kafka: bool,
 }
 
-impl SocialTestContextBuilder<()> {
+impl SocialTestContextBuilder {
     pub fn new() -> Self {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let scylla_migrations = manifest_dir.join("migrations/scylla");
+
         Self {
-            kernel_builder: TestContextBuilder::new().with_scylla().with_redis(),
-            server_factory: None,
+            kernel_builder: TestContextBuilder::new()
+                .with_scylla(vec![scylla_migrations])
+                .with_redis(),
+            with_grpc: false,
             has_kafka: false,
         }
+    }
+
+    pub fn with_grpc_server(mut self) -> Self {
+        self.with_grpc = true;
+        self
     }
 
     pub fn with_kafka(mut self) -> Self {
@@ -37,77 +41,71 @@ impl SocialTestContextBuilder<()> {
         self
     }
 
-    pub fn with_server<F, Fut>(self, factory: F) -> SocialTestContextBuilder<F>
-    where
-        F: Fn(SocialServerDeps, SocketAddr, oneshot::Receiver<()>, oneshot::Sender<()>) -> Fut
-            + Send
-            + Sync
-            + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        SocialTestContextBuilder {
-            kernel_builder: self.kernel_builder,
-            server_factory: Some(factory),
-            has_kafka: self.has_kafka,
-        }
-    }
-}
-
-impl<F, Fut> SocialTestContextBuilder<F>
-where
-    F: Fn(SocialServerDeps, SocketAddr, oneshot::Receiver<()>, oneshot::Sender<()>) -> Fut
-        + Send
-        + Sync
-        + 'static,
-    Fut: Future<Output = ()> + Send + 'static,
-{
     pub async fn build_e2e(self) -> SocialTestContext {
+        tracing::info!("Building Social test infrastructure...");
         let kernel_infra = self.kernel_builder.build().await;
 
-        // Extraction propre des ressources
-        let redis_repo = kernel_infra.redis().repository();
-        let redis_pool = kernel_infra.redis().repository().pool().clone();
+        // Extraction des ressources pour le serveur
         let scylla_session = kernel_infra.scylla().session();
+        let redis_repo = kernel_infra.redis().repository();
+        let redis_pool = redis_repo.pool().clone();
 
-        if let Some(factory) = self.server_factory {
-            let deps = SocialServerDeps {
-                scylla: scylla_session,
-                redis_repo,
-                redis_pool,
-                kafka_brokers: if self.has_kafka {
-                    Some(kernel_infra.kafka().bootstrap_servers().to_string())
-                } else {
-                    None
-                },
-            };
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
 
-            let addr: SocketAddr = "[::1]:0".parse().unwrap();
-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            let actual_addr = listener.local_addr().unwrap();
-            drop(listener);
+        if self.with_grpc {
+            tracing::info!("Starting Social gRPC server...");
+            tokio::spawn(async move {
+                let auth_ctx = KeycloakTestContext::restore("master").await;
+                let validator = Arc::new(
+                    KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
+                        .await
+                        .unwrap(),
+                );
+                let interceptor = AuthInterceptor::new(validator);
 
-            let (shutdown_tx, shutdown_rx) = oneshot::channel();
-            let (ready_tx, ready_rx) = oneshot::channel();
+                let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
+                    redis_pool.clone(),
+                    "social_e2e",
+                    300,
+                ));
+                let builder = SocialServiceBuilder::new(
+                    scylla_session,
+                    redis_pool,
+                    redis_repo,
+                    idempotency_repo,
+                );
 
-            let server_handle = tokio::spawn(async move {
-                factory(deps, actual_addr, shutdown_rx, ready_tx).await;
+                let app_ctx = builder.build_context().await;
+                let bus = builder.build_command_bus();
+                let social_svc = SocialService::new(bus, app_ctx);
+
+                let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
+                let actual_addr = listener.local_addr().unwrap();
+                let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+
+                tracing::info!(port = %actual_addr.port(), "Social gRPC server listening");
+                ready_tx.send(actual_addr).ok();
+
+                Server::builder()
+                    .add_service(SocialServiceServer::with_interceptor(
+                        social_svc,
+                        interceptor,
+                    ))
+                    .serve_with_incoming_shutdown(incoming, async {
+                        shutdown_rx.await.ok();
+                    })
+                    .await
+                    .unwrap();
             });
-
-            ready_rx.await.ok();
-
-            let (pg, redis, scylla, kafka) = kernel_infra.into_parts();
-            let final_kernel = TestContext::new(
-                pg,
-                redis,
-                scylla,
-                kafka,
-                Some(actual_addr),
-                Some(shutdown_tx),
-                Some(server_handle),
-            );
-            return SocialTestContext::new(final_kernel);
         }
 
-        SocialTestContext::new(kernel_infra)
+        let addr = if self.with_grpc {
+            Some(ready_rx.await.expect("gRPC server failed to start"))
+        } else {
+            None
+        };
+
+        SocialTestContext::new(kernel_infra, addr, Some(shutdown_tx))
     }
 }

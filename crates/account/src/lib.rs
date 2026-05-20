@@ -17,5 +17,5 @@ pub use infrastructure::{postgres::repositories as db, utils};
 
 pub use presentation::services;
 
-#[cfg(feature = "test-utils")]
+
 pub mod test_utils;

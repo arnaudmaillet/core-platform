@@ -1,14 +1,11 @@
 // backend/services/profile/api/event-worker/tests/worker_it.rs
 
 use chrono::Utc;
-use profile::ProfileServiceBuilder;
-use profile::kafka::AccountConsumer;
 use profile::test_utils::ProfileTestContext;
 use serde_json::json;
 use shared_kernel::core::Result;
-use shared_kernel::kafka::{KafkaEventConsumer, KafkaEventProducer};
-use shared_kernel::messaging::{EventConsumer, EventEnvelope, EventProducer};
-use std::sync::Arc;
+use shared_kernel::kafka::KafkaEventProducer;
+use shared_kernel::messaging::{EventEnvelope, EventProducer};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -17,55 +14,7 @@ async fn test_worker_e2e_profile_creation_on_account_event() -> Result<()> {
 
     // 1. SETUP INFRA ET BOOT DU WORKER VIA LA CLOSURE DU BUILDER
     let ctx = ProfileTestContext::builder()
-        .with_kafka()
-        .with_server(|pg_pool, redis_repo, kafka_brokers, _addr, shutdown_rx, ready_tx| {
-            async move {
-                let bootstrap_servers = kafka_brokers.expect("Kafka bootstrap servers missing");
-
-                let builder = ProfileServiceBuilder::new(pg_pool, redis_repo);
-                let app_ctx = builder.build_context();
-                let bus = builder.build_command_bus();
-                let account_consumer = Arc::new(AccountConsumer::new(bus.clone(), (*app_ctx).clone()));
-
-                let kafka_transport = KafkaEventConsumer::new(&bootstrap_servers, "profile-worker-test-group", 10);
-
-                let shutdown_token = tokio_util::sync::CancellationToken::new();
-                let token_clone = shutdown_token.clone();
-                tokio::spawn(async move {
-                    shutdown_rx.await.ok();
-                    token_clone.cancel();
-                });
-
-                let handler = Box::new(move |envelope: EventEnvelope| {
-                    let consumer = Arc::clone(&account_consumer);
-                    let fut: std::pin::Pin<
-                        Box<dyn std::future::Future<Output = shared_kernel::core::Result<()>> + Send>,
-                    > = Box::pin(async move {
-                        let raw_payload = serde_json::to_vec(&envelope.payload)
-                            .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
-
-                        consumer
-                            .on_message_received(&raw_payload)
-                            .await
-                            .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
-
-                        tracing::info!(event_id = %envelope.id, "Event successfully dispatched to the domain consumer.");
-                        Ok(())
-                    });
-                    fut
-                });
-
-                // Démarrage du consommateur en arrière-plan
-                tokio::spawn(async move {
-                    if let Err(e) = kafka_transport.consume("account.events", handler).await {
-                        tracing::error!(error = ?e, "Technical Kafka consumer loop crashed");
-                    }
-                });
-
-                // 💡 PLUS AUCUN SLEEP : On libère immédiatement l'exécution du builder.
-                ready_tx.send(()).ok();
-            }
-        })
+        .with_kafka_worker()
         .build_e2e()
         .await;
 
@@ -89,7 +38,7 @@ async fn test_worker_e2e_profile_creation_on_account_event() -> Result<()> {
     let account_registered_payload = json!({
         "type": "AccountRegistered",
         "data": {
-            "account_id": account_id_string, // 💡 Doit être le format textuel du Smart ID
+            "account_id": account_id_string,
             "region": region_str,
             "email": "charlie_brown@peanuts.com",
             "phone": null,

@@ -1,144 +1,172 @@
 // crates/profile/src/test_utils/test_context_builder.rs
 
-use crate::{test_utils::ProfileTestContext, utils::run_postgres_migrations};
-use shared_kernel::test_utils::{TestContext, TestContextBuilder};
-use std::future::Future;
+use crate::ProfileServiceBuilder;
+use crate::kafka::AccountConsumer;
+use crate::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use crate::test_utils::ProfileTestContext;
+use auth::{AuthInterceptor, KeycloakTestContext, KeycloakValidator};
+use shared_kernel::kafka::KafkaEventConsumer;
+use shared_kernel::messaging::{EventConsumer, EventEnvelope};
+use shared_kernel::test_utils::TestContextBuilder;
+use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
+use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
+use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataServiceServer;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::sync::oneshot;
+use tonic::transport::Server;
 
-pub struct ProfileTestContextBuilder<F = ()> {
+pub enum ServiceMode {
+    Grpc,
+    KafkaWorker,
+}
+
+pub struct ProfileTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
-    server_factory: Option<F>,
+    service_mode: Option<ServiceMode>,
     has_kafka: bool,
 }
 
-impl ProfileTestContextBuilder<()> {
+impl ProfileTestContextBuilder {
     pub fn new() -> Self {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let pg_migrations = manifest_dir.join("migrations/postgres");
+
         Self {
-            kernel_builder: TestContextBuilder::new().with_postgres().with_redis(),
-            server_factory: None,
+            kernel_builder: TestContextBuilder::new()
+                .with_postgres(vec![pg_migrations])
+                .with_redis(),
+            service_mode: None,
             has_kafka: false,
         }
     }
-}
 
-impl<F> ProfileTestContextBuilder<F> {
-    pub fn with_kafka(mut self) -> Self {
-        self.kernel_builder = self.kernel_builder.with_kafka();
-        self.has_kafka = true;
+    pub fn with_grpc_server(mut self) -> Self {
+        self.service_mode = Some(ServiceMode::Grpc);
         self
     }
-}
 
-impl ProfileTestContextBuilder<()> {
-    pub fn with_server<F, Fut>(self, factory: F) -> ProfileTestContextBuilder<F>
-    where
-        F: Fn(
-                sqlx::PgPool,
-                std::sync::Arc<dyn shared_kernel::cache::CacheRepository>,
-                Option<String>,
-                SocketAddr,
-                oneshot::Receiver<()>,
-                oneshot::Sender<()>,
-            ) -> Fut
-            + Send
-            + Sync
-            + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        ProfileTestContextBuilder {
-            kernel_builder: self.kernel_builder,
-            server_factory: Some(factory),
-            has_kafka: self.has_kafka,
-        }
+    pub fn with_kafka_worker(mut self) -> Self {
+        self.service_mode = Some(ServiceMode::KafkaWorker);
+        self.has_kafka = true;
+        self.kernel_builder = self.kernel_builder.with_kafka();
+        self
     }
-}
 
-/// Extension d'exécution classique (sans serveur gRPC)
-impl ProfileTestContextBuilder<()> {
-    pub async fn build(self) -> ProfileTestContext {
-        let kernel = self.kernel_builder.build().await;
-        let ctx = ProfileTestContext::new(kernel);
-        run_postgres_migrations(&ctx.kernel().postgres().pool())
-            .await
-            .expect("Failed to apply profile migrations");
-        ctx
-    }
-}
-
-/// Extension d'exécution E2E (avec serveur gRPC ou Event-Worker)
-impl<F, Fut> ProfileTestContextBuilder<F>
-where
-    F: Fn(
-            sqlx::PgPool,
-            std::sync::Arc<dyn shared_kernel::cache::CacheRepository>,
-            Option<String>,
-            SocketAddr,
-            oneshot::Receiver<()>,
-            oneshot::Sender<()>,
-        ) -> Fut
-        + Send
-        + Sync
-        + 'static,
-    Fut: Future<Output = ()> + Send + 'static,
-{
     pub async fn build_e2e(self) -> ProfileTestContext {
-        let kernel_infra = self.kernel_builder.build().await;
+        tracing::info!("Starting E2E infrastructure build...");
 
+        let kernel_infra = self.kernel_builder.build().await;
         let pg_pool = kernel_infra.postgres().pool().clone();
         let redis_repo = kernel_infra.redis().repository();
+        let kafka_brokers = self
+            .has_kafka
+            .then(|| kernel_infra.kafka().bootstrap_servers().to_string());
 
-        run_postgres_migrations(&pg_pool)
-            .await
-            .expect("Failed to apply profile migrations");
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
 
-        if let Some(factory) = self.server_factory {
-            let kafka_bootstrap_servers = if self.has_kafka {
-                Some(kernel_infra.kafka().bootstrap_servers().to_string())
-            } else {
-                None
-            };
+        match self.service_mode {
+            Some(ServiceMode::Grpc) => {
+                tracing::info!("Mode selected: gRPC Server");
+                let pg = pg_pool.clone();
+                let redis = redis_repo.clone();
 
-            let addr: SocketAddr = "[::1]:0".parse().unwrap();
-            let listener = tokio::net::TcpListener::bind(addr)
-                .await
-                .expect("Failed to bind");
-            let actual_addr = listener.local_addr().expect("Failed to get local addr");
-            drop(listener);
+                tokio::spawn(async move {
+                    tracing::debug!("gRPC server task spawning...");
+                    let auth_ctx = KeycloakTestContext::restore("master").await;
+                    let validator = Arc::new(
+                        KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
+                            .await
+                            .unwrap(),
+                    );
+                    let interceptor = AuthInterceptor::new(validator);
 
-            let (shutdown_tx, shutdown_rx) = oneshot::channel();
-            let (ready_tx, ready_rx) = oneshot::channel(); // 💡 Canal de synchronisation déterministe
+                    let builder = ProfileServiceBuilder::new(pg, redis);
+                    let app_ctx = builder.build_context();
+                    let bus = builder.build_command_bus();
 
-            // Lancement de la factory utilisateur
-            let server_handle = tokio::spawn(async move {
-                factory(
-                    pg_pool,
-                    redis_repo,
-                    kafka_bootstrap_servers,
-                    actual_addr,
-                    shutdown_rx,
-                    ready_tx,
-                )
-                .await;
-            });
+                    let svc = Server::builder()
+                        .add_service(ProfileIdentityServiceServer::with_interceptor(
+                            ProfileIdentityService::new(bus.clone(), app_ctx.clone()),
+                            interceptor.clone(),
+                        ))
+                        .add_service(ProfileMediaServiceServer::with_interceptor(
+                            ProfileMediaService::new(bus.clone(), app_ctx.clone()),
+                            interceptor.clone(),
+                        ))
+                        .add_service(ProfileMetadataServiceServer::with_interceptor(
+                            ProfileMetadataService::new(bus, app_ctx),
+                            interceptor,
+                        ));
 
-            ready_rx.await.ok();
+                    let addr = "[::1]:0".parse::<SocketAddr>().unwrap();
+                    let listener = tokio::net::TcpListener::bind(addr)
+                        .await
+                        .expect("Failed to bind gRPC port");
+                    let actual_addr = listener.local_addr().unwrap();
+                    let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
 
-            let (pg, redis, scylla, kafka) = kernel_infra.into_parts();
+                    tracing::info!(port = %actual_addr.port(), "gRPC server listening");
+                    ready_tx.send(actual_addr).ok();
 
-            let final_kernel = TestContext::new(
-                pg,
-                redis,
-                scylla,
-                kafka,
-                Some(actual_addr),
-                Some(shutdown_tx),
-                Some(server_handle),
-            );
+                    svc.serve_with_incoming_shutdown(incoming, async {
+                        shutdown_rx.await.ok();
+                        tracing::info!("gRPC server shutting down");
+                    })
+                    .await
+                    .unwrap();
+                });
+            }
+            Some(ServiceMode::KafkaWorker) => {
+                tracing::info!("Mode selected: Kafka Worker");
+                let pg = pg_pool.clone();
+                let redis = redis_repo.clone();
+                let brokers = kafka_brokers.unwrap();
 
-            return ProfileTestContext::new(final_kernel);
+                tokio::spawn(async move {
+                    tracing::debug!("Kafka worker task spawning...");
+                    let builder = ProfileServiceBuilder::new(pg, redis);
+                    let app_ctx = builder.build_context();
+                    let bus = builder.build_command_bus();
+
+                    let account_consumer =
+                        Arc::new(AccountConsumer::new(bus.clone(), (*app_ctx).clone()));
+                    let kafka_transport =
+                        KafkaEventConsumer::new(&brokers, "profile-worker-test-group", 10);
+
+                    let handler = Box::new(move |envelope: EventEnvelope| {
+                        let consumer = Arc::clone(&account_consumer);
+                        let fut: std::pin::Pin<
+                            Box<
+                                dyn std::future::Future<Output = shared_kernel::core::Result<()>>
+                                    + Send,
+                            >,
+                        > = Box::pin(async move {
+                            let raw = serde_json::to_vec(&envelope.payload).unwrap();
+                            consumer
+                                .on_message_received(&raw)
+                                .await
+                                .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))
+                        });
+                        fut
+                    });
+
+                    tracing::info!("Kafka consumer loop started");
+                    ready_tx.send("[::1]:0".parse().unwrap()).ok();
+
+                    if let Err(e) = kafka_transport.consume("account.events", handler).await {
+                        tracing::error!(error = %e, "Kafka consumer loop crashed");
+                    }
+                });
+            }
+            None => tracing::warn!("No service mode selected for E2E build"),
         }
 
-        ProfileTestContext::new(kernel_infra)
+        let addr = ready_rx
+            .await
+            .expect("Service failed to start (timeout or crash)");
+        tracing::info!(addr = %addr, "E2E infrastructure ready");
+        ProfileTestContext::new(kernel_infra, Some(addr), Some(shutdown_tx))
     }
 }
