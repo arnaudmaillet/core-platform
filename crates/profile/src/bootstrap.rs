@@ -35,10 +35,7 @@ impl ProfileServiceBuilder {
 
     /// Construit le contexte global de l'application Profile
     pub fn build_context(&self) -> Arc<ProfileAppContext> {
-        let profile_repo = Arc::new(PostgresProfileRepository::new(
-            self.pool.clone(),
-            self.redis_repo.clone(),
-        ));
+        let profile_repo = Arc::new(PostgresProfileRepository::new(self.pool.clone()));
 
         let outbox_repo = Arc::new(PostgresOutboxRepository::new(self.pool.clone()));
         // Note: Utilisation d'un scope d'idempotence spécifique au profil
@@ -54,7 +51,7 @@ impl ProfileServiceBuilder {
 
     /// Enregistre tous les handlers dans le CommandBus
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new();
+        let mut bus = CommandBus::new(self.redis_repo.clone());
 
         // --- Identity Section ---
         bus.register::<ProfileContext, CreateProfileCommand, CreateProfileHandler>(
