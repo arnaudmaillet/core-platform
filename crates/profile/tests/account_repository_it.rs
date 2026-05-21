@@ -9,31 +9,25 @@ use profile::entities::Profile;
 
 use shared_kernel::core::{Error, ErrorCode, Identifier, Result, Versioned};
 use shared_kernel::postgres::PostgresTransaction;
-use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
+use shared_kernel::test_utils::PostgresTestContext;
 use shared_kernel::types::{AccountId, ProfileId, Region};
 
 /// Helper pour instancier le repo et les infrastructures de test
-async fn get_test_context() -> (
-    PostgresProfileRepository,
-    PostgresTestContext,
-    RedisTestContext,
-) {
+async fn get_test_context() -> (PostgresProfileRepository, PostgresTestContext) {
     let pg_ctx = PostgresTestContext::builder()
         .with_migrations(&["./migrations/postgres"])
         .build()
         .await;
 
-    let redis_ctx = RedisTestContext::builder().build().await;
-
     let repo = PostgresProfileRepository::new(pg_ctx.pool().clone());
 
-    (repo, pg_ctx, redis_ctx)
+    (repo, pg_ctx)
 }
 
 #[tokio::test]
 async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     // --- Arrange ---
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let handle = Handle::try_new("alice_rocks")?;
 
@@ -96,7 +90,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 
 #[tokio::test]
 async fn test_profile_concurrency_protection_occ() -> Result<()> {
-    let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, _pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("ConcurrentUser")?)?.build()?;
 
@@ -129,7 +123,7 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 
 #[tokio::test]
 async fn test_profile_rollback_works_properly() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("Ghost")?)?.build()?;
 
@@ -156,7 +150,7 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_all_by_account_id() -> Result<()> {
-    let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, _pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
 
     // Utilise "profile_1" (minuscules) pour correspondre à la sortie attendue
@@ -177,7 +171,7 @@ async fn test_find_all_by_account_id() -> Result<()> {
 
 #[tokio::test]
 async fn test_profile_rollback_integrity() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("ghost")?)?.build()?;
     let profile_id = profile.profile_id();
@@ -208,7 +202,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
 
 #[tokio::test]
 async fn test_profile_partial_data_resilience() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let region = Region::try_new("EU")?;
 
     let domain_profile_id = ProfileId::generate(region.clone());

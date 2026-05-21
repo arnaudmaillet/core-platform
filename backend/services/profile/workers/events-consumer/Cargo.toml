@@ -1,7 +1,7 @@
 # backend/services/account/api/command-server/Cargo.toml
 
 [package]
-name = "profile-event-worker"
+name = "profile-events-consumer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

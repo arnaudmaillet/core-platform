@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/postgres/repositories/postgres_idempotency_repository.rs
+// crates/shared-kernel/src/persistence/postgres/repositories/idempotency.rs
 
 use crate::core::{Error, Result, Transaction};
 use crate::idempotency::IdempotencyRepository;

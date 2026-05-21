@@ -21,6 +21,7 @@ uuid = { workspace = true }
 # Serveur & Async
 tonic = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
 prost = { workspace = true }
 
 # Utilitaires
@@ -33,7 +34,6 @@ sqlx = { workspace = true, features = [
     "uuid",
     "chrono",
 ] }
-tokio-stream = { version = "0.1", features = ["net"] }
 
 [dev-dependencies]
 auth = { workspace = true, features = ["test-utils"] }

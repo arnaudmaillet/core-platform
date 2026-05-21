@@ -10,26 +10,20 @@ use shared_kernel::core::{Error, Identifier, Result, Versioned};
 use shared_kernel::types::{AccountId, AuditReason, Email, Region, SubId};
 
 /// Helper pour instancier le repo et les infrastructures de test (Postgres + Redis)
-async fn get_test_context() -> (
-    PostgresAccountRepository,
-    PostgresTestContext,
-    RedisTestContext,
-) {
+async fn get_test_context() -> (PostgresAccountRepository, PostgresTestContext) {
     let pg_ctx = PostgresTestContext::builder()
         .with_migrations(&["./migrations/postgres"])
         .build()
         .await;
 
-    let redis_ctx = RedisTestContext::builder().build().await;
-
     let repo = PostgresAccountRepository::new(pg_ctx.pool().clone());
 
-    (repo, pg_ctx, redis_ctx)
+    (repo, pg_ctx)
 }
 
 #[tokio::test]
 async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
-    let (repo, pg_ctx, _) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let email = Email::try_new("full@lifecycle.com")?;
 
@@ -92,7 +86,7 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
 
 #[tokio::test]
 async fn test_concurrency_protection_occ() -> Result<()> {
-    let (repo, pg_ctx, _) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let account = Account::builder(
         account_id,
@@ -119,7 +113,7 @@ async fn test_concurrency_protection_occ() -> Result<()> {
 
 #[tokio::test]
 async fn test_unique_constraints() -> Result<()> {
-    let (repo, pg_ctx, _) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let identifier = RegistrationIdentifier::try_from_email("unique@test.com")?;
 
     let acc1 =
@@ -141,7 +135,7 @@ async fn test_unique_constraints() -> Result<()> {
 
 #[tokio::test]
 async fn test_lookups() -> Result<()> {
-    let (repo, pg_ctx, _) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let email = Email::try_new("lookup@test.com")?;
     let identifier = RegistrationIdentifier::try_from_email(email.to_string())?;
     let ext_id = SubId::from_raw("ext_123");
@@ -173,7 +167,7 @@ async fn test_lookups() -> Result<()> {
 
 #[tokio::test]
 async fn test_rollback_works_properly() -> Result<()> {
-    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let account = Account::builder(
         account_id,
@@ -195,7 +189,7 @@ async fn test_rollback_works_properly() -> Result<()> {
 
 #[tokio::test]
 async fn test_rigorous_partial_fetch_integrity() -> Result<()> {
-    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let email = Email::try_new("partial@integrity.com")?;
 

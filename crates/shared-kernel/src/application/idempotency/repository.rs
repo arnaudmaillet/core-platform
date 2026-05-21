@@ -1,4 +1,4 @@
-// crates/shared_kernel/src/domain/repositories/idempotency_repository.rs
+// crates/shared-kernel/src/application/idempotency/repository.rs
 
 use crate::core::{Result, Transaction};
 use async_trait::async_trait;

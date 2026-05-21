@@ -24,6 +24,10 @@ impl IdentifiableCommand for UnfollowCommand {
     fn region(&self) -> String {
         self.target.region.to_string()
     }
+
+    fn cache_key(&self) -> Option<String> {
+        None
+    }
 }
 
 impl UnfollowCommand {
