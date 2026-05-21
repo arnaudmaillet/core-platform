@@ -34,7 +34,6 @@ sqlx = { workspace = true, features = [
     "uuid",
     "chrono",
 ] }
-tokio-stream = { version = "0.1", features = ["net"] }
 
 [dev-dependencies]
 auth = { workspace = true, features = ["test-utils"] }
