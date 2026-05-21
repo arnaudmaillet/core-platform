@@ -30,6 +30,14 @@ impl IdentifiableCommand for ChangeBetaTierCommand {
     fn region(&self) -> String {
         self.target.region.to_string()
     }
+
+    fn cache_key(&self) -> Option<String> {
+        Some(format!(
+            "account:aggregate:{}:{}",
+            self.target.region.as_str(),
+            self.target.id.uuid()
+        ))
+    }
 }
 
 impl ChangeBetaTierCommand {

@@ -2,10 +2,8 @@ use account::db::PostgresAccountRepository;
 use account::entities::Account;
 use account::repositories::AccountRepository;
 use account::types::{AccountRole, AccountState, RegistrationIdentifier};
-use shared_kernel::cache::CacheRepository;
 use shared_kernel::postgres::PostgresTransaction;
 use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
-use std::time::Duration;
 use tokio;
 
 use shared_kernel::core::{Error, Identifier, Result, Versioned};
@@ -24,7 +22,7 @@ async fn get_test_context() -> (
 
     let redis_ctx = RedisTestContext::builder().build().await;
 
-    let repo = PostgresAccountRepository::new(pg_ctx.pool().clone(), redis_ctx.repository());
+    let repo = PostgresAccountRepository::new(pg_ctx.pool().clone());
 
     (repo, pg_ctx, redis_ctx)
 }
@@ -120,82 +118,14 @@ async fn test_concurrency_protection_occ() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_cache_logic_integrity() -> Result<()> {
-    let (repo, pg_ctx, redis_ctx) = get_test_context().await;
-    let cache = redis_ctx.repository();
-    let account_id = AccountId::generate(Region::default());
-
-    // Utiliser la même logique de clé que le Repo ---
-    // Tu peux soit appeler PostgresAccountRepository::cache_key(account_id)
-    // Soit reproduire exactement le format :
-    let cache_key = format!(
-        "account:aggregate:{}:{}",
-        account_id.region().as_str(),
-        account_id.uuid()
-    );
-
-    let account = Account::builder(
-        account_id,
-        RegistrationIdentifier::try_from_email("cache@test.com")?,
-    )
-    .build()?;
-
-    // 1. Create + find_by_id
-    let mut tx = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-    repo.create(&account, &mut tx).await?;
-    tx.into_inner().commit().await.unwrap();
-
-    let _ = repo.find_by_id(account_id, None).await?;
-
-    // --- AJUSTEMENT 2 : Assertion robuste avec retries ---
-    let mut success = false;
-    for _ in 0..10 {
-        if cache.exists(&cache_key).await? {
-            success = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(
-        success,
-        "Cache should be filled (checked with key: {})",
-        cache_key
-    );
-
-    // 3. Save -> Invalide le cache
-    let mut to_update = account.clone();
-    to_update.activate()?;
-    repo.save(&mut to_update, None).await?;
-
-    // Même logique pour l'invalidation (on attend que ce soit supprimé)
-    let mut invalidated = false;
-    for _ in 0..10 {
-        if !cache.exists(&cache_key).await? {
-            invalidated = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(invalidated, "Cache must be invalidated after save");
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_unique_constraints() -> Result<()> {
     let (repo, pg_ctx, _) = get_test_context().await;
     let identifier = RegistrationIdentifier::try_from_email("unique@test.com")?;
 
-    let acc1 = Account::builder(
-        AccountId::generate(Region::default()),
-        identifier.clone(),
-    )
-    .build()?;
-    let acc2 = Account::builder(
-        AccountId::generate(Region::default()),
-        identifier.clone(),
-    )
-    .build()?;
+    let acc1 =
+        Account::builder(AccountId::generate(Region::default()), identifier.clone()).build()?;
+    let acc2 =
+        Account::builder(AccountId::generate(Region::default()), identifier.clone()).build()?;
 
     let mut tx1 = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
     repo.create(&acc1, &mut tx1).await?;
@@ -259,99 +189,6 @@ async fn test_rollback_works_properly() -> Result<()> {
 
     let found = repo.find_by_id(account_id, None).await?;
     assert!(found.is_none(), "Account should not exist after rollback");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_cache_hit_proven_by_db_deletion() -> Result<()> {
-    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
-
-    let account = Account::builder(
-        account_id,
-        RegistrationIdentifier::try_from_email("cache-check@test.com")?,
-    )
-    .build()?;
-
-    // 1. Persistance initiale
-    let mut tx = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-    repo.create(&account, &mut tx).await?;
-    tx.into_inner().commit().await.unwrap();
-
-    // 2. Premier find_by_id : remplit le cache
-    let _ = repo.find_by_id(account_id, None).await?;
-
-    // Attendre le spawn asynchrone du cache
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-    // 3. SABOTAGE : Suppression SQL directe avec la correction & devant pg_ctx.pool()
-    sqlx::query("DELETE FROM account_identity WHERE account_id = $1")
-        .bind(account_id.as_uuid())
-        .execute(&pg_ctx.pool())
-        .await
-        .map_err(|e| Error::internal(e.to_string()))?;
-
-    // 4. Tentative de récupération (doit être un Cache Hit)
-    let found_from_cache = repo.find_by_id(account_id, None).await?;
-
-    assert!(
-        found_from_cache.is_some(),
-        "Le cache devrait renvoyer l'objet même si la DB est vide"
-    );
-
-    // 5. Verification du bypass en transaction
-    let mut tx_check = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-    let found_in_tx = repo.find_by_id(account_id, Some(&mut tx_check)).await?;
-
-    assert!(
-        found_in_tx.is_none(),
-        "En transaction, on doit ignorer le cache et voir que la DB est vide"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_cache_performance_benefit() -> Result<()> {
-    let (repo, pg_ctx, _redis_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
-
-    // On prépare un compte
-    let account = Account::builder(
-        account_id,
-        RegistrationIdentifier::try_from_email("perf@test.com")?,
-    )
-    .build()?;
-
-    let mut tx = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-    repo.create(&account, &mut tx).await?;
-    tx.into_inner().commit().await.unwrap();
-
-    // --- ÉTAPE 1 : Premier appel (Remplit le cache) ---
-    let _ = repo.find_by_id(account_id, None).await?;
-
-    // On attend un peu pour être SÛR que le cache est prêt et écrit
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    // --- ÉTAPE 2 : Mesure de l'appel Cache ---
-    let start_cache = std::time::Instant::now();
-    let _ = repo.find_by_id(account_id, None).await?;
-    let duration_cache = start_cache.elapsed();
-
-    // --- ÉTAPE 3 : Mesure de l'appel DB (en forçant une transaction pour bypass le cache) ---
-    let mut tx_force = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
-    let start_db = std::time::Instant::now();
-    let _ = repo.find_by_id(account_id, Some(&mut tx_force)).await?;
-    let duration_db = start_db.elapsed();
-
-    println!("⏱️ Cache: {:?}, ⏱️ DB: {:?}", duration_cache, duration_db);
-
-    // En théorie, Redis est 5x à 10x plus rapide que Postgres avec des JOIN
-    assert!(
-        duration_cache < duration_db,
-        "Le cache doit être plus rapide que la DB"
-    );
 
     Ok(())
 }

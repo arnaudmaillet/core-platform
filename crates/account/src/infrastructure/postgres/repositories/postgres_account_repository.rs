@@ -2,9 +2,8 @@
 
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres, query_scalar};
-use std::{sync::Arc, time::Duration};
 
-use shared_kernel::{cache::{CacheRepository, CacheRepositoryExt}, core::{AggregateRoot, Error, Identifier, Result, Transaction}, types::{AccountId, Email, PhoneNumber, SubId}};
+use shared_kernel::{core::{AggregateRoot, Error, Identifier, Result, Transaction}, types::{AccountId, Email, PhoneNumber, SubId}};
 
 use crate::domain::entities::Account;
 use crate::domain::repositories::AccountRepository;
@@ -15,17 +14,12 @@ use crate::infrastructure::postgres::rows::{
 
 pub struct PostgresAccountRepository {
     pool: Pool<Postgres>,
-    cache: Arc<dyn CacheRepository>,
 }
 
 impl PostgresAccountRepository {
-    pub fn new(pool: Pool<Postgres>, cache: Arc<dyn CacheRepository>) -> Self {
-        Self { pool, cache }
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool }
     }
-
-    pub fn cache_key(id: AccountId) -> String {
-    format!("account:aggregate:{}:{}", id.region().as_str(), id.uuid())
-}
 }
 
 #[async_trait]
@@ -36,21 +30,6 @@ impl AccountRepository for PostgresAccountRepository {
         id: AccountId,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
-        let key = Self::cache_key(id);
-        let is_no_tx = tx.is_none();
-
-        // 1. Stratégie de Cache (Uniquement si pas de transaction)
-        if is_no_tx {
-            let cache_result = tokio::time::timeout(
-                std::time::Duration::from_millis(50),
-                self.cache.get_obj::<Account>(&key),
-            )
-            .await;
-
-            if let Ok(Ok(Some(account))) = cache_result {
-                return Ok(Some(account));
-            }
-        }
 
         // 2. Fallback DB (Si pas en cache ou si transaction active)
         let uid = id.uuid();
@@ -81,24 +60,6 @@ impl AccountRepository for PostgresAccountRepository {
                 }
             })
         }).await?;
-
-        // 3. Ré-alimentation du Cache en tâche de fond (si lecture DB réussie)
-        if is_no_tx {
-            if let Some(account) = &account_opt {
-                let cache_handle = self.cache.clone();
-                let account_to_cache = account.clone();
-                let cache_key_owned = key.clone();
-                tokio::spawn(async move {
-                    let _ = cache_handle
-                        .set_obj(
-                            &cache_key_owned,
-                            &account_to_cache,
-                            Some(std::time::Duration::from_secs(900)),
-                        )
-                        .await;
-                });
-            }
-        }
 
         Ok(account_opt)
     }
@@ -246,16 +207,6 @@ impl AccountRepository for PostgresAccountRepository {
                 Ok(())
             })
         }).await?;
-        
-        let cache_handle = self.cache.clone();
-        let key = Self::cache_key(account.account_id());
-        tokio::spawn(async move {
-            let _ = tokio::time::timeout(
-                Duration::from_millis(100),
-                cache_handle.delete(&key),
-            )
-            .await;
-        });
 
         Ok(())
     }
@@ -391,20 +342,6 @@ impl AccountRepository for PostgresAccountRepository {
             })
         })
         .await?;
-
-        // Invalidation du cache APRÈS la réussite de la transaction
-        // Note : Idéalement, l'invalidation du cache se fait après le commit final,
-        // mais ici on suit ta logique habituelle de repository.
-        let cache_handle = self.cache.clone();
-        let key = Self::cache_key(id);
-
-        tokio::spawn(async move {
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_millis(100),
-                cache_handle.delete(&key),
-            )
-            .await;
-        });
 
         Ok(())
     }
