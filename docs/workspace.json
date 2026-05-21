@@ -5,7 +5,7 @@
   "description" : "Social Network - Full Scale Production Architecture",
   "documentation" : { },
   "id" : 1,
-  "lastModifiedDate" : "2026-03-26T02:16:29Z",
+  "lastModifiedDate" : "2026-05-20T17:59:02Z",
   "model" : {
     "people" : [ {
       "description" : "Utilisateur final accédant aux services via Mobile ou Web.",
@@ -119,6 +119,21 @@
       "properties" : {
         "structurizr.dsl.identifier" : "aiService"
       },
+      "relationships" : [ {
+        "description" : "Appel API Scan",
+        "destinationId" : "42",
+        "id" : "148",
+        "sourceId" : "7",
+        "tags" : "Relationship",
+        "technology" : "HTTPS/JSON"
+      }, {
+        "description" : "Appel API Scan",
+        "destinationId" : "8",
+        "id" : "149",
+        "linkedRelationshipId" : "148",
+        "sourceId" : "7",
+        "technology" : "HTTPS/JSON"
+      } ],
       "tags" : "Element,Software System,External"
     }, {
       "containers" : [ {
@@ -130,58 +145,86 @@
           "structurizr.dsl.identifier" : "kafka"
         },
         "relationships" : [ {
-          "description" : "Consomme [User_Followed/Avatar_Changed]",
-          "destinationId" : "16",
-          "id" : "83",
+          "description" : "Consomme événements",
+          "destinationId" : "42",
+          "id" : "136",
           "sourceId" : "9",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
-          "description" : "Sync des relations",
-          "destinationId" : "21",
-          "id" : "88",
+          "description" : "Consomme événements",
+          "destinationId" : "35",
+          "id" : "137",
           "sourceId" : "9",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
-          "description" : "Consomme [Post_Created/Content_Banned]",
+          "description" : "Consomme événements",
           "destinationId" : "24",
-          "id" : "91",
+          "id" : "138",
           "sourceId" : "9",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
-          "description" : "Update statut post",
-          "destinationId" : "28",
-          "id" : "99",
-          "sourceId" : "9",
-          "tags" : "Relationship",
-          "technology" : "Kafka Protocol"
-        }, {
-          "description" : "Consomme [Content_Banned]",
-          "destinationId" : "31",
-          "id" : "105",
-          "sourceId" : "9",
-          "tags" : "Relationship",
-          "technology" : "Kafka Protocol"
-        }, {
-          "description" : "Consomme [Comment_Created]",
+          "description" : "Consomme événements",
           "destinationId" : "44",
-          "id" : "106",
+          "id" : "139",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Consomme événements",
+          "destinationId" : "46",
+          "id" : "140",
           "sourceId" : "9",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Déclenche Fan-out",
           "destinationId" : "38",
-          "id" : "112",
+          "id" : "141",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Update statut",
+          "destinationId" : "28",
+          "id" : "142",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Consomme bannissement",
+          "destinationId" : "31",
+          "id" : "143",
           "sourceId" : "9",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Consomme [Media_Uploaded/Avatar_Changed]",
           "destinationId" : "41",
-          "id" : "123",
+          "id" : "144",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Sync des relations",
+          "destinationId" : "21",
+          "id" : "145",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Consomme [User_Followed/Avatar_Changed]",
+          "destinationId" : "16",
+          "id" : "146",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "Kafka Protocol"
+        }, {
+          "description" : "Consomme flux",
+          "destinationId" : "49",
+          "id" : "147",
           "sourceId" : "9",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -464,28 +507,28 @@
         "relationships" : [ {
           "description" : "Persistance",
           "destinationId" : "20",
-          "id" : "84",
+          "id" : "83",
           "sourceId" : "19",
           "tags" : "Relationship",
           "technology" : "CQL"
         }, {
           "description" : "Graph Queries",
           "destinationId" : "21",
-          "id" : "85",
+          "id" : "84",
           "sourceId" : "19",
           "tags" : "Relationship",
           "technology" : "Thrift"
         }, {
           "description" : "Cache L1",
           "destinationId" : "22",
-          "id" : "86",
+          "id" : "85",
           "sourceId" : "19",
           "tags" : "Relationship",
           "technology" : "RESP"
         }, {
           "description" : "Émet [User_Followed]",
           "destinationId" : "9",
-          "id" : "87",
+          "id" : "86",
           "sourceId" : "19",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -537,7 +580,7 @@
         "relationships" : [ {
           "description" : "Requêtes",
           "destinationId" : "25",
-          "id" : "89",
+          "id" : "87",
           "sourceId" : "23",
           "tags" : "Relationship",
           "technology" : "HTTPS/JSON"
@@ -556,7 +599,7 @@
         "relationships" : [ {
           "description" : "Indexation",
           "destinationId" : "25",
-          "id" : "90",
+          "id" : "88",
           "sourceId" : "24",
           "tags" : "Relationship",
           "technology" : "HTTPS/JSON"
@@ -586,28 +629,28 @@
         "relationships" : [ {
           "description" : "Cache suggestions",
           "destinationId" : "27",
-          "id" : "92",
+          "id" : "89",
           "sourceId" : "26",
           "tags" : "Relationship",
           "technology" : "RESP"
         }, {
           "description" : "Extraction candidats",
           "destinationId" : "19",
-          "id" : "93",
+          "id" : "90",
           "sourceId" : "26",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Filtres géo",
           "destinationId" : "23",
-          "id" : "94",
+          "id" : "91",
           "sourceId" : "26",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Hydratation",
           "destinationId" : "16",
-          "id" : "95",
+          "id" : "92",
           "sourceId" : "26",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
@@ -637,21 +680,21 @@
         "relationships" : [ {
           "description" : "Persistance",
           "destinationId" : "29",
-          "id" : "96",
+          "id" : "93",
           "sourceId" : "28",
           "tags" : "Relationship",
           "technology" : "CQL"
         }, {
           "description" : "Cache L2",
           "destinationId" : "30",
-          "id" : "97",
+          "id" : "94",
           "sourceId" : "28",
           "tags" : "Relationship",
           "technology" : "RESP"
         }, {
           "description" : "Émet [Post_Created]",
           "destinationId" : "9",
-          "id" : "98",
+          "id" : "95",
           "sourceId" : "28",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -692,28 +735,28 @@
         "relationships" : [ {
           "description" : "Persistance",
           "destinationId" : "32",
-          "id" : "100",
+          "id" : "96",
           "sourceId" : "31",
           "tags" : "Relationship",
           "technology" : "CQL"
         }, {
           "description" : "Cache L1",
           "destinationId" : "33",
-          "id" : "101",
+          "id" : "97",
           "sourceId" : "31",
           "tags" : "Relationship",
           "technology" : "RESP"
         }, {
           "description" : "Publie les nouveaux commentaires en temps-réel",
           "destinationId" : "34",
-          "id" : "102",
+          "id" : "98",
           "sourceId" : "31",
           "tags" : "Relationship",
           "technology" : "RESP / PubSub"
         }, {
           "description" : "Émet [Comment_Created]",
           "destinationId" : "9",
-          "id" : "103",
+          "id" : "99",
           "sourceId" : "31",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -754,7 +797,7 @@
         "relationships" : [ {
           "description" : "Diffuse les messages aux instances connectées",
           "destinationId" : "11",
-          "id" : "104",
+          "id" : "100",
           "sourceId" : "34",
           "tags" : "Relationship",
           "technology" : "RESP / PubSub"
@@ -773,28 +816,28 @@
         "relationships" : [ {
           "description" : "Compteurs atomiques",
           "destinationId" : "37",
-          "id" : "113",
+          "id" : "106",
           "sourceId" : "35",
           "tags" : "Relationship",
           "technology" : "RESP"
         }, {
           "description" : "Persistence",
           "destinationId" : "36",
-          "id" : "114",
+          "id" : "107",
           "sourceId" : "35",
           "tags" : "Relationship",
           "technology" : "CQL"
         }, {
           "description" : "Émet [Like_Added]",
           "destinationId" : "9",
-          "id" : "115",
+          "id" : "108",
           "sourceId" : "35",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Publie les mises à jour des compteurs (Likes, Viewers) en temps réel",
           "destinationId" : "34",
-          "id" : "116",
+          "id" : "109",
           "sourceId" : "35",
           "tags" : "Relationship",
           "technology" : "RESP / PubSub"
@@ -835,35 +878,35 @@
         "relationships" : [ {
           "description" : "Stockage Timelines",
           "destinationId" : "39",
-          "id" : "107",
+          "id" : "101",
           "sourceId" : "38",
           "tags" : "Relationship",
           "technology" : "RESP"
         }, {
           "description" : "Get Following",
           "destinationId" : "19",
-          "id" : "108",
+          "id" : "102",
           "sourceId" : "38",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Get Posts",
           "destinationId" : "28",
-          "id" : "109",
+          "id" : "103",
           "sourceId" : "38",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Get Authors",
           "destinationId" : "16",
-          "id" : "110",
+          "id" : "104",
           "sourceId" : "38",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Logique interne (Filtrage, Fusion, Tri)",
           "destinationId" : "38",
-          "id" : "111",
+          "id" : "105",
           "sourceId" : "38",
           "tags" : "Relationship",
           "technology" : "In-Memory"
@@ -893,7 +936,7 @@
         "relationships" : [ {
           "description" : "Émet [Media_Uploaded]",
           "destinationId" : "9",
-          "id" : "117",
+          "id" : "110",
           "sourceId" : "40",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -912,21 +955,21 @@
         "relationships" : [ {
           "description" : "Lecture/Écriture",
           "destinationId" : "4",
-          "id" : "118",
+          "id" : "111",
           "sourceId" : "41",
           "tags" : "Relationship",
           "technology" : "S3 Protocol"
         }, {
           "description" : "Analyse IA",
           "destinationId" : "7",
-          "id" : "120",
+          "id" : "113",
           "sourceId" : "41",
           "tags" : "Relationship",
           "technology" : "HTTPS/JSON"
         }, {
           "description" : "Émet [Media_Processed]",
           "destinationId" : "9",
-          "id" : "122",
+          "id" : "115",
           "sourceId" : "41",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -945,42 +988,42 @@
         "relationships" : [ {
           "description" : "Persistance",
           "destinationId" : "43",
-          "id" : "124",
+          "id" : "116",
           "sourceId" : "42",
           "tags" : "Relationship",
           "technology" : "PostgreSQL Protocol"
         }, {
           "description" : "Scan automatique",
           "destinationId" : "7",
-          "id" : "125",
+          "id" : "117",
           "sourceId" : "42",
           "tags" : "Relationship",
           "technology" : "HTTPS/JSON"
         }, {
           "description" : "Émet [Content_Banned/Approved]",
           "destinationId" : "9",
-          "id" : "126",
+          "id" : "118",
           "sourceId" : "42",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Lockdown",
           "destinationId" : "13",
-          "id" : "127",
+          "id" : "119",
           "sourceId" : "42",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Reset Avatar",
           "destinationId" : "16",
-          "id" : "128",
+          "id" : "120",
           "sourceId" : "42",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Alerte modération",
           "destinationId" : "44",
-          "id" : "129",
+          "id" : "121",
           "sourceId" : "42",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
@@ -1010,28 +1053,28 @@
         "relationships" : [ {
           "description" : "Persistence",
           "destinationId" : "45",
-          "id" : "130",
+          "id" : "122",
           "sourceId" : "44",
           "tags" : "Relationship",
           "technology" : "PostgreSQL Protocol"
         }, {
           "description" : "Get Followers",
           "destinationId" : "19",
-          "id" : "131",
+          "id" : "123",
           "sourceId" : "44",
           "tags" : "Relationship",
           "technology" : "gRPC/Protobuf"
         }, {
           "description" : "Produit [Push_Task]",
           "destinationId" : "9",
-          "id" : "132",
+          "id" : "124",
           "sourceId" : "44",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Vérifie Idempotence",
           "destinationId" : "47",
-          "id" : "133",
+          "id" : "125",
           "sourceId" : "44",
           "tags" : "Relationship",
           "technology" : "RESP"
@@ -1061,28 +1104,28 @@
         "relationships" : [ {
           "description" : "Consomme [Push_Task]",
           "destinationId" : "9",
-          "id" : "134",
+          "id" : "126",
           "sourceId" : "46",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Push",
           "destinationId" : "2",
-          "id" : "135",
+          "id" : "127",
           "sourceId" : "46",
           "tags" : "Relationship",
           "technology" : "HTTPS"
         }, {
           "description" : "Email",
           "destinationId" : "3",
-          "id" : "137",
+          "id" : "129",
           "sourceId" : "46",
           "tags" : "Relationship",
           "technology" : "HTTPS"
         }, {
           "description" : "Marque comme envoyé",
           "destinationId" : "47",
-          "id" : "139",
+          "id" : "131",
           "sourceId" : "46",
           "tags" : "Relationship",
           "technology" : "RESP"
@@ -1112,7 +1155,7 @@
         "relationships" : [ {
           "description" : "Flux brut",
           "destinationId" : "9",
-          "id" : "140",
+          "id" : "132",
           "sourceId" : "48",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
@@ -1131,21 +1174,21 @@
         "relationships" : [ {
           "description" : "Consomme flux",
           "destinationId" : "9",
-          "id" : "141",
+          "id" : "133",
           "sourceId" : "49",
           "tags" : "Relationship",
           "technology" : "Kafka Protocol"
         }, {
           "description" : "Bulk Insert",
           "destinationId" : "50",
-          "id" : "142",
+          "id" : "134",
           "sourceId" : "49",
           "tags" : "Relationship",
           "technology" : "Native"
         }, {
           "description" : "Archivage",
           "destinationId" : "51",
-          "id" : "143",
+          "id" : "135",
           "sourceId" : "49",
           "tags" : "Relationship",
           "technology" : "S3 Protocol"
@@ -1192,29 +1235,29 @@
       }, {
         "description" : "Lecture/Écriture",
         "destinationId" : "4",
-        "id" : "119",
-        "linkedRelationshipId" : "118",
+        "id" : "112",
+        "linkedRelationshipId" : "111",
         "sourceId" : "8",
         "technology" : "S3 Protocol"
       }, {
         "description" : "Analyse IA",
         "destinationId" : "7",
-        "id" : "121",
-        "linkedRelationshipId" : "120",
+        "id" : "114",
+        "linkedRelationshipId" : "113",
         "sourceId" : "8",
         "technology" : "HTTPS/JSON"
       }, {
         "description" : "Push",
         "destinationId" : "2",
-        "id" : "136",
-        "linkedRelationshipId" : "135",
+        "id" : "128",
+        "linkedRelationshipId" : "127",
         "sourceId" : "8",
         "technology" : "HTTPS"
       }, {
         "description" : "Email",
         "destinationId" : "3",
-        "id" : "138",
-        "linkedRelationshipId" : "137",
+        "id" : "130",
+        "linkedRelationshipId" : "129",
         "sourceId" : "8",
         "technology" : "HTTPS"
       } ],
@@ -1505,11 +1548,7 @@
       }, {
         "id" : "111"
       }, {
-        "id" : "112"
-      }, {
         "id" : "113"
-      }, {
-        "id" : "114"
       }, {
         "id" : "115"
       }, {
@@ -1519,7 +1558,11 @@
       }, {
         "id" : "118"
       }, {
+        "id" : "119"
+      }, {
         "id" : "120"
+      }, {
+        "id" : "121"
       }, {
         "id" : "122"
       }, {
@@ -1533,11 +1576,7 @@
       }, {
         "id" : "127"
       }, {
-        "id" : "128"
-      }, {
         "id" : "129"
-      }, {
-        "id" : "130"
       }, {
         "id" : "131"
       }, {
@@ -1549,7 +1588,11 @@
       }, {
         "id" : "135"
       }, {
+        "id" : "136"
+      }, {
         "id" : "137"
+      }, {
+        "id" : "138"
       }, {
         "id" : "139"
       }, {
@@ -1560,6 +1603,16 @@
         "id" : "142"
       }, {
         "id" : "143"
+      }, {
+        "id" : "144"
+      }, {
+        "id" : "145"
+      }, {
+        "id" : "146"
+      }, {
+        "id" : "147"
+      }, {
+        "id" : "148"
       }, {
         "id" : "52"
       }, {
@@ -1753,7 +1806,7 @@
         "response" : false
       }, {
         "description" : "3. Check sanctions",
-        "id" : "124",
+        "id" : "116",
         "order" : "3",
         "response" : false
       }, {
@@ -1830,7 +1883,7 @@
         "response" : false
       }, {
         "description" : "5. Auto-create profile",
-        "id" : "83",
+        "id" : "146",
         "order" : "5",
         "response" : false
       }, {
@@ -1901,22 +1954,22 @@
         "response" : false
       }, {
         "description" : "5. Resize",
-        "id" : "123",
+        "id" : "144",
         "order" : "5",
         "response" : false
       }, {
         "description" : "6. Scan NSFW",
-        "id" : "120",
+        "id" : "113",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. Analysis",
-        "id" : "125",
+        "id" : "148",
         "order" : "7",
-        "response" : true
+        "response" : false
       }, {
         "description" : "8. Revert if offensive",
-        "id" : "128",
+        "id" : "120",
         "order" : "8",
         "response" : false
       } ]
@@ -1972,27 +2025,27 @@
         "response" : false
       }, {
         "description" : "3. Persist Relation",
-        "id" : "84",
+        "id" : "83",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. Update Cache",
-        "id" : "86",
+        "id" : "85",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. UserFollowed Event",
-        "id" : "87",
+        "id" : "86",
         "order" : "5",
         "response" : false
       }, {
         "description" : "6. Increment Counter",
-        "id" : "83",
+        "id" : "146",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. Update Social Graph",
-        "id" : "88",
+        "id" : "145",
         "order" : "7",
         "response" : false
       } ]
@@ -2052,37 +2105,37 @@
         "response" : false
       }, {
         "description" : "3. Check pre-calculated results",
-        "id" : "92",
+        "id" : "89",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. Get Candidates",
-        "id" : "93",
+        "id" : "90",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. Find k-hop neighbors",
-        "id" : "85",
+        "id" : "84",
         "order" : "5",
         "response" : false
       }, {
         "description" : "6. Filter by Geo/Interests",
-        "id" : "94",
+        "id" : "91",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. Query Scoring",
-        "id" : "89",
+        "id" : "87",
         "order" : "7",
         "response" : false
       }, {
         "description" : "8. Batch Get Profiles",
-        "id" : "95",
+        "id" : "92",
         "order" : "8",
         "response" : false
       }, {
         "description" : "9. Cache results",
-        "id" : "92",
+        "id" : "89",
         "order" : "9",
         "response" : false
       } ]
@@ -2126,7 +2179,7 @@
         "response" : false
       }, {
         "description" : "3. [PFADD] presence:post_123 (HyperLogLog)",
-        "id" : "113",
+        "id" : "106",
         "order" : "3",
         "response" : false
       }, {
@@ -2141,17 +2194,17 @@
         "response" : false
       }, {
         "description" : "6. [PEXPIRE] Reset TTL sur la présence",
-        "id" : "113",
+        "id" : "106",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. [PUBLISH] channel:post_123 {type: 'VIEWER_COUNT', count: 4250}",
-        "id" : "116",
+        "id" : "109",
         "order" : "7",
         "response" : false
       }, {
         "description" : "8. [SUBSCRIBE]",
-        "id" : "104",
+        "id" : "100",
         "order" : "8",
         "response" : false
       }, {
@@ -2229,7 +2282,7 @@
         "response" : false
       }, {
         "description" : "4. [READ] Check Local Post Cache",
-        "id" : "97",
+        "id" : "94",
         "order" : "4",
         "response" : false
       }, {
@@ -2239,7 +2292,7 @@
         "response" : false
       }, {
         "description" : "6. [READ] Get Hot Counters",
-        "id" : "113",
+        "id" : "106",
         "order" : "6",
         "response" : false
       }, {
@@ -2249,7 +2302,7 @@
         "response" : false
       }, {
         "description" : "8. [READ] Check Hot Thread Cache",
-        "id" : "101",
+        "id" : "97",
         "order" : "8",
         "response" : false
       }, {
@@ -2325,37 +2378,37 @@
         "response" : false
       }, {
         "description" : "3. PostCreated Event",
-        "id" : "98",
+        "id" : "95",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. Transcode Media",
-        "id" : "123",
+        "id" : "144",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. Scan AI",
-        "id" : "120",
+        "id" : "113",
         "order" : "5",
         "response" : false
       }, {
         "description" : "6. Risk Scoring",
-        "id" : "125",
+        "id" : "148",
         "order" : "6",
-        "response" : true
+        "response" : false
       }, {
         "description" : "7. ContentApproved Event",
-        "id" : "126",
+        "id" : "118",
         "order" : "7",
         "response" : false
       }, {
         "description" : "8. Status = VISIBLE",
-        "id" : "99",
+        "id" : "142",
         "order" : "8",
         "response" : false
       }, {
         "description" : "9. Trigger Fan-out",
-        "id" : "112",
+        "id" : "141",
         "order" : "9",
         "response" : false
       } ]
@@ -2399,12 +2452,12 @@
         "response" : false
       }, {
         "description" : "3. Geo_Tile_Grid Aggregation",
-        "id" : "89",
+        "id" : "87",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. Top Posts per Tile",
-        "id" : "89",
+        "id" : "87",
         "order" : "4",
         "response" : true
       }, {
@@ -2448,27 +2501,27 @@
       "order" : 13,
       "relationships" : [ {
         "description" : "1. [EVENT] PostCreated {author_id, is_celebrity: false}",
-        "id" : "98",
+        "id" : "95",
         "order" : "1",
         "response" : false
       }, {
         "description" : "2. [CONSUME] Post Event",
-        "id" : "112",
+        "id" : "141",
         "order" : "2",
         "response" : false
       }, {
         "description" : "3. Check: is_celebrity == false",
-        "id" : "111",
+        "id" : "105",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. [gRPC] Get Followers IDs",
-        "id" : "108",
+        "id" : "102",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. [LPUSH] Push post_id to follower timelines (Fan-out)",
-        "id" : "107",
+        "id" : "101",
         "order" : "5",
         "response" : false
       } ]
@@ -2520,47 +2573,47 @@
         "response" : false
       }, {
         "description" : "3. [LRANGE] Récupère les IDs pré-calculés (Timeline des amis 'normaux')",
-        "id" : "107",
+        "id" : "101",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. [IF_CACHE_MISS] Récupère la liste complète des suivis",
-        "id" : "108",
+        "id" : "102",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. [IF_CACHE_MISS] Pull des derniers posts (filtrés hors célébrités)",
-        "id" : "109",
+        "id" : "103",
         "order" : "5",
         "response" : false
       }, {
         "description" : "6. [IF_CACHE_MISS] Remplit le cache Redis (LPUSH)",
-        "id" : "107",
+        "id" : "101",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. [L1 Cache] Récupère les IDs des célébrités suivies par l'utilisateur",
-        "id" : "110",
+        "id" : "104",
         "order" : "7",
         "response" : false
       }, {
         "description" : "8. [PULL gRPC] Récupère les N derniers posts pour ces IDs spécifiques",
-        "id" : "109",
+        "id" : "103",
         "order" : "8",
         "response" : false
       }, {
         "description" : "9. Fusionne Push + Pull, dédoublonne et trie chronologiquement",
-        "id" : "111",
+        "id" : "105",
         "order" : "9",
         "response" : false
       }, {
         "description" : "10. [gRPC Batch] Hydrate le contenu des posts",
-        "id" : "109",
+        "id" : "103",
         "order" : "10",
         "response" : false
       }, {
         "description" : "11. [gRPC Batch] Hydrate les auteurs (Avatar, Badge VIP)",
-        "id" : "110",
+        "id" : "104",
         "order" : "11",
         "response" : false
       }, {
@@ -2638,17 +2691,17 @@
         "response" : false
       }, {
         "description" : "3. [WRITE] ScyllaDB (Status: LIVE)",
-        "id" : "100",
+        "id" : "96",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. [PUBLISH] channel:post_123",
-        "id" : "102",
+        "id" : "98",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. [SUBSCRIBE]",
-        "id" : "104",
+        "id" : "100",
         "order" : "5",
         "response" : false
       }, {
@@ -2658,52 +2711,52 @@
         "response" : true
       }, {
         "description" : "7. [EVENT] CommentCreated",
-        "id" : "103",
+        "id" : "99",
         "order" : "7",
         "response" : false
       }, {
         "description" : "8. [CONSUME] Analyse NLP / Toxicité",
-        "id" : "126",
+        "id" : "136",
         "order" : "8",
-        "response" : true
+        "response" : false
       }, {
         "description" : "9. Scan IA",
-        "id" : "125",
+        "id" : "117",
         "order" : "9",
         "response" : false
       }, {
         "description" : "10. [EVENT] ContentBanned",
-        "id" : "126",
+        "id" : "118",
         "order" : "10",
         "response" : false
       }, {
         "description" : "11. [CONSUME] Delete / Hide in DB",
-        "id" : "105",
+        "id" : "143",
         "order" : "11",
         "response" : false
       }, {
         "description" : "12. [PUBLISH] channel:post_123 {type: 'DELETE', id: 'msg_99'}",
-        "id" : "102",
+        "id" : "98",
         "order" : "12",
         "response" : false
       }, {
         "description" : "13. [WS PUSH] L'UI retire le message de l'écran",
-        "id" : "104",
+        "id" : "100",
         "order" : "13",
         "response" : false
       }, {
         "description" : "14. [CONSUME] Incrémente les compteurs globaux",
-        "id" : "115",
+        "id" : "137",
         "order" : "14",
-        "response" : true
+        "response" : false
       }, {
         "description" : "15. [CONSUME] Indexation",
-        "id" : "91",
+        "id" : "138",
         "order" : "15",
         "response" : false
       }, {
         "description" : "16. [CONSUME] Notify Post Owner",
-        "id" : "106",
+        "id" : "139",
         "order" : "16",
         "response" : false
       } ]
@@ -2759,27 +2812,27 @@
         "response" : false
       }, {
         "description" : "3. SQL Persist",
-        "id" : "124",
+        "id" : "116",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. Content Analysis",
-        "id" : "125",
+        "id" : "117",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. ContentBanned Event",
-        "id" : "126",
+        "id" : "118",
         "order" : "5",
         "response" : false
       }, {
         "description" : "6. Mask Post",
-        "id" : "99",
+        "id" : "142",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. Remove from ES",
-        "id" : "91",
+        "id" : "138",
         "order" : "7",
         "response" : false
       } ]
@@ -2817,37 +2870,37 @@
       "order" : 17,
       "relationships" : [ {
         "description" : "1. Engagement Event",
-        "id" : "106",
+        "id" : "139",
         "order" : "1",
         "response" : false
       }, {
         "description" : "2. Idempotency Check",
-        "id" : "133",
+        "id" : "125",
         "order" : "2",
         "response" : false
       }, {
         "description" : "3. Get Tokens",
-        "id" : "130",
+        "id" : "122",
         "order" : "3",
         "response" : false
       }, {
         "description" : "4. Produit PushTask",
-        "id" : "132",
+        "id" : "124",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. Execute",
-        "id" : "134",
+        "id" : "140",
         "order" : "5",
-        "response" : true
+        "response" : false
       }, {
         "description" : "6. Send Push",
-        "id" : "135",
+        "id" : "127",
         "order" : "6",
         "response" : false
       }, {
         "description" : "7. Mark Task Done",
-        "id" : "139",
+        "id" : "131",
         "order" : "7",
         "response" : false
       } ]
@@ -2894,22 +2947,22 @@
         "response" : false
       }, {
         "description" : "2. Raw Events",
-        "id" : "140",
+        "id" : "132",
         "order" : "2",
         "response" : false
       }, {
         "description" : "3. Enrichment",
-        "id" : "141",
+        "id" : "147",
         "order" : "3",
-        "response" : true
+        "response" : false
       }, {
         "description" : "4. Insert OLAP",
-        "id" : "142",
+        "id" : "134",
         "order" : "4",
         "response" : false
       }, {
         "description" : "5. Archive",
-        "id" : "143",
+        "id" : "135",
         "order" : "5",
         "response" : false
       }, {
@@ -2961,13 +3014,15 @@
       "name" : "System Context View: Backend Platform",
       "order" : 1,
       "relationships" : [ {
-        "id" : "119"
+        "id" : "112"
       }, {
-        "id" : "121"
+        "id" : "114"
       }, {
-        "id" : "136"
+        "id" : "128"
       }, {
-        "id" : "138"
+        "id" : "130"
+      }, {
+        "id" : "149"
       }, {
         "id" : "53"
       }, {

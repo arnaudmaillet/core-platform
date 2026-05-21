@@ -37,10 +37,7 @@ impl AccountServiceBuilder {
     }
 
     pub fn build_context(&self) -> Arc<AccountAppContext> {
-        let account_repo = Arc::new(PostgresAccountRepository::new(
-            self.pool.clone(),
-            self.redis_repo.clone(),
-        ));
+        let account_repo = Arc::new(PostgresAccountRepository::new(self.pool.clone()));
 
         let outbox_repo = Arc::new(PostgresOutboxRepository::new(self.pool.clone()));
         let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("account_idempotency"));
@@ -54,7 +51,7 @@ impl AccountServiceBuilder {
     }
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new();
+        let mut bus = CommandBus::new(self.redis_repo.clone());
 
         // --- Access Management ---
         bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);

@@ -34,7 +34,7 @@ impl ProfileTestFixture {
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
 
-        let base_ctx = BaseAppContext::new(None, cache);
+        let base_ctx = BaseAppContext::new(None, cache.clone());
 
         let app_ctx = ProfileAppContext::new(
             base_ctx,
@@ -49,7 +49,7 @@ impl ProfileTestFixture {
         let profile_id = ProfileId::generate(region);
         let profile_ctx = ProfileContext::new(app_ctx.clone(), Some(profile_id), region);
 
-        let mut bus = CommandBus::new();
+        let mut bus = CommandBus::new(cache);
 
         // --- Enregistrement des Handlers ---
         // AJOUT : Le bus principal doit connaître le handler de création pour les tests nominaux/retry
@@ -185,7 +185,8 @@ impl ProfileTestFixture {
     pub fn clone_with_profile_id(&self, new_profile_id: ProfileId) -> Self {
         let region = self.region();
         let profile_ctx = ProfileContext::new(self.app_ctx.clone(), Some(new_profile_id), region);
-        let mut new_bus = CommandBus::new();
+        let cache = self.app_ctx.base().cache().clone();
+        let mut new_bus = CommandBus::new(cache);
 
         new_bus.register::<ProfileContext, CreateProfileCommand, CreateProfileHandler>(
             CreateProfileHandler,

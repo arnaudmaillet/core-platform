@@ -33,7 +33,7 @@ impl SocialTestFixture {
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
 
-        let base_ctx = BaseAppContext::new(None, cache);
+        let base_ctx = BaseAppContext::new(None, cache.clone());
 
         // 2. Assemblage du SocialAppContext global
         let app_ctx = SocialAppContext::new(
@@ -52,7 +52,7 @@ impl SocialTestFixture {
         let social_ctx = SocialContext::new(app_ctx.clone(), default_target_id, region);
 
         // 4. Enregistrement des Handlers d'écriture dans le CommandBus
-        let mut bus = CommandBus::new();
+        let mut bus = CommandBus::new(cache);
         bus.register::<SocialContext, FollowCommand, FollowHandler>(FollowHandler);
         bus.register::<SocialContext, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
 

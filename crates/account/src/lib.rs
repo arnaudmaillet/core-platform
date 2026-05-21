@@ -13,9 +13,8 @@ pub use domain::{entities, events, repositories, types};
 pub use application::commands;
 pub use application::context;
 
-pub use infrastructure::{postgres::repositories as db, utils};
+pub use infrastructure::postgres::repositories as db;
 
 pub use presentation::services;
-
 
 pub mod test_utils;

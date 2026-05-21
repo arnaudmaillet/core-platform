@@ -1,4 +1,4 @@
-// backend/services/profile/cache_invalidator/src/main.rs
+// backend/services/account/cache_invalidator/src/main.rs
 
 use std::sync::Arc;
 
@@ -20,12 +20,12 @@ async fn main() -> Result<()> {
 
     // 3. Instancier les repos
     let redis = RedisCacheRepository::new(&redis_url).await?;
-    let consumer = KafkaEventConsumer::new(&brokers, "profile-cache-group", 500);
+    let consumer = KafkaEventConsumer::new(&brokers, "account-cache-group", 500);
 
     // 4. Démarrer le worker
     let worker = CacheWorker::new(Arc::new(consumer), Arc::new(redis));
 
-    let worker_handle = tokio::spawn(async move { worker.start("profile.events").await });
+    let worker_handle = tokio::spawn(async move { worker.start("account.events").await });
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {

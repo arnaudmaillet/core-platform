@@ -1,12 +1,11 @@
-#backend/services/profile/cache-invalidator/Cargo.toml
-
 [package]
-name = "profile-cache-invalidator"
+name = "profile-outbox-producer"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = ["service-invalidator"] }
+shared-kernel = { workspace = true, features = ["service-outbox"] }
 tokio = { workspace = true }
+sqlx = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

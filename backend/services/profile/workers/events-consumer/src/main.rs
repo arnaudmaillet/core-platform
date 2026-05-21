@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Initialisation des Contextes de Stockage
     let pg_ctx = PostgresContext::builder()?
         .with_url(database_url)
-        .with_max_connections(20) // Ajuste selon la concurrence de ton worker
+        .with_max_connections(20)
         .build()
         .await?;
 

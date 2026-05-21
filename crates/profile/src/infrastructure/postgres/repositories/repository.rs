@@ -5,28 +5,17 @@ use crate::infrastructure::postgres::rows::PostgresProfileRow;
 use crate::repositories::ProfileRepository;
 use crate::types::{Handle};
 use async_trait::async_trait;
-use shared_kernel::cache::{CacheRepository, CacheRepositoryExt};
 use shared_kernel::core::{AggregateRoot, Error, Identifier, Result, Transaction, Versioned};
 use shared_kernel::types::{AccountId, Region, ProfileId};
 use sqlx::PgPool;
-use std::sync::Arc;
 
 pub struct PostgresProfileRepository {
     pool: PgPool,
-    cache: Arc<dyn CacheRepository>,
 }
 
 impl PostgresProfileRepository {
-    pub fn new(pool: PgPool, cache: Arc<dyn CacheRepository>) -> Self {
-        Self { pool, cache }
-    }
-
-    pub fn cache_key(profile_id: ProfileId, region: Region) -> String {
-        format!(
-            "profile:aggregate:{}:{}",
-            region.as_str(),
-            profile_id.as_uuid()
-        )
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
 
@@ -34,7 +23,6 @@ impl PostgresProfileRepository {
 impl ProfileRepository for PostgresProfileRepository {
     async fn save(&self, profile: &mut Profile, tx: Option<&mut dyn Transaction>) -> Result<()> {
     let row = PostgresProfileRow::from_domain(profile);
-    let key = Self::cache_key(profile.profile_id(), profile.account_id().region());
     let next_version = profile.version() as i64;
     
     // 1. EXTRACTION DU FLAG AVANT LA CLOSURE ASYNC (Lifetime Safe)
@@ -121,13 +109,6 @@ impl ProfileRepository for PostgresProfileRepository {
     })
     .await;
 
-    // --- POST-TRANSACTION ---
-    // Infrastructure passive : aucun record_change() ici, le domaine gère sa vie.
-    let cache_handle = self.cache.clone();
-    tokio::spawn(async move {
-        let _ = cache_handle.delete(&key).await;
-    });
-
     result
 }
 
@@ -138,22 +119,6 @@ impl ProfileRepository for PostgresProfileRepository {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
         let pid = id.as_uuid();
-        let key = Self::cache_key(id, region);
-        let is_no_tx = tx.is_none();
-
-        // 1. Essai Cache
-        if is_no_tx {
-            let cache_result = tokio::time::timeout(
-                std::time::Duration::from_millis(50),
-                self.cache.get_obj::<Profile>(&key),
-            )
-            .await;
-
-            if let Ok(Ok(Some(profile))) = cache_result {
-                return Ok(Some(profile));
-            }
-        }
-
         // 2. Lecture DB
         let profile_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
             let uid = pid;
@@ -174,23 +139,6 @@ impl ProfileRepository for PostgresProfileRepository {
             })
         })
         .await?;
-
-        // 3. MISE À JOUR DU CACHE
-        if is_no_tx && profile_opt.is_some() {
-            let cache_handle = self.cache.clone();
-            let p_clone = profile_opt.clone().unwrap();
-            let key_owned = key.clone();
-            tokio::spawn(async move {
-                // On garde un TTL de 10 min par exemple
-                let _ = cache_handle
-                    .set_obj(
-                        &key_owned,
-                        &p_clone,
-                        Some(std::time::Duration::from_secs(600)),
-                    )
-                    .await;
-            });
-        }
 
         Ok(profile_opt)
     }
@@ -258,7 +206,6 @@ impl ProfileRepository for PostgresProfileRepository {
         region: Region,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
-        let key = Self::cache_key(id, region);
         let uid = id.as_uuid();
         let r_str = region.as_str().to_string();
 
@@ -278,12 +225,6 @@ impl ProfileRepository for PostgresProfileRepository {
             })
         })
         .await?;
-
-        // Invalidation du cache uniquement après la réussite de la transaction
-        let cache_handle = self.cache.clone();
-        tokio::spawn(async move {
-            let _ = cache_handle.delete(&key).await;
-        });
 
         Ok(())
     }

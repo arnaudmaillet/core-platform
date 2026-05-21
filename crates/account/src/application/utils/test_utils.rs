@@ -50,7 +50,7 @@ impl TestFixture {
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
 
-        let base_ctx = BaseAppContext::new(None, cache);
+        let base_ctx = BaseAppContext::new(None, cache.clone());
 
         let app_ctx = AccountAppContext::new(
             base_ctx,
@@ -63,7 +63,7 @@ impl TestFixture {
         let account_id = AccountId::generate(default_region);
         let account_ctx = AccountContext::new(app_ctx.clone(), Some(account_id), default_region);
 
-        let mut bus = CommandBus::new();
+        let mut bus = CommandBus::new(cache);
 
         // Enregistrement des Handlers avec le type AccountContext propre
         bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);

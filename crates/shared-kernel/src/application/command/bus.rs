@@ -1,3 +1,4 @@
+use crate::cache::CacheRepository;
 use crate::command::{CommandHandler, IdentifiableCommand};
 use crate::core::{Error, ErrorCode, Result, with_retry};
 use async_trait::async_trait;
@@ -15,15 +16,16 @@ pub trait AnyCommandHandler: Send + Sync {
     ) -> Result<Box<dyn Any + Send>>;
 }
 
-#[derive(Default)]
 pub struct CommandBus {
     handlers: HashMap<TypeId, Arc<dyn AnyCommandHandler>>,
+    cache: Arc<dyn CacheRepository>,
 }
 
 impl CommandBus {
-    pub fn new() -> Self {
+    pub fn new(cache: Arc<dyn CacheRepository>) -> Self {
         Self {
             handlers: HashMap::new(),
+            cache,
         }
     }
 
@@ -52,9 +54,13 @@ impl CommandBus {
     where
         TContext: 'static + Send + Sync + Clone,
         TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
-        TOutput: 'static + Send + Default, // On ajoute Default pour pouvoir renvoyer une valeur vide en cas d'idempotence
+        TOutput: 'static + Send + Default,
     {
+        // 0. Récupère la clé avant que cmd soit déplacé
+        let cache_key = cmd.cache_key();
+
         let type_id = TypeId::of::<TCommand>();
+
         let handler = self.handlers.get(&type_id).ok_or_else(|| {
             Error::internal(format!(
                 "No handler registered for {}",
@@ -62,22 +68,23 @@ impl CommandBus {
             ))
         })?;
 
-        let ctx_box: Box<dyn Any + Send + Sync> = Box::new(ctx);
-        let cmd_box: Box<dyn Any + Send> = Box::new(cmd);
+        let ctx_box = Box::new(ctx);
+        let cmd_box = Box::new(cmd);
 
-        // 1. On enlève le '?' pour inspecter le résultat
         let result = handler.execute_any(ctx_box, cmd_box).await;
 
-        // 2. On gère l'idempotence ici
         let final_result = match result {
             Err(e) if e.code == ErrorCode::AlreadyExists && e.message.contains("Command") => {
-                tracing::info!("🔁 CommandBus: Idempotency hit, returning success.");
-                return Ok(TOutput::default()); // On sort avec un succès transparent
+                return Ok(TOutput::default());
             }
-            res => res?, // Pour toute autre erreur, on propage normalement
+            res => res?,
         };
 
-        // 3. Downcast normal
+        if let Some(key) = cache_key {
+            let _ = self.cache.delete(&key).await;
+            tracing::info!(key = %key, "CommandBus: Cache invalidated");
+        }
+
         let output = final_result
             .downcast::<TOutput>()
             .map_err(|_| Error::internal("CommandBus: Downcast output failed"))?;

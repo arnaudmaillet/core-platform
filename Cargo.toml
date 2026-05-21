@@ -3,12 +3,12 @@
 [workspace]
 members = [
     "backend/services/account/api/command-server",
-    "backend/services/account/outbox-processor",
-    "backend/services/account/cache-invalidator",
-    "backend/services/profile/workers/outbox-processor",
+    "backend/services/account/workers/outbox-producer",
+    "backend/services/account/workers/cache-invalidator",
+    "backend/services/profile/workers/outbox-producer",
     "backend/services/profile/workers/cache-invalidator",
+    "backend/services/profile/workers/events-consumer",
     "backend/services/profile/api/command-server",
-    "backend/services/profile/api/event-worker",
     "backend/services/social/api/command-server",
     "common/rust/shared-proto",
     "crates/account",
@@ -48,6 +48,7 @@ tokio = { version = "1.40", features = [
     "signal",
 ] }
 tokio-util = { version = "0.7.18" }
+tokio-stream = { version = "0.1", features = ["net"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }

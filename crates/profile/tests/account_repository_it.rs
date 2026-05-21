@@ -1,7 +1,5 @@
 // crates/profile/src/infrastructure/postgres/repositories/postgres_profile_tests.rs
 
-use std::time::Duration;
-
 use profile::repositories::ProfileRepository;
 use profile::repositories_impl::PostgresProfileRepository;
 use profile::types::{DisplayName, Handle};
@@ -9,34 +7,27 @@ use tokio;
 
 use profile::entities::Profile;
 
-use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::{Error, ErrorCode, Identifier, Result, Versioned};
 use shared_kernel::postgres::PostgresTransaction;
-use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
+use shared_kernel::test_utils::PostgresTestContext;
 use shared_kernel::types::{AccountId, ProfileId, Region};
 
 /// Helper pour instancier le repo et les infrastructures de test
-async fn get_test_context() -> (
-    PostgresProfileRepository,
-    PostgresTestContext,
-    RedisTestContext,
-) {
+async fn get_test_context() -> (PostgresProfileRepository, PostgresTestContext) {
     let pg_ctx = PostgresTestContext::builder()
         .with_migrations(&["./migrations/postgres"])
         .build()
         .await;
 
-    let redis_ctx = RedisTestContext::builder().build().await;
+    let repo = PostgresProfileRepository::new(pg_ctx.pool().clone());
 
-    let repo = PostgresProfileRepository::new(pg_ctx.pool().clone(), redis_ctx.repository());
-
-    (repo, pg_ctx, redis_ctx)
+    (repo, pg_ctx)
 }
 
 #[tokio::test]
 async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     // --- Arrange ---
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let handle = Handle::try_new("alice_rocks")?;
 
@@ -99,7 +90,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 
 #[tokio::test]
 async fn test_profile_concurrency_protection_occ() -> Result<()> {
-    let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, _pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("ConcurrentUser")?)?.build()?;
 
@@ -131,54 +122,8 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_profile_cache_logic_integrity() -> Result<()> {
-    let (repo, _pg_ctx, redis_ctx) = get_test_context().await;
-    let cache = redis_ctx.repository();
-    let account_id = AccountId::generate(Region::default());
-    let mut profile = Profile::builder(account_id, Handle::try_new("cache_test")?)?.build()?;
-
-    let key = PostgresProfileRepository::cache_key(profile.profile_id(), account_id.region());
-
-    // 1. Save & Initial Fetch
-    repo.save(&mut profile, None).await?;
-    // Ce find_by_id déclenche le tokio::spawn(set_obj)
-    repo.find_by_id(profile.profile_id(), account_id.region(), None)
-        .await?;
-
-    // --- CORRECTION : Forcer le passage aux tâches de fond ---
-    let mut filled = false;
-    for _ in 0..30 {
-        // On monte à 1.5s max
-        tokio::task::yield_now().await; // On rend la main à l'exécuteur
-        if cache.exists(&key).await? {
-            filled = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(filled, "Cache should be filled (async spawn still pending)");
-
-    // 2. Save (update) -> Doit invalider
-    profile.update_display_name(DisplayName::try_new("Updated Name")?)?;
-    repo.save(&mut profile, None).await?; // Déclenche tokio::spawn(delete)
-
-    let mut invalidated = false;
-    for _ in 0..30 {
-        tokio::task::yield_now().await;
-        if !cache.exists(&key).await? {
-            invalidated = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(invalidated, "Cache must be invalidated after save");
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_profile_rollback_works_properly() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("Ghost")?)?.build()?;
 
@@ -205,7 +150,7 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
 
 #[tokio::test]
 async fn test_find_all_by_account_id() -> Result<()> {
-    let (repo, _pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, _pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
 
     // Utilise "profile_1" (minuscules) pour correspondre à la sortie attendue
@@ -225,51 +170,8 @@ async fn test_find_all_by_account_id() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_cache_hit_proven_by_db_sabotage() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
-    let mut profile = Profile::builder(account_id, Handle::try_new("alice")?)?.build()?;
-
-    repo.save(&mut profile, None).await?;
-    repo.find_by_id(profile.profile_id(), account_id.region(), None)
-        .await?;
-
-    // --- CORRECTION : Attendre que le cache soit peuplé ---
-    let key = PostgresProfileRepository::cache_key(profile.profile_id(), account_id.region());
-    let mut cached = false;
-    for _ in 0..30 {
-        tokio::task::yield_now().await;
-        if _cache_ctx.repository().exists(&key).await? {
-            cached = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(cached, "Cache setup failed before sabotage");
-
-    // 3. Sabotage DB
-    sqlx::query("DELETE FROM user_profiles WHERE profile_id = $1")
-        .bind(profile.profile_id().as_uuid())
-        .execute(&pg_ctx.pool())
-        .await
-        .map_err(|e| Error::database(e.to_string()))?;
-
-    // 4. Lecture (Bypass DB car déjà en cache)
-    let found_from_cache = repo
-        .find_by_id(profile.profile_id(), account_id.region(), None)
-        .await?;
-
-    assert!(
-        found_from_cache.is_some(),
-        "Should return object from cache even if DB is empty"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_profile_rollback_integrity() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
     let mut profile = Profile::builder(account_id, Handle::try_new("ghost")?)?.build()?;
     let profile_id = profile.profile_id();
@@ -300,7 +202,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
 
 #[tokio::test]
 async fn test_profile_partial_data_resilience() -> Result<()> {
-    let (repo, pg_ctx, _cache_ctx) = get_test_context().await;
+    let (repo, pg_ctx) = get_test_context().await;
     let region = Region::try_new("EU")?;
 
     let domain_profile_id = ProfileId::generate(region.clone());

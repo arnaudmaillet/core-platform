@@ -74,7 +74,7 @@ impl SocialServiceBuilder {
 
     /// Enregistre tous les handlers d'écriture graph/compteurs dans le CommandBus
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new();
+        let mut bus = CommandBus::new(self.redis_cache_repo.clone());
 
         bus.register::<SocialContext, FollowCommand, FollowHandler>(FollowHandler);
 

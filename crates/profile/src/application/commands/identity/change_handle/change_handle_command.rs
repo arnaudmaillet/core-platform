@@ -3,7 +3,7 @@
 use crate::types::Handle;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
-use shared_kernel::core::{Error, Result};
+use shared_kernel::core::{Error, Identifier, Result};
 use shared_kernel::types::{ProfileId, Region};
 use shared_proto::profile::v1::ChangeHandleRequest;
 use uuid::Uuid;
@@ -26,6 +26,14 @@ impl IdentifiableCommand for ChangeHandleCommand {
 
     fn region(&self) -> String {
         self.target.region.to_string()
+    }
+    
+    fn cache_key(&self) -> Option<String> {
+        Some(format!(
+            "profile:aggregate:{}:{}",
+            self.target.region.as_str(),
+            self.target.id.as_uuid()
+        ))
     }
 }
 
