@@ -18,13 +18,8 @@ use crate::{
     context::{AccountAppContext, AccountContext},
     db::PostgresAccountRepository,
 };
-use shared_kernel::{
-    cache::CacheRepository,
-    command::CommandBus,
-    context::BaseAppContext,
-    postgres::{PostgresIdempotencyRepository, PostgresOutboxRepository},
-};
-use sqlx::PgPool;
+use infra_sqlx::{PostgresIdempotencyRepository, PostgresOutboxRepository, sqlx::PgPool};
+use shared_kernel::{cache::CacheRepository, command::CommandBus};
 
 pub struct AccountServiceBuilder {
     pool: PgPool,
@@ -43,7 +38,7 @@ impl AccountServiceBuilder {
         let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("account_idempotency"));
 
         Arc::new(AccountAppContext::new(
-            BaseAppContext::new(Some(self.pool.clone()), self.redis_repo.clone()),
+            self.pool.clone(),
             account_repo,
             outbox_repo,
             idempotency_repo,

@@ -11,6 +11,7 @@ use crate::{
     infrastructure::postgres::models::PostgresBetaTier,
 };
 use chrono::{DateTime, NaiveDate, Utc};
+use infra_sqlx::sqlx::FromRow;
 use shared_kernel::geo::Timezone;
 use shared_kernel::security::PushToken;
 use shared_kernel::{
@@ -18,7 +19,7 @@ use shared_kernel::{
     types::{AccountId, Email, PhoneNumber, SubId},
 };
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, FromRow)]
 pub struct PostgresAccountRow {
     // --- Identity ---
     pub account_id: uuid::Uuid,

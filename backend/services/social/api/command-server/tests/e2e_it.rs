@@ -1,14 +1,14 @@
 // backend/services/social/api/command-server/tests/social_e2e_it.rs
 
-use auth::KeycloakTestContext;
-use fred::interfaces::HashesInterface;
+use infra_fred::fred::interfaces::HashesInterface;
+use infra_test::KeycloakTestContext;
 use shared_kernel::{
     core::{Identifier, Result},
     types::{ProfileId, Region, RegionCode},
 };
 use shared_proto::social::v1::social_service_client::SocialServiceClient;
 use shared_proto::social::v1::{CommandTarget, FollowProfileRequest, UnfollowProfileRequest};
-use social::test_utils::SocialTestContextBuilder;
+use social_test_utils::SocialTestContextBuilder;
 use tonic::{Request, metadata::MetadataValue};
 use uuid::Uuid;
 

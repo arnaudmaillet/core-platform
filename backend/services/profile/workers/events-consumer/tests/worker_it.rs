@@ -1,10 +1,11 @@
 // backend/services/profile/api/event-worker/tests/worker_it.rs
 
 use chrono::Utc;
-use profile::test_utils::ProfileTestContext;
+use infra_kafka::KafkaEventProducer;
+use infra_sqlx::sqlx;
+use profile_test_utils::ProfileTestContext;
 use serde_json::json;
 use shared_kernel::core::Result;
-use shared_kernel::kafka::KafkaEventProducer;
 use shared_kernel::messaging::{EventEnvelope, EventProducer};
 use uuid::Uuid;
 
@@ -17,7 +18,7 @@ async fn test_worker_e2e_profile_creation_on_account_event() -> Result<()> {
         .with_kafka_worker()
         .build_e2e()
         .await;
-
+ 
     // Récupération sécurisée des bootstrap_servers de l'infra unifiée pour émettre notre événement
     let bootstrap_servers = ctx.kernel().kafka().bootstrap_servers().to_string();
 

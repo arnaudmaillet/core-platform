@@ -2,8 +2,8 @@ use account::db::PostgresAccountRepository;
 use account::entities::Account;
 use account::repositories::AccountRepository;
 use account::types::{AccountRole, AccountState, RegistrationIdentifier};
-use shared_kernel::postgres::PostgresTransaction;
-use shared_kernel::test_utils::{PostgresTestContext, RedisTestContext};
+use infra_sqlx::PostgresTransaction;
+use infra_test::PostgresTestContext;
 use tokio;
 
 use shared_kernel::core::{Error, Identifier, Result, Versioned};

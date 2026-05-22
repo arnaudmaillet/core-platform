@@ -1,8 +1,8 @@
 // crates/social/src/infrastructure/redis/repositories/counter.rs
 
 use async_trait::async_trait;
-use fred::clients::Pool;
-use fred::interfaces::{HashesInterface, SetsInterface};
+use infra_fred::fred::clients::Pool;
+use infra_fred::fred::interfaces::{HashesInterface, SetsInterface};
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::ProfileId;
 use std::collections::HashMap;

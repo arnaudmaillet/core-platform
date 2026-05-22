@@ -12,8 +12,11 @@ description.workspace = true
 [dependencies]
 shared-kernel = { workspace = true, features = ["service-worker"] }
 shared-proto = { workspace = true }
-profile = { workspace = true, features = ["test-utils"] }
+profile = { workspace = true }
 auth = { workspace = true }
+infra-fred = { workspace = true }
+infra-kafka = { workspace = true }
+infra-sqlx = { workspace = true }
 
 tokio = { workspace = true }
 tonic = { workspace = true }
@@ -30,12 +33,8 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
-sqlx = { workspace = true, features = [
-    "runtime-tokio",
-    "postgres",
-    "uuid",
-    "chrono",
-] }
+
 
 [dev-dependencies]
-auth = { workspace = true, features = ["test-utils"] }
+profile-test-utils = { workspace = true }
+infra-test = { workspace = true }

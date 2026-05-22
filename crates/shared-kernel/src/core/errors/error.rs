@@ -1,3 +1,5 @@
+// crates/shared-kernel/src/core/errors/error.rs
+
 use crate::core::ErrorCode;
 use serde::Serialize;
 use serde_json::{Value, json};

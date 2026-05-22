@@ -2,15 +2,12 @@
 
 use auth::{AuthInterceptor, KeycloakValidator};
 use dotenvy::dotenv;
+use infra_fred::{RedisContext, RedisIdempotencyRepository};
+use infra_scylla::ScyllaContext;
 use social::SocialServiceBuilder;
 use social::services::SocialService;
 use std::sync::Arc;
 use tonic::transport::Server;
-
-use shared_kernel::{
-    redis::{RedisContext, RedisIdempotencyRepository},
-    scylla::ScyllaContext,
-};
 
 use shared_proto::social::v1::social_service_server::SocialServiceServer;
 

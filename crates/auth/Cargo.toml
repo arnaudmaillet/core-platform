@@ -7,12 +7,9 @@ authors.workspace = true
 repository.workspace = true
 description.workspace = true
 
-[features]
-test-utils = ["testcontainers", "testcontainers-modules"]
-
 [dependencies]
 # --- Internes (via Workspace) ---
-shared-kernel = { workspace = true, features = ["runtime", "test-utils"] }
+shared-kernel = { workspace = true, features = ["runtime"] }
 
 # --- Communs (via Workspace) ---
 tokio = { workspace = true }
@@ -27,17 +24,8 @@ reqwest = { workspace = true, features = ["json"] }
 tonic = { workspace = true }
 jsonwebtoken = { workspace = true }
 
-# --- DÉPENDANCES OPTIONNELLES (uniquement pour les tests/outils) ---
-
-testcontainers = { workspace = true, optional = true }
-testcontainers-modules = { workspace = true, optional = true }
-
-
 [dev-dependencies]
-auth = { path = ".", features = ["test-utils"] }
-
+infra-test = { workspace = true }
 tokio = { workspace = true }
 openssl = { workspace = true }
 base64 = { workspace = true }
-testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true }

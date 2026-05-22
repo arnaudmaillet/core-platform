@@ -18,6 +18,14 @@ members = [
     "crates/gamification",
     "crates/social",
     "backend/gateway/graphql-bff",
+    "crates/infra-sqlx",
+    "crates/infra-fred",
+    "crates/infra-scylla",
+    "crates/infra-kafka",
+    "crates/infra-test",
+    "crates/account-test-utils",
+    "crates/profile-test-utils",
+    "crates/social-test-utils",
 ]
 resolver = "2"
 
@@ -30,13 +38,21 @@ repository = "https://github.com/ton-repo/projet"
 description = "core-platform repo"
 
 [workspace.dependencies]
-# Internes
+account-test-utils = { path = "crates/account-test-utils" }
+account = { path = "crates/account" }
 shared-kernel = { path = "crates/shared-kernel" }
 shared-proto = { path = "common/rust/shared-proto" }
-account = { path = "crates/account" }
 social = { path = "crates/social" }
+social-test-utils = { path = "crates/social-test-utils" }
 profile = { path = "crates/profile" }
+profile-test-utils = { path = "crates/profile-test-utils" }
 auth = { path = "crates/auth" }
+infra-sqlx = { path = "crates/infra-sqlx" }
+infra-scylla = { path = "crates/infra-scylla" }
+infra-fred = { path = "crates/infra-fred" }
+infra-kafka = { path = "crates/infra-kafka" }
+infra-test = { path = "crates/infra-test" }
+
 
 # Communs
 tokio = { version = "1.40", features = [

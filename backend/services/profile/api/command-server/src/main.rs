@@ -2,17 +2,14 @@
 
 use auth::{AuthInterceptor, KeycloakValidator};
 use dotenvy::dotenv;
+use infra_fred::RedisContext;
+use infra_sqlx::PostgresContext;
 use std::sync::Arc;
 use tonic::transport::Server;
 
-// Imports du Shared Kernel (Socle technique)
-use shared_kernel::{postgres::PostgresContext, redis::RedisContext};
-
-// Imports de la crate Profile (on utilise nos réexportations propres)
 use profile::ProfileServiceBuilder;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
 
-// Serveurs générés par Tonic pour Profile
 use shared_proto::profile::v1::{
     profile_identity_service_server::ProfileIdentityServiceServer,
     profile_media_service_server::ProfileMediaServiceServer,

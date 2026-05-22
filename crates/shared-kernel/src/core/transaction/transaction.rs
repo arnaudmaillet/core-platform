@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/domain/transaction/transaction.rs
+// crates/shared-kernel/src/core/transaction/transaction.rs
 
 use std::any::Any;
 use std::pin::Pin;

@@ -2,7 +2,10 @@
 
 use std::pin::Pin;
 
-use crate::core::{FakeTransaction, Transaction, transaction::TransactionManager};
+use crate::core::{
+    Transaction,
+    transaction::{FakeTransaction, TransactionManager},
+};
 
 pub struct StubTxManager;
 

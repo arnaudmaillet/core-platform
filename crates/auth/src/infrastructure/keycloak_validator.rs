@@ -1,3 +1,5 @@
+// crates/auth/src/infrastructure/keycloak_validator.rs
+
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
 use shared_kernel::security::JwtToken;
 

@@ -1,7 +1,7 @@
 // crates/social/src/application/builder.rs
 
-use fred::clients::Pool as RedisPool;
-use scylla::client::session::Session as ScyllaSession;
+use infra_fred::fred::clients::Pool as RedisPool;
+use infra_scylla::scylla::client::session::Session as ScyllaSession;
 use std::sync::Arc;
 
 use crate::{
@@ -14,8 +14,7 @@ use crate::{
 
 // Imports du Shared Kernel
 use shared_kernel::{
-    cache::CacheRepository, command::CommandBus, context::BaseAppContext,
-    idempotency::IdempotencyRepository,
+    cache::CacheRepository, command::CommandBus, idempotency::IdempotencyRepository,
 };
 
 pub struct SocialServiceBuilder {
@@ -59,12 +58,8 @@ impl SocialServiceBuilder {
         let redis_counter_repo: Arc<dyn CounterRepository> =
             Arc::new(RedisCounterRepository::new(self.redis_pool.clone()));
 
-        // 3. Assemblage du BaseAppContext (Pas de pool Postgres ici, donc None)
-        let base_app_ctx = BaseAppContext::new(None, self.redis_cache_repo.clone());
-
-        // 4. Instanciation finale de ton SocialAppContext typé
+        // 3. Instanciation finale de ton SocialAppContext typé
         Arc::new(SocialAppContext::new(
-            base_app_ctx,
             relation_repo,
             redis_counter_repo,
             scylla_counter_repo,

@@ -9,13 +9,14 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true, features = [
-    "postgres",
-    "kafka",
     "elasticsearch",
     "concurrency",
     "runtime",
-    "test-utils",
 ] }
+infra-kafka = { workspace = true }
+infra-scylla = { workspace = true }
+infra-fred = { workspace = true }
+infra-test = { workspace = true }
 shared-proto = { workspace = true }
 auth = { workspace = true }
 tokio = { workspace = true }
@@ -24,13 +25,10 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 tracing = { workspace = true }
-fred = { workspace = true }
 tonic = { workspace = true }
 
 async-trait = { workspace = true }
+tokio-stream = { workspace = true }
 
-scylla = { workspace = true }
-tokio-stream = { version = "0.1", features = ["net"] }
-
-[features]
-test-utils = ["shared-kernel/test-utils"]
+[dev-dependencies]
+social-test-utils = { workspace = true }

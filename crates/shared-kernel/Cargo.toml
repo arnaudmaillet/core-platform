@@ -7,16 +7,7 @@ edition.workspace = true
 
 [features]
 default = []
-test-utils = [
-    "kafka",
-    "postgres",
-    "scylla",
-    "once_cell",
-    "redis",
-    "dep:testcontainers",
-    "dep:testcontainers-modules",
-    "tokio/test-util",
-]
+test-utils = []
 
 # --- 1. Drivers Techniques ---
 postgres = ["dep:sqlx"]
@@ -28,14 +19,7 @@ grpc = []
 concurrency = ["dep:dashmap", "dep:futures"]
 
 # --- 2. Capacités Techniques ---
-runtime = [
-    "tokio/rt",
-    "tokio/time",
-    "tokio/sync",
-    "dep:tokio-util",
-    "dep:tracing-subscriber",
-    "dep:futures",
-]
+runtime = ["dep:tokio-util", "dep:tracing-subscriber", "dep:futures"]
 
 # --- 3. Rôles Fonctionnels ---
 service-api = ["postgres", "redis", "grpc", "runtime"]
@@ -59,6 +43,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 rand = { workspace = true }
 idna = { workspace = true }
+tokio = { workspace = true }
 
 # OBLIGATOIRES (Pour que Bazel génère les cibles @crates//:tonic)
 tonic = { workspace = true }
@@ -74,7 +59,6 @@ rdkafka = { workspace = true, optional = true }
 elasticsearch = { workspace = true, optional = true }
 dashmap = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true, features = ["rt"] }
 tracing-subscriber = { workspace = true, optional = true, features = [
     "fmt",
@@ -84,7 +68,7 @@ testcontainers = { workspace = true, optional = true }
 testcontainers-modules = { workspace = true, optional = true, features = [
     "postgres",
     "redis",
-    "kafka"
+    "kafka",
 ] }
 
 # --- Utils (Core) ---

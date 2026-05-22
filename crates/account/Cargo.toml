@@ -5,12 +5,12 @@ name = "account"
 version.workspace = true
 edition.workspace = true
 
+[features]
+test-utils = []
+
 [dependencies]
-shared-kernel = { workspace = true, features = [
-    "postgres",
-    "runtime",
-    "test-utils",
-] }
+infra-sqlx = { workspace = true }
+shared-kernel = { workspace = true, features = ["runtime"] }
 shared-proto = { workspace = true }
 auth = { workspace = true }
 tokio = { workspace = true }
@@ -18,8 +18,7 @@ serde = { workspace = true }
 tracing = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
-sqlx = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
 regex = { workspace = true }
 unicode-normalization = { workspace = true }
@@ -29,15 +28,11 @@ tonic = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
 anyhow = { workspace = true }
-tokio-stream = { version = "0.1", features = ["net"] }
-
+tokio-stream = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "macros", "derive"] }
 
 [dev-dependencies]
-testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true }
+infra-test = { workspace = true }
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }
-
-[features]
-test-utils = ["shared-kernel/test-utils"]

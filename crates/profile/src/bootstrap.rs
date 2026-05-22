@@ -1,6 +1,7 @@
 // crates/profile/src/application/builder.rs
 
-use sqlx::PgPool;
+use infra_sqlx::sqlx::PgPool;
+use infra_sqlx::{PostgresIdempotencyRepository, PostgresOutboxRepository};
 use std::sync::Arc;
 
 use crate::{
@@ -16,12 +17,7 @@ use crate::{
     repositories_impl::PostgresProfileRepository,
 };
 
-use shared_kernel::{
-    cache::CacheRepository,
-    command::CommandBus,
-    context::BaseAppContext,
-    postgres::{PostgresIdempotencyRepository, PostgresOutboxRepository},
-};
+use shared_kernel::{cache::CacheRepository, command::CommandBus};
 
 pub struct ProfileServiceBuilder {
     pool: PgPool,
@@ -42,7 +38,7 @@ impl ProfileServiceBuilder {
         let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("profile_idempotency"));
 
         Arc::new(ProfileAppContext::new(
-            BaseAppContext::new(Some(self.pool.clone()), self.redis_repo.clone()),
+            self.pool.clone(),
             profile_repo,
             outbox_repo,
             idempotency_repo,

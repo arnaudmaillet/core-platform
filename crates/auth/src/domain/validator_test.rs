@@ -1,14 +1,14 @@
+// crates/auth/src/domain/validator_test.rs
 #[cfg(test)]
 mod tests {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
     use crate::domain::claims::RealmAccess;
     use crate::domain::validator::{AuthError, TokenValidator};
-    use crate::infrastructure::keycloak_test_context::KeycloakTestContext;
     use crate::{Claims, KeycloakValidator};
+    use infra_test::KeycloakTestContext;
     use jsonwebtoken::{EncodingKey, Header, Validation, encode};
-    use shared_kernel::types::{Email, SubId};
     use shared_kernel::security::JwtToken;
+    use shared_kernel::types::{Email, SubId};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     // Helper pour créer des Claims valides sans Default::default()
     fn create_test_claims(sub: &str, email: &str) -> Claims {
@@ -40,9 +40,10 @@ mod tests {
         // Si KeycloakValidator::new a réussi, c'est que le Discovery (HTTP + Parsing) est OK
         assert!(ctx.uri.starts_with("http://"));
 
-        let result = ctx
-            .validator
-            .validate(&JwtToken::from_raw("invalid.token.structure"));
+        let result = TokenValidator::validate(
+            ctx.validator.as_ref(),
+            &JwtToken::from_raw("invalid.token.structure"),
+        );
         assert!(matches!(result, Err(AuthError::InvalidToken)));
     }
 

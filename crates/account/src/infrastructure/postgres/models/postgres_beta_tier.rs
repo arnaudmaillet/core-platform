@@ -1,7 +1,8 @@
 use crate::domain::types::BetaTier;
+use infra_sqlx::sqlx::Type;
 
 /// Mappe l'ENUM PostgreSQL `beta_tier` vers une structure compatible SQLx.
-#[derive(Debug, sqlx::Type)]
+#[derive(Debug, Type)]
 #[sqlx(type_name = "TEXT")]
 pub enum PostgresBetaTier {
     NONE,

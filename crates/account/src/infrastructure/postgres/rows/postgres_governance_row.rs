@@ -1,12 +1,12 @@
 // crates/account/src/infrastructure/postgres/rows/postgres_account_governance_row.rs
 
-use chrono::{DateTime, Utc};
-use std::net::IpAddr as StdIpAddr;
-
 use crate::{
     entities::Account,
     infrastructure::postgres::models::{PostgresAccountRole, PostgresBetaTier},
 };
+use chrono::{DateTime, Utc};
+use infra_sqlx::sqlx;
+use std::net::IpAddr as StdIpAddr;
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountGovernanceRow {

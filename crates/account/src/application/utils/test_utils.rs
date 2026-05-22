@@ -5,7 +5,6 @@ use std::sync::Arc;
 // Shared Kernel
 use shared_kernel::cache::CacheRepositoryStub;
 use shared_kernel::command::CommandBus;
-use shared_kernel::context::BaseAppContext;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::messaging::OutboxRepositoryStub;
@@ -50,10 +49,7 @@ impl TestFixture {
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
 
-        let base_ctx = BaseAppContext::new(None, cache.clone());
-
-        let app_ctx = AccountAppContext::new(
-            base_ctx,
+        let app_ctx = AccountAppContext::new_stubbed(
             account_repo.clone(),
             outbox_repo.clone(),
             idempotency_repo.clone(),

@@ -1,21 +1,23 @@
 // crates/account/src/application/context/context.rs
 
 use crate::domain::{entities::Account, repositories::AccountRepository};
+use infra_sqlx::{PostgresTransaction, sqlx::PgPool};
 use shared_kernel::{
     command::CommandTarget,
-    context::BaseAppContext,
-    core::{Error, FakeTransaction, Result, Transaction, Versioned},
+    core::{Error, Result, Transaction, Versioned},
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
-    postgres::PostgresTransaction,
     types::{AccountId, Region},
 };
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "test-utils"))]
+use shared_kernel::core::FakeTransaction;
+
 #[derive(Clone)]
 pub struct AccountAppContext {
-    base: BaseAppContext,
+    pool: Option<PgPool>,
     account_repo: Arc<dyn AccountRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
@@ -23,13 +25,27 @@ pub struct AccountAppContext {
 
 impl AccountAppContext {
     pub fn new(
-        base: BaseAppContext,
+        pool: PgPool,
         account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
     ) -> Self {
         Self {
-            base,
+            pool: Some(pool),
+            account_repo,
+            outbox_repo,
+            idempotency_repo,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_stubbed(
+        account_repo: Arc<dyn AccountRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
+        idempotency_repo: Arc<dyn IdempotencyRepository>,
+    ) -> Self {
+        Self {
+            pool: None,
             account_repo,
             outbox_repo,
             idempotency_repo,
@@ -47,8 +63,8 @@ impl AccountAppContext {
         AccountContext::new(self.clone(), None, region)
     }
 
-    pub fn base(&self) -> &BaseAppContext {
-        &self.base
+    pub fn pg_pool(&self) -> Option<&PgPool> {
+        self.pool.as_ref()
     }
 
     pub fn account_repo(&self) -> Arc<dyn AccountRepository> {
@@ -241,9 +257,10 @@ impl AccountContext {
         // se fait encore sur le Shard / Pool de connexion d'origine.
     }
 
+    //ERREURRR
     // --- GESTION DES TRANSACTIONS ---
     pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
-        match self.app.base.pool() {
+        match self.app.pg_pool() {
             Some(pool) => {
                 let tx = pool
                     .begin()
@@ -251,7 +268,15 @@ impl AccountContext {
                     .map_err(|e| Error::internal(e.to_string()))?;
                 Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
             }
+            // Si on est en mode test (via cargo test ou la feature de stubbing), on autorise la FakeTransaction
+            #[cfg(any(test, feature = "test-utils"))]
             None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
+
+            // En production, l'absence de pool est une erreur fatale d'initialisation
+            #[cfg(not(any(test, feature = "test-utils")))]
+            None => Err(Error::internal(
+                "Database pool is missing. AccountAppContext must be initialized with a valid PgPool in production.",
+            )),
         }
     }
 }

@@ -13,15 +13,8 @@ use crate::{
         entities::{AccountBuilder, AccountGovernance, AccountIdentity, AccountSettings},
         events::AccountEvent,
         types::{
-            AccountRole,
-            AppearancePreferences,
-            BirthDate,
-            IpAddr,
-            Locale,
-            NotificationPreferences,
-            PrivacyPreferences,
-            RegistrationIdentifier,
-            TrustAmount, // 💡 ALIGNEMENT : Remplacement de TrustDelta
+            AccountRole, AppearancePreferences, BirthDate, IpAddr, Locale, NotificationPreferences,
+            PrivacyPreferences, RegistrationIdentifier, TrustAmount,
         },
     },
     types::BetaTier,

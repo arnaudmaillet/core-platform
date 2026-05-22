@@ -7,7 +7,8 @@ use account::{
 };
 use auth::{AuthInterceptor, KeycloakValidator};
 use dotenvy::dotenv;
-use shared_kernel::{postgres::PostgresContext, redis::RedisContext};
+use infra_fred::RedisContext;
+use infra_sqlx::PostgresContext;
 use std::sync::Arc;
 use tonic::transport::Server;
 

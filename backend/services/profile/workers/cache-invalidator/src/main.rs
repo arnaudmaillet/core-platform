@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
+use infra_fred::RedisCacheRepository;
+use infra_kafka::KafkaEventConsumer;
 use shared_kernel::cache::CacheWorker;
 use shared_kernel::core::{Error, Result};
-use shared_kernel::kafka::KafkaEventConsumer;
-use shared_kernel::redis::RedisCacheRepository;
 
 #[tokio::main]
 async fn main() -> Result<()> {

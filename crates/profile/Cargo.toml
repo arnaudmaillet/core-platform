@@ -5,15 +5,20 @@ name = "profile"
 version.workspace = true
 edition.workspace = true
 
+[features]
+test-utils = []
+
 [dependencies]
 shared-kernel = { workspace = true, features = [
-    "postgres",
-    "kafka",
+    "test-utils",
     "elasticsearch",
     "concurrency",
     "runtime",
-    "test-utils",
 ] }
+infra-sqlx = { workspace = true }
+infra-kafka = { workspace = true }
+infra-fred = { workspace = true }
+infra-test = { workspace = true }
 
 auth = { workspace = true }
 shared-proto = { workspace = true }
@@ -22,29 +27,22 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
-sqlx = { workspace = true }
 elasticsearch = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-scylla = { workspace = true }
 
 prost = { workspace = true }
 tonic = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
-tokio-stream = { version = "0.1", features = ["net"] }
+tokio-stream = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "macros", "derive"] }
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
-sqlx = { workspace = true }
-testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true }
 futures = { workspace = true }
-
-[features]
-test-utils = ["shared-kernel/test-utils"]

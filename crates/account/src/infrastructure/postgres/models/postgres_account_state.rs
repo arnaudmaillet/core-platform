@@ -1,7 +1,8 @@
 use crate::domain::types::AccountState;
+use infra_sqlx::sqlx::Type;
 
 /// Il permet de mapper l'ENUM PostgreSQL sans polluer le Domaine avec SQLx.
-#[derive(Debug, sqlx::Type)]
+#[derive(Debug, Type)]
 #[sqlx(type_name = "TEXT")]
 pub enum PostgresAccountState {
     PENDING,
