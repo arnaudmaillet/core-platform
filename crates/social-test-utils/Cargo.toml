@@ -8,11 +8,10 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = ["test-utils"] }
 social = { workspace = true }
 auth = { workspace = true }
+auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
-infra-kafka = { workspace = true }
 infra-fred = { workspace = true }
 shared-proto = { workspace = true }
 tonic = { workspace = true }

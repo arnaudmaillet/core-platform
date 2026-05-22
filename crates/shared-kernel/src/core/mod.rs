@@ -12,7 +12,7 @@ pub use identity::{AggregateMetadata, AggregateRoot, Entity, Identifier, ValueOb
 pub use resilience::{RetryConfig, with_retry};
 pub use transaction::{Transaction, TransactionManager};
 
-#[cfg(feature = "test-utils")]
+#[cfg(feature = "stub")]
 pub use transaction::FakeTransaction;
 
 #[cfg(feature = "concurrency")]

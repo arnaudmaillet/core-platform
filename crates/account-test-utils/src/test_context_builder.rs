@@ -9,7 +9,8 @@ use account::{
     },
 };
 use auth::{AuthInterceptor, KeycloakValidator};
-use infra_test::{KeycloakTestContext, TestContextBuilder};
+use auth_test_utils::KeycloakTestContext;
+use infra_test::TestContextBuilder;
 use shared_proto::account::v1::account_access_service_server::AccountAccessServiceServer;
 use shared_proto::account::v1::account_moderation_service_server::AccountModerationServiceServer;
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;

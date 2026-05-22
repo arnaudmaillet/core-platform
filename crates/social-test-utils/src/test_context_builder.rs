@@ -2,8 +2,9 @@
 
 use crate::SocialTestContext;
 use auth::{AuthInterceptor, KeycloakValidator};
+use auth_test_utils::KeycloakTestContext;
 use infra_fred::RedisIdempotencyRepository;
-use infra_test::{KeycloakTestContext, TestContextBuilder};
+use infra_test::TestContextBuilder;
 use shared_proto::social::v1::social_service_server::SocialServiceServer;
 use social::SocialServiceBuilder;
 use social::services::SocialService;

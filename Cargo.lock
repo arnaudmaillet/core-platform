@@ -6,28 +6,20 @@ version = 4
 name = "account"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
- "auth",
  "chrono",
  "infra-sqlx",
  "infra-test",
- "prost",
  "prost-types",
- "regex",
- "seahash",
  "serde",
  "serde_json",
  "shared-kernel",
  "shared-proto",
  "sqlx",
  "tokio",
- "tokio-stream",
  "tonic",
- "tonic-prost",
  "tonic-prost-build",
  "tracing",
- "unicode-normalization",
  "uuid",
 ]
 
@@ -49,17 +41,15 @@ version = "0.1.0"
 dependencies = [
  "account",
  "account-test-utils",
- "async-trait",
  "auth",
+ "auth-test-utils",
  "dotenvy",
  "infra-fred",
  "infra-sqlx",
  "infra-test",
- "prost",
  "shared-kernel",
  "shared-proto",
  "tokio",
- "tokio-stream",
  "tonic",
  "tracing",
  "tracing-subscriber",
@@ -84,6 +74,7 @@ version = "0.1.0"
 dependencies = [
  "account",
  "auth",
+ "auth-test-utils",
  "infra-sqlx",
  "infra-test",
  "shared-proto",
@@ -391,19 +382,28 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "auth"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "auth-test-utils",
  "base64 0.22.1",
- "infra-test",
  "jsonwebtoken",
  "openssl",
  "reqwest",
  "serde",
- "serde_json",
  "shared-kernel",
  "thiserror",
  "tokio",
  "tonic",
- "tracing",
+]
+
+[[package]]
+name = "auth-test-utils"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "reqwest",
+ "serde_json",
+ "shared-kernel",
+ "testcontainers",
+ "tokio",
 ]
 
 [[package]]
@@ -2046,15 +2046,12 @@ name = "infra-test"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "auth",
  "infra-fred",
  "infra-kafka",
  "infra-scylla",
  "infra-sqlx",
  "once_cell",
- "reqwest",
  "serde_json",
- "shared-kernel",
  "testcontainers",
  "testcontainers-modules",
  "tokio",
@@ -2832,13 +2829,10 @@ dependencies = [
  "chrono",
  "elasticsearch",
  "futures",
- "infra-fred",
  "infra-kafka",
  "infra-sqlx",
  "infra-test",
- "prost",
  "prost-types",
- "rand 0.9.2",
  "serde",
  "serde_json",
  "shared-kernel",
@@ -2847,7 +2841,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
- "tonic-prost",
  "tonic-prost-build",
  "tracing",
  "uuid",
@@ -2869,10 +2862,9 @@ dependencies = [
 name = "profile-command-server"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "auth",
+ "auth-test-utils",
  "dotenvy",
- "futures",
  "infra-fred",
  "infra-sqlx",
  "infra-test",
@@ -2882,8 +2874,6 @@ dependencies = [
  "shared-proto",
  "tokio",
  "tonic",
- "tonic-health",
- "tonic-reflection",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -2935,6 +2925,7 @@ name = "profile-test-utils"
 version = "0.1.0"
 dependencies = [
  "auth",
+ "auth-test-utils",
  "infra-kafka",
  "infra-sqlx",
  "infra-test",
@@ -3792,24 +3783,15 @@ dependencies = [
  "futures",
  "futures-util",
  "idna",
- "log",
- "once_cell",
- "prost",
- "prost-types",
  "rand 0.9.2",
  "rdkafka",
  "regex",
- "scylla",
  "seahash",
  "serde",
  "serde_json",
  "sqlx",
- "testcontainers",
- "testcontainers-modules",
- "thiserror",
  "tokio",
  "tokio-util",
- "tonic",
  "tracing",
  "tracing-subscriber",
  "unicode-normalization",
@@ -3905,10 +3887,8 @@ name = "social"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "auth",
  "chrono",
  "infra-fred",
- "infra-kafka",
  "infra-scylla",
  "infra-test",
  "serde",
@@ -3917,7 +3897,6 @@ dependencies = [
  "shared-proto",
  "social-test-utils",
  "tokio",
- "tokio-stream",
  "tonic",
  "tracing",
  "uuid",
@@ -3927,12 +3906,10 @@ dependencies = [
 name = "social-command-server"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "auth",
+ "auth-test-utils",
  "dotenvy",
- "futures",
  "infra-fred",
- "infra-kafka",
  "infra-scylla",
  "infra-test",
  "shared-kernel",
@@ -3941,8 +3918,6 @@ dependencies = [
  "social-test-utils",
  "tokio",
  "tonic",
- "tonic-health",
- "tonic-reflection",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -3953,10 +3928,9 @@ name = "social-test-utils"
 version = "0.1.0"
 dependencies = [
  "auth",
+ "auth-test-utils",
  "infra-fred",
- "infra-kafka",
  "infra-test",
- "shared-kernel",
  "shared-proto",
  "social",
  "tokio",

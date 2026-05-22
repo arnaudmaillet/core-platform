@@ -15,20 +15,16 @@ social = { workspace = true }
 shared-proto = { workspace = true }
 auth = { workspace = true }
 infra-fred = { workspace = true }
-infra-kafka = { workspace = true }
 infra-scylla = { workspace = true }
 
 tokio = { workspace = true }
 tonic = { workspace = true }
-tonic-reflection = { workspace = true }
-tonic-health = { workspace = true }
 uuid = { workspace = true }
-futures = { workspace = true }
-async-trait = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
 
 [dev-dependencies]
 infra-test = { workspace = true }
+auth-test-utils = { workspace = true }
 social-test-utils = { workspace = true }

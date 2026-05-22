@@ -3,11 +3,11 @@ mod tests {
     use crate::commands::UnfollowCommand;
     use crate::context::SocialContext;
     use crate::repositories::CounterRepository;
+    use crate::test_utils::SocialTestFixture;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::Result;
     use shared_kernel::idempotency::IdempotencyRepository;
     use shared_kernel::types::ProfileId;
-    use social_test_utils::SocialTestFixture;
     use uuid::Uuid;
 
     #[tokio::test]

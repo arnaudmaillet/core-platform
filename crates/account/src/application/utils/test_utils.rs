@@ -3,15 +3,6 @@
 use std::sync::Arc;
 
 // Shared Kernel
-use shared_kernel::cache::CacheRepositoryStub;
-use shared_kernel::command::CommandBus;
-use shared_kernel::core::Result;
-use shared_kernel::idempotency::IdempotencyRepositoryStub;
-use shared_kernel::messaging::OutboxRepositoryStub;
-use shared_kernel::types::{AccountId, Region};
-
-// Account Domain & Application
-// Note : Importation directe depuis application::context (structure plate)
 use crate::application::context::{AccountAppContext, AccountContext};
 use crate::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
 use crate::commands::{
@@ -30,6 +21,12 @@ use crate::commands::{
 use crate::domain::repositories::AccountRepositoryStub;
 use crate::domain::types::RegistrationIdentifier;
 use crate::entities::{Account, AccountBuilder};
+use shared_kernel::cache::CacheRepositoryStub;
+use shared_kernel::command::CommandBus;
+use shared_kernel::core::Result;
+use shared_kernel::idempotency::IdempotencyRepositoryStub;
+use shared_kernel::messaging::OutboxRepositoryStub;
+use shared_kernel::types::{AccountId, Region};
 
 // --- Imports des Use Cases ---
 

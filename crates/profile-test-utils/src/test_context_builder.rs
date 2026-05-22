@@ -2,8 +2,9 @@
 
 use crate::ProfileTestContext;
 use auth::{AuthInterceptor, KeycloakValidator};
+use auth_test_utils::KeycloakTestContext;
 use infra_kafka::KafkaEventConsumer;
-use infra_test::{KeycloakTestContext, TestContextBuilder};
+use infra_test::TestContextBuilder;
 use profile::ProfileServiceBuilder;
 use profile::kafka::AccountConsumer;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};

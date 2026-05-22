@@ -12,8 +12,6 @@ infra-sqlx = { workspace = true }
 infra-scylla = { workspace = true }
 infra-fred = { workspace = true }
 infra-kafka = { workspace = true }
-shared-kernel = { workspace = true, features = ["runtime"] }
-auth = { workspace = true }
 
 uuid = { workspace = true }
 tokio = { workspace = true }
@@ -21,7 +19,6 @@ tracing = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
 once_cell = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
 testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true, features = [
     "postgres",

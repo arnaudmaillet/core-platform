@@ -3,23 +3,6 @@
 pub mod application;
 mod building_blocks;
 pub mod core;
-// mod persistence;
-// mod transport;
 
 pub use application::{cache, command, idempotency, sharding};
 pub use building_blocks::{geo, messaging, security, types};
-
-// #[cfg(feature = "postgres")]
-// pub use persistence::postgres;
-
-// #[cfg(feature = "scylla")]
-// pub use persistence::scylla;
-
-// #[cfg(feature = "redis")]
-// pub use persistence::redis;
-
-// #[cfg(feature = "kafka")]
-// pub use transport::kafka;
-
-// #[cfg(feature = "test-utils")]
-// pub mod test_utils;
