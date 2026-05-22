@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod redis_integration_tests {
-    use fred::interfaces::SetsInterface;
-    use shared_kernel::core::{Error, ErrorCode, Result};
-    use shared_kernel::test_utils::RedisTestContext;
+    use infra_fred::fred::interfaces::SetsInterface;
+    use infra_test::RedisTestContext;
+    use shared_kernel::core::{ErrorCode, Result};
     use shared_kernel::types::{Counter, ProfileId, Region, RegionCode};
     use social::entities::ProfileCounters;
     use social::redis::RedisCounterRepository;
@@ -39,7 +39,7 @@ mod redis_integration_tests {
         let error = res.unwrap_err();
         assert_eq!(
             error.code,
-            shared_kernel::core::ErrorCode::NotFound,
+            ErrorCode::NotFound,
             "L'erreur attendue était un code NotFound, obtenu: {:?}",
             error
         );

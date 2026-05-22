@@ -1,12 +1,16 @@
-use account::test_utils::AccountTestContextBuilder;
+// backend/services/account/api/command-server/tests/e2e_it.rs
+
+use account_test_utils::AccountTestContextBuilder;
+use infra_test::KeycloakTestContext;
 use shared_kernel::core::Result;
 use shared_proto::account::v1::AccountTarget;
 use shared_proto::account::v1::account_personal_service_client::AccountPersonalServiceClient;
 
 use tonic::{Request, metadata::MetadataValue};
 use uuid::Uuid;
+use infra_sqlx::sqlx;
 
-use auth::{KeycloakTestContext, TokenValidator};
+use auth::TokenValidator;
 use shared_proto::account::v1::{
     RegisterRequest, RegistrationIdentifier, UpdateLocaleRequest,
     account_access_service_client::AccountAccessServiceClient, registration_identifier::Method,

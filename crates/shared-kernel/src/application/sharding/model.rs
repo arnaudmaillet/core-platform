@@ -1,21 +1,11 @@
-// crates/account/src/infrastructure/sharding/models.rs
+// Dans crates/shared-kernel/src/application/sharding/model.rs
 
-use crate::cache::CacheRepository;
 use crate::types::Region;
-use std::sync::Arc;
 
-#[derive(Clone)]
+/// Identifiant unique et opaque d'un Shard au sein du cluster.
+/// Dérivé avec Eq et Hash pour servir de clé de routage dans l'infrastructure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShardNode {
     pub region: Region,
     pub shard_id: u16,
-    pub storage: Arc<ShardStorage>,
-}
-
-pub struct ShardStorage {
-    // Le pool SQL (Optionnel si un shard n'est que NoSQL)
-    pub postgres: Option<sqlx::PgPool>,
-    // Le cache (Redis)
-    pub redis: Arc<dyn CacheRepository>,
-    // Si tu ajoutes du NoSQL plus tard :
-    // pub mongo: Option<mongodb::Client>,
 }

@@ -1,9 +1,12 @@
 // crates/social/src/infrastructure/scylla/repositories/relations.rs
 
 use async_trait::async_trait;
-use scylla::{
+use infra_scylla::scylla::{
     client::session::Session,
-    statement::{batch::Batch, prepared::PreparedStatement},
+    statement::{
+        batch::{Batch, BatchType},
+        prepared::PreparedStatement,
+    },
     value::CqlTimestamp,
 };
 use shared_kernel::{
@@ -81,7 +84,7 @@ impl ScyllaRelationRepository {
 #[async_trait]
 impl RelationRepository for ScyllaRelationRepository {
     async fn save(&self, relation: &FollowRelation) -> Result<()> {
-        let mut batch = Batch::new(scylla::statement::batch::BatchType::Logged);
+        let mut batch = Batch::new(BatchType::Logged);
 
         batch.append_statement(self.insert_following_stmt.clone());
         batch.append_statement(self.insert_follower_stmt.clone());
@@ -106,7 +109,7 @@ impl RelationRepository for ScyllaRelationRepository {
     }
 
     async fn delete(&self, follower_id: ProfileId, following_id: ProfileId) -> Result<()> {
-        let mut batch = Batch::new(scylla::statement::batch::BatchType::Logged);
+        let mut batch = Batch::new(BatchType::Logged);
 
         batch.append_statement(self.delete_following_stmt.clone());
         batch.append_statement(self.delete_follower_stmt.clone());

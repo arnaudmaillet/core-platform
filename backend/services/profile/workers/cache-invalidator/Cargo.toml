@@ -7,6 +7,8 @@ edition.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true, features = ["service-invalidator"] }
+infra-fred = { workspace = true }
+infra-kafka = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -13,7 +13,7 @@ pub use event::Event;
 pub use operation_tracker::OperationTracker;
 pub use producer::EventProducer;
 
-pub use outbox::{OutboxProcessor, OutboxRepository, OutboxRepositoryStub, OutboxStore};
+pub use outbox::{OutboxProcessor, OutboxRepository, OutboxStore};
 
-#[cfg(all(feature = "postgres", feature = "kafka"))]
-pub use outbox::run_outbox_relay;
+#[cfg(feature = "test-utils")]
+pub use outbox::OutboxRepositoryStub;

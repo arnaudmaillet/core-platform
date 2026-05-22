@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
+    use infra_test::ScyllaTestContext;
     use shared_kernel::core::{Result, Versioned};
-    use shared_kernel::test_utils::ScyllaTestContext;
     use shared_kernel::types::{ProfileId, Region, RegionCode};
     use social::entities::FollowRelation;
     use social::repositories::RelationRepository;

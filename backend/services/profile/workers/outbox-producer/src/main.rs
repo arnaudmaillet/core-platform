@@ -1,14 +1,13 @@
 // backend/services/profile/outbox_processor/src/main.rs
 
-use sqlx::PgPool;
 use std::env;
 use std::time::Duration;
 use tokio::sync::watch;
 
+use infra_kafka::KafkaEventProducer;
+use infra_sqlx::{PostgresOutboxRepository, sqlx::PgPool};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::kafka::KafkaEventProducer;
 use shared_kernel::messaging::OutboxProcessor;
-use shared_kernel::postgres::PostgresOutboxRepository;
 
 #[tokio::main]
 async fn main() -> Result<()> {

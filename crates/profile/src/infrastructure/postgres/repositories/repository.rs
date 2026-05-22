@@ -4,10 +4,11 @@ use crate::entities::Profile;
 use crate::infrastructure::postgres::rows::PostgresProfileRow;
 use crate::repositories::ProfileRepository;
 use crate::types::{Handle};
+use infra_sqlx::TransactionExecuteExt;
 use async_trait::async_trait;
 use shared_kernel::core::{AggregateRoot, Error, Identifier, Result, Transaction, Versioned};
 use shared_kernel::types::{AccountId, Region, ProfileId};
-use sqlx::PgPool;
+use infra_sqlx::{sqlx, sqlx::PgPool};
 
 pub struct PostgresProfileRepository {
     pool: PgPool,
@@ -28,7 +29,7 @@ impl ProfileRepository for PostgresProfileRepository {
     // 1. EXTRACTION DU FLAG AVANT LA CLOSURE ASYNC (Lifetime Safe)
     let is_events_empty = profile.metadata().is_events_empty();
 
-    let result = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+    let result = self.pool.execute_on(tx, |conn| {
         Box::pin(async move {
             // 2. ÉVALUATION DE L'IDEMPOTENCE
             let current_db_v: Option<i64> = sqlx::query_scalar(
@@ -120,7 +121,7 @@ impl ProfileRepository for PostgresProfileRepository {
     ) -> Result<Option<Profile>> {
         let pid = id.as_uuid();
         // 2. Lecture DB
-        let profile_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        let profile_opt = self.pool.execute_on(tx, |conn| {
             let uid = pid;
             let r_str = region.as_str().to_string();
             Box::pin(async move {
@@ -152,7 +153,7 @@ impl ProfileRepository for PostgresProfileRepository {
         let handle_str = handle.as_str().to_string();
         let region_str = region.as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        self.pool.execute_on(tx, |conn| {
             let h = handle_str.clone();
             let r = region_str.clone();
             Box::pin(async move {
@@ -183,7 +184,7 @@ impl ProfileRepository for PostgresProfileRepository {
         let uid = account_id.uuid().clone();
         let r_str = account_id.region().as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        self.pool.execute_on(tx, |conn| {
         let u = uid;
         let r = r_str.clone();
         Box::pin(async move {
@@ -209,7 +210,7 @@ impl ProfileRepository for PostgresProfileRepository {
         let uid = id.as_uuid();
         let r_str = region.as_str().to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+        self.pool.execute_on(tx, |conn| {
             let u = uid;
             let r = r_str.clone();
             Box::pin(async move {

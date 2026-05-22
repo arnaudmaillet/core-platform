@@ -1,9 +1,12 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use scylla::{
+use infra_scylla::scylla::{
     client::session::Session,
-    statement::{batch::Batch, prepared::PreparedStatement},
-    value::Counter as ScyllaCounter, // Import du type fort de Scylla pour les compteurs
+    statement::{
+        batch::{Batch, BatchType},
+        prepared::PreparedStatement,
+    },
+    value::Counter as ScyllaCounter,
 };
 use shared_kernel::{
     core::{Error, Identifier, Result},
@@ -69,7 +72,7 @@ impl CounterRepository for ScyllaCounterRepository {
         follower_id: ProfileId,
         following_id: ProfileId,
     ) -> Result<()> {
-        let mut batch = Batch::new(scylla::statement::batch::BatchType::Counter);
+        let mut batch = Batch::new(BatchType::Counter);
 
         batch.append_statement(self.increment_following_stmt.clone());
         batch.append_statement(self.increment_followers_stmt.clone());
@@ -89,7 +92,7 @@ impl CounterRepository for ScyllaCounterRepository {
         follower_id: ProfileId,
         following_id: ProfileId,
     ) -> Result<()> {
-        let mut batch = Batch::new(scylla::statement::batch::BatchType::Counter);
+        let mut batch = Batch::new(BatchType::Counter);
 
         batch.append_statement(self.decrement_following_stmt.clone());
         batch.append_statement(self.decrement_followers_stmt.clone());

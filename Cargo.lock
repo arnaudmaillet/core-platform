@@ -10,6 +10,8 @@ dependencies = [
  "async-trait",
  "auth",
  "chrono",
+ "infra-sqlx",
+ "infra-test",
  "prost",
  "prost-types",
  "regex",
@@ -19,8 +21,6 @@ dependencies = [
  "shared-kernel",
  "shared-proto",
  "sqlx",
- "testcontainers",
- "testcontainers-modules",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -35,6 +35,8 @@ dependencies = [
 name = "account-cache-invalidator"
 version = "0.1.0"
 dependencies = [
+ "infra-fred",
+ "infra-kafka",
  "shared-kernel",
  "tokio",
  "tracing",
@@ -46,13 +48,16 @@ name = "account-command-server"
 version = "0.1.0"
 dependencies = [
  "account",
+ "account-test-utils",
  "async-trait",
  "auth",
  "dotenvy",
+ "infra-fred",
+ "infra-sqlx",
+ "infra-test",
  "prost",
  "shared-kernel",
  "shared-proto",
- "sqlx",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -65,11 +70,27 @@ dependencies = [
 name = "account-outbox-producer"
 version = "0.1.0"
 dependencies = [
+ "infra-kafka",
+ "infra-sqlx",
  "shared-kernel",
- "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "account-test-utils"
+version = "0.1.0"
+dependencies = [
+ "account",
+ "auth",
+ "infra-sqlx",
+ "infra-test",
+ "shared-proto",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -371,16 +392,14 @@ name = "auth"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "auth",
  "base64 0.22.1",
+ "infra-test",
  "jsonwebtoken",
  "openssl",
  "reqwest",
  "serde",
  "serde_json",
  "shared-kernel",
- "testcontainers",
- "testcontainers-modules",
  "thiserror",
  "tokio",
  "tonic",
@@ -1979,6 +1998,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "infra-fred"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "fred",
+ "shared-kernel",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "infra-kafka"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "rdkafka",
+ "serde_json",
+ "shared-kernel",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "infra-scylla"
+version = "0.1.0"
+dependencies = [
+ "scylla",
+ "shared-kernel",
+]
+
+[[package]]
+name = "infra-sqlx"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde_json",
+ "shared-kernel",
+ "sqlx",
+ "uuid",
+]
+
+[[package]]
+name = "infra-test"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth",
+ "infra-fred",
+ "infra-kafka",
+ "infra-scylla",
+ "infra-sqlx",
+ "once_cell",
+ "reqwest",
+ "serde_json",
+ "shared-kernel",
+ "testcontainers",
+ "testcontainers-modules",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2748,17 +2832,18 @@ dependencies = [
  "chrono",
  "elasticsearch",
  "futures",
+ "infra-fred",
+ "infra-kafka",
+ "infra-sqlx",
+ "infra-test",
  "prost",
  "prost-types",
  "rand 0.9.2",
- "scylla",
  "serde",
  "serde_json",
  "shared-kernel",
  "shared-proto",
  "sqlx",
- "testcontainers",
- "testcontainers-modules",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -2772,6 +2857,8 @@ dependencies = [
 name = "profile-cache-invalidator"
 version = "0.1.0"
 dependencies = [
+ "infra-fred",
+ "infra-kafka",
  "shared-kernel",
  "tokio",
  "tracing",
@@ -2786,10 +2873,13 @@ dependencies = [
  "auth",
  "dotenvy",
  "futures",
+ "infra-fred",
+ "infra-sqlx",
+ "infra-test",
  "profile",
+ "profile-test-utils",
  "shared-kernel",
  "shared-proto",
- "sqlx",
  "tokio",
  "tonic",
  "tonic-health",
@@ -2808,12 +2898,16 @@ dependencies = [
  "chrono",
  "dotenvy",
  "futures",
+ "infra-fred",
+ "infra-kafka",
+ "infra-sqlx",
+ "infra-test",
  "profile",
+ "profile-test-utils",
  "rdkafka",
  "serde_json",
  "shared-kernel",
  "shared-proto",
- "sqlx",
  "tokio",
  "tokio-util",
  "tonic",
@@ -2828,11 +2922,30 @@ dependencies = [
 name = "profile-outbox-producer"
 version = "0.1.0"
 dependencies = [
+ "infra-kafka",
+ "infra-sqlx",
  "shared-kernel",
- "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "profile-test-utils"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "infra-kafka",
+ "infra-sqlx",
+ "infra-test",
+ "profile",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -3794,12 +3907,15 @@ dependencies = [
  "async-trait",
  "auth",
  "chrono",
- "fred",
- "scylla",
+ "infra-fred",
+ "infra-kafka",
+ "infra-scylla",
+ "infra-test",
  "serde",
  "serde_json",
  "shared-kernel",
  "shared-proto",
+ "social-test-utils",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -3814,12 +3930,15 @@ dependencies = [
  "async-trait",
  "auth",
  "dotenvy",
- "fred",
  "futures",
- "scylla",
+ "infra-fred",
+ "infra-kafka",
+ "infra-scylla",
+ "infra-test",
  "shared-kernel",
  "shared-proto",
  "social",
+ "social-test-utils",
  "tokio",
  "tonic",
  "tonic-health",
@@ -3827,6 +3946,23 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "social-test-utils"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "infra-fred",
+ "infra-kafka",
+ "infra-test",
+ "shared-kernel",
+ "shared-proto",
+ "social",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
 ]
 
 [[package]]

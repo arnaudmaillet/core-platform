@@ -1,8 +1,9 @@
+// crates/social/src/application/context/context.rs
+
 use crate::domain::entities::{FollowRelation, ProfileCounters};
 use crate::domain::repositories::{CounterRepository, RelationRepository};
 use shared_kernel::core::ErrorCode;
 use shared_kernel::{
-    context::BaseAppContext,
     core::{Error, Result},
     idempotency::IdempotencyRepository,
     types::{ProfileId, Region},
@@ -12,7 +13,6 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct SocialAppContext {
-    base: BaseAppContext,
     relation_repo: Arc<dyn RelationRepository>,
     cache_counter_repo: Arc<dyn CounterRepository>,
     counter_repo: Arc<dyn CounterRepository>,
@@ -21,14 +21,12 @@ pub struct SocialAppContext {
 
 impl SocialAppContext {
     pub fn new(
-        base: BaseAppContext,
         relation_repo: Arc<dyn RelationRepository>,
         cache_counter_repo: Arc<dyn CounterRepository>,
         counter_repo: Arc<dyn CounterRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
     ) -> Self {
         Self {
-            base,
             relation_repo,
             cache_counter_repo,
             counter_repo,
@@ -36,16 +34,8 @@ impl SocialAppContext {
         }
     }
 
-    pub fn create_context(
-        &self,
-        target_profile_id: ProfileId,
-        region: Region,
-    ) -> SocialContext {
+    pub fn create_context(&self, target_profile_id: ProfileId, region: Region) -> SocialContext {
         SocialContext::new(self.clone(), target_profile_id, region)
-    }
-
-    pub fn base(&self) -> &BaseAppContext {
-        &self.base
     }
     pub fn relation_repo(&self) -> Arc<dyn RelationRepository> {
         self.relation_repo.clone()

@@ -1,15 +1,17 @@
 // backend/services/profile/api/event-worker/src/main.rs
 
 use dotenvy::dotenv;
+use infra_fred::RedisContext;
+use infra_kafka::KafkaEventConsumer;
+use infra_sqlx::PostgresContext;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
-// Imports du Shared Kernel (Socle technique & Transport de la plateforme)
 use shared_kernel::{
-    core::Error, kafka::KafkaEventConsumer, messaging::{EventConsumer, EventEnvelope}, postgres::PostgresContext, redis::RedisContext
+    core::Error,
+    messaging::{EventConsumer, EventEnvelope},
 };
 
-// Imports de la crate Profile
 use profile::{ProfileServiceBuilder, kafka::AccountConsumer};
 
 #[tokio::main]

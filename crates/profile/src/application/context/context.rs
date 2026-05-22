@@ -1,21 +1,23 @@
 // crates/profile/src/application/context/context.rs
 
 use crate::{entities::Profile, repositories::ProfileRepository, types::Handle};
+use infra_sqlx::{PostgresTransaction, sqlx::PgPool};
 use shared_kernel::{
     command::CommandTarget,
-    context::BaseAppContext,
-    core::{Error, FakeTransaction, Result, Transaction, Versioned},
+    core::{Error, Result, Transaction, Versioned},
     idempotency::IdempotencyRepository,
     messaging::{Event, EventEmitter, OutboxRepository},
-    postgres::PostgresTransaction,
     types::{ProfileId, Region},
 };
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "test-utils"))]
+use shared_kernel::core::FakeTransaction;
+
 #[derive(Clone)]
 pub struct ProfileAppContext {
-    base: BaseAppContext,
+    pool: Option<PgPool>,
     profile_repo: Arc<dyn ProfileRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
@@ -23,13 +25,27 @@ pub struct ProfileAppContext {
 
 impl ProfileAppContext {
     pub fn new(
-        base: BaseAppContext,
+        pool: PgPool,
         profile_repo: Arc<dyn ProfileRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
     ) -> Self {
         Self {
-            base,
+            pool: Some(pool),
+            profile_repo,
+            outbox_repo,
+            idempotency_repo,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_stubbed(
+        profile_repo: Arc<dyn ProfileRepository>,
+        outbox_repo: Arc<dyn OutboxRepository>,
+        idempotency_repo: Arc<dyn IdempotencyRepository>,
+    ) -> Self {
+        Self {
+            pool: None,
             profile_repo,
             outbox_repo,
             idempotency_repo,
@@ -44,8 +60,8 @@ impl ProfileAppContext {
         ProfileContext::new(self.clone(), None, region)
     }
 
-    pub fn base(&self) -> &BaseAppContext {
-        &self.base
+    pub fn pg_pool(&self) -> Option<&PgPool> {
+        self.pool.as_ref()
     }
     pub fn profile_repo(&self) -> Arc<dyn ProfileRepository> {
         self.profile_repo.clone()
@@ -218,16 +234,25 @@ impl ProfileContext {
         Ok(())
     }
 
+    // --- GESTION DES TRANSACTIONS ---
     pub async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
-        match self.app.base.pool() {
+        match self.app.pg_pool() {
             Some(pool) => {
-                let tx = pool
-                    .begin()
-                    .await
-                    .map_err(|e| Error::internal(e.to_string()))?;
+                let tx = pool.begin().await.map_err(|e| {
+                    Error::internal(format!("Failed to begin database transaction: {}", e))
+                })?;
                 Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
             }
+
+            // Si on est en mode test (via cargo test ou la feature de stubbing), on autorise la FakeTransaction
+            #[cfg(any(test, feature = "test-utils"))]
             None => Ok(Box::new(FakeTransaction::new()) as Box<dyn Transaction>),
+
+            // En production, l'absence de pool est une erreur fatale d'initialisation
+            #[cfg(not(any(test, feature = "test-utils")))]
+            None => Err(Error::internal(
+                "Database pool is missing. ProfileAppContext must be initialized with a valid PgPool in production.",
+            )),
         }
     }
 }

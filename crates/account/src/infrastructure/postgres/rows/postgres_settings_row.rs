@@ -1,6 +1,6 @@
 // crates/account/src/infrastructure/persistence/postgres/account_settings_row.rs
 use crate::entities::Account;
-
+use infra_sqlx::sqlx;
 #[derive(Debug, sqlx::FromRow)]
 pub struct PostgresAccountSettingsRow {
     pub preferences: serde_json::Value,

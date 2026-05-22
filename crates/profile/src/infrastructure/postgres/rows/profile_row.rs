@@ -3,12 +3,12 @@
 use crate::domain::entities::Profile;
 use crate::domain::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
+use infra_sqlx::sqlx::FromRow;
 use serde_json::Value as JsonValue;
 use shared_kernel::{
     core::{Error, Identifier, Result, Versioned},
     types::{AccountId, ProfileId, Url},
 };
-use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(FromRow, Debug)]

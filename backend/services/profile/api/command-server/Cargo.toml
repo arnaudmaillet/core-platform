@@ -13,8 +13,10 @@ description.workspace = true
 # On active spécifiquement les capacités de recherche (ES + gRPC)
 shared-kernel = { workspace = true, features = ["kafka"] }
 shared-proto = { workspace = true }
-profile = { workspace = true, features = ["test-utils"] }
+profile = { workspace = true }
 auth = { workspace = true }
+infra-sqlx = { workspace = true }
+infra-fred = { workspace = true }
 
 # Dépendances externes nécessaires au binaire
 tokio = { workspace = true }
@@ -28,12 +30,7 @@ async-trait = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
-sqlx = { workspace = true, features = [
-    "runtime-tokio",
-    "postgres",
-    "uuid",
-    "chrono",
-] }
 
 [dev-dependencies]
-auth = { workspace = true, features = ["test-utils"] }
+profile-test-utils = { workspace = true }
+infra-test = { workspace = true }

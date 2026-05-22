@@ -1,13 +1,15 @@
+// crates/social/src/application/context/test.rs
+
 #[cfg(test)]
 mod tests {
     use crate::domain::entities::FollowRelation;
     use crate::entities::FollowRelationBuilder;
     use crate::repositories::CounterRepository;
-    use crate::test_utils::SocialTestFixture;
     use chrono::Utc;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use shared_kernel::idempotency::IdempotencyRepository;
     use shared_kernel::types::{ProfileId, Region, RegionCode};
+    use social_test_utils::SocialTestFixture;
     use uuid::Uuid;
 
     // Helper pour générer un ProfileId forcé sur une région spécifique

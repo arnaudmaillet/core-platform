@@ -1,6 +1,8 @@
 // backend/services/profile/api/command-server/tests/e2e_it.rs
 
-use profile::test_utils::ProfileTestContextBuilder;
+use infra_sqlx::sqlx;
+use infra_test::KeycloakTestContext;
+use profile_test_utils::ProfileTestContextBuilder;
 use shared_kernel::core::{Identifier, Result};
 use shared_kernel::types::{AccountId, ProfileId};
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
@@ -39,7 +41,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
         .unwrap();
 
     // 3. AUTH & IDENTITY (Logique de test maintenue)
-    let auth_ctx = auth::KeycloakTestContext::restore("master").await;
+    let auth_ctx = KeycloakTestContext::restore("master").await;
     let auth_response = auth_ctx.get_admin_token().await?;
 
     let region_str = "EU";

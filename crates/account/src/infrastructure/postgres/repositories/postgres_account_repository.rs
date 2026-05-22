@@ -1,7 +1,8 @@
-// crates/account/src/infrastructure/postgres/repositories/account_repository.rs
+// crates/account/src/infrastructure/postgres/repositories/postgres_account_repository.rs
 
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres, query_scalar};
+use infra_sqlx::sqlx::{self, Pool, Postgres, query_scalar};
+use infra_sqlx::TransactionExecuteExt;
 
 use shared_kernel::{core::{AggregateRoot, Error, Identifier, Result, Transaction}, types::{AccountId, Email, PhoneNumber, SubId}};
 
@@ -35,7 +36,7 @@ impl AccountRepository for PostgresAccountRepository {
         let uid = id.uuid();
         let region = id.region();
 
-        let account_opt = <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+       let account_opt = self.pool.execute_on(tx, |conn| {
             Box::pin(async move {
                 let sql = r#"
                     SELECT i.*, i.updated_at as identity_updated_at,
@@ -87,7 +88,7 @@ impl AccountRepository for PostgresAccountRepository {
         let next_version = account.metadata().version() as i64;
         let is_events_empty = account.metadata().is_events_empty();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+         self.pool.execute_on(tx, |conn| {
             Box::pin(async move {
                 // 1. On vérifie si le compte existe et on verrouille la ligne (FOR UPDATE) 
                 // pour garantir que personne ne modifie la version entre le check et l'écriture
@@ -217,7 +218,7 @@ impl AccountRepository for PostgresAccountRepository {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountId>> {
         let email_raw = email.to_string();
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+         self.pool.execute_on(tx, |conn| {
             let email_owned = email_raw.clone();
             Box::pin(async move {
                 let sql = "SELECT account_id FROM account_identity WHERE email = $1";
@@ -238,7 +239,7 @@ impl AccountRepository for PostgresAccountRepository {
     ) -> Result<Option<AccountId>> {
         let ext_id_raw = ext_id.to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+         self.pool.execute_on(tx, |conn| {
             let ext_id_owned = ext_id_raw.clone();
 
             Box::pin(async move {
@@ -261,7 +262,7 @@ impl AccountRepository for PostgresAccountRepository {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
         let email_raw = email.to_string();
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+         self.pool.execute_on(tx, |conn| {
             let email_owned = email_raw.clone();
             Box::pin(async move {
                 let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE email = $1)";
@@ -283,7 +284,7 @@ impl AccountRepository for PostgresAccountRepository {
     ) -> Result<bool> {
         let phone_raw = phone.to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+         self.pool.execute_on(tx, |conn| {
             let phone_owned = phone_raw.clone();
             Box::pin(async move {
                 let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone_number = $1)";
@@ -305,7 +306,7 @@ impl AccountRepository for PostgresAccountRepository {
     ) -> Result<bool> {
         let ext_id_raw = ext_id.to_string();
 
-        <dyn Transaction>::execute_on(&self.pool, tx, |conn| {
+         self.pool.execute_on(tx, |conn| {
             let ext_id_owned = ext_id_raw.clone();
             Box::pin(async move {
                 let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE sub_id = $1)";
@@ -328,7 +329,7 @@ impl AccountRepository for PostgresAccountRepository {
     async fn delete(&self, id: AccountId, tx: &mut dyn Transaction) -> Result<()> {
         let uid = id.as_uuid();
 
-        <dyn Transaction>::execute_on(&self.pool, Some(tx), |conn| {
+         self.pool.execute_on(Some(tx), |conn| {
             Box::pin(async move {
                 let sql = "DELETE FROM account_identity WHERE account_id = $1";
 

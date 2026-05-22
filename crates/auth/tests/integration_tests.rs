@@ -1,4 +1,5 @@
-use auth::{KeycloakTestContext, TokenValidator};
+use auth::TokenValidator;
+use infra_test::KeycloakTestContext;
 use shared_kernel::{core::Result, security::JwtToken};
 
 #[tokio::test]

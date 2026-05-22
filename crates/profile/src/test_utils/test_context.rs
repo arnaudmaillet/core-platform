@@ -1,6 +1,6 @@
 use crate::test_utils::ProfileTestContextBuilder;
-use shared_kernel::test_utils::TestContext;
-use sqlx::PgPool;
+use infra_sqlx::sqlx::PgPool;
+use infra_test::TestContext;
 use std::net::SocketAddr;
 use tokio::sync::oneshot;
 

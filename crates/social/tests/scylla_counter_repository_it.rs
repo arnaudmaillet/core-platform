@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
+    use infra_test::ScyllaTestContext;
     use shared_kernel::core::{Error, Identifier, Result};
-    use shared_kernel::test_utils::ScyllaTestContext;
     use shared_kernel::types::{Counter, ProfileId, Region, RegionCode};
     use social::entities::ProfileCounters;
     use social::repositories::CounterRepository;

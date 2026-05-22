@@ -1,5 +1,4 @@
-use fred::clients::Pool;
-use fred::interfaces::SetsInterface;
+use infra_fred::fred::{clients::Pool, interfaces::SetsInterface};
 use shared_kernel::core::Result;
 use shared_kernel::types::ProfileId;
 use std::sync::Arc;

@@ -10,7 +10,10 @@ pub use clock::Clock;
 pub use errors::{Error, ErrorCode, Result};
 pub use identity::{AggregateMetadata, AggregateRoot, Entity, Identifier, ValueObject, Versioned};
 pub use resilience::{RetryConfig, with_retry};
-pub use transaction::{FakeTransaction, Transaction, TransactionManager};
+pub use transaction::{Transaction, TransactionManager};
+
+#[cfg(feature = "test-utils")]
+pub use transaction::FakeTransaction;
 
 #[cfg(feature = "concurrency")]
 mod concurrency;
