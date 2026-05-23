@@ -20,8 +20,7 @@ chrono = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
 tonic = { workspace = true }
-prost-types = { workspace = true }
-sqlx = { workspace = true, features = ["postgres", "macros", "derive"] }
+sqlx = { workspace = true }
 
 [dev-dependencies]
 infra-test = { workspace = true }

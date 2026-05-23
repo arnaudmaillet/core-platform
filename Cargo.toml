@@ -85,7 +85,6 @@ dotenvy = "0.15.7"
 # Observabilité
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-log = "0.4"
 
 # Infrastructure
 sqlx = { version = "0.8.6", features = [
