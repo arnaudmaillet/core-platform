@@ -1,8 +1,8 @@
 mod repository;
 pub use repository::IdempotencyRepository;
 
-#[cfg(feature = "test-utils")]
+#[cfg(feature = "stub")]
 mod repository_stub;
 
-#[cfg(feature = "test-utils")]
+#[cfg(feature = "stub")]
 pub use repository_stub::IdempotencyRepositoryStub;

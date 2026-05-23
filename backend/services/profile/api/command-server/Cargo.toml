@@ -11,7 +11,7 @@ description.workspace = true
 
 [dependencies]
 # On active spécifiquement les capacités de recherche (ES + gRPC)
-shared-kernel = { workspace = true, features = ["kafka"] }
+shared-kernel = { workspace = true }
 shared-proto = { workspace = true }
 profile = { workspace = true }
 auth = { workspace = true }
@@ -21,16 +21,12 @@ infra-fred = { workspace = true }
 # Dépendances externes nécessaires au binaire
 tokio = { workspace = true }
 tonic = { workspace = true }
-tonic-reflection = { workspace = true }
-tonic-health = { workspace = true }
 uuid = { workspace = true }
-futures = { workspace = true }
-async-trait = { workspace = true }
-
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
 
 [dev-dependencies]
 profile-test-utils = { workspace = true }
+auth-test-utils = { workspace = true }
 infra-test = { workspace = true }

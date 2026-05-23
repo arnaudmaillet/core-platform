@@ -5,7 +5,10 @@ mod tests {
         application::interceptor::AuthInterceptor,
         domain::validator::{AuthError, TokenValidator},
     };
-    use shared_kernel::{security::JwtToken, types::SubId};
+    use shared_kernel::{
+        security::JwtToken,
+        types::{Region, SubId},
+    };
     use std::{
         sync::Arc,
         time::{SystemTime, UNIX_EPOCH},
@@ -48,16 +51,22 @@ mod tests {
         let mut interceptor = AuthInterceptor::new(validator);
 
         let mut req = Request::new(());
-        req.metadata_mut()
-            .insert("authorization", "Bearer valid-token".parse().unwrap());
+        let metadata = req.metadata_mut();
+        metadata.insert("authorization", "Bearer valid-token".parse().unwrap());
+        metadata.insert("x-region", "EU".parse().unwrap());
 
         // Act
         let res = interceptor.call(req);
 
         // Assert
         assert!(res.is_ok());
-        let claims = res.unwrap().extensions().get::<Claims>().cloned();
+        let unwrapped_req = res.unwrap();
+
+        let claims = unwrapped_req.extensions().get::<Claims>().cloned();
         assert_eq!(claims.unwrap().sub_id, SubId::from_raw("user-123"));
+
+        let region = unwrapped_req.extensions().get::<Region>().cloned();
+        assert!(region.is_some());
     }
 
     #[test]
@@ -69,14 +78,17 @@ mod tests {
         let mut interceptor = AuthInterceptor::new(validator);
 
         let mut req = Request::new(());
-        req.metadata_mut()
-            .insert("authorization", "Bearer bad-token".parse().unwrap());
+        let metadata = req.metadata_mut();
+        metadata.insert("authorization", "Bearer bad-token".parse().unwrap());
+        metadata.insert("x-region", "EU".parse().unwrap());
 
         // Act
         let res = interceptor.call(req);
 
         // Assert
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err().code(), tonic::Code::Unauthenticated);
+        let err = res.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::Unauthenticated);
+        assert_eq!(err.message(), "Token invalide");
     }
 }

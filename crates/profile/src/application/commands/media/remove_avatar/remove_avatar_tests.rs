@@ -68,7 +68,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.version(), version_snapshot); // Pas de save car pas de changement
         })
         .await;
@@ -113,7 +113,7 @@ mod tests {
         );
 
         // On vérifie que l'avatar est toujours là (car la commande a été stoppée net)
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert!(p.avatar().is_some());
         })
         .await;

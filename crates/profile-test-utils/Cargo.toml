@@ -11,6 +11,7 @@ description.workspace = true
 shared-kernel = { workspace = true }
 profile = { workspace = true }
 auth = { workspace = true }
+auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
 infra-sqlx = { workspace = true }
 infra-kafka = { workspace = true }

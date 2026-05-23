@@ -5,8 +5,6 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::fmt;
 
-pub type Result<T> = std::result::Result<T, Error>;
-
 #[derive(Debug, Serialize, Clone)]
 pub struct Error {
     pub code: ErrorCode,
@@ -132,24 +130,6 @@ impl Error {
 }
 
 // --- CONVERSIONS AUTOMATIQUES (Traits From) ---
-
-#[cfg(feature = "postgres")]
-impl From<sqlx::Error> for Error {
-    fn from(err: sqlx::Error) -> Self {
-        match err {
-            sqlx::Error::RowNotFound => Self::not_found("Database Row", "unknown"),
-            _ => Self::database(err.to_string()),
-        }
-    }
-}
-
-#[cfg(feature = "kafka")]
-impl From<rdkafka::error::KafkaError> for Error {
-    fn from(err: rdkafka::error::KafkaError) -> Self {
-        Self::messaging(err.to_string())
-    }
-}
-
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Self::new(ErrorCode::InternalError, "Serialization failed").with_source(err.to_string())

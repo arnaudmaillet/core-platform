@@ -10,9 +10,8 @@ test-utils = []
 
 [dependencies]
 infra-sqlx = { workspace = true }
-shared-kernel = { workspace = true, features = ["runtime"] }
+shared-kernel = { workspace = true, features = ["stub"] }
 shared-proto = { workspace = true }
-auth = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
@@ -20,15 +19,8 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
-regex = { workspace = true }
-unicode-normalization = { workspace = true }
-seahash = { workspace = true }
-prost = { workspace = true }
 tonic = { workspace = true }
 prost-types = { workspace = true }
-tonic-prost = { workspace = true }
-anyhow = { workspace = true }
-tokio-stream = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "macros", "derive"] }
 
 [dev-dependencies]

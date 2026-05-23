@@ -1,7 +1,7 @@
 // backend/services/social/api/command-server/tests/social_e2e_it.rs
 
+use auth_test_utils::KeycloakTestContext;
 use infra_fred::fred::interfaces::HashesInterface;
-use infra_test::KeycloakTestContext;
 use shared_kernel::{
     core::{Identifier, Result},
     types::{ProfileId, Region, RegionCode},

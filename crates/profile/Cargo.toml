@@ -10,14 +10,11 @@ test-utils = []
 
 [dependencies]
 shared-kernel = { workspace = true, features = [
-    "test-utils",
-    "elasticsearch",
+    "stub",
     "concurrency",
-    "runtime",
 ] }
 infra-sqlx = { workspace = true }
 infra-kafka = { workspace = true }
-infra-fred = { workspace = true }
 infra-test = { workspace = true }
 
 auth = { workspace = true }
@@ -29,16 +26,13 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 elasticsearch = { workspace = true }
 async-trait = { workspace = true }
-rand = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 
-prost = { workspace = true }
 tonic = { workspace = true }
 prost-types = { workspace = true }
-tonic-prost = { workspace = true }
 tokio-stream = { workspace = true }
-sqlx = { workspace = true, features = ["postgres", "macros", "derive"] }
+sqlx = { workspace = true }
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }

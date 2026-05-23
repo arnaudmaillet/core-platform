@@ -1,7 +1,7 @@
 // crates/account/src/application/update_locale/update_locale_use_case.rs
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{AggregateRoot, Result};
+use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::settings::UpdateLocaleCommand;

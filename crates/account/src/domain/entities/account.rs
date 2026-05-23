@@ -138,7 +138,7 @@ impl Account {
         let old_region = self.identity.region().clone();
 
         self.track_change(
-            |s| {
+            |_| {
                 if old_region == new_region {
                     Ok(false)
                 } else {

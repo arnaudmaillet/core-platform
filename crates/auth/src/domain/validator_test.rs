@@ -4,7 +4,6 @@ mod tests {
     use crate::domain::claims::RealmAccess;
     use crate::domain::validator::{AuthError, TokenValidator};
     use crate::{Claims, KeycloakValidator};
-    use infra_test::KeycloakTestContext;
     use jsonwebtoken::{EncodingKey, Header, Validation, encode};
     use shared_kernel::security::JwtToken;
     use shared_kernel::types::{Email, SubId};
@@ -29,25 +28,6 @@ mod tests {
             exp,
         }
     }
-
-    // --- 1. TESTS D'INTÉGRATION (Réel Docker via Singleton) ---
-
-    #[tokio::test]
-    async fn test_integration_keycloak_discovery() {
-        // Utilise le Singleton : boot 20s la première fois, 0s les suivantes
-        let ctx = KeycloakTestContext::restore("master").await;
-
-        // Si KeycloakValidator::new a réussi, c'est que le Discovery (HTTP + Parsing) est OK
-        assert!(ctx.uri.starts_with("http://"));
-
-        let result = TokenValidator::validate(
-            ctx.validator.as_ref(),
-            &JwtToken::from_raw("invalid.token.structure"),
-        );
-        assert!(matches!(result, Err(AuthError::InvalidToken)));
-    }
-
-    // --- 2. TESTS UNITAIRES DE SÉCURITÉ (Mockés) ---
 
     fn setup_mock_validator() -> (KeycloakValidator, Vec<u8>, String) {
         use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};

@@ -33,7 +33,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.bio(), new_bio.as_ref());
             assert_eq!(p.version(), version_snapshot + 1);
         })
@@ -109,7 +109,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.version(), version_snapshot);
         })
         .await;

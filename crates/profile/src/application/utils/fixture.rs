@@ -6,6 +6,7 @@ use shared_kernel::cache::CacheRepositoryStub;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
+
 use shared_kernel::messaging::OutboxRepositoryStub;
 use shared_kernel::types::{AccountId, ProfileId, Region};
 
@@ -124,10 +125,6 @@ impl ProfileTestFixture {
 
     pub fn idempotency_repo(&self) -> &IdempotencyRepositoryStub {
         &self.idempotency_repo
-    }
-
-    pub fn outbox_repo(&self) -> &OutboxRepositoryStub {
-        &self.outbox_repo
     }
 
     // --- Helpers pour les tests ---

@@ -8,11 +8,20 @@ use social::SocialServiceBuilder;
 use social::services::SocialService;
 use std::sync::Arc;
 use tonic::transport::Server;
+use tracing_subscriber::{EnvFilter, fmt};
 
 use shared_proto::social::v1::social_service_server::SocialServiceServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,sqlx=debug,account=debug,tonic=debug")),
+        )
+        .with_test_writer()
+        .try_init();
+
     // 1. Initialisation des variables d'environnement et du traçage
     dotenv().ok();
     tracing_subscriber::fmt::init();

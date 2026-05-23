@@ -1,4 +1,4 @@
--- crates/shared-kernel/migrations/postgres/202601010000_foundation.sql
+-- crates/infra-sqlx/migrations/postgres/202601010000_foundation.sql
 
 -- 0. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS postgis SCHEMA public;

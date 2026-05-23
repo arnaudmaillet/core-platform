@@ -6,7 +6,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = ["service-invalidator"] }
+shared-kernel = { workspace = true }
 infra-fred = { workspace = true }
 infra-kafka = { workspace = true }
 tokio = { workspace = true }

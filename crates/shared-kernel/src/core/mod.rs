@@ -5,15 +5,16 @@ mod identity;
 mod resilience;
 mod transaction;
 
-pub use clock::Clock;
-
+pub use clock::{Clock, SystemClock};
 pub use errors::{Error, ErrorCode, Result};
-pub use identity::{AggregateMetadata, AggregateRoot, Entity, Identifier, ValueObject, Versioned};
+pub use identity::{
+    AggregateMetadata, AggregateRoot, Entity, EntityOptionExt, Identifier, ValueObject, Versioned,
+};
 pub use resilience::{RetryConfig, with_retry};
 pub use transaction::{Transaction, TransactionManager};
 
-#[cfg(feature = "test-utils")]
-pub use transaction::FakeTransaction;
+#[cfg(feature = "stub")]
+pub use transaction::{TransactionManagerStub, TransactionStub};
 
 #[cfg(feature = "concurrency")]
 mod concurrency;

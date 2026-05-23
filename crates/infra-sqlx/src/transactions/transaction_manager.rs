@@ -32,7 +32,7 @@ impl TransactionManager for PostgresTransactionManager {
             let tx = pool
                 .begin()
                 .await
-                .map_err(|e| Error::database("Failed to begin transaction"))?;
+                .map_err(|_| Error::database("Failed to begin transaction"))?;
             let sqlx_tx = Box::new(PostgresTransaction::new(tx));
             f(sqlx_tx as Box<dyn Transaction>).await
         })

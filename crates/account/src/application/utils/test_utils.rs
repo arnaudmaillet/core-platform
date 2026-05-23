@@ -3,15 +3,6 @@
 use std::sync::Arc;
 
 // Shared Kernel
-use shared_kernel::cache::CacheRepositoryStub;
-use shared_kernel::command::CommandBus;
-use shared_kernel::core::Result;
-use shared_kernel::idempotency::IdempotencyRepositoryStub;
-use shared_kernel::messaging::OutboxRepositoryStub;
-use shared_kernel::types::{AccountId, Region};
-
-// Account Domain & Application
-// Note : Importation directe depuis application::context (structure plate)
 use crate::application::context::{AccountAppContext, AccountContext};
 use crate::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
 use crate::commands::{
@@ -30,12 +21,18 @@ use crate::commands::{
 use crate::domain::repositories::AccountRepositoryStub;
 use crate::domain::types::RegistrationIdentifier;
 use crate::entities::{Account, AccountBuilder};
+use shared_kernel::cache::CacheRepositoryStub;
+use shared_kernel::command::CommandBus;
+use shared_kernel::core::Result;
+use shared_kernel::idempotency::IdempotencyRepositoryStub;
+use shared_kernel::messaging::OutboxRepositoryStub;
+use shared_kernel::types::{AccountId, Region};
 
 // --- Imports des Use Cases ---
 
 pub struct TestFixture {
     bus: CommandBus,
-    app_ctx: AccountAppContext,
+    _app_ctx: AccountAppContext,
     account_ctx: AccountContext,
     account_repo: Arc<AccountRepositoryStub>,
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
@@ -114,7 +111,7 @@ impl TestFixture {
 
         Self {
             bus,
-            app_ctx,
+            _app_ctx: app_ctx,
             account_ctx,
             account_repo,
             idempotency_repo,
@@ -128,8 +125,8 @@ impl TestFixture {
         &self.bus
     }
 
-    pub fn app_ctx(&self) -> &AccountAppContext {
-        &self.app_ctx
+    pub fn _app_ctx(&self) -> &AccountAppContext {
+        &self._app_ctx
     }
 
     pub fn account_ctx(&self) -> &AccountContext {
@@ -164,10 +161,6 @@ impl TestFixture {
     }
 
     pub fn account_builder(&self) -> Result<AccountBuilder> {
-        self.account_builder_for(self.region())
-    }
-
-    pub fn account_builder_for(&self, region: Region) -> Result<AccountBuilder> {
         Ok(Account::builder(
             self.account_id(),
             RegistrationIdentifier::try_from_email("test@example.com")?,
@@ -213,14 +206,5 @@ impl TestFixture {
     pub async fn assert_account_exists(&self, id: AccountId) -> Result<()> {
         assert!(self.account_repo().find_direct(id).is_some());
         Ok(())
-    }
-
-    pub fn assert_outbox_contains(&self, event_name: &str) {
-        assert!(
-            self.outbox_events().contains(&event_name.to_string()),
-            "L'événement {} est manquant. Présents : {:?}",
-            event_name,
-            self.outbox_events()
-        );
     }
 }

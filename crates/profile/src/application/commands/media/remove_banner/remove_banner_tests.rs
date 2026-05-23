@@ -34,12 +34,12 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
-            // On vérifie que la bannière est bien None
-            assert!(p.banner().is_none());
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert!(p.banner().is_none());
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         // Vérification de l'événement spécifique à la bannière
         f.assert_outbox(1, Some(ProfileEvent::BANNER_REMOVED));
@@ -82,10 +82,11 @@ mod tests {
         );
 
         // On vérifie que la bannière est toujours présente en base (car le save a été bloqué)
-        f.assert_profile(|p| {
-            assert!(p.banner().is_some());
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                let _ = assert!(p.banner().is_some());
+            })
+            .await;
 
         // Pas d'événement émis
         f.assert_outbox(0, None);
@@ -115,10 +116,11 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de changement de version
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas de changement de version
+            })
+            .await;
 
         f.assert_outbox(0, None);
 

@@ -1,7 +1,7 @@
 // backend/services/profile/api/command-server/tests/e2e_it.rs
 
+use auth_test_utils::KeycloakTestContext;
 use infra_sqlx::sqlx;
-use infra_test::KeycloakTestContext;
 use profile_test_utils::ProfileTestContextBuilder;
 use shared_kernel::core::{Identifier, Result};
 use shared_kernel::types::{AccountId, ProfileId};

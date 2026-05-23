@@ -4,12 +4,12 @@ use std::pin::Pin;
 
 use crate::core::{
     Transaction,
-    transaction::{FakeTransaction, TransactionManager},
+    transaction::{TransactionStub, TransactionManager},
 };
 
-pub struct StubTxManager;
+pub struct TransactionManagerStub;
 
-impl TransactionManager for StubTxManager {
+impl TransactionManager for TransactionManagerStub {
     fn in_transaction<'a>(
         &'a self,
         f: Box<
@@ -22,7 +22,7 @@ impl TransactionManager for StubTxManager {
         >,
     ) -> Pin<Box<dyn Future<Output = crate::core::Result<()>> + Send + 'a>> {
         // On crée l'instance ici pour qu'elle soit trouvée dans le scope
-        let tx = Box::new(FakeTransaction::new());
+        let tx = Box::new(TransactionStub::new());
         Box::pin(async move { f(tx).await })
     }
 }

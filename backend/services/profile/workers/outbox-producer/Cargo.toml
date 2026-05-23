@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 infra-sqlx = { workspace = true }
 infra-kafka = { workspace = true }
-shared-kernel = { workspace = true, features = ["service-outbox"] }
+shared-kernel = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -1,6 +1,22 @@
 use auth::TokenValidator;
-use infra_test::KeycloakTestContext;
+use auth::domain::validator::AuthError;
+use auth_test_utils::KeycloakTestContext;
 use shared_kernel::{core::Result, security::JwtToken};
+
+#[tokio::test]
+async fn test_integration_keycloak_discovery() {
+    // Utilise le Singleton : boot 20s la première fois, 0s les suivantes
+    let ctx: KeycloakTestContext = KeycloakTestContext::restore("master").await;
+
+    // Si KeycloakValidator::new a réussi, c'est que le Discovery (HTTP + Parsing) est OK
+    assert!(ctx.uri.starts_with("http://"));
+
+    let result = TokenValidator::validate(
+        ctx.validator.as_ref(),
+        &JwtToken::from_raw("invalid.token.structure"),
+    );
+    assert!(matches!(result, Err(AuthError::InvalidToken)));
+}
 
 #[tokio::test]
 async fn test_keycloak_discovery_works_with_singleton() {

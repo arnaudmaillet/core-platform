@@ -12,7 +12,7 @@ use testcontainers_modules::kafka::{KAFKA_PORT, Kafka as KafkaImage};
 use crate::KafkaTestContextBuilder;
 
 pub struct KafkaTestContext {
-    container: ContainerAsync<KafkaImage>,
+    _container: ContainerAsync<KafkaImage>,
     bootstrap_servers: String,
     producer: FutureProducer,
 }
@@ -67,7 +67,7 @@ impl KafkaTestContext {
             .expect("Impossible de créer le FutureProducer de test");
 
         Self {
-            container,
+            _container: container,
             bootstrap_servers,
             producer,
         }

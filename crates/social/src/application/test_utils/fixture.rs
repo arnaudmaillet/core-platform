@@ -7,9 +7,9 @@ use shared_kernel::types::{ProfileId, Region};
 use std::sync::Arc;
 
 // Application & Context
-use social::commands::{FollowCommand, FollowHandler, UnfollowCommand, UnfollowHandler};
-use social::context::{SocialAppContext, SocialContext};
-use social::repositories::{
+use crate::commands::{FollowCommand, FollowHandler, UnfollowCommand, UnfollowHandler};
+use crate::context::{SocialAppContext, SocialContext};
+use crate::repositories::{
     CounterRepository, CounterRepositoryStub, RelationRepository, RelationRepositoryStub,
 };
 

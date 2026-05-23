@@ -15,5 +15,5 @@ pub use producer::EventProducer;
 
 pub use outbox::{OutboxProcessor, OutboxRepository, OutboxStore};
 
-#[cfg(feature = "test-utils")]
+#[cfg(feature = "stub")]
 pub use outbox::OutboxRepositoryStub;

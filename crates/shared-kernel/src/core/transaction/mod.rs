@@ -1,8 +1,14 @@
 mod transaction;
 mod transaction_manager;
-mod transaction_manager_stub;
-mod transaction_stub;
 
 pub use transaction::Transaction;
 pub use transaction_manager::TransactionManager;
-pub use transaction_stub::FakeTransaction;
+#[cfg(feature = "stub")]
+mod transaction_manager_stub;
+#[cfg(feature = "stub")]
+mod transaction_stub;
+
+#[cfg(feature = "stub")]
+pub use transaction_manager_stub::TransactionManagerStub;
+#[cfg(feature = "stub")]
+pub use transaction_stub::TransactionStub;

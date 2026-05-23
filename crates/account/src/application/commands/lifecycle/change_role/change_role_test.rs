@@ -6,7 +6,7 @@ mod tests {
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountRole;
     use shared_kernel::command::CommandTarget;
-    use shared_kernel::core::{ErrorCode, Result, Versioned};
+    use shared_kernel::core::{Result, Versioned};
     use shared_kernel::messaging::EventEmitter;
     use shared_kernel::types::AuditReason;
     use uuid::Uuid;

@@ -2,8 +2,9 @@
 
 use crate::ProfileTestContext;
 use auth::{AuthInterceptor, KeycloakValidator};
+use auth_test_utils::KeycloakTestContext;
 use infra_kafka::KafkaEventConsumer;
-use infra_test::{KeycloakTestContext, TestContextBuilder};
+use infra_test::TestContextBuilder;
 use profile::ProfileServiceBuilder;
 use profile::kafka::AccountConsumer;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
@@ -29,12 +30,9 @@ pub struct ProfileTestContextBuilder {
 
 impl ProfileTestContextBuilder {
     pub fn new() -> Self {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let pg_migrations = manifest_dir.join("migrations/postgres");
-
         Self {
             kernel_builder: TestContextBuilder::new()
-                .with_postgres(vec![pg_migrations])
+                .with_postgres(vec!["crates/profile/migrations/postgres"])
                 .with_redis(),
             service_mode: None,
             has_kafka: false,

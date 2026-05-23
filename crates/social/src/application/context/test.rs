@@ -5,22 +5,14 @@ mod tests {
     use crate::domain::entities::FollowRelation;
     use crate::entities::FollowRelationBuilder;
     use crate::repositories::CounterRepository;
+    use crate::test_utils::SocialTestFixture;
     use chrono::Utc;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
     use shared_kernel::idempotency::IdempotencyRepository;
     use shared_kernel::types::{ProfileId, Region, RegionCode};
-    use social_test_utils::SocialTestFixture;
     use uuid::Uuid;
 
-    // Helper pour générer un ProfileId forcé sur une région spécifique
-    fn mock_profile_id_in_region(region: &str) -> ProfileId {
-        // Version robuste : utilise le générateur de ton kernel ou mock String
-        ProfileId::try_new(format!("{}:{}", region, Uuid::new_v4())).unwrap_or_else(|_| {
-            // Fallback si ton ProfileId a un parsing strict différent (ex: UUID pur mais rattaché à la région par métadonnées)
-            ProfileId::generate(Region::try_new(region).unwrap())
-        })
-    }
-
+    
     // --- TESTS DU BUILDER ---
 
     #[test]

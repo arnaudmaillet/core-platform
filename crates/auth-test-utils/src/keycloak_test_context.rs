@@ -84,7 +84,7 @@ impl KeycloakTestContext {
 
         // On garde la boucle de retry car Keycloak peut mettre quelques secondes
         // à être opérationnel APRÈS que le port soit ouvert.
-        for i in 0..10 {
+        for _i in 0..10 {
             let response = client.post(&token_url).form(&params).send().await;
 
             match response {

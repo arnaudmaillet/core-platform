@@ -6,6 +6,7 @@ use infra_fred::RedisContext;
 use infra_sqlx::PostgresContext;
 use std::sync::Arc;
 use tonic::transport::Server;
+use tracing_subscriber::{EnvFilter, fmt};
 
 use profile::ProfileServiceBuilder;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
@@ -18,6 +19,14 @@ use shared_proto::profile::v1::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,sqlx=debug,account=debug,tonic=debug")),
+        )
+        .with_test_writer()
+        .try_init();
+
     // 1. Initialisation
     dotenv().ok();
     tracing_subscriber::fmt::init();

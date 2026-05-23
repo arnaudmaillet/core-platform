@@ -2,8 +2,9 @@
 
 use crate::SocialTestContext;
 use auth::{AuthInterceptor, KeycloakValidator};
+use auth_test_utils::KeycloakTestContext;
 use infra_fred::RedisIdempotencyRepository;
-use infra_test::{KeycloakTestContext, TestContextBuilder};
+use infra_test::TestContextBuilder;
 use shared_proto::social::v1::social_service_server::SocialServiceServer;
 use social::SocialServiceBuilder;
 use social::services::SocialService;
@@ -19,12 +20,9 @@ pub struct SocialTestContextBuilder {
 
 impl SocialTestContextBuilder {
     pub fn new() -> Self {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let scylla_migrations = manifest_dir.join("migrations/scylla");
-
         Self {
             kernel_builder: TestContextBuilder::new()
-                .with_scylla(vec![scylla_migrations])
+                .with_scylla(vec!["crates/social/migrations/scylla"])
                 .with_redis(),
             with_grpc: false,
             has_kafka: false,

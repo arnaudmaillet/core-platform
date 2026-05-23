@@ -8,6 +8,7 @@ pub use repositories::{PostgresIdempotencyRepository, PostgresOutboxRepository};
 pub use rows::{IdempotencyRow, OutboxRow};
 pub use transactions::{
     PostgresTransaction, PostgresTransactionManager, TransactionExecuteExt, TransactionExt,
+    TransactionManagerExt,
 };
 
 pub use sqlx;

@@ -2,4 +2,4 @@
 mod fixture;
 
 #[cfg(test)]
-pub use fixture::ProfileTestFixture;
+pub use fixture::SocialTestFixture;
