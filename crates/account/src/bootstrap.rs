@@ -23,12 +23,12 @@ use shared_kernel::{cache::CacheRepository, command::CommandBus};
 
 pub struct AccountServiceBuilder {
     pool: PgPool,
-    redis_repo: Arc<dyn CacheRepository>,
+    cache_repo: Arc<dyn CacheRepository>,
 }
 
 impl AccountServiceBuilder {
-    pub fn new(pool: PgPool, redis_repo: Arc<dyn CacheRepository>) -> Self {
-        Self { pool, redis_repo }
+    pub fn new(pool: PgPool, cache_repo: Arc<dyn CacheRepository>) -> Self {
+        Self { pool, cache_repo }
     }
 
     pub fn build_context(&self) -> Arc<AccountAppContext> {
@@ -46,7 +46,7 @@ impl AccountServiceBuilder {
     }
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new(self.redis_repo.clone());
+        let mut bus = CommandBus::new(self.cache_repo.clone());
 
         // --- Access Management ---
         bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);
