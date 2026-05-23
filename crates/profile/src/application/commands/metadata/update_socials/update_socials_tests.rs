@@ -112,7 +112,7 @@ mod tests {
             .await?;
 
         // Assert
-        f.assert_profile(|p| {
+        let _ = f.assert_profile(|p| {
             assert_eq!(p.version(), version_snapshot);
         })
         .await;

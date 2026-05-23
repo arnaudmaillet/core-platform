@@ -7,7 +7,7 @@ mod tests {
     use crate::domain::types::BetaTier;
     use shared_kernel::{
         command::CommandTarget,
-        core::{ErrorCode, Result, Versioned},
+        core::{Result, Versioned},
         messaging::EventEmitter,
     };
     use uuid::Uuid;
@@ -16,7 +16,6 @@ mod tests {
     async fn test_change_beta_tier_success() -> Result<()> {
         let f = TestFixture::new();
         let account = f.account_builder()?.build()?;
-        let account_id = f.account_id();
         let version_snapshot = account.version();
 
         f.account_repo().insert(account);

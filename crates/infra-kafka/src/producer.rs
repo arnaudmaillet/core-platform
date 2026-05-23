@@ -53,7 +53,7 @@ impl EventProducer for KafkaEventProducer {
         self.producer
             .send(record, Duration::from_secs(5))
             .await
-            .map_err(|(e, _)| Error::from(e))?;
+            .map_err(|(e, _)| Error::internal(format!("Kafka publish error: {}", e)))?;
 
         Ok(())
     }
@@ -79,7 +79,9 @@ impl EventProducer for KafkaEventProducer {
         }
 
         for future in futures {
-            future.await.map_err(|(e, _)| Error::from(e))?;
+            future
+                .await
+                .map_err(|(e, _)| Error::internal(format!("Kafka batch publish error: {}", e)))?; // Transformation explicite
         }
 
         Ok(())

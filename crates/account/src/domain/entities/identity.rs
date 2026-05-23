@@ -105,15 +105,6 @@ impl AccountIdentity {
     // MUTATIONS INTERNES (pub(crate))
     // ==========================================
 
-    pub(crate) fn apply_region_change(&mut self, new_region: Region) -> Result<bool> {
-        if self.region() == new_region {
-            return Ok(false);
-        }
-
-        self.account_id = AccountId::generate(new_region);
-        Ok(true)
-    }
-
     pub(crate) fn apply_sub_id_change(&mut self, new_sub_id: SubId) -> Result<bool> {
         if self.sub_id.as_ref() == Some(&new_sub_id) {
             return Ok(false);

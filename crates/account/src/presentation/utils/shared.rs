@@ -51,15 +51,6 @@ pub trait GrpcServiceUtils {
 
         Ok(Response::new(response_payload))
     }
-
-    /// Helper privé pour factoriser l'extraction de la région depuis les extensions de la requête
-    fn extract_region<T>(&self, request: &Request<T>) -> Result<Region, Status> {
-        request
-            .extensions()
-            .get::<Region>()
-            .cloned()
-            .ok_or_else(|| Status::unauthenticated("Missing region context in request extensions"))
-    }
 }
 
 pub fn map_domain_err_to_status(err: Error) -> Status {

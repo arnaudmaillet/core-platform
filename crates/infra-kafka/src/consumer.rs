@@ -47,7 +47,10 @@ impl EventConsumer for KafkaEventConsumer {
     // instrument capture automatiquement le paramètre `topic` dans tous les logs de cette fonction
     #[instrument(skip(self, handler), fields(kafka.topic = %topic))]
     async fn consume(&self, topic: &str, handler: EventHandler) -> Result<()> {
-        let consumer: StreamConsumer = self.client_config.create()?;
+        let consumer: StreamConsumer = self
+            .client_config
+            .create()
+            .map_err(|e| Error::internal(format!("Failed to create Kafka consumer: {}", e)))?;
         let consumer = Arc::new(consumer);
 
         consumer

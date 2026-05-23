@@ -1,5 +1,5 @@
 #[cfg(test)]
-pub mod fixture;
+mod fixture;
 
 #[cfg(test)]
 pub use fixture::ProfileTestFixture;

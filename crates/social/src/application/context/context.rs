@@ -54,7 +54,7 @@ impl SocialAppContext {
 #[derive(Clone)]
 pub struct SocialContext {
     app: SocialAppContext,
-    target_id: ProfileId,
+    _target_id: ProfileId,
     region: Region,
 }
 
@@ -62,7 +62,7 @@ impl SocialContext {
     pub(crate) fn new(app: SocialAppContext, target_id: ProfileId, region: Region) -> Self {
         Self {
             app,
-            target_id,
+            _target_id: target_id,
             region,
         }
     }

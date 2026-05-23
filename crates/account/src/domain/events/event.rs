@@ -2,7 +2,7 @@
 
 use crate::types::{
     AccountRole, AppearancePreferences, BetaTier, BirthDate, IpAddr, Locale,
-    NotificationPreferences, PrivacyPreferences, TrustAmount, TrustDelta, TrustScore,
+    NotificationPreferences, PrivacyPreferences, TrustAmount, TrustScore,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

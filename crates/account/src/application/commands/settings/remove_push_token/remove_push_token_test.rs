@@ -7,7 +7,7 @@ mod tests {
     use crate::domain::types::AccountState;
     use shared_kernel::{
         command::CommandTarget,
-        core::{Error, ErrorCode, Result, Versioned},
+        core::{Result, Versioned},
         security::PushToken,
     };
     use uuid::Uuid;

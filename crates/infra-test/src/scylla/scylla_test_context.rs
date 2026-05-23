@@ -121,31 +121,43 @@ impl ScyllaTestContext {
     async fn run_migrations(session: &Arc<Session>, paths: &[String], run_kernel: bool) {
         let mut all_paths = Vec::new();
 
+        // --- CALCUL DU ROOT PATH DU WORKSPACE ---
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+        let mut root_path = std::path::Path::new(&manifest_dir);
+        while !root_path.join("crates").exists() && root_path.parent().is_some() {
+            root_path = root_path.parent().unwrap();
+        }
+        let root_path_buf = root_path.to_path_buf();
+
         // 1. Chemins Kernel (Scylla) - Soumis au flag run_kernel
         if run_kernel {
             let possible_kernel_paths = [
-                "crates/shared-kernel/migrations/scylla",
-                "../shared-kernel/migrations/scylla",
-                "./crates/shared-kernel/migrations/scylla",
+                root_path_buf.join("crates/infra-scylla/migrations/scylla"),
+                std::path::PathBuf::from("crates/infra-scylla/migrations/scylla"),
             ];
-            if let Some(kp) = possible_kernel_paths
-                .iter()
-                .find(|p| std::path::Path::new(p).exists())
-            {
-                println!("✅ Scylla: Found Kernel migrations at: {}", kp);
-                all_paths.push(kp.to_string());
+            if let Some(kp) = possible_kernel_paths.iter().find(|p| p.exists()) {
+                println!("✅ Scylla: Found Kernel migrations at: {:?}", kp);
+                all_paths.push(kp.to_string_lossy().into_owned());
             }
         }
 
-        // 2. Chemins Module - Utilise les String du builder
+        // 2. Chemins Module - Utilise les String du builder sécurisées par la racine
         for p in paths {
             let path = std::path::Path::new(p);
-            if path.exists() {
-                println!("✅ Scylla: Found migrations at: {:?}", path);
-                all_paths.push(p.to_string());
+            let final_path = if path.exists() {
+                path.to_path_buf()
             } else {
-                // Ajoute un log d'erreur plus explicite pour débugger
-                println!("❌ Scylla ERROR: Migration path does NOT exist: {:?}", path);
+                root_path_buf.join(p)
+            };
+
+            if final_path.exists() {
+                println!("✅ Scylla: Found migrations at: {:?}", final_path);
+                all_paths.push(final_path.to_string_lossy().into_owned());
+            } else {
+                println!(
+                    "❌ Scylla ERROR: Migration path does NOT exist: {:?}",
+                    final_path
+                );
             }
         }
 

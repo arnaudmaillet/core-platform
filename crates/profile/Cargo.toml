@@ -11,9 +11,7 @@ test-utils = []
 [dependencies]
 shared-kernel = { workspace = true, features = [
     "stub",
-    "elasticsearch",
     "concurrency",
-    "runtime",
 ] }
 infra-sqlx = { workspace = true }
 infra-kafka = { workspace = true }

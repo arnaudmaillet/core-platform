@@ -9,7 +9,7 @@ description.workspace = true
 
 [dependencies]
 fred = { workspace = true }
-shared-kernel = { workspace = true, features = ["runtime"] }
+shared-kernel = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

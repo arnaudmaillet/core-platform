@@ -10,7 +10,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = ["service-worker"] }
+shared-kernel = { workspace = true }
 shared-proto = { workspace = true }
 profile = { workspace = true }
 auth = { workspace = true }

@@ -20,12 +20,9 @@ pub struct SocialTestContextBuilder {
 
 impl SocialTestContextBuilder {
     pub fn new() -> Self {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let scylla_migrations = manifest_dir.join("migrations/scylla");
-
         Self {
             kernel_builder: TestContextBuilder::new()
-                .with_scylla(vec![scylla_migrations])
+                .with_scylla(vec!["crates/social/migrations/scylla"])
                 .with_redis(),
             with_grpc: false,
             has_kafka: false,

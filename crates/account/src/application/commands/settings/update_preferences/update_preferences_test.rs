@@ -6,7 +6,7 @@ mod tests {
     use crate::events::AccountEvent;
     use crate::types::{AccountState, AppearancePreferences, ThemeMode};
     use shared_kernel::command::CommandTarget;
-    use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
+    use shared_kernel::core::{Result, Versioned};
     use uuid::Uuid;
 
     #[tokio::test]

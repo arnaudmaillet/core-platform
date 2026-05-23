@@ -9,9 +9,7 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true, features = [
-    "elasticsearch",
     "concurrency",
-    "runtime",
     "stub",
 ] }
 infra-scylla = { workspace = true }

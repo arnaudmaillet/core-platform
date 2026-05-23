@@ -8,6 +8,7 @@ use shared_proto::account::v1::account_personal_service_client::AccountPersonalS
 
 use infra_sqlx::sqlx;
 use tonic::{Request, metadata::MetadataValue};
+use tracing_subscriber::{EnvFilter, fmt};
 use uuid::Uuid;
 
 use shared_proto::account::v1::{
@@ -29,6 +30,16 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 
 #[tokio::test]
 async fn test_e2e_complete_account_lifecycle() -> Result<()> {
+    let _ = fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,sqlx=debug,account=debug,tonic=debug")),
+        )
+        .with_test_writer()
+        .try_init();
+
+    tracing::info!("Démarrage du test E2E de cycle de vie de compte");
+
     // 1. SETUP
     let ctx = AccountTestContextBuilder::new()
         .with_grpc_server()

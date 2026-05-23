@@ -1,4 +1,4 @@
-// crates/account/src/test_utils/test_context_builder.rs
+// crates/account-test-utils/src/test_context_builder.rs
 
 use crate::AccountTestContext;
 use account::{
@@ -26,12 +26,9 @@ pub struct AccountTestContextBuilder {
 
 impl AccountTestContextBuilder {
     pub fn new() -> Self {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let pg_migrations = manifest_dir.join("migrations/postgres");
-
         Self {
             kernel_builder: TestContextBuilder::new()
-                .with_postgres(vec![pg_migrations])
+                .with_postgres(vec!["crates/account/migrations/postgres"])
                 .with_redis(),
             with_grpc: false,
         }

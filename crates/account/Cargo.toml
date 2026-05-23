@@ -10,7 +10,7 @@ test-utils = []
 
 [dependencies]
 infra-sqlx = { workspace = true }
-shared-kernel = { workspace = true, features = ["runtime", "stub"] }
+shared-kernel = { workspace = true, features = ["stub"] }
 shared-proto = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

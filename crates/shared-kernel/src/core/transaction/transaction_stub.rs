@@ -5,12 +5,12 @@ use std::pin::Pin;
 use crate::core::Transaction;
 use crate::core::Result;
 
-pub struct FakeTransaction {
+pub struct TransactionStub {
     pub committed: Arc<Mutex<bool>>,
     pub rolled_back: Arc<Mutex<bool>>,
 }
 
-impl FakeTransaction {
+impl TransactionStub {
     pub fn new() -> Self {
         Self {
             committed: Arc::new(Mutex::new(false)),
@@ -19,7 +19,7 @@ impl FakeTransaction {
     }
 }
 
-impl Transaction for FakeTransaction {
+impl Transaction for TransactionStub {
     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 
     fn commit(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
