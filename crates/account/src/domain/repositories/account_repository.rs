@@ -30,7 +30,6 @@ pub trait AccountRepository: Send + Sync {
         tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountId>>;
 
-    // AJOUTER tx ICI
     async fn find_id_by_email(
         &self,
         email: &Email,

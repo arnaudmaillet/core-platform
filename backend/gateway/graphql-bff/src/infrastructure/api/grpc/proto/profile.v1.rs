@@ -197,6 +197,13 @@ pub struct GetProfileResponse {
     #[prost(message, optional, tag = "1")]
     pub profile: ::core::option::Option<Profile>,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ResolveSlugsRequest {
+    #[prost(message, optional, tag = "1")]
+    pub metadata: ::core::option::Option<QueryMetadata>,
+    #[prost(string, repeated, tag = "2")]
+    pub slugs: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct CreateProfileResponse {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -219,6 +226,14 @@ pub struct UpdateBioResponse {}
 pub struct UpdateLocationResponse {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UpdateSocialsResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolveSlugsResponse {
+    #[prost(map = "string, string", tag = "1")]
+    pub mappings: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
+}
 /// Generated client implementations.
 pub mod profile_identity_service_client {
     #![allow(
@@ -1934,6 +1949,32 @@ pub mod profile_query_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn resolve_slugs(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ResolveSlugsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ResolveSlugsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/profile.v1.ProfileQueryService/ResolveSlugs",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("profile.v1.ProfileQueryService", "ResolveSlugs"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1958,6 +1999,13 @@ pub mod profile_query_service_server {
             request: tonic::Request<super::GetProfilesByAccountRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetProfilesByAccountResponse>,
+            tonic::Status,
+        >;
+        async fn resolve_slugs(
+            &self,
+            request: tonic::Request<super::ResolveSlugsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ResolveSlugsResponse>,
             tonic::Status,
         >;
     }
@@ -2117,6 +2165,52 @@ pub mod profile_query_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetProfilesByAccountSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/profile.v1.ProfileQueryService/ResolveSlugs" => {
+                    #[allow(non_camel_case_types)]
+                    struct ResolveSlugsSvc<T: ProfileQueryService>(pub Arc<T>);
+                    impl<
+                        T: ProfileQueryService,
+                    > tonic::server::UnaryService<super::ResolveSlugsRequest>
+                    for ResolveSlugsSvc<T> {
+                        type Response = super::ResolveSlugsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ResolveSlugsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ProfileQueryService>::resolve_slugs(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ResolveSlugsSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

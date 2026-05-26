@@ -1,0 +1,114 @@
+syntax = "proto3";
+package post.v1;
+
+import "post/v1/models.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/core-platform/proto/post/v1";
+
+// ==========================================
+// STRUCTURES DE CONTRÔLE
+// ==========================================
+
+message PostTarget {
+  string post_id          = 1;
+  string author_id        = 2;
+  string region           = 3;
+  uint64 expected_version = 4;
+}
+
+message QueryMetadata {
+  string region = 1;
+}
+
+// ==========================================
+// SERVICES (COMMANDES)
+// ==========================================
+
+service PostService {
+  // --- Commandes ---
+  rpc CreatePost(CreatePostRequest) returns (CreatePostResponse);
+  rpc UpdateCaption(UpdateCaptionRequest) returns (UpdateCaptionResponse);
+  rpc ChangeVisibility(ChangeVisibilityRequest) returns (ChangeVisibilityResponse);
+  rpc ToggleComments(ToggleCommentsRequest) returns (ToggleCommentsResponse);
+  rpc DeletePost(DeletePostRequest) returns (DeletePostResponse);
+
+  // --- Queries ---
+  rpc GetPost(GetPostRequest) returns (Post);
+  rpc GetPostsByAuthor(GetPostsByAuthorRequest) returns (GetPostsByAuthorResponse);
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES (COMMANDES)
+// ==========================================
+
+message CreatePostRequest {
+  string                      command_id            = 1;
+  string                      author_id             = 2;
+  string                      post_type             = 3;
+  optional string             caption               = 4;
+  repeated MediaAsset         media_list            = 5;
+  bool                        allowed_comment_hands = 6;
+  string                      visibility_level      = 7;
+  optional string             music_id              = 8;
+  string                      dynamic_metadata      = 9;
+}
+
+message UpdateCaptionRequest {
+  string     command_id  = 1;
+  PostTarget target      = 2;
+  string     new_caption = 3;
+}
+
+message ChangeVisibilityRequest {
+  string     command_id           = 1;
+  PostTarget target               = 2;
+  string     new_visibility_level = 3;
+}
+
+message ToggleCommentsRequest {
+  string     command_id = 1;
+  PostTarget target     = 2;
+  bool       allowed    = 3;
+}
+
+message DeletePostRequest {
+  string     command_id = 1;
+  PostTarget target     = 2;
+}
+
+// ==========================================
+// MESSAGES DE REQUÊTES (QUERIES)
+// ==========================================
+
+message GetPostRequest {
+  QueryMetadata metadata  = 1;
+  string        post_id   = 2;
+  string        author_id = 3;
+}
+
+message GetPostsByAuthorRequest {
+  QueryMetadata   metadata  = 1;
+  string          author_id = 2;
+  int32           limit     = 3;
+  optional string cursor    = 4;
+}
+
+message GetPostsByAuthorResponse {
+  repeated Post   items       = 1;
+  optional string next_cursor = 2;
+}
+
+// ==========================================
+// RESPONSES VIDE (COMMANDES)
+// ==========================================
+
+message CreatePostResponse {}
+
+message UpdateCaptionResponse {}
+
+message ChangeVisibilityResponse {}
+
+message ToggleCommentsResponse {}
+
+message DeletePostResponse {}

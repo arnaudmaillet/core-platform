@@ -1,0 +1,22 @@
+[package]
+name = "post-test-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+auth = { workspace = true }
+auth-test-utils = { workspace = true }
+shared-kernel = { workspace = true }
+infra-fred = { workspace = true }
+infra-test = { workspace = true }
+shared-proto = { workspace = true }
+async-trait = { workspace = true }
+post = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }

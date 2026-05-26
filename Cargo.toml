@@ -10,6 +10,7 @@ members = [
     "backend/services/profile/workers/events-consumer",
     "backend/services/profile/api/command-server",
     "backend/services/social/api/command-server",
+    "backend/services/post/api/command-server",
     "common/rust/shared-proto",
     "crates/account",
     "crates/auth",
@@ -27,6 +28,8 @@ members = [
     "crates/profile-test-utils",
     "crates/social-test-utils",
     "crates/auth-test-utils",
+    "crates/post",
+    "crates/post-test-utils",
 ]
 resolver = "2"
 
@@ -47,6 +50,8 @@ social = { path = "crates/social" }
 social-test-utils = { path = "crates/social-test-utils" }
 profile = { path = "crates/profile" }
 profile-test-utils = { path = "crates/profile-test-utils" }
+post = { path = "crates/post" }
+post-test-utils = { path = "crates/post-test-utils" }
 auth = { path = "crates/auth" }
 auth-test-utils = { path = "crates/auth-test-utils" }
 infra-sqlx = { path = "crates/infra-sqlx" }
@@ -102,6 +107,7 @@ rdkafka = "0.38.0"
 dashmap = "7.0.0-rc2"
 elasticsearch = "9.1.0-alpha.1"
 scylla = "1.4.1"
+scylla-macros = "1.4.1"
 once_cell = "1.21.3"
 
 # Utils

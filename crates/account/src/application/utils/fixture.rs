@@ -1,4 +1,4 @@
-// crates/account/src/application/test_utils.rs
+// crates/account/src/application/fixture.rs
 
 use std::sync::Arc;
 

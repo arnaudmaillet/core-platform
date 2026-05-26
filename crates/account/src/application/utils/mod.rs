@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod test_utils;
+mod fixture;
 
 #[cfg(test)]
-pub use test_utils::TestFixture;
+pub use fixture::TestFixture;

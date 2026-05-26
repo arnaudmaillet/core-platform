@@ -2022,6 +2022,7 @@ name = "infra-scylla"
 version = "0.1.0"
 dependencies = [
  "scylla",
+ "scylla-macros",
  "shared-kernel",
 ]
 
@@ -2753,6 +2754,65 @@ name = "portable-atomic"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
+
+[[package]]
+name = "post"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "infra-scylla",
+ "infra-test",
+ "post-test-utils",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "post-command-server"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "auth-test-utils",
+ "dotenvy",
+ "infra-fred",
+ "infra-scylla",
+ "post",
+ "post-test-utils",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "post-test-utils"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth",
+ "auth-test-utils",
+ "infra-fred",
+ "infra-test",
+ "post",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+]
 
 [[package]]
 name = "potential_utf"
