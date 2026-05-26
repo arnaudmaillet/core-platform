@@ -65,8 +65,6 @@ impl ScyllaTestContext {
         // 2. Préparation du nom unique
         let full_uuid = Uuid::new_v4().to_string().replace("-", "");
         let ks_name = format!("{}_{}", builder.keyspace, &full_uuid[..20]);
-
-        // 3. ⚠️ CRUCIAL : Création du Keyspace AVANT le ScyllaContext
         {
             let _guard = SCYLLA_SCHEMA_LOCK.lock().await;
 
@@ -84,7 +82,6 @@ impl ScyllaTestContext {
             ), ()).await.expect("Failed to create keyspace");
         }
 
-        // 4. Maintenant que le Keyspace EXISTE en base, on peut créer le contexte de prod
         let mut scylla_builder = ScyllaContext::builder_raw()
             .with_nodes(vec![container_info.uri.clone()])
             .with_keyspace(&ks_name);
@@ -97,11 +94,13 @@ impl ScyllaTestContext {
             .build()
             .await
             .expect("Failed to build ScyllaContext");
-
-        // 5. Migrations (Maintenant la session du contexte de prod est valide)
         {
             let _guard = SCYLLA_SCHEMA_LOCK.lock().await;
             let session = context.session();
+            session
+                .use_keyspace(&ks_name, true)
+                .await
+                .expect("Failed to bind test session to ephemeral keyspace for migrations");
 
             session.query_unpaged(
                 "CREATE TABLE IF NOT EXISTS schema_migrations (version bigint PRIMARY KEY, description text, applied_at timestamp)",
@@ -128,8 +127,6 @@ impl ScyllaTestContext {
             root_path = root_path.parent().unwrap();
         }
         let root_path_buf = root_path.to_path_buf();
-
-        // 1. Chemins Kernel (Scylla) - Soumis au flag run_kernel
         if run_kernel {
             let possible_kernel_paths = [
                 root_path_buf.join("crates/infra-scylla/migrations/scylla"),
@@ -141,7 +138,6 @@ impl ScyllaTestContext {
             }
         }
 
-        // 2. Chemins Module - Utilise les String du builder sécurisées par la racine
         for p in paths {
             let path = std::path::Path::new(p);
             let final_path = if path.exists() {

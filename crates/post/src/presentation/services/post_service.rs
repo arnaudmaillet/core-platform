@@ -53,7 +53,9 @@ impl ProtoPostService for PostService {
         self.dispatch_command::<CreatePostCommand, (), CreatePostResponse>(
             &ctx,
             command,
-            CreatePostResponse {},
+            CreatePostResponse {
+                post_id: post_id.to_string(),
+            },
         )
         .await
     }

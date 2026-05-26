@@ -50,6 +50,7 @@ impl PostTestContextBuilder {
 
         // Extraction des instances d'infra éphémères du conteneur de test
         let scylla_session = kernel_infra.scylla().session();
+        let scylla_keyspace = kernel_infra.scylla().keyspace().to_string();
         let redis_repo = kernel_infra.redis().repository();
         let redis_pool = redis_repo.pool().clone();
         let profile_resolver = Arc::new(ProfileResolverStub::default());
@@ -77,6 +78,7 @@ impl PostTestContextBuilder {
 
                 // On utilise ton PostServiceBuilder d'application
                 let builder = PostServiceBuilder::new(
+                    scylla_keyspace,
                     scylla_session,
                     redis_repo,
                     idempotency_repo,

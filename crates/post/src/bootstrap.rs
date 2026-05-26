@@ -20,6 +20,7 @@ use shared_kernel::{
 };
 
 pub struct PostServiceBuilder {
+    keyspace: String,
     scylla_session: Arc<ScyllaSession>,
     redis_cache_repo: Arc<dyn CacheRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
@@ -28,12 +29,14 @@ pub struct PostServiceBuilder {
 
 impl PostServiceBuilder {
     pub fn new(
+        keyspace: String,
         scylla_session: Arc<ScyllaSession>,
         redis_cache_repo: Arc<dyn CacheRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
         profile_resolver: Arc<dyn ProfileResolver>,
     ) -> Self {
         Self {
+            keyspace,
             scylla_session,
             redis_cache_repo,
             idempotency_repo,
@@ -41,12 +44,11 @@ impl PostServiceBuilder {
         }
     }
 
-    /// Construit le contexte global de l'application Post (CQRS & Sharding)
     pub async fn build_context(
         &self,
     ) -> Result<Arc<PostAppContext>, infra_scylla::scylla::errors::PrepareError> {
-        let scylla_repo = ScyllaPostRepository::new(self.scylla_session.clone()).await?;
-
+        let scylla_repo =
+            ScyllaPostRepository::new(self.scylla_session.clone(), &self.keyspace).await?;
         let scylla_repo_with_cache: Arc<dyn PostRepository> = Arc::new(CachePostRepository::new(
             scylla_repo,
             self.redis_cache_repo.clone(),
@@ -59,27 +61,19 @@ impl PostServiceBuilder {
         )))
     }
 
-    /// Enregistre tous les Handlers de mutation (Commandes) avec le PostCommandContext
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
         let mut bus = CommandBus::new(self.redis_cache_repo.clone());
-
-        // Enregistrement de chaque mutation sur le contexte d'écriture dédié (Command / Writer)
         bus.register::<PostCommandContext, CreatePostCommand, CreatePostHandler>(CreatePostHandler);
-
         bus.register::<PostCommandContext, UpdateCaptionCommand, UpdateCaptionHandler>(
             UpdateCaptionHandler,
         );
-
         bus.register::<PostCommandContext, ToggleCommentsCommand, ToggleCommentsHandler>(
             ToggleCommentsHandler,
         );
-
         bus.register::<PostCommandContext, ChangeVisibilityCommand, ChangeVisibilityHandler>(
             ChangeVisibilityHandler,
         );
-
         bus.register::<PostCommandContext, DeletePostCommand, DeletePostHandler>(DeletePostHandler);
-
         Arc::new(bus)
     }
 }

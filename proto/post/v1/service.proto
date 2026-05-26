@@ -103,7 +103,9 @@ message GetPostsByAuthorResponse {
 // RESPONSES VIDE (COMMANDES)
 // ==========================================
 
-message CreatePostResponse {}
+message CreatePostResponse {
+  string post_id = 1;
+}
 
 message UpdateCaptionResponse {}
 

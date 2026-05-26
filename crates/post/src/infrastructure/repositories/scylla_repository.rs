@@ -24,31 +24,48 @@ pub struct ScyllaPostRepository {
 }
 
 impl ScyllaPostRepository {
-    pub async fn new(session: Arc<Session>) -> std::result::Result<Self, PrepareError> {
-        let insert_author_stmt = session.prepare(
-    "INSERT INTO posts_by_author (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, is_edited, updated_at, dynamic_metadata) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-).await?;
+    pub async fn new(
+        session: Arc<Session>,
+        keyspace: &str,
+    ) -> std::result::Result<Self, PrepareError> {
+        let insert_author_stmt = session.prepare(format!(
+            "INSERT INTO {}.posts_by_author (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, is_edited, updated_at, dynamic_metadata) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            keyspace
+        )).await?;
 
-        let insert_id_stmt = session.prepare(
-    "INSERT INTO posts_by_id (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, is_edited, updated_at, dynamic_metadata) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-).await?;
+        let insert_id_stmt = session.prepare(format!(
+            "INSERT INTO {}.posts_by_id (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, is_edited, updated_at, dynamic_metadata) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            keyspace
+        )).await?;
 
         let find_by_id_stmt = session
-            .prepare("SELECT * FROM posts_by_id WHERE region = ? AND post_id = ? LIMIT 1")
+            .prepare(format!(
+                "SELECT * FROM {}.posts_by_id WHERE region = ? AND post_id = ? LIMIT 1",
+                keyspace
+            ))
             .await?;
+
         let find_by_author_stmt = session
-            .prepare("SELECT * FROM posts_by_author WHERE region = ? AND author_id = ?")
+            .prepare(format!(
+                "SELECT * FROM {}.posts_by_author WHERE region = ? AND author_id = ?",
+                keyspace
+            ))
             .await?;
 
         let delete_author_stmt = session
-            .prepare(
-                "DELETE FROM posts_by_author WHERE region = ? AND author_id = ? AND post_id = ?",
-            )
+            .prepare(format!(
+                "DELETE FROM {}.posts_by_author WHERE region = ? AND author_id = ? AND post_id = ?",
+                keyspace
+            ))
             .await?;
+
         let delete_id_stmt = session
-            .prepare("DELETE FROM posts_by_id WHERE region = ? AND post_id = ?")
+            .prepare(format!(
+                "DELETE FROM {}.posts_by_id WHERE region = ? AND post_id = ?",
+                keyspace
+            ))
             .await?;
 
         Ok(Self {

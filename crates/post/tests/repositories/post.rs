@@ -23,7 +23,7 @@ mod scylla_integration_tests {
             .build()
             .await;
 
-        let repo = ScyllaPostRepository::new(scylla_ctx.session().clone())
+        let repo = ScyllaPostRepository::new(scylla_ctx.session().clone(), &scylla_ctx.keyspace())
             .await
             .expect("Échec de l'initialisation du ScyllaPostRepository");
 

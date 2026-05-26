@@ -1,4 +1,5 @@
-// crates/shared-kernel/src/infrastructure/scylla/factories/scylla_context_builder.rs
+// crates/infra-scylla/src/factories/context_builder.rs
+
 use crate::ScyllaContext;
 use shared_kernel::core::{Error, Result};
 use std::time::Duration;

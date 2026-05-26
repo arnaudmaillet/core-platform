@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/scylla/factories/scylla_factory.rs
+// crates/infra-scylla/src/factories/config.rs
 
 use std::time::Duration;
 

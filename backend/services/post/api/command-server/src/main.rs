@@ -34,6 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Récupération de la configuration d'infrastructure
     let scylla_nodes_str =
         std::env::var("POST_SCYLLA_NODES").unwrap_or_else(|_| "127.0.0.1:9042".to_string());
+    let keyspace_name =
+        std::env::var("POST_SCYLLA_KEYSPACE").unwrap_or_else(|_| "posts".to_string());
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let keycloak_url = std::env::var("KEYCLOAK_URL").expect("KEYCLOAK_URL must be set");
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").expect("KEYCLOAK_REALM must be set");
@@ -48,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scylla_ctx = ScyllaContext::builder_raw()
         .with_nodes(scylla_nodes)
-        .with_keyspace("posts") // Keyspace configuré dans ta migration CQL
+        .with_keyspace(keyspace_name) // Keyspace configuré dans ta migration CQL
         .build()
         .await?;
 
@@ -83,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ce builder encapsule la création du CommandBus (Redis pour l'invalidation)
     // et du PostAppContext (Scylla + Idempotence)
     let builder = PostServiceBuilder::new(
+        scylla_ctx.keyspace(),
         scylla_ctx.session().clone(),
         redis_cache_repo.clone(),
         idempotency_repo,
