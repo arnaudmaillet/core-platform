@@ -25,7 +25,7 @@ pub trait GrpcServiceUtils {
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
     ) -> Result<SocialContext, Status> {
-        let region = extensions
+        let region: Region = extensions
             .get::<Region>()
             .cloned()
             .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))?;

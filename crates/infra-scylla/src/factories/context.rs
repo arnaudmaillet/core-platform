@@ -1,4 +1,4 @@
-// crates/shared-kernel/src/infrastructure/scylla/factories/scylla_context.rs
+// crates/infra-scylla/src/factories/context.rs
 
 use crate::{ScyllaConfig, ScyllaContextBuilder};
 use scylla::client::session::Session;
@@ -42,15 +42,11 @@ impl ScyllaContext {
     }
 
     pub(crate) async fn restore(builder: ScyllaContextBuilder) -> Result<Self> {
+        // On initialise la connexion globale au cluster, sans la verrouiller sur un keyspace par défaut
         let session = SessionBuilder::new()
             .known_nodes(&builder.nodes)
             .connection_timeout(builder.connect_timeout)
             .build()
-            .await
-            .map_err(|e| Error::internal(e.to_string()))?;
-
-        session
-            .use_keyspace(&builder.keyspace, true)
             .await
             .map_err(|e| Error::internal(e.to_string()))?;
 

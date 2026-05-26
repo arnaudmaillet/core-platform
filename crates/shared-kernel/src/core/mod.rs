@@ -2,6 +2,7 @@ mod clock;
 
 mod errors;
 mod identity;
+mod pagination;
 mod resilience;
 mod transaction;
 
@@ -10,6 +11,7 @@ pub use errors::{Error, ErrorCode, Result};
 pub use identity::{
     AggregateMetadata, AggregateRoot, Entity, EntityOptionExt, Identifier, ValueObject, Versioned,
 };
+pub use pagination::{PageQuery, PagedResult};
 pub use resilience::{RetryConfig, with_retry};
 pub use transaction::{Transaction, TransactionManager};
 

@@ -58,6 +58,7 @@ service ProfileMetadataService {
 service ProfileQueryService {
   rpc GetProfile(GetProfileRequest) returns (Profile);
   rpc GetProfilesByAccount(GetProfilesByAccountRequest) returns (GetProfilesByAccountResponse);
+  rpc ResolveSlugs(ResolveSlugsRequest) returns (ResolveSlugsResponse);
 }
 
 // ==========================================
@@ -157,6 +158,11 @@ message GetProfileResponse {
   Profile profile = 1;
 }
 
+message ResolveSlugsRequest {
+  QueryMetadata metadata = 1;
+  repeated string slugs = 2;
+}
+
 // ==========================================
 // RESPONSES (COMMANDS)
 // ==========================================
@@ -172,3 +178,6 @@ message RemoveBannerResponse {}
 message UpdateBioResponse {}
 message UpdateLocationResponse {}
 message UpdateSocialsResponse {}
+message ResolveSlugsResponse {
+  map<string, string> mappings = 1;
+}
