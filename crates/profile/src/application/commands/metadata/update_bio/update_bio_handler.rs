@@ -4,18 +4,18 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateBioCommand, context::ProfileContext};
+use crate::{commands::UpdateBioCommand, context::ProfileCommandContext};
 pub struct UpdateBioHandler;
 
 #[async_trait]
 impl CommandHandler for UpdateBioHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = UpdateBioCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &ProfileContext, cmd: UpdateBioCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &ProfileCommandContext, cmd: UpdateBioCommand) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

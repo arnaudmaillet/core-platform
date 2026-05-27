@@ -1,8 +1,7 @@
-mod builder;
-mod context;
+mod app;
+mod command;
+mod query;
 
-#[cfg(test)]
-mod test;
-
-pub use builder::ProfileContextBuilder;
-pub use context::{ProfileAppContext, ProfileContext};
+pub use app::ProfileAppContext;
+pub use command::ProfileCommandContext;
+pub use query::ProfileQueryContext;

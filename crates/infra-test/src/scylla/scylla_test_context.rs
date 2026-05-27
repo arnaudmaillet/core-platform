@@ -31,7 +31,6 @@ impl ScyllaTestContext {
     }
 
     pub(crate) async fn restore(builder: ScyllaTestContextBuilder) -> Self {
-        // 1. Initialisation unique du CONTAINER uniquement
         let container_info = SCYLLA_INSTANCE
             .get_or_init(|| async {
                 let port = ContainerPort::Tcp(9042);

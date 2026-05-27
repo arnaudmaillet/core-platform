@@ -1,6 +1,6 @@
 // crates/profile/src/presentation/utils/shared.rs
 
-use crate::application::context::{ProfileAppContext, ProfileContext};
+use crate::application::context::{ProfileAppContext, ProfileCommandContext};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};
@@ -15,17 +15,14 @@ pub trait GrpcServiceUtils {
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
-    ) -> Result<ProfileContext, Status> {
-        let region = extensions
-            .get::<Region>()
-            .cloned()
-            .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))?;
-        Ok(self.app_ctx().create_context(profile_id, region))
+    ) -> Result<ProfileCommandContext, Status> {
+        let region = self.extract_region(extensions)?;
+        Ok(self.app_ctx().command(profile_id, region))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &ProfileContext,
+        ctx: &ProfileCommandContext,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
@@ -35,10 +32,16 @@ pub trait GrpcServiceUtils {
         R: Send,
     {
         self.bus()
-            .execute::<ProfileContext, C, Output>(ctx.clone(), cmd)
+            .execute::<ProfileCommandContext, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(|err| map_domain_err_to_status(err))?;
         Ok(Response::new(response_payload))
+    }
+
+    fn extract_region(&self, ext: &tonic::Extensions) -> Result<Region, Status> {
+        ext.get::<Region>()
+            .cloned()
+            .ok_or_else(|| Status::invalid_argument("Missing region in request extensions"))
     }
 }
 

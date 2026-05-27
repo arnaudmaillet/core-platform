@@ -4,23 +4,23 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdatePrivacyCommand, context::ProfileContext};
+use crate::{commands::UpdatePrivacyCommand, context::ProfileCommandContext};
 
 pub struct UpdatePrivacyHandler;
 
 #[async_trait]
 impl CommandHandler for UpdatePrivacyHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = UpdatePrivacyCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileContext,
+        ctx: &ProfileCommandContext,
         cmd: UpdatePrivacyCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

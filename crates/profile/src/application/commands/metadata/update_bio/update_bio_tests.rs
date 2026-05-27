@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateBioCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use crate::types::Bio;
     use shared_kernel::command::CommandTarget;
@@ -29,15 +29,16 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.bio(), new_bio.as_ref());
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.bio(), new_bio.as_ref());
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::BIO_UPDATED));
 
@@ -64,7 +65,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -105,14 +106,15 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot);
+            })
+            .await;
         f.assert_outbox(0, None);
 
         Ok(())
@@ -134,7 +136,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateBioCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

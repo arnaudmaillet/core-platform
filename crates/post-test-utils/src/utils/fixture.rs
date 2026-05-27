@@ -47,7 +47,7 @@ impl PostTestFixture {
 
         // Configuration par défaut pour isoler les régions dans les tests
         let region = Region::default();
-        let author_id = ProfileId::generate(region);
+        let author_id = ProfileId::generate();
         let post_id = PostId::generate();
 
         let mut bus = CommandBus::new(cache);
@@ -161,7 +161,7 @@ impl PostTestFixture {
     }
 
     pub fn clone_with_post_id(&self, new_post_id: PostId) -> Self {
-        let author_id = ProfileId::generate(self.region);
+        let author_id = ProfileId::generate();
 
         Self {
             bus: self.bus.clone(),

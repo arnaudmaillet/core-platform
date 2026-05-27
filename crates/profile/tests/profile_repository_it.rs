@@ -29,10 +29,10 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     // --- Arrange ---
     let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
+    let profile_id = ProfileId::generate();
     let handle = Handle::try_new("alice_rocks")?;
+    let mut profile = Profile::builder(account_id, profile_id, handle)?.build()?;
 
-    let mut profile = Profile::builder(account_id, handle)?.build()?;
-    let profile_id = profile.profile_id();
     let region = account_id.region();
 
     // --- Act: Step 1 (Initial Save) ---
@@ -92,7 +92,9 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 async fn test_profile_concurrency_protection_occ() -> Result<()> {
     let (repo, _pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
-    let mut profile = Profile::builder(account_id, Handle::try_new("ConcurrentUser")?)?.build()?;
+    let profile_id = ProfileId::generate();
+    let mut profile =
+        Profile::builder(account_id, profile_id, Handle::try_new("ConcurrentUser")?)?.build()?;
 
     repo.save(&mut profile, None).await?;
 
@@ -125,7 +127,9 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 async fn test_profile_rollback_works_properly() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
-    let mut profile = Profile::builder(account_id, Handle::try_new("Ghost")?)?.build()?;
+    let profile_id = ProfileId::generate();
+    let mut profile =
+        Profile::builder(account_id, profile_id, Handle::try_new("Ghost")?)?.build()?;
 
     let tx_sqlx = pg_ctx
         .pool()
@@ -152,10 +156,14 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
 async fn test_find_all_by_account_id() -> Result<()> {
     let (repo, _pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
+    let profile_id = ProfileId::generate();
+    let alt_profile_id = ProfileId::generate();
 
     // Utilise "profile_1" (minuscules) pour correspondre à la sortie attendue
-    let mut p1 = Profile::builder(account_id, Handle::try_new("profile_1")?)?.build()?;
-    let mut p2 = Profile::builder(account_id, Handle::try_new("profile_2")?)?.build()?;
+    let mut p1 =
+        Profile::builder(account_id, profile_id, Handle::try_new("profile_1")?)?.build()?;
+    let mut p2 =
+        Profile::builder(account_id, alt_profile_id, Handle::try_new("profile_2")?)?.build()?;
 
     repo.save(&mut p1, None).await?;
     repo.save(&mut p2, None).await?;
@@ -173,7 +181,9 @@ async fn test_find_all_by_account_id() -> Result<()> {
 async fn test_profile_rollback_integrity() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate(Region::default());
-    let mut profile = Profile::builder(account_id, Handle::try_new("ghost")?)?.build()?;
+    let profile_id = ProfileId::generate();
+    let mut profile =
+        Profile::builder(account_id, profile_id, Handle::try_new("ghost")?)?.build()?;
     let profile_id = profile.profile_id();
 
     // 1. On ouvre une transaction et on save
@@ -205,7 +215,7 @@ async fn test_profile_partial_data_resilience() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
     let region = Region::try_new("EU")?;
 
-    let domain_profile_id = ProfileId::generate(region.clone());
+    let domain_profile_id = ProfileId::generate();
     let domain_account_id = AccountId::generate(region.clone());
 
     let profile_uuid = domain_profile_id.as_uuid();

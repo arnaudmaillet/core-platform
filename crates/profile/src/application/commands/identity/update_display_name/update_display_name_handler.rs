@@ -4,23 +4,23 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateDisplayNameCommand, context::ProfileContext};
+use crate::{commands::UpdateDisplayNameCommand, context::ProfileCommandContext};
 
 pub struct UpdateDisplayNameHandler;
 
 #[async_trait]
 impl CommandHandler for UpdateDisplayNameHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = UpdateDisplayNameCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileContext,
+        ctx: &ProfileCommandContext,
         cmd: UpdateDisplayNameCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

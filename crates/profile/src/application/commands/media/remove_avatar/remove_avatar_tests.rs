@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::RemoveAvatarCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -30,16 +30,17 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, RemoveAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            // On vérifie que l'avatar est bien devenu None
-            assert!(p.avatar().is_none());
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                // On vérifie que l'avatar est bien devenu None
+                assert!(p.avatar().is_none());
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::AVATAR_REMOVED));
 
@@ -64,14 +65,15 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, RemoveAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de save car pas de changement
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas de save car pas de changement
+            })
+            .await;
 
         f.assert_outbox(0, None);
 
@@ -102,7 +104,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, RemoveAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -113,10 +115,11 @@ mod tests {
         );
 
         // On vérifie que l'avatar est toujours là (car la commande a été stoppée net)
-        let _ = f.assert_profile(|p| {
-            assert!(p.avatar().is_some());
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert!(p.avatar().is_some());
+            })
+            .await;
 
         // Pas d'événement supplémentaire dans l'outbox
         f.assert_outbox(0, None);
@@ -139,7 +142,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, RemoveAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

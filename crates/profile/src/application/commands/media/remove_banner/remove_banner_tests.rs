@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::RemoveBannerCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -30,7 +30,7 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
@@ -71,7 +71,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -112,7 +112,7 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
@@ -142,7 +142,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

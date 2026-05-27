@@ -84,8 +84,12 @@ impl Entity for Profile {
 }
 
 impl Profile {
-    pub fn builder(account_id: AccountId, handle: Handle) -> Result<ProfileBuilder> {
-        ProfileBuilder::new(account_id, handle)
+    pub fn builder(
+        account_id: AccountId,
+        profile_id: ProfileId,
+        handle: Handle,
+    ) -> Result<ProfileBuilder> {
+        ProfileBuilder::new(account_id, profile_id, handle)
     }
 
     pub(crate) fn restore(

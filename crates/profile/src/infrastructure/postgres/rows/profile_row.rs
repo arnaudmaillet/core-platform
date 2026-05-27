@@ -30,7 +30,6 @@ pub struct PostgresProfileRow {
 }
 
 impl PostgresProfileRow {
-    /// Mappe le domaine vers l'infrastructure (pour le save)
     pub fn from_domain(p: &Profile) -> Self {
         Self {
             profile_id: p.profile_id().as_uuid(),
@@ -50,7 +49,6 @@ impl PostgresProfileRow {
         }
     }
 
-    /// Mappe l'infrastructure vers le domaine (pour le fetch)
     pub fn to_domain(self) -> Result<Profile> {
         let raw_json = self.social_links.unwrap_or(JsonValue::Null);
 
@@ -62,22 +60,8 @@ impl PostgresProfileRow {
             .try_into()
             .map_err(|_| Error::internal("Negative version in database"))?;
 
-        // Reconstruction de l'AccountId avec sa région
         let account_id = AccountId::new(self.account_id);
         let profile_id = ProfileId::from_uuid(self.profile_id);
-
-        if profile_id.region_str() != self.region
-            || account_id.region().as_static_str() != self.region
-        {
-            tracing::warn!(
-                profile_id = %self.profile_id,
-                account_id = %self.account_id,
-                db_region = %self.region,
-                profile_smart_region = %profile_id.region_str(),
-                account_smart_region = %account_id.region(),
-                "Data consistency warning: Regional shard mismatch detected between Smart IDs and SQL rows"
-            );
-        }
 
         Ok(Profile::restore(
             profile_id,

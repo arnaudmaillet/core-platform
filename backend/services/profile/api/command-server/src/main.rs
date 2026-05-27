@@ -47,7 +47,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
 
     // 3. Assemblage du Domaine via le Builder
-    // On passe le pool PG et le repo Redis
     let builder = ProfileServiceBuilder::new(pg_ctx.pool(), redis_ctx.repository());
     let app_ctx = builder.build_context();
     let bus = builder.build_command_bus();

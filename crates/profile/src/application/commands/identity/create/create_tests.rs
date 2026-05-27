@@ -1,8 +1,6 @@
-// crates/profile/src/application/use_cases/identity/create_profile/mod.rs (ou fichier de test dédié)
-
 #[cfg(test)]
 mod tests {
-    use crate::context::ProfileContext;
+    use crate::application::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use crate::repositories::ProfileRepository;
     use crate::types::Handle;
@@ -13,22 +11,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_profile_success() -> Result<()> {
-        // Arrange
         let f = ProfileTestFixture::new();
-
-        // On génère un contexte de création légitime (profile_id à None) via l'usine de la fixture
-        let creation_ctx = f.app_ctx().create_creation_context(f.region());
+        let generated_profile_id = ProfileId::generate();
+        let creation_ctx = f.app_ctx().creation_command(f.region());
 
         let cmd = CreateProfileCommand {
             command_id: Uuid::new_v4(),
+            profile_id: generated_profile_id,
             account_id: f.account_id(),
             handle: Handle::try_new("bob_dev")?,
             region: f.region(),
         };
 
-        // Act - On passe le contexte de création unifié
+        // Act - On exécute avec le ProfileCommandContext
         f.bus()
-            .execute::<ProfileContext, CreateProfileCommand, ()>(creation_ctx, cmd.clone())
+            .execute::<ProfileCommandContext, CreateProfileCommand, ()>(creation_ctx, cmd.clone())
             .await?;
 
         // Assert
@@ -38,6 +35,7 @@ mod tests {
             .await?
             .expect("Le profil aurait dû être enregistré en base");
 
+        assert_eq!(saved_profile.profile_id(), generated_profile_id);
         assert_eq!(saved_profile.handle().as_str(), "bob_dev");
         assert_eq!(saved_profile.version(), 1);
 
@@ -51,25 +49,26 @@ mod tests {
         // Arrange
         let f = ProfileTestFixture::new();
         let cmd_id = Uuid::new_v4();
+        let profile_id = ProfileId::generate();
 
-        // 1. On simule que la commande a déjà été exécutée avec succès au premier essai
         f.idempotency_repo().seed(cmd_id);
-
-        // 2. On insère un profil qui correspond à ce premier essai réussi
-        let existing_profile = f.builder("bob_dev").build()?;
+        let existing_profile = f.builder("bob_dev").with_profile_id(profile_id).build()?;
         f.profile_repo().save_direct(existing_profile).await;
 
         let cmd = CreateProfileCommand {
-            command_id: cmd_id, // Même ID de commande -> Va forcer le court-circuit
+            command_id: cmd_id,
+            profile_id,
             account_id: f.account_id(),
             handle: Handle::try_new("bob_dev")?,
             region: f.region(),
         };
 
-        // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, CreateProfileCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, CreateProfileCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert
@@ -78,7 +77,6 @@ mod tests {
             "Le retry technique d'une création doit être transparent et renvoyer Ok(())"
         );
 
-        // Crucial : On s'assure qu'aucun événement n'a été dupliqué dans l'outbox
         f.assert_outbox(0, None);
 
         Ok(())
@@ -89,10 +87,7 @@ mod tests {
         // Arrange
         let f = ProfileTestFixture::new();
         let duplicated_handle = "taken_handle";
-
-        // 1. On sème un profil en base qui possède déjà ce handle
-        // (Peu importe l'ID, l'unicité du handle est transverse sur la région)
-        let other_profile_id = ProfileId::generate(f.region());
+        let other_profile_id = ProfileId::generate();
         let f_other = f.clone_with_profile_id(other_profile_id);
 
         let profile_with_handle = f_other.builder(duplicated_handle).build()?;
@@ -104,6 +99,7 @@ mod tests {
         // 2. On tente de créer un NOUVEAU profil avec le même handle usurpé
         let cmd = CreateProfileCommand {
             command_id: Uuid::new_v4(),
+            profile_id: ProfileId::generate(),
             account_id: f.account_id(),
             handle: Handle::try_new(duplicated_handle)?,
             region: f.region(),
@@ -112,7 +108,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, CreateProfileCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, CreateProfileCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert

@@ -204,8 +204,11 @@ pub struct ResolveSlugsRequest {
     #[prost(string, repeated, tag = "2")]
     pub slugs: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CreateProfileResponse {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CreateProfileResponse {
+    #[prost(string, tag = "1")]
+    pub profile_id: ::prost::alloc::string::String,
+}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ChangeHandleResponse {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

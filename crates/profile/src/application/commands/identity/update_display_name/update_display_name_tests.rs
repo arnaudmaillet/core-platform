@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateDisplayNameCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use crate::types::DisplayName;
     use shared_kernel::command::CommandTarget;
@@ -29,15 +29,19 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.display_name(), &new_name);
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.display_name(), &new_name);
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         // On vérifie qu'un événement est parti dans l'outbox
         f.assert_outbox(1, Some(ProfileEvent::DISPLAY_NAME_UPDATED));
@@ -66,7 +70,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert
@@ -98,14 +105,18 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // La version ne doit PAS bouger
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // La version ne doit PAS bouger
+            })
+            .await;
 
         // Pas d'événement car pas de changement réel
         f.assert_outbox(0, None);
@@ -128,7 +139,10 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Doit échouer avec une ConcurrencyConflict (levée par fetch_verified dans le handler)

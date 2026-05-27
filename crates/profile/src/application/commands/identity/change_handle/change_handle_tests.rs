@@ -1,10 +1,8 @@
-// crates/profile/src/application/commands/identity/change_handle/change_handle_handler.rs
-
 #[cfg(test)]
 mod tests {
+    use crate::application::context::ProfileCommandContext;
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::ChangeHandleCommand;
-    use crate::context::ProfileContext;
     use crate::entities::Profile;
     use crate::events::ProfileEvent;
     use crate::types::Handle;
@@ -31,7 +29,7 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, ChangeHandleCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
@@ -57,12 +55,16 @@ mod tests {
         f.given_profile(profile).await;
 
         // 2. On crée un AUTRE profil qui possède déjà le handle "taken.handle"
-        let other_id = ProfileId::generate(f.region());
+        // L'UUID v7 ne prend plus de région en paramètre
+        let other_id = ProfileId::generate();
         let taken_handle = Handle::try_new("taken.handle")?;
-        let other_profile =
-            Profile::builder(AccountId::generate(f.region()), taken_handle.clone())?
-                .with_profile_id(other_id)
-                .build()?;
+
+        let other_profile = Profile::builder(
+            AccountId::generate(f.region()),
+            other_id,
+            taken_handle.clone(),
+        )?
+        .build()?;
 
         f.given_profile(other_profile).await;
 
@@ -76,7 +78,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, ChangeHandleCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -112,14 +114,15 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, ChangeHandleCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de changement
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot);
+            })
+            .await;
 
         f.assert_outbox(0, None);
 
@@ -135,14 +138,14 @@ mod tests {
 
         let cmd = ChangeHandleCommand {
             command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.profile_id(), f.region(), 99), // Mauvaise version
+            target: CommandTarget::new(f.profile_id(), f.region(), 99), // Mauvaise version pour déclencher l'OCC
             new_handle: Handle::try_new("new.alice")?,
         };
 
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, ChangeHandleCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

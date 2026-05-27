@@ -1,6 +1,11 @@
 // crates/profile/src/presentation/services/profile_identity_service.rs
 
-use shared_kernel::core::Identifier;
+use crate::commands::{
+    ChangeHandleCommand, CreateProfileCommand, UpdateDisplayNameCommand, UpdatePrivacyCommand,
+};
+use crate::context::ProfileAppContext;
+use crate::presentation::utils::shared::GrpcServiceUtils;
+use shared_kernel::command::CommandBus;
 use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityService as ProtoProfileIdentityService;
 use shared_proto::profile::v1::{
@@ -10,15 +15,6 @@ use shared_proto::profile::v1::{
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use uuid::Uuid;
-
-// Kernel & Application imports
-use crate::commands::{
-    ChangeHandleCommand, CreateProfileCommand, UpdateDisplayNameCommand, UpdatePrivacyCommand,
-};
-use crate::context::ProfileAppContext;
-use crate::presentation::utils::shared::GrpcServiceUtils;
-use shared_kernel::command::CommandBus;
 
 pub struct ProfileIdentityService {
     bus: Arc<CommandBus>,
@@ -47,15 +43,17 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
         request: Request<CreateProfileRequest>,
     ) -> Result<Response<CreateProfileResponse>, Status> {
         let (_, extensions, req_inner) = request.into_parts();
-
-        let command = CreateProfileCommand::try_from_proto(req_inner)
+        let generated_profile_id = ProfileId::generate();
+        let ctx = self.build_context(generated_profile_id, &extensions)?;
+        let command = CreateProfileCommand::try_from_proto(req_inner, generated_profile_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        let ctx = self.build_context(ProfileId::from_uuid(Uuid::nil()), &extensions)?;
 
         self.dispatch_command::<CreateProfileCommand, (), CreateProfileResponse>(
             &ctx,
             command,
-            CreateProfileResponse {},
+            CreateProfileResponse {
+                profile_id: generated_profile_id.to_string(),
+            },
         )
         .await
     }

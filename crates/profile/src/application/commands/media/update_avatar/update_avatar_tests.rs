@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateAvatarCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -31,15 +31,16 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.avatar(), Some(&new_url));
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.avatar(), Some(&new_url));
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::AVATAR_UPDATED));
 
@@ -67,7 +68,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -105,14 +106,15 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de changement de version
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas de changement de version
+            })
+            .await;
 
         f.assert_outbox(0, None);
 
@@ -135,7 +137,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

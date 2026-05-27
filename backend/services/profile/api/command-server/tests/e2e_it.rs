@@ -46,7 +46,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
 
     let region_str = "EU";
     let region = shared_kernel::types::Region::try_new(region_str)?;
-    let real_profile_id = ProfileId::generate(region);
+    let real_profile_id = ProfileId::generate();
     let real_account_id = AccountId::generate(region);
 
     // 4. PRÉPARATION DB
