@@ -60,7 +60,7 @@ mod tests {
         let taken_handle = Handle::try_new("taken.handle")?;
 
         let other_profile = Profile::builder(
-            AccountId::generate(f.region()),
+            AccountId::generate(),
             other_id,
             taken_handle.clone(),
         )?

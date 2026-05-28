@@ -3,10 +3,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
-    core::{Entity, Error, Result},
+    core::{Entity, Result},
     geo::Timezone,
     security::PushToken,
-    types::{AccountId, Region},
+    types::AccountId,
 };
 
 use crate::{
@@ -120,23 +120,9 @@ impl AccountSettings {
 
     // --- MUTATIONS INTERNES (pub(crate)) ---
 
-    pub(crate) fn apply_timezone_update(
-        &mut self,
-        new_tz: Timezone,
-        region: &Region,
-    ) -> Result<bool> {
+    pub(crate) fn apply_timezone_update(&mut self, new_tz: Timezone) -> Result<bool> {
         if self.timezone == new_tz {
             return Ok(false);
-        }
-
-        if !new_tz.is_compatible_with(region) {
-            return Err(Error::validation(
-                "timezone",
-                format!(
-                    "Timezone '{}' is inconsistent with region '{}'",
-                    new_tz, region
-                ),
-            ));
         }
 
         self.timezone = new_tz;

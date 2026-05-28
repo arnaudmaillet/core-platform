@@ -1,7 +1,7 @@
 // crates/account/src/application/update_settings/mod.rs
 
 use crate::application::commands::settings::UpdatePreferencesCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
 use shared_kernel::core::Result;
@@ -11,17 +11,17 @@ pub struct UpdatePreferencesHandler;
 
 #[async_trait]
 impl CommandHandler for UpdatePreferencesHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = UpdatePreferencesCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: UpdatePreferencesCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.id.region())
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

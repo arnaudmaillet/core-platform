@@ -5,19 +5,19 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::settings::ChangeBirthDateCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct ChangeBirthDateHandler;
 
 #[async_trait]
 impl CommandHandler for ChangeBirthDateHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ChangeBirthDateCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: ChangeBirthDateCommand,
     ) -> Result<Self::Output> {
         if !ctx

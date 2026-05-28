@@ -52,7 +52,7 @@ mod tests {
         let profile_id = ProfileId::generate();
 
         f.idempotency_repo().seed(cmd_id);
-        let existing_profile = f.builder("bob_dev").with_profile_id(profile_id).build()?;
+        let existing_profile = f.builder("bob_dev")?.with_profile_id(profile_id).build()?;
         f.profile_repo().save_direct(existing_profile).await;
 
         let cmd = CreateProfileCommand {
@@ -90,7 +90,7 @@ mod tests {
         let other_profile_id = ProfileId::generate();
         let f_other = f.clone_with_profile_id(other_profile_id);
 
-        let profile_with_handle = f_other.builder(duplicated_handle).build()?;
+        let profile_with_handle = f_other.builder(duplicated_handle)?.build()?;
         f_other
             .profile_repo()
             .save_direct(profile_with_handle)

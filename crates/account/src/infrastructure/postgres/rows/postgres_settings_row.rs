@@ -6,9 +6,6 @@ pub struct PostgresAccountSettingsRow {
     pub preferences: serde_json::Value,
     pub timezone: String,
     pub push_tokens: Vec<String>,
-    // pub account_id: Uuid,
-    // #[sqlx(rename = "settings_updated_at")]
-    // pub updated_at: DateTime<Utc>,
 }
 
 impl PostgresAccountSettingsRow {
@@ -28,8 +25,6 @@ impl PostgresAccountSettingsRow {
             preferences,
             timezone: settings.timezone().as_str().to_string(),
             push_tokens,
-            // account_id: account.account_id().as_uuid(),
-            // updated_at: settings.updated_at(),
         }
     }
 }

@@ -44,7 +44,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
     ) -> Result<Response<CreateProfileResponse>, Status> {
         let (_, extensions, req_inner) = request.into_parts();
         let generated_profile_id = ProfileId::generate();
-        let ctx = self.build_context(generated_profile_id, &extensions)?;
+        let ctx = self.build_creation_context(&extensions)?;
         let command = CreateProfileCommand::try_from_proto(req_inner, generated_profile_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -72,7 +72,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = UpdateDisplayNameCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         self.dispatch_command::<UpdateDisplayNameCommand, (), UpdateDisplayNameResponse>(
@@ -97,7 +97,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
 
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = ChangeHandleCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -122,7 +122,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = UpdatePrivacyCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

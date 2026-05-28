@@ -4,20 +4,20 @@ use shared_kernel::command::CommandHandler;
 use shared_kernel::core::Result;
 use tracing::info;
 
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 use crate::commands::lifecycle::ChangeBetaTierCommand;
 
 pub struct ChangeBetaTierHandler;
 
 #[async_trait]
 impl CommandHandler for ChangeBetaTierHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ChangeBetaTierCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: ChangeBetaTierCommand,
     ) -> Result<Self::Output> {
         if !ctx

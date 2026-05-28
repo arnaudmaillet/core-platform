@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::moderation::LiftShadowbanCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -16,7 +16,7 @@ mod tests {
 
         // 1. Arrange : Un compte banni est automatiquement shadowbanné par notre builder
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::BANNED)
             .build()?;
 
@@ -31,7 +31,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LiftShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -58,7 +58,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::BANNED)
             .build()?;
         let version_snapshot = account.version();
@@ -73,7 +73,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LiftShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -92,7 +92,7 @@ mod tests {
 
         // 1. Arrange : Compte déjà sain (Shadowban = false par défaut)
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -106,7 +106,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, LiftShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LiftShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

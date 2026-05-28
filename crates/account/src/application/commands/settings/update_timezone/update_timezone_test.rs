@@ -1,13 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::commands::settings::UpdateTimezoneCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
+    use crate::{
+        application::commands::settings::UpdateTimezoneCommand, entities::AccountSettingsBuilder,
+    };
     use shared_kernel::{
         command::CommandTarget,
-        core::{Error, ErrorCode, Result, Versioned},
+        core::{Result, Versioned},
         geo::Timezone,
     };
     use uuid::Uuid;
@@ -20,9 +22,9 @@ mod tests {
 
         // 1. Arrange : Compte actif en UTC
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
-            .settings(|s| s.with_timezone(initial_tz))
+            .settings(|s: AccountSettingsBuilder| s.with_timezone(initial_tz))
             .build()?;
 
         let version_snapshot = account.version();
@@ -36,7 +38,10 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UpdateTimezoneCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdateTimezoneCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // 3. Assert
@@ -60,10 +65,7 @@ mod tests {
         // Arrange : Commande déjà traitée par l'infrastructure
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f
-            .account_builder()?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
+        let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -76,7 +78,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, UpdateTimezoneCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdateTimezoneCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert
@@ -103,9 +108,9 @@ mod tests {
 
         // 1. Arrange : Compte possédant déjà cette timezone
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
-            .settings(|s| s.with_timezone(current_tz.clone()))
+            .settings(|s: AccountSettingsBuilder| s.with_timezone(current_tz.clone()))
             .build()?;
 
         let version_snapshot = account.version();
@@ -119,7 +124,10 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UpdateTimezoneCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdateTimezoneCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // 3. Assert
@@ -134,41 +142,6 @@ mod tests {
 
         f.assert_outbox(0, None);
 
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_update_timezone_business_rule_violation() -> Result<()> {
-        let f = TestFixture::new();
-
-        // Arrange : Contexte EU (Paris par défaut dans la fixture)
-        let account = f
-            .account_builder()?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
-        let version_snapshot = account.version();
-        f.account_repo().insert(account);
-
-        // Tentative d'injecter une Timezone US alors que le compte est en EU
-        let cmd = UpdateTimezoneCommand {
-            command_id: Uuid::new_v4(),
-            target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
-            new_timezone: Timezone::from_raw("America/New_York"),
-        };
-
-        let result = f
-            .bus()
-            .execute::<AccountContext, UpdateTimezoneCommand, ()>(f.account_ctx().clone(), cmd)
-            .await;
-
-        // Assert : Rejet par le domaine
-        assert!(matches!(
-            result,
-            Err(Error {
-                code: ErrorCode::ValidationFailed,
-                ..
-            })
-        ));
         Ok(())
     }
 }

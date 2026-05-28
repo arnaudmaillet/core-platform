@@ -6,19 +6,19 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::moderation::LiftShadowbanCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct LiftShadowbanHandler;
 
 #[async_trait]
 impl CommandHandler for LiftShadowbanHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = LiftShadowbanCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: LiftShadowbanCommand,
     ) -> Result<Self::Output> {
         if !ctx

@@ -15,8 +15,6 @@ pub trait Event: DynClone + Debug + Send + Sync {
         Uuid::now_v7()
     }
 
-    fn region(&self) -> &str;
-
     /// Nom de l'événement (ex: "user.profile.updated")
     fn event_name(&self) -> Cow<'_, str>;
 

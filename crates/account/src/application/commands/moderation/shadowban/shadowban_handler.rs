@@ -6,17 +6,17 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::moderation::ShadowbanCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct ShadowbanHandler;
 
 #[async_trait]
 impl CommandHandler for ShadowbanHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ShadowbanCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: ShadowbanCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: ShadowbanCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

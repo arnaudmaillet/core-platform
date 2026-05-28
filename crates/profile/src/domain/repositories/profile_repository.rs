@@ -9,7 +9,12 @@ use shared_kernel::types::{AccountId, ProfileId, Region};
 #[async_trait]
 #[async_trait]
 pub trait ProfileRepository: Send + Sync {
-    async fn save(&self, profile: &mut Profile, tx: Option<&mut dyn Transaction>) -> Result<()>;
+    async fn save(
+        &self,
+        region: Region,
+        profile: &mut Profile,
+        tx: Option<&mut dyn Transaction>,
+    ) -> Result<()>;
 
     async fn find_by_id(
         &self,

@@ -70,9 +70,6 @@ impl AccountIdentity {
     pub fn account_id(&self) -> AccountId {
         self.account_id
     }
-    pub fn region(&self) -> Region {
-        self.account_id.region()
-    }
     pub fn sub_id(&self) -> Option<&SubId> {
         self.sub_id.as_ref()
     }

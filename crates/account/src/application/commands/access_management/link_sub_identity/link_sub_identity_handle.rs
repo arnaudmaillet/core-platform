@@ -1,7 +1,7 @@
 // crates/account/src/application/link_sub_identity/link_sub_identity_handler.rs
 
 use crate::application::{
-    commands::access_management::LinkSubIdentityCommand, context::AccountContext,
+    commands::access_management::LinkSubIdentityCommand, context::AccountCommandContext,
 };
 use async_trait::async_trait;
 use shared_kernel::{
@@ -13,13 +13,13 @@ pub struct LinkSubIdentityHandler;
 
 #[async_trait]
 impl CommandHandler for LinkSubIdentityHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = LinkSubIdentityCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: LinkSubIdentityCommand,
     ) -> Result<Self::Output> {
         if !ctx

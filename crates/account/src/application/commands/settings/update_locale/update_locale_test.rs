@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::UpdateLocaleCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::{AccountState, Locale};
@@ -17,7 +17,7 @@ mod tests {
 
         // 1. Arrange : Compte actif avec une locale spécifique
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_locale(old_locale)
             .build()?;
@@ -33,7 +33,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -58,7 +58,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -73,7 +73,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -100,7 +100,7 @@ mod tests {
 
         // 1. Arrange : Compte possédant déjà cette locale
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_locale(current_locale.clone())
             .build()?;
@@ -116,7 +116,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UpdateLocaleCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

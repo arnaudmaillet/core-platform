@@ -4,6 +4,7 @@ use crate::{OutboxRow, TransactionExt};
 use async_trait::async_trait;
 use shared_kernel::core::{Error, Result, Transaction};
 use shared_kernel::messaging::{Event, EventEnvelope, OutboxRepository, OutboxStore};
+use shared_kernel::types::Region;
 use sqlx::{Pool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
@@ -92,14 +93,14 @@ impl OutboxStore for PostgresOutboxRepository {
 // 2. Ton trait classique pour la couche d'écriture (save_all)
 #[async_trait]
 impl OutboxRepository for PostgresOutboxRepository {
-    async fn save_all(&self, tx: &mut dyn Transaction, events: &[&dyn Event]) -> Result<()> {
+    async fn save_all(&self, region: Region, tx: &mut dyn Transaction, events: &[&dyn Event]) -> Result<()> {
         if events.is_empty() {
             return Ok(());
         }
 
         let sqlx_tx = tx.downcast_mut_sqlx()?;
         let envelopes: Vec<EventEnvelope> =
-            events.iter().map(|e| EventEnvelope::wrap(*e)).collect();
+            events.iter().map(|e| EventEnvelope::wrap(*e, region)).collect();
 
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
             "INSERT INTO outbox_events (id, region, aggregate_type, aggregate_id, event_type, payload, metadata, occurred_at) ",

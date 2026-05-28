@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::UpdatePreferencesCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
-    use crate::events::AccountEvent;
+    use crate::entities::AccountSettingsBuilder;
+use crate::events::AccountEvent;
     use crate::types::{AccountState, AppearancePreferences, ThemeMode};
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{Result, Versioned};
@@ -15,7 +16,7 @@ mod tests {
 
         // 1. Arrange : Compte actif
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -37,7 +38,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdatePreferencesCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -64,7 +65,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -80,7 +81,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdatePreferencesCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -110,9 +111,9 @@ mod tests {
 
         // 1. Arrange : Compte possédant déjà ces préférences
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
-            .settings(|s| s.with_appearance(initial_appearance.clone()))
+            .settings(|s:AccountSettingsBuilder| s.with_appearance(initial_appearance.clone()))
             .build()?;
 
         let version_snapshot = account.version();
@@ -128,7 +129,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UpdatePreferencesCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UpdatePreferencesCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

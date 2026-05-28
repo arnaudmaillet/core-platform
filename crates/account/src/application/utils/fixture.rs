@@ -3,20 +3,20 @@
 use std::sync::Arc;
 
 // Shared Kernel
-use crate::application::context::{AccountAppContext, AccountContext};
+use crate::application::context::{AccountAppContext, AccountCommandContext, AccountQueryContext};
 use crate::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
 use crate::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
     BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,
     ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-    ChangeRegionCommand, ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler,
-    DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
-    LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
-    RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
-    ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler, UnsuspendCommand,
-    UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler, UpdatePreferencesCommand,
-    UpdatePreferencesHandler, UpdateTimezoneCommand, UpdateTimezoneHandler,
+    ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand, DeactivateHandler,
+    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler, IncreaseTrustScoreCommand,
+    IncreaseTrustScoreHandler, LiftShadowbanCommand, LiftShadowbanHandler, LinkSubIdentityCommand,
+    LinkSubIdentityHandler, RegisterCommand, RegisterHandler, RemovePushTokenCommand,
+    RemovePushTokenHandler, ShadowbanCommand, ShadowbanHandler, SuspendCommand, SuspendHandler,
+    UnbanCommand, UnbanHandler, UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand,
+    UpdateLocaleHandler, UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
+    UpdateTimezoneHandler,
 };
 use crate::domain::repositories::AccountRepositoryStub;
 use crate::domain::types::RegistrationIdentifier;
@@ -32,8 +32,11 @@ use shared_kernel::types::{AccountId, Region};
 
 pub struct TestFixture {
     bus: CommandBus,
-    _app_ctx: AccountAppContext,
-    account_ctx: AccountContext,
+    region: Region,
+    account_id: AccountId,
+    app_ctx: AccountAppContext,
+    command_ctx: AccountCommandContext,
+    query_ctx: AccountQueryContext,
     account_repo: Arc<AccountRepositoryStub>,
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
     outbox_repo: Arc<OutboxRepositoryStub>,
@@ -52,67 +55,74 @@ impl TestFixture {
             idempotency_repo.clone(),
         );
 
-        let default_region = Region::default();
-        let account_id = AccountId::generate(default_region);
-        let account_ctx = AccountContext::new(app_ctx.clone(), Some(account_id), default_region);
+        // Configuration par défaut pour les tests
+        let region = Region::default();
+        let account_id = AccountId::generate();
+        let command_ctx = app_ctx.command(account_id, region);
+        let query_ctx = app_ctx.query(region);
 
         let mut bus = CommandBus::new(cache);
 
-        // Enregistrement des Handlers avec le type AccountContext propre
-        bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);
-        bus.register::<AccountContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
+        bus.register::<AccountCommandContext, RegisterCommand, RegisterHandler>(RegisterHandler);
+        bus.register::<AccountCommandContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
             LinkSubIdentityHandler,
         );
-        bus.register::<AccountContext, ActivateCommand, ActivateHandler>(ActivateHandler);
-        bus.register::<AccountContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
-        bus.register::<AccountContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
-        bus.register::<AccountContext, ChangeBetaTierCommand, ChangeBetaTierHandler>(
+        bus.register::<AccountCommandContext, ActivateCommand, ActivateHandler>(ActivateHandler);
+        bus.register::<AccountCommandContext, DeactivateCommand, DeactivateHandler>(
+            DeactivateHandler,
+        );
+        bus.register::<AccountCommandContext, ChangeRoleCommand, ChangeRoleHandler>(
+            ChangeRoleHandler,
+        );
+        bus.register::<AccountCommandContext, ChangeBetaTierCommand, ChangeBetaTierHandler>(
             ChangeBetaTierHandler,
         );
-        bus.register::<AccountContext, SuspendCommand, SuspendHandler>(SuspendHandler);
-        bus.register::<AccountContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
-        bus.register::<AccountContext, BanCommand, BanHandler>(BanHandler);
-        bus.register::<AccountContext, UnbanCommand, UnbanHandler>(UnbanHandler);
-        bus.register::<AccountContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
-        bus.register::<AccountContext, LiftShadowbanCommand, LiftShadowbanHandler>(
+        bus.register::<AccountCommandContext, SuspendCommand, SuspendHandler>(SuspendHandler);
+        bus.register::<AccountCommandContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
+        bus.register::<AccountCommandContext, BanCommand, BanHandler>(BanHandler);
+        bus.register::<AccountCommandContext, UnbanCommand, UnbanHandler>(UnbanHandler);
+        bus.register::<AccountCommandContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
+        bus.register::<AccountCommandContext, LiftShadowbanCommand, LiftShadowbanHandler>(
             LiftShadowbanHandler,
         );
-        bus.register::<AccountContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
+        bus.register::<AccountCommandContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
             IncreaseTrustScoreHandler,
         );
-        bus.register::<AccountContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
+        bus.register::<AccountCommandContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
             DecreaseTrustScoreHandler,
         );
-        bus.register::<AccountContext, AddPushTokenCommand, AddPushTokenHandler>(
+        bus.register::<AccountCommandContext, AddPushTokenCommand, AddPushTokenHandler>(
             AddPushTokenHandler,
         );
-        bus.register::<AccountContext, RemovePushTokenCommand, RemovePushTokenHandler>(
+        bus.register::<AccountCommandContext, RemovePushTokenCommand, RemovePushTokenHandler>(
             RemovePushTokenHandler,
         );
-        bus.register::<AccountContext, ChangeEmailCommand, ChangeEmailHandler>(ChangeEmailHandler);
-        bus.register::<AccountContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
+        bus.register::<AccountCommandContext, ChangeEmailCommand, ChangeEmailHandler>(
+            ChangeEmailHandler,
+        );
+        bus.register::<AccountCommandContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
             ChangePhoneNumberHandler,
         );
-        bus.register::<AccountContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
+        bus.register::<AccountCommandContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
             ChangeBirthDateHandler,
         );
-        bus.register::<AccountContext, ChangeRegionCommand, ChangeRegionHandler>(
-            ChangeRegionHandler,
-        );
-        bus.register::<AccountContext, UpdateLocaleCommand, UpdateLocaleHandler>(
+        bus.register::<AccountCommandContext, UpdateLocaleCommand, UpdateLocaleHandler>(
             UpdateLocaleHandler,
         );
-        bus.register::<AccountContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
+        bus.register::<AccountCommandContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
             UpdateTimezoneHandler,
         );
-        bus.register::<AccountContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
+        bus.register::<AccountCommandContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
             UpdatePreferencesHandler,
         );
 
         Self {
             bus,
-            _app_ctx: app_ctx,
-            account_ctx,
+            region,
+            account_id,
+            app_ctx: app_ctx,
+            command_ctx,
+            query_ctx,
             account_repo,
             idempotency_repo,
             outbox_repo,
@@ -125,23 +135,24 @@ impl TestFixture {
         &self.bus
     }
 
-    pub fn _app_ctx(&self) -> &AccountAppContext {
-        &self._app_ctx
-    }
-
-    pub fn account_ctx(&self) -> &AccountContext {
-        &self.account_ctx
-    }
-
     pub fn account_id(&self) -> AccountId {
-        self.account_ctx
-            .account_id()
-            .expect("TestFixture context must contain an account_id")
-            .clone()
+        self.account_id
     }
 
     pub fn region(&self) -> Region {
-        self.account_ctx.region()
+        self.region
+    }
+
+    pub fn app_ctx(&self) -> &AccountAppContext {
+        &self.app_ctx
+    }
+
+    pub fn command_ctx(&self) -> &AccountCommandContext {
+        &self.command_ctx
+    }
+
+    pub fn query_ctx(&self) -> &AccountQueryContext {
+        &self.query_ctx
     }
 
     pub fn account_repo(&self) -> &AccountRepositoryStub {
@@ -160,14 +171,12 @@ impl TestFixture {
         self.outbox_repo.event_names()
     }
 
-    pub fn account_builder(&self) -> Result<AccountBuilder> {
+    pub fn builder(&self) -> Result<AccountBuilder> {
         Ok(Account::builder(
-            self.account_id(),
+            self.account_id,
             RegistrationIdentifier::try_from_email("test@example.com")?,
         ))
     }
-
-    // --- Assertions ---
 
     pub fn assert_outbox(&self, expected_count: usize, expected_event: Option<&str>) {
         assert_eq!(
@@ -188,7 +197,7 @@ impl TestFixture {
     where
         F: FnOnce(&Account),
     {
-        self.assert_account_by_id(self.account_id(), check).await
+        self.assert_account_by_id(self.account_id, check).await
     }
 
     pub async fn assert_account_by_id<F>(&self, id: AccountId, check: F) -> Result<()>

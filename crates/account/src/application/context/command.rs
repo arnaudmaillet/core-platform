@@ -1,10 +1,12 @@
-use crate::{context::ProfileAppContext, entities::Profile, types::Handle};
+use crate::application::context::AccountAppContext;
+use crate::domain::entities::Account;
 use infra_sqlx::PostgresTransaction;
+use shared_kernel::messaging::EventEmitter;
 use shared_kernel::{
     command::CommandTarget,
     core::{Error, Result, Transaction, Versioned},
-    messaging::{Event, EventEmitter},
-    types::{ProfileId, Region},
+    messaging::Event,
+    types::{AccountId, Region},
 };
 use uuid::Uuid;
 
@@ -12,69 +14,50 @@ use uuid::Uuid;
 use shared_kernel::core::TransactionStub;
 
 #[derive(Clone)]
-pub struct ProfileCommandContext {
-    app: ProfileAppContext,
-    profile_id: Option<ProfileId>,
+pub struct AccountCommandContext {
+    app: AccountAppContext,
+    account_id: Option<AccountId>,
     region: Region,
 }
 
-impl ProfileCommandContext {
+impl AccountCommandContext {
     pub(crate) fn new(
-        app: ProfileAppContext,
-        profile_id: Option<ProfileId>,
+        app: AccountAppContext,
+        account_id: Option<AccountId>,
         region: Region,
     ) -> Self {
         Self {
             app,
-            profile_id,
+            account_id,
             region,
         }
+    }
+
+    pub fn app(&self) -> &AccountAppContext {
+        &self.app
     }
 
     pub fn region(&self) -> Region {
         self.region
     }
 
-    pub fn profile_id(&self) -> Result<&ProfileId> {
-        self.profile_id.as_ref().ok_or_else(|| {
+    pub fn account_id(&self) -> Result<&AccountId> {
+        self.account_id.as_ref().ok_or_else(|| {
             Error::validation(
-                "profile_id",
-                "Profile ID is missing in this context (Creation flow)",
+                "account_id",
+                "Account ID is missing in this context (Creation flow)",
             )
         })
     }
 
-    pub async fn ensure_creatable(
-        &self,
-        command_id: Uuid,
-        command_region: Region,
-        handle: &Handle,
-    ) -> Result<bool> {
+    pub async fn ensure_creatable(&self, command_id: Uuid, command_region: Region) -> Result<bool> {
         if command_region != self.region {
             return Err(Error::validation(
                 "region",
-                "Region mismatch for profile creation",
+                "Region mismatch for account creation",
             ));
         }
-
-        if !self.ensure_executable(command_id, command_region).await? {
-            return Ok(false);
-        }
-
-        if self
-            .app
-            .profile_repo()
-            .exists_by_handle(handle, self.region)
-            .await?
-        {
-            return Err(Error::already_exists(
-                "Profile",
-                "handle",
-                handle.as_str().to_string(),
-            ));
-        }
-
-        Ok(true)
+        self.ensure_executable(command_id, command_region).await
     }
 
     pub async fn ensure_executable(
@@ -85,7 +68,10 @@ impl ProfileCommandContext {
         if command_region != self.region {
             return Err(Error::validation(
                 "region",
-                "Region mismatch (sharding violation prevention)",
+                format!(
+                    "Sharding violation prevention: Command region '{}' mismatch with context region '{}'",
+                    command_region, self.region
+                ),
             ));
         }
 
@@ -99,34 +85,37 @@ impl ProfileCommandContext {
         Ok(!exists)
     }
 
-    pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
-        if target.region != self.region || Some(&target.id) != self.profile_id.as_ref() {
-            return Err(Error::validation("target", "Context/Target mismatch"));
+    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
+        if target.region != self.region || Some(&target.id) != self.account_id.as_ref() {
+            return Err(Error::validation(
+                "target",
+                "Context/Target identity or sharding mismatch",
+            ));
         }
 
-        let profile = self
+        let account = self
             .app
-            .profile_repo()
-            .find_by_id(target.id, self.region, None)
+            .account_repo()
+            .find_by_id(self.region, target.id, None)
             .await?
-            .ok_or_else(|| Error::not_found("Profile", target.id.to_string()))?;
+            .ok_or_else(|| Error::not_found("Account", target.id.to_string()))?;
 
-        if profile.version() != target.expected_version {
+        if account.version() != target.expected_version {
             return Err(Error::concurrency_conflict(format!(
                 "OCC Mismatch: DB v{}, Expected v{}",
-                profile.version(),
+                account.version(),
                 target.expected_version
             )));
         }
 
-        Ok(profile)
+        Ok(account)
     }
 
-    pub async fn save(&self, profile: &mut Profile, command_id: Option<Uuid>) -> Result<()> {
-        if let Some(expected_id) = self.profile_id {
-            if profile.profile_id() != expected_id {
+    pub async fn save(&self, account: &mut Account, command_id: Option<Uuid>) -> Result<()> {
+        if let Some(expected_id) = self.account_id {
+            if account.account_id() != expected_id {
                 return Err(Error::validation(
-                    "profile_id",
+                    "account_id",
                     "Identity mismatch violation",
                 ));
             }
@@ -145,18 +134,21 @@ impl ProfileCommandContext {
             }
         }
 
-        let events = profile.pull_events();
-        self.app
-            .profile_repo()
-            .save(self.region, profile, Some(&mut *tx))
-            .await?;
+        let events = account.pull_events();
 
         if !events.is_empty() {
+            self.app
+                .account_repo()
+                .save(self.region, account, Some(&mut *tx))
+                .await?;
+
             let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
             self.app
                 .outbox_repo()
                 .save_all(self.region, &mut *tx, &event_refs)
                 .await?;
+        } else {
+            tracing::debug!(account_id = %account.account_id(), "Idempotence métier : écriture du compte court-circuitée");
         }
 
         if let Some(cmd_id) = command_id {
@@ -170,29 +162,21 @@ impl ProfileCommandContext {
         Ok(())
     }
 
-    pub async fn exists_by_handle(&self, handle: &Handle) -> Result<bool> {
-        self.app
-            .profile_repo()
-            .exists_by_handle(handle, self.region)
-            .await
-    }
-
-    /// Démarre de manière transparente une transaction PostgreSQL ou un stub d'isolation pour les tests.
     async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
         match self.app.pg_pool() {
             Some(pool) => {
-                let tx = pool.begin().await.map_err(|e| {
-                    Error::internal(format!("Failed to begin database transaction: {}", e))
-                })?;
+                let tx = pool
+                    .begin()
+                    .await
+                    .map_err(|e| Error::internal(e.to_string()))?;
                 Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
             }
-
             #[cfg(any(test, feature = "test-utils"))]
             None => Ok(Box::new(TransactionStub::new()) as Box<dyn Transaction>),
 
             #[cfg(not(any(test, feature = "test-utils")))]
             None => Err(Error::internal(
-                "Database pool is missing. ProfileAppContext must be initialized with a valid PgPool in production.",
+                "Database pool is missing. AccountAppContext must be initialized with a valid PgPool in production.",
             )),
         }
     }

@@ -1,6 +1,7 @@
 // crates/profile/src/presentation/utils/shared.rs
 
 use crate::application::context::{ProfileAppContext, ProfileCommandContext};
+use crate::context::ProfileQueryContext;
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};
@@ -11,13 +12,26 @@ pub trait GrpcServiceUtils {
     fn app_ctx(&self) -> &ProfileAppContext;
     fn bus(&self) -> &CommandBus;
 
-    fn build_context(
+    fn build_command_context(
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
     ) -> Result<ProfileCommandContext, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().command(profile_id, region))
+    }
+
+    fn build_creation_context(
+        &self,
+        extensions: &tonic::Extensions,
+    ) -> Result<ProfileCommandContext, Status> {
+        let region = self.extract_region(extensions)?;
+        Ok(self.app_ctx().creation_command(region))
+    }
+
+    fn build_query(&self, extensions: &tonic::Extensions) -> Result<ProfileQueryContext, Status> {
+        let region = self.extract_region(extensions)?;
+        Ok(self.app_ctx().query(region))
     }
 
     async fn dispatch_command<C, Output, R>(

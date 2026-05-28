@@ -15,6 +15,7 @@ use crate::types::Handle;
 
 pub struct ProfileTestFixture {
     bus: Arc<CommandBus>,
+    region: Region,
     app_ctx: ProfileAppContext,
     account_id: AccountId,
     profile_id: ProfileId,
@@ -40,7 +41,7 @@ impl ProfileTestFixture {
 
         // Configuration par défaut pour les tests
         let region = Region::default();
-        let account_id = AccountId::generate(region);
+        let account_id = AccountId::generate();
         let profile_id = ProfileId::generate();
 
         // Génération des deux nouveaux contextes typés CQRS
@@ -84,6 +85,7 @@ impl ProfileTestFixture {
 
         Self {
             bus: Arc::new(bus),
+            region,
             app_ctx,
             account_id,
             profile_id,
@@ -118,12 +120,11 @@ impl ProfileTestFixture {
     }
 
     pub fn profile_id(&self) -> ProfileId {
-        // Plus besoin de déballer un Result complexe, la fixture expose directement la valeur immuable définie au build
         self.profile_id
     }
 
     pub fn region(&self) -> Region {
-        self.command_ctx.region()
+        self.region
     }
 
     pub fn profile_repo(&self) -> &ProfileRepositoryStub {
@@ -134,21 +135,18 @@ impl ProfileTestFixture {
         &self.idempotency_repo
     }
 
-    // --- Helpers pour les tests ---
-
     pub async fn given_profile(&self, profile: Profile) {
         self.profile_repo.save_direct(profile).await;
     }
 
-    pub fn builder(&self, handle: &str) -> ProfileBuilder {
-        let handle_vo = Handle::try_new(handle).expect("Handle invalide dans la fixture");
+    pub fn builder(&self, handle: &str) -> Result<ProfileBuilder> {
+        let handle_vo = Handle::try_new(handle)?;
 
-        Profile::builder(self.account_id(), self.profile_id(), handle_vo)
-            .expect("Erreur lors de l'initialisation du builder")
-            .with_profile_id(self.profile_id())
+        Ok(
+            Profile::builder(self.account_id(), self.profile_id(), handle_vo)?
+                .with_profile_id(self.profile_id()),
+        )
     }
-
-    // --- Assertions ---
 
     pub fn assert_outbox(&self, expected_count: usize, expected_event: Option<&str>) {
         assert_eq!(
@@ -180,14 +178,15 @@ impl ProfileTestFixture {
     }
 
     pub fn clone_with_profile_id(&self, new_profile_id: ProfileId) -> Self {
-        let region = self.region();
+        let region: Region = self.region();
         let command_ctx = self.app_ctx.command(new_profile_id, region);
         let query_ctx = self.app_ctx.query(region);
 
         Self {
             bus: self.bus.clone(),
+            region,
             app_ctx: self.app_ctx.clone(),
-            account_id: AccountId::generate(self.region()),
+            account_id: AccountId::generate(),
             profile_id: new_profile_id,
             command_ctx,
             query_ctx,

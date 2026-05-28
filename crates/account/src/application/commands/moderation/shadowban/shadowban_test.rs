@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::moderation::ShadowbanCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
+use crate::entities::AccountGovernanceBuilder;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{Result, Versioned};
     use shared_kernel::types::AuditReason;
-    use uuid::Uuid;
+    use shared_proto::account::v1::AccountGovernance;
+use uuid::Uuid;
 
     #[tokio::test]
     async fn test_shadowban_account_success() -> Result<()> {
@@ -16,7 +18,7 @@ mod tests {
 
         // 1. Arrange : Compte sain (v1)
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -31,7 +33,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -55,7 +57,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -70,7 +72,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, ShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -89,9 +91,9 @@ mod tests {
 
         // 1. Arrange : Déjà shadowbanné (on peut utiliser une closure ou un helper dédié)
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
-            .governance(|g| g.with_shadowban(true)) // Utilisation de la closure de ton builder
+            .governance(|g: AccountGovernanceBuilder| g.with_shadowban(true)) // Utilisation de la closure de ton builder
             .build()?;
 
         let version_snapshot = account.version();
@@ -105,7 +107,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ShadowbanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

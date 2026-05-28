@@ -2,7 +2,6 @@ syntax = "proto3";
 package account.v1;
 
 import "account/v1/models.proto";
-import "account/v1/enums.proto";
 
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
@@ -95,7 +94,7 @@ message DecreaseTrustScoreResponse {}
 message ChangeRoleRequest { 
   string command_id = 1; 
   AccountTarget target = 2;
-  AccountRole new_role = 3; 
+  string new_role = 3; 
   string reason = 4; 
 }
 message ChangeRoleResponse {}
@@ -105,6 +104,6 @@ message ChangeRoleResponse {}
 message ChangeBetaTierRequest {
   string command_id = 1;
   AccountTarget target = 2;
-  BetaTier new_tier = 3;
+  string new_tier = 3;
 }
 message ChangeBetaTierResponse {}

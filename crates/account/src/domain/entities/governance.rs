@@ -202,19 +202,15 @@ impl AccountGovernance {
 
 impl Entity for AccountGovernance {
     type Id = AccountId;
-
-    // Métadonnées
     fn entity_name() -> &'static str {
         "AccountGovernance"
     }
-
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
             "account_governance_pkey" => "account_id",
             _ => "internal_governance",
         }
     }
-
     fn id(&self) -> &Self::Id {
         &self.account_id
     }

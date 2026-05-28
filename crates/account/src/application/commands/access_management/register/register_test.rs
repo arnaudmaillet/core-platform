@@ -7,7 +7,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::application::commands::access_management::RegisterCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::{AccountState, IpAddr, Locale, RegistrationIdentifier};
@@ -25,6 +25,7 @@ mod tests {
 
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
+            region: f.region(),
             account_id: expected_account_id,
             sub_id: Some(ext_id.clone()),
             identifier: RegistrationIdentifier::from_email(email.clone()),
@@ -35,7 +36,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, RegisterCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -69,14 +70,14 @@ mod tests {
 
         // 1. Arrange : Un compte possède déjà ce sub_id
         let existing_acc = f
-            .account_builder()?
+            .builder()?
             .with_sub_id(existing_ext_id.clone())
             .build()?;
         f.account_repo().insert(existing_acc);
 
-        // 💡 ALIGNEMENT : Remplacement de 'region' par le Value Object 'account_id'
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
+            region: f.region(),
             account_id: f.account_id(),
             sub_id: Some(existing_ext_id),
             identifier: RegistrationIdentifier::try_from_email("new@test.com")?,
@@ -87,7 +88,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, RegisterCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -112,6 +113,7 @@ mod tests {
 
         let cmd = RegisterCommand {
             command_id: Uuid::new_v4(),
+            region: f.region(),
             account_id: f.account_id(),
             sub_id: Some(SubId::from_raw("atomic_ext")),
             identifier: RegistrationIdentifier::try_from_email("atomic@test.com")?,
@@ -122,7 +124,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, RegisterCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, RegisterCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert

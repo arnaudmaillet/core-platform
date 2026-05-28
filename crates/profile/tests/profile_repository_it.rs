@@ -28,15 +28,14 @@ async fn get_test_context() -> (PostgresProfileRepository, PostgresTestContext) 
 async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     // --- Arrange ---
     let (repo, pg_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
+    let account_id = AccountId::generate();
     let profile_id = ProfileId::generate();
+    let region =  Region::default();
     let handle = Handle::try_new("alice_rocks")?;
     let mut profile = Profile::builder(account_id, profile_id, handle)?.build()?;
 
-    let region = account_id.region();
-
     // --- Act: Step 1 (Initial Save) ---
-    repo.save(&mut profile, None).await?;
+    repo.save(region, &mut profile, None).await?;
 
     // --- Assert: Step 2 (Verification Initial State) ---
     let found = repo
@@ -51,7 +50,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     to_update.update_display_name(DisplayName::try_new("Alice In Wonderland")?)?;
     // Ici, le domaine a incrémenté la version de 0 à 1
 
-    repo.save(&mut to_update, None).await?;
+    repo.save(region, &mut to_update, None).await?;
 
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
@@ -91,12 +90,13 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
 #[tokio::test]
 async fn test_profile_concurrency_protection_occ() -> Result<()> {
     let (repo, _pg_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
+    let account_id = AccountId::generate();
     let profile_id = ProfileId::generate();
+    let region = Region::default();
     let mut profile =
         Profile::builder(account_id, profile_id, Handle::try_new("ConcurrentUser")?)?.build()?;
 
-    repo.save(&mut profile, None).await?;
+    repo.save(region, &mut profile, None).await?;
 
     // Charger deux instances (v0)
     let mut client_a = repo
@@ -110,11 +110,11 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 
     // Client A gagne
     client_a.update_display_name(DisplayName::try_new("Winner")?)?;
-    repo.save(&mut client_a, None).await?; // Passe v1 en DB
+    repo.save(region, &mut client_a, None).await?; // Passe v1 en DB
 
     // Client B tente de save (v0 -> v1) mais la DB est déjà en v1
     client_b.update_display_name(DisplayName::try_new("Loser")?)?;
-    let result = repo.save(&mut client_b, None).await;
+    let result = repo.save(region, &mut client_b, None).await;
 
     assert!(matches!(
         result,
@@ -126,8 +126,9 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 #[tokio::test]
 async fn test_profile_rollback_works_properly() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
+    let account_id = AccountId::generate();
     let profile_id = ProfileId::generate();
+    let region = Region::default();
     let mut profile =
         Profile::builder(account_id, profile_id, Handle::try_new("Ghost")?)?.build()?;
 
@@ -138,7 +139,7 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
         .map_err(|e| Error::internal(e.to_string()))?;
     let mut tx = PostgresTransaction::new(tx_sqlx);
 
-    repo.save(&mut profile, Some(&mut tx)).await?;
+    repo.save(region, &mut profile, Some(&mut tx)).await?;
     tx.into_inner()
         .rollback()
         .await
@@ -155,9 +156,10 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
 #[tokio::test]
 async fn test_find_all_by_account_id() -> Result<()> {
     let (repo, _pg_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
+    let account_id = AccountId::generate();
     let profile_id = ProfileId::generate();
     let alt_profile_id = ProfileId::generate();
+    let region = Region::default();
 
     // Utilise "profile_1" (minuscules) pour correspondre à la sortie attendue
     let mut p1 =
@@ -165,8 +167,8 @@ async fn test_find_all_by_account_id() -> Result<()> {
     let mut p2 =
         Profile::builder(account_id, alt_profile_id, Handle::try_new("profile_2")?)?.build()?;
 
-    repo.save(&mut p1, None).await?;
-    repo.save(&mut p2, None).await?;
+    repo.save(region, &mut p1, None).await?;
+    repo.save(region, &mut p2, None).await?;
 
     let profiles = repo.find_all_by_account_id(account_id, None).await?;
 
@@ -180,8 +182,9 @@ async fn test_find_all_by_account_id() -> Result<()> {
 #[tokio::test]
 async fn test_profile_rollback_integrity() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
-    let account_id = AccountId::generate(Region::default());
+    let account_id = AccountId::generate();
     let profile_id = ProfileId::generate();
+    let region = Region::default();
     let mut profile =
         Profile::builder(account_id, profile_id, Handle::try_new("ghost")?)?.build()?;
     let profile_id = profile.profile_id();
@@ -193,7 +196,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
         .await
         .map_err(|e| Error::internal(e.to_string()))?;
     let mut tx = PostgresTransaction::new(tx_sqlx);
-    repo.save(&mut profile, Some(&mut tx)).await?;
+    repo.save(region, &mut profile, Some(&mut tx)).await?;
 
     // 2. ROLLBACK
     tx.into_inner()
@@ -213,10 +216,10 @@ async fn test_profile_rollback_integrity() -> Result<()> {
 #[tokio::test]
 async fn test_profile_partial_data_resilience() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
-    let region = Region::try_new("EU")?;
+    let region = Region::default();
 
     let domain_profile_id = ProfileId::generate();
-    let domain_account_id = AccountId::generate(region.clone());
+    let domain_account_id = AccountId::generate();
 
     let profile_uuid = domain_profile_id.as_uuid();
     let account_uuid = domain_account_id.uuid();

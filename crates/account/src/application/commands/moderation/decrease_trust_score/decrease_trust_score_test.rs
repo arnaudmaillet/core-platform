@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::moderation::DecreaseTrustScoreCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::{AccountState, TrustAmount, TrustScore};
@@ -16,7 +16,7 @@ mod tests {
 
         // 1. Arrange : Compte actif (score 100 par défaut via builder)
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -32,7 +32,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DecreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -54,7 +54,7 @@ mod tests {
 
         // 1. Arrange : Utilisation du builder avec un score précis
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(TrustScore::CRITICAL_THRESHOLD))
             .build()?;
@@ -71,7 +71,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DecreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -96,7 +96,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -111,7 +111,7 @@ mod tests {
 
         let result: std::result::Result<(), Error> = f
             .bus()
-            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DecreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -133,7 +133,7 @@ mod tests {
 
         // Arrange : Utilisation du with_state(Banned) qui met auto le score à 0 et shadowban
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::BANNED)
             .build()?;
 
@@ -149,7 +149,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DecreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -172,7 +172,7 @@ mod tests {
     async fn test_trust_decrease_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -192,7 +192,7 @@ mod tests {
         // ACT : Le bus doit absorber l'erreur et réussir au second essai
         let result = f
             .bus()
-            .execute::<AccountContext, DecreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DecreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // ASSERT

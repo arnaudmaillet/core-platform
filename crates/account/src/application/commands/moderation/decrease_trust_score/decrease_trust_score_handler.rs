@@ -7,23 +7,23 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::moderation::DecreaseTrustScoreCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct DecreaseTrustScoreHandler;
 
 #[async_trait]
 impl CommandHandler for DecreaseTrustScoreHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = DecreaseTrustScoreCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: DecreaseTrustScoreCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.id.region())
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

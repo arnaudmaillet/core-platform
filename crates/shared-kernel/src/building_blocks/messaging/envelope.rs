@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::borrow::Cow;
 use uuid::Uuid;
 
-use crate::messaging::Event;
+use crate::{messaging::Event, types::Region};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EventEnvelope {
@@ -20,10 +20,10 @@ pub struct EventEnvelope {
 }
 
 impl EventEnvelope {
-    pub fn wrap(event: &dyn Event) -> Self {
+    pub fn wrap(event: &dyn Event, region: Region) -> Self {
         Self {
             id: event.event_id(),
-            region: event.region().to_string(),
+            region: region.to_string(),
             aggregate_type: event.aggregate_type().into_owned(),
             aggregate_id: event.aggregate_id(),
             event_type: event.event_name().into_owned(),
@@ -36,14 +36,9 @@ impl EventEnvelope {
     }
 }
 
-// L'implémentation du trait DomainEvent pour l'enveloppe permet
-// de la manipuler comme n'importe quel événement dans le système.
 impl Event for EventEnvelope {
     fn event_id(&self) -> Uuid {
         self.id
-    }
-    fn region(&self) -> &str {
-        &self.region
     }
     fn event_name(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.event_type)

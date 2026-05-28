@@ -2,6 +2,7 @@
 
 use crate::core::{Error, Result, Transaction};
 use crate::messaging::{Event, EventEnvelope, OutboxRepository};
+use crate::types::Region;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
@@ -54,7 +55,7 @@ impl OutboxRepositoryStub {
 
 #[async_trait]
 impl OutboxRepository for OutboxRepositoryStub {
-    async fn save_all(&self, _tx: &mut dyn Transaction, events: &[&dyn Event]) -> Result<()> {
+    async fn save_all(&self, _region: Region, _tx: &mut dyn Transaction, events: &[&dyn Event]) -> Result<()> {
         self.check_error()?;
 
         if events.is_empty() {
@@ -63,7 +64,6 @@ impl OutboxRepository for OutboxRepositoryStub {
 
         let mut saved = self.saved_events.lock().expect("Lock failed");
         for event in events {
-            // On stocke le nom du type d'événement pour faciliter les tests
             saved.push(event.event_name().to_string());
         }
 

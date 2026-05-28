@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::lifecycle::DeactivateCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -16,7 +16,7 @@ mod tests {
         let f = TestFixture::new();
 
         // 1. Arrange : Compte initial actif
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -28,7 +28,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -51,7 +51,7 @@ mod tests {
         // Arrange : Simulation d'une commande de désactivation déjà enregistrée
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -64,7 +64,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -89,7 +89,7 @@ mod tests {
         let f = TestFixture::new();
 
         // Arrange : Compte DÉJÀ désactivé
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.deactivate(None)?;
 
         let version_snapshot = account.version();
@@ -103,7 +103,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -131,7 +131,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, DeactivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

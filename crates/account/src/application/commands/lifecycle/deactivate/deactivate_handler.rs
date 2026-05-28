@@ -7,17 +7,17 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::lifecycle::DeactivateCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct DeactivateHandler;
 
 #[async_trait]
 impl CommandHandler for DeactivateHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = DeactivateCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: DeactivateCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: DeactivateCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

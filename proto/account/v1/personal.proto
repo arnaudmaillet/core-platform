@@ -11,9 +11,9 @@ service AccountPersonalService {
   rpc ChangeEmail(ChangeEmailRequest) returns (ChangeEmailResponse);
   rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (ChangePhoneNumberResponse);
   rpc ChangeBirthDate(ChangeBirthDateRequest) returns (ChangeBirthDateResponse);
-  
+
   // --- LOCALISATION ---
-  rpc ChangeRegion(ChangeRegionRequest) returns (ChangeRegionResponse);
+  // rpc ChangeRegion(ChangeRegionRequest) returns (ChangeRegionResponse);
   rpc UpdateLocale(UpdateLocaleRequest) returns (UpdateLocaleResponse);
 
   // --- CYCLE DE VIE UTILISATEUR ---
@@ -23,55 +23,61 @@ service AccountPersonalService {
 
 // --- MESSAGES (INFORMATIONS PERSONNELLES) ---
 
-message ChangeEmailRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string new_email = 3; 
+message ChangeEmailRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        new_email  = 3;
 }
-message ChangeEmailResponse {} 
 
-message ChangePhoneNumberRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string new_phone = 3; 
+message ChangeEmailResponse {}
+
+message ChangePhoneNumberRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        new_phone  = 3;
 }
+
 message ChangePhoneNumberResponse {}
 
-message ChangeBirthDateRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  google.protobuf.Timestamp new_birth_date = 3; 
+message ChangeBirthDateRequest {
+  string                    command_id     = 1;
+  AccountTarget             target         = 2;
+  google.protobuf.Timestamp new_birth_date = 3;
 }
+
 message ChangeBirthDateResponse {}
 
 // --- MESSAGES (LOCALISATION) ---
 
-message ChangeRegionRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string new_region = 3; 
-}
-message ChangeRegionResponse {}
+// message ChangeRegionRequest {
+//   string command_id = 1;
+//   AccountTarget target = 2;
+//   string new_region = 3;
+// }
+// message ChangeRegionResponse {}
 
-message UpdateLocaleRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string locale = 3; 
+message UpdateLocaleRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        locale     = 3;
 }
+
 message UpdateLocaleResponse {}
 
 // --- MESSAGES (CYCLE DE VIE UTILISATEUR) ---
 
-message ActivateRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  optional string reason = 3; 
+message ActivateRequest {
+  string          command_id = 1;
+  AccountTarget   target     = 2;
+  optional string reason     = 3;
 }
+
 message ActivateResponse {}
 
-message DeactivateRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  optional string reason = 3; 
+message DeactivateRequest {
+  string          command_id = 1;
+  AccountTarget   target     = 2;
+  optional string reason     = 3;
 }
+
 message DeactivateResponse {}

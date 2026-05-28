@@ -1,4 +1,4 @@
-// crates/account/src/domain/account/builders/account_builder.rs
+// crates/account/src/domain/account/builders/builder.rs
 
 use crate::domain::{
     entities::{Account, AccountGovernanceBuilder, AccountIdentityBuilder, AccountSettingsBuilder},

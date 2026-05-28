@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::lifecycle::ActivateCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -18,7 +18,7 @@ mod tests {
         let f = TestFixture::new();
 
         // 1. Arrange : On crée un compte désactivé
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
 
         account.deactivate(None)?;
         account.pull_events();
@@ -33,7 +33,7 @@ mod tests {
         };
 
         f.bus()
-            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ActivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -56,7 +56,7 @@ mod tests {
         // Arrange : On simule une commande déjà traitée
         f.idempotency_repo().seed(cmd_id);
 
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.deactivate(None)?;
 
         let version_snapshot = account.version();
@@ -70,7 +70,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ActivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -95,7 +95,7 @@ mod tests {
         let f = TestFixture::new();
 
         // Arrange : Compte déjà actif
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.activate()?;
 
         let version_snapshot = account.version();
@@ -108,7 +108,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ActivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -128,7 +128,7 @@ mod tests {
         let f = TestFixture::new();
 
         // Arrange
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.ban(AuditReason::try_new("Violation")?)?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -141,7 +141,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, ActivateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ActivateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert

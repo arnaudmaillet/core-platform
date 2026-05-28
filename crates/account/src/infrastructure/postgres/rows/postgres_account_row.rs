@@ -57,15 +57,6 @@ impl PostgresAccountRow {
     pub fn to_domain(self) -> Result<Account> {
         let account_id = AccountId::new(self.account_id);
 
-        if account_id.region().as_static_str() != self.region {
-            tracing::warn!(
-                account_id = %self.account_id,
-                db_region = %self.region,
-                smart_id_region = %account_id.region(),
-                "Data consistency warning: Smart ID region bits mismatch with table regional column"
-            );
-        }
-
         // 1. Reconstruction de Identity
         let identity = AccountIdentity::restore(
             account_id,
@@ -128,7 +119,11 @@ impl PostgresAccountRow {
             identity,
             governance,
             settings,
-            AggregateMetadata::restore(self.version as u64, self.aggregate_updated_at),
+            AggregateMetadata::restore(
+                self.version as u64,
+                self.created_at,
+                self.aggregate_updated_at,
+            ),
         ))
     }
 }
