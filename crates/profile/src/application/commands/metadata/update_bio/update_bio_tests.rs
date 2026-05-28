@@ -15,7 +15,7 @@ mod tests {
     async fn test_update_bio_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -53,7 +53,7 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let initial_version = profile.version();
         f.given_profile(profile).await;
 
@@ -94,7 +94,7 @@ mod tests {
         let bio_text = "Already my bio";
         let bio = Bio::try_new(bio_text)?;
 
-        let profile = f.builder("alice").with_bio(bio.clone()).build()?;
+        let profile = f.builder("alice")?.with_bio(bio.clone()).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -124,7 +124,7 @@ mod tests {
     async fn test_update_bio_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateBioCommand {

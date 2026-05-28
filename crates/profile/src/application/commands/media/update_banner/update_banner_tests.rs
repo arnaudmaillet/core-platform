@@ -15,7 +15,7 @@ mod tests {
     async fn test_update_banner_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?; // Pas de bannière au début
+        let profile = f.builder("alice")?.build()?; // Pas de bannière au début
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -52,7 +52,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateBannerCommand {
@@ -84,7 +84,7 @@ mod tests {
         let current_url = Url::try_new("https://cdn.test.com/banner.png")?;
 
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_banner(current_url.clone())
             .build()?;
         let version_snapshot = profile.version();
@@ -116,7 +116,7 @@ mod tests {
     async fn test_update_banner_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateBannerCommand {

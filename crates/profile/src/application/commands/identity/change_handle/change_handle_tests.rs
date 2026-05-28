@@ -15,7 +15,7 @@ mod tests {
     async fn test_change_handle_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("old.handle").build()?;
+        let profile = f.builder("old.handle")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -51,7 +51,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // 1. On crée le profil cible (celui qu'on veut modifier)
-        let profile = f.builder("my.handle").build()?;
+        let profile = f.builder("my.handle")?.build()?;
         f.given_profile(profile).await;
 
         // 2. On crée un AUTRE profil qui possède déjà le handle "taken.handle"
@@ -59,12 +59,8 @@ mod tests {
         let other_id = ProfileId::generate();
         let taken_handle = Handle::try_new("taken.handle")?;
 
-        let other_profile = Profile::builder(
-            AccountId::generate(),
-            other_id,
-            taken_handle.clone(),
-        )?
-        .build()?;
+        let other_profile =
+            Profile::builder(AccountId::generate(), other_id, taken_handle.clone())?.build()?;
 
         f.given_profile(other_profile).await;
 
@@ -102,7 +98,7 @@ mod tests {
         let f = ProfileTestFixture::new();
         let handle = Handle::try_new("alice.handle")?;
 
-        let profile = f.builder("alice.handle").build()?;
+        let profile = f.builder("alice.handle")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -133,7 +129,7 @@ mod tests {
     async fn test_change_handle_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = ChangeHandleCommand {

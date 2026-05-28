@@ -44,14 +44,15 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     let auth_ctx = KeycloakTestContext::restore("master").await;
     let auth_response = auth_ctx.get_admin_token().await?;
 
-    let region = Region::from_raw(RegionCode::EU);
-    let author_id = ProfileId::generate(region);
+    let region = Region::default();
+    let author_id = ProfileId::generate();
 
     // =========================================================================
     // 2. ACT : CRÉATION DU POST VIA GRPC
     // =========================================================================
     let create_req = CreatePostRequest {
         command_id: Uuid::now_v7().to_string(),
+        region: region.to_string(),
         author_id: author_id.to_string(),
         post_type: "text".to_string(),
         caption: Some(

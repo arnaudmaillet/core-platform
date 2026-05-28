@@ -44,14 +44,15 @@ service PostService {
 
 message CreatePostRequest {
   string                      command_id            = 1;
-  string                      author_id             = 2;
-  string                      post_type             = 3;
-  optional string             caption               = 4;
-  repeated MediaAsset         media_list            = 5;
-  bool                        allowed_comment_hands = 6;
-  string                      visibility_level      = 7;
-  optional string             music_id              = 8;
-  string                      dynamic_metadata      = 9;
+  string                      region                = 2;
+  string                      author_id             = 3;
+  string                      post_type             = 4;
+  optional string             caption               = 5;
+  repeated MediaAsset         media_list            = 6;
+  bool                        allowed_comment_hands = 7;
+  string                      visibility_level      = 8;
+  optional string             music_id              = 9;
+  string                      dynamic_metadata      = 10;
 }
 
 message UpdateCaptionRequest {

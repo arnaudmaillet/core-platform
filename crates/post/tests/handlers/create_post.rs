@@ -3,7 +3,7 @@ mod tests {
     use post::commands::CreatePostCommand;
     use post::context::PostCommandContext;
     use post::repositories::PostRepository;
-    use post::types::{Caption, PostType, VisibilityLevel};
+    use post::types::{Caption, PostType};
     use post_test_utils::PostTestFixture;
     use shared_kernel::core::Result;
     use shared_kernel::idempotency::IdempotencyRepository;
@@ -16,7 +16,7 @@ mod tests {
         // Arrange
         let f = PostTestFixture::new();
         let command_id = Uuid::now_v7();
-        let target_profile = ProfileId::generate(f.region());
+        let target_profile = ProfileId::generate();
         let slug = "arnaud".to_string();
 
         // Configurer le stub de résolution
@@ -28,6 +28,7 @@ mod tests {
 
         let cmd = CreatePostCommand {
             command_id,
+            region: f.region(),
             author_id: f.author_id(),
             post_type: PostType::Text,
             caption: Some(caption),
@@ -66,6 +67,7 @@ mod tests {
 
         let cmd = CreatePostCommand {
             command_id,
+            region: f.region(),
             author_id: f.author_id(),
             post_type: PostType::Text,
             caption: None,

@@ -24,7 +24,6 @@ pub enum ProfileEvent {
         occurred_at: DateTime<Utc>,
     },
 
-    /// Changement de pseudonyme (Action critique : nécessite redirection d'URL)
     HandleChanged {
         id: Uuid,
         profile_id: ProfileId,
@@ -43,7 +42,6 @@ pub enum ProfileEvent {
         occurred_at: DateTime<Utc>,
     },
 
-    /// Mise à jour des médias (Utile pour le nettoyage de l'ancien cache CDN)
     AvatarUpdated {
         id: Uuid,
         profile_id: ProfileId,
@@ -96,7 +94,6 @@ pub enum ProfileEvent {
         occurred_at: DateTime<Utc>,
     },
 
-    /// Mise à jour des réseaux sociaux
     SocialsUpdated {
         id: Uuid,
         profile_id: ProfileId,
@@ -106,7 +103,6 @@ pub enum ProfileEvent {
         occurred_at: DateTime<Utc>,
     },
 
-    /// Changement de confidentialité (Critique pour le moteur de recherche et le Feed)
     PrivacyChanged {
         id: Uuid,
         profile_id: ProfileId,
@@ -115,7 +111,6 @@ pub enum ProfileEvent {
         occurred_at: DateTime<Utc>,
     },
 
-    /// Suppression définitive
     ProfileDeleted {
         id: Uuid,
         profile_id: ProfileId,
@@ -172,24 +167,6 @@ impl Event for ProfileEvent {
             Self::ProfileDeleted { .. } => Self::PROFILE_DELETED,
         };
         Cow::Borrowed(s)
-    }
-
-    fn region(&self) -> &str {
-        let account_id = match self {
-            Self::ProfileCreated { account_id, .. }
-            | Self::HandleChanged { account_id, .. }
-            | Self::DisplayNameUpdated { account_id, .. }
-            | Self::AvatarUpdated { account_id, .. }
-            | Self::AvatarRemoved { account_id, .. }
-            | Self::BannerUpdated { account_id, .. }
-            | Self::BannerRemoved { account_id, .. }
-            | Self::BioUpdated { account_id, .. }
-            | Self::LocationUpdated { account_id, .. }
-            | Self::SocialsUpdated { account_id, .. }
-            | Self::PrivacyChanged { account_id, .. }
-            | Self::ProfileDeleted { account_id, .. } => account_id,
-        };
-        account_id.region().as_static_str()
     }
 
     fn aggregate_type(&self) -> Cow<'_, str> {

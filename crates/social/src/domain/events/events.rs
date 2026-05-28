@@ -43,14 +43,6 @@ impl Event for SocialEvent {
         Cow::Borrowed(s)
     }
 
-    fn region(&self) -> &str {
-        match self {
-            Self::ProfileFollowed { follower_id, .. } | Self::ProfileUnfollowed { follower_id, .. } => {
-                follower_id.region_str()
-            }
-        }
-    }
-
     fn aggregate_type(&self) -> Cow<'_, str> {
         Cow::Borrowed("social_relation")
     }

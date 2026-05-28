@@ -14,7 +14,7 @@ mod tests {
     async fn test_follow_handler_success_nominal_path() -> Result<()> {
         // Arrange
         let f = SocialTestFixture::new();
-        let follower_id = ProfileId::generate(f.region());
+        let follower_id = ProfileId::generate();
         let target_id = f.target_profile_id();
 
         let cmd = FollowCommand {
@@ -45,7 +45,7 @@ mod tests {
         // Arrange
         let f = SocialTestFixture::new();
         let command_id = Uuid::new_v4();
-        let follower_id = ProfileId::generate(f.region());
+        let follower_id = ProfileId::generate();
         let target_id = f.target_profile_id();
 
         // On simule une commande déjà enregistrée à chaud (Idempotence Redis SET NX)
@@ -99,7 +99,7 @@ mod tests {
         // Arrange
         let f = SocialTestFixture::new();
         let command_id = Uuid::new_v4();
-        let follower_id = ProfileId::generate(f.region());
+        let follower_id = ProfileId::generate();
         let target_id = f.target_profile_id();
 
         // Business Idempotency : La relation existe déjà dans la base

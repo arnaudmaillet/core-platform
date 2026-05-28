@@ -27,7 +27,6 @@ impl ProfileBuilder {
         handle: Handle,
     ) -> Result<Self> {
         let display_name = DisplayName::try_new(handle.as_str())?;
-        let region: Region = account_id.region();
 
         Ok(Self {
             profile_id,

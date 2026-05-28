@@ -94,7 +94,6 @@ impl SocialContext {
             .await
     }
 
-    /// Récupère la liste paginée des profils qui suivent un utilisateur
     pub async fn get_followers_list(
         &self,
         following_id: ProfileId,
@@ -107,7 +106,6 @@ impl SocialContext {
             .await
     }
 
-    // --- BARRIÈRE D'IDEMPOTENCE À CHAUD ---
     pub async fn ensure_executable(&self, command_id: Uuid, region: &Region) -> Result<bool> {
         if region != &self.region {
             return Err(Error::validation(
@@ -129,19 +127,14 @@ impl SocialContext {
     }
 
     pub async fn get_profile_counters(&self, profile_id: ProfileId) -> Result<ProfileCounters> {
-        // 1. Tentative de lecture sur le Hot Path Redis
         match self.app.cache_counter_repo().get_counters(profile_id).await {
-            Ok(counters) => Ok(counters), // Cache Hit !
+            Ok(counters) => Ok(counters),
 
             Err(Error {
                 code: ErrorCode::NotFound,
                 ..
             }) => {
-                // Cache Miss !
-                // 2. Fallback : On va chercher la source de vérité dans ScyllaDB
                 let db_counters = self.app.counter_repo().get_counters(profile_id).await?;
-
-                // 3. Cache Warming : On ré-alimente Redis
                 if let Err(e) = self.app.cache_counter_repo().save(&db_counters).await {
                     tracing::warn!(
                         "Failed to warm up Redis counter cache for {}: {:?}",
@@ -157,27 +150,13 @@ impl SocialContext {
         }
     }
 
-    // --- ENREGISTREMENT SANS TRANSACTION DISTRIBUÉE ---
     pub async fn save_relation(
         &self,
         relation: &mut FollowRelation,
         command_id: Uuid,
     ) -> Result<()> {
-        if self.region.as_static_str() != relation.follower_id().region_str() {
-            return Err(Error::validation(
-                "region",
-                "Actor region mismatch violation",
-            ));
-        }
-
-        // 1. Verrouillage / Sauvegarde de la commande dans Redis (SET NX)
-        // Si la commande existe déjà, la méthode `save` de Redis lèvera directement un Error::already_exists
         self.app.idempotency_repo().save(None, &command_id).await?;
-
-        // 2. L'écriture Graphe dans ScyllaDB (Synchrone & Immédiat)
         self.app.relation_repo().save(relation).await?;
-
-        // 3. Le Hot Path Redis (Incréments Compteurs + Marquage Dirty)
         self.app
             .cache_counter_repo()
             .increment_counters(*relation.follower_id(), *relation.following_id())
@@ -191,23 +170,11 @@ impl SocialContext {
         relation: &mut FollowRelation,
         command_id: Uuid,
     ) -> Result<()> {
-        if self.region.as_static_str() != relation.follower_id().region_str() {
-            return Err(Error::validation(
-                "region",
-                "Actor region mismatch violation",
-            ));
-        }
-
-        // 1. Verrouillage / Sauvegarde de la commande de suppression dans Redis
         self.app.idempotency_repo().save(None, &command_id).await?;
-
-        // 2. Suppression Graphe immédiate dans ScyllaDB
         self.app
             .relation_repo()
             .delete(*relation.follower_id(), *relation.following_id())
             .await?;
-
-        // 3. Décrémentation atomique Redis
         self.app
             .cache_counter_repo()
             .decrement_counters(*relation.follower_id(), *relation.following_id())

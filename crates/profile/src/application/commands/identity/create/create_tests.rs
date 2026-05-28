@@ -53,7 +53,9 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
         let existing_profile = f.builder("bob_dev")?.with_profile_id(profile_id).build()?;
-        f.profile_repo().save_direct(existing_profile).await;
+        f.profile_repo()
+            .save_direct(f.region(), existing_profile)
+            .await;
 
         let cmd = CreateProfileCommand {
             command_id: cmd_id,
@@ -93,7 +95,7 @@ mod tests {
         let profile_with_handle = f_other.builder(duplicated_handle)?.build()?;
         f_other
             .profile_repo()
-            .save_direct(profile_with_handle)
+            .save_direct(f.region(), profile_with_handle)
             .await;
 
         // 2. On tente de créer un NOUVEAU profil avec le même handle usurpé

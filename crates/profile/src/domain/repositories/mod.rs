@@ -1,7 +1,7 @@
-mod profile_repository;
-pub use profile_repository::ProfileRepository;
+mod repository;
+pub use repository::ProfileRepository;
 
 #[cfg(test)]
-mod profile_repository_stub;
+mod stub;
 #[cfg(test)]
-pub use profile_repository_stub::ProfileRepositoryStub;
+pub use stub::ProfileRepositoryStub;

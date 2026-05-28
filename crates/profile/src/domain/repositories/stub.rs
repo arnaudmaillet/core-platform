@@ -43,11 +43,11 @@ impl ProfileRepositoryStub {
     // --- Helpers de Configuration (Arrange) ---
 
     /// Insère un profil directement sans vérifier l'OCC ou les erreurs forcées
-    pub async fn save_direct(&self, profile: Profile) {
+    pub async fn save_direct(&self, region: Region, profile: Profile) {
         let mut store = self.profiles.lock().unwrap();
         let key = ProfileKey {
             id: profile.profile_id(),
-            region: profile.account_id().region(),
+            region,
         };
         store.insert(key, profile);
     }
@@ -89,8 +89,12 @@ impl ProfileRepositoryStub {
 
 #[async_trait]
 impl ProfileRepository for ProfileRepositoryStub {
-    async fn save(&self, profile: &mut Profile, _tx: Option<&mut dyn Transaction>) -> Result<()> {
-        // 1. Simulation d'erreur forcée
+    async fn save(
+        &self,
+        region: Region,
+        profile: &mut Profile,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<()> {
         if let Some(err) = self.error_to_return.lock().unwrap().clone() {
             return Err(err);
         }
@@ -98,7 +102,7 @@ impl ProfileRepository for ProfileRepositoryStub {
         let mut store = self.profiles.lock().unwrap();
         let key = ProfileKey {
             id: profile.profile_id(),
-            region: profile.account_id().region(),
+            region,
         };
 
         let next_version = profile.version();
@@ -151,27 +155,33 @@ impl ProfileRepository for ProfileRepositoryStub {
         region: Region,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Profile>> {
+        if let Some(err) = self.error_to_return.lock().unwrap().clone() {
+            return Err(err);
+        }
+
         let store = self.profiles.lock().unwrap();
-        // Simulation d'un scan de table avec respect de la région
+
         let profile = store
-            .values()
-            .find(|p| p.handle() == handle && p.account_id().region() == region)
-            .cloned();
+            .iter()
+            .find(|(key, p)| p.handle() == handle && key.region == region)
+            .map(|(_, p)| p.clone());
+
         Ok(profile)
     }
 
     async fn find_all_by_account_id(
         &self,
         account_id: AccountId,
+        region: Region,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Vec<Profile>> {
         let store = self.profiles.lock().unwrap();
-        // Un compte peut avoir plusieurs profils, on filtre par AccountId
         let profiles: Vec<Profile> = store
-            .values()
-            .filter(|p| p.account_id() == account_id)
-            .cloned()
+            .iter()
+            .filter(|(key, p)| p.account_id() == account_id && key.region == region)
+            .map(|(_, p)| p.clone())
             .collect();
+
         Ok(profiles)
     }
 
@@ -204,10 +214,9 @@ impl ProfileRepository for ProfileRepositoryStub {
         }
 
         let store = self.profiles.lock().unwrap();
-
         let exists = store
-            .values()
-            .any(|p| p.handle() == handle && p.account_id().region() == region);
+            .iter()
+            .any(|(key, p)| p.handle() == handle && key.region == region);
 
         Ok(exists)
     }

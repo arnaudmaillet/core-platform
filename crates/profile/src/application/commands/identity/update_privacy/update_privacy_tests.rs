@@ -16,7 +16,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // On part d'un profil public (is_private: false par défaut dans le builder)
-        let profile = f.builder("alice").with_privacy(false).build()?;
+        let profile = f.builder("alice")?.with_privacy(false).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -53,7 +53,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Le profil est déjà en privé
-        let profile = f.builder("alice").with_privacy(true).build()?;
+        let profile = f.builder("alice")?.with_privacy(true).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -87,7 +87,7 @@ mod tests {
     async fn test_update_privacy_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdatePrivacyCommand {

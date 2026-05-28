@@ -15,7 +15,7 @@ mod tests {
     async fn test_update_location_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -55,7 +55,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateLocationCommand {
@@ -89,7 +89,7 @@ mod tests {
         let f = ProfileTestFixture::new();
         let location = Location::try_new("Montreal, Canada")?;
 
-        let profile = f.builder("alice").with_location(location.clone()).build()?;
+        let profile = f.builder("alice")?.with_location(location.clone()).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -122,7 +122,7 @@ mod tests {
     async fn test_update_location_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateLocationCommand {

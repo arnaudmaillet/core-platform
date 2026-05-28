@@ -12,7 +12,6 @@ use infra_test::PostgresTestContext;
 use shared_kernel::core::{Error, ErrorCode, Identifier, Result, Versioned};
 use shared_kernel::types::{AccountId, ProfileId, Region};
 
-/// Helper pour instancier le repo et les infrastructures de test
 async fn get_test_context() -> (PostgresProfileRepository, PostgresTestContext) {
     let pg_ctx = PostgresTestContext::builder()
         .with_migrations(&["./migrations/postgres"])
@@ -30,7 +29,7 @@ async fn test_profile_full_lifecycle_and_atomicity() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate();
     let profile_id = ProfileId::generate();
-    let region =  Region::default();
+    let region = Region::default();
     let handle = Handle::try_new("alice_rocks")?;
     let mut profile = Profile::builder(account_id, profile_id, handle)?.build()?;
 
@@ -100,11 +99,11 @@ async fn test_profile_concurrency_protection_occ() -> Result<()> {
 
     // Charger deux instances (v0)
     let mut client_a = repo
-        .find_by_id(profile.profile_id(), account_id.region(), None)
+        .find_by_id(profile.profile_id(), region, None)
         .await?
         .unwrap();
     let mut client_b = repo
-        .find_by_id(profile.profile_id(), account_id.region(), None)
+        .find_by_id(profile.profile_id(), region, None)
         .await?
         .unwrap();
 
@@ -145,9 +144,7 @@ async fn test_profile_rollback_works_properly() -> Result<()> {
         .await
         .map_err(|e| Error::internal(e.to_string()))?;
 
-    let found = repo
-        .find_by_id(profile.profile_id(), account_id.region(), None)
-        .await?;
+    let found = repo.find_by_id(profile.profile_id(), region, None).await?;
     assert!(found.is_none(), "Profile should not exist after rollback");
 
     Ok(())
@@ -170,7 +167,9 @@ async fn test_find_all_by_account_id() -> Result<()> {
     repo.save(region, &mut p1, None).await?;
     repo.save(region, &mut p2, None).await?;
 
-    let profiles = repo.find_all_by_account_id(account_id, None).await?;
+    let profiles = repo
+        .find_all_by_account_id(account_id, region, None)
+        .await?;
 
     assert_eq!(profiles.len(), 2);
     // On compare avec "profile_2" (en minuscules)
@@ -205,9 +204,7 @@ async fn test_profile_rollback_integrity() -> Result<()> {
         .map_err(|e| Error::internal(e.to_string()))?;
 
     // 3. Le profil ne doit pas exister
-    let found = repo
-        .find_by_id(profile_id, account_id.region(), None)
-        .await?;
+    let found = repo.find_by_id(profile_id, region, None).await?;
     assert!(found.is_none(), "Profile should not exist after rollback");
 
     Ok(())

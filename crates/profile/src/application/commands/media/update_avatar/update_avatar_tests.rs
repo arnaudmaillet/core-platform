@@ -17,7 +17,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Profil sans avatar au départ
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -56,7 +56,7 @@ mod tests {
         // 1. On "seed" le repo d'idempotence pour simuler que cette commande a déjà été traitée
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateAvatarCommand {
@@ -91,7 +91,7 @@ mod tests {
 
         // Le profil a déjà cet avatar
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_avatar(current_url.clone())
             .build()?;
 
@@ -125,7 +125,7 @@ mod tests {
     async fn test_update_avatar_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateAvatarCommand {

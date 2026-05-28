@@ -1,3 +1,3 @@
-mod postgres_account_repository;
+mod repository;
 
-pub use postgres_account_repository::PostgresAccountRepository;
+pub use repository::PostgresAccountRepository;

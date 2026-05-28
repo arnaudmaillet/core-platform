@@ -14,7 +14,7 @@ mod tests {
     async fn test_unfollow_handler_success_nominal_path() -> Result<()> {
         // Arrange
         let f = SocialTestFixture::new();
-        let follower_id = ProfileId::generate(f.region());
+        let follower_id = ProfileId::generate();
         let target_id = f.target_profile_id();
 
         // ÉTAT INITIAL : La relation existe et les compteurs ont déjà été incrémentés
@@ -51,7 +51,7 @@ mod tests {
         // Arrange
         let f = SocialTestFixture::new();
         let command_id = Uuid::new_v4();
-        let follower_id = ProfileId::generate(f.region());
+        let follower_id = ProfileId::generate();
         let target_id = f.target_profile_id();
 
         // On injecte la relation initiale
@@ -108,7 +108,7 @@ mod tests {
         // Arrange
         let f = SocialTestFixture::new();
         let command_id = Uuid::new_v4();
-        let follower_id = ProfileId::generate(f.region());
+        let follower_id = ProfileId::generate();
         let target_id = f.target_profile_id();
 
         // ÉTAT INITIAL : Pas de relation en base, compteurs vierges à 0

@@ -4,7 +4,7 @@ use auth_test_utils::KeycloakTestContext;
 use infra_fred::fred::interfaces::HashesInterface;
 use shared_kernel::{
     core::{Identifier, Result},
-    types::{ProfileId, Region, RegionCode},
+    types::ProfileId,
 };
 use shared_proto::social::v1::social_service_client::SocialServiceClient;
 use shared_proto::social::v1::{CommandTarget, FollowProfileRequest, UnfollowProfileRequest};
@@ -39,9 +39,8 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
     let auth_ctx = KeycloakTestContext::restore("master").await;
     let auth_response = auth_ctx.get_admin_token().await?;
 
-    let region = Region::from_raw(RegionCode::EU);
-    let follower_id = ProfileId::generate(region);
-    let following_id = ProfileId::generate(region);
+    let follower_id = ProfileId::generate();
+    let following_id = ProfileId::generate();
 
     // 2. ACT : FOLLOW
     let follow_req = FollowProfileRequest {

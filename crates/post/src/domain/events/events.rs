@@ -13,13 +13,12 @@ use crate::domain::types::{PostType, VisibilityLevel};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum PostEvent {
-    // --- LIFECYCLE EVENTS ---
     PostCreated {
         post_id: PostId,
         author_id: ProfileId,
         post_type: PostType,
-        region: Region,             // Extrait via Smart UUID à la création
-        occurred_at: DateTime<Utc>, // Extrait depuis l'UUIDv7 du post_id
+        region: Region,
+        occurred_at: DateTime<Utc>,
     },
     PostDeleted {
         post_id: PostId,
@@ -28,7 +27,6 @@ pub enum PostEvent {
         occurred_at: DateTime<Utc>,
     },
 
-    // --- MUTATION EVENTS ---
     PostCaptionUpdated {
         post_id: PostId,
         author_id: ProfileId,
@@ -49,7 +47,6 @@ pub enum PostEvent {
 }
 
 impl PostEvent {
-    // Constantes de routage pour le broker (Kebab-case sémantique)
     pub const CREATED: &'static str = "post.lifecycle.created";
     pub const DELETED: &'static str = "post.lifecycle.deleted";
     pub const CAPTION_EDITED: &'static str = "post.mutation.caption_edited";
@@ -59,7 +56,6 @@ impl PostEvent {
 
 impl Event for PostEvent {
     fn event_id(&self) -> Uuid {
-        // Pour les posts, chaque événement génère son propre identifiant de message (UUIDv7)
         Uuid::now_v7()
     }
 
@@ -72,19 +68,6 @@ impl Event for PostEvent {
             Self::PostVisibilityChanged { .. } => Self::VISIBILITY_CHANGED,
         };
         Cow::Borrowed(s)
-    }
-
-    fn region(&self) -> &str {
-        let author_id = match self {
-            Self::PostCreated { author_id, .. }
-            | Self::PostDeleted { author_id, .. }
-            | Self::PostCaptionUpdated { author_id, .. }
-            | Self::PostCommentsToggled { author_id, .. }
-            | Self::PostVisibilityChanged { author_id, .. } => author_id,
-        };
-
-        // Extraction magique et ultra-rapide de la région via le Smart UUID de l'auteur
-        author_id.region().as_static_str()
     }
 
     fn aggregate_type(&self) -> Cow<'_, str> {

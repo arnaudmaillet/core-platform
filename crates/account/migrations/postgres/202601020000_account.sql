@@ -1,6 +1,3 @@
-
-
--- 1. FONCTION DE TRIGGER (Crucial : à définir AVANT les tables)
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN

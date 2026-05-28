@@ -4,7 +4,7 @@ use auth_test_utils::KeycloakTestContext;
 use infra_sqlx::sqlx;
 use profile_test_utils::ProfileTestContextBuilder;
 use shared_kernel::core::{Identifier, Result};
-use shared_kernel::types::{AccountId, ProfileId};
+use shared_kernel::types::{AccountId, ProfileId, Region};
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::{ChangeHandleRequest, ProfileTarget};
 use tonic::Request;
@@ -44,10 +44,10 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let auth_ctx = KeycloakTestContext::restore("master").await;
     let auth_response = auth_ctx.get_admin_token().await?;
 
-    let region_str = "EU";
-    let region = shared_kernel::types::Region::try_new(region_str)?;
+    let region = Region::default();
+    let region_str = region.as_str();
     let real_profile_id = ProfileId::generate();
-    let real_account_id = AccountId::generate(region);
+    let real_account_id = AccountId::generate();
 
     // 4. PRÉPARATION DB
     sqlx::query(

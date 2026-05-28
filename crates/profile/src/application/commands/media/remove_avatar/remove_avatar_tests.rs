@@ -18,7 +18,7 @@ mod tests {
 
         // On crée un profil qui POSSÈDE un avatar
         let avatar_url = Url::try_new("https://cdn.test.com/avatar.png")?;
-        let profile = f.builder("alice").with_avatar(avatar_url).build()?;
+        let profile = f.builder("alice")?.with_avatar(avatar_url).build()?;
 
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -53,7 +53,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Le profil n'a DÉJÀ PAS d'avatar
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
 
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -91,7 +91,7 @@ mod tests {
 
         // 2. On crée un profil avec un avatar
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_avatar(Url::try_new("https://cdn.com/avatar.png")?)
             .build()?;
         f.given_profile(profile).await;
@@ -131,7 +131,7 @@ mod tests {
     async fn test_remove_avatar_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = RemoveAvatarCommand {

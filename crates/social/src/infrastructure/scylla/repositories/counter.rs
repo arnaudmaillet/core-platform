@@ -134,6 +134,7 @@ impl CounterRepository for ScyllaCounterRepository {
                 following_count,
                 1,
                 Utc::now(),
+                Utc::now(),
             ));
         }
 
@@ -142,6 +143,7 @@ impl CounterRepository for ScyllaCounterRepository {
             DomainCounter::default(),
             DomainCounter::default(),
             1,
+            Utc::now(),
             Utc::now(),
         ))
     }

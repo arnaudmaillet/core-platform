@@ -84,13 +84,14 @@ impl ProfileCounters {
         followers_count: Counter,
         following_count: Counter,
         version: u64,
+        created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
         ProfileCounters {
             profile_id,
             followers_count,
             following_count,
-            metadata: AggregateMetadata::restore(version, updated_at),
+            metadata: AggregateMetadata::restore(version, created_at, updated_at),
         }
     }
 

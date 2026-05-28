@@ -16,7 +16,7 @@ mod tests {
         // Arrange
         let f = ProfileTestFixture::new();
         // On crée un profil existant
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let new_name = DisplayName::try_new("new_name")?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -58,8 +58,8 @@ mod tests {
         // On simule que la commande a déjà été traitée (Idempotency Repo)
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("Original").build()?;
-        f.profile_repo().save_direct(profile).await;
+        let profile = f.builder("Original")?.build()?;
+        f.profile_repo().save_direct(f.region(), profile).await;
 
         let cmd = UpdateDisplayNameCommand {
             command_id: cmd_id, // Même ID que seedé
@@ -81,7 +81,7 @@ mod tests {
             result.is_ok(),
             "L'idempotence technique doit être transparente (Ok)"
         );
-        f.assert_outbox(0, None); // Rien ne doit sortir
+        f.assert_outbox(0, None);
 
         Ok(())
     }
@@ -93,9 +93,9 @@ mod tests {
         let name = DisplayName::try_new("Consistent Name")?;
 
         // Le profil a déjà le nom qu'on essaie de lui donner
-        let profile = f.builder("alice").with_display_name(name.clone()).build()?;
+        let profile = f.builder("alice")?.with_display_name(name.clone()).build()?;
         let version_snapshot = profile.version();
-        f.profile_repo().save_direct(profile).await;
+        f.profile_repo().save_direct(f.region(), profile).await;
 
         let cmd = UpdateDisplayNameCommand {
             command_id: Uuid::new_v4(),
@@ -114,7 +114,7 @@ mod tests {
         // Assert
         let _ = f
             .assert_profile(|p| {
-                assert_eq!(p.version(), version_snapshot); // La version ne doit PAS bouger
+                assert_eq!(p.version(), version_snapshot);
             })
             .await;
 
@@ -127,7 +127,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_display_name_conflict() -> Result<()> {
         let f: ProfileTestFixture = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateDisplayNameCommand {

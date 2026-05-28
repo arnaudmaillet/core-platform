@@ -16,7 +16,7 @@ mod tests {
     async fn test_update_socials_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -60,7 +60,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
         f.idempotency_repo().seed(cmd_id); // Simule que la commande a déjà été traitée
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         // On crée un changement REEL pour forcer le handler à aller jusqu'au ctx.save()
@@ -103,7 +103,7 @@ mod tests {
             .with_github(Url::try_new("https://github.com/alice")?)
             .build();
 
-        let profile = f.builder("alice").with_socials(socials.clone()).build()?;
+        let profile = f.builder("alice")?.with_socials(socials.clone()).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -136,7 +136,7 @@ mod tests {
     async fn test_update_socials_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateSocialsCommand {

@@ -18,7 +18,7 @@ mod tests {
 
         // On crée un profil avec une bannière
         let banner_url = Url::try_new("https://cdn.test.com/banner.png")?;
-        let profile = f.builder("alice").with_banner(banner_url).build()?;
+        let profile = f.builder("alice")?.with_banner(banner_url).build()?;
 
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -58,7 +58,7 @@ mod tests {
 
         // 2. On crée un profil avec une bannière
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_banner(Url::try_new("https://cdn.com/banner.png")?)
             .build()?;
         f.given_profile(profile).await;
@@ -100,7 +100,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Le profil n'a déjà pas de bannière
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
 
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -131,7 +131,7 @@ mod tests {
     async fn test_remove_banner_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = RemoveBannerCommand {

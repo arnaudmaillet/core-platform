@@ -5,7 +5,7 @@ use std::str::FromStr;
 use serde::Deserialize;
 use shared_kernel::command::IdentifiableCommand;
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{MusicId, ProfileId, Url};
+use shared_kernel::types::{MusicId, ProfileId, Region, Url};
 use shared_proto::post::v1::CreatePostRequest;
 use shared_proto::post::v1::MediaAsset as ProtoMediaAsset;
 use uuid::Uuid;
@@ -20,6 +20,7 @@ use crate::types::{
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreatePostCommand {
     pub command_id: Uuid,
+    pub region: Region,
     pub author_id: ProfileId,
     pub post_type: PostType,
     pub caption: Option<Caption>,
@@ -38,7 +39,7 @@ impl IdentifiableCommand for CreatePostCommand {
         self.author_id.to_string()
     }
     fn region(&self) -> String {
-        self.author_id.region().to_string()
+        self.region.to_string()
     }
     fn cache_key(&self) -> Option<String> {
         None
@@ -49,6 +50,8 @@ impl CreatePostCommand {
     pub fn try_from_proto(req: CreatePostRequest) -> Result<Self> {
         let command_id = Uuid::parse_str(&req.command_id)
             .map_err(|_| Error::validation("command_id", "Invalid UUID"))?;
+        let region = Region::try_new(req.region)
+            .map_err(|e| Error::validation("region", "Invalid region"))?;
 
         let author_id = ProfileId::try_new(req.author_id)?;
         let post_type = PostType::try_from(req.post_type)?;
@@ -73,6 +76,7 @@ impl CreatePostCommand {
 
         Ok(Self {
             command_id,
+            region,
             author_id,
             post_type,
             caption,

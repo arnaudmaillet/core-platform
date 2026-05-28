@@ -15,7 +15,6 @@ use uuid::Uuid;
 pub struct PostgresProfileRow {
     pub profile_id: Uuid,
     pub account_id: Uuid,
-    pub region: String,
     pub display_name: String,
     pub handle: String,
     pub bio: Option<String>,
@@ -34,7 +33,6 @@ impl PostgresProfileRow {
         Self {
             profile_id: p.profile_id().as_uuid(),
             account_id: p.account_id().uuid().clone(),
-            region: p.account_id().region().as_str().to_string(),
             display_name: p.display_name().to_string(),
             handle: p.handle().as_str().to_string(),
             bio: p.bio().as_ref().map(|b| b.to_string()),

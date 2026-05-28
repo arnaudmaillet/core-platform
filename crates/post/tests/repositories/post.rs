@@ -43,7 +43,7 @@ mod scylla_integration_tests {
         let (repo, _scylla_ctx) = get_test_context().await;
 
         let region = Region::default();
-        let author_id = ProfileId::generate(region);
+        let author_id = ProfileId::generate();
         let post_id = PostId::generate();
 
         tracing::info!(%post_id, %author_id, "--- ARRANGING FIXTURE POST ---");
@@ -81,7 +81,7 @@ mod scylla_integration_tests {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
         let region = Region::default();
-        let author_id = ProfileId::generate(region);
+        let author_id = ProfileId::generate();
 
         // On insère 3 publications consécutives pour le même auteur
         for i in 1..=3 {

@@ -44,10 +44,9 @@ mod tests {
 
     #[test]
     fn test_post_creation_invariants_text_no_media() {
-        let region = Region::try_new("US").unwrap();
         let post = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Text,
             VisibilityLevel::Public,
         )
@@ -59,13 +58,12 @@ mod tests {
 
     #[test]
     fn test_post_creation_image_without_caption_is_valid() {
-        let region = Region::try_new("US").unwrap();
         let asset = create_image_asset(MediaId::generate());
 
         // Test : Un post Image peut avoir une légende vide (None)
         let post = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Image,
             VisibilityLevel::Public,
         )
@@ -78,12 +76,11 @@ mod tests {
 
     #[test]
     fn test_post_creation_invariants_text_with_media_fails() {
-        let region = Region::try_new("US").unwrap();
         let asset = create_video_asset(MediaId::generate());
 
         let result = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Text,
             VisibilityLevel::Public,
         )
@@ -98,10 +95,9 @@ mod tests {
     fn test_post_duration_calculation() {
         let asset1 = create_video_asset(MediaId::generate()); // 60s
         let asset2 = create_video_asset(MediaId::generate()); // 60s
-        let region = Region::try_new("US").unwrap();
         let post = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Carousel,
             VisibilityLevel::Public,
         )
@@ -115,10 +111,9 @@ mod tests {
 
     #[test]
     fn test_update_caption_extracts_hashtags() {
-        let region = Region::try_new("US").unwrap();
         let mut post = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Text,
             VisibilityLevel::Public,
         )
@@ -137,10 +132,9 @@ mod tests {
 
     #[test]
     fn test_update_caption_extracts_mentions() {
-        let region = Region::try_new("US").unwrap();
-        let author_id = ProfileId::generate(region);
-        let target_profile_1 = ProfileId::generate(region);
-        let target_profile_2 = ProfileId::generate(region);
+        let author_id = ProfileId::generate();
+        let target_profile_1 = ProfileId::generate();
+        let target_profile_2 = ProfileId::generate();
 
         let mut post = Post::builder(
             PostId::generate(),
@@ -175,10 +169,9 @@ mod tests {
 
     #[test]
     fn test_visibility_and_comments_toggles() {
-        let region = Region::try_new("US").unwrap();
         let mut post = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Text,
             VisibilityLevel::Public,
         )
@@ -195,10 +188,9 @@ mod tests {
 
     #[test]
     fn test_events_emitted_on_mutation() {
-        let region = Region::try_new("US").unwrap();
         let mut post = Post::builder(
             PostId::generate(),
-            ProfileId::generate(region),
+            ProfileId::generate(),
             PostType::Text,
             VisibilityLevel::Public,
         )

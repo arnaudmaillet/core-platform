@@ -13,7 +13,6 @@ impl CommandHandler for UnfollowHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &SocialContext, cmd: UnfollowCommand) -> Result<Self::Output> {
-        // 1. Contrôle de l'idempotence et du partitionnement régional
         if !ctx
             .ensure_executable(cmd.command_id, &cmd.target.region)
             .await?
@@ -21,12 +20,10 @@ impl CommandHandler for UnfollowHandler {
             return Ok(());
         }
 
-        // 2. Invariant métier de base : impossible de s'unfollow soi-même
         if cmd.follower_id == cmd.target.id {
             return Ok(());
         }
 
-        // 3. Vérification de l'existence de la relation
         let is_following = ctx
             .is_already_following(cmd.follower_id, cmd.target.id)
             .await?;
@@ -39,7 +36,6 @@ impl CommandHandler for UnfollowHandler {
             return Ok(());
         }
 
-        // 4. Reconstitution de l'agrégat via son Builder à sa version par défaut
         let mut relation = FollowRelation::builder(cmd.follower_id, cmd.target.id).build()?;
 
         if relation.execute_unfollow()? {

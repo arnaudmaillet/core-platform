@@ -1,11 +1,10 @@
-use std::sync::Arc;
-// Shared Kernel
 use shared_kernel::cache::CacheRepositoryStub;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::messaging::OutboxRepositoryStub;
 use shared_kernel::types::{AccountId, ProfileId, Region};
+use std::sync::Arc;
 
 use crate::application::context::{ProfileAppContext, ProfileCommandContext, ProfileQueryContext};
 use crate::commands::*;
@@ -39,18 +38,15 @@ impl ProfileTestFixture {
             idempotency_repo.clone(),
         );
 
-        // Configuration par défaut pour les tests
         let region = Region::default();
         let account_id = AccountId::generate();
         let profile_id = ProfileId::generate();
 
-        // Génération des deux nouveaux contextes typés CQRS
         let command_ctx = app_ctx.command(profile_id, region);
         let query_ctx = app_ctx.query(region);
 
         let mut bus = CommandBus::new(cache);
 
-        // --- Enregistrement des Handlers sur le ProfileCommandContext ---
         bus.register::<ProfileCommandContext, CreateProfileCommand, CreateProfileHandler>(
             CreateProfileHandler,
         );
@@ -136,7 +132,7 @@ impl ProfileTestFixture {
     }
 
     pub async fn given_profile(&self, profile: Profile) {
-        self.profile_repo.save_direct(profile).await;
+        self.profile_repo.save_direct(self.region, profile).await;
     }
 
     pub fn builder(&self, handle: &str) -> Result<ProfileBuilder> {
