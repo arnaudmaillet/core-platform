@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::lifecycle::UnsuspendCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -15,7 +15,7 @@ mod tests {
         let f = TestFixture::new();
 
         // 1. Arrange : On crée un compte et on le suspend
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.suspend(AuditReason::try_new("Suspicious activity")?)?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -28,7 +28,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UnsuspendCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -51,7 +51,7 @@ mod tests {
         // Arrange : Commande déjà connue de l'infrastructure
         f.idempotency_repo().seed(cmd_id);
 
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
 
         account.suspend(AuditReason::try_new("Suspicious activity")?)?;
         let version_snapshot = account.version();
@@ -66,7 +66,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UnsuspendCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -91,7 +91,7 @@ mod tests {
         let f = TestFixture::new();
 
         // Arrange : Le compte est déjà Actif
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -103,7 +103,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, UnsuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, UnsuspendCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

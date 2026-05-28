@@ -22,7 +22,6 @@ pub enum AccountEvent {
     // --- IDENTITY & SECURITY EVENTS ---
     AccountRegistered {
         account_id: AccountId,
-        region: Region,
         email: Option<Email>,
         phone: Option<PhoneNumber>,
         sub_id: Option<SubId>,
@@ -32,35 +31,30 @@ pub enum AccountEvent {
     },
     SubIdentityLinked {
         account_id: AccountId,
-        region: Region,
         old_sub_id: Option<SubId>,
         new_sub_id: SubId,
         occurred_at: DateTime<Utc>,
     },
     EmailChanged {
         account_id: AccountId,
-        region: Region,
         old_email: Option<Email>,
         new_email: Email,
         occurred_at: DateTime<Utc>,
     },
     PhoneNumberChanged {
         account_id: AccountId,
-        region: Region,
         old_phone_number: Option<PhoneNumber>,
         new_phone_number: PhoneNumber,
         occurred_at: DateTime<Utc>,
     },
     BirthDateChanged {
         account_id: AccountId,
-        region: Region,
         old_birth_date: Option<BirthDate>,
         new_birth_date: BirthDate,
         occurred_at: DateTime<Utc>,
     },
     LocaleUpdated {
         account_id: AccountId,
-        region: Region,
         new_locale: Locale,
         occurred_at: DateTime<Utc>,
     },
@@ -68,7 +62,6 @@ pub enum AccountEvent {
     // --- SYSTEM & MODERATION EVENTS ---
     BetaTierChanged {
         account_id: AccountId,
-        region: Region,
         old_tier: BetaTier,
         new_tier: BetaTier,
         occurred_at: DateTime<Utc>,
@@ -76,7 +69,6 @@ pub enum AccountEvent {
     TrustScoreRewarded {
         id: Uuid,
         account_id: AccountId,
-        region: Region,
         amount: TrustAmount,
         new_score: TrustScore,
         reason: String,
@@ -85,7 +77,6 @@ pub enum AccountEvent {
     TrustScorePenalized {
         id: Uuid,
         account_id: AccountId,
-        region: Region,
         amount: TrustAmount,
         new_score: TrustScore,
         reason: String,
@@ -93,14 +84,12 @@ pub enum AccountEvent {
     },
     ShadowbanUpdated {
         account_id: AccountId,
-        region: Region,
         is_shadowbanned: bool,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountRoleChanged {
         account_id: AccountId,
-        region: Region,
         old_role: AccountRole,
         new_role: AccountRole,
         reason: String,
@@ -117,37 +106,31 @@ pub enum AccountEvent {
     // --- STATE & MODERATION ---
     AccountDeactivated {
         account_id: AccountId,
-        region: Region,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountActivated {
         account_id: AccountId,
-        region: Region,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountBanned {
         account_id: AccountId,
-        region: Region,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountUnbanned {
         account_id: AccountId,
-        region: Region,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountSuspended {
         account_id: AccountId,
-        region: Region,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
     AccountUnsuspended {
         account_id: AccountId,
-        region: Region,
         reason: String,
         occurred_at: DateTime<Utc>,
     },
@@ -155,19 +138,16 @@ pub enum AccountEvent {
     // --- SETTINGS EVENTS ---
     NotificationsPreferencesUpdated {
         account_id: AccountId,
-        region: Region,
         new_preferences: NotificationPreferences,
         occurred_at: DateTime<Utc>,
     },
     AppearancePreferencesUpdated {
         account_id: AccountId,
-        region: Region,
         new_preferences: AppearancePreferences,
         occurred_at: DateTime<Utc>,
     },
     PrivacyPreferencesUpdated {
         account_id: AccountId,
-        region: Region,
         new_preferences: PrivacyPreferences,
         occurred_at: DateTime<Utc>,
     },
@@ -175,19 +155,16 @@ pub enum AccountEvent {
     /// Spécifique pour le routage des notifications
     PushTokenAdded {
         account_id: AccountId,
-        region: Region,
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
     PushTokenRemoved {
         account_id: AccountId,
-        region: Region,
         token: PushToken,
         occurred_at: DateTime<Utc>,
     },
     TimezoneUpdated {
         account_id: AccountId,
-        region: Region,
         new_timezone: Timezone,
         occurred_at: DateTime<Utc>,
     },
@@ -265,37 +242,6 @@ impl Event for AccountEvent {
             Self::TimezoneUpdated { .. } => Self::TIMEZONE_UPDATED,
         };
         Cow::Borrowed(s)
-    }
-
-    fn region(&self) -> &str {
-        let account_id = match self {
-            Self::AccountRegistered { account_id, .. }
-            | Self::SubIdentityLinked { account_id, .. }
-            | Self::EmailChanged { account_id, .. }
-            | Self::PhoneNumberChanged { account_id, .. }
-            | Self::BirthDateChanged { account_id, .. }
-            | Self::LocaleUpdated { account_id, .. }
-            | Self::BetaTierChanged { account_id, .. }
-            | Self::TrustScoreRewarded { account_id, .. }
-            | Self::TrustScorePenalized { account_id, .. }
-            | Self::ShadowbanUpdated { account_id, .. }
-            | Self::AccountRoleChanged { account_id, .. }
-            | Self::AccountRegionChanged { account_id, .. }
-            | Self::AccountDeactivated { account_id, .. }
-            | Self::AccountActivated { account_id, .. }
-            | Self::AccountBanned { account_id, .. }
-            | Self::AccountUnbanned { account_id, .. }
-            | Self::AccountSuspended { account_id, .. }
-            | Self::AccountUnsuspended { account_id, .. }
-            | Self::NotificationsPreferencesUpdated { account_id, .. }
-            | Self::AppearancePreferencesUpdated { account_id, .. }
-            | Self::PrivacyPreferencesUpdated { account_id, .. }
-            | Self::PushTokenAdded { account_id, .. }
-            | Self::PushTokenRemoved { account_id, .. }
-            | Self::TimezoneUpdated { account_id, .. } => account_id,
-        };
-
-        account_id.region().as_static_str()
     }
 
     fn aggregate_type(&self) -> Cow<'_, str> {

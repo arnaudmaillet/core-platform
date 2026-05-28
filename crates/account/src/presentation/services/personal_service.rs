@@ -1,5 +1,3 @@
-// crates/account/src/infrastructure/api/grpc/personal_service.rs
-
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -7,17 +5,17 @@ use shared_proto::account::v1::account_personal_service_server::AccountPersonalS
 use shared_proto::account::v1::{
     ActivateRequest, ActivateResponse, ChangeBirthDateRequest, ChangeBirthDateResponse,
     ChangeEmailRequest, ChangeEmailResponse, ChangePhoneNumberRequest, ChangePhoneNumberResponse,
-    ChangeRegionRequest, ChangeRegionResponse, DeactivateRequest, DeactivateResponse,
-    UpdateLocaleRequest, UpdateLocaleResponse,
+    DeactivateRequest, DeactivateResponse, UpdateLocaleRequest, UpdateLocaleResponse,
 };
 
 use crate::application::context::AccountAppContext;
 use crate::commands::{
     ActivateCommand, ChangeBirthDateCommand, ChangeEmailCommand, ChangePhoneNumberCommand,
-    ChangeRegionCommand, DeactivateCommand, UpdateLocaleCommand,
+    DeactivateCommand, UpdateLocaleCommand,
 };
 use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
+use shared_kernel::types::AccountId;
 
 pub struct AccountPersonalService {
     bus: Arc<CommandBus>,
@@ -41,16 +39,23 @@ impl GrpcServiceUtils for AccountPersonalService {
 
 #[tonic::async_trait]
 impl ProtoAccountPersonalService for AccountPersonalService {
-    // --- INFORMATIONS PERSONNELLES ---
-
     async fn change_email(
         &self,
         request: Request<ChangeEmailRequest>,
     ) -> Result<Response<ChangeEmailResponse>, Status> {
-        let command = ChangeEmailCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = ChangeEmailCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<ChangeEmailCommand, (), ChangeEmailResponse>(
             &ctx,
@@ -64,10 +69,19 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         &self,
         request: Request<ChangePhoneNumberRequest>,
     ) -> Result<Response<ChangePhoneNumberResponse>, Status> {
-        let command = ChangePhoneNumberCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = ChangePhoneNumberCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<ChangePhoneNumberCommand, (), ChangePhoneNumberResponse>(
             &ctx,
@@ -81,10 +95,19 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         &self,
         request: Request<ChangeBirthDateRequest>,
     ) -> Result<Response<ChangeBirthDateResponse>, Status> {
-        let command = ChangeBirthDateCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = ChangeBirthDateCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<ChangeBirthDateCommand, (), ChangeBirthDateResponse>(
             &ctx,
@@ -94,33 +117,49 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         .await
     }
 
-    // --- LOCALISATION ---
+    // async fn change_region(
+    //     &self,
+    //     request: Request<ChangeRegionRequest>,
+    // ) -> Result<Response<ChangeRegionResponse>, Status> {
+    //     let (_, extensions, req_inner) = request.into_parts();
 
-    async fn change_region(
-        &self,
-        request: Request<ChangeRegionRequest>,
-    ) -> Result<Response<ChangeRegionResponse>, Status> {
-        let command = ChangeRegionCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+    //     let target = req_inner
+    //         .target
+    //         .as_ref()
+    //         .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+    //     let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+    //         Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+    //     })?;
 
-        let ctx = self.get_context(&request, command.target.id)?;
+    //     let ctx = self.build_command_context(account_id, &extensions)?;
+    //     let command = ChangeRegionCommand::try_from_proto(req_inner)
+    //         .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.dispatch_command::<ChangeRegionCommand, (), ChangeRegionResponse>(
-            &ctx,
-            command,
-            ChangeRegionResponse {},
-        )
-        .await
-    }
+    //     self.dispatch_command::<ChangeRegionCommand, (), ChangeRegionResponse>(
+    //         &ctx,
+    //         command,
+    //         ChangeRegionResponse {},
+    //     )
+    //     .await
+    // }
 
     async fn update_locale(
         &self,
         request: Request<UpdateLocaleRequest>,
     ) -> Result<Response<UpdateLocaleResponse>, Status> {
-        let command = UpdateLocaleCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = UpdateLocaleCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<UpdateLocaleCommand, (), UpdateLocaleResponse>(
             &ctx,
@@ -130,16 +169,23 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         .await
     }
 
-    // --- CYCLE DE VIE UTILISATEUR ---
-
     async fn activate(
         &self,
         request: Request<ActivateRequest>,
     ) -> Result<Response<ActivateResponse>, Status> {
-        let command = ActivateCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = ActivateCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<ActivateCommand, (), ActivateResponse>(
             &ctx,
@@ -153,10 +199,19 @@ impl ProtoAccountPersonalService for AccountPersonalService {
         &self,
         request: Request<DeactivateRequest>,
     ) -> Result<Response<DeactivateResponse>, Status> {
-        let command = DeactivateCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = DeactivateCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<DeactivateCommand, (), DeactivateResponse>(
             &ctx,

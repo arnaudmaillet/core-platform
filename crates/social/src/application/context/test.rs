@@ -18,8 +18,8 @@ mod tests {
     #[test]
     fn test_builder_should_instantiate_relation_correctly() -> Result<()> {
         // Given
-        let follower = ProfileId::generate(Region::default());
-        let following = ProfileId::generate(Region::default());
+        let follower = ProfileId::generate();
+        let following = ProfileId::generate();
         let custom_time = Utc::now() - chrono::Duration::days(2);
 
         // When
@@ -164,7 +164,7 @@ mod tests {
         let command_id = Uuid::now_v7();
 
         let follower_id = fixture.target_profile_id();
-        let following_id = ProfileId::generate(fixture.region());
+        let following_id = ProfileId::generate();
 
         let mut relation = FollowRelation::builder(follower_id, following_id).build()?;
 
@@ -189,46 +189,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_save_relation_should_raise_error_on_actor_sharding_violation() -> Result<()> {
-        // Given
-        let fixture = SocialTestFixture::new();
-        let command_id = Uuid::now_v7();
-
-        let local_region_code = fixture.region().inner();
-        let foreign_region_code = match local_region_code {
-            RegionCode::EU => RegionCode::US,
-            _ => RegionCode::EU,
-        };
-
-        // On utilise la méthode de génération de ton Kernel (qui prend probablement l'enum ou le VO)
-        let foreign_follower = ProfileId::generate(Region::from_raw(foreign_region_code));
-        let local_following = fixture.target_profile_id();
-
-        let mut invalid_relation =
-            FollowRelation::builder(foreign_follower, local_following).build()?;
-
-        // When
-        let result = fixture
-            .social_ctx()
-            .save_relation(&mut invalid_relation, command_id)
-            .await;
-
-        // Then
-        assert!(
-            result.is_err(),
-            "Le sharding cross-region aurait dû bloquer l'écriture synchrone"
-        );
-        let error = result.unwrap_err();
-
-        assert_eq!(error.code, ErrorCode::ValidationFailed);
-        assert!(
-            error.message.contains("region"),
-            "L'erreur de validation aurait dû spécifier le champ 'region', reçu: '{}'",
-            error.message
-        );
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Result<()> {
@@ -237,7 +197,7 @@ mod tests {
         let command_id = Uuid::now_v7();
 
         let follower_id = fixture.target_profile_id();
-        let following_id = ProfileId::generate(fixture.region());
+        let following_id = ProfileId::generate();
 
         // État initial (Given): La relation existe et les compteurs sont déjà chauds
         fixture.given_existing_relation(follower_id, following_id);

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::ChangeEmailCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -18,7 +18,7 @@ mod tests {
 
         // 1. Arrange : Compte actif avec l'ancien email
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_email(old_email)
             .build()?;
@@ -34,7 +34,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -59,7 +59,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -74,7 +74,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -101,7 +101,7 @@ mod tests {
 
         // 1. Arrange : Compte possédant déjà cet email
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_email(email.clone())
             .build()?;
@@ -117,7 +117,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -141,7 +141,7 @@ mod tests {
 
         // Arrange : Un banni ne peut pas modifier ses réglages
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::BANNED)
             .build()?;
         let version_snapshot = account.version();
@@ -156,7 +156,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -183,7 +183,7 @@ mod tests {
         let requested_email = Email::try_new("b@c.com")?;
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -203,7 +203,7 @@ mod tests {
         // 2. Act : Le Bus intercepte le conflit et relance le handler
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeEmailCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : On s'attend maintenant à un SUCCÈS

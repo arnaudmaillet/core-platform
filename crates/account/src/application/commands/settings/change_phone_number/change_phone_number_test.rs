@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::ChangePhoneNumberCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -18,7 +18,7 @@ mod tests {
 
         // 1. Arrange : Compte actif avec l'ancien téléphone
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_phone(old_phone)
             .build()?;
@@ -34,7 +34,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangePhoneNumberCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -59,7 +59,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -74,7 +74,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangePhoneNumberCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -101,7 +101,7 @@ mod tests {
 
         // 1. Arrange : Compte possédant déjà ce numéro
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_phone(phone.clone())
             .build()?;
@@ -117,7 +117,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangePhoneNumberCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -140,7 +140,7 @@ mod tests {
         let error_msg = "Kafka/Outbox DB Error";
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         f.account_repo().insert(account);
@@ -158,7 +158,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, ChangePhoneNumberCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangePhoneNumberCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert

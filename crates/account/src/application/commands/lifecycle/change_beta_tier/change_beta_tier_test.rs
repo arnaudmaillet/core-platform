@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::lifecycle::ChangeBetaTierCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::BetaTier;
@@ -15,7 +15,7 @@ mod tests {
     #[tokio::test]
     async fn test_change_beta_tier_success() -> Result<()> {
         let f = TestFixture::new();
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
 
         f.account_repo().insert(account);
@@ -27,7 +27,10 @@ mod tests {
         };
 
         f.bus()
-            .execute::<AccountContext, ChangeBetaTierCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBetaTierCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         f.assert_account(|acc| {
@@ -49,7 +52,7 @@ mod tests {
         // On simule une commande déjà traitée techniquement
         f.idempotency_repo().seed(cmd_id);
 
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         // On initialise l'état pour le test
         let _ = account.change_beta_tier(BetaTier::ALPHA);
         account.pull_events();
@@ -65,7 +68,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeBetaTierCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBetaTierCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Doit retourner une erreur d'idempotence technique
@@ -87,7 +90,7 @@ mod tests {
     #[tokio::test]
     async fn test_change_beta_tier_business_idempotency() -> Result<()> {
         let f = TestFixture::new();
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
 
         // On le passe déjà en ALPHA
         let _ = account.change_beta_tier(BetaTier::ALPHA);
@@ -104,7 +107,7 @@ mod tests {
 
         // L'exécution doit réussir mais ne rien changer
         f.bus()
-            .execute::<AccountContext, ChangeBetaTierCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBetaTierCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {

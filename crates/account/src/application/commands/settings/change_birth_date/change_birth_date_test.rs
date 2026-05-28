@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::ChangeBirthDateCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::{AccountState, BirthDate};
@@ -19,7 +19,7 @@ mod tests {
         let f = TestFixture::new();
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -34,7 +34,7 @@ mod tests {
         };
 
         f.bus()
-            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -56,7 +56,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -72,7 +72,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -96,7 +96,7 @@ mod tests {
         let f = TestFixture::new();
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::BANNED)
             .build()?;
 
@@ -112,7 +112,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         match result {
@@ -136,7 +136,7 @@ mod tests {
     async fn test_change_birth_date_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -157,7 +157,7 @@ mod tests {
         // 2. Act : Le Bus intercepte le ConcurrencyConflict et relance le Handler
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeBirthDateCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Succès final attendu

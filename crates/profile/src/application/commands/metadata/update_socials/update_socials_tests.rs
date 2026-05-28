@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateSocialsCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use crate::types::Socials;
     use shared_kernel::command::CommandTarget;
@@ -16,7 +16,7 @@ mod tests {
     async fn test_update_socials_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -34,15 +34,19 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateSocialsCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.socials(), Some(&socials));
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.socials(), Some(&socials));
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::SOCIALS_UPDATED));
 
@@ -56,7 +60,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
         f.idempotency_repo().seed(cmd_id); // Simule que la commande a déjà été traitée
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         // On crée un changement REEL pour forcer le handler à aller jusqu'au ctx.save()
@@ -73,7 +77,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateSocialsCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert
@@ -96,7 +103,7 @@ mod tests {
             .with_github(Url::try_new("https://github.com/alice")?)
             .build();
 
-        let profile = f.builder("alice").with_socials(socials.clone()).build()?;
+        let profile = f.builder("alice")?.with_socials(socials.clone()).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -108,14 +115,18 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateSocialsCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot);
+            })
+            .await;
         f.assert_outbox(0, None);
 
         Ok(())
@@ -125,7 +136,7 @@ mod tests {
     async fn test_update_socials_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateSocialsCommand {
@@ -137,7 +148,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateSocialsCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert

@@ -5,17 +5,17 @@ use shared_kernel::command::CommandHandler;
 use shared_kernel::core::Result;
 
 use crate::application::commands::settings::ChangeRegionCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct ChangeRegionHandler;
 
 #[async_trait]
 impl CommandHandler for ChangeRegionHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ChangeRegionCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: ChangeRegionCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: ChangeRegionCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

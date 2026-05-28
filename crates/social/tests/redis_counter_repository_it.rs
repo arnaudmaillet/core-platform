@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod redis_integration_tests {
+    use chrono::Utc;
     use infra_fred::fred::interfaces::SetsInterface;
     use infra_test::RedisTestContext;
     use shared_kernel::core::{ErrorCode, Result};
-    use shared_kernel::types::{Counter, ProfileId, Region, RegionCode};
+    use shared_kernel::types::{Counter, ProfileId};
     use social::entities::ProfileCounters;
     use social::redis::RedisCounterRepository;
     use social::repositories::CounterRepository;
@@ -27,8 +28,7 @@ mod redis_integration_tests {
     async fn test_redis_get_counters_should_return_not_found_when_empty() -> Result<()> {
         // --- Arrange ---
         let (repo, _test_ctx) = get_test_context().await;
-        let region = Region::from_raw(RegionCode::EU);
-        let random_id = ProfileId::generate(region);
+        let random_id = ProfileId::generate();
 
         // --- Act ---
         let res = repo.get_counters(random_id).await;
@@ -50,10 +50,9 @@ mod redis_integration_tests {
     async fn test_redis_counter_increment_and_dirty_set_lifecycle() -> Result<()> {
         // --- Arrange ---
         let (repo, test_ctx) = get_test_context().await;
-        let region = Region::from_raw(RegionCode::EU);
 
-        let follower_id = ProfileId::generate(region);
-        let following_id = ProfileId::generate(region);
+        let follower_id = ProfileId::generate();
+        let following_id = ProfileId::generate();
         let pool = test_ctx.repository().pool().clone();
 
         // --- Act: Étape 1 - Incrémentation atomique des Hashes ---
@@ -104,8 +103,7 @@ mod redis_integration_tests {
     async fn test_redis_save_should_overwrite_entire_hash() -> Result<()> {
         // --- Arrange ---
         let (repo, _test_ctx) = get_test_context().await;
-        let region = Region::from_raw(RegionCode::EU);
-        let profile_id = ProfileId::generate(region);
+        let profile_id = ProfileId::generate();
 
         // Simulation d'un snapshot à écraser/synchroniser (ex: flush depuis Scylla)
         let counters_snapshot = ProfileCounters::restore(
@@ -113,7 +111,8 @@ mod redis_integration_tests {
             Counter::from_raw(42),
             Counter::from_raw(84),
             1,
-            chrono::Utc::now(),
+            Utc::now(),
+            Utc::now(),
         );
 
         // --- Act ---

@@ -23,7 +23,7 @@ impl CommandHandler for CreatePostHandler {
         cmd: CreatePostCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.author_id.region())
+            .ensure_executable(cmd.command_id, cmd.region)
             .await?
         {
             return Ok(());

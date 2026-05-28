@@ -1,9 +1,7 @@
-// crates/account/src/domain/repositories/stubs/account_repository_stub.rs
-
 use async_trait::async_trait;
 use shared_kernel::{
     core::{AggregateRoot, Error, Result, Transaction},
-    types::{AccountId, Email, PhoneNumber, SubId},
+    types::{AccountId, Email, PhoneNumber, Region, SubId},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -22,8 +20,6 @@ impl AccountRepositoryStub {
         Self::default()
     }
 
-    // --- Helpers Setup (Arrange) ---
-
     pub fn insert(&self, account: Account) {
         let mut map = self.accounts.lock().unwrap();
         map.insert(account.account_id(), account);
@@ -39,13 +35,9 @@ impl AccountRepositoryStub {
         *slot = Some(err);
     }
 
-    // --- Helpers Assert ---
-
     pub fn find_direct(&self, id: AccountId) -> Option<Account> {
         self.accounts.lock().unwrap().get(&id).cloned()
     }
-
-    // --- Logique Interne ---
 
     fn check_error(&self) -> Result<()> {
         let mut slot = self.error_to_return.lock().unwrap();
@@ -60,6 +52,7 @@ impl AccountRepositoryStub {
 impl AccountRepository for AccountRepositoryStub {
     async fn find_by_id(
         &self,
+        _region: Region,
         id: AccountId,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
@@ -69,6 +62,7 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn find_by_sub_id(
         &self,
+        _region: Region,
         ext_id: &SubId,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
@@ -81,9 +75,9 @@ impl AccountRepository for AccountRepositoryStub {
         Ok(account)
     }
 
-    // AJOUTÉ : _tx
     async fn find_id_by_email(
         &self,
+        _region: Region,
         email: &Email,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountId>> {
@@ -97,8 +91,9 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn find_id_by_sub_id(
         &self,
+        _region: Region,
         ext_id: &SubId,
-        _tx: Option<&mut dyn Transaction>, // Déjà présent ou à corriger
+        _tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<AccountId>> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
@@ -108,8 +103,11 @@ impl AccountRepository for AccountRepositoryStub {
             .map(|a| a.identity().account_id()))
     }
 
+    // --- VÉRIFICATIONS D'UNICITÉ ---
+
     async fn exists_by_email(
         &self,
+        _region: Region,
         email: &Email,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
@@ -120,6 +118,7 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn exists_by_phone(
         &self,
+        _region: Region,
         phone: &PhoneNumber,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
@@ -132,6 +131,7 @@ impl AccountRepository for AccountRepositoryStub {
 
     async fn exists_by_sub_id(
         &self,
+        _region: Region,
         ext_id: &SubId,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
@@ -140,43 +140,43 @@ impl AccountRepository for AccountRepositoryStub {
         Ok(map.values().any(|a| a.identity().sub_id() == Some(ext_id)))
     }
 
-    async fn save(&self, account: &mut Account, _tx: Option<&mut dyn Transaction>) -> Result<()> {
+    // --- ÉCRITURES ---
+
+    async fn save(
+        &self,
+        _region: Region,
+        account: &mut Account,
+        _tx: Option<&mut dyn Transaction>,
+    ) -> Result<()> {
         self.check_error()?;
 
         let mut map = self.accounts.lock().unwrap();
         let new_id = account.account_id();
         let new_version = account.metadata().version();
 
-        // 1. DÉTECTION DE MIGRATION (Changement de Région)
-        // On cherche si l'UUID existe déjà sous une autre clé (une autre région)
         let old_id_opt = map
             .iter()
             .find(|(_, a)| {
                 a.identity().account_id().uuid() == new_id.uuid()
                     && a.identity().account_id() != new_id
             })
-            .map(|(id, _)| id.clone());
+            .map(|(id, _)| *id);
 
-        if let Some(old_id) = old_id_opt.clone() {
-            // Si on a trouvé l'ancien ID, on le supprime pour simuler le déplacement
+        if let Some(old_id) = old_id_opt {
             map.remove(&old_id);
-            // On continue en mode "Update" car techniquement le compte existe déjà
         }
 
-        // 2. RÉCUPÉRATION DU COMPTE (soit l'actuel, soit None si c'est une pure création)
         let existing_opt = map.get(&new_id);
 
         match existing_opt {
             None => {
-                // --- MODE INSERT (Logique identique à create) ---
-                // Vérifier que c'est bien une création (version initiale)
+                // --- MODE INSERT ---
                 if new_version > 1 && old_id_opt.is_none() {
                     return Err(Error::concurrency_conflict(format!(
                         "Cannot insert new account with version {}",
                         new_version
                     )));
                 }
-                // On vérifie quand même l'unicité du sub_id pour les nouveaux comptes
                 if let Some(new_sub) = account.identity().sub_id() {
                     if map.values().any(|a| a.identity().sub_id() == Some(new_sub)) {
                         return Err(Error::already_exists(
@@ -188,7 +188,6 @@ impl AccountRepository for AccountRepositoryStub {
                 }
             }
             Some(existing) => {
-                // --- MODE UPDATE (OCC) ---
                 let current_version = existing.metadata().version();
 
                 if new_version == current_version {
@@ -202,7 +201,6 @@ impl AccountRepository for AccountRepositoryStub {
                     )));
                 }
 
-                // Vérification de l'unicité du sub_id (au cas où il a changé)
                 if let Some(new_sub) = account.identity().sub_id() {
                     let duplicate_exists = map.values().any(|a| {
                         a.identity().account_id() != new_id
@@ -220,18 +218,26 @@ impl AccountRepository for AccountRepositoryStub {
             }
         }
 
-        // Dans tous les cas, on insère/écrase
         map.insert(new_id, account.clone());
         Ok(())
     }
 
-    // Optionnel : tu peux simplifier create pour qu'il appelle save
-    async fn create(&self, account: &Account, _tx: &mut dyn Transaction) -> Result<()> {
+    async fn create(
+        &self,
+        region: Region,
+        account: &Account,
+        _tx: &mut dyn Transaction,
+    ) -> Result<()> {
         let mut acc = account.clone();
-        self.save(&mut acc, None).await
+        self.save(region, &mut acc, None).await
     }
 
-    async fn delete(&self, id: AccountId, _tx: &mut dyn Transaction) -> Result<()> {
+    async fn delete(
+        &self,
+        _region: Region,
+        id: AccountId,
+        _tx: &mut dyn Transaction,
+    ) -> Result<()> {
         self.check_error()?;
         let mut map = self.accounts.lock().unwrap();
         if map.remove(&id).is_none() {

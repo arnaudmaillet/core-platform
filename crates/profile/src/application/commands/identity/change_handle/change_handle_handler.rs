@@ -6,19 +6,23 @@ use shared_kernel::{
     core::{Error, Result},
 };
 
-use crate::{commands::ChangeHandleCommand, context::ProfileContext};
+use crate::{commands::ChangeHandleCommand, context::ProfileCommandContext};
 
 pub struct ChangeHandleHandler;
 
 #[async_trait]
 impl CommandHandler for ChangeHandleHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = ChangeHandleCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &ProfileContext, cmd: ChangeHandleCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &ProfileCommandContext,
+        cmd: ChangeHandleCommand,
+    ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());
@@ -34,18 +38,14 @@ impl CommandHandler for ChangeHandleHandler {
             return Ok(());
         }
 
-        if ctx
-            .profile_repo()
-            .find_by_handle(&cmd.new_handle, ctx.region(), None)
-            .await?
-            .is_some()
-        {
+        if ctx.exists_by_handle(&cmd.new_handle).await? {
             return Err(Error::already_exists(
                 "Profile",
-                "handle".into(),
+                "handle",
                 cmd.new_handle.as_str().to_string(),
             ));
         }
+
         profile.change_handle(cmd.new_handle)?;
 
         ctx.save(&mut profile, Some(cmd.command_id)).await?;

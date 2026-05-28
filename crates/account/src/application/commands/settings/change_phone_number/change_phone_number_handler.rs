@@ -5,19 +5,19 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::settings::ChangePhoneNumberCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct ChangePhoneNumberHandler;
 
 #[async_trait]
 impl CommandHandler for ChangePhoneNumberHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ChangePhoneNumberCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: ChangePhoneNumberCommand,
     ) -> Result<Self::Output> {
         if !ctx

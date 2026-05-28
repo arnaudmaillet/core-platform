@@ -1,6 +1,6 @@
 // crates/account/src/application/add_push_token/add_push_token_use_case.rs
 use crate::application::commands::settings::AddPushTokenCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
 use shared_kernel::core::Result;
@@ -10,11 +10,11 @@ pub struct AddPushTokenHandler;
 
 #[async_trait]
 impl CommandHandler for AddPushTokenHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = AddPushTokenCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: AddPushTokenCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: AddPushTokenCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

@@ -1,10 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use crate::application::commands::settings::RemovePushTokenCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
+    use crate::{
+        application::commands::settings::RemovePushTokenCommand, entities::AccountSettingsBuilder,
+    };
     use shared_kernel::{
         command::CommandTarget,
         core::{Result, Versioned},
@@ -20,9 +22,11 @@ mod tests {
 
         // 1. Arrange : Utilisation de la closure settings pour injecter les tokens
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
-            .settings(|s| s.with_tokens(vec![token_to_remove.clone(), token_to_keep.clone()]))
+            .settings(|s: AccountSettingsBuilder| {
+                s.with_tokens(vec![token_to_remove.clone(), token_to_keep.clone()])
+            })
             .build()?;
 
         let version_snapshot = account.version();
@@ -36,7 +40,10 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, RemovePushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, RemovePushTokenCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // 3. Assert
@@ -67,10 +74,7 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f
-            .account_builder()?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
+        let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -82,7 +86,10 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, RemovePushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, RemovePushTokenCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         assert!(
@@ -110,10 +117,7 @@ mod tests {
         let non_existent_token = PushToken::try_new("valid_but_missing_token")?;
 
         // 1. Arrange : Compte sans tokens
-        let account = f
-            .account_builder()?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
+        let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
 
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -126,7 +130,10 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, RemovePushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, RemovePushTokenCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // 3. Assert

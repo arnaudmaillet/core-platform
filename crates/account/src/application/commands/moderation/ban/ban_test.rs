@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::moderation::BanCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -15,7 +15,7 @@ mod tests {
         let f = TestFixture::new();
 
         // 1. Arrange : Compte actif
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -27,7 +27,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, BanCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -49,7 +49,7 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -62,7 +62,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, BanCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -80,7 +80,7 @@ mod tests {
         let f = TestFixture::new();
 
         // Arrange : Compte déjà Banni
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.ban(AuditReason::try_new("First reason")?)?;
 
         let version_snapshot = account.version();
@@ -94,7 +94,7 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, BanCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
@@ -122,7 +122,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, BanCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -141,7 +141,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrency_retry_success() -> Result<()> {
         let f = TestFixture::new();
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -158,7 +158,7 @@ mod tests {
         // ACT : Le bus doit absorber l'erreur et réussir au 2ème essai
         let result = f
             .bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, BanCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // ASSERT
@@ -175,7 +175,7 @@ mod tests {
     async fn test_worst_case_atomic_outbox_failure() -> Result<()> {
         let f = TestFixture::new();
 
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -190,7 +190,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, BanCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, BanCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // La transaction globale échoue si l'outbox échoue

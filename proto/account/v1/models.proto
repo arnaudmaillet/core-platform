@@ -3,7 +3,6 @@
 syntax = "proto3";
 package account.v1;
 
-import "account/v1/enums.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
 
@@ -26,7 +25,7 @@ message AccountIdentity {
   optional string sub_id = 3;
   string email = 4;
   google.protobuf.StringValue phone_number = 5;
-  AccountState state = 6;
+  string state = 6;
   google.protobuf.Timestamp birth_date = 7;
   string locale = 8;
   google.protobuf.Timestamp created_at = 9;
@@ -38,8 +37,8 @@ message AccountIdentity {
 
 message AccountGovernance {
   string account_id = 1;
-  AccountRole role = 2;
-  BetaTier beta_tier = 3;
+  string role = 2;
+  string beta_tier = 3;
   bool is_shadowbanned = 4;
   int32 trust_score = 5;
   google.protobuf.Timestamp last_moderation_at = 6;
@@ -68,7 +67,7 @@ message AccountSettings {
   }
   
   message Appearance {
-    ThemeMode theme = 1;
+    int32 theme = 1;
     bool high_contrast = 2;
   }
 

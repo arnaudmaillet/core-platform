@@ -1,6 +1,6 @@
 // crates/account/src/application/update_timezone/mod.rs
 use crate::application::commands::settings::UpdateTimezoneCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
 use shared_kernel::core::Result;
@@ -10,13 +10,13 @@ pub struct UpdateTimezoneHandler;
 
 #[async_trait]
 impl CommandHandler for UpdateTimezoneHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = UpdateTimezoneCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: UpdateTimezoneCommand,
     ) -> Result<Self::Output> {
         if !ctx

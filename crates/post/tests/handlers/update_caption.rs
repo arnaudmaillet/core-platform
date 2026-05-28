@@ -20,7 +20,7 @@ mod tests {
         f.given_post(&post).await;
 
         let command_id = Uuid::now_v7();
-        let target_profile = ProfileId::generate(f.region());
+        let target_profile = ProfileId::generate();
         let slug = "arnaud".to_string();
 
         // Configurer le stub pour résoudre "@arnaud" vers target_profile

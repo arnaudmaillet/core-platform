@@ -1,5 +1,3 @@
-// crates/account/src/application/register_account/register_account_command.rs
-
 use crate::domain::types::{IpAddr, Locale, RegistrationIdentifier};
 use shared_kernel::{
     command::IdentifiableCommand,
@@ -12,6 +10,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct RegisterCommand {
     pub command_id: Uuid,
+    pub region: Region,
     pub account_id: AccountId,
     pub sub_id: Option<SubId>,
     pub identifier: RegistrationIdentifier,
@@ -29,12 +28,15 @@ impl IdentifiableCommand for RegisterCommand {
     }
 
     fn region(&self) -> String {
-        self.account_id.region().to_string()
+        self.region.to_string()
     }
 }
 
 impl RegisterCommand {
-    pub fn try_from_proto(req: RegisterRequest) -> Result<Self, tonic::Status> {
+    pub fn try_from_proto(
+        req: RegisterRequest,
+        account_id: AccountId,
+    ) -> Result<Self, tonic::Status> {
         let identifier = match req.identifier.and_then(|i| i.method) {
             Some(Method::Email(e)) => RegistrationIdentifier::from_email(
                 Email::try_new(e).map_err(|err| Status::invalid_argument(err.to_string()))?,
@@ -50,15 +52,14 @@ impl RegisterCommand {
             None => return Err(Status::invalid_argument("Missing registration identifier")),
         };
 
-        // On extrait temporairement la région pour instancier un AccountId factice.
-        // Cet ID sera immédiatement écrasé à la volée dans ton access_service.rs.
-        let temp_region = Region::try_new(req.region)
+        let region = Region::try_new(req.region)
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
-            account_id: AccountId::generate(temp_region),
+            account_id,
+            region,
             sub_id: match req.sub_id {
                 Some(id) if !id.is_empty() => {
                     Some(SubId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?)

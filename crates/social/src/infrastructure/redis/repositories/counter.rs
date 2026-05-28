@@ -1,6 +1,7 @@
 // crates/social/src/infrastructure/redis/repositories/counter.rs
 
 use async_trait::async_trait;
+use chrono::Utc;
 use infra_fred::fred::clients::Pool;
 use infra_fred::fred::interfaces::{HashesInterface, SetsInterface};
 use shared_kernel::core::{Error, Result};
@@ -105,7 +106,8 @@ impl CounterRepository for RedisCounterRepository {
             followers_raw.try_into()?,
             following_raw.try_into()?,
             1,
-            chrono::Utc::now(),
+            Utc::now(),
+            Utc::now(),
         ))
     }
 

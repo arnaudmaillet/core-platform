@@ -103,6 +103,7 @@ impl CounterRepository for CounterRepositoryStub {
                 Counter::from_raw(following),
                 1,
                 Utc::now(),
+                Utc::now()
             )),
             None => {
                 if self.is_cache_behavior {
@@ -116,6 +117,7 @@ impl CounterRepository for CounterRepositoryStub {
                         Counter::default(),
                         1,
                         Utc::now(),
+                        Utc::now()
                     ))
                 }
             }

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::AddPushTokenCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -20,7 +20,7 @@ mod tests {
 
         // 1. Arrange : Compte actif sans tokens
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -35,7 +35,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -60,7 +60,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -75,7 +75,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -100,7 +100,7 @@ mod tests {
 
         // 1. Arrange : Token déjà présent dans l'agrégat
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -120,7 +120,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -142,7 +142,7 @@ mod tests {
     async fn test_add_push_token_succeeds_after_retry() -> Result<()> {
         let f = TestFixture::new();
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
         let version_snapshot = account.version();
@@ -163,7 +163,7 @@ mod tests {
         // 2. Act : Le bus doit absorber le conflit et retenter l'opération
         let result = f
             .bus()
-            .execute::<AccountContext, AddPushTokenCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Succès attendu !

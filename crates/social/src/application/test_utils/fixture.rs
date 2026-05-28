@@ -44,7 +44,7 @@ impl SocialTestFixture {
 
         // 3. Configuration d'acteurs par défaut pour le test
         let region = Region::default();
-        let default_target_id = ProfileId::generate(region);
+        let default_target_id = ProfileId::generate();
 
         // Le contexte unifié centré sur notre cible
         let social_ctx = app_ctx.create_context(default_target_id, region);
@@ -80,7 +80,7 @@ impl SocialTestFixture {
     }
 
     pub fn target_profile_id(&self) -> ProfileId {
-        ProfileId::generate(self.region())
+        ProfileId::generate()
     }
 
     pub fn region(&self) -> Region {

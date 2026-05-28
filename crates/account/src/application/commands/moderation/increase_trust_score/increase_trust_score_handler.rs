@@ -6,19 +6,19 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::moderation::IncreaseTrustScoreCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct IncreaseTrustScoreHandler;
 
 #[async_trait]
 impl CommandHandler for IncreaseTrustScoreHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = IncreaseTrustScoreCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountContext,
+        ctx: &AccountCommandContext,
         cmd: IncreaseTrustScoreCommand,
     ) -> Result<Self::Output> {
         if !ctx

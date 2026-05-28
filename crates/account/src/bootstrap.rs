@@ -5,7 +5,7 @@ use crate::{
         ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
         BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
         ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-        ChangeRegionCommand, ChangeRegionHandler, ChangeRoleCommand, ChangeRoleHandler,
+        ChangeRoleCommand, ChangeRoleHandler,
         DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
         IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
         LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
@@ -15,7 +15,7 @@ use crate::{
         UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
         UpdateTimezoneHandler,
     },
-    context::{AccountAppContext, AccountContext},
+    context::{AccountAppContext, AccountCommandContext},
     db::PostgresAccountRepository,
 };
 use infra_sqlx::{PostgresIdempotencyRepository, PostgresOutboxRepository, sqlx::PgPool};
@@ -49,56 +49,56 @@ impl AccountServiceBuilder {
         let mut bus = CommandBus::new(self.cache_repo.clone());
 
         // --- Access Management ---
-        bus.register::<AccountContext, RegisterCommand, RegisterHandler>(RegisterHandler);
-        bus.register::<AccountContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
+        bus.register::<AccountCommandContext, RegisterCommand, RegisterHandler>(RegisterHandler);
+        bus.register::<AccountCommandContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
             LinkSubIdentityHandler,
         );
 
         // --- Lifecycle ---
-        bus.register::<AccountContext, ActivateCommand, ActivateHandler>(ActivateHandler);
-        bus.register::<AccountContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
-        bus.register::<AccountContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
-        bus.register::<AccountContext, SuspendCommand, SuspendHandler>(SuspendHandler);
-        bus.register::<AccountContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
+        bus.register::<AccountCommandContext, ActivateCommand, ActivateHandler>(ActivateHandler);
+        bus.register::<AccountCommandContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
+        bus.register::<AccountCommandContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
+        bus.register::<AccountCommandContext, SuspendCommand, SuspendHandler>(SuspendHandler);
+        bus.register::<AccountCommandContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
 
         // --- Moderation ---
-        bus.register::<AccountContext, BanCommand, BanHandler>(BanHandler);
-        bus.register::<AccountContext, UnbanCommand, UnbanHandler>(UnbanHandler);
-        bus.register::<AccountContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
-        bus.register::<AccountContext, LiftShadowbanCommand, LiftShadowbanHandler>(
+        bus.register::<AccountCommandContext, BanCommand, BanHandler>(BanHandler);
+        bus.register::<AccountCommandContext, UnbanCommand, UnbanHandler>(UnbanHandler);
+        bus.register::<AccountCommandContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
+        bus.register::<AccountCommandContext, LiftShadowbanCommand, LiftShadowbanHandler>(
             LiftShadowbanHandler,
         );
-        bus.register::<AccountContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
+        bus.register::<AccountCommandContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
             IncreaseTrustScoreHandler,
         );
-        bus.register::<AccountContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
+        bus.register::<AccountCommandContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
             DecreaseTrustScoreHandler,
         );
 
         // --- Settings ---
-        bus.register::<AccountContext, AddPushTokenCommand, AddPushTokenHandler>(
+        bus.register::<AccountCommandContext, AddPushTokenCommand, AddPushTokenHandler>(
             AddPushTokenHandler,
         );
-        bus.register::<AccountContext, RemovePushTokenCommand, RemovePushTokenHandler>(
+        bus.register::<AccountCommandContext, RemovePushTokenCommand, RemovePushTokenHandler>(
             RemovePushTokenHandler,
         );
-        bus.register::<AccountContext, ChangeEmailCommand, ChangeEmailHandler>(ChangeEmailHandler);
-        bus.register::<AccountContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
+        bus.register::<AccountCommandContext, ChangeEmailCommand, ChangeEmailHandler>(ChangeEmailHandler);
+        bus.register::<AccountCommandContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
             ChangePhoneNumberHandler,
         );
-        bus.register::<AccountContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
+        bus.register::<AccountCommandContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
             ChangeBirthDateHandler,
         );
-        bus.register::<AccountContext, ChangeRegionCommand, ChangeRegionHandler>(
-            ChangeRegionHandler,
-        );
-        bus.register::<AccountContext, UpdateLocaleCommand, UpdateLocaleHandler>(
+        // bus.register::<AccountCommandContext, ChangeRegionCommand, ChangeRegionHandler>(
+        //     ChangeRegionHandler,
+        // );
+        bus.register::<AccountCommandContext, UpdateLocaleCommand, UpdateLocaleHandler>(
             UpdateLocaleHandler,
         );
-        bus.register::<AccountContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
+        bus.register::<AccountCommandContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
             UpdateTimezoneHandler,
         );
-        bus.register::<AccountContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
+        bus.register::<AccountCommandContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
             UpdatePreferencesHandler,
         );
 

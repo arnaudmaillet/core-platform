@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::settings::ChangeRegionCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -22,7 +22,7 @@ mod tests {
 
         // 1. Arrange
         let account = f
-            .account_builder()?
+            .builder()?
             .with_account_id(old_id)
             .with_sub_id(test_sub_id.clone())
             .with_state(AccountState::ACTIVE)
@@ -39,7 +39,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -72,7 +72,7 @@ mod tests {
         let f = TestFixture::new();
         let current_region = f.region();
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .build()?;
 
@@ -87,7 +87,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -110,7 +110,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
 
         // Arrange cohérent
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
         f.idempotency_repo().seed(cmd_id);
@@ -123,7 +123,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -139,7 +139,7 @@ mod tests {
         let f = TestFixture::new();
 
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::BANNED)
             .build()?;
         let version_snapshot = account.version();
@@ -153,7 +153,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeRegionCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(matches!(

@@ -1,17 +1,12 @@
-// crates/profile/src/application/utils/fixture.rs
-
-use std::sync::Arc;
-// Shared Kernel
 use shared_kernel::cache::CacheRepositoryStub;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepositoryStub;
-
 use shared_kernel::messaging::OutboxRepositoryStub;
 use shared_kernel::types::{AccountId, ProfileId, Region};
+use std::sync::Arc;
 
-// Profile Domain & Application
-use crate::application::context::{ProfileAppContext, ProfileContext};
+use crate::application::context::{ProfileAppContext, ProfileCommandContext, ProfileQueryContext};
 use crate::commands::*;
 use crate::entities::{Profile, ProfileBuilder};
 use crate::repositories::ProfileRepositoryStub;
@@ -19,9 +14,12 @@ use crate::types::Handle;
 
 pub struct ProfileTestFixture {
     bus: Arc<CommandBus>,
+    region: Region,
     app_ctx: ProfileAppContext,
     account_id: AccountId,
-    profile_ctx: ProfileContext,
+    profile_id: ProfileId,
+    command_ctx: ProfileCommandContext,
+    query_ctx: ProfileQueryContext,
     profile_repo: Arc<ProfileRepositoryStub>,
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
     outbox_repo: Arc<OutboxRepositoryStub>,
@@ -40,53 +38,55 @@ impl ProfileTestFixture {
             idempotency_repo.clone(),
         );
 
-        // Configuration par défaut pour les tests
         let region = Region::default();
-        let account_id = AccountId::generate(region);
-        let profile_id = ProfileId::generate(region);
-        let profile_ctx = ProfileContext::new(app_ctx.clone(), Some(profile_id), region);
+        let account_id = AccountId::generate();
+        let profile_id = ProfileId::generate();
+
+        let command_ctx = app_ctx.command(profile_id, region);
+        let query_ctx = app_ctx.query(region);
 
         let mut bus = CommandBus::new(cache);
 
-        // --- Enregistrement des Handlers ---
-        // AJOUT : Le bus principal doit connaître le handler de création pour les tests nominaux/retry
-        bus.register::<ProfileContext, CreateProfileCommand, CreateProfileHandler>(
+        bus.register::<ProfileCommandContext, CreateProfileCommand, CreateProfileHandler>(
             CreateProfileHandler,
         );
-        bus.register::<ProfileContext, UpdateDisplayNameCommand, UpdateDisplayNameHandler>(
+        bus.register::<ProfileCommandContext, UpdateDisplayNameCommand, UpdateDisplayNameHandler>(
             UpdateDisplayNameHandler,
         );
-        bus.register::<ProfileContext, UpdateBioCommand, UpdateBioHandler>(UpdateBioHandler);
-        bus.register::<ProfileContext, ChangeHandleCommand, ChangeHandleHandler>(
+        bus.register::<ProfileCommandContext, UpdateBioCommand, UpdateBioHandler>(UpdateBioHandler);
+        bus.register::<ProfileCommandContext, ChangeHandleCommand, ChangeHandleHandler>(
             ChangeHandleHandler,
         );
-        bus.register::<ProfileContext, UpdatePrivacyCommand, UpdatePrivacyHandler>(
+        bus.register::<ProfileCommandContext, UpdatePrivacyCommand, UpdatePrivacyHandler>(
             UpdatePrivacyHandler,
         );
-        bus.register::<ProfileContext, UpdateAvatarCommand, UpdateAvatarHandler>(
+        bus.register::<ProfileCommandContext, UpdateAvatarCommand, UpdateAvatarHandler>(
             UpdateAvatarHandler,
         );
-        bus.register::<ProfileContext, RemoveAvatarCommand, RemoveAvatarHandler>(
+        bus.register::<ProfileCommandContext, RemoveAvatarCommand, RemoveAvatarHandler>(
             RemoveAvatarHandler,
         );
-        bus.register::<ProfileContext, UpdateBannerCommand, UpdateBannerHandler>(
+        bus.register::<ProfileCommandContext, UpdateBannerCommand, UpdateBannerHandler>(
             UpdateBannerHandler,
         );
-        bus.register::<ProfileContext, RemoveBannerCommand, RemoveBannerHandler>(
+        bus.register::<ProfileCommandContext, RemoveBannerCommand, RemoveBannerHandler>(
             RemoveBannerHandler,
         );
-        bus.register::<ProfileContext, UpdateLocationCommand, UpdateLocationHandler>(
+        bus.register::<ProfileCommandContext, UpdateLocationCommand, UpdateLocationHandler>(
             UpdateLocationHandler,
         );
-        bus.register::<ProfileContext, UpdateSocialsCommand, UpdateSocialsHandler>(
+        bus.register::<ProfileCommandContext, UpdateSocialsCommand, UpdateSocialsHandler>(
             UpdateSocialsHandler,
         );
 
         Self {
             bus: Arc::new(bus),
+            region,
             app_ctx,
             account_id,
-            profile_ctx,
+            profile_id,
+            command_ctx,
+            query_ctx,
             profile_repo,
             idempotency_repo,
             outbox_repo,
@@ -98,27 +98,31 @@ impl ProfileTestFixture {
     pub fn bus(&self) -> Arc<CommandBus> {
         self.bus.clone()
     }
+
     pub fn app_ctx(&self) -> &ProfileAppContext {
         &self.app_ctx
     }
+
     pub fn account_id(&self) -> AccountId {
         self.account_id
     }
-    pub fn profile_ctx(&self) -> &ProfileContext {
-        &self.profile_ctx
+
+    pub fn command_ctx(&self) -> &ProfileCommandContext {
+        &self.command_ctx
     }
 
-    // CORRECTION : L'accesseur .profile_id() renvoie un Result. On unwrap dans la fixture de test.
+    pub fn query_ctx(&self) -> &ProfileQueryContext {
+        &self.query_ctx
+    }
+
     pub fn profile_id(&self) -> ProfileId {
-        self.profile_ctx
-            .profile_id()
-            .expect("L'ID du profil devrait être présent dans le contexte par défaut de la fixture")
-            .clone()
+        self.profile_id
     }
 
     pub fn region(&self) -> Region {
-        self.profile_ctx.region()
+        self.region
     }
+
     pub fn profile_repo(&self) -> &ProfileRepositoryStub {
         &self.profile_repo
     }
@@ -127,22 +131,18 @@ impl ProfileTestFixture {
         &self.idempotency_repo
     }
 
-    // --- Helpers pour les tests ---
-
-    /// Prépare un profil existant dans le repo pour le test
     pub async fn given_profile(&self, profile: Profile) {
-        self.profile_repo.save_direct(profile).await;
+        self.profile_repo.save_direct(self.region, profile).await;
     }
 
-    pub fn builder(&self, handle: &str) -> ProfileBuilder {
-        let handle_vo = Handle::try_new(handle).expect("Handle invalide dans la fixture");
+    pub fn builder(&self, handle: &str) -> Result<ProfileBuilder> {
+        let handle_vo = Handle::try_new(handle)?;
 
-        Profile::builder(self.account_id(), handle_vo)
-            .expect("Erreur lors de l'initialisation du builder")
-            .with_profile_id(self.profile_id())
+        Ok(
+            Profile::builder(self.account_id(), self.profile_id(), handle_vo)?
+                .with_profile_id(self.profile_id()),
+        )
     }
-
-    // --- Assertions ---
 
     pub fn assert_outbox(&self, expected_count: usize, expected_event: Option<&str>) {
         assert_eq!(
@@ -170,20 +170,22 @@ impl ProfileTestFixture {
         })?;
 
         check(&saved);
-
         Ok(())
     }
 
-    /// Clone la fixture courante mais applique un ProfileId et un Context différents.
     pub fn clone_with_profile_id(&self, new_profile_id: ProfileId) -> Self {
-        let region = self.region();
-        let profile_ctx = ProfileContext::new(self.app_ctx.clone(), Some(new_profile_id), region);
+        let region: Region = self.region();
+        let command_ctx = self.app_ctx.command(new_profile_id, region);
+        let query_ctx = self.app_ctx.query(region);
 
         Self {
             bus: self.bus.clone(),
+            region,
             app_ctx: self.app_ctx.clone(),
-            account_id: AccountId::generate(self.region()),
-            profile_ctx,
+            account_id: AccountId::generate(),
+            profile_id: new_profile_id,
+            command_ctx,
+            query_ctx,
             profile_repo: self.profile_repo.clone(),
             idempotency_repo: self.idempotency_repo.clone(),
             outbox_repo: self.outbox_repo.clone(),

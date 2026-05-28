@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::moderation::IncreaseTrustScoreCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::{AccountState, TrustAmount, TrustScore};
@@ -16,7 +16,7 @@ mod tests {
 
         // 1. Arrange : Score initial à 50
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(50))
             .build()?;
@@ -33,7 +33,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, IncreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, IncreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -54,7 +54,7 @@ mod tests {
 
         // 1. Arrange : Score à 90
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(50))
             .build()?;
@@ -71,7 +71,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, IncreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, IncreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -91,10 +91,7 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f
-            .account_builder()?
-            .with_state(AccountState::ACTIVE)
-            .build()?;
+        let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -107,7 +104,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, IncreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, IncreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         f.assert_account(|acc| {
@@ -139,7 +136,7 @@ mod tests {
 
         // Arrange : Déjà au maximum (100)
         let account = f
-            .account_builder()?
+            .builder()?
             .with_state(AccountState::ACTIVE)
             .with_trust_score(TrustScore::from_raw(TrustScore::MAX))
             .build()?;
@@ -156,7 +153,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, IncreaseTrustScoreCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, IncreaseTrustScoreCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

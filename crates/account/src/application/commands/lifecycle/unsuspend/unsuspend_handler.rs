@@ -7,17 +7,21 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::lifecycle::UnsuspendCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct UnsuspendHandler;
 
 #[async_trait]
 impl CommandHandler for UnsuspendHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = UnsuspendCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: UnsuspendCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext,
+        cmd: UnsuspendCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

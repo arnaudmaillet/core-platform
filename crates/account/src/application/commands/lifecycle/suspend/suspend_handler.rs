@@ -6,17 +6,17 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::lifecycle::SuspendCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct SuspendHandler;
 
 #[async_trait]
 impl CommandHandler for SuspendHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = SuspendCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: SuspendCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: SuspendCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

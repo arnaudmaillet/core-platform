@@ -6,7 +6,7 @@ mod tests {
     };
     use serde_json::json;
     use shared_kernel::types::AccountId;
-use uuid::Uuid;
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn test_on_message_received_success() -> Result<(), Box<dyn std::error::Error>> {
@@ -14,7 +14,8 @@ use uuid::Uuid;
         let f = ProfileTestFixture::new();
         let consumer = AccountConsumer::new(f.bus(), f.app_ctx().clone());
 
-        let domain_account_id = AccountId::generate(f.region().clone());
+        // 💡 FIX : AccountId ne prend plus de région à la génération
+        let domain_account_id = AccountId::generate();
         let raw_uuid = domain_account_id.uuid();
 
         let payload = json!({
@@ -36,13 +37,14 @@ use uuid::Uuid;
             "Le consommateur aurait dû traiter le message avec succès"
         );
 
-        // 💡 FIX : Le handle autogénéré doit se baser sur le même UUID
+        // Le handle autogénéré doit se baser sur le même UUID
         let expected_handle_str = format!("user_{}", &raw_uuid.to_string()[0..8]);
         let expected_handle = Handle::try_new(expected_handle_str)?;
 
+        // 💡 FIX : alignement de la signature avec la région explicite
         let saved_profile = f
             .profile_repo()
-            .find_by_handle(&expected_handle, f.region(), None)
+            .find_by_handle(&expected_handle, f.region().clone(), None)
             .await?
             .expect("Le profil aurait dû être créé en base de données avec le handle autogénéré");
 
@@ -61,8 +63,11 @@ use uuid::Uuid;
         let generated_handle_str = format!("user_{}", &account_id.to_string()[0..8]);
 
         // On simule qu'un profil possède déjà EXACTEMENT ce handle généré en base
-        let existing_profile = f.builder(&generated_handle_str).build()?;
-        f.profile_repo().save_direct(existing_profile).await;
+        let existing_profile = f.builder(&generated_handle_str)?.build()?;
+
+        f.profile_repo()
+            .save_direct(f.region().clone(), existing_profile)
+            .await;
 
         // On rejoue le même événement (déclencheur de l'idempotence)
         let payload = json!({
@@ -92,7 +97,7 @@ use uuid::Uuid;
         let f = ProfileTestFixture::new();
         let consumer = AccountConsumer::new(f.bus().clone(), f.app_ctx().clone());
         let payload = json!({
-            "type": "AccountPasswordChanged", // 💡 Aligné sur les types d'events PascalCase d'Account
+            "type": "AccountPasswordChanged",
             "data": {
                 "account_id": Uuid::new_v4()
             }

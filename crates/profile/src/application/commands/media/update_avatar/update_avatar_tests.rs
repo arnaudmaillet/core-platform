@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateAvatarCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -17,7 +17,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Profil sans avatar au départ
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -31,15 +31,16 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.avatar(), Some(&new_url));
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.avatar(), Some(&new_url));
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::AVATAR_UPDATED));
 
@@ -55,7 +56,7 @@ mod tests {
         // 1. On "seed" le repo d'idempotence pour simuler que cette commande a déjà été traitée
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateAvatarCommand {
@@ -67,7 +68,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -90,7 +91,7 @@ mod tests {
 
         // Le profil a déjà cet avatar
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_avatar(current_url.clone())
             .build()?;
 
@@ -105,14 +106,15 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de changement de version
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas de changement de version
+            })
+            .await;
 
         f.assert_outbox(0, None);
 
@@ -123,7 +125,7 @@ mod tests {
     async fn test_update_avatar_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateAvatarCommand {
@@ -135,7 +137,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateAvatarCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateAvatarCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateDisplayNameCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use crate::types::DisplayName;
     use shared_kernel::command::CommandTarget;
@@ -16,7 +16,7 @@ mod tests {
         // Arrange
         let f = ProfileTestFixture::new();
         // On crée un profil existant
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let new_name = DisplayName::try_new("new_name")?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -29,15 +29,19 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.display_name(), &new_name);
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.display_name(), &new_name);
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         // On vérifie qu'un événement est parti dans l'outbox
         f.assert_outbox(1, Some(ProfileEvent::DISPLAY_NAME_UPDATED));
@@ -54,8 +58,8 @@ mod tests {
         // On simule que la commande a déjà été traitée (Idempotency Repo)
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("Original").build()?;
-        f.profile_repo().save_direct(profile).await;
+        let profile = f.builder("Original")?.build()?;
+        f.profile_repo().save_direct(f.region(), profile).await;
 
         let cmd = UpdateDisplayNameCommand {
             command_id: cmd_id, // Même ID que seedé
@@ -66,7 +70,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert
@@ -74,7 +81,7 @@ mod tests {
             result.is_ok(),
             "L'idempotence technique doit être transparente (Ok)"
         );
-        f.assert_outbox(0, None); // Rien ne doit sortir
+        f.assert_outbox(0, None);
 
         Ok(())
     }
@@ -86,9 +93,9 @@ mod tests {
         let name = DisplayName::try_new("Consistent Name")?;
 
         // Le profil a déjà le nom qu'on essaie de lui donner
-        let profile = f.builder("alice").with_display_name(name.clone()).build()?;
+        let profile = f.builder("alice")?.with_display_name(name.clone()).build()?;
         let version_snapshot = profile.version();
-        f.profile_repo().save_direct(profile).await;
+        f.profile_repo().save_direct(f.region(), profile).await;
 
         let cmd = UpdateDisplayNameCommand {
             command_id: Uuid::new_v4(),
@@ -98,14 +105,18 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // La version ne doit PAS bouger
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot);
+            })
+            .await;
 
         // Pas d'événement car pas de changement réel
         f.assert_outbox(0, None);
@@ -116,7 +127,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_display_name_conflict() -> Result<()> {
         let f: ProfileTestFixture = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateDisplayNameCommand {
@@ -128,7 +139,10 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateDisplayNameCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Doit échouer avec une ConcurrencyConflict (levée par fetch_verified dans le handler)

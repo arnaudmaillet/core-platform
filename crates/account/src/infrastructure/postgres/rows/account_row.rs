@@ -29,7 +29,6 @@ pub struct PostgresAccountRow {
     pub state: PostgresAccountState,
     pub birth_date: Option<NaiveDate>,
     pub locale: String,
-    pub region: String,
     pub version: i64,
     pub created_at: DateTime<Utc>,
     pub identity_updated_at: DateTime<Utc>,
@@ -57,16 +56,6 @@ impl PostgresAccountRow {
     pub fn to_domain(self) -> Result<Account> {
         let account_id = AccountId::new(self.account_id);
 
-        if account_id.region().as_static_str() != self.region {
-            tracing::warn!(
-                account_id = %self.account_id,
-                db_region = %self.region,
-                smart_id_region = %account_id.region(),
-                "Data consistency warning: Smart ID region bits mismatch with table regional column"
-            );
-        }
-
-        // 1. Reconstruction de Identity
         let identity = AccountIdentity::restore(
             account_id,
             self.sub_id.map(SubId::try_new).transpose()?,
@@ -98,7 +87,6 @@ impl PostgresAccountRow {
                 .unwrap_or(self.aggregate_updated_at),
         );
 
-        // 3. Reconstruction de Settings avec fallback
         let settings = if let Some(prefs_val) = self.preferences {
             let preferences: AccountPreferences = serde_json::from_value(prefs_val)
                 .map_err(|e| Error::internal(format!("JSON settings error: {}", e)))?;
@@ -119,16 +107,18 @@ impl PostgresAccountRow {
                     .unwrap_or(self.aggregate_updated_at),
             )
         } else {
-            // Audit Résilience : Fallback sur les paramètres par défaut
             AccountSettings::builder(account_id).build()?
         };
 
-        // 4. Reconstruction finale
         Ok(Account::restore(
             identity,
             governance,
             settings,
-            AggregateMetadata::restore(self.version as u64, self.aggregate_updated_at),
+            AggregateMetadata::restore(
+                self.version as u64,
+                self.created_at,
+                self.aggregate_updated_at,
+            ),
         ))
     }
 }

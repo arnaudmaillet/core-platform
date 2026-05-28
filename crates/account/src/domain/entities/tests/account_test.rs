@@ -6,11 +6,11 @@ mod tests {
     use shared_kernel::geo::Timezone;
     use shared_kernel::messaging::EventEmitter;
     use shared_kernel::security::PushToken;
-    use shared_kernel::types::{AccountId, AuditReason, Email, Region, SubId};
+    use shared_kernel::types::{AccountId, AuditReason, Email, SubId};
 
     /// Helper pour créer un compte de test valide et actif
     fn create_test_account() -> Account {
-        let id = AccountId::generate(Region::default());
+        let id = AccountId::generate();
         let identifier =
             RegistrationIdentifier::from_email(Email::try_new("john@doe.com").unwrap());
 

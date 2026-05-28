@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
+    use chrono::Utc;
     use infra_test::ScyllaTestContext;
     use shared_kernel::core::{Error, Identifier, Result};
     use shared_kernel::types::{Counter, ProfileId, Region, RegionCode};
@@ -33,8 +34,7 @@ mod integration_tests {
     async fn test_counter_fallback_when_no_row_exists() -> Result<()> {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
-        let region = Region::from_raw(RegionCode::EU);
-        let random_profile_id = ProfileId::generate(region);
+        let random_profile_id = ProfileId::generate();
 
         // --- Act ---
         let counters = repo.get_counters(random_profile_id).await?;
@@ -52,10 +52,9 @@ mod integration_tests {
     async fn test_counter_atomic_increment_and_decrement_lifecycle() -> Result<()> {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
-        let region = Region::from_raw(RegionCode::EU);
 
-        let follower_id = ProfileId::generate(region);
-        let following_id = ProfileId::generate(region);
+        let follower_id = ProfileId::generate();
+        let following_id = ProfileId::generate();
 
         // --- Act: Étape 1 - Incrémentation atomique (Batch Logged) ---
         repo.increment_counters(follower_id, following_id).await?;
@@ -103,7 +102,7 @@ mod integration_tests {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
         let region = Region::from_raw(RegionCode::EU);
-        let profile_id = ProfileId::generate(region);
+        let profile_id = ProfileId::generate();
 
         // Simulation d'un delta cumulé par un worker de réconciliation (+5 followers, +12 followings)
         let delta_counters = ProfileCounters::restore(
@@ -111,7 +110,8 @@ mod integration_tests {
             Counter::from_raw(5),
             Counter::from_raw(12),
             1,
-            chrono::Utc::now(),
+            Utc::now(),
+            Utc::now(),
         );
 
         // --- Act ---
@@ -137,14 +137,15 @@ mod integration_tests {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
         let region = Region::from_raw(RegionCode::EU);
-        let profile_id = ProfileId::generate(region);
+        let profile_id = ProfileId::generate();
 
         let zero_counters = ProfileCounters::restore(
             profile_id,
             Counter::from_raw(0),
             Counter::from_raw(0),
             1,
-            chrono::Utc::now(),
+            Utc::now(),
+            Utc::now(),
         );
 
         // --- Act ---

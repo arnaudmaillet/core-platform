@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateLocationCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use crate::types::Location;
     use shared_kernel::command::CommandTarget;
@@ -15,7 +15,7 @@ mod tests {
     async fn test_update_location_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -29,15 +29,19 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateLocationCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.location(), new_location.as_ref());
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.location(), new_location.as_ref());
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::LOCATION_UPDATED));
 
@@ -51,7 +55,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateLocationCommand {
@@ -63,7 +67,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateLocationCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert
@@ -82,7 +89,7 @@ mod tests {
         let f = ProfileTestFixture::new();
         let location = Location::try_new("Montreal, Canada")?;
 
-        let profile = f.builder("alice").with_location(location.clone()).build()?;
+        let profile = f.builder("alice")?.with_location(location.clone()).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -94,14 +101,18 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateLocationCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de changement
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas de changement
+            })
+            .await;
         f.assert_outbox(0, None);
 
         Ok(())
@@ -111,7 +122,7 @@ mod tests {
     async fn test_update_location_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateLocationCommand {
@@ -123,7 +134,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateLocationCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert

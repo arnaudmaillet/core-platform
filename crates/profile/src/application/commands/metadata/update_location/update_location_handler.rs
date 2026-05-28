@@ -4,23 +4,23 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateLocationCommand, context::ProfileContext};
+use crate::{commands::UpdateLocationCommand, context::ProfileCommandContext};
 
 pub struct UpdateLocationHandler;
 
 #[async_trait]
 impl CommandHandler for UpdateLocationHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = UpdateLocationCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileContext,
+        ctx: &ProfileCommandContext,
         cmd: UpdateLocationCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

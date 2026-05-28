@@ -4,19 +4,19 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateAvatarCommand, context::ProfileContext};
+use crate::{commands::UpdateAvatarCommand, context::ProfileCommandContext};
 
 pub struct UpdateAvatarHandler;
 
 #[async_trait]
 impl CommandHandler for UpdateAvatarHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = UpdateAvatarCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &ProfileContext, cmd: UpdateAvatarCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &ProfileCommandContext, cmd: UpdateAvatarCommand) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());

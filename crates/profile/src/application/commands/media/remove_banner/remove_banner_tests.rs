@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::RemoveBannerCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -18,7 +18,7 @@ mod tests {
 
         // On crée un profil avec une bannière
         let banner_url = Url::try_new("https://cdn.test.com/banner.png")?;
-        let profile = f.builder("alice").with_banner(banner_url).build()?;
+        let profile = f.builder("alice")?.with_banner(banner_url).build()?;
 
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -30,7 +30,7 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
@@ -58,7 +58,7 @@ mod tests {
 
         // 2. On crée un profil avec une bannière
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_banner(Url::try_new("https://cdn.com/banner.png")?)
             .build()?;
         f.given_profile(profile).await;
@@ -71,7 +71,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -100,7 +100,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Le profil n'a déjà pas de bannière
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
 
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
@@ -112,7 +112,7 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
@@ -131,7 +131,7 @@ mod tests {
     async fn test_remove_banner_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = RemoveBannerCommand {
@@ -142,7 +142,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, RemoveBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

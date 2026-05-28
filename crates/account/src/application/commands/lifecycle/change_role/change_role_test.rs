@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::lifecycle::ChangeRoleCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountRole;
@@ -14,7 +14,7 @@ mod tests {
     #[tokio::test]
     async fn test_change_role_success() -> Result<()> {
         let f = TestFixture::new();
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
 
         f.account_repo().insert(account);
@@ -27,7 +27,7 @@ mod tests {
         };
 
         f.bus()
-            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRoleCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {
@@ -48,7 +48,7 @@ mod tests {
 
         f.idempotency_repo().seed(cmd_id);
 
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         let _ = account.change_role(AccountRole::MODERATOR, AuditReason::try_new("init")?);
         account.pull_events();
 
@@ -64,7 +64,7 @@ mod tests {
 
         let result = f
             .bus()
-            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRoleCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         assert!(
@@ -86,7 +86,7 @@ mod tests {
     #[tokio::test]
     async fn test_change_role_business_idempotency() -> Result<()> {
         let f = TestFixture::new();
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
 
         let _ = account.change_role(AccountRole::MODERATOR, AuditReason::try_new("init")?);
         account.pull_events();
@@ -102,7 +102,7 @@ mod tests {
         };
 
         f.bus()
-            .execute::<AccountContext, ChangeRoleCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, ChangeRoleCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         f.assert_account(|acc| {

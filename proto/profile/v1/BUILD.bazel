@@ -7,9 +7,7 @@ core_rust_proto_library(
     name = "profile_v1",
     srcs = [
         "profile.proto",
-        # "profile_query.proto",
         "models.proto",
-        # "user_location.proto",
     ],
     visibility = ["//visibility:public"],
 )

@@ -13,7 +13,7 @@ mod tests {
     };
 
     fn create_test_settings() -> Result<AccountSettings> {
-        let account_id = AccountId::generate(Region::default());
+        let account_id = AccountId::generate();
         let preferences = AccountPreferences::new(
             PrivacyPreferences::default(),
             NotificationPreferences::default(),
@@ -36,12 +36,12 @@ mod tests {
         let new_tz = Timezone::try_new("Europe/Paris")?;
 
         // 1. Premier passage : mutation acceptée
-        let changed = settings.apply_timezone_update(new_tz.clone(), &region)?;
+        let changed = settings.apply_timezone_update(new_tz.clone())?;
         assert!(changed);
         assert_eq!(settings.timezone().as_str(), "Europe/Paris");
 
         // 2. Idempotence : même valeur
-        let changed_again = settings.apply_timezone_update(new_tz, &region)?;
+        let changed_again = settings.apply_timezone_update(new_tz)?;
         assert!(!changed_again);
 
         Ok(())
@@ -83,21 +83,6 @@ mod tests {
         let changed = settings.apply_appearance_update(identical_appearance);
 
         assert!(!changed);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_timezone_region_inconsistency() -> Result<()> {
-        let mut settings = create_test_settings()?;
-        let region_eu = Region::try_new("EU")?;
-
-        // Exemple d'une timezone incohérente avec la région (si ton VO implémente cette logique)
-        let invalid_tz = Timezone::try_new("America/New_York")?;
-
-        // On s'attend à ce que la règle de validation métier dans apply_timezone_update bloque cela
-        let result = settings.apply_timezone_update(invalid_tz, &region_eu);
-        assert!(result.is_err());
 
         Ok(())
     }

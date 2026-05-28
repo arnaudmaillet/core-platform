@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdatePrivacyCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -16,7 +16,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // On part d'un profil public (is_private: false par défaut dans le builder)
-        let profile = f.builder("alice").with_privacy(false).build()?;
+        let profile = f.builder("alice")?.with_privacy(false).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -28,15 +28,19 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdatePrivacyCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdatePrivacyCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert!(p.is_private());
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert!(p.is_private());
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::PRIVACY_UPDATED));
 
@@ -49,7 +53,7 @@ mod tests {
         let f = ProfileTestFixture::new();
 
         // Le profil est déjà en privé
-        let profile = f.builder("alice").with_privacy(true).build()?;
+        let profile = f.builder("alice")?.with_privacy(true).build()?;
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -61,14 +65,18 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdatePrivacyCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdatePrivacyCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas d'incrément
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas d'incrément
+            })
+            .await;
 
         f.assert_outbox(0, None);
 
@@ -79,7 +87,7 @@ mod tests {
     async fn test_update_privacy_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdatePrivacyCommand {
@@ -91,7 +99,10 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdatePrivacyCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdatePrivacyCommand, ()>(
+                f.command_ctx().clone(),
+                cmd,
+            )
             .await;
 
         // Assert

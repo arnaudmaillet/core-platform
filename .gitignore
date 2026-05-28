@@ -2,6 +2,7 @@
 .env
 local-dev/.env
 infra.env
+settings.json
 
 # Rust / Build
 target/

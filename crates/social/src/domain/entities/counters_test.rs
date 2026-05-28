@@ -40,6 +40,7 @@ mod tests {
         let expected_followers = Counter::from_raw(1250);
         let expected_following = Counter::from_raw(420);
         let expected_version = 8;
+        let created_at = Utc::now() - Duration::hours(6);
         let past_update = Utc::now() - Duration::hours(4);
 
         // When
@@ -48,6 +49,7 @@ mod tests {
             expected_followers,
             expected_following,
             expected_version,
+            created_at,
             past_update,
         );
 
@@ -91,6 +93,7 @@ mod tests {
             Counter::from_raw(5),
             1,
             Utc::now(),
+            Utc::now(),
         );
 
         // When
@@ -131,6 +134,7 @@ mod tests {
             Counter::from_raw(50),
             Counter::from_raw(50),
             4,
+            Utc::now(),
             Utc::now(),
         );
 

@@ -167,7 +167,9 @@ message ResolveSlugsRequest {
 // RESPONSES (COMMANDS)
 // ==========================================
 
-message CreateProfileResponse {}
+message CreateProfileResponse {
+  string profile_id = 1;
+}
 message ChangeHandleResponse {}
 message UpdateDisplayNameResponse {}
 message UpdatePrivacyResponse {}

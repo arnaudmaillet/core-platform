@@ -1,5 +1,3 @@
-// crates/account/src/infrastructure/api/grpc/settings_service.rs
-
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -16,6 +14,7 @@ use crate::commands::{
 };
 use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
+use shared_kernel::types::AccountId;
 
 pub struct AccountSettingsService {
     bus: Arc<CommandBus>,
@@ -43,10 +42,19 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         &self,
         request: Request<UpdatePreferencesRequest>,
     ) -> Result<Response<UpdatePreferencesResponse>, Status> {
-        let command = UpdatePreferencesCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = UpdatePreferencesCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<UpdatePreferencesCommand, (), UpdatePreferencesResponse>(
             &ctx,
@@ -60,10 +68,19 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         &self,
         request: Request<UpdateTimezoneRequest>,
     ) -> Result<Response<UpdateTimezoneResponse>, Status> {
-        let command = UpdateTimezoneCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = UpdateTimezoneCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<UpdateTimezoneCommand, (), UpdateTimezoneResponse>(
             &ctx,
@@ -77,10 +94,19 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         &self,
         request: Request<AddPushTokenRequest>,
     ) -> Result<Response<AddPushTokenResponse>, Status> {
-        let command = AddPushTokenCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = AddPushTokenCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<AddPushTokenCommand, (), AddPushTokenResponse>(
             &ctx,
@@ -94,10 +120,19 @@ impl ProtoAccountSettingsService for AccountSettingsService {
         &self,
         request: Request<RemovePushTokenRequest>,
     ) -> Result<Response<RemovePushTokenResponse>, Status> {
-        let command = RemovePushTokenCommand::try_from_proto(request.get_ref().clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let (_, extensions, req_inner) = request.into_parts();
 
-        let ctx = self.get_context(&request, command.target.id)?;
+        let target = req_inner
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = RemovePushTokenCommand::try_from_proto(req_inner)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<RemovePushTokenCommand, (), RemovePushTokenResponse>(
             &ctx,

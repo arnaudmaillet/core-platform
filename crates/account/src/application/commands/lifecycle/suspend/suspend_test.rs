@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::lifecycle::SuspendCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use crate::domain::types::AccountState;
@@ -15,7 +15,7 @@ mod tests {
         let f = TestFixture::new();
 
         // 1. Arrange
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -27,7 +27,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -50,7 +50,7 @@ mod tests {
         // Arrange : Commande déjà enregistrée
         f.idempotency_repo().seed(cmd_id);
 
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -63,7 +63,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert
@@ -88,7 +88,7 @@ mod tests {
         let f = TestFixture::new();
 
         // Arrange : Compte déjà suspendu
-        let mut account = f.account_builder()?.build()?;
+        let mut account = f.builder()?.build()?;
         account.suspend(AuditReason::try_new("Original reason")?)?;
 
         let version_snapshot = account.version();
@@ -102,7 +102,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, SuspendCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

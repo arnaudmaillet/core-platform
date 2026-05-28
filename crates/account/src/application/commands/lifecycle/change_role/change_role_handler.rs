@@ -6,17 +6,17 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::lifecycle::ChangeRoleCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct ChangeRoleHandler;
 
 #[async_trait]
 impl CommandHandler for ChangeRoleHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ChangeRoleCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: ChangeRoleCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: ChangeRoleCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

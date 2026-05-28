@@ -2,7 +2,6 @@ syntax = "proto3";
 package account.v1;
 
 import "account/v1/models.proto";
-import "account/v1/enums.proto";
 
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
@@ -45,6 +44,6 @@ message ResolveIdentityRequest {
 
 message ResolveIdentityResponse {
   string account_id = 1;
-  AccountState state = 2;
-  AccountRole role = 3;
+  string state = 2;
+  string role = 3;
 }

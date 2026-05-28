@@ -17,9 +17,6 @@ pub struct PostgresAccountGovernanceRow {
     pub last_moderation_at: Option<DateTime<Utc>>,
     pub moderation_notes: Option<String>,
     pub last_ip_addr: Option<StdIpAddr>,
-    // pub account_id: Uuid,
-    // #[sqlx(rename = "governance_updated_at")]
-    // pub updated_at: DateTime<Utc>,
 }
 
 impl PostgresAccountGovernanceRow {
@@ -34,8 +31,6 @@ impl PostgresAccountGovernanceRow {
             last_moderation_at: gov.last_moderation_at(),
             moderation_notes: gov.moderation_notes().map(|s| s.to_string()),
             last_ip_addr: gov.last_ip_addr().map(|ip| ip.to_std()),
-            // account_id: account.account_id().as_uuid(),
-            // updated_at: gov.updated_at(),
         }
     }
 }

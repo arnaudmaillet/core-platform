@@ -36,9 +36,8 @@ mod integration_tests {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
 
-        let region = Region::from_raw(RegionCode::EU);
-        let follower_id = ProfileId::generate(region);
-        let following_id = ProfileId::generate(region);
+        let follower_id = ProfileId::generate();
+        let following_id = ProfileId::generate();
 
         let relation = FollowRelation::builder(follower_id, following_id)
             .with_version(1)
@@ -104,13 +103,12 @@ mod integration_tests {
     async fn test_get_following_and_followers_pagination_limits() -> Result<()> {
         // --- Arrange ---
         let (repo, _scylla_ctx) = get_test_context().await;
-        let region = Region::from_raw(RegionCode::EU);
 
-        let target_user = ProfileId::generate(region);
+        let target_user = ProfileId::generate();
 
         // On génère 5 followers différents qui vont follow notre target
         for _ in 0..5 {
-            let follower_id = ProfileId::generate(region);
+            let follower_id = ProfileId::generate();
             let relation = FollowRelation::builder(follower_id, target_user).build()?;
             repo.save(&relation).await?;
         }
@@ -136,8 +134,8 @@ mod integration_tests {
         let (repo, _scylla_ctx) = get_test_context().await;
         let region = Region::from_raw(RegionCode::EU);
 
-        let random_follower = ProfileId::generate(region);
-        let random_following = ProfileId::generate(region);
+        let random_follower = ProfileId::generate();
+        let random_following = ProfileId::generate();
 
         // --- Act ---
         let result = repo.find(random_follower, random_following).await?;

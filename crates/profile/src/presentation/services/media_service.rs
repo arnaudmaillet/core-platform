@@ -52,7 +52,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = UpdateAvatarCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -78,7 +78,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = UpdateBannerCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -103,7 +103,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = RemoveAvatarCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -128,7 +128,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_context(profile_id, &extensions)?;
+        let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = RemoveBannerCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

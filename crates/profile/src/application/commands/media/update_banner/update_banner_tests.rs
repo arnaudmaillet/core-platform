@@ -4,7 +4,7 @@
 mod tests {
     use crate::application::utils::ProfileTestFixture;
     use crate::commands::UpdateBannerCommand;
-    use crate::context::ProfileContext;
+    use crate::context::ProfileCommandContext;
     use crate::events::ProfileEvent;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::{ErrorCode, Result, Versioned};
@@ -15,7 +15,7 @@ mod tests {
     async fn test_update_banner_success() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?; // Pas de bannière au début
+        let profile = f.builder("alice")?.build()?; // Pas de bannière au début
         let version_snapshot = profile.version();
         f.given_profile(profile).await;
 
@@ -29,15 +29,16 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.banner(), Some(&new_url));
-            assert_eq!(p.version(), version_snapshot + 1);
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.banner(), Some(&new_url));
+                assert_eq!(p.version(), version_snapshot + 1);
+            })
+            .await;
 
         f.assert_outbox(1, Some(ProfileEvent::BANNER_UPDATED));
 
@@ -51,7 +52,7 @@ mod tests {
         let cmd_id = Uuid::new_v4();
         f.idempotency_repo().seed(cmd_id);
 
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateBannerCommand {
@@ -63,7 +64,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert
@@ -83,7 +84,7 @@ mod tests {
         let current_url = Url::try_new("https://cdn.test.com/banner.png")?;
 
         let profile = f
-            .builder("alice")
+            .builder("alice")?
             .with_banner(current_url.clone())
             .build()?;
         let version_snapshot = profile.version();
@@ -97,14 +98,15 @@ mod tests {
 
         // Act
         f.bus()
-            .execute::<ProfileContext, UpdateBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // Assert
-        let _ = f.assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de save
-        })
-        .await;
+        let _ = f
+            .assert_profile(|p| {
+                assert_eq!(p.version(), version_snapshot); // Pas de save
+            })
+            .await;
         f.assert_outbox(0, None);
 
         Ok(())
@@ -114,7 +116,7 @@ mod tests {
     async fn test_update_banner_concurrency_conflict() -> Result<()> {
         // Arrange
         let f = ProfileTestFixture::new();
-        let profile = f.builder("alice").build()?;
+        let profile = f.builder("alice")?.build()?;
         f.given_profile(profile).await;
 
         let cmd = UpdateBannerCommand {
@@ -126,7 +128,7 @@ mod tests {
         // Act
         let result = f
             .bus()
-            .execute::<ProfileContext, UpdateBannerCommand, ()>(f.profile_ctx().clone(), cmd)
+            .execute::<ProfileCommandContext, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // Assert

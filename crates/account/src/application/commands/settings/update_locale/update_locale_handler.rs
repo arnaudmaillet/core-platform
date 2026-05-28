@@ -5,7 +5,7 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::settings::UpdateLocaleCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct UpdateLocaleHandler;
 
@@ -13,11 +13,11 @@ pub struct UpdateLocaleHandler;
 
 #[async_trait]
 impl CommandHandler for UpdateLocaleHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = UpdateLocaleCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: UpdateLocaleCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: UpdateLocaleCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

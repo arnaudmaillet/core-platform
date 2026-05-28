@@ -5,17 +5,17 @@ use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::settings::ChangeEmailCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 
 pub struct ChangeEmailHandler;
 
 #[async_trait]
 impl CommandHandler for ChangeEmailHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = ChangeEmailCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: ChangeEmailCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &AccountCommandContext, cmd: ChangeEmailCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

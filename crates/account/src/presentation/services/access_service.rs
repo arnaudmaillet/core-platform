@@ -1,11 +1,8 @@
-// crates/account/src/infrastructure/api/grpc/access_service.rs
-
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use uuid::Uuid;
 
 use shared_kernel::command::CommandBus;
-use shared_kernel::types::{AccountId, Region, SubId};
+use shared_kernel::types::{AccountId, SubId};
 
 use shared_proto::account::v1::account_access_service_server::AccountAccessService as ProtoAccountAccessService;
 use shared_proto::account::v1::{
@@ -43,30 +40,19 @@ impl ProtoAccountAccessService for AccountAccessService {
         &self,
         request: Request<RegisterRequest>,
     ) -> Result<Response<RegisterResponse>, Status> {
-        let (_metadata, extensions, req) = request.into_parts();
-
-        let region = Region::try_new(&req.region)
-            .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
-
-        let account_id = match &req.sub_id {
-            Some(id) if !id.is_empty() => {
-                let uuid = Uuid::parse_str(id)
-                    .map_err(|_| Status::invalid_argument("Invalid sub_id UUID"))?;
-                AccountId::from_external_uuid(uuid, region)
-            }
-            _ => AccountId::generate(region),
-        };
-
-        let mut command = RegisterCommand::try_from_proto(req)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        command.account_id = account_id;
+        let (_, extensions, req) = request.into_parts();
+        let generated_account_id = AccountId::generate();
 
         let ctx = self.build_creation_context(&extensions)?;
 
+        let command: RegisterCommand = RegisterCommand::try_from_proto(req, generated_account_id)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         let response_payload = RegisterResponse {
-            account_id: account_id.uuid().to_string(),
+            account_id: generated_account_id.to_string(),
         };
 
+        // 4. Dispatch sur le CommandBus
         self.dispatch_command::<RegisterCommand, (), RegisterResponse>(
             &ctx,
             command,
@@ -74,9 +60,7 @@ impl ProtoAccountAccessService for AccountAccessService {
         )
         .await
         .map_err(|e| {
-            // C'est ici que tu vas enfin voir l'erreur
             tracing::error!(target: "account_debug", error = ?e, "CRASH DANS REGISTER");
-            // Reste sur le statut actuel pour ne pas casser le contrat gRPC
             e
         })
     }
@@ -85,19 +69,24 @@ impl ProtoAccountAccessService for AccountAccessService {
         &self,
         request: Request<LinkSubIdentityRequest>,
     ) -> Result<Response<LinkSubIdentityResponse>, Status> {
-        let (_metadata, _extensions, req) = request.into_parts();
+        let (_, extensions, req) = request.into_parts();
 
+        let target = req
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
+        let account_id = AccountId::try_from(target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
         let command = LinkSubIdentityCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let ctx = self.get_context(&Request::new(()), command.target.id)?;
-
-        let response_payload = LinkSubIdentityResponse {};
 
         self.dispatch_command::<LinkSubIdentityCommand, (), LinkSubIdentityResponse>(
             &ctx,
             command,
-            response_payload,
+            LinkSubIdentityResponse {},
         )
         .await
     }
@@ -106,23 +95,31 @@ impl ProtoAccountAccessService for AccountAccessService {
         &self,
         request: Request<ResolveIdentityRequest>,
     ) -> Result<Response<ResolveIdentityResponse>, Status> {
-        let req = request.into_inner();
+        let (_, extensions, req) = request.into_parts();
 
         let sub_id =
             SubId::try_new(req.sub_id).map_err(|e| Status::invalid_argument(e.to_string()))?;
 
+        let query_ctx = self.build_query_context(&extensions)?;
+
         let account = self
             .app_ctx
             .account_repo()
-            .find_by_sub_id(&sub_id, None)
+            .find_by_sub_id(query_ctx.region(), &sub_id, None)
             .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| Status::not_found("No account associated with this sub identity"))?;
+            .map_err(|e| {
+                Status::internal(format!("Database error during identity resolution: {}", e))
+            })?
+            .ok_or_else(|| {
+                Status::not_found(
+                    "No account associated with this sub identity in the target region",
+                )
+            })?;
 
         Ok(Response::new(ResolveIdentityResponse {
             account_id: account.account_id().to_string(),
-            state: *account.identity().state() as i32,
-            role: account.governance().role() as i32,
+            state: account.identity().state().to_string(),
+            role: account.governance().role().to_string(),
         }))
     }
 }

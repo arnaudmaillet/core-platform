@@ -1,28 +1,34 @@
-// crates/account/src/application/use_cases/access_management/register/mod.rs
 use async_trait::async_trait;
 
 use shared_kernel::command::CommandHandler;
 use shared_kernel::core::{Error, Result, RetryConfig};
 
 use crate::application::commands::access_management::RegisterCommand;
-use crate::application::context::AccountContext;
+use crate::application::context::AccountCommandContext;
 use crate::domain::entities::Account;
 
 pub struct RegisterHandler;
 
 #[async_trait]
 impl CommandHandler for RegisterHandler {
-    type Context = AccountContext;
+    type Context = AccountCommandContext;
     type Command = RegisterCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountContext, cmd: RegisterCommand) -> Result<Self::Output> {
-        if !ctx.ensure_creatable(cmd.command_id).await? {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext,
+        cmd: RegisterCommand,
+    ) -> Result<Self::Output> {
+        if !ctx.ensure_creatable(cmd.command_id, cmd.region).await? {
             return Ok(());
         }
-        // 1. VÉRIFICATION D'UNICITÉ
         if let Some(ref ext_id) = cmd.sub_id {
-            let existing = ctx.account_repo().find_by_sub_id(ext_id, None).await?;
+            let existing = ctx
+                .app()
+                .account_repo()
+                .find_by_sub_id(ctx.region(), ext_id, None)
+                .await?;
 
             if existing.is_some() {
                 return Err(Error::already_exists(
@@ -33,7 +39,6 @@ impl CommandHandler for RegisterHandler {
             }
         }
 
-        // 2. Construction de l'agrégat
         let account_id = cmd.account_id;
         let mut builder = Account::builder(account_id, cmd.identifier);
 
@@ -42,11 +47,7 @@ impl CommandHandler for RegisterHandler {
         }
 
         let mut account = builder.with_locale(cmd.locale).build()?;
-
-        // 3. Logique métier
-        account.register(cmd.account_id.region(), cmd.ip_addr)?;
-
-        // 4. Persistance (atomique avec Outbox et Idempotence)
+        account.register(cmd.ip_addr)?;
         ctx.save(&mut account, Some(cmd.command_id)).await?;
 
         Ok(())

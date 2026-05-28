@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::application::commands::access_management::LinkSubIdentityCommand;
-    use crate::application::context::AccountContext;
+    use crate::application::context::AccountCommandContext;
     use crate::application::utils::TestFixture;
     use crate::domain::events::AccountEvent;
     use shared_kernel::core::{Error, ErrorCode, Result};
@@ -15,7 +15,7 @@ mod tests {
         let new_ext = SubId::try_new("google_123")?;
 
         // 1. Arrange : On utilise désormais None (Option)
-        let account = f.account_builder_for(f.region())?.build()?;
+        let account = f.builder_for(f.region())?.build()?;
 
         let version_snapshot = account.version();
         f.account_repo().insert(account);
@@ -28,7 +28,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert
@@ -51,7 +51,7 @@ mod tests {
         let ext_id = SubId::try_new("steam_456")?;
 
         // 1. Arrange: Le compte a déjà cet ID externe
-        let mut account = f.account_builder()?.with_sub_id(ext_id.clone()).build()?;
+        let mut account = f.builder()?.with_sub_id(ext_id.clone()).build()?;
 
         account.pull_events(); // On vide l'outbox de création
         let version_snapshot = account.version();
@@ -65,7 +65,7 @@ mod tests {
 
         // 2. Act
         f.bus()
-            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert: La version et l'outbox restent inchangées
@@ -86,7 +86,7 @@ mod tests {
         f.idempotency_repo().seed(cmd_id);
 
         // On utilise un compte valide pour ne pas déclencher le "Forbidden"
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         f.account_repo().insert(account);
 
         let cmd = LinkSubIdentityCommand {
@@ -99,7 +99,7 @@ mod tests {
         // 2. Act
         let result = f
             .bus()
-            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
             .await;
 
         // 3. Assert : Ici on s'attend à ce que l'infra bloque AVANT le domaine
@@ -118,7 +118,7 @@ mod tests {
     #[tokio::test]
     async fn test_link_sub_identity_concurrency_retry() -> Result<()> {
         let f = TestFixture::new();
-        let account = f.account_builder()?.build()?;
+        let account = f.builder()?.build()?;
         let version_snapshot = account.version();
         f.account_repo().insert(account);
 
@@ -134,7 +134,7 @@ mod tests {
 
         // 2. Act : Le CommandBus doit gérer le retry automatiquement
         f.bus()
-            .execute::<AccountContext, LinkSubIdentityCommand, ()>(f.account_ctx().clone(), cmd)
+            .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
         // 3. Assert

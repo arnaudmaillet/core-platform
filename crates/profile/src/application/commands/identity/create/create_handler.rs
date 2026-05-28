@@ -1,6 +1,6 @@
 // crates/profile/src/application/use_cases/identity/create_profile/mod.rs
 
-use crate::application::context::ProfileContext;
+use crate::application::context::ProfileCommandContext;
 use crate::commands::CreateProfileCommand;
 use crate::domain::entities::Profile;
 use crate::types::DisplayName;
@@ -12,24 +12,24 @@ pub struct CreateProfileHandler;
 
 #[async_trait]
 impl CommandHandler for CreateProfileHandler {
-    type Context = ProfileContext;
+    type Context = ProfileCommandContext;
     type Command = CreateProfileCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileContext,
+        ctx: &ProfileCommandContext,
         cmd: CreateProfileCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_creatable(cmd.command_id, &cmd.region, &cmd.handle)
+            .ensure_creatable(cmd.command_id, cmd.region, &cmd.handle)
             .await?
         {
             return Ok(());
         }
 
         let display_name = DisplayName::from_raw(cmd.handle.as_str());
-        let mut profile = Profile::builder(cmd.account_id, cmd.handle)?
+        let mut profile = Profile::builder(cmd.account_id, cmd.profile_id, cmd.handle)?
             .with_display_name(display_name)
             .build()?;
         profile.create_profile()?;

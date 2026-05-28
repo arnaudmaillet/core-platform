@@ -7,6 +7,7 @@ use profile_test_utils::ProfileTestContext;
 use serde_json::json;
 use shared_kernel::core::Result;
 use shared_kernel::messaging::{EventEnvelope, EventProducer};
+use shared_kernel::types::{AccountId, Region};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -29,10 +30,10 @@ async fn test_worker_e2e_profile_creation_on_account_event() -> Result<()> {
 
     // 3. ACT : On crée l'enveloppe et le payload conformes au format d'AccountRegistered
     let region_str = "EU";
-    let region = shared_kernel::types::Region::try_new(region_str)?;
+    let region = Region::try_new(region_str)?;
 
     // 💡 FIX : On utilise ton vrai Smart ID typé pour générer un identifiant valide pour le domaine !
-    let real_account_id = shared_kernel::types::AccountId::generate(region);
+    let real_account_id = AccountId::generate();
     let account_id_string = real_account_id.to_string();
     let account_uuid = real_account_id.uuid(); // Pour l'interrogation SQLx plus bas
 
