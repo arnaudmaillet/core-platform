@@ -12,7 +12,7 @@ shared-kernel = { workspace = true, features = ["concurrency"] }
 infra-scylla = { workspace = true }
 infra-fred = { workspace = true }
 infra-test = { workspace = true }
-shared-proto = { workspace = true }
+shared-proto = { workspace = true, features = ["social"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

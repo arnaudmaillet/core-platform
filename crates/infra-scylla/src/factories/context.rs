@@ -19,10 +19,6 @@ impl ScyllaContext {
         ScyllaContextBuilder::new()
     }
 
-    pub fn builder_raw() -> ScyllaContextBuilder {
-        ScyllaContextBuilder::default()
-    }
-
     pub fn session(&self) -> Arc<Session> {
         self.session.clone()
     }

@@ -1,8 +1,7 @@
-
 use chrono::Utc;
 use infra_test::ScyllaTestContext;
 use shared_kernel::core::{Error, Identifier, Result};
-use shared_kernel::types::{Counter, ProfileId, Region, RegionCode};
+use shared_kernel::types::{Counter, ProfileId};
 use social::entities::ProfileCounters;
 use social::repositories::CounterRepository;
 use social::scylla::ScyllaCounterRepository;
@@ -100,7 +99,6 @@ async fn test_counter_atomic_increment_and_decrement_lifecycle() -> Result<()> {
 async fn test_counter_save_custom_delta_sync() -> Result<()> {
     // --- Arrange ---
     let (repo, _scylla_ctx) = get_test_context().await;
-    let region = Region::from_raw(RegionCode::EU);
     let profile_id = ProfileId::generate();
 
     // Simulation d'un delta cumulé par un worker de réconciliation (+5 followers, +12 followings)

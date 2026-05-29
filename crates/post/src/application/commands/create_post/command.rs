@@ -51,7 +51,7 @@ impl CreatePostCommand {
         let command_id = Uuid::parse_str(&req.command_id)
             .map_err(|_| Error::validation("command_id", "Invalid UUID"))?;
         let region = Region::try_new(req.region)
-            .map_err(|e| Error::validation("region", "Invalid region"))?;
+            .map_err(|_| Error::validation("region", "Invalid region"))?;
 
         let author_id = ProfileId::try_new(req.author_id)?;
         let post_type = PostType::try_from(req.post_type)?;

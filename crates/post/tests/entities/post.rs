@@ -9,7 +9,7 @@ mod tests {
     };
     use post::types::{MediaId, Mentions};
     use shared_kernel::messaging::EventEmitter;
-    use shared_kernel::types::{PostId, ProfileId, Region, Url};
+    use shared_kernel::types::{PostId, ProfileId, Url};
 
     // Helper pour créer un MediaAsset valide
     fn create_video_asset(id: MediaId) -> MediaAsset {

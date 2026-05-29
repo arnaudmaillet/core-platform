@@ -4,7 +4,7 @@ use crate::entities::Profile;
 use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use shared_kernel::core::{AggregateMetadata, Result};
-use shared_kernel::types::{AccountId, ProfileId, Region, Url};
+use shared_kernel::types::{AccountId, ProfileId, Url};
 
 pub struct ProfileBuilder {
     profile_id: ProfileId,

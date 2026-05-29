@@ -9,20 +9,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("../../../proto")
         .canonicalize()?;
 
-    let protos = [
-        "account/v1/access.proto",
-        "account/v1/personal.proto",
-        "account/v1/settings.proto",
-        "account/v1/moderation.proto",
-        "account/v1/query.proto",
-        "profile/v1/profile.proto",
-        "profile/v1/models.proto",
-        "social/v1/social.proto",
-        "post/v1/models.proto",
-        "post/v1/service.proto",
-    ];
-
     let proto_root_str = proto_root.to_str().expect("Chemin non valide UTF-8");
+    let mut protos = Vec::new();
+
+    if env::var("CARGO_FEATURE_ACCOUNT").is_ok() {
+        protos.push("account/v1/service.proto");
+        protos.push("account/v1/models.proto");
+    }
+    if env::var("CARGO_FEATURE_PROFILE").is_ok() {
+        protos.push("profile/v1/service.proto");
+        protos.push("profile/v1/models.proto");
+    }
+    if env::var("CARGO_FEATURE_SOCIAL").is_ok() {
+        protos.push("social/v1/service.proto");
+    }
+    if env::var("CARGO_FEATURE_POST").is_ok() {
+        protos.push("post/v1/models.proto");
+        protos.push("post/v1/service.proto");
+    }
+    if protos.is_empty() {
+        return Ok(());
+    }
 
     tonic_prost_build::configure()
         .build_server(true)

@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.trim().to_string())
         .collect();
 
-    let scylla_ctx = ScyllaContext::builder_raw()
+    let scylla_ctx = ScyllaContext::builder()?
         .with_nodes(scylla_nodes)
         .with_keyspace(keyspace_name) // Keyspace configuré dans ta migration CQL
         .build()
@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_ctx = builder.build_context().await?;
     let bus = builder.build_command_bus();
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "50054".to_string()); // Port distinct pour éviter les collisions en local
+    let port = std::env::var("PORT").unwrap_or_else(|_| "50054".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
     let validator = Arc::new(

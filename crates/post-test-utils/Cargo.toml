@@ -14,7 +14,7 @@ shared-kernel = { workspace = true }
 shared-kernel-test-utils = { workspace = true }
 infra-fred = { workspace = true }
 infra-test = { workspace = true }
-shared-proto = { workspace = true }
+shared-proto = { workspace = true, features = ["post"] }
 async-trait = { workspace = true }
 post = { workspace = true }
 tokio = { workspace = true }

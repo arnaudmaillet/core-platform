@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_interceptor = AuthInterceptor::new(validator.clone());
     let identity_svc = ProfileIdentityService::new(bus.clone(), app_ctx.clone());
     let media_svc = ProfileMediaService::new(bus.clone(), app_ctx.clone());
-    let metadata_svc = ProfileMetadataService::new(bus.clone(), app_ctx.clone());
+    let metadata_svc = ProfileMetadataService::new(bus, app_ctx);
 
     tracing::info!("🚀 Profile Service listening on {}", addr);
 
@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ))
         .add_service(ProfileMetadataServiceServer::with_interceptor(
             metadata_svc,
-            auth_interceptor.clone(),
+            auth_interceptor,
         ))
         .serve(addr)
         .await?;

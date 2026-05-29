@@ -13,7 +13,7 @@ auth = { workspace = true }
 auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
 infra-fred = { workspace = true }
-shared-proto = { workspace = true }
+shared-proto = { workspace = true, features = ["social"] }
 shared-kernel = { workspace = true }
 shared-kernel-test-utils = { workspace = true }
 tonic = { workspace = true }
