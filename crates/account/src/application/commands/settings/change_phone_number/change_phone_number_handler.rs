@@ -1,23 +1,34 @@
 // crates/account/src/application/change_email/change_phone_number_use_case.rs
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::settings::ChangePhoneNumberCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct ChangePhoneNumberHandler;
+pub struct ChangePhoneNumberHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> ChangePhoneNumberHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for ChangePhoneNumberHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangePhoneNumberHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = ChangePhoneNumberCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: ChangePhoneNumberCommand,
     ) -> Result<Self::Output> {
         if !ctx

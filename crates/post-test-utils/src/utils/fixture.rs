@@ -14,11 +14,11 @@ use post::context::{PostAppContext, PostCommandContext, PostQueryContext};
 use post::entities::Post;
 use post::repositories::PostRepository;
 use post::types::{Caption, PostType, VisibilityLevel};
-use shared_kernel::cache::CacheRepositoryStub;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
-use shared_kernel::idempotency::IdempotencyRepositoryStub;
 use shared_kernel::types::{PostId, ProfileId, Region};
+use shared_kernel_test_utils::repositories::CacheRepositoryStub;
+use shared_kernel_test_utils::repositories::IdempotencyRepositoryStub;
 
 pub struct PostTestFixture {
     bus: Arc<CommandBus>,

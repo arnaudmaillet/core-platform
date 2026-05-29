@@ -1,24 +1,34 @@
 // crates/profile/src/application/commands/identity/change_handle/change_handle_handler.rs
 
+use crate::{commands::ChangeHandleCommand, context::ProfileCommandContext};
 use async_trait::async_trait;
 use shared_kernel::{
     command::CommandHandler,
-    core::{Error, Result},
+    core::{Error, Result, TransactionManager},
 };
+use std::marker::PhantomData;
 
-use crate::{commands::ChangeHandleCommand, context::ProfileCommandContext};
+pub struct ChangeHandleHandler<TM> {
+    _marker: PhantomData<TM>,
+}
 
-pub struct ChangeHandleHandler;
+impl<TM> ChangeHandleHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for ChangeHandleHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeHandleHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = ChangeHandleCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: ChangeHandleCommand,
     ) -> Result<Self::Output> {
         if !ctx

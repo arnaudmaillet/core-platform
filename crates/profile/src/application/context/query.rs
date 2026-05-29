@@ -1,17 +1,27 @@
+// crates/profile/src/context/query_context.rs
+
 use crate::{context::ProfileAppContext, entities::Profile, types::Handle};
 use shared_kernel::{
     core::Result,
     types::{ProfileId, Region},
 };
 
-#[derive(Clone)]
-pub struct ProfileQueryContext {
-    app_ctx: ProfileAppContext,
+pub struct ProfileQueryContext<TM> {
+    app_ctx: ProfileAppContext<TM>,
     region: Region,
 }
 
-impl ProfileQueryContext {
-    pub(crate) fn new(app_ctx: ProfileAppContext, region: Region) -> Self {
+impl<TM> Clone for ProfileQueryContext<TM> {
+    fn clone(&self) -> Self {
+        Self {
+            app_ctx: self.app_ctx.clone(),
+            region: self.region,
+        }
+    }
+}
+
+impl<TM> ProfileQueryContext<TM> {
+    pub(crate) fn new(app_ctx: ProfileAppContext<TM>, region: Region) -> Self {
         Self { app_ctx, region }
     }
 

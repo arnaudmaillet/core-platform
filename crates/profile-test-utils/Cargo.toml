@@ -9,6 +9,7 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
 profile = { workspace = true }
 auth = { workspace = true }
 auth-test-utils = { workspace = true }
@@ -16,6 +17,7 @@ infra-test = { workspace = true }
 infra-sqlx = { workspace = true }
 infra-kafka = { workspace = true }
 shared-proto = { workspace = true }
+async-trait = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }

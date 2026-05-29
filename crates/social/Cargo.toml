@@ -8,10 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
-shared-kernel = { workspace = true, features = [
-    "concurrency",
-    "stub",
-] }
+shared-kernel = { workspace = true, features = ["concurrency"] }
 infra-scylla = { workspace = true }
 infra-fred = { workspace = true }
 infra-test = { workspace = true }

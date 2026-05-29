@@ -1,22 +1,37 @@
 // crates/profile/src/application/commands/identity/update_privacy/update_privacy_handler.rs
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
-use shared_kernel::{command::CommandHandler, core::Result};
+use shared_kernel::{
+    command::CommandHandler,
+    core::{Result, TransactionManager},
+};
 use tracing::info;
 
 use crate::{commands::UpdatePrivacyCommand, context::ProfileCommandContext};
 
-pub struct UpdatePrivacyHandler;
+pub struct UpdatePrivacyHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UpdatePrivacyHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdatePrivacyHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdatePrivacyHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = UpdatePrivacyCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: UpdatePrivacyCommand,
     ) -> Result<Self::Output> {
         if !ctx

@@ -1,28 +1,34 @@
+// crates/account/src/application/context/command_context.rs
+
 use crate::application::context::AccountAppContext;
 use crate::domain::entities::Account;
-use infra_sqlx::PostgresTransaction;
-use shared_kernel::messaging::EventEmitter;
-use shared_kernel::{
-    command::CommandTarget,
-    core::{Error, Result, Transaction, Versioned},
-    messaging::Event,
-    types::{AccountId, Region},
-};
+use infra_sqlx::TransactionManagerExt;
+use shared_kernel::command::CommandTarget;
+use shared_kernel::core::TransactionManager;
+use shared_kernel::core::{Error, Result, Versioned};
+use shared_kernel::messaging::{Event, EventEmitter};
+use shared_kernel::types::{AccountId, Region};
 use uuid::Uuid;
 
-#[cfg(any(test, feature = "test-utils"))]
-use shared_kernel::core::TransactionStub;
-
-#[derive(Clone)]
-pub struct AccountCommandContext {
-    app: AccountAppContext,
+pub struct AccountCommandContext<TM> {
+    app: AccountAppContext<TM>,
     account_id: Option<AccountId>,
     region: Region,
 }
 
-impl AccountCommandContext {
+impl<TM> Clone for AccountCommandContext<TM> {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+            account_id: self.account_id,
+            region: self.region,
+        }
+    }
+}
+
+impl<TM> AccountCommandContext<TM> {
     pub(crate) fn new(
-        app: AccountAppContext,
+        app: AccountAppContext<TM>,
         account_id: Option<AccountId>,
         region: Region,
     ) -> Self {
@@ -33,7 +39,7 @@ impl AccountCommandContext {
         }
     }
 
-    pub fn app(&self) -> &AccountAppContext {
+    pub fn app(&self) -> &AccountAppContext<TM> {
         &self.app
     }
 
@@ -49,7 +55,9 @@ impl AccountCommandContext {
             )
         })
     }
+}
 
+impl<TM: TransactionManager> AccountCommandContext<TM> {
     pub async fn ensure_creatable(&self, command_id: Uuid, command_region: Region) -> Result<bool> {
         if command_region != self.region {
             return Err(Error::validation(
@@ -75,11 +83,17 @@ impl AccountCommandContext {
             ));
         }
 
-        let mut tx = self.begin_transaction().await?;
         let exists = self
             .app
-            .idempotency_repo()
-            .exists(Some(&mut *tx), &command_id)
+            .transaction_manager()
+            .run_in_transaction(|mut tx| async move {
+                let is_present = self
+                    .app
+                    .idempotency_repo()
+                    .exists(Some(&mut *tx), &command_id)
+                    .await?;
+                Ok(is_present)
+            })
             .await?;
 
         Ok(!exists)
@@ -121,63 +135,49 @@ impl AccountCommandContext {
             }
         }
 
-        let mut tx = self.begin_transaction().await?;
-
-        if let Some(cmd_id) = command_id {
-            if self
-                .app
-                .idempotency_repo()
-                .exists(Some(&mut *tx), &cmd_id)
-                .await?
-            {
-                return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
-            }
-        }
-
         let events = account.pull_events();
 
-        if !events.is_empty() {
-            self.app
-                .account_repo()
-                .save(self.region, account, Some(&mut *tx))
-                .await?;
+        self.app
+            .transaction_manager()
+            .run_in_transaction(|mut tx| async move {
+                if let Some(cmd_id) = command_id {
+                    if self
+                        .app
+                        .idempotency_repo()
+                        .exists(Some(&mut *tx), &cmd_id)
+                        .await?
+                    {
+                        return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
+                    }
+                }
 
-            let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
-            self.app
-                .outbox_repo()
-                .save_all(self.region, &mut *tx, &event_refs)
-                .await?;
-        } else {
-            tracing::debug!(account_id = %account.account_id(), "Idempotence métier : écriture du compte court-circuitée");
-        }
+                if !events.is_empty() {
+                    self.app
+                        .account_repo()
+                        .save(self.region, account, Some(&mut *tx))
+                        .await?;
 
-        if let Some(cmd_id) = command_id {
-            self.app
-                .idempotency_repo()
-                .save(Some(&mut *tx), &cmd_id)
-                .await?;
-        }
+                    let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
+                    self.app
+                        .outbox_repo()
+                        .save_all(self.region, &mut *tx, &event_refs)
+                        .await?;
+                } else {
+                    tracing::debug!(account_id = %account.account_id(), "Idempotence métier : écriture du compte court-circuitée");
+                }
 
-        tx.commit().await?;
+                if let Some(cmd_id) = command_id {
+                    self.app
+                        .idempotency_repo()
+                        .save(Some(&mut *tx), &cmd_id)
+                        .await?;
+                }
+
+                tx.commit().await?;
+                Ok(())
+            })
+            .await?;
+
         Ok(())
-    }
-
-    async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
-        match self.app.pg_pool() {
-            Some(pool) => {
-                let tx = pool
-                    .begin()
-                    .await
-                    .map_err(|e| Error::internal(e.to_string()))?;
-                Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
-            }
-            #[cfg(any(test, feature = "test-utils"))]
-            None => Ok(Box::new(TransactionStub::new()) as Box<dyn Transaction>),
-
-            #[cfg(not(any(test, feature = "test-utils")))]
-            None => Err(Error::internal(
-                "Database pool is missing. AccountAppContext must be initialized with a valid PgPool in production.",
-            )),
-        }
     }
 }

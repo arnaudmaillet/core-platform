@@ -6,6 +6,7 @@ version = 4
 name = "account"
 version = "0.1.0"
 dependencies = [
+ "account-test-utils",
  "async-trait",
  "chrono",
  "infra-sqlx",
@@ -13,6 +14,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared-kernel",
+ "shared-kernel-test-utils",
  "shared-proto",
  "sqlx",
  "tokio",
@@ -72,10 +74,13 @@ name = "account-test-utils"
 version = "0.1.0"
 dependencies = [
  "account",
+ "async-trait",
  "auth",
  "auth-test-utils",
  "infra-sqlx",
  "infra-test",
+ "shared-kernel",
+ "shared-kernel-test-utils",
  "shared-proto",
  "tokio",
  "tokio-stream",
@@ -2756,7 +2761,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -2791,6 +2795,7 @@ dependencies = [
  "infra-test",
  "post",
  "shared-kernel",
+ "shared-kernel-test-utils",
  "shared-proto",
  "tokio",
  "tokio-stream",
@@ -2865,21 +2870,19 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "auth",
  "chrono",
  "elasticsearch",
  "futures",
- "infra-kafka",
  "infra-sqlx",
  "infra-test",
- "prost-types",
+ "profile-test-utils",
  "serde",
  "serde_json",
  "shared-kernel",
+ "shared-kernel-test-utils",
  "shared-proto",
  "sqlx",
  "tokio",
- "tokio-stream",
  "tonic",
  "tonic-prost-build",
  "tracing",
@@ -2956,6 +2959,7 @@ dependencies = [
 name = "profile-test-utils"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "auth",
  "auth-test-utils",
  "infra-kafka",
@@ -2964,6 +2968,7 @@ dependencies = [
  "profile",
  "serde_json",
  "shared-kernel",
+ "shared-kernel-test-utils",
  "shared-proto",
  "tokio",
  "tokio-stream",
@@ -3812,6 +3817,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-kernel-test-utils"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "shared-kernel",
+ "uuid",
+]
+
+[[package]]
 name = "shared-proto"
 version = "0.1.0"
 dependencies = [
@@ -3939,10 +3953,14 @@ dependencies = [
 name = "social-test-utils"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "auth",
  "auth-test-utils",
+ "chrono",
  "infra-fred",
  "infra-test",
+ "shared-kernel",
+ "shared-kernel-test-utils",
  "shared-proto",
  "social",
  "tokio",

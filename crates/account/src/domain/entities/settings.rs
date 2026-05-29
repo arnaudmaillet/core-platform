@@ -88,7 +88,7 @@ impl AccountSettings {
         AccountSettingsBuilder::new(account_id)
     }
 
-    pub(crate) fn restore(
+    pub fn restore(
         account_id: AccountId,
         preferences: AccountPreferences,
         timezone: Timezone,
@@ -118,9 +118,7 @@ impl AccountSettings {
         &self.push_tokens
     }
 
-    // --- MUTATIONS INTERNES (pub(crate)) ---
-
-    pub(crate) fn apply_timezone_update(&mut self, new_tz: Timezone) -> Result<bool> {
+    pub fn apply_timezone_update(&mut self, new_tz: Timezone) -> Result<bool> {
         if self.timezone == new_tz {
             return Ok(false);
         }
@@ -129,7 +127,7 @@ impl AccountSettings {
         Ok(true)
     }
 
-    pub(crate) fn apply_push_token_add(&mut self, token: PushToken) -> bool {
+    pub fn apply_push_token_add(&mut self, token: PushToken) -> bool {
         if self.push_tokens.contains(&token) {
             return false;
         }
@@ -142,24 +140,21 @@ impl AccountSettings {
         true
     }
 
-    pub(crate) fn apply_push_token_remove(&mut self, token: &PushToken) -> bool {
+    pub fn apply_push_token_remove(&mut self, token: &PushToken) -> bool {
         let original_len = self.push_tokens.len();
         self.push_tokens.retain(|t| t != token);
         self.push_tokens.len() != original_len
     }
 
-    pub(crate) fn apply_notifications_update(
-        &mut self,
-        new_prefs: NotificationPreferences,
-    ) -> bool {
+    pub fn apply_notifications_update(&mut self, new_prefs: NotificationPreferences) -> bool {
         self.preferences.update_notifications(new_prefs)
     }
 
-    pub(crate) fn apply_appearance_update(&mut self, new_prefs: AppearancePreferences) -> bool {
+    pub fn apply_appearance_update(&mut self, new_prefs: AppearancePreferences) -> bool {
         self.preferences.update_appearance(new_prefs)
     }
 
-    pub(crate) fn apply_privacy_update(&mut self, new_prefs: PrivacyPreferences) -> bool {
+    pub fn apply_privacy_update(&mut self, new_prefs: PrivacyPreferences) -> bool {
         self.preferences.update_privacy(new_prefs)
     }
 }

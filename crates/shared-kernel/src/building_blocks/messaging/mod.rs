@@ -14,6 +14,3 @@ pub use operation_tracker::OperationTracker;
 pub use producer::EventProducer;
 
 pub use outbox::{OutboxProcessor, OutboxRepository, OutboxStore};
-
-#[cfg(feature = "stub")]
-pub use outbox::OutboxRepositoryStub;

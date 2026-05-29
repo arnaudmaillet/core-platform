@@ -1,23 +1,33 @@
 use async_trait::async_trait;
-
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{Error, Result, RetryConfig};
+use shared_kernel::core::{Error, Result, RetryConfig, TransactionManager};
+use std::marker::PhantomData;
 
 use crate::application::commands::access_management::RegisterCommand;
 use crate::application::context::AccountCommandContext;
 use crate::domain::entities::Account;
 
-pub struct RegisterHandler;
+pub struct RegisterHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> RegisterHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for RegisterHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for RegisterHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = RegisterCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: RegisterCommand,
     ) -> Result<Self::Output> {
         if !ctx.ensure_creatable(cmd.command_id, cmd.region).await? {

@@ -4,21 +4,23 @@ use crate::{
     commands::{
         ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
         BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
-        ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-        ChangeRoleCommand, ChangeRoleHandler,
-        DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
-        IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
-        LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
-        RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
-        ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler,
-        UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler,
+        ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler, ChangeRoleCommand,
+        ChangeRoleHandler, DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand,
+        DecreaseTrustScoreHandler, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
+        LiftShadowbanCommand, LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler,
+        RegisterCommand, RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler,
+        ShadowbanCommand, ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand,
+        UnbanHandler, UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler,
         UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
         UpdateTimezoneHandler,
     },
     context::{AccountAppContext, AccountCommandContext},
     db::PostgresAccountRepository,
 };
-use infra_sqlx::{PostgresIdempotencyRepository, PostgresOutboxRepository, sqlx::PgPool};
+use infra_sqlx::{
+    PostgresIdempotencyRepository, PostgresOutboxRepository, PostgresTransactionManager,
+    sqlx::PgPool,
+};
 use shared_kernel::{cache::CacheRepository, command::CommandBus};
 
 pub struct AccountServiceBuilder {
@@ -31,14 +33,14 @@ impl AccountServiceBuilder {
         Self { pool, cache_repo }
     }
 
-    pub fn build_context(&self) -> Arc<AccountAppContext> {
+    pub fn build_context(&self) -> Arc<AccountAppContext<PostgresTransactionManager>> {
+        let tx_manager = Arc::new(PostgresTransactionManager::new(self.pool.clone()));
         let account_repo = Arc::new(PostgresAccountRepository::new(self.pool.clone()));
-
         let outbox_repo = Arc::new(PostgresOutboxRepository::new(self.pool.clone()));
         let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("account_idempotency"));
 
         Arc::new(AccountAppContext::new(
-            self.pool.clone(),
+            tx_manager,
             account_repo,
             outbox_repo,
             idempotency_repo,
@@ -48,58 +50,59 @@ impl AccountServiceBuilder {
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
         let mut bus = CommandBus::new(self.cache_repo.clone());
 
-        // --- Access Management ---
-        bus.register::<AccountCommandContext, RegisterCommand, RegisterHandler>(RegisterHandler);
-        bus.register::<AccountCommandContext, LinkSubIdentityCommand, LinkSubIdentityHandler>(
-            LinkSubIdentityHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, RegisterCommand, RegisterHandler<PostgresTransactionManager>>(RegisterHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, LinkSubIdentityCommand, LinkSubIdentityHandler<PostgresTransactionManager>>(
+            LinkSubIdentityHandler::new(),
         );
-
-        // --- Lifecycle ---
-        bus.register::<AccountCommandContext, ActivateCommand, ActivateHandler>(ActivateHandler);
-        bus.register::<AccountCommandContext, DeactivateCommand, DeactivateHandler>(DeactivateHandler);
-        bus.register::<AccountCommandContext, ChangeRoleCommand, ChangeRoleHandler>(ChangeRoleHandler);
-        bus.register::<AccountCommandContext, SuspendCommand, SuspendHandler>(SuspendHandler);
-        bus.register::<AccountCommandContext, UnsuspendCommand, UnsuspendHandler>(UnsuspendHandler);
-
-        // --- Moderation ---
-        bus.register::<AccountCommandContext, BanCommand, BanHandler>(BanHandler);
-        bus.register::<AccountCommandContext, UnbanCommand, UnbanHandler>(UnbanHandler);
-        bus.register::<AccountCommandContext, ShadowbanCommand, ShadowbanHandler>(ShadowbanHandler);
-        bus.register::<AccountCommandContext, LiftShadowbanCommand, LiftShadowbanHandler>(
-            LiftShadowbanHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ActivateCommand, ActivateHandler<PostgresTransactionManager>>(ActivateHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, DeactivateCommand, DeactivateHandler<PostgresTransactionManager>>(
+            DeactivateHandler::new(),
         );
-        bus.register::<AccountCommandContext, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler>(
-            IncreaseTrustScoreHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangeRoleCommand, ChangeRoleHandler<PostgresTransactionManager>>(
+            ChangeRoleHandler::new(),
         );
-        bus.register::<AccountCommandContext, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler>(
-            DecreaseTrustScoreHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, SuspendCommand, SuspendHandler<PostgresTransactionManager>>(SuspendHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, UnsuspendCommand, UnsuspendHandler<PostgresTransactionManager>>(UnsuspendHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, BanCommand, BanHandler<PostgresTransactionManager>>(
+            BanHandler::new(),
         );
-
-        // --- Settings ---
-        bus.register::<AccountCommandContext, AddPushTokenCommand, AddPushTokenHandler>(
-            AddPushTokenHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, UnbanCommand, UnbanHandler<PostgresTransactionManager>>(UnbanHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ShadowbanCommand, ShadowbanHandler<PostgresTransactionManager>>(ShadowbanHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, LiftShadowbanCommand, LiftShadowbanHandler<PostgresTransactionManager>>(
+            LiftShadowbanHandler::new(),
         );
-        bus.register::<AccountCommandContext, RemovePushTokenCommand, RemovePushTokenHandler>(
-            RemovePushTokenHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler<PostgresTransactionManager>>(
+            IncreaseTrustScoreHandler::new(),
         );
-        bus.register::<AccountCommandContext, ChangeEmailCommand, ChangeEmailHandler>(ChangeEmailHandler);
-        bus.register::<AccountCommandContext, ChangePhoneNumberCommand, ChangePhoneNumberHandler>(
-            ChangePhoneNumberHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler<PostgresTransactionManager>>(
+            DecreaseTrustScoreHandler::new(),
         );
-        bus.register::<AccountCommandContext, ChangeBirthDateCommand, ChangeBirthDateHandler>(
-            ChangeBirthDateHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, AddPushTokenCommand, AddPushTokenHandler<PostgresTransactionManager>>(
+            AddPushTokenHandler::new(),
         );
-        // bus.register::<AccountCommandContext, ChangeRegionCommand, ChangeRegionHandler>(
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, RemovePushTokenCommand, RemovePushTokenHandler<PostgresTransactionManager>>(
+            RemovePushTokenHandler::new(),
+        );
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangeEmailCommand, ChangeEmailHandler<PostgresTransactionManager>>(
+            ChangeEmailHandler::new(),
+        );
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangePhoneNumberCommand, ChangePhoneNumberHandler<PostgresTransactionManager>>(
+            ChangePhoneNumberHandler::new(),
+        );
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangeBirthDateCommand, ChangeBirthDateHandler<PostgresTransactionManager>>(
+            ChangeBirthDateHandler::new(),
+        );
+        // bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangeRegionCommand, ChangeRegionHandler>(
         //     ChangeRegionHandler,
         // );
-        bus.register::<AccountCommandContext, UpdateLocaleCommand, UpdateLocaleHandler>(
-            UpdateLocaleHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, UpdateLocaleCommand, UpdateLocaleHandler<PostgresTransactionManager>>(
+            UpdateLocaleHandler::new(),
         );
-        bus.register::<AccountCommandContext, UpdateTimezoneCommand, UpdateTimezoneHandler>(
-            UpdateTimezoneHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, UpdateTimezoneCommand, UpdateTimezoneHandler<PostgresTransactionManager>>(
+            UpdateTimezoneHandler::new(),
         );
-        bus.register::<AccountCommandContext, UpdatePreferencesCommand, UpdatePreferencesHandler>(
-            UpdatePreferencesHandler,
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, UpdatePreferencesCommand, UpdatePreferencesHandler<PostgresTransactionManager>>(
+            UpdatePreferencesHandler::new(),
         );
 
         Arc::new(bus)

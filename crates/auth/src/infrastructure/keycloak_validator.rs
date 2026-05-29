@@ -28,13 +28,11 @@ impl KeycloakValidator {
             .map_err(|_| AuthError::DiscoveryFailed)?;
 
         let mut validation = Validation::new(jsonwebtoken::Algorithm::RS256);
-        // Ici tu pourras configurer l'audience ou l'issuer plus tard
         validation.validate_aud = false;
 
         Ok(Self { jwks, validation })
     }
 
-    #[cfg(test)]
     pub fn new_mock(jwks: JwkSet, validation: Validation) -> Self {
         Self { jwks, validation }
     }
@@ -48,7 +46,6 @@ impl TokenValidator for KeycloakValidator {
         if let Some(jwk) = self.jwks.find(&kid) {
             let key = DecodingKey::from_jwk(jwk).map_err(|_| AuthError::InvalidToken)?;
 
-            // La désérialisation vers Claims va utiliser tes VOs (SubId, Email, etc.)
             let data = decode::<Claims>(token.as_str(), &key, &self.validation).map_err(|e| {
                 eprintln!("JWT Decode Error: {:?}", e);
                 AuthError::InvalidToken

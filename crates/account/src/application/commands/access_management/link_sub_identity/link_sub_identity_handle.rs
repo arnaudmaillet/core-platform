@@ -6,20 +6,31 @@ use crate::application::{
 use async_trait::async_trait;
 use shared_kernel::{
     command::CommandHandler,
-    core::{Result, RetryConfig},
+    core::{Result, RetryConfig, TransactionManager},
 };
+use std::marker::PhantomData;
 
-pub struct LinkSubIdentityHandler;
+pub struct LinkSubIdentityHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> LinkSubIdentityHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for LinkSubIdentityHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for LinkSubIdentityHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = LinkSubIdentityCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: LinkSubIdentityCommand,
     ) -> Result<Self::Output> {
         if !ctx

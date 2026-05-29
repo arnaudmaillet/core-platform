@@ -5,7 +5,7 @@ use shared_kernel::{
     geo::Timezone,
     messaging::{Event, EventEmitter, OperationTracker},
     security::{PushToken, TrustContext},
-    types::{AccountId, AuditReason, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, AuditReason, Email, PhoneNumber, SubId},
 };
 
 use crate::{

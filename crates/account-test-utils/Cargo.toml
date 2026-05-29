@@ -14,6 +14,9 @@ auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
 infra-sqlx = { workspace = true }
 shared-proto = { workspace = true }
+shared-kernel = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
+async-trait = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }

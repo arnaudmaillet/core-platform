@@ -1,19 +1,38 @@
 // crates/profile/src/application/commands/metadata/update_bio/update_bio_handler.rs
 
-use async_trait::async_trait;
-use shared_kernel::{command::CommandHandler, core::Result};
-use tracing::info;
+use std::marker::PhantomData;
 
 use crate::{commands::UpdateBioCommand, context::ProfileCommandContext};
-pub struct UpdateBioHandler;
+use async_trait::async_trait;
+use shared_kernel::{
+    command::CommandHandler,
+    core::{Result, TransactionManager},
+};
+use tracing::info;
+
+pub struct UpdateBioHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UpdateBioHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdateBioHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateBioHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = UpdateBioCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &ProfileCommandContext, cmd: UpdateBioCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &ProfileCommandContext<TM>,
+        cmd: UpdateBioCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

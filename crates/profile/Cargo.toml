@@ -9,15 +9,10 @@ edition.workspace = true
 test-utils = []
 
 [dependencies]
-shared-kernel = { workspace = true, features = [
-    "stub",
-    "concurrency",
-] }
+shared-kernel = { workspace = true, features = ["concurrency"] }
 infra-sqlx = { workspace = true }
-infra-kafka = { workspace = true }
 infra-test = { workspace = true }
 
-auth = { workspace = true }
 shared-proto = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -30,8 +25,6 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 
 tonic = { workspace = true }
-prost-types = { workspace = true }
-tokio-stream = { workspace = true }
 sqlx = { workspace = true }
 
 [build-dependencies]
@@ -40,3 +33,5 @@ tonic-prost-build = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true }
 futures = { workspace = true }
+profile-test-utils = { workspace = true }
+shared-kernel-test-utils = { workspace = true }

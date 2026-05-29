@@ -1,22 +1,37 @@
 // crates/profile/src/application/commands/metadata/update_social_links/update_social_links_handler.rs
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
-use shared_kernel::{command::CommandHandler, core::Result};
+use shared_kernel::{
+    command::CommandHandler,
+    core::{Result, TransactionManager},
+};
 use tracing::info;
 
 use crate::{commands::UpdateSocialsCommand, context::ProfileCommandContext};
 
-pub struct UpdateSocialsHandler;
+pub struct UpdateSocialsHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UpdateSocialsHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdateSocialsHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateSocialsHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = UpdateSocialsCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: UpdateSocialsCommand,
     ) -> Result<Self::Output> {
         if !ctx

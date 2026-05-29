@@ -14,7 +14,11 @@ auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
 infra-fred = { workspace = true }
 shared-proto = { workspace = true }
+shared-kernel = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
 tonic = { workspace = true }
+async-trait = { workspace = true }
 tokio = { workspace = true }
+chrono = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }

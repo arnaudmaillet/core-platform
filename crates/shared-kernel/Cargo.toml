@@ -6,14 +6,9 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-default = []
-stub = []
-
-# --- 1. Drivers Techniques ---
 concurrency = ["dep:dashmap", "dep:futures"]
 
 [dependencies]
-# --- Toujours inclus (Core) ---
 uuid = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -25,12 +20,8 @@ url = { workspace = true }
 rand = { workspace = true }
 idna = { workspace = true }
 tokio = { workspace = true }
-
-# --- Optionnels (activés par dep: dans les features) ---
 dashmap = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-
-# --- Utils (Core) ---
 futures-util = { workspace = true }
 regex = { workspace = true }
 seahash = { workspace = true }

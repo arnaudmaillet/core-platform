@@ -1,23 +1,37 @@
 // crates/account/src/application/deactivate_account/deactivate_account_use_case.rs
 
 use async_trait::async_trait;
-
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::lifecycle::DeactivateCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct DeactivateHandler;
+pub struct DeactivateHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> DeactivateHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for DeactivateHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for DeactivateHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = DeactivateCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: DeactivateCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext<TM>,
+        cmd: DeactivateCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

@@ -1,23 +1,34 @@
 // crates/account/src/application/change_birth_date/change_birth_date_use_case.rs
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::settings::ChangeBirthDateCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct ChangeBirthDateHandler;
+pub struct ChangeBirthDateHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> ChangeBirthDateHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for ChangeBirthDateHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeBirthDateHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = ChangeBirthDateCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: ChangeBirthDateCommand,
     ) -> Result<Self::Output> {
         if !ctx

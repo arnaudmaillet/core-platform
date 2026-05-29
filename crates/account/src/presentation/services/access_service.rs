@@ -1,3 +1,4 @@
+use shared_kernel::core::TransactionManager;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -14,19 +15,19 @@ use crate::application::context::AccountAppContext;
 use crate::commands::{LinkSubIdentityCommand, RegisterCommand};
 use crate::presentation::utils::GrpcServiceUtils;
 
-pub struct AccountAccessService {
+pub struct AccountAccessService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext>,
+    app_ctx: Arc<AccountAppContext<TM>>,
 }
 
-impl AccountAccessService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext>) -> Self {
+impl<TM> AccountAccessService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for AccountAccessService {
-    fn app_ctx(&self) -> &AccountAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountAccessService<TM> {
+    fn app_ctx(&self) -> &AccountAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -35,7 +36,9 @@ impl GrpcServiceUtils for AccountAccessService {
 }
 
 #[tonic::async_trait]
-impl ProtoAccountAccessService for AccountAccessService {
+impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
+    for AccountAccessService<TM>
+{
     async fn register(
         &self,
         request: Request<RegisterRequest>,

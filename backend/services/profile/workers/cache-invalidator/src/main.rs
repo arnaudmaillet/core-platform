@@ -14,17 +14,13 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    // 2. Lire la config (via dotenv ou env)
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let brokers = std::env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS must be set");
 
-    // 3. Instancier les repos
     let redis = RedisCacheRepository::new(&redis_url).await?;
     let consumer = KafkaEventConsumer::new(&brokers, "profile-cache-group", 500);
 
-    // 4. Démarrer le worker
     let worker = CacheWorker::new(Arc::new(consumer), Arc::new(redis));
-
     let worker_handle = tokio::spawn(async move { worker.start("profile.events").await });
 
     tokio::select! {

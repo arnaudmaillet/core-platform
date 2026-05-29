@@ -1,3 +1,4 @@
+use shared_kernel::core::TransactionManager;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -17,19 +18,19 @@ use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 use shared_kernel::types::AccountId;
 
-pub struct AccountPersonalService {
+pub struct AccountPersonalService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext>,
+    app_ctx: Arc<AccountAppContext<TM>>,
 }
 
-impl AccountPersonalService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext>) -> Self {
+impl<TM> AccountPersonalService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for AccountPersonalService {
-    fn app_ctx(&self) -> &AccountAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountPersonalService<TM> {
+    fn app_ctx(&self) -> &AccountAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -38,7 +39,9 @@ impl GrpcServiceUtils for AccountPersonalService {
 }
 
 #[tonic::async_trait]
-impl ProtoAccountPersonalService for AccountPersonalService {
+impl<TM: TransactionManager + Clone + 'static> ProtoAccountPersonalService
+    for AccountPersonalService<TM>
+{
     async fn change_email(
         &self,
         request: Request<ChangeEmailRequest>,

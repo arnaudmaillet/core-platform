@@ -1,22 +1,36 @@
-// crates/account/src/application/suspend_account/suspend_account_use_case
+// crates/account/src/application/suspend_account/suspend_account_use_case.rs
 use async_trait::async_trait;
-
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::lifecycle::SuspendCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct SuspendHandler;
+pub struct SuspendHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> SuspendHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for SuspendHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for SuspendHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = SuspendCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: SuspendCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext<TM>,
+        cmd: SuspendCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

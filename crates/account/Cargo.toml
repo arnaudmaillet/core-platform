@@ -10,7 +10,7 @@ test-utils = []
 
 [dependencies]
 infra-sqlx = { workspace = true }
-shared-kernel = { workspace = true, features = ["stub"] }
+shared-kernel = { workspace = true }
 shared-proto = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -24,6 +24,8 @@ sqlx = { workspace = true }
 
 [dev-dependencies]
 infra-test = { workspace = true }
+account-test-utils = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }

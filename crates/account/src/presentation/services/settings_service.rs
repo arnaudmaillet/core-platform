@@ -1,3 +1,4 @@
+use shared_kernel::core::TransactionManager;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -16,19 +17,19 @@ use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 use shared_kernel::types::AccountId;
 
-pub struct AccountSettingsService {
+pub struct AccountSettingsService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext>,
+    app_ctx: Arc<AccountAppContext<TM>>,
 }
 
-impl AccountSettingsService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext>) -> Self {
+impl<TM> AccountSettingsService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for AccountSettingsService {
-    fn app_ctx(&self) -> &AccountAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountSettingsService<TM> {
+    fn app_ctx(&self) -> &AccountAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -37,7 +38,9 @@ impl GrpcServiceUtils for AccountSettingsService {
 }
 
 #[tonic::async_trait]
-impl ProtoAccountSettingsService for AccountSettingsService {
+impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
+    for AccountSettingsService<TM>
+{
     async fn update_preferences(
         &self,
         request: Request<UpdatePreferencesRequest>,

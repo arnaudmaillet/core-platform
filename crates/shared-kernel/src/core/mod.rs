@@ -15,9 +15,6 @@ pub use pagination::{PageQuery, PagedResult};
 pub use resilience::{RetryConfig, with_retry};
 pub use transaction::{Transaction, TransactionManager};
 
-#[cfg(feature = "stub")]
-pub use transaction::{TransactionManagerStub, TransactionStub};
-
 #[cfg(feature = "concurrency")]
 mod concurrency;
 

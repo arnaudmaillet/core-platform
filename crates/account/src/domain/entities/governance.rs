@@ -35,7 +35,7 @@ impl AccountGovernance {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn restore(
+    pub fn restore(
         account_id: AccountId,
         role: AccountRole,
         beta_tier: BetaTier,
@@ -90,7 +90,7 @@ impl AccountGovernance {
     // MUTATIONS INTERNES (pub(crate))
     // ==========================================
 
-    pub(crate) fn apply_trust_reward(
+    pub fn apply_trust_reward(
         &mut self,
         amount: TrustAmount,
         context: TrustContext,
@@ -107,7 +107,7 @@ impl AccountGovernance {
         Ok(true)
     }
 
-    pub(crate) fn apply_trust_penalty(
+    pub fn apply_trust_penalty(
         &mut self,
         amount: TrustAmount,
         context: TrustContext,
@@ -125,7 +125,7 @@ impl AccountGovernance {
         Ok(changed)
     }
 
-    pub(crate) fn apply_shadowban(&mut self, reason: &AuditReason) -> Result<bool> {
+    pub fn apply_shadowban(&mut self, reason: &AuditReason) -> Result<bool> {
         if self.is_shadowbanned {
             return Ok(false);
         }
@@ -133,7 +133,7 @@ impl AccountGovernance {
         Ok(true)
     }
 
-    pub(crate) fn apply_lift_shadowban(&mut self, reason: &AuditReason) -> Result<bool> {
+    pub fn apply_lift_shadowban(&mut self, reason: &AuditReason) -> Result<bool> {
         if !self.is_shadowbanned {
             return Ok(false);
         }
@@ -142,7 +142,7 @@ impl AccountGovernance {
         Ok(true)
     }
 
-    pub(crate) fn apply_role_change(
+    pub fn apply_role_change(
         &mut self,
         new_role: AccountRole,
         reason: &AuditReason,
@@ -159,7 +159,7 @@ impl AccountGovernance {
         Ok(true)
     }
 
-    pub(crate) fn apply_beta_tier_change(&mut self, new_tier: BetaTier) -> Result<bool> {
+    pub fn apply_beta_tier_change(&mut self, new_tier: BetaTier) -> Result<bool> {
         if self.beta_tier == new_tier {
             return Ok(false);
         }
@@ -173,7 +173,7 @@ impl AccountGovernance {
         Ok(true)
     }
 
-    pub(crate) fn apply_ip_record(&mut self, ip: IpAddr) {
+    pub fn apply_ip_record(&mut self, ip: IpAddr) {
         self.last_ip_addr = Some(ip);
     }
 
