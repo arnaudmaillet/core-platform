@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     core::{Entity, Result},
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, PhoneNumber, SubId},
 };
 
 use crate::domain::{

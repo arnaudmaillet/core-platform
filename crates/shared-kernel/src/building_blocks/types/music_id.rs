@@ -6,19 +6,16 @@ use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
 
-/// Identifiant unique fort pour une piste audio du catalogue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct MusicId(Uuid);
 
 impl MusicId {
-    /// Crée un MusicId à partir d'un UUID existant
     pub fn new(uuid: Uuid) -> Self {
         Self(uuid)
     }
 
-    /// Génère un nouveau MusicId (Utilise UUID v4 ou v7 selon les standards de ton catalogue audio)
     pub fn generate() -> Self {
-        Self(Uuid::new_v4())
+        Self(Uuid::now_v7())
     }
 
     pub fn uuid(&self) -> Uuid {

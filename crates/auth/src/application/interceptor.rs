@@ -17,7 +17,6 @@ impl AuthInterceptor {
 
 impl Interceptor for AuthInterceptor {
     fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
-        // 1. Extraction du Token (Ton code existant)
         let token_str = request
             .metadata()
             .get("authorization")
@@ -25,7 +24,6 @@ impl Interceptor for AuthInterceptor {
             .and_then(|s| s.strip_prefix("Bearer "))
             .ok_or_else(|| Status::unauthenticated("Missing or malformed authorization header"))?;
 
-        // 2. EXTRACTION DE LA RÉGION (Le chaînon manquant)
         let region_str = request
             .metadata()
             .get("x-region")
@@ -35,7 +33,6 @@ impl Interceptor for AuthInterceptor {
         let region = Region::try_new(region_str)
             .map_err(|_| Status::invalid_argument("Invalid region code"))?;
 
-        // 3. Validation du Token
         let token = JwtToken::from_raw(token_str);
 
         match self.validator.validate(&token) {

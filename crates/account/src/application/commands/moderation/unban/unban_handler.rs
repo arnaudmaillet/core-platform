@@ -2,21 +2,36 @@
 
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::moderation::UnbanCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct UnbanHandler;
+pub struct UnbanHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UnbanHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UnbanHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UnbanHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = UnbanCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: UnbanCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext<TM>,
+        cmd: UnbanCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

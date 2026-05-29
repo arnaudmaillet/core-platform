@@ -9,6 +9,3 @@ pub use bootstrap::SocialServiceBuilder;
 pub use domain::{entities, events, repositories};
 pub use infrastructure::{redis, scylla, workers};
 pub use presentation::{services, utils};
-
-#[cfg(test)]
-pub use application::test_utils;

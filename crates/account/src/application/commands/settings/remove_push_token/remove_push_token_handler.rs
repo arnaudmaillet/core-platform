@@ -3,20 +3,31 @@ use crate::application::commands::settings::RemovePushTokenCommand;
 use crate::application::context::AccountCommandContext;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
-pub struct RemovePushTokenHandler;
+pub struct RemovePushTokenHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> RemovePushTokenHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for RemovePushTokenHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for RemovePushTokenHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = RemovePushTokenCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: RemovePushTokenCommand,
     ) -> Result<Self::Output> {
         if !ctx

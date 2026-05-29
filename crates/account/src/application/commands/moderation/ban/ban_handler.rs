@@ -2,28 +2,43 @@
 
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::moderation::BanCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct BanHandler;
+pub struct BanHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> BanHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for BanHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for BanHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = BanCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: BanCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext<TM>,
+        cmd: BanCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());
         }
-        
+
         let mut account = ctx.fetch_verified(&cmd.target).await?;
 
         if account.ban(cmd.reason)? {

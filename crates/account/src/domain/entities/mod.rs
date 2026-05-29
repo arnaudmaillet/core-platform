@@ -11,6 +11,3 @@ pub use builders::{
 pub use governance::AccountGovernance;
 pub use identity::AccountIdentity;
 pub use settings::{AccountPreferences, AccountSettings};
-
-#[cfg(test)]
-mod tests;

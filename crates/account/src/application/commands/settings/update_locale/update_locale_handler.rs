@@ -1,23 +1,36 @@
 // crates/account/src/application/update_locale/update_locale_use_case.rs
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::settings::UpdateLocaleCommand;
 use crate::application::context::AccountCommandContext;
 
-pub struct UpdateLocaleHandler;
+pub struct UpdateLocaleHandler<TM> {
+    _marker: PhantomData<TM>,
+}
 
-// crates/account/src/application/update_locale/update_locale_use_case.rs
+impl<TM> UpdateLocaleHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdateLocaleHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateLocaleHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = UpdateLocaleCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: UpdateLocaleCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext<TM>,
+        cmd: UpdateLocaleCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

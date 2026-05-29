@@ -1,12 +1,12 @@
 use crate::application::context::{AccountAppContext, AccountCommandContext, AccountQueryContext};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
-use shared_kernel::core::{Error, ErrorCode};
+use shared_kernel::core::{Error, ErrorCode, TransactionManager};
 use shared_kernel::types::{AccountId, Region};
 use tonic::{Response, Status};
 
 #[tonic::async_trait]
-pub trait GrpcServiceUtils {
-    fn app_ctx(&self) -> &AccountAppContext;
+pub trait GrpcServiceUtils<TM: TransactionManager + Clone + 'static> {
+    fn app_ctx(&self) -> &AccountAppContext<TM>;
     fn bus(&self) -> &CommandBus;
 
     fn extract_region(&self, extensions: &tonic::Extensions) -> Result<Region, Status> {
@@ -20,15 +20,15 @@ pub trait GrpcServiceUtils {
         &self,
         account_id: AccountId,
         extensions: &tonic::Extensions,
-    ) -> Result<AccountCommandContext, Status> {
+    ) -> Result<AccountCommandContext<TM>, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().command(account_id, region))
     }
-    
+
     fn build_creation_context(
         &self,
         extensions: &tonic::Extensions,
-    ) -> Result<AccountCommandContext, Status> {
+    ) -> Result<AccountCommandContext<TM>, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().creation_command(region))
     }
@@ -36,14 +36,14 @@ pub trait GrpcServiceUtils {
     fn build_query_context(
         &self,
         extensions: &tonic::Extensions,
-    ) -> Result<AccountQueryContext, Status> {
+    ) -> Result<AccountQueryContext<TM>, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().query(region))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
@@ -53,7 +53,7 @@ pub trait GrpcServiceUtils {
         R: Send,
     {
         self.bus()
-            .execute::<AccountCommandContext, C, Output>(ctx.clone(), cmd)
+            .execute::<AccountCommandContext<TM>, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(map_domain_err_to_status)?;
 

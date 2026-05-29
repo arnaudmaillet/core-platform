@@ -2,7 +2,7 @@ use crate::application::context::{ProfileAppContext, ProfileCommandContext};
 use crate::commands::CreateProfileCommand;
 use crate::types::Handle;
 use serde::Deserialize;
-use shared_kernel::core::Identifier;
+use shared_kernel::core::{Identifier, TransactionManager};
 use shared_kernel::{
     command::CommandBus,
     core::ErrorCode,
@@ -20,16 +20,18 @@ enum AccountIncomingEvent {
     Ignored,
 }
 
-pub struct AccountConsumer {
+pub struct AccountConsumer<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: ProfileAppContext,
+    app_ctx: ProfileAppContext<TM>,
 }
 
-impl AccountConsumer {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
+impl<TM> AccountConsumer<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext<TM>) -> Self {
         Self { bus, app_ctx }
     }
+}
 
+impl<TM: TransactionManager + Clone + 'static> AccountConsumer<TM> {
     pub async fn on_message_received(
         &self,
         payload: &[u8],
@@ -64,7 +66,7 @@ impl AccountConsumer {
 
                 match self
                     .bus
-                    .execute::<ProfileCommandContext, CreateProfileCommand, ()>(
+                    .execute::<ProfileCommandContext<TM>, CreateProfileCommand, ()>(
                         creation_ctx,
                         command,
                     )

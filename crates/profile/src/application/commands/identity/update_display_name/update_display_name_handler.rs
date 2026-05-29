@@ -1,22 +1,37 @@
 // crates/profile/src/application/commands/identity/update_handle/update_handle_handler.rs
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
-use shared_kernel::{command::CommandHandler, core::Result};
+use shared_kernel::{
+    command::CommandHandler,
+    core::{Result, TransactionManager},
+};
 use tracing::info;
 
 use crate::{commands::UpdateDisplayNameCommand, context::ProfileCommandContext};
 
-pub struct UpdateDisplayNameHandler;
+pub struct UpdateDisplayNameHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UpdateDisplayNameHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdateDisplayNameHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateDisplayNameHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = UpdateDisplayNameCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: UpdateDisplayNameCommand,
     ) -> Result<Self::Output> {
         if !ctx

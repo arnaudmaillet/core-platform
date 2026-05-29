@@ -3,18 +3,33 @@ use crate::application::commands::settings::AddPushTokenCommand;
 use crate::application::context::AccountCommandContext;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
-pub struct AddPushTokenHandler;
+pub struct AddPushTokenHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> AddPushTokenHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for AddPushTokenHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for AddPushTokenHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = AddPushTokenCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: AddPushTokenCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext<TM>,
+        cmd: AddPushTokenCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

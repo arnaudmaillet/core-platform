@@ -1,5 +1,4 @@
-mod test_context;
-mod test_context_builder;
+pub mod repositories;
+mod utils;
 
-pub use test_context::ProfileTestContext;
-pub use test_context_builder::ProfileTestContextBuilder;
+pub use utils::{ProfileTestContext, ProfileTestContextBuilder, ProfileTestFixture};

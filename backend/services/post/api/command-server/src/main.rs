@@ -20,7 +20,6 @@ use shared_proto::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Initialisation du traçage avec filtres d'environnement
     let _ =
         fmt()
             .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -28,10 +27,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }))
             .try_init();
 
-    // Initialisation additionnelle standard si nécessaire
     dotenv().ok();
 
-    // 2. Récupération de la configuration d'infrastructure
     let scylla_nodes_str =
         std::env::var("POST_SCYLLA_NODES").unwrap_or_else(|_| "127.0.0.1:9042".to_string());
     let keyspace_name =
@@ -42,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let profile_service_url =
         std::env::var("PROFILE_SERVICE_URL").expect("PROFILE_SERVICE_URL must be set");
 
-    // 3. Initialisation du contexte ScyllaDB
     let scylla_nodes: Vec<String> = scylla_nodes_str
         .split(',')
         .map(|s| s.trim().to_string())
@@ -54,19 +50,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .await?;
 
-    // 4. Initialisation du contexte Redis & Idempotence
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
     let redis_cache_repo = redis_ctx.repository();
     let redis_pool = redis_cache_repo.pool().clone();
-
-    // Dépôt d'idempotence isolé pour le module "post" avec TTL de 2h (7200s)
     let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
         redis_pool.clone(),
         "post",
         7200,
     ));
 
-    // A. Créer le client gRPC (ton Fallback)
     let grpc_channel = tonic::transport::Channel::from_shared(profile_service_url)?
         .connect()
         .await?;
@@ -81,9 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         fallback_source,
     ));
 
-    // 5. Instanciation du Builder d'application Post
-    // Ce builder encapsule la création du CommandBus (Redis pour l'invalidation)
-    // et du PostAppContext (Scylla + Idempotence)
     let builder = PostServiceBuilder::new(
         scylla_ctx.keyspace(),
         scylla_ctx.session().clone(),
@@ -95,7 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_ctx = builder.build_context().await?;
     let bus = builder.build_command_bus();
 
-    // 6. Configuration réseau gRPC & Sécurité Auth (Keycloak)
     let port = std::env::var("PORT").unwrap_or_else(|_| "50054".to_string()); // Port distinct pour éviter les collisions en local
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
@@ -106,8 +94,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let auth_interceptor = AuthInterceptor::new(validator.clone());
-
-    // 7. Instanciation de l'implémentation du service gRPC Tonic PostService
     let post_svc = PostService::new(bus, app_ctx);
 
     tracing::info!(
@@ -115,7 +101,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         addr
     );
 
-    // 8. Lancement du serveur d'écoute gRPC
     Server::builder()
         .add_service(PostServiceServer::with_interceptor(
             post_svc,

@@ -1,24 +1,36 @@
 // crates/profile/src/application/use_cases/identity/create_profile/mod.rs
 
-use crate::application::context::ProfileCommandContext;
 use crate::commands::CreateProfileCommand;
+use crate::context::ProfileCommandContext;
 use crate::domain::entities::Profile;
 use crate::types::DisplayName;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
 
-pub struct CreateProfileHandler;
+use std::marker::PhantomData;
+
+pub struct CreateProfileHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> CreateProfileHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for CreateProfileHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for CreateProfileHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = CreateProfileCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: CreateProfileCommand,
     ) -> Result<Self::Output> {
         if !ctx

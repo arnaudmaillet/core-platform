@@ -1,5 +1,6 @@
 // crates/profile/src/presentation/services/profile_metadata_service.rs
 
+use shared_kernel::core::TransactionManager;
 use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataService as ProtoProfileMetadataService;
 use shared_proto::profile::v1::{
@@ -15,19 +16,19 @@ use crate::context::ProfileAppContext;
 use crate::presentation::utils::shared::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 
-pub struct ProfileMetadataService {
+pub struct ProfileMetadataService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext>,
+    app_ctx: Arc<ProfileAppContext<TM>>,
 }
 
-impl ProfileMetadataService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
+impl<TM> ProfileMetadataService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for ProfileMetadataService {
-    fn app_ctx(&self) -> &ProfileAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileMetadataService<TM> {
+    fn app_ctx(&self) -> &ProfileAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -36,7 +37,9 @@ impl GrpcServiceUtils for ProfileMetadataService {
 }
 
 #[tonic::async_trait]
-impl ProtoProfileMetadataService for ProfileMetadataService {
+impl<TM: TransactionManager + Clone + 'static> ProtoProfileMetadataService
+    for ProfileMetadataService<TM>
+{
     async fn update_bio(
         &self,
         request: Request<UpdateBioRequest>,

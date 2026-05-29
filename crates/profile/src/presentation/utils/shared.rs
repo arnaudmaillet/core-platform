@@ -3,20 +3,20 @@
 use crate::application::context::{ProfileAppContext, ProfileCommandContext};
 use crate::context::ProfileQueryContext;
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
-use shared_kernel::core::{Error, ErrorCode};
+use shared_kernel::core::{Error, ErrorCode, TransactionManager};
 use shared_kernel::types::{ProfileId, Region};
 use tonic::{Response, Status};
 
 #[tonic::async_trait]
-pub trait GrpcServiceUtils {
-    fn app_ctx(&self) -> &ProfileAppContext;
+pub trait GrpcServiceUtils<TM: TransactionManager + Clone + 'static> {
+    fn app_ctx(&self) -> &ProfileAppContext<TM>;
     fn bus(&self) -> &CommandBus;
 
     fn build_command_context(
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
-    ) -> Result<ProfileCommandContext, Status> {
+    ) -> Result<ProfileCommandContext<TM>, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().command(profile_id, region))
     }
@@ -24,19 +24,22 @@ pub trait GrpcServiceUtils {
     fn build_creation_context(
         &self,
         extensions: &tonic::Extensions,
-    ) -> Result<ProfileCommandContext, Status> {
+    ) -> Result<ProfileCommandContext<TM>, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().creation_command(region))
     }
 
-    fn build_query(&self, extensions: &tonic::Extensions) -> Result<ProfileQueryContext, Status> {
+    fn build_query(
+        &self,
+        extensions: &tonic::Extensions,
+    ) -> Result<ProfileQueryContext<TM>, Status> {
         let region = self.extract_region(extensions)?;
         Ok(self.app_ctx().query(region))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
@@ -46,7 +49,7 @@ pub trait GrpcServiceUtils {
         R: Send,
     {
         self.bus()
-            .execute::<ProfileCommandContext, C, Output>(ctx.clone(), cmd)
+            .execute::<ProfileCommandContext<TM>, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(|err| map_domain_err_to_status(err))?;
         Ok(Response::new(response_payload))

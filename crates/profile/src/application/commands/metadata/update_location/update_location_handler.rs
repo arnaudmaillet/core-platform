@@ -1,22 +1,37 @@
 // crates/profile/src/application/commands/metadata/update_location_label/update_location_label_handler.rs
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
-use shared_kernel::{command::CommandHandler, core::Result};
+use shared_kernel::{
+    command::CommandHandler,
+    core::{Result, TransactionManager},
+};
 use tracing::info;
 
 use crate::{commands::UpdateLocationCommand, context::ProfileCommandContext};
 
-pub struct UpdateLocationHandler;
+pub struct UpdateLocationHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UpdateLocationHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdateLocationHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateLocationHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = UpdateLocationCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandContext<TM>,
         cmd: UpdateLocationCommand,
     ) -> Result<Self::Output> {
         if !ctx

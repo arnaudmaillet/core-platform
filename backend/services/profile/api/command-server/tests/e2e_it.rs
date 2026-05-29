@@ -28,19 +28,15 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    // 1. SETUP HARMONISÉ
-    // Plus besoin de passer run_my_server, le builder sait quoi faire avec .with_gRPC_server()
     let ctx = ProfileTestContextBuilder::new()
         .with_grpc_server()
         .build_e2e()
         .await;
 
-    // 2. CLIENTS gRPC
     let mut identity_client = ProfileIdentityServiceClient::connect(ctx.grpc_url())
         .await
         .unwrap();
 
-    // 3. AUTH & IDENTITY (Logique de test maintenue)
     let auth_ctx = KeycloakTestContext::restore("master").await;
     let auth_response = auth_ctx.get_admin_token().await?;
 
@@ -49,7 +45,6 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let real_profile_id = ProfileId::generate();
     let real_account_id = AccountId::generate();
 
-    // 4. PRÉPARATION DB
     sqlx::query(
         "INSERT INTO user_profiles (profile_id, account_id, region, handle, display_name, version, is_private, created_at, updated_at) 
          VALUES ($1, $2, $3, $4, $5, 0, false, NOW(), NOW())"
@@ -63,7 +58,6 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     .await
     .unwrap();
 
-    // 5. ACT : Changement de Handle
     let change_handle_req = ChangeHandleRequest {
         command_id: Uuid::now_v7().to_string(),
         target: Some(ProfileTarget {
@@ -88,7 +82,6 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
         res.err()
     );
 
-    // 6. VÉRIFICATIONS FINALES
     let row: (String, i64) = sqlx::query_as(
         "SELECT handle, version FROM user_profiles WHERE profile_id = $1 AND region = $2",
     )
@@ -101,7 +94,6 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     assert_eq!(row.0, "alice_wonderland");
     assert_eq!(row.1, 1);
 
-    // 7. SHUTDOWN
     ctx.shutdown().await;
     Ok(())
 }

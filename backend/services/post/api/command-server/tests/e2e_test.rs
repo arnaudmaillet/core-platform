@@ -5,7 +5,7 @@ use infra_fred::fred::interfaces::KeysInterface;
 use post_test_utils::PostTestContextBuilder;
 use shared_kernel::{
     core::{Identifier, Result},
-    types::{PostId, ProfileId, Region, RegionCode},
+    types::{PostId, ProfileId, Region},
 };
 use shared_proto::post::v1::{CreatePostRequest, GetPostRequest};
 use shared_proto::post::v1::{QueryMetadata, post_service_client::PostServiceClient};
@@ -32,9 +32,6 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    // =========================================================================
-    // 1. SETUP DE L'ENVIRONNEMENT ÉPHÉMÈRE
-    // =========================================================================
     let ctx = PostTestContextBuilder::new()
         .with_grpc_server()
         .build_e2e()
@@ -47,17 +44,13 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     let region = Region::default();
     let author_id = ProfileId::generate();
 
-    // =========================================================================
-    // 2. ACT : CRÉATION DU POST VIA GRPC
-    // =========================================================================
     let create_req = CreatePostRequest {
         command_id: Uuid::now_v7().to_string(),
         region: region.to_string(),
         author_id: author_id.to_string(),
         post_type: "text".to_string(),
         caption: Some(
-            "Wynn hyperscale post architecture with custom Redis caching! #rust #scylla"
-                .to_string(),
+            "Hyperscale post architecture with custom Redis caching! #rust #scylla".to_string(),
         ),
         visibility_level: "public".to_string(),
         media_list: vec![],
@@ -77,16 +70,11 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         create_res.err()
     );
 
-    // Extraction du PostId réel généré par le serveur gRPC
     let create_payload = create_res.unwrap().into_inner();
-    let post_id = PostId::try_from(create_payload.post_id) // Ou .id selon le proto
+    let post_id = PostId::try_from(create_payload.post_id)
         .expect("Le serveur gRPC doit renvoyer un PostId valide");
     tracing::info!(%post_id, "Post successfully created, moving to database verifications.");
 
-    // =========================================================================
-    // 3. VERIFICATIONS : VÉRIFICATION DU STOCKAGE À FROID (ScyllaDB)
-    // =========================================================================
-    // On récupère dynamiquement le nom du keyspace éphémère (ex: it_52d954b...)
     let keyspace = ctx.kernel().scylla().keyspace();
     let scylla_session = ctx.kernel().scylla().session();
 
@@ -129,9 +117,6 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         "Post must exist in posts_by_author timeline table"
     );
 
-    // =========================================================================
-    // 4. VERIFICATIONS : CACHE-ASIDE (Redis State Before & After Query)
-    // =========================================================================
     let redis_pool = ctx.kernel().redis().repository().pool().clone();
     let cache_key = format!("posts:EU:{}", post_id);
 
@@ -163,8 +148,6 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         )
     );
 
-    // Étape C : Le décorateur `CachedPostRepository` a intercepté le Cache Miss et
-    // a repeuplé Redis. On vérifie la présence de la clé sérialisée en JSON.
     let cache_bytes_after: Option<String> = redis_pool.get(&cache_key).await.unwrap();
     assert!(
         cache_bytes_after.is_some(),
@@ -176,10 +159,6 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         cached_json_str.contains(&post_id.to_string()),
         "Cached JSON must wrap correct identity context"
     );
-
-    // =========================================================================
-    // 5. SHUTDOWN CLEAN
-    // =========================================================================
     ctx.shutdown().await;
     Ok(())
 }

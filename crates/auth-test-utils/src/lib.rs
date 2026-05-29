@@ -1,3 +1,3 @@
-mod keycloak_test_context;
+mod test_context;
 
-pub use keycloak_test_context::KeycloakTestContext;
+pub use test_context::KeycloakTestContext;

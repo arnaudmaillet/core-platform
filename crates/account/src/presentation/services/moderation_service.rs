@@ -1,3 +1,4 @@
+use shared_kernel::core::TransactionManager;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -10,7 +11,7 @@ use shared_proto::account::v1::{
     UnbanRequest, UnbanResponse, UnsuspendRequest, UnsuspendResponse,
 };
 
-use crate::application::context::{AccountAppContext};
+use crate::application::context::AccountAppContext;
 use crate::commands::{
     BanCommand, ChangeBetaTierCommand, ChangeRoleCommand, DecreaseTrustScoreCommand,
     IncreaseTrustScoreCommand, LiftShadowbanCommand, ShadowbanCommand, SuspendCommand,
@@ -20,19 +21,21 @@ use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 use shared_kernel::types::AccountId;
 
-pub struct AccountModerationService {
+pub struct AccountModerationService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext>,
+    app_ctx: Arc<AccountAppContext<TM>>,
 }
 
-impl AccountModerationService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext>) -> Self {
+impl<TM> AccountModerationService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for AccountModerationService {
-    fn app_ctx(&self) -> &AccountAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM>
+    for AccountModerationService<TM>
+{
+    fn app_ctx(&self) -> &AccountAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -41,7 +44,9 @@ impl GrpcServiceUtils for AccountModerationService {
 }
 
 #[tonic::async_trait]
-impl ProtoAccountModerationService for AccountModerationService {
+impl<TM: TransactionManager + Clone + 'static> ProtoAccountModerationService
+    for AccountModerationService<TM>
+{
     // --- SANCTIONS ---
 
     async fn ban(&self, request: Request<BanRequest>) -> Result<Response<BanResponse>, Status> {

@@ -1,20 +1,39 @@
 // crates/profile/src/application/commands/media/remove_banner/remove_banner_handler.rs
 
+use std::marker::PhantomData;
+
 use async_trait::async_trait;
-use shared_kernel::{command::CommandHandler, core::Result};
+use shared_kernel::{
+    command::CommandHandler,
+    core::{Result, TransactionManager},
+};
 use tracing::info;
 
 use crate::{commands::RemoveBannerCommand, context::ProfileCommandContext};
 
-pub struct RemoveBannerHandler;
+pub struct RemoveBannerHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> RemoveBannerHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for RemoveBannerHandler {
-    type Context = ProfileCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for RemoveBannerHandler<TM> {
+    type Context = ProfileCommandContext<TM>;
     type Command = RemoveBannerCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &ProfileCommandContext, cmd: RemoveBannerCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &ProfileCommandContext<TM>,
+        cmd: RemoveBannerCommand,
+    ) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, cmd.target.region)
             .await?

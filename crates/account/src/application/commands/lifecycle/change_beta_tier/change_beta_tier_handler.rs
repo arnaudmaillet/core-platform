@@ -1,23 +1,34 @@
 // crates/account/src/application/set_beta_status/set_as_beta_account_use_case.rs
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::context::AccountCommandContext;
 use crate::commands::lifecycle::ChangeBetaTierCommand;
 
-pub struct ChangeBetaTierHandler;
+pub struct ChangeBetaTierHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> ChangeBetaTierHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for ChangeBetaTierHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeBetaTierHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = ChangeBetaTierCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: ChangeBetaTierCommand,
     ) -> Result<Self::Output> {
         if !ctx

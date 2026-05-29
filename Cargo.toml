@@ -30,6 +30,7 @@ members = [
     "crates/auth-test-utils",
     "crates/post",
     "crates/post-test-utils",
+    "crates/shared-kernel-test-utils",
 ]
 resolver = "2"
 
@@ -45,6 +46,7 @@ description = "core-platform repo"
 account-test-utils = { path = "crates/account-test-utils" }
 account = { path = "crates/account" }
 shared-kernel = { path = "crates/shared-kernel" }
+shared-kernel-test-utils = { path = "crates/shared-kernel-test-utils" }
 shared-proto = { path = "common/rust/shared-proto" }
 social = { path = "crates/social" }
 social-test-utils = { path = "crates/social-test-utils" }

@@ -1,26 +1,22 @@
 use crate::{context::ProfileAppContext, entities::Profile, types::Handle};
-use infra_sqlx::PostgresTransaction;
+use infra_sqlx::TransactionManagerExt;
 use shared_kernel::{
     command::CommandTarget,
-    core::{Error, Result, Transaction, Versioned},
+    core::{Error, Result, TransactionManager, Versioned},
     messaging::{Event, EventEmitter},
     types::{ProfileId, Region},
 };
 use uuid::Uuid;
-
-#[cfg(any(test, feature = "test-utils"))]
-use shared_kernel::core::TransactionStub;
-
 #[derive(Clone)]
-pub struct ProfileCommandContext {
-    app: ProfileAppContext,
+pub struct ProfileCommandContext<TM> {
+    app: ProfileAppContext<TM>,
     profile_id: Option<ProfileId>,
     region: Region,
 }
 
-impl ProfileCommandContext {
+impl<TM> ProfileCommandContext<TM> {
     pub(crate) fn new(
-        app: ProfileAppContext,
+        app: ProfileAppContext<TM>,
         profile_id: Option<ProfileId>,
         region: Region,
     ) -> Self {
@@ -44,6 +40,15 @@ impl ProfileCommandContext {
         })
     }
 
+    pub async fn exists_by_handle(&self, handle: &Handle) -> Result<bool> {
+        self.app
+            .profile_repo()
+            .exists_by_handle(handle, self.region)
+            .await
+    }
+}
+
+impl<TM: TransactionManager> ProfileCommandContext<TM> {
     pub async fn ensure_creatable(
         &self,
         command_id: Uuid,
@@ -89,11 +94,18 @@ impl ProfileCommandContext {
             ));
         }
 
-        let mut tx = self.begin_transaction().await?;
+        // Affectation directe et typée du retour de la transaction
         let exists = self
             .app
-            .idempotency_repo()
-            .exists(Some(&mut *tx), &command_id)
+            .transaction_manager()
+            .run_in_transaction(|mut tx| async move {
+                let is_present = self
+                    .app
+                    .idempotency_repo()
+                    .exists(Some(&mut *tx), &command_id)
+                    .await?;
+                Ok(is_present)
+            })
             .await?;
 
         Ok(!exists)
@@ -132,68 +144,47 @@ impl ProfileCommandContext {
             }
         }
 
-        let mut tx = self.begin_transaction().await?;
-
-        if let Some(cmd_id) = command_id {
-            if self
-                .app
-                .idempotency_repo()
-                .exists(Some(&mut *tx), &cmd_id)
-                .await?
-            {
-                return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
-            }
-        }
-
         let events = profile.pull_events();
+
         self.app
-            .profile_repo()
-            .save(self.region, profile, Some(&mut *tx))
+            .transaction_manager()
+            .run_in_transaction(|mut tx| async move {
+                if let Some(cmd_id) = command_id {
+                    if self
+                        .app
+                        .idempotency_repo()
+                        .exists(Some(&mut *tx), &cmd_id)
+                        .await?
+                    {
+                        return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
+                    }
+                }
+
+                self.app
+                    .profile_repo()
+                    .save(self.region, profile, Some(&mut *tx))
+                    .await?;
+
+                if !events.is_empty() {
+                    let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
+                    self.app
+                        .outbox_repo()
+                        .save_all(self.region, &mut *tx, &event_refs)
+                        .await?;
+                }
+
+                if let Some(cmd_id) = command_id {
+                    self.app
+                        .idempotency_repo()
+                        .save(Some(&mut *tx), &cmd_id)
+                        .await?;
+                }
+
+                tx.commit().await?;
+                Ok(())
+            })
             .await?;
 
-        if !events.is_empty() {
-            let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
-            self.app
-                .outbox_repo()
-                .save_all(self.region, &mut *tx, &event_refs)
-                .await?;
-        }
-
-        if let Some(cmd_id) = command_id {
-            self.app
-                .idempotency_repo()
-                .save(Some(&mut *tx), &cmd_id)
-                .await?;
-        }
-
-        tx.commit().await?;
         Ok(())
-    }
-
-    pub async fn exists_by_handle(&self, handle: &Handle) -> Result<bool> {
-        self.app
-            .profile_repo()
-            .exists_by_handle(handle, self.region)
-            .await
-    }
-
-    /// Démarre de manière transparente une transaction PostgreSQL ou un stub d'isolation pour les tests.
-    async fn begin_transaction(&self) -> Result<Box<dyn Transaction>> {
-        match self.app.pg_pool() {
-            Some(pool) => {
-                let tx = pool.begin().await.map_err(|e| {
-                    Error::internal(format!("Failed to begin database transaction: {}", e))
-                })?;
-                Ok(Box::new(PostgresTransaction::new(tx)) as Box<dyn Transaction>)
-            }
-
-            #[cfg(any(test, feature = "test-utils"))]
-            None => Ok(Box::new(TransactionStub::new()) as Box<dyn Transaction>),
-
-            #[cfg(not(any(test, feature = "test-utils")))]
-            None => Err(Error::internal(
-                "Database pool is missing. ProfileAppContext must be initialized with a valid PgPool in production.",
-            )),
-        }
     }
 }

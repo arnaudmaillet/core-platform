@@ -1,5 +1,12 @@
 // crates/profile/src/presentation/services/profile_media_service.rs
 
+use crate::commands::{
+    RemoveAvatarCommand, RemoveBannerCommand, UpdateAvatarCommand, UpdateBannerCommand,
+};
+use crate::context::ProfileAppContext;
+use crate::presentation::utils::shared::GrpcServiceUtils;
+use shared_kernel::command::CommandBus;
+use shared_kernel::core::TransactionManager;
 use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaService as ProtoProfileMediaService;
 use shared_proto::profile::v1::{
@@ -9,27 +16,19 @@ use shared_proto::profile::v1::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
-// Kernel & Application imports
-use crate::commands::{
-    RemoveAvatarCommand, RemoveBannerCommand, UpdateAvatarCommand, UpdateBannerCommand,
-};
-use crate::context::ProfileAppContext;
-use crate::presentation::utils::shared::GrpcServiceUtils;
-use shared_kernel::command::CommandBus;
-
-pub struct ProfileMediaService {
+pub struct ProfileMediaService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext>,
+    app_ctx: Arc<ProfileAppContext<TM>>,
 }
 
-impl ProfileMediaService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
+impl<TM> ProfileMediaService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for ProfileMediaService {
-    fn app_ctx(&self) -> &ProfileAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileMediaService<TM> {
+    fn app_ctx(&self) -> &ProfileAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -38,7 +37,9 @@ impl GrpcServiceUtils for ProfileMediaService {
 }
 
 #[tonic::async_trait]
-impl ProtoProfileMediaService for ProfileMediaService {
+impl<TM: TransactionManager + Clone + 'static> ProtoProfileMediaService
+    for ProfileMediaService<TM>
+{
     async fn update_avatar(
         &self,
         request: Request<UpdateAvatarRequest>,

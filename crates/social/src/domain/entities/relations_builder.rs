@@ -11,7 +11,7 @@ pub struct FollowRelationBuilder {
 }
 
 impl FollowRelationBuilder {
-    pub(crate) fn new(follower_id: ProfileId, following_id: ProfileId) -> Self {
+    pub fn new(follower_id: ProfileId, following_id: ProfileId) -> Self {
         Self {
             follower_id,
             following_id,
@@ -30,7 +30,6 @@ impl FollowRelationBuilder {
         self
     }
 
-    /// Construit l'agrégat final
     pub fn build(self) -> Result<FollowRelation> {
         let now = Utc::now();
         let created_at = self.created_at.unwrap_or(now);

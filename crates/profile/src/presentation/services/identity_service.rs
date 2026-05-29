@@ -6,6 +6,7 @@ use crate::commands::{
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::shared::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
+use shared_kernel::core::TransactionManager;
 use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityService as ProtoProfileIdentityService;
 use shared_proto::profile::v1::{
@@ -16,19 +17,19 @@ use shared_proto::profile::v1::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
-pub struct ProfileIdentityService {
+pub struct ProfileIdentityService<TM> {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext>,
+    app_ctx: Arc<ProfileAppContext<TM>>,
 }
 
-impl ProfileIdentityService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
+impl<TM> ProfileIdentityService<TM> {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext<TM>>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl GrpcServiceUtils for ProfileIdentityService {
-    fn app_ctx(&self) -> &ProfileAppContext {
+impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileIdentityService<TM> {
+    fn app_ctx(&self) -> &ProfileAppContext<TM> {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -37,7 +38,9 @@ impl GrpcServiceUtils for ProfileIdentityService {
 }
 
 #[tonic::async_trait]
-impl ProtoProfileIdentityService for ProfileIdentityService {
+impl<TM: TransactionManager + Clone + 'static> ProtoProfileIdentityService
+    for ProfileIdentityService<TM>
+{
     async fn create_profile(
         &self,
         request: Request<CreateProfileRequest>,

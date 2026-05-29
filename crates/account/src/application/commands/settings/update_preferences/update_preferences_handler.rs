@@ -4,20 +4,31 @@ use crate::application::commands::settings::UpdatePreferencesCommand;
 use crate::application::context::AccountCommandContext;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::Result;
+use shared_kernel::core::{Result, TransactionManager};
+use std::marker::PhantomData;
 use tracing::info;
 
-pub struct UpdatePreferencesHandler;
+pub struct UpdatePreferencesHandler<TM> {
+    _marker: PhantomData<TM>,
+}
+
+impl<TM> UpdatePreferencesHandler<TM> {
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 #[async_trait]
-impl CommandHandler for UpdatePreferencesHandler {
-    type Context = AccountCommandContext;
+impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdatePreferencesHandler<TM> {
+    type Context = AccountCommandContext<TM>;
     type Command = UpdatePreferencesCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext,
+        ctx: &AccountCommandContext<TM>,
         cmd: UpdatePreferencesCommand,
     ) -> Result<Self::Output> {
         if !ctx
@@ -29,7 +40,7 @@ impl CommandHandler for UpdatePreferencesHandler {
 
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         let mut changed = false;
-        
+
         if let Some(privacy) = cmd.privacy {
             if account.update_privacy_preferences(privacy)? {
                 changed = true;

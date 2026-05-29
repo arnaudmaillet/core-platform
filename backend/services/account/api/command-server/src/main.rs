@@ -24,7 +24,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    // --- Configuration de l'Infrastructure ---
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let keycloak_url = std::env::var("KEYCLOAK_URL").expect("KEYCLOAK_URL must be set");
@@ -41,7 +40,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_ctx = builder.build_context();
     let bus = builder.build_command_bus();
 
-    // --- Démarrage du Serveur gRPC ---
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
     let validator = Arc::new(

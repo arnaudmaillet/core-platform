@@ -7,7 +7,7 @@ use profile_test_utils::ProfileTestContext;
 use serde_json::json;
 use shared_kernel::core::Result;
 use shared_kernel::messaging::{EventEnvelope, EventProducer};
-use shared_kernel::types::{AccountId, Region};
+use shared_kernel::types::AccountId;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -19,7 +19,7 @@ async fn test_worker_e2e_profile_creation_on_account_event() -> Result<()> {
         .with_kafka_worker()
         .build_e2e()
         .await;
- 
+
     // Récupération sécurisée des bootstrap_servers de l'infra unifiée pour émettre notre événement
     let bootstrap_servers = ctx.kernel().kafka().bootstrap_servers().to_string();
 
@@ -30,7 +30,6 @@ async fn test_worker_e2e_profile_creation_on_account_event() -> Result<()> {
 
     // 3. ACT : On crée l'enveloppe et le payload conformes au format d'AccountRegistered
     let region_str = "EU";
-    let region = Region::try_new(region_str)?;
 
     // 💡 FIX : On utilise ton vrai Smart ID typé pour générer un identifiant valide pour le domaine !
     let real_account_id = AccountId::generate();

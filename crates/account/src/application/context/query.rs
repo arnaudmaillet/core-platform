@@ -5,14 +5,22 @@ use shared_kernel::{
     types::{AccountId, Region},
 };
 
-#[derive(Clone)]
-pub struct AccountQueryContext {
-    app: AccountAppContext,
+pub struct AccountQueryContext<TM> {
+    app: AccountAppContext<TM>,
     region: Region,
 }
 
-impl AccountQueryContext {
-    pub(crate) fn new(app: AccountAppContext, region: Region) -> Self {
+impl<TM> Clone for AccountQueryContext<TM> {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+            region: self.region,
+        }
+    }
+}
+
+impl<TM> AccountQueryContext<TM> {
+    pub(crate) fn new(app: AccountAppContext<TM>, region: Region) -> Self {
         Self { app, region }
     }
 
