@@ -12,7 +12,6 @@ use crate::{
     scylla::{ScyllaCounterRepository, ScyllaRelationRepository},
 };
 
-// Imports du Shared Kernel
 use shared_kernel::{
     cache::CacheRepository, command::CommandBus, idempotency::IdempotencyRepository,
 };
@@ -39,9 +38,7 @@ impl SocialServiceBuilder {
         }
     }
 
-    /// Construit le contexte global de l'application Social (Clean Architecture)
     pub async fn build_context(&self) -> Arc<SocialAppContext> {
-        // 1. Initialisation des dépôts d'infrastructure ScyllaDB (Persistance)
         let relation_repo: Arc<dyn RelationRepository> = Arc::new(
             ScyllaRelationRepository::new(self.scylla_session.clone())
                 .await
@@ -54,11 +51,9 @@ impl SocialServiceBuilder {
                 .expect("💥 Impossible d'initialiser ScyllaCounterRepository"),
         );
 
-        // 2. Initialisation du dépôt de cache Redis pour les compteurs à chaud
         let redis_counter_repo: Arc<dyn CounterRepository> =
             Arc::new(RedisCounterRepository::new(self.redis_pool.clone()));
 
-        // 3. Instanciation finale de ton SocialAppContext typé
         Arc::new(SocialAppContext::new(
             relation_repo,
             redis_counter_repo,
@@ -67,7 +62,6 @@ impl SocialServiceBuilder {
         ))
     }
 
-    /// Enregistre tous les handlers d'écriture graph/compteurs dans le CommandBus
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
         let mut bus = CommandBus::new(self.redis_cache_repo.clone());
 

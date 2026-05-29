@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
     let moderation_svc = AccountModerationService::new(bus.clone(), app_ctx.clone());
     let personal_svc = AccountPersonalService::new(bus.clone(), app_ctx.clone());
-    let settings_svc = AccountSettingsService::new(bus.clone(), app_ctx.clone());
+    let settings_svc = AccountSettingsService::new(bus, app_ctx);
 
     tracing::info!("🚀 Account Command Service listening on {}", addr);
 

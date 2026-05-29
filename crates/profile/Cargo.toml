@@ -13,7 +13,7 @@ shared-kernel = { workspace = true, features = ["concurrency"] }
 infra-sqlx = { workspace = true }
 infra-test = { workspace = true }
 
-shared-proto = { workspace = true }
+shared-proto = { workspace = true, features = ["profile"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

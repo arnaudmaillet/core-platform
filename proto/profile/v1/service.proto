@@ -2,18 +2,11 @@ syntax = "proto3";
 
 package profile.v1;
 
-// Importation des models partagés (Profile, SocialLinks, etc.)
 import "profile/v1/models.proto";
 import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/core-platform/proto/profile/v1";
 
-// ==========================================
-// STRUCTURES DE CONTRÔLE
-// ==========================================
-
-// Metadata présentes dans chaque commande pour assurer 
-// l'idempotence (command_id) et le routage (region)
 message ProfileTarget {
   string profile_id = 1;
   string region = 2;
@@ -24,11 +17,7 @@ message QueryMetadata {
   string region = 1;
 }
 
-// ==========================================
-// SERVICES DE MODIFICATION (COMMANDES)
-// ==========================================
 
-// 1. SERVICE D'IDENTITÉ : Gère les informations pivots du compte
 service ProfileIdentityService {
   rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse);
   rpc ChangeHandle(ChangeHandleRequest) returns (ChangeHandleResponse);
@@ -36,7 +25,6 @@ service ProfileIdentityService {
   rpc UpdatePrivacy(UpdatePrivacyRequest) returns (UpdatePrivacyResponse);
 }
 
-// 2. SERVICE DE MÉDIAS (ASSETS) : Gère les images de profil
 service ProfileMediaService {
   rpc UpdateAvatar(UpdateAvatarRequest) returns (UpdateAvatarResponse);
   rpc RemoveAvatar(RemoveAvatarRequest) returns (RemoveAvatarResponse);
@@ -44,28 +32,17 @@ service ProfileMediaService {
   rpc RemoveBanner(RemoveBannerRequest) returns (RemoveBannerResponse);
 }
 
-// 3. SERVICE DE MÉTADONNÉES : Gère les infos éditoriales et sociales
 service ProfileMetadataService {
   rpc UpdateBio(UpdateBioRequest) returns (UpdateBioResponse);
   rpc UpdateLocation(UpdateLocationRequest) returns (UpdateLocationResponse);
   rpc UpdateSocials(UpdateSocialsRequest) returns (UpdateSocialsResponse);
 }
 
-// ==========================================
-// SERVICE DE LECTURE (QUERIES)
-// ==========================================
-
 service ProfileQueryService {
   rpc GetProfile(GetProfileRequest) returns (Profile);
   rpc GetProfilesByAccount(GetProfilesByAccountRequest) returns (GetProfilesByAccountResponse);
   rpc ResolveSlugs(ResolveSlugsRequest) returns (ResolveSlugsResponse);
 }
-
-// ==========================================
-// MESSAGES DE REQUÊTES (COMMANDS)
-// ==========================================
-
-// --- Identity ---
 
 message CreateProfileRequest {
   string command_id = 1;
@@ -92,8 +69,6 @@ message UpdatePrivacyRequest {
   bool is_private = 3;
 }
 
-// --- Medias ---
-
 message UpdateAvatarRequest {
   string command_id = 1;
   ProfileTarget target = 2;
@@ -116,8 +91,6 @@ message RemoveBannerRequest {
   ProfileTarget target = 2;
 }
 
-// --- Metadata ---
-
 message UpdateBioRequest {
   string command_id = 1;
   ProfileTarget target = 2;
@@ -135,10 +108,6 @@ message UpdateSocialsRequest {
   ProfileTarget target = 2;
   optional Socials new_socials = 3;
 }
-
-// ==========================================
-// MESSAGES DE REQUÊTES (QUERIES)
-// ==========================================
 
 message GetProfileRequest {
   QueryMetadata metadata = 1;
@@ -162,10 +131,6 @@ message ResolveSlugsRequest {
   QueryMetadata metadata = 1;
   repeated string slugs = 2;
 }
-
-// ==========================================
-// RESPONSES (COMMANDS)
-// ==========================================
 
 message CreateProfileResponse {
   string profile_id = 1;

@@ -22,11 +22,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_test_writer()
         .try_init();
 
-    // 1. Initialisation des variables d'environnement et du traçage
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    // 2. Récupération de la configuration d'infrastructure
     let scylla_nodes_str =
         std::env::var("SOCIAL_SCYLLA_NODES").unwrap_or_else(|_| "127.0.0.1:9042".to_string());
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
@@ -39,26 +37,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.trim().to_string())
         .collect();
 
-    let scylla_ctx = ScyllaContext::builder_raw()
+    let scylla_ctx = ScyllaContext::builder()?
         .with_nodes(scylla_nodes)
         .with_keyspace("social_network")
         .build()
         .await?;
 
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
-
-    // 4. Extraction des composants Redis et instanciation de TON dépôt d'idempotence
     let redis_cache_repo = redis_ctx.repository();
     let redis_pool = redis_cache_repo.pool().clone();
 
-    // Connexion à TON dépôt générique. On met un TTL de 2 heures (7200 secondes).
     let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
         redis_pool.clone(),
         "social",
         7200,
     ));
 
-    // 5. Alignement du Builder de domaine
     let builder = SocialServiceBuilder::new(
         scylla_ctx.session(),
         redis_pool,
@@ -69,7 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_ctx = builder.build_context().await;
     let bus = builder.build_command_bus();
 
-    // 6. Configuration réseau gRPC & Sécurité Auth (Keycloak)
     let port = std::env::var("PORT").unwrap_or_else(|_| "50053".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
@@ -80,8 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let auth_interceptor = AuthInterceptor::new(validator.clone());
-
-    // 7. Instanciation de l'implémentation du service gRPC Tonic
     let social_svc = SocialService::new(bus, app_ctx);
 
     tracing::info!(
@@ -89,7 +80,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         addr
     );
 
-    // 8. Lancement du serveur d'écoute gRPC
     Server::builder()
         .add_service(SocialServiceServer::with_interceptor(
             social_svc,

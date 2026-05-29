@@ -9,7 +9,7 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true }
-shared-proto = { workspace = true }
+shared-proto = { workspace = true, features = ["post"] }
 infra-scylla = { workspace = true, features = ["macros"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

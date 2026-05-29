@@ -2,7 +2,7 @@
 mod integration_tests {
     use infra_test::ScyllaTestContext;
     use shared_kernel::core::{Result, Versioned};
-    use shared_kernel::types::{ProfileId, Region, RegionCode};
+    use shared_kernel::types::ProfileId;
     use social::entities::FollowRelation;
     use social::repositories::RelationRepository;
     use social::scylla::ScyllaRelationRepository;

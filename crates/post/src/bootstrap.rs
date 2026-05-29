@@ -1,9 +1,5 @@
 // crates/post/src/application/builder.rs
 
-use infra_scylla::scylla::client::session::Session as ScyllaSession;
-use std::sync::Arc;
-
-// Post Domain & Application
 use crate::application::context::{PostAppContext, PostCommandContext};
 use crate::commands::{
     ChangeVisibilityCommand, ChangeVisibilityHandler, CreatePostCommand, CreatePostHandler,
@@ -13,8 +9,9 @@ use crate::commands::{
 use crate::repositories::PostRepository;
 use crate::repositories_impl::{CachePostRepository, ScyllaPostRepository};
 use crate::resolvers::ProfileResolver;
+use infra_scylla::scylla::client::session::Session as ScyllaSession;
+use std::sync::Arc;
 
-// Shared Kernel
 use shared_kernel::{
     cache::CacheRepository, command::CommandBus, idempotency::IdempotencyRepository,
 };

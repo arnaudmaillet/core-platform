@@ -12,7 +12,7 @@ auth = { workspace = true }
 post = { workspace = true }
 infra-fred = { workspace = true }
 infra-scylla = { workspace = true }
-shared-proto = { workspace = true }
+shared-proto = { workspace = true, features = ["post"] }
 dotenvy = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

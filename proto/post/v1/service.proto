@@ -6,10 +6,6 @@ import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/core-platform/proto/post/v1";
 
-// ==========================================
-// STRUCTURES DE CONTRÔLE
-// ==========================================
-
 message PostTarget {
   string post_id          = 1;
   string author_id        = 2;
@@ -20,10 +16,6 @@ message PostTarget {
 message QueryMetadata {
   string region = 1;
 }
-
-// ==========================================
-// SERVICES (COMMANDES)
-// ==========================================
 
 service PostService {
   // --- Commandes ---
@@ -37,10 +29,6 @@ service PostService {
   rpc GetPost(GetPostRequest) returns (Post);
   rpc GetPostsByAuthor(GetPostsByAuthorRequest) returns (GetPostsByAuthorResponse);
 }
-
-// ==========================================
-// MESSAGES DE REQUÊTES (COMMANDES)
-// ==========================================
 
 message CreatePostRequest {
   string                      command_id            = 1;
@@ -78,10 +66,6 @@ message DeletePostRequest {
   PostTarget target     = 2;
 }
 
-// ==========================================
-// MESSAGES DE REQUÊTES (QUERIES)
-// ==========================================
-
 message GetPostRequest {
   QueryMetadata metadata  = 1;
   string        post_id   = 2;
@@ -99,11 +83,6 @@ message GetPostsByAuthorResponse {
   repeated Post   items       = 1;
   optional string next_cursor = 2;
 }
-
-// ==========================================
-// RESPONSES VIDE (COMMANDES)
-// ==========================================
-
 message CreatePostResponse {
   string post_id = 1;
 }

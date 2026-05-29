@@ -2,8 +2,19 @@
 
 [package]
 name = "shared-proto"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[features]
+default = ["account", "profile", "post", "social"]
+account = []
+profile = []
+post = []
+social = []
 
 [dependencies]
 tonic = { workspace = true }
