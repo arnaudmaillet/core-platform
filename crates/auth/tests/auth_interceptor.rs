@@ -1,5 +1,4 @@
-
-use auth::{AuthError, AuthInterceptor, Claims, TokenValidator};
+use auth::{AuthError, Claims, TokenValidator, interceptors::AuthInterceptor};
 use shared_kernel::{
     security::JwtToken,
     types::{Region, SubId},
@@ -28,8 +27,11 @@ impl TokenValidator for SimpleMockValidator {
                 email: None,
                 email_verified: None,
                 phone_number: None,
+                phone_number_verified: None,
                 realm_access: None,
                 exp,
+                aud: serde_json::json!("account-service-test"),
+                iss: "http://localhost:8080/realms/master".to_string(),
             })
         } else {
             Err(AuthError::InvalidToken)

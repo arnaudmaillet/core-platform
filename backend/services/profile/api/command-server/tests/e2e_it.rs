@@ -1,17 +1,17 @@
 // backend/services/profile/api/command-server/tests/e2e_it.rs
 
-use auth_test_utils::KeycloakTestContext;
+use auth::Claims;
+use auth_test_utils::TokenValidatorStub;
 use infra_sqlx::sqlx;
 use profile_test_utils::ProfileTestContextBuilder;
 use shared_kernel::core::{Identifier, Result};
-use shared_kernel::types::{AccountId, ProfileId, Region};
+use shared_kernel::types::{AccountId, ProfileId, Region, SubId};
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::{ChangeHandleRequest, ProfileTarget};
 use tonic::Request;
 use tonic::metadata::MetadataValue;
 use uuid::Uuid;
 
-// Helper Auth resté ici car spécifique au client du test
 fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
     let mut request = Request::new(payload);
     let token_val = format!("Bearer {}", token)
@@ -28,7 +28,27 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
+    let test_token = "simulated.profile.service.jwt";
+    let target_sub_id = "keycloak|profile-user-123";
+    let mock_validator = std::sync::Arc::new(TokenValidatorStub::new());
+
+    let expected_claims = Claims {
+        sub_id: SubId::try_new(target_sub_id)?,
+        aud: serde_json::Value::String("profile-service".to_string()),
+        iss: "https://identity.core.platform/realms/master".to_string(),
+        email: None,
+        email_verified: None,
+        phone_number: None,
+        phone_number_verified: None,
+        realm_access: None,
+        exp: chrono::Utc::now().timestamp() as u64 + 3600,
+    };
+
+    mock_validator.stub_token(test_token, expected_claims);
+
+    // 2. SETUP INFRASTRUCTURE
     let ctx = ProfileTestContextBuilder::new()
+        .with_mock_auth(mock_validator)
         .with_grpc_server()
         .build_e2e()
         .await;
@@ -36,9 +56,6 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let mut identity_client = ProfileIdentityServiceClient::connect(ctx.grpc_url())
         .await
         .unwrap();
-
-    let auth_ctx = KeycloakTestContext::restore("master").await;
-    let auth_response = auth_ctx.get_admin_token().await?;
 
     let region = Region::default();
     let region_str = region.as_str();
@@ -71,7 +88,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let res = identity_client
         .change_handle(with_auth(
             change_handle_req,
-            &auth_response.token.as_str(),
+            test_token, // 💡 Utilisation du test_token
             region_str,
         ))
         .await;

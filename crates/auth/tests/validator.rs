@@ -1,4 +1,3 @@
-
 use auth::RealmAccess;
 use auth::{AuthError, TokenValidator};
 use auth::{Claims, KeycloakValidator};
@@ -20,10 +19,13 @@ fn create_test_claims(sub: &str, email: &str) -> Claims {
         email: Some(Email::from_raw(email)),
         email_verified: Some(true),
         phone_number: None,
+        phone_number_verified: None,
         realm_access: Some(RealmAccess {
             roles: vec!["user".to_string()],
         }),
         exp,
+        aud: serde_json::json!("account-service-test"),
+        iss: "http://localhost:8080/realms/master".to_string(),
     }
 }
 

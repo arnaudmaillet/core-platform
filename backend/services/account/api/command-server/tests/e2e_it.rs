@@ -1,10 +1,13 @@
 // backend/services/account/api/command-server/tests/e2e_it.rs
 
 use account_test_utils::AccountTestContextBuilder;
-use auth_test_utils::KeycloakTestContext;
+use auth::Claims;
+use auth_test_utils::TokenValidatorStub;
 use shared_kernel::core::Result;
+use shared_kernel::types::SubId;
 use shared_proto::account::v1::AccountTarget;
 use shared_proto::account::v1::account_personal_service_client::AccountPersonalServiceClient;
+use shared_proto::account::v1::account_registration_service_client::AccountRegistrationServiceClient;
 
 use infra_sqlx::sqlx;
 use tonic::{Request, metadata::MetadataValue};
@@ -12,8 +15,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 use uuid::Uuid;
 
 use shared_proto::account::v1::{
-    RegisterRequest, RegistrationIdentifier, UpdateLocaleRequest,
-    account_access_service_client::AccountAccessServiceClient, registration_identifier::Method,
+    RegisterRequest, RegistrationIdentifier, UpdateLocaleRequest, registration_identifier::Method,
 };
 
 fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
@@ -38,39 +40,53 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
         .with_test_writer()
         .try_init();
 
-    tracing::info!("Démarrage du test E2E de cycle de vie de compte");
+    tracing::info!("Démarrage du test E2E de cycle de vie de compte (Isolé via Mock)");
 
-    // 1. SETUP
+    let region: &str = "EU";
+    let test_token = "simulated.valid.jwt.token";
+    let target_sub_id = "keycloak|user-e2e-123456";
+    let mock_validator = std::sync::Arc::new(TokenValidatorStub::new());
+
+    let expected_claims = Claims {
+        sub_id: SubId::try_new(target_sub_id)?,
+        aud: serde_json::Value::String("account-service".to_string()),
+        iss: "https://identity.core.platform/realms/master".to_string(),
+
+        email: None,
+        email_verified: None,
+        phone_number: None,
+        phone_number_verified: None,
+        realm_access: None,
+        exp: chrono::Utc::now().timestamp() as u64 + 3600,
+    };
+
+    // On dit au validateur d'accepter notre chaîne de caractères arbitraire
+    mock_validator.stub_token(test_token, expected_claims);
+
+    // 2. SETUP INFRASTRUCTURE (Bases de données réelles en Docker, mais Auth mockée)
     let ctx = AccountTestContextBuilder::new()
+        .with_mock_auth(mock_validator)
         .with_grpc_server()
         .build()
         .await;
 
-    // 2. CLIENTS gRPC
+    // 3. CLIENTS gRPC
     let grpc_url = ctx.grpc_url();
-    let mut access_client = AccountAccessServiceClient::connect(grpc_url.clone())
+
+    let mut registration_client = AccountRegistrationServiceClient::connect(grpc_url.clone())
         .await
-        .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?; // Conversion explicite
+        .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
 
     let mut personal_client = AccountPersonalServiceClient::connect(grpc_url)
         .await
         .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
 
-    // 3. AUTH & IDENTITY
-    let auth_ctx = KeycloakTestContext::restore("master").await;
-    let auth_response = auth_ctx.get_admin_token().await?;
-    let claims = auth_ctx
-        .validator
-        .validate(&auth_response.token)
-        .expect("Token invalid");
-
-    let region: &str = "EU";
     let register_command_id = Uuid::now_v7().to_string();
 
     // 4. PRÉPARATION PAYLOAD
     let register_payload = RegisterRequest {
         command_id: register_command_id.clone(),
-        sub_id: Some(claims.sub_id.to_string()),
+        sub_id: Some(target_sub_id.to_string()),
         identifier: Some(RegistrationIdentifier {
             method: Some(Method::Email("audit-e2e@test.com".to_string())),
         }),
@@ -79,32 +95,24 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
         ip_addr: "127.0.0.1".to_string(),
     };
 
-    // 5. ACT : Register
-    let res = access_client
-        .register(with_auth(
-            register_payload.clone(),
-            &auth_response.token.as_str(),
-            region,
-        ))
+    // 5. ACT : Inscription via le Registration Client
+    let res = registration_client
+        .register(with_auth(register_payload.clone(), test_token, region))
         .await;
-    assert!(res.is_ok(), "Le registre a échoué: {:?}", res.err());
+    assert!(res.is_ok(), "L'inscription a échoué: {:?}", res.err());
 
     let real_account_id = res.unwrap().into_inner().account_id;
 
-    // Idempotence
-    let res_dup = access_client
-        .register(with_auth(
-            register_payload,
-            &auth_response.token.as_str(),
-            region,
-        ))
+    // Idempotence sur le canal de Registration
+    let res_dup = registration_client
+        .register(with_auth(register_payload, test_token, region))
         .await;
-    assert!(res_dup.is_ok());
+    assert!(res_dup.is_ok(), "L'idempotence de l'inscription a échoué");
 
-    // 6. ACT : Update locale
+    // 6. ACT : Update locale (Zone gRPC privée sécurisée par AuthInterceptor)
     let account_id_uuid = Uuid::parse_str(&real_account_id).unwrap();
 
-    // On récupère la version actuelle depuis la DB
+    // On vérifie que l'écriture a bien eu lieu dans le pool Postgres régional du TestContext
     let current_version: i64 = sqlx::query_scalar(
         "SELECT version FROM account_identity WHERE account_id = $1 AND region = $2",
     )
@@ -125,15 +133,15 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     };
 
     let upd_res = personal_client
-        .update_locale(with_auth(
-            update_payload,
-            &auth_response.token.as_str(),
-            region,
-        ))
+        .update_locale(with_auth(update_payload, test_token, region))
         .await;
-    assert!(upd_res.is_ok());
+    assert!(
+        upd_res.is_ok(),
+        "La mise à jour de la locale a échoué : {:?}",
+        upd_res.err()
+    );
 
-    // 7. VÉRIFICATIONS FINALES
+    // 7. VÉRIFICATIONS FINALES EN BASE DE DONNÉES
     let row: (String, i64) = sqlx::query_as(
         "SELECT locale, version FROM account_identity WHERE account_id = $1 AND region = $2",
     )
@@ -144,9 +152,9 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     .expect("Profile should exist in DB");
 
     assert_eq!(row.0, "en-US");
-    assert_eq!(row.1, 2); // Version incrémentée
+    assert_eq!(row.1, 2);
 
-    // 8. SHUTDOWN
+    // 8. SHUTDOWN DOCKER CLEANUP (Postgres et Redis s'éteignent proprement)
     ctx.shutdown().await;
     Ok(())
 }

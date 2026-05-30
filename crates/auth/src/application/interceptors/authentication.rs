@@ -1,3 +1,5 @@
+// crates/auth/src/application/interceptor.rs
+
 use shared_kernel::{security::JwtToken, types::Region};
 use std::sync::Arc;
 use tonic::{Request, Status, service::Interceptor};

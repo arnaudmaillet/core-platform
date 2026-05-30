@@ -1,10 +1,11 @@
 // backend/services/social/api/command-server/tests/social_e2e_it.rs
 
-use auth_test_utils::KeycloakTestContext;
+use auth::Claims;
+use auth_test_utils::TokenValidatorStub;
 use infra_fred::fred::interfaces::HashesInterface;
 use shared_kernel::{
     core::{Identifier, Result},
-    types::ProfileId,
+    types::{ProfileId, SubId},
 };
 use shared_proto::social::v1::social_service_client::SocialServiceClient;
 use shared_proto::social::v1::{CommandTarget, FollowProfileRequest, UnfollowProfileRequest};
@@ -12,7 +13,6 @@ use social_test_utils::SocialTestContextBuilder;
 use tonic::{Request, metadata::MetadataValue};
 use uuid::Uuid;
 
-// Helper d'injection des métadonnées d'authentification gRPC
 fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
     let mut request = Request::new(payload);
     let token_val = format!("Bearer {}", token)
@@ -29,20 +29,37 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    // 1. SETUP HARMONISÉ
+    let test_token = "simulated.social.service.jwt";
+    let target_sub_id = "keycloak|social-user-999";
+    let mock_validator = std::sync::Arc::new(TokenValidatorStub::new());
+
+    let expected_claims = Claims {
+        sub_id: SubId::try_new(target_sub_id)?,
+        aud: serde_json::Value::String("social-service".to_string()),
+        iss: "https://identity.core.platform/realms/master".to_string(),
+        email: None,
+        email_verified: None,
+        phone_number: None,
+        phone_number_verified: None,
+        realm_access: None,
+        exp: chrono::Utc::now().timestamp() as u64 + 3600,
+    };
+
+    mock_validator.stub_token(test_token, expected_claims);
+
+    // 2. SETUP INFRASTRUCTURE
     let ctx = SocialTestContextBuilder::new()
+        .with_mock_auth(mock_validator)
         .with_grpc_server()
         .build_e2e()
         .await;
 
     let mut social_client = SocialServiceClient::connect(ctx.grpc_url()).await.unwrap();
-    let auth_ctx = KeycloakTestContext::restore("master").await;
-    let auth_response = auth_ctx.get_admin_token().await?;
 
     let follower_id = ProfileId::generate();
     let following_id = ProfileId::generate();
 
-    // 2. ACT : FOLLOW
+    // 3. ACT : FOLLOW
     let follow_req = FollowProfileRequest {
         command_id: Uuid::now_v7().to_string(),
         follower_id: follower_id.to_string(),
@@ -54,11 +71,11 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
     };
 
     let follow_res = social_client
-        .follow_profile(with_auth(follow_req, &auth_response.token.as_str(), "EU"))
+        .follow_profile(with_auth(follow_req, test_token, "EU"))
         .await;
     assert!(follow_res.is_ok());
 
-    // 3. VERIFICATIONS (Scylla + Redis)
+    // 4. VERIFICATIONS (Scylla + Redis)
     let scylla_rows = ctx
         .kernel()
         .scylla()
@@ -80,7 +97,7 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
         .unwrap();
     assert_eq!(count, 1);
 
-    // 4. ACT : UNFOLLOW
+    // 5. ACT : UNFOLLOW
     let unfollow_req = UnfollowProfileRequest {
         command_id: Uuid::now_v7().to_string(),
         follower_id: follower_id.to_string(),
@@ -93,14 +110,11 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
 
     assert!(
         social_client
-            .unfollow_profile(with_auth(unfollow_req, &auth_response.token.as_str(), "EU"))
+            .unfollow_profile(with_auth(unfollow_req, test_token, "EU"))
             .await
             .is_ok()
     );
 
-    // 5. VÉRIFICATION FINALE DE L'ÉTAT (Le "Reverse Cycle")
-
-    // A. Vérifier que la ligne a disparu de Scylla
     let scylla_rows_after = ctx
         .kernel()
         .scylla()

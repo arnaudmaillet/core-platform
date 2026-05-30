@@ -1,11 +1,16 @@
+// backend/services/account/api/command-server/src/main.rs
+
 use account::{
     AccountServiceBuilder,
     services::{
         AccountAccessService, AccountModerationService, AccountPersonalService,
-        AccountSettingsService,
+        AccountRegistrationService, AccountSettingsService,
     },
 };
-use auth::{AuthInterceptor, KeycloakValidator};
+use auth::{
+    KeycloakValidator,
+    interceptors::{AuthInterceptor, RegistrationInterceptor},
+};
 use dotenvy::dotenv;
 use infra_fred::RedisContext;
 use infra_sqlx::PostgresContext;
@@ -16,6 +21,7 @@ use shared_proto::account::v1::{
     account_access_service_server::AccountAccessServiceServer,
     account_moderation_service_server::AccountModerationServiceServer,
     account_personal_service_server::AccountPersonalServiceServer,
+    account_registration_service_server::AccountRegistrationServiceServer, // 💡 Nouveau serveur généré
     account_settings_service_server::AccountSettingsServiceServer,
 };
 
@@ -25,31 +31,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let global_database_url =
+        std::env::var("GLOBAL_DATABASE_URL").expect("GLOBAL_DATABASE_URL must be set");
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let keycloak_url = std::env::var("KEYCLOAK_URL").expect("KEYCLOAK_URL must be set");
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").expect("KEYCLOAK_REALM must be set");
+    let keycloak_audience =
+        std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "account-service".to_string());
 
     let pg_ctx = PostgresContext::builder()?
         .with_url(database_url)
         .with_max_connections(20)
         .build()
         .await?;
-    let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
 
-    let builder = AccountServiceBuilder::new(pg_ctx.pool(), redis_ctx.repository());
+    let global_pg_ctx = PostgresContext::builder()?
+        .with_url(global_database_url)
+        .with_max_connections(10) 
+        .build()
+        .await?;
+
+    let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
+    let builder =
+        AccountServiceBuilder::new(pg_ctx.pool(), global_pg_ctx.pool(), redis_ctx.repository());
     let app_ctx = builder.build_context();
     let bus = builder.build_command_bus();
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
+
     let validator = Arc::new(
-        KeycloakValidator::new(&keycloak_url, &keycloak_realm)
+        KeycloakValidator::new(&keycloak_url, &keycloak_realm, keycloak_audience)
             .await
             .expect("Failed to initialize Keycloak validator"),
     );
 
-    let auth_interceptor: AuthInterceptor = AuthInterceptor::new(validator.clone());
+    // 💡 Nos deux intercepteurs partagent le même validateur de clés publiques en mémoire (JWKS)
+    let auth_interceptor = AuthInterceptor::new(validator.clone());
+    let registration_interceptor = RegistrationInterceptor::new(validator);
 
+    // 5. Instanciation des Services Applicatifs gRPC
+    let registration_svc = AccountRegistrationService::new(bus.clone(), app_ctx.clone()); // 💡 Nouveau
     let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
     let moderation_svc = AccountModerationService::new(bus.clone(), app_ctx.clone());
     let personal_svc = AccountPersonalService::new(bus.clone(), app_ctx.clone());
@@ -57,7 +79,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("🚀 Account Command Service listening on {}", addr);
 
+    // 6. Démarrage du Serveur gRPC Tonic avec application asymétrique des politiques de sécurité
     Server::builder()
+        // 🔓 SERVICE PUBLIC : Permet les inscriptions anonymes (Email/Password) et sociales (Token Google/FB)
+        .add_service(AccountRegistrationServiceServer::with_interceptor(
+            registration_svc,
+            registration_interceptor,
+        ))
+        // 🔒 SERVICES PRIVÉS : Bloquent immédiatement à l'entrée si pas de session active
         .add_service(AccountAccessServiceServer::with_interceptor(
             access_svc,
             auth_interceptor.clone(),

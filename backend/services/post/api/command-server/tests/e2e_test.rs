@@ -1,11 +1,12 @@
 // backend/services/post/api/command-server/tests/post_e2e_it.rs
 
-use auth_test_utils::KeycloakTestContext;
+use auth::Claims;
+use auth_test_utils::TokenValidatorStub;
 use infra_fred::fred::interfaces::KeysInterface;
 use post_test_utils::PostTestContextBuilder;
 use shared_kernel::{
     core::{Identifier, Result},
-    types::{PostId, ProfileId, Region},
+    types::{PostId, ProfileId, Region, SubId},
 };
 use shared_proto::post::v1::{CreatePostRequest, GetPostRequest};
 use shared_proto::post::v1::{QueryMetadata, post_service_client::PostServiceClient};
@@ -32,14 +33,34 @@ fn with_auth<T>(payload: T, token: &str, region: &str) -> Request<T> {
 async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
+    let test_token = "simulated.post.service.jwt";
+    let target_sub_id = "keycloak|author-123456";
+
+    // 1. SETUP DU VALIDATEUR MOCKÉ
+    let mock_validator = std::sync::Arc::new(TokenValidatorStub::new());
+
+    let expected_claims = Claims {
+        sub_id: SubId::try_new(target_sub_id)?,
+        aud: serde_json::Value::String("post-service".to_string()),
+        iss: "https://identity.core.platform/realms/master".to_string(),
+        email: None,
+        email_verified: None,
+        phone_number: None,
+        phone_number_verified: None,
+        realm_access: None,
+        exp: chrono::Utc::now().timestamp() as u64 + 3600,
+    };
+
+    mock_validator.stub_token(test_token, expected_claims);
+
+    // 2. SETUP INFRASTRUCTURE
     let ctx = PostTestContextBuilder::new()
+        .with_mock_auth(mock_validator)
         .with_grpc_server()
         .build_e2e()
         .await;
 
     let mut post_client = PostServiceClient::connect(ctx.grpc_url()).await.unwrap();
-    let auth_ctx = KeycloakTestContext::restore("master").await;
-    let auth_response = auth_ctx.get_admin_token().await?;
 
     let region = Region::default();
     let author_id = ProfileId::generate();
@@ -61,7 +82,7 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
 
     tracing::info!("Sending CreatePostRequest through gRPC client...");
     let create_res = post_client
-        .create_post(with_auth(create_req, auth_response.token.as_str(), "EU"))
+        .create_post(with_auth(create_req, test_token, "EU")) // 💡 Utilisation du test_token
         .await;
 
     assert!(
@@ -135,17 +156,14 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     };
 
     let get_res = post_client
-        .get_post(with_auth(get_req, auth_response.token.as_str(), "EU"))
+        .get_post(with_auth(get_req, test_token, "EU"))
         .await;
 
     assert!(get_res.is_ok(), "gRPC GetPost query failed");
     let returned_post = get_res.unwrap().into_inner();
     assert_eq!(
         returned_post.caption,
-        Some(
-            "Wynn hyperscale post architecture with custom Redis caching! #rust #scylla"
-                .to_string()
-        )
+        Some("Hyperscale post architecture with custom Redis caching! #rust #scylla".to_string())
     );
 
     let cache_bytes_after: Option<String> = redis_pool.get(&cache_key).await.unwrap();
