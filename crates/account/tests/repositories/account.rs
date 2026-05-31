@@ -27,11 +27,8 @@ async fn test_account_full_lifecycle_and_atomicity() -> Result<()> {
     let email = Email::try_new("full@lifecycle.com")?;
     let region = Region::default();
 
-    let account = Account::builder(
-        account_id,
-        RegistrationIdentifier::try_from_email(email.to_string())?,
-    )
-    .build()?;
+    let account =
+        Account::builder(account_id, RegistrationIdentifier::from_email(email)).build()?;
 
     // --- 1. CREATE (Scope isolé) ---
     {
@@ -89,11 +86,9 @@ async fn test_concurrency_protection_occ() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
     let account_id = AccountId::generate();
     let region = Region::default();
-    let account = Account::builder(
-        account_id,
-        RegistrationIdentifier::try_from_email("occ@test.com")?,
-    )
-    .build()?;
+    let email = Email::try_new("occ@test.com")?;
+    let account =
+        Account::builder(account_id, RegistrationIdentifier::from_email(email)).build()?;
 
     let mut tx = PostgresTransaction::new(pg_ctx.pool().begin().await.unwrap());
     repo.create(region, &account, &mut tx).await?;
@@ -121,7 +116,8 @@ async fn test_concurrency_protection_occ() -> Result<()> {
 #[tokio::test]
 async fn test_unique_constraints() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
-    let identifier = RegistrationIdentifier::try_from_email("unique@test.com")?;
+    let email = Email::try_new("unique@test.com")?;
+    let identifier = RegistrationIdentifier::from_email(email);
     let region = Region::default();
 
     let acc1 = Account::builder(AccountId::generate(), identifier.clone()).build()?;
@@ -144,7 +140,7 @@ async fn test_lookups() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
     let email = Email::try_new("lookup@test.com")?;
     let region = Region::default();
-    let identifier = RegistrationIdentifier::try_from_email(email.to_string())?;
+    let identifier = RegistrationIdentifier::from_email(email.clone());
     let ext_id = SubId::from_raw("ext_123");
     let account_id = AccountId::generate();
 
@@ -177,13 +173,11 @@ async fn test_lookups() -> Result<()> {
 #[tokio::test]
 async fn test_rollback_works_properly() -> Result<()> {
     let (repo, pg_ctx) = get_test_context().await;
+    let email = Email::try_new("rollback@test.com")?;
     let account_id = AccountId::generate();
     let region = Region::default();
-    let account = Account::builder(
-        account_id,
-        RegistrationIdentifier::try_from_email("rollback@test.com")?,
-    )
-    .build()?;
+    let account =
+        Account::builder(account_id, RegistrationIdentifier::from_email(email)).build()?;
 
     let tx_sqlx = pg_ctx.pool().begin().await.unwrap();
     let mut tx = PostgresTransaction::new(tx_sqlx);

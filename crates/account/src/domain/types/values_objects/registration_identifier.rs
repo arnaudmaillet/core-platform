@@ -1,15 +1,15 @@
-// domain/types/registration_identifier.rs
-
-use std::fmt;
+// crates/account/src/domain/types/registration_identifier.rs
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use shared_kernel::{
     core::{Error, Result, ValueObject},
     types::{Email, PhoneNumber},
 };
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RegistrationMethod {
+enum RegistrationMethod {
     Email(Email),
     Phone(PhoneNumber),
     Both { email: Email, phone: PhoneNumber },
@@ -21,40 +21,25 @@ pub struct RegistrationIdentifier {
 }
 
 impl RegistrationIdentifier {
-    /// Constructeur via Email uniquement
     pub fn from_email(email: Email) -> Self {
         Self {
             method: RegistrationMethod::Email(email),
         }
     }
 
-    /// Constructeur via Téléphone uniquement
     pub fn from_phone(phone: PhoneNumber) -> Self {
         Self {
             method: RegistrationMethod::Phone(phone),
         }
     }
 
-    /// Constructeur avec les deux
     pub fn from_both(email: Email, phone: PhoneNumber) -> Self {
         Self {
             method: RegistrationMethod::Both { email, phone },
         }
     }
 
-    pub fn try_from_phone(raw_phone: impl Into<String>) -> Result<Self> {
-        let phone = PhoneNumber::try_new(raw_phone)?;
-        Ok(Self::from_phone(phone))
-    }
-
-    pub fn try_from_email(raw_email: impl Into<String>) -> Result<Self> {
-        // En supposant que Email a aussi un try_new()
-        let email = Email::try_new(raw_email)?;
-        Ok(Self::from_email(email))
-    }
-
-    /// Constructeur "Smart" qui essaie de construire à partir d'options.
-    /// C'est celui-ci que tu utiliseras dans tes contrôleurs/handlers.
+    /// Constructeur robuste à partir d'options (Typique des handlers/endpoints gRPC)
     pub fn try_from_options(email: Option<Email>, phone: Option<PhoneNumber>) -> Result<Self> {
         match (email, phone) {
             (Some(e), Some(p)) => Ok(Self::from_both(e, p)),
@@ -62,12 +47,12 @@ impl RegistrationIdentifier {
             (None, Some(p)) => Ok(Self::from_phone(p)),
             (None, None) => Err(Error::validation(
                 "registration_identifier",
-                "At least one registration method (email or phone) must be provided",
+                "At least one valid identity identifier (email or phone) must be provided",
             )),
         }
     }
 
-    // --- Helpers d'accès ---
+    // --- ACCESSEURS DE SÉCURITÉ ---
 
     pub fn email(&self) -> Option<&Email> {
         match &self.method {
@@ -81,6 +66,28 @@ impl RegistrationIdentifier {
             RegistrationMethod::Phone(p) | RegistrationMethod::Both { phone: p, .. } => Some(p),
             RegistrationMethod::Email(_) => None,
         }
+    }
+
+    // --- 🔐 CAPACITÉS CRYPTOGRAPHIQUES DU DOMAINE ---
+
+    /// Génère le hash SHA-256 binaire (32 octets) de l'e-mail de manière standardisée
+    pub fn email_hash(&self) -> Option<Vec<u8>> {
+        self.email().map(|e| {
+            let mut hasher = Sha256::new();
+            // Le Value Object Email nettoie déjà en principe sa chaîne (trim/lowercase)
+            hasher.update(e.as_str().as_bytes());
+            hasher.finalize().to_vec()
+        })
+    }
+
+    /// Génère le hash SHA-256 binaire (32 octets) du téléphone de manière standardisée
+    pub fn phone_hash(&self) -> Option<Vec<u8>> {
+        self.phone().map(|p| {
+            let mut hasher = Sha256::new();
+            // Le type fort PhoneNumber garantit un format international standardisé (E.164)
+            hasher.update(p.as_str().as_bytes());
+            hasher.finalize().to_vec()
+        })
     }
 }
 
@@ -96,7 +103,7 @@ impl fmt::Display for RegistrationIdentifier {
             RegistrationMethod::Email(e) => write!(f, "Email({})", e),
             RegistrationMethod::Phone(p) => write!(f, "Phone({})", p),
             RegistrationMethod::Both { email, phone } => {
-                write!(f, "Both(Email:{}, Phone:{})", email, phone)
+                write!(f, "Both(Email: {}, Phone: {})", email, phone)
             }
         }
     }

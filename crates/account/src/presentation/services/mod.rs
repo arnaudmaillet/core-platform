@@ -1,9 +1,11 @@
-mod access_service;
-mod moderation_service;
-mod personal_service;
-mod settings_service;
+mod access_svc;
+mod moderation_svc;
+mod personal_svc;
+mod registration_svc;
+mod settings_svc;
 
-pub use access_service::AccountAccessService;
-pub use moderation_service::AccountModerationService;
-pub use personal_service::AccountPersonalService;
-pub use settings_service::AccountSettingsService;
+pub use access_svc::AccountAccessService;
+pub use moderation_svc::AccountModerationService;
+pub use personal_svc::AccountPersonalService;
+pub use registration_svc::AccountRegistrationService;
+pub use settings_svc::AccountSettingsService;

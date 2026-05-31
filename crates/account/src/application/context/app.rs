@@ -1,7 +1,7 @@
 // crates/account/src/application/context.rs (ou son chemin équivalent)
 
 use crate::application::context::{AccountCommandContext, AccountQueryContext};
-use crate::domain::repositories::AccountRepository;
+use crate::repositories::{AccountRepository, GlobalIdentityRegistry};
 use shared_kernel::core::TransactionManager;
 use shared_kernel::{
     idempotency::IdempotencyRepository,
@@ -15,6 +15,7 @@ pub struct AccountAppContext<TM> {
     account_repo: Arc<dyn AccountRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
+    global_registry: Arc<dyn GlobalIdentityRegistry>,
 }
 
 impl<TM> Clone for AccountAppContext<TM> {
@@ -24,6 +25,7 @@ impl<TM> Clone for AccountAppContext<TM> {
             account_repo: self.account_repo.clone(),
             outbox_repo: self.outbox_repo.clone(),
             idempotency_repo: self.idempotency_repo.clone(),
+            global_registry: self.global_registry.clone(),
         }
     }
 }
@@ -34,12 +36,14 @@ impl<TM> AccountAppContext<TM> {
         account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
+        global_registry: Arc<dyn GlobalIdentityRegistry>,
     ) -> Self {
         Self {
             transaction_manager,
             account_repo,
             outbox_repo,
             idempotency_repo,
+            global_registry,
         }
     }
 
@@ -57,6 +61,10 @@ impl<TM> AccountAppContext<TM> {
 
     pub(crate) fn idempotency_repo(&self) -> Arc<dyn IdempotencyRepository> {
         self.idempotency_repo.clone()
+    }
+
+    pub(crate) fn global_registry(&self) -> Arc<dyn GlobalIdentityRegistry> {
+        self.global_registry.clone()
     }
 }
 

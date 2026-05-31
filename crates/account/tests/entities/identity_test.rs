@@ -23,7 +23,7 @@ fn create_test_account() -> Account {
 fn test_account_initial_state() -> Result<()> {
     let account = create_test_account();
 
-    assert_eq!(account.identity().state(), &AccountState::PENDING);
+    assert_eq!(account.identity().state(), &AccountState::UNVERIFIED);
     assert_eq!(
         account.metadata().version(),
         AggregateMetadata::INITIAL_VERSION

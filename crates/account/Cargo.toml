@@ -12,6 +12,7 @@ test-utils = []
 infra-sqlx = { workspace = true }
 shared-kernel = { workspace = true }
 shared-proto = { workspace = true, features = ["account"] }
+auth = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
@@ -21,6 +22,7 @@ uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
 tonic = { workspace = true }
 sqlx = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 infra-test = { workspace = true }

@@ -1,3 +1,5 @@
+-- crates/account/migrations/postgres/0001_account.sql
+
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -8,13 +10,14 @@ $$ LANGUAGE plpgsql;
 
 
 -- 2. IDENTITY (Table racine)
+-- uq_sub_id constaint handled by global registry table
 CREATE TABLE IF NOT EXISTS account_identity (
     account_id UUID,
     region VARCHAR(10) NOT NULL,
     sub_id TEXT,
     email TEXT,
     phone_number TEXT,
-    state TEXT NOT NULL DEFAULT 'PENDING',
+    state TEXT NOT NULL DEFAULT 'UNVERIFIED',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'EN',
     version BIGINT NOT NULL DEFAULT 0,
@@ -24,8 +27,7 @@ CREATE TABLE IF NOT EXISTS account_identity (
     last_active_at TIMESTAMPTZ,
     PRIMARY KEY (region, account_id),
     CONSTRAINT uq_email UNIQUE (email, region),
-    CONSTRAINT uq_phone_number UNIQUE (phone_number, region),
-    CONSTRAINT uq_sub_id UNIQUE (sub_id)
+    CONSTRAINT uq_phone_number UNIQUE (phone_number, region)
 );
 
 -- 3. SETTINGS (Relation 1:1 co-localisée)

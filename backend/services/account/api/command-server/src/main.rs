@@ -21,7 +21,7 @@ use shared_proto::account::v1::{
     account_access_service_server::AccountAccessServiceServer,
     account_moderation_service_server::AccountModerationServiceServer,
     account_personal_service_server::AccountPersonalServiceServer,
-    account_registration_service_server::AccountRegistrationServiceServer, // 💡 Nouveau serveur généré
+    account_registration_service_server::AccountRegistrationServiceServer,
     account_settings_service_server::AccountSettingsServiceServer,
 };
 
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let global_pg_ctx = PostgresContext::builder()?
         .with_url(global_database_url)
-        .with_max_connections(10) 
+        .with_max_connections(10)
         .build()
         .await?;
 
@@ -66,11 +66,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .expect("Failed to initialize Keycloak validator"),
     );
 
-    // 💡 Nos deux intercepteurs partagent le même validateur de clés publiques en mémoire (JWKS)
     let auth_interceptor = AuthInterceptor::new(validator.clone());
     let registration_interceptor = RegistrationInterceptor::new(validator);
 
-    // 5. Instanciation des Services Applicatifs gRPC
     let registration_svc = AccountRegistrationService::new(bus.clone(), app_ctx.clone()); // 💡 Nouveau
     let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
     let moderation_svc = AccountModerationService::new(bus.clone(), app_ctx.clone());
@@ -79,14 +77,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("🚀 Account Command Service listening on {}", addr);
 
-    // 6. Démarrage du Serveur gRPC Tonic avec application asymétrique des politiques de sécurité
     Server::builder()
-        // 🔓 SERVICE PUBLIC : Permet les inscriptions anonymes (Email/Password) et sociales (Token Google/FB)
         .add_service(AccountRegistrationServiceServer::with_interceptor(
             registration_svc,
             registration_interceptor,
         ))
-        // 🔒 SERVICES PRIVÉS : Bloquent immédiatement à l'entrée si pas de session active
         .add_service(AccountAccessServiceServer::with_interceptor(
             access_svc,
             auth_interceptor.clone(),

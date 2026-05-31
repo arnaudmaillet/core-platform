@@ -73,7 +73,7 @@ async fn test_suspend_technical_idempotency() -> Result<()> {
     );
 
     f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::PENDING);
+        assert_eq!(*acc.identity().state(), AccountState::UNVERIFIED);
         assert_eq!(acc.version(), version_snapshot);
     })
     .await?;

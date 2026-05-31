@@ -1,4 +1,3 @@
-
 use account::commands::lifecycle::UnsuspendCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -28,7 +27,10 @@ async fn test_unsuspend_account_success() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, UnsuspendCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, UnsuspendCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -66,7 +68,10 @@ async fn test_unsuspend_technical_idempotency() -> Result<()> {
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, UnsuspendCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, UnsuspendCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert
@@ -103,12 +108,15 @@ async fn test_unsuspend_business_idempotency() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, UnsuspendCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, UnsuspendCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
     f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::PENDING);
+        assert_eq!(*acc.identity().state(), AccountState::UNVERIFIED);
         assert_eq!(acc.version(), version_snapshot);
     })
     .await?;

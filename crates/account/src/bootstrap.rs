@@ -15,7 +15,7 @@ use crate::{
         UpdateTimezoneHandler,
     },
     context::{AccountAppContext, AccountCommandContext},
-    db::PostgresAccountRepository,
+    db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry},
 };
 use infra_sqlx::{
     PostgresIdempotencyRepository, PostgresOutboxRepository, PostgresTransactionManager,
@@ -25,12 +25,17 @@ use shared_kernel::{cache::CacheRepository, command::CommandBus};
 
 pub struct AccountServiceBuilder {
     pool: PgPool,
+    global_pool: PgPool,
     cache_repo: Arc<dyn CacheRepository>,
 }
 
 impl AccountServiceBuilder {
-    pub fn new(pool: PgPool, cache_repo: Arc<dyn CacheRepository>) -> Self {
-        Self { pool, cache_repo }
+    pub fn new(pool: PgPool, global_pool: PgPool, cache_repo: Arc<dyn CacheRepository>) -> Self {
+        Self {
+            pool,
+            global_pool,
+            cache_repo,
+        }
     }
 
     pub fn build_context(&self) -> Arc<AccountAppContext<PostgresTransactionManager>> {
@@ -38,12 +43,16 @@ impl AccountServiceBuilder {
         let account_repo = Arc::new(PostgresAccountRepository::new(self.pool.clone()));
         let outbox_repo = Arc::new(PostgresOutboxRepository::new(self.pool.clone()));
         let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("account_idempotency"));
+        let global_registry = Arc::new(PostgresGlobalIdentityRegistry::new(
+            self.global_pool.clone(),
+        ));
 
         Arc::new(AccountAppContext::new(
             tx_manager,
             account_repo,
             outbox_repo,
             idempotency_repo,
+            global_registry,
         ))
     }
 

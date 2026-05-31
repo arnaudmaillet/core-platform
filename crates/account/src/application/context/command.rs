@@ -1,7 +1,10 @@
 // crates/account/src/application/context/command_context.rs
 
+use std::sync::Arc;
+
 use crate::application::context::AccountAppContext;
 use crate::domain::entities::Account;
+use crate::repositories::GlobalIdentityRegistry;
 use infra_sqlx::TransactionManagerExt;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::TransactionManager;
@@ -54,6 +57,10 @@ impl<TM> AccountCommandContext<TM> {
                 "Account ID is missing in this context (Creation flow)",
             )
         })
+    }
+
+    pub fn global_registry(&self) -> Arc<dyn GlobalIdentityRegistry> {
+        self.app.global_registry()
     }
 }
 

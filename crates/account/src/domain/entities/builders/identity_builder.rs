@@ -26,7 +26,7 @@ impl AccountIdentityBuilder {
             locale: None,
             phone: None,
             birth_date: None,
-            state: AccountState::PENDING,
+            state: AccountState::UNVERIFIED,
             last_active_at: None,
         }
     }
