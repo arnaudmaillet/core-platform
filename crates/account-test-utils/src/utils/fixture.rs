@@ -1,6 +1,6 @@
 // crates/account/src/application/fixture.rs
 
-use crate::repositories::AccountRepositoryStub;
+use crate::repositories::{AccountRepositoryStub, GlobalIdentityRegistryStub};
 use account::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
 use account::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
@@ -20,7 +20,7 @@ use account::entities::{Account, AccountBuilder};
 use account::types::RegistrationIdentifier;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
-use shared_kernel::types::{AccountId, Region};
+use shared_kernel::types::{AccountId, Email, Region};
 use shared_kernel_test_utils::repositories::IdempotencyRepositoryStub;
 use shared_kernel_test_utils::repositories::OutboxRepositoryStub;
 use shared_kernel_test_utils::repositories::{CacheRepositoryStub, TransactionManagerStub};
@@ -38,6 +38,7 @@ pub struct AccountTestFixture {
     account_repo: Arc<AccountRepositoryStub>,
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
     outbox_repo: Arc<OutboxRepositoryStub>,
+    global_registry: Arc<GlobalIdentityRegistryStub>,
 }
 
 impl AccountTestFixture {
@@ -47,12 +48,14 @@ impl AccountTestFixture {
         let outbox_repo = Arc::new(OutboxRepositoryStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
+        let global_registry = Arc::new(GlobalIdentityRegistryStub::new());
 
         let app_ctx = AccountAppContext::new(
             tx_manager,
             account_repo.clone(),
             outbox_repo.clone(),
             idempotency_repo.clone(),
+            global_registry.clone(),
         );
 
         let region = Region::default();
@@ -125,6 +128,7 @@ impl AccountTestFixture {
             account_repo,
             idempotency_repo,
             outbox_repo,
+            global_registry,
         }
     }
 
@@ -170,10 +174,14 @@ impl AccountTestFixture {
         self.outbox_repo.event_names()
     }
 
+    pub fn global_registry(&self) -> &GlobalIdentityRegistryStub {
+        &self.global_registry
+    }
+
     pub fn builder(&self) -> Result<AccountBuilder> {
         Ok(Account::builder(
             self.account_id,
-            RegistrationIdentifier::try_from_email("test@example.com")?,
+            RegistrationIdentifier::from_email(Email::try_new("test@example.com")?),
         ))
     }
 

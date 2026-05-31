@@ -14,3 +14,4 @@ tokio = { workspace = true }
 testcontainers = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde_json = { workspace = true }
+jsonwebtoken = { workspace = true }

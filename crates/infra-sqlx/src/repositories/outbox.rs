@@ -18,11 +18,9 @@ impl PostgresOutboxRepository {
     }
 }
 
-// 1. Implémentation du trait OutboxStore pour ton OutboxProcessor générique !
 #[async_trait]
 impl OutboxStore for PostgresOutboxRepository {
     async fn fetch_unprocessed(&self, limit: u32) -> Result<Vec<EventEnvelope>> {
-        // 💡 Utilisation d'une transaction interne pour sécuriser le verrou 'FOR UPDATE SKIP LOCKED'
         let mut tx = self
             .pool
             .begin()
@@ -90,7 +88,6 @@ impl OutboxStore for PostgresOutboxRepository {
     }
 }
 
-// 2. Ton trait classique pour la couche d'écriture (save_all)
 #[async_trait]
 impl OutboxRepository for PostgresOutboxRepository {
     async fn save_all(&self, region: Region, tx: &mut dyn Transaction, events: &[&dyn Event]) -> Result<()> {

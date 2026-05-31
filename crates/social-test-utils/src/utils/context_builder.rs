@@ -1,7 +1,7 @@
 // crates/social-test-utils/src/test_context_builder.rs
 
 use crate::SocialTestContext;
-use auth::{AuthInterceptor, KeycloakValidator};
+use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::KeycloakTestContext;
 use infra_fred::RedisIdempotencyRepository;
 use infra_test::TestContextBuilder;
@@ -16,6 +16,7 @@ pub struct SocialTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
     with_grpc: bool,
     has_kafka: bool,
+    mock_validator: Option<Arc<dyn TokenValidator>>,
 }
 
 impl SocialTestContextBuilder {
@@ -26,6 +27,7 @@ impl SocialTestContextBuilder {
                 .with_redis(),
             with_grpc: false,
             has_kafka: false,
+            mock_validator: None,
         }
     }
 
@@ -37,6 +39,11 @@ impl SocialTestContextBuilder {
     pub fn with_kafka(mut self) -> Self {
         self.kernel_builder = self.kernel_builder.with_kafka();
         self.has_kafka = true;
+        self
+    }
+
+    pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
+        self.mock_validator = Some(validator);
         self
     }
 
@@ -54,13 +61,22 @@ impl SocialTestContextBuilder {
 
         if self.with_grpc {
             tracing::info!("Starting Social gRPC server...");
+            let custom_validator = self.mock_validator.clone();
+
             tokio::spawn(async move {
-                let auth_ctx = KeycloakTestContext::restore("master").await;
-                let validator = Arc::new(
-                    KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
-                        .await
-                        .unwrap(),
-                );
+                // 💡 CHOIX DU VALIDATEUR : Utilisation du mock s'il est fourni, sinon fallback Docker
+                let validator = match custom_validator {
+                    Some(mock) => mock,
+                    None => {
+                        let auth_ctx = KeycloakTestContext::restore(
+                            "master",
+                            "social-service-test".to_string(),
+                        )
+                        .await;
+                        auth_ctx.validator.clone()
+                    }
+                };
+
                 let interceptor = AuthInterceptor::new(validator);
 
                 let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(

@@ -1,8 +1,10 @@
+// crates/account/tests/handlers/change_phone_number.rs
 
 use account::commands::settings::ChangePhoneNumberCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account::types::RegistrationIdentifier;
 use account_test_utils::AccountTestFixture;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
@@ -20,11 +22,23 @@ async fn test_change_phone_number_success() -> Result<()> {
     let account = f
         .builder()?
         .with_state(AccountState::ACTIVE)
-        .with_phone(old_phone)
+        .with_phone(old_phone.clone())
         .build()?;
 
     let version_snapshot = account.version();
     f.account_repo().insert(account);
+
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_phone(old_phone),
+            state: AccountState::ACTIVE,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
 
     let cmd = ChangePhoneNumberCommand {
         command_id: Uuid::new_v4(),
@@ -64,6 +78,9 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
     let version_snapshot = account.version();
     f.account_repo().insert(account);
+
+    // Note : L'idempotence technique court-circuite le handler avant le global_registry,
+    // pas besoin d'insert_fixture ici.
 
     let cmd = ChangePhoneNumberCommand {
         command_id: cmd_id,
@@ -112,6 +129,18 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_phone(phone.clone()),
+            state: AccountState::ACTIVE,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
+
     let cmd = ChangePhoneNumberCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
@@ -144,9 +173,26 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
 async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
     let f = AccountTestFixture::new();
     let error_msg = "Kafka/Outbox DB Error";
+    let old_phone = PhoneNumber::try_new("+33612345678")?;
 
-    let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
+    let account = f
+        .builder()?
+        .with_state(AccountState::ACTIVE)
+        .with_phone(old_phone.clone())
+        .build()?;
     f.account_repo().insert(account);
+
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_phone(old_phone),
+            state: AccountState::ACTIVE,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
 
     // Simulation d'une erreur d'infrastructure lors du commit (Outbox)
     f.outbox_repo().set_error(Error::internal(error_msg));
@@ -168,7 +214,6 @@ async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
         .await;
 
     // 3. Assert
-    // On vérifie que l'erreur d'infrastructure est bien remontée au Bus
     match result {
         Err(e) => {
             assert_eq!(e.code, ErrorCode::InternalError);
@@ -177,12 +222,6 @@ async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
         }
         Ok(_) => panic!("Should have failed"),
     }
-
-    // NOTE : On ne vérifie pas le rollback ici.
-    // Pourquoi ? Parce que f.account_repo() est un InMemoryRepository.
-    // Sans une vraie base de données (Postgres), l'annulation atomique
-    // des changements en mémoire n'est pas possible via FakeTransaction.
-    // Ce test de "vrai rollback" appartient aux tests d'intégration (IT).
 
     Ok(())
 }

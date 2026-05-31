@@ -1,7 +1,7 @@
 // crates/profile/src/test_utils/test_context_builder.rs
 
 use crate::ProfileTestContext;
-use auth::{AuthInterceptor, KeycloakValidator};
+use auth::{TokenValidator, interceptors::AuthInterceptor}; // 💡 Import du trait générique TokenValidator
 use auth_test_utils::KeycloakTestContext;
 use infra_kafka::KafkaEventConsumer;
 use infra_test::TestContextBuilder;
@@ -26,6 +26,7 @@ pub struct ProfileTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
     service_mode: Option<ServiceMode>,
     has_kafka: bool,
+    mock_validator: Option<Arc<dyn TokenValidator>>,
 }
 
 impl ProfileTestContextBuilder {
@@ -36,6 +37,7 @@ impl ProfileTestContextBuilder {
                 .with_redis(),
             service_mode: None,
             has_kafka: false,
+            mock_validator: None,
         }
     }
 
@@ -48,6 +50,12 @@ impl ProfileTestContextBuilder {
         self.service_mode = Some(ServiceMode::KafkaWorker);
         self.has_kafka = true;
         self.kernel_builder = self.kernel_builder.with_kafka();
+        self
+    }
+
+    /// 💡 NOUVELLE MÉTHODE : Permet d'injecter ton MockTokenValidator depuis e2e_it.rs
+    pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
+        self.mock_validator = Some(validator);
         self
     }
 
@@ -69,15 +77,24 @@ impl ProfileTestContextBuilder {
                 tracing::info!("Mode selected: gRPC Server");
                 let pg = pg_pool.clone();
                 let redis = redis_repo.clone();
+                let custom_validator = self.mock_validator.clone(); // Clônage pour l'isoler dans le thread
 
                 tokio::spawn(async move {
                     tracing::debug!("gRPC server task spawning...");
-                    let auth_ctx = KeycloakTestContext::restore("master").await;
-                    let validator = Arc::new(
-                        KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
-                            .await
-                            .unwrap(),
-                    );
+
+                    // 💡 BRANCHEMENT ADAPTATIF : Mock ou Keycloak réel par défaut
+                    let validator = match custom_validator {
+                        Some(mock) => mock,
+                        None => {
+                            let auth_ctx = KeycloakTestContext::restore(
+                                "master",
+                                "profile-service-test".to_string(),
+                            )
+                            .await;
+                            auth_ctx.validator.clone()
+                        }
+                    };
+
                     let interceptor = AuthInterceptor::new(validator);
 
                     let builder = ProfileServiceBuilder::new(pg, redis);

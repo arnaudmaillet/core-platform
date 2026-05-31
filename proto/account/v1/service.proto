@@ -6,8 +6,11 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
-service AccountAccessService {
+service AccountRegistrationService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
+}
+
+service AccountAccessService {
   rpc LinkSubIdentity(LinkSubIdentityRequest) returns (LinkSubIdentityResponse);
   rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
 }
@@ -47,103 +50,121 @@ service AccountSettingsService {
   rpc RemovePushToken(RemovePushTokenRequest) returns (RemovePushTokenResponse);
 }
 
-
 message RegisterRequest {
-  string command_id = 1;
-  string region = 2;
-  optional string sub_id = 3;
+  string                 command_id = 1;
+  string                 region     = 2;
+  optional string        sub_id     = 3;
   RegistrationIdentifier identifier = 4;
-  string locale = 5;
-  string ip_addr = 6;
+  string                 locale     = 5;
+  string                 ip_addr    = 6;
 }
+
 message RegisterResponse {
   string account_id = 1;
 }
 
 message LinkSubIdentityRequest {
-  string command_id = 1;
-  AccountTarget target = 2;
-  string sub_id = 3;
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        sub_id     = 3;
 }
 
 message LinkSubIdentityResponse {}
-message ResolveIdentityRequest { 
-  string sub_id = 1; 
+
+message ResolveIdentityRequest {
+  string sub_id = 1;
 }
+
 message ResolveIdentityResponse {
   string account_id = 1;
-  string state = 2;
-  string role = 3;
+  string state      = 2;
+  string role       = 3;
 }
 
-message BanRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string reason = 3; 
+message BanRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        reason     = 3;
 }
+
 message BanResponse {}
 
-message UnbanRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string reason = 3; 
+message UnbanRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        reason     = 3;
 }
+
 message UnbanResponse {}
 
-message SuspendRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  int64 duration_seconds = 3;
-  string reason = 4; 
+message SuspendRequest {
+  string        command_id       = 1;
+  AccountTarget target           = 2;
+  int64         duration_seconds = 3;
+  string        reason           = 4;
 }
+
 message SuspendResponse {}
 
-message UnsuspendRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string reason = 3; 
+message UnsuspendRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        reason     = 3;
 }
+
 message UnsuspendResponse {}
-message ShadowbanRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string reason = 3; 
+
+message ShadowbanRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        reason     = 3;
 }
+
 message ShadowbanResponse {}
 
-message LiftShadowbanRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string reason = 3; 
+message LiftShadowbanRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        reason     = 3;
 }
+
 message LiftShadowbanResponse {}
+
 message IncreaseTrustScoreRequest {
-  string command_id = 1; 
-  AccountTarget target = 2;
-  uint32 amount = 3; 
-  string reason = 4;
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  uint32        amount     = 3;
+  string        reason     = 4;
 }
+
 message IncreaseTrustScoreResponse {}
+
 message DecreaseTrustScoreRequest {
-  string command_id = 1; 
-  AccountTarget target = 2;
-  uint32 amount = 3; 
-  string reason = 4;
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  uint32        amount     = 3;
+  string        reason     = 4;
 }
+
 message DecreaseTrustScoreResponse {}
-message ChangeRoleRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2;
-  string new_role = 3; 
-  string reason = 4; 
+
+message ChangeRoleRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        new_role   = 3;
+  string        reason     = 4;
 }
+
 message ChangeRoleResponse {}
+
 message ChangeBetaTierRequest {
-  string command_id = 1;
-  AccountTarget target = 2;
-  string new_tier = 3;
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        new_tier   = 3;
 }
+
 message ChangeBetaTierResponse {}
+
 message ChangeEmailRequest {
   string        command_id = 1;
   AccountTarget target     = 2;
@@ -165,6 +186,7 @@ message ChangeBirthDateRequest {
   AccountTarget             target         = 2;
   google.protobuf.Timestamp new_birth_date = 3;
 }
+
 message ChangeBirthDateResponse {}
 
 // --- MESSAGES (LOCALISATION) ---
@@ -182,55 +204,66 @@ message UpdateLocaleRequest {
 }
 
 message UpdateLocaleResponse {}
+
 message ActivateRequest {
   string          command_id = 1;
   AccountTarget   target     = 2;
   optional string reason     = 3;
 }
+
 message ActivateResponse {}
+
 message DeactivateRequest {
   string          command_id = 1;
   AccountTarget   target     = 2;
   optional string reason     = 3;
 }
+
 message DeactivateResponse {}
+
 message GetAccountRequest { string account_id = 1; }
 
 message FullAccountResponse {
-  AccountIdentity identity = 1;
+  AccountIdentity   identity   = 1;
   AccountGovernance governance = 2;
-  AccountSettings settings = 3;
+  AccountSettings   settings   = 3;
 }
 
 message PublicProfileResponse {
   string account_id = 1;
-  string locale = 2;
+  string locale     = 2;
 }
-message UpdatePreferencesRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2;
-  AccountSettings.Privacy privacy = 3;
+
+message UpdatePreferencesRequest {
+  string                        command_id    = 1;
+  AccountTarget                 target        = 2;
+  AccountSettings.Privacy       privacy       = 3;
   AccountSettings.Notifications notifications = 4;
-  AccountSettings.Appearance appearance = 5;
+  AccountSettings.Appearance    appearance    = 5;
 }
+
 message UpdatePreferencesResponse {}
-message UpdateTimezoneRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string timezone = 3; 
+
+message UpdateTimezoneRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        timezone   = 3;
 }
+
 message UpdateTimezoneResponse {}
 
-message AddPushTokenRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string token = 3; 
+message AddPushTokenRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        token      = 3;
 }
+
 message AddPushTokenResponse {}
 
-message RemovePushTokenRequest { 
-  string command_id = 1; 
-  AccountTarget target = 2; 
-  string token = 3; 
+message RemovePushTokenRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        token      = 3;
 }
+
 message RemovePushTokenResponse {}

@@ -5,15 +5,19 @@ use account::{
     AccountServiceBuilder,
     services::{
         AccountAccessService, AccountModerationService, AccountPersonalService,
-        AccountSettingsService,
+        AccountRegistrationService, AccountSettingsService,
     },
 };
-use auth::{AuthInterceptor, KeycloakValidator};
+use auth::{
+    TokenValidator,
+    interceptors::{AuthInterceptor, RegistrationInterceptor},
+};
 use auth_test_utils::KeycloakTestContext;
 use infra_test::TestContextBuilder;
 use shared_proto::account::v1::account_access_service_server::AccountAccessServiceServer;
 use shared_proto::account::v1::account_moderation_service_server::AccountModerationServiceServer;
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;
+use shared_proto::account::v1::account_registration_service_server::AccountRegistrationServiceServer;
 use shared_proto::account::v1::account_settings_service_server::AccountSettingsServiceServer;
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -22,6 +26,7 @@ use tonic::transport::Server;
 pub struct AccountTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
     with_grpc: bool,
+    mock_validator: Option<Arc<dyn TokenValidator>>,
 }
 
 impl AccountTestContextBuilder {
@@ -31,6 +36,7 @@ impl AccountTestContextBuilder {
                 .with_postgres(vec!["crates/account/migrations/postgres"])
                 .with_redis(),
             with_grpc: false,
+            mock_validator: None,
         }
     }
 
@@ -39,10 +45,17 @@ impl AccountTestContextBuilder {
         self
     }
 
+    pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
+        self.mock_validator = Some(validator);
+        self
+    }
+
     pub async fn build(self) -> AccountTestContext {
         tracing::info!("Building Account test infrastructure...");
         let kernel_infra = self.kernel_builder.build().await;
         let pg_pool = kernel_infra.postgres().pool().clone();
+        let global_pg_pool = kernel_infra.postgres().pool().clone();
+
         let redis_repo = kernel_infra.redis().repository();
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -51,37 +64,50 @@ impl AccountTestContextBuilder {
         if self.with_grpc {
             tracing::info!("Starting gRPC server...");
             let pg = pg_pool.clone();
+            let global_pg = global_pg_pool.clone();
             let redis = redis_repo.clone();
+            let custom_validator = self.mock_validator.clone();
 
             tokio::spawn(async move {
-                let auth_ctx = KeycloakTestContext::restore("master").await;
-                let validator = Arc::new(
-                    KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
-                        .await
-                        .unwrap(),
-                );
-                let interceptor = AuthInterceptor::new(validator);
+                let validator = match custom_validator {
+                    Some(mock) => mock,
+                    None => {
+                        let auth_ctx = KeycloakTestContext::restore(
+                            "master",
+                            "account-service-test".to_string(),
+                        )
+                        .await;
+                        auth_ctx.validator.clone()
+                    }
+                };
 
-                let builder = AccountServiceBuilder::new(pg, redis);
+                let auth_interceptor = AuthInterceptor::new(validator.clone());
+                let registration_interceptor = RegistrationInterceptor::new(validator);
+
+                let builder = AccountServiceBuilder::new(pg, global_pg, redis);
                 let app_ctx = builder.build_context();
                 let bus = builder.build_command_bus();
 
                 let svc = Server::builder()
+                    .add_service(AccountRegistrationServiceServer::with_interceptor(
+                        AccountRegistrationService::new(bus.clone(), app_ctx.clone()),
+                        registration_interceptor,
+                    ))
                     .add_service(AccountAccessServiceServer::with_interceptor(
                         AccountAccessService::new(bus.clone(), app_ctx.clone()),
-                        interceptor.clone(),
+                        auth_interceptor.clone(),
                     ))
                     .add_service(AccountModerationServiceServer::with_interceptor(
                         AccountModerationService::new(bus.clone(), app_ctx.clone()),
-                        interceptor.clone(),
+                        auth_interceptor.clone(),
                     ))
                     .add_service(AccountPersonalServiceServer::with_interceptor(
                         AccountPersonalService::new(bus.clone(), app_ctx.clone()),
-                        interceptor.clone(),
+                        auth_interceptor.clone(),
                     ))
                     .add_service(AccountSettingsServiceServer::with_interceptor(
                         AccountSettingsService::new(bus, app_ctx),
-                        interceptor,
+                        auth_interceptor,
                     ));
 
                 let addr = "[::1]:0".parse::<std::net::SocketAddr>().unwrap();
