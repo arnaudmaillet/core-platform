@@ -1,7 +1,7 @@
 // crates/auth/src/domain/claims.rs
 
 use serde::{Deserialize, Serialize};
-use shared_kernel::types::{Email, PhoneNumber, SubId};
+use shared_kernel::types::{Email, Phone, SubId};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -9,7 +9,7 @@ pub struct Claims {
     pub sub_id: SubId,
     pub email: Option<Email>,
     pub email_verified: Option<bool>,
-    pub phone_number: Option<PhoneNumber>,
+    pub phone_number: Option<Phone>,
     pub phone_number_verified: Option<bool>,
     pub realm_access: Option<RealmAccess>,
     pub exp: u64,

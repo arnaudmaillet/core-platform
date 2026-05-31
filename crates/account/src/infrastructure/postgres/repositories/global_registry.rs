@@ -45,7 +45,7 @@ impl GlobalIdentityRegistry for PostgresGlobalIdentityRegistry {
                         return Error::validation("email", "This email address is already registered globally.");
                     }
                     if msg.contains("uq_global_phone") {
-                        return Error::validation("phone_number", "This phone number is already registered globally.");
+                        return Error::validation("phone", "This phone is already registered globally.");
                     }
                     if msg.contains("uq_global_sub_id") {
                         return Error::validation("sub_id", "This external identity provider sub_id is already linked to an account.");
@@ -147,8 +147,8 @@ impl GlobalIdentityRegistry for PostgresGlobalIdentityRegistry {
                     }
                     if msg.contains("uq_global_phone") {
                         return Error::validation(
-                            "phone_number",
-                            "This phone number is already claimed by another account.",
+                            "phone",
+                            "This phone is already claimed by another account.",
                         );
                     }
                 }

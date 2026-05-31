@@ -5,7 +5,7 @@ use shared_kernel::{
     geo::Timezone,
     messaging::{Event, EventEmitter, OperationTracker},
     security::{PushToken, TrustContext},
-    types::{AccountId, AuditReason, Email, PhoneNumber, SubId},
+    types::{AccountId, AuditReason, Email, Phone, SubId},
 };
 
 use crate::{
@@ -122,7 +122,7 @@ impl Account {
                 Box::new(AccountEvent::AccountRegistered {
                     account_id: s.id_typed(),
                     email: s.identity.email().cloned(),
-                    phone: s.identity.phone_number().cloned(),
+                    phone: s.identity.phone().cloned(),
                     sub_id: s.identity.sub_id().cloned(),
                     locale: s.identity.locale().clone(),
                     ip_addr,
@@ -217,17 +217,17 @@ impl Account {
         )
     }
 
-    pub fn change_phone(&mut self, new_phone: PhoneNumber) -> Result<bool> {
+    pub fn change_phone(&mut self, new_phone: Phone) -> Result<bool> {
         self.ensure_not_restricted()?;
-        let old_phone = self.identity.phone_number().cloned();
+        let old_phone = self.identity.phone().cloned();
 
         self.track_change(
             |s| s.identity.apply_phone_change(new_phone.clone()),
             |s| {
                 Box::new(AccountEvent::PhoneNumberChanged {
                     account_id: s.id_typed(),
-                    old_phone_number: old_phone,
-                    new_phone_number: new_phone.clone(),
+                    old_phone,
+                    new_phone: new_phone.clone(),
                     occurred_at: s.updated_at(),
                 })
             },

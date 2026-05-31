@@ -5,7 +5,7 @@ use infra_sqlx::TransactionExecuteExt;
 use shared_kernel::core::{AggregateRoot, Entity, Identifier};
 use shared_kernel::{
     core::{Error, Result, Transaction},
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, Phone, Region, SubId},
 };
 
 use crate::domain::entities::Account;
@@ -117,7 +117,7 @@ impl AccountRepository for PostgresAccountRepository {
                         sqlx::query(
                             r#"INSERT INTO account_identity 
                                 (
-                                    account_id, region, sub_id, email, phone_number, 
+                                    account_id, region, sub_id, email, phone, 
                                     state, birth_date, locale, version, last_active_at,
                                     created_at, updated_at, aggregate_updated_at
                                 )
@@ -127,7 +127,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(&region_str)
                         .bind(&ident_row.sub_id)
                         .bind(&ident_row.email)
-                        .bind(&ident_row.phone_number)
+                        .bind(&ident_row.phone)
                         .bind(&ident_row.state)
                         .bind(&ident_row.birth_date)
                         .bind(&ident_row.locale)
@@ -174,7 +174,7 @@ impl AccountRepository for PostgresAccountRepository {
                                 r#"UPDATE account_identity SET 
                                     sub_id = $3, 
                                     email = $4, 
-                                    phone_number = $5, 
+                                    phone = $5, 
                                     state = $6, 
                                     birth_date = $7, 
                                     locale = $8, 
@@ -188,7 +188,7 @@ impl AccountRepository for PostgresAccountRepository {
                         .bind(&region_str)
                         .bind(&ident_row.sub_id)
                         .bind(&ident_row.email)
-                        .bind(&ident_row.phone_number)
+                        .bind(&ident_row.phone)
                         .bind(&ident_row.state)
                         .bind(&ident_row.birth_date)
                         .bind(&ident_row.locale)
@@ -326,7 +326,7 @@ impl AccountRepository for PostgresAccountRepository {
     async fn exists_by_phone(
         &self,
         region: Region,
-        phone: &PhoneNumber,
+        phone: &Phone,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
         let phone_raw = phone.to_string();
@@ -336,7 +336,7 @@ impl AccountRepository for PostgresAccountRepository {
             let phone_owned = phone_raw.clone();
             let region_owned = region_str.clone();
             Box::pin(async move {
-                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone_number = $1 AND region = $2)";
+                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone = $1 AND region = $2)";
                 let exists = sqlx::query_scalar::<_, bool>(sql)
                     .bind(phone_owned)
                     .bind(region_owned)

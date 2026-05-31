@@ -5,7 +5,7 @@ use account::commands::lifecycle::change_beta_tier::change_beta_tier_handler::Ch
 use account::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
     BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,
-    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
+    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneCommand, ChangePhoneNumberHandler,
     ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand, DeactivateHandler,
     DecreaseTrustScoreCommand, DecreaseTrustScoreHandler, IncreaseTrustScoreCommand,
     IncreaseTrustScoreHandler, LiftShadowbanCommand, LiftShadowbanHandler, LinkSubIdentityCommand,
@@ -102,7 +102,7 @@ impl AccountTestFixture {
         bus.register::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ChangeEmailHandler<TransactionManagerStub>>(
             ChangeEmailHandler::new(),
         );
-        bus.register::<AccountCommandContext<TransactionManagerStub>, ChangePhoneNumberCommand, ChangePhoneNumberHandler<TransactionManagerStub>>(
+        bus.register::<AccountCommandContext<TransactionManagerStub>, ChangePhoneCommand, ChangePhoneNumberHandler<TransactionManagerStub>>(
             ChangePhoneNumberHandler::new(),
         );
         bus.register::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ChangeBirthDateHandler<TransactionManagerStub>>(

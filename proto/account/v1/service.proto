@@ -30,7 +30,7 @@ service AccountModerationService {
 
 service AccountPersonalService {
   rpc ChangeEmail(ChangeEmailRequest) returns (ChangeEmailResponse);
-  rpc ChangePhoneNumber(ChangePhoneNumberRequest) returns (ChangePhoneNumberResponse);
+  rpc ChangePhone(ChangePhoneRequest) returns (ChangePhoneResponse);
   rpc ChangeBirthDate(ChangeBirthDateRequest) returns (ChangeBirthDateResponse);
   // rpc ChangeRegion(ChangeRegionRequest) returns (ChangeRegionResponse);
   rpc UpdateLocale(UpdateLocaleRequest) returns (UpdateLocaleResponse);
@@ -173,13 +173,13 @@ message ChangeEmailRequest {
 
 message ChangeEmailResponse {}
 
-message ChangePhoneNumberRequest {
+message ChangePhoneRequest {
   string        command_id = 1;
   AccountTarget target     = 2;
   string        new_phone  = 3;
 }
 
-message ChangePhoneNumberResponse {}
+message ChangePhoneResponse {}
 
 message ChangeBirthDateRequest {
   string                    command_id     = 1;

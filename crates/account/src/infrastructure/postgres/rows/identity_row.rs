@@ -14,7 +14,7 @@ pub struct PostgresAccountIdentityRow {
     pub state: PostgresAccountState,
     pub locale: String,
     pub last_active_at: Option<DateTime<Utc>>,
-    pub phone_number: Option<String>,
+    pub phone: Option<String>,
     pub birth_date: Option<NaiveDate>,
 }
 
@@ -28,7 +28,7 @@ impl PostgresAccountIdentityRow {
             state: ident.state().into(),
             locale: ident.locale().to_string(),
             last_active_at: ident.last_active_at(),
-            phone_number: ident.phone_number().as_ref().map(|p| p.to_string()),
+            phone: ident.phone().as_ref().map(|p| p.to_string()),
             birth_date: ident.birth_date().map(|d| d.into()),
         }
     }

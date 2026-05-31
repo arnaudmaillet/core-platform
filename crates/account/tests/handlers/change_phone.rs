@@ -1,6 +1,6 @@
-// crates/account/tests/handlers/change_phone_number.rs
+// crates/account/tests/handlers/change_phone.rs
 
-use account::commands::settings::ChangePhoneNumberCommand;
+use account::commands::settings::ChangePhoneCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
 use account::types::AccountState;
@@ -8,15 +8,15 @@ use account::types::RegistrationIdentifier;
 use account_test_utils::AccountTestFixture;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
-use shared_kernel::types::PhoneNumber;
+use shared_kernel::types::Phone;
 use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
-async fn test_change_phone_number_success() -> Result<()> {
+async fn test_change_phone_success() -> Result<()> {
     let f = AccountTestFixture::new();
-    let old_phone = PhoneNumber::try_new("+33612345678")?;
-    let new_phone = PhoneNumber::try_new("+33687654321")?;
+    let old_phone = Phone::try_new("+33612345678")?;
+    let new_phone = Phone::try_new("+33687654321")?;
 
     // 1. Arrange : Compte actif avec l'ancien téléphone
     let account = f
@@ -40,7 +40,7 @@ async fn test_change_phone_number_success() -> Result<()> {
         })
         .await;
 
-    let cmd = ChangePhoneNumberCommand {
+    let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         new_phone: new_phone.clone(),
@@ -48,7 +48,7 @@ async fn test_change_phone_number_success() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneNumberCommand, ()>(
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
@@ -56,12 +56,12 @@ async fn test_change_phone_number_success() -> Result<()> {
 
     // 3. Assert
     f.assert_account(|acc| {
-        assert_eq!(acc.identity().phone_number(), Some(&new_phone));
+        assert_eq!(acc.identity().phone(), Some(&new_phone));
         assert_eq!(acc.version(), version_snapshot + 1);
     })
     .await?;
 
-    f.assert_outbox(1, Some(AccountEvent::PHONE_NUMBER_CHANGED));
+    f.assert_outbox(1, Some(AccountEvent::PHONE_CHANGED));
 
     Ok(())
 }
@@ -70,7 +70,7 @@ async fn test_change_phone_number_success() -> Result<()> {
 async fn test_change_phone_technical_idempotency() -> Result<()> {
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
-    let requested_phone = PhoneNumber::try_new("+33611223344")?;
+    let requested_phone = Phone::try_new("+33611223344")?;
 
     // Arrange : Commande déjà connue par l'infra
     f.idempotency_repo().seed(cmd_id);
@@ -82,7 +82,7 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
     // Note : L'idempotence technique court-circuite le handler avant le global_registry,
     // pas besoin d'insert_fixture ici.
 
-    let cmd = ChangePhoneNumberCommand {
+    let cmd = ChangePhoneCommand {
         command_id: cmd_id,
         target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         new_phone: requested_phone.clone(),
@@ -91,7 +91,7 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneNumberCommand, ()>(
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
@@ -105,7 +105,7 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
 
     // VERIFICATION : L'état en base n'a pas bougé
     f.assert_account(|acc| {
-        assert_ne!(acc.identity().phone_number(), Some(&requested_phone));
+        assert_ne!(acc.identity().phone(), Some(&requested_phone));
         assert_eq!(acc.version(), version_snapshot);
     })
     .await?;
@@ -117,7 +117,7 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
 #[tokio::test]
 async fn test_change_phone_business_idempotency() -> Result<()> {
     let f = AccountTestFixture::new();
-    let phone = PhoneNumber::try_new("+33600000000")?;
+    let phone = Phone::try_new("+33600000000")?;
 
     // 1. Arrange : Compte possédant déjà ce numéro
     let account = f
@@ -141,7 +141,7 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
         })
         .await;
 
-    let cmd = ChangePhoneNumberCommand {
+    let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
         new_phone: phone.clone(),
@@ -149,7 +149,7 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneNumberCommand, ()>(
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
@@ -173,7 +173,7 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
 async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
     let f = AccountTestFixture::new();
     let error_msg = "Kafka/Outbox DB Error";
-    let old_phone = PhoneNumber::try_new("+33612345678")?;
+    let old_phone = Phone::try_new("+33612345678")?;
 
     let account = f
         .builder()?
@@ -197,8 +197,8 @@ async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
     // Simulation d'une erreur d'infrastructure lors du commit (Outbox)
     f.outbox_repo().set_error(Error::internal(error_msg));
 
-    let requested_phone = PhoneNumber::try_new("+33611223344")?;
-    let cmd = ChangePhoneNumberCommand {
+    let requested_phone = Phone::try_new("+33611223344")?;
+    let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::new(f.account_id(), f.region(), 0),
         new_phone: requested_phone.clone(),
@@ -207,7 +207,7 @@ async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneNumberCommand, ()>(
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangePhoneCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )

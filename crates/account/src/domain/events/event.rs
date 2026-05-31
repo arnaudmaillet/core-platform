@@ -11,7 +11,7 @@ use shared_kernel::messaging::Event;
 use shared_kernel::{
     geo::Timezone,
     security::PushToken,
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, Phone, Region, SubId},
 };
 use std::borrow::Cow;
 use uuid::Uuid;
@@ -23,7 +23,7 @@ pub enum AccountEvent {
     AccountRegistered {
         account_id: AccountId,
         email: Option<Email>,
-        phone: Option<PhoneNumber>,
+        phone: Option<Phone>,
         sub_id: Option<SubId>,
         locale: Locale,
         ip_addr: IpAddr,
@@ -43,8 +43,8 @@ pub enum AccountEvent {
     },
     PhoneNumberChanged {
         account_id: AccountId,
-        old_phone_number: Option<PhoneNumber>,
-        new_phone_number: PhoneNumber,
+        old_phone: Option<Phone>,
+        new_phone: Phone,
         occurred_at: DateTime<Utc>,
     },
     BirthDateChanged {
@@ -175,7 +175,7 @@ impl AccountEvent {
     pub const REGISTERED: &'static str = "account.identity.registered";
     pub const EXTERNAL_LINKED: &'static str = "account.identity.external_linked";
     pub const EMAIL_CHANGED: &'static str = "account.identity.email_changed";
-    pub const PHONE_NUMBER_CHANGED: &'static str = "account.identity.phone_number_changed";
+    pub const PHONE_CHANGED: &'static str = "account.identity.phone_changed";
     pub const BIRTH_DATE_CHANGED: &'static str = "account.identity.birth_date_changed";
     pub const LOCALE_UPDATED: &'static str = "account.identity.locale_updated";
 
@@ -219,7 +219,7 @@ impl Event for AccountEvent {
             Self::AccountRegistered { .. } => Self::REGISTERED,
             Self::SubIdentityLinked { .. } => Self::EXTERNAL_LINKED,
             Self::EmailChanged { .. } => Self::EMAIL_CHANGED,
-            Self::PhoneNumberChanged { .. } => Self::PHONE_NUMBER_CHANGED,
+            Self::PhoneNumberChanged { .. } => Self::PHONE_CHANGED,
             Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
             Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
             Self::BetaTierChanged { .. } => Self::BETA_TIER_CHANGED,

@@ -21,7 +21,7 @@ pub use moderation::{
 
 pub use settings::{
     AddPushTokenCommand, AddPushTokenHandler, ChangeBirthDateCommand, ChangeBirthDateHandler,
-    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
+    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneCommand, ChangePhoneNumberHandler,
     RemovePushTokenCommand, RemovePushTokenHandler, UpdateLocaleCommand, UpdateLocaleHandler,
     UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
     UpdateTimezoneHandler,

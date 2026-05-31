@@ -4,7 +4,7 @@ mod ban;
 mod change_beta_tier;
 mod change_birth_date;
 mod change_email;
-mod change_phone_number;
+mod change_phone;
 mod change_role;
 mod deactivate;
 mod decrease_trust_score;

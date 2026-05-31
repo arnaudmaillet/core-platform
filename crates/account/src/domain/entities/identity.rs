@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     core::{Entity, Result},
-    types::{AccountId, Email, PhoneNumber, SubId},
+    types::{AccountId, Email, Phone, SubId},
 };
 
 use crate::domain::{
@@ -20,7 +20,7 @@ pub struct AccountIdentity {
     account_id: AccountId,
     sub_id: Option<SubId>,
     email: Option<Email>,
-    phone_number: Option<PhoneNumber>,
+    phone: Option<Phone>,
     state: AccountState,
     birth_date: Option<BirthDate>,
     locale: Locale,
@@ -41,7 +41,7 @@ impl AccountIdentity {
         account_id: AccountId,
         sub_id: Option<SubId>,
         email: Option<Email>,
-        phone_number: Option<PhoneNumber>,
+        phone: Option<Phone>,
         state: AccountState,
         birth_date: Option<BirthDate>,
         locale: Locale,
@@ -54,7 +54,7 @@ impl AccountIdentity {
             account_id,
             sub_id,
             email,
-            phone_number,
+            phone,
             state,
             birth_date,
             locale,
@@ -76,8 +76,8 @@ impl AccountIdentity {
     pub fn email(&self) -> Option<&Email> {
         self.email.as_ref()
     }
-    pub fn phone_number(&self) -> Option<&PhoneNumber> {
-        self.phone_number.as_ref()
+    pub fn phone(&self) -> Option<&Phone> {
+        self.phone.as_ref()
     }
     pub fn state(&self) -> &AccountState {
         &self.state
@@ -118,11 +118,11 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub(crate) fn apply_phone_change(&mut self, new_phone: PhoneNumber) -> Result<bool> {
-        if self.phone_number.as_ref() == Some(&new_phone) {
+    pub(crate) fn apply_phone_change(&mut self, new_phone: Phone) -> Result<bool> {
+        if self.phone.as_ref() == Some(&new_phone) {
             return Ok(false);
         }
-        self.phone_number = Some(new_phone);
+        self.phone = Some(new_phone);
         Ok(true)
     }
 
@@ -257,7 +257,7 @@ impl Entity for AccountIdentity {
     fn map_constraint_to_field(constraint: &str) -> &'static str {
         match constraint {
             "account_identity_email_key" => "email",
-            "account_identity_phone_number_key" => "phone_number",
+            "account_identity_phone_key" => "phone",
             "account_identity_sub_id_key" => "sub_id",
             _ => "unique_constraint",
         }

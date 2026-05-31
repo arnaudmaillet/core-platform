@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use shared_kernel::{
     core::{Result, Transaction},
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, Phone, Region, SubId},
 };
 
 use crate::domain::entities::Account;
@@ -48,7 +48,7 @@ pub trait AccountRepository: Send + Sync {
     async fn exists_by_phone(
         &self,
         region: Region,
-        phone: &PhoneNumber,
+        phone: &Phone,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool>;
 

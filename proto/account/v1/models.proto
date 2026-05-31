@@ -9,8 +9,8 @@ import "google/protobuf/wrappers.proto";
 option go_package = "github.com/core-platform/proto/account/v1;accountv1";
 
 message AccountTarget {
-  string account_id = 1;
-  string region = 2;
+  string account_id       = 1;
+  string region           = 2;
   uint64 expected_version = 3;
 }
 
@@ -18,72 +18,72 @@ message QueryMetadata {
   string region = 1;
 }
 
-
 message AccountIdentity {
-  string account_id = 1;
-  string region = 2;
-  optional string sub_id = 3;
-  string email = 4;
-  google.protobuf.StringValue phone_number = 5;
-  string state = 6;
-  google.protobuf.Timestamp birth_date = 7;
-  string locale = 8;
-  google.protobuf.Timestamp created_at = 9;
-  google.protobuf.Timestamp updated_at = 10;
-  google.protobuf.Timestamp aggregate_updated_at = 11;
-  google.protobuf.Timestamp last_active_at = 12;
-  int64 version = 13;
+  string                      account_id           = 1;
+  string                      region               = 2;
+  optional string             sub_id               = 3;
+  string                      email                = 4;
+  google.protobuf.StringValue phone                = 5;
+  string                      state                = 6;
+  google.protobuf.Timestamp   birth_date           = 7;
+  string                      locale               = 8;
+  google.protobuf.Timestamp   created_at           = 9;
+  google.protobuf.Timestamp   updated_at           = 10;
+  google.protobuf.Timestamp   aggregate_updated_at = 11;
+  google.protobuf.Timestamp   last_active_at       = 12;
+  int64                       version              = 13;
 }
 
 message AccountGovernance {
-  string account_id = 1;
-  string role = 2;
-  string beta_tier = 3;
-  bool is_shadowbanned = 4;
-  int32 trust_score = 5;
-  google.protobuf.Timestamp last_moderation_at = 6;
-  google.protobuf.StringValue moderation_notes = 7;
-  google.protobuf.StringValue estimated_ip = 8;
-  google.protobuf.Timestamp updated_at = 9;
+  string                      account_id         = 1;
+  string                      role               = 2;
+  string                      beta_tier          = 3;
+  bool                        is_shadowbanned    = 4;
+  int32                       trust_score        = 5;
+  google.protobuf.Timestamp   last_moderation_at = 6;
+  google.protobuf.StringValue moderation_notes   = 7;
+  google.protobuf.StringValue estimated_ip       = 8;
+  google.protobuf.Timestamp   updated_at         = 9;
 }
 
 message AccountSettings {
-  string account_id = 1;
-  string timezone = 2;
-  repeated string push_tokens = 3;
-  google.protobuf.Timestamp updated_at = 4;
-  
+  string                    account_id  = 1;
+  string                    timezone    = 2;
+  repeated string           push_tokens = 3;
+  google.protobuf.Timestamp updated_at  = 4;
+
   message Privacy {
     bool profile_visible_to_public = 1;
-    bool show_last_active = 2;
-    bool allow_indexing = 3;
-  }
-  
-  message Notifications {
-    bool email_enabled = 1;
-    bool push_enabled = 2;
-    bool marketing_opt_in = 3;
-    bool security_alerts_only = 4;
-  }
-  
-  message Appearance {
-    int32 theme = 1;
-    bool high_contrast = 2;
+    bool show_last_active          = 2;
+    bool allow_indexing            = 3;
   }
 
-  Privacy privacy = 6;
+  message Notifications {
+    bool email_enabled        = 1;
+    bool push_enabled         = 2;
+    bool marketing_opt_in     = 3;
+    bool security_alerts_only = 4;
+  }
+
+  message Appearance {
+    int32 theme         = 1;
+    bool  high_contrast = 2;
+  }
+
+  Privacy       privacy       = 6;
   Notifications notifications = 7;
-  Appearance appearance = 8;
+  Appearance    appearance    = 8;
 }
+
 message RegistrationIdentifier {
   oneof method {
-    string email = 1;
-    string phone_number = 2;
-    FullIdentifier both = 3;
+    string         email = 1;
+    string         phone = 2;
+    FullIdentifier both  = 3;
   }
 }
 
 message FullIdentifier {
   string email = 1;
-  string phone_number = 2;
+  string phone = 2;
 }

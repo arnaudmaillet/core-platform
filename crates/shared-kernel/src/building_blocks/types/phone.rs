@@ -1,23 +1,27 @@
+// crates/shared-kernel/src/building_blocks/types/phone.rs
+
 use crate::core::{Error, Result, ValueObject};
+use phf;
 use regex::Regex;
 use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 
+include!(concat!(env!("OUT_DIR"), "/codegen_country_codes.rs"));
+
 // Regex E.164 : un '+' suivi de 7 à 15 chiffres (pas de 0 après le +)
 static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\+[1-9]\d{6,14}$").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct PhoneNumber {
+pub struct Phone {
     inner: String,
     #[serde(skip)]
     hash: u64,
 }
 
-impl PhoneNumber {
-    /// Constructeur sécurisé (API / Inscription)
+impl Phone {
     pub fn try_new(value: impl Into<String>) -> Result<Self> {
         let raw = value.into();
 
@@ -35,7 +39,6 @@ impl PhoneNumber {
         Ok(phone)
     }
 
-    /// Reconstruction ultra-rapide (Infrastructure / DB)
     pub fn from_raw(value: impl Into<String>) -> Self {
         let inner = value.into();
         let mut hasher = SeaHasher::new();
@@ -55,18 +58,26 @@ impl PhoneNumber {
         self.hash
     }
 
-    /// Aide au routage SMS (Hyperscale : choix du provider par région)
     pub fn country_code(&self) -> &str {
-        // Logique simplifiée E.164 (les 1 à 3 premiers chiffres après le +)
-        if self.inner.len() >= 4 {
-            &self.inner[0..4]
-        } else {
-            &self.inner
+        let s = &self.inner;
+        if s.len() < 2 {
+            return "";
         }
+
+        if s.len() >= 4 && CODES_3_DIGITS.contains(&s[1..4]) {
+            return &s[1..4];
+        }
+        if s.len() >= 3 && CODES_2_DIGITS.contains(&s[1..3]) {
+            return &s[1..3];
+        }
+        if s.len() >= 2 && (&s[1..2] == "1" || &s[1..2] == "7") {
+            return &s[1..2];
+        }
+        ""
     }
 }
 
-impl ValueObject for PhoneNumber {
+impl ValueObject for Phone {
     fn validate(&self) -> Result<()> {
         // 1. Format Regex E.164
         if !PHONE_REGEX.is_match(&self.inner) {
@@ -82,22 +93,20 @@ impl ValueObject for PhoneNumber {
     }
 }
 
-// --- CONVERSIONS ---
-
-impl TryFrom<String> for PhoneNumber {
+impl TryFrom<String> for Phone {
     type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }
 }
 
-impl From<PhoneNumber> for String {
-    fn from(phone: PhoneNumber) -> Self {
+impl From<Phone> for String {
+    fn from(phone: Phone) -> Self {
         phone.inner
     }
 }
 
-impl std::fmt::Display for PhoneNumber {
+impl std::fmt::Display for Phone {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.inner)
     }

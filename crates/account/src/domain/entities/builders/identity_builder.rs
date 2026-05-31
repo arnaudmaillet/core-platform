@@ -4,14 +4,14 @@ use crate::entities::AccountIdentity;
 use crate::types::{AccountState, BirthDate, Locale};
 use chrono::{DateTime, Utc};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{AccountId, Email, PhoneNumber, SubId};
+use shared_kernel::types::{AccountId, Email, Phone, SubId};
 
 pub struct AccountIdentityBuilder {
     account_id: AccountId,
     sub_id: Option<SubId>,
     email: Option<Email>,
     locale: Option<Locale>,
-    phone: Option<PhoneNumber>,
+    phone: Option<Phone>,
     birth_date: Option<BirthDate>,
     state: AccountState,
     last_active_at: Option<DateTime<Utc>>,
@@ -53,7 +53,7 @@ impl AccountIdentityBuilder {
         self
     }
 
-    pub fn with_phone(mut self, phone: PhoneNumber) -> Self {
+    pub fn with_phone(mut self, phone: Phone) -> Self {
         self.phone = Some(phone);
         self
     }

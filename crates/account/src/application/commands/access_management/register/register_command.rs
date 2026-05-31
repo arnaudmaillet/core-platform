@@ -1,7 +1,7 @@
 use crate::domain::types::{IpAddr, Locale, RegistrationIdentifier};
 use shared_kernel::{
     command::IdentifiableCommand,
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, Phone, Region, SubId},
 };
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
 use tonic::Status;
@@ -41,13 +41,12 @@ impl RegisterCommand {
             Some(Method::Email(e)) => RegistrationIdentifier::from_email(
                 Email::try_new(e).map_err(|err| Status::invalid_argument(err.to_string()))?,
             ),
-            Some(Method::PhoneNumber(p)) => RegistrationIdentifier::from_phone(
-                PhoneNumber::try_new(p).map_err(|err| Status::invalid_argument(err.to_string()))?,
+            Some(Method::Phone(p)) => RegistrationIdentifier::from_phone(
+                Phone::try_new(p).map_err(|err| Status::invalid_argument(err.to_string()))?,
             ),
             Some(Method::Both(b)) => RegistrationIdentifier::from_both(
                 Email::try_new(b.email).map_err(|err| Status::invalid_argument(err.to_string()))?,
-                PhoneNumber::try_new(b.phone_number)
-                    .map_err(|err| Status::invalid_argument(err.to_string()))?,
+                Phone::try_new(b.phone).map_err(|err| Status::invalid_argument(err.to_string()))?,
             ),
             None => return Err(Status::invalid_argument("Missing registration identifier")),
         };

@@ -4,6 +4,11 @@
 name = "shared-kernel"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
 
 [features]
 concurrency = ["dep:dashmap", "dep:futures"]
@@ -27,3 +32,7 @@ regex = { workspace = true }
 seahash = { workspace = true }
 unicode-normalization = { workspace = true }
 dyn-clone = { workspace = true }
+phf = { workspace = true, features = ["macros"] }
+
+[build-dependencies]
+phf_codegen = { workspace = true }

@@ -121,6 +121,8 @@ unicode-normalization = { version = "0.1", features = ["std"] }
 idna = "1.1.0"
 openssl = "0.10"
 base64 = "0.22.1"
+phf = "0.13"
+phf_codegen = "0.13"
 
 # Proto / gRPC
 tonic-health = "0.14.3"

@@ -16,7 +16,7 @@ use shared_kernel::geo::Timezone;
 use shared_kernel::security::PushToken;
 use shared_kernel::{
     core::{AggregateMetadata, Error, Result},
-    types::{AccountId, Email, PhoneNumber, SubId},
+    types::{AccountId, Email, Phone, SubId},
 };
 
 #[derive(Debug, FromRow)]
@@ -25,7 +25,7 @@ pub struct PostgresAccountRow {
     pub account_id: uuid::Uuid,
     pub sub_id: Option<String>,
     pub email: Option<String>,
-    pub phone_number: Option<String>,
+    pub phone: Option<String>,
     pub state: PostgresAccountState,
     pub birth_date: Option<NaiveDate>,
     pub locale: String,
@@ -60,7 +60,7 @@ impl PostgresAccountRow {
             account_id,
             self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
-            self.phone_number.map(PhoneNumber::try_new).transpose()?,
+            self.phone.map(Phone::try_new).transpose()?,
             AccountState::from(self.state),
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(self.locale)?,

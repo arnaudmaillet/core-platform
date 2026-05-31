@@ -4,7 +4,7 @@ use crate::{
     commands::{
         ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
         BanHandler, ChangeBirthDateCommand, ChangeBirthDateHandler, ChangeEmailCommand,
-        ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler, ChangeRoleCommand,
+        ChangeEmailHandler, ChangePhoneCommand, ChangePhoneNumberHandler, ChangeRoleCommand,
         ChangeRoleHandler, DeactivateCommand, DeactivateHandler, DecreaseTrustScoreCommand,
         DecreaseTrustScoreHandler, IncreaseTrustScoreCommand, IncreaseTrustScoreHandler,
         LiftShadowbanCommand, LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler,
@@ -95,7 +95,7 @@ impl AccountServiceBuilder {
         bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangeEmailCommand, ChangeEmailHandler<PostgresTransactionManager>>(
             ChangeEmailHandler::new(),
         );
-        bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangePhoneNumberCommand, ChangePhoneNumberHandler<PostgresTransactionManager>>(
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangePhoneCommand, ChangePhoneNumberHandler<PostgresTransactionManager>>(
             ChangePhoneNumberHandler::new(),
         );
         bus.register::<AccountCommandContext<PostgresTransactionManager>, ChangeBirthDateCommand, ChangeBirthDateHandler<PostgresTransactionManager>>(
