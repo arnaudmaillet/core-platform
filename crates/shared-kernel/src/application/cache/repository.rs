@@ -1,6 +1,6 @@
 // crates/shared-kernel/src/application/cache/repository.rs
 
-use crate::core::{Error, Result}; // Importation du nouveau système unifié
+use crate::core::{Error, Result};
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 use std::time::Duration;

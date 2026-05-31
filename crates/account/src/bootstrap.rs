@@ -12,10 +12,13 @@ use crate::{
         ShadowbanCommand, ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand,
         UnbanHandler, UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler,
         UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
-        UpdateTimezoneHandler,
+        UpdateTimezoneHandler, VerifyEmailCommand, VerifyEmailHandler, VerifyPhoneCommand,
+        VerifyPhoneHandler,
     },
     context::{AccountAppContext, AccountCommandContext},
     db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry},
+    fred::FredOtpRepository,
+    repositories::OtpRepository,
 };
 use infra_sqlx::{
     PostgresIdempotencyRepository, PostgresOutboxRepository, PostgresTransactionManager,
@@ -58,10 +61,22 @@ impl AccountServiceBuilder {
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
         let mut bus = CommandBus::new(self.cache_repo.clone());
+        let otp_repo: Arc<dyn OtpRepository> =
+            Arc::new(FredOtpRepository::new(self.cache_repo.clone()));
 
         bus.register::<AccountCommandContext<PostgresTransactionManager>, RegisterCommand, RegisterHandler<PostgresTransactionManager>>(RegisterHandler::new());
         bus.register::<AccountCommandContext<PostgresTransactionManager>, LinkSubIdentityCommand, LinkSubIdentityHandler<PostgresTransactionManager>>(
             LinkSubIdentityHandler::new(),
+        );
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, RegisterCommand, RegisterHandler<PostgresTransactionManager>>(RegisterHandler::new());
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, LinkSubIdentityCommand, LinkSubIdentityHandler<PostgresTransactionManager>>(
+            LinkSubIdentityHandler::new(),
+        );
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, VerifyEmailCommand, VerifyEmailHandler<PostgresTransactionManager>>(
+            VerifyEmailHandler::new(otp_repo.clone()),
+        );
+        bus.register::<AccountCommandContext<PostgresTransactionManager>, VerifyPhoneCommand, VerifyPhoneHandler<PostgresTransactionManager>>(
+            VerifyPhoneHandler::new(otp_repo),
         );
         bus.register::<AccountCommandContext<PostgresTransactionManager>, ActivateCommand, ActivateHandler<PostgresTransactionManager>>(ActivateHandler::new());
         bus.register::<AccountCommandContext<PostgresTransactionManager>, DeactivateCommand, DeactivateHandler<PostgresTransactionManager>>(

@@ -12,21 +12,19 @@ use crate::domain::{
     types::{AccountState, BirthDate, Locale},
 };
 
-/// Entité Identity (Interne à l'Agrégat Account)
-///
-/// Gère les données brutes d'identification et les transitions d'état local.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountIdentity {
     account_id: AccountId,
     sub_id: Option<SubId>,
     email: Option<Email>,
     phone: Option<Phone>,
+    email_verified_at: Option<DateTime<Utc>>,
+    phone_verified_at: Option<DateTime<Utc>>,
     state: AccountState,
     birth_date: Option<BirthDate>,
     locale: Locale,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
-    aggregate_updated_at: DateTime<Utc>,
     last_active_at: Option<DateTime<Utc>>,
 }
 
@@ -35,19 +33,19 @@ impl AccountIdentity {
         AccountIdentityBuilder::new(account_id)
     }
 
-    /// Utilisé par le Builder ou le Repository pour restaurer l'état.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
         account_id: AccountId,
         sub_id: Option<SubId>,
         email: Option<Email>,
         phone: Option<Phone>,
+        email_verified_at: Option<DateTime<Utc>>,
+        phone_verified_at: Option<DateTime<Utc>>,
         state: AccountState,
         birth_date: Option<BirthDate>,
         locale: Locale,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
-        aggregate_updated_at: DateTime<Utc>,
         last_active_at: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -55,17 +53,16 @@ impl AccountIdentity {
             sub_id,
             email,
             phone,
+            email_verified_at,
+            phone_verified_at,
             state,
             birth_date,
             locale,
             created_at,
             updated_at,
-            aggregate_updated_at,
             last_active_at,
         }
     }
-
-    // --- GETTERS ---
 
     pub fn account_id(&self) -> AccountId {
         self.account_id
@@ -79,6 +76,18 @@ impl AccountIdentity {
     pub fn phone(&self) -> Option<&Phone> {
         self.phone.as_ref()
     }
+    pub fn is_email_verified(&self) -> bool {
+        self.email_verified_at.is_some()
+    }
+    pub fn is_phone_verified(&self) -> bool {
+        self.phone_verified_at.is_some()
+    }
+    pub fn email_verified_at(&self) -> Option<DateTime<Utc>> {
+        self.email_verified_at
+    }
+    pub fn phone_verified_at(&self) -> Option<DateTime<Utc>> {
+        self.phone_verified_at
+    }
     pub fn state(&self) -> &AccountState {
         &self.state
     }
@@ -91,16 +100,9 @@ impl AccountIdentity {
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
-    pub fn aggregate_updated_at(&self) -> DateTime<Utc> {
-        self.aggregate_updated_at
-    }
     pub fn last_active_at(&self) -> Option<DateTime<Utc>> {
         self.last_active_at
     }
-
-    // ==========================================
-    // MUTATIONS INTERNES (pub(crate))
-    // ==========================================
 
     pub(crate) fn apply_sub_id_change(&mut self, new_sub_id: SubId) -> Result<bool> {
         if self.sub_id.as_ref() == Some(&new_sub_id) {
@@ -115,6 +117,8 @@ impl AccountIdentity {
             return Ok(false);
         }
         self.email = Some(new_email);
+        self.email_verified_at = None;
+        self.updated_at = Utc::now();
         Ok(true)
     }
 
@@ -123,6 +127,38 @@ impl AccountIdentity {
             return Ok(false);
         }
         self.phone = Some(new_phone);
+        self.phone_verified_at = None;
+        self.updated_at = Utc::now();
+        Ok(true)
+    }
+
+    pub fn apply_email_verification(&mut self, verified_at: DateTime<Utc>) -> Result<bool> {
+        if self.email.is_none() {
+            return Ok(false);
+        }
+
+        self.email_verified_at = Some(verified_at);
+        self.updated_at = verified_at;
+
+        if self.state == AccountState::UNVERIFIED {
+            self.state = AccountState::ACTIVE;
+        }
+
+        Ok(true)
+    }
+
+    pub fn apply_phone_verification(&mut self, verified_at: DateTime<Utc>) -> Result<bool> {
+        if self.phone.is_none() {
+            return Ok(false);
+        }
+
+        self.phone_verified_at = Some(verified_at);
+        self.updated_at = verified_at;
+
+        if self.state == AccountState::UNVERIFIED {
+            self.state = AccountState::ACTIVE;
+        }
+
         Ok(true)
     }
 
@@ -208,8 +244,6 @@ impl AccountIdentity {
             Ok(false)
         }
     }
-
-    // --- LOGIQUE DE LECTURE ---
 
     pub fn is_active(&self) -> bool {
         self.state == AccountState::ACTIVE

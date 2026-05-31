@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_interceptor = AuthInterceptor::new(validator.clone());
     let registration_interceptor = RegistrationInterceptor::new(validator);
 
-    let registration_svc = AccountRegistrationService::new(bus.clone(), app_ctx.clone()); // 💡 Nouveau
+    let registration_svc = AccountRegistrationService::new(bus.clone(), app_ctx.clone());
     let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
     let moderation_svc = AccountModerationService::new(bus.clone(), app_ctx.clone());
     let personal_svc = AccountPersonalService::new(bus.clone(), app_ctx.clone());

@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS account_settings (
     preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (region, account_id),
     CONSTRAINT fk_settings_identity FOREIGN KEY (region, account_id) REFERENCES account_identity(region, account_id) ON DELETE CASCADE
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS account_governance (
     moderation_notes TEXT,
     last_moderation_at TIMESTAMPTZ,
     last_ip_addr INET,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (region, account_id),
     CONSTRAINT fk_governance_identity FOREIGN KEY (region, account_id) REFERENCES account_identity(region, account_id) ON DELETE CASCADE

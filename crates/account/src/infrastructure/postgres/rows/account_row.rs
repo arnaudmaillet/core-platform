@@ -26,6 +26,8 @@ pub struct PostgresAccountRow {
     pub sub_id: Option<String>,
     pub email: Option<String>,
     pub phone: Option<String>,
+    pub email_verified_at: Option<DateTime<Utc>>,
+    pub phone_verified_at: Option<DateTime<Utc>>,
     pub state: PostgresAccountState,
     pub birth_date: Option<NaiveDate>,
     pub locale: String,
@@ -61,12 +63,13 @@ impl PostgresAccountRow {
             self.sub_id.map(SubId::try_new).transpose()?,
             self.email.map(Email::try_new).transpose()?,
             self.phone.map(Phone::try_new).transpose()?,
+            self.email_verified_at,
+            self.phone_verified_at,
             AccountState::from(self.state),
             self.birth_date.map(BirthDate::from_raw),
             Locale::try_new(self.locale)?,
             self.created_at,
             self.identity_updated_at,
-            self.aggregate_updated_at,
             self.last_active_at,
         );
 

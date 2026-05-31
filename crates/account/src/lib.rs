@@ -13,6 +13,6 @@ pub use domain::{entities, events, repositories, types};
 pub use application::commands;
 pub use application::context;
 
-pub use infrastructure::postgres::repositories as db;
+pub use infrastructure::{fred, postgres::repositories as db};
 
 pub use presentation::{services, workers};

@@ -19,7 +19,6 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum AccountEvent {
-    // --- IDENTITY & SECURITY EVENTS ---
     AccountRegistered {
         account_id: AccountId,
         email: Option<Email>,
@@ -41,10 +40,20 @@ pub enum AccountEvent {
         new_email: Email,
         occurred_at: DateTime<Utc>,
     },
-    PhoneNumberChanged {
+    PhoneChanged {
         account_id: AccountId,
         old_phone: Option<Phone>,
         new_phone: Phone,
+        occurred_at: DateTime<Utc>,
+    },
+    EmailVerified {
+        account_id: AccountId,
+        email: Email,
+        occurred_at: DateTime<Utc>,
+    },
+    PhoneVerified {
+        account_id: AccountId,
+        phone: Phone,
         occurred_at: DateTime<Utc>,
     },
     BirthDateChanged {
@@ -58,8 +67,6 @@ pub enum AccountEvent {
         new_locale: Locale,
         occurred_at: DateTime<Utc>,
     },
-
-    // --- SYSTEM & MODERATION EVENTS ---
     BetaTierChanged {
         account_id: AccountId,
         old_tier: BetaTier,
@@ -102,8 +109,6 @@ pub enum AccountEvent {
         new_region: Region,
         occurred_at: DateTime<Utc>,
     },
-
-    // --- STATE & MODERATION ---
     AccountDeactivated {
         account_id: AccountId,
         reason: String,
@@ -134,8 +139,6 @@ pub enum AccountEvent {
         reason: String,
         occurred_at: DateTime<Utc>,
     },
-
-    // --- SETTINGS EVENTS ---
     NotificationsPreferencesUpdated {
         account_id: AccountId,
         new_preferences: NotificationPreferences,
@@ -151,8 +154,6 @@ pub enum AccountEvent {
         new_preferences: PrivacyPreferences,
         occurred_at: DateTime<Utc>,
     },
-
-    /// Spécifique pour le routage des notifications
     PushTokenAdded {
         account_id: AccountId,
         token: PushToken,
@@ -176,6 +177,8 @@ impl AccountEvent {
     pub const EXTERNAL_LINKED: &'static str = "account.identity.external_linked";
     pub const EMAIL_CHANGED: &'static str = "account.identity.email_changed";
     pub const PHONE_CHANGED: &'static str = "account.identity.phone_changed";
+    pub const EMAIL_VERIFIED: &'static str = "account.identity.email_verified";
+    pub const PHONE_VERIFIED: &'static str = "account.identity.phone_verified";
     pub const BIRTH_DATE_CHANGED: &'static str = "account.identity.birth_date_changed";
     pub const LOCALE_UPDATED: &'static str = "account.identity.locale_updated";
 
@@ -219,7 +222,9 @@ impl Event for AccountEvent {
             Self::AccountRegistered { .. } => Self::REGISTERED,
             Self::SubIdentityLinked { .. } => Self::EXTERNAL_LINKED,
             Self::EmailChanged { .. } => Self::EMAIL_CHANGED,
-            Self::PhoneNumberChanged { .. } => Self::PHONE_CHANGED,
+            Self::PhoneChanged { .. } => Self::PHONE_CHANGED,
+            Self::EmailVerified { .. } => Self::EMAIL_VERIFIED,
+            Self::PhoneVerified { .. } => Self::PHONE_VERIFIED,
             Self::BirthDateChanged { .. } => Self::BIRTH_DATE_CHANGED,
             Self::LocaleUpdated { .. } => Self::LOCALE_UPDATED,
             Self::BetaTierChanged { .. } => Self::BETA_TIER_CHANGED,
@@ -254,7 +259,9 @@ impl Event for AccountEvent {
             Self::AccountRegistered { account_id, .. }
             | Self::SubIdentityLinked { account_id, .. }
             | Self::EmailChanged { account_id, .. }
-            | Self::PhoneNumberChanged { account_id, .. }
+            | Self::PhoneChanged { account_id, .. }
+            | Self::EmailVerified { account_id, .. }
+            | Self::PhoneVerified { account_id, .. }
             | Self::BirthDateChanged { account_id, .. }
             | Self::LocaleUpdated { account_id, .. }
             | Self::BetaTierChanged { account_id, .. }
@@ -283,7 +290,9 @@ impl Event for AccountEvent {
             Self::AccountRegistered { occurred_at, .. }
             | Self::SubIdentityLinked { occurred_at, .. }
             | Self::EmailChanged { occurred_at, .. }
-            | Self::PhoneNumberChanged { occurred_at, .. }
+            | Self::PhoneChanged { occurred_at, .. }
+            | Self::EmailVerified { occurred_at, .. }
+            | Self::PhoneVerified { occurred_at, .. }
             | Self::BirthDateChanged { occurred_at, .. }
             | Self::LocaleUpdated { occurred_at, .. }
             | Self::BetaTierChanged { occurred_at, .. }

@@ -13,6 +13,8 @@ service AccountRegistrationService {
 service AccountAccessService {
   rpc LinkSubIdentity(LinkSubIdentityRequest) returns (LinkSubIdentityResponse);
   rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
+  rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+  rpc VerifyPhone(VerifyPhoneRequest) returns (VerifyPhoneResponse);
 }
 
 service AccountModerationService {
@@ -80,6 +82,23 @@ message ResolveIdentityResponse {
   string state      = 2;
   string role       = 3;
 }
+
+message VerifyEmailRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        code       = 3;
+}
+
+message VerifyEmailResponse {}
+
+// 💡 NOUVEAU : Payloads pour VerifyPhone
+message VerifyPhoneRequest {
+  string        command_id = 1;
+  AccountTarget target     = 2;
+  string        code       = 3;
+}
+
+message VerifyPhoneResponse {}
 
 message BanRequest {
   string        command_id = 1;

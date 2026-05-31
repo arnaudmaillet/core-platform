@@ -93,10 +93,6 @@ impl Account {
     pub fn settings(&self) -> &AccountSettings {
         &self.settings
     }
-    pub fn updated_at(&self) -> DateTime<Utc> {
-        self.identity.aggregate_updated_at()
-    }
-
     fn id_typed(&self) -> AccountId {
         self.identity.account_id()
     }
@@ -224,10 +220,52 @@ impl Account {
         self.track_change(
             |s| s.identity.apply_phone_change(new_phone.clone()),
             |s| {
-                Box::new(AccountEvent::PhoneNumberChanged {
+                Box::new(AccountEvent::PhoneChanged {
                     account_id: s.id_typed(),
                     old_phone,
                     new_phone: new_phone.clone(),
+                    occurred_at: s.updated_at(),
+                })
+            },
+        )
+    }
+
+    pub fn verify_email(&mut self, verified_at: DateTime<Utc>) -> Result<bool> {
+        self.ensure_not_restricted()?;
+
+        let target_email =
+            self.identity.email().cloned().ok_or_else(|| {
+                Error::validation("email", "Cannot verify an empty email address")
+            })?;
+
+        self.track_change(
+            |s| s.identity.apply_email_verification(verified_at),
+            |s| {
+                Box::new(AccountEvent::EmailVerified {
+                    account_id: s.id_typed(),
+                    email: target_email,
+                    occurred_at: s.updated_at(),
+                })
+            },
+        )
+    }
+
+    // 💡 NOUVEAU : Action souveraine de validation de numéro de téléphone
+    pub fn verify_phone(&mut self, verified_at: DateTime<Utc>) -> Result<bool> {
+        self.ensure_not_restricted()?;
+
+        let target_phone = self
+            .identity
+            .phone()
+            .cloned()
+            .ok_or_else(|| Error::validation("phone", "Cannot verify an empty phone number"))?;
+
+        self.track_change(
+            |s| s.identity.apply_phone_verification(verified_at),
+            |s| {
+                Box::new(AccountEvent::PhoneVerified {
+                    account_id: s.id_typed(),
+                    phone: target_phone,
                     occurred_at: s.updated_at(),
                 })
             },
@@ -247,7 +285,6 @@ impl Account {
         )?;
 
         if changed {
-            // 💡 ALIGNEMENT : Utilisation de TrustAmount::PENALTY_BAN
             self.governance.apply_trust_penalty(
                 TrustAmount::PENALTY_BAN,
                 TrustContext::AccountBanned,
@@ -270,7 +307,6 @@ impl Account {
         )?;
 
         if changed {
-            // 💡 ALIGNEMENT : Utilisation de TrustAmount::REWARD_UNBAN
             self.governance.apply_trust_reward(
                 TrustAmount::REWARD_UNBAN,
                 TrustContext::UnbanBonus,

@@ -5,6 +5,7 @@ pub mod settings;
 
 pub use access_management::{
     LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand, RegisterHandler,
+    VerifyEmailCommand, VerifyEmailHandler, VerifyPhoneCommand, VerifyPhoneHandler,
 };
 
 pub use lifecycle::{

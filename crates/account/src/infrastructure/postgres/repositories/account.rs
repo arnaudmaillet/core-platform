@@ -99,10 +99,9 @@ impl AccountRepository for PostgresAccountRepository {
         let gov_updated_at = account.governance().updated_at();
         let sett_updated_at = account.settings().updated_at();
 
-
         self.pool.execute_on(tx, |conn| {
             Box::pin(async move {
-                // 1. Lock d'idempotence et d'OCC (FOR UPDATE) aligné territorialement
+                // 1. Lock d'idempotence et d'OCC (FOR UPDATE)
                 let db_v: Option<i64> = sqlx::query_scalar(
                     "SELECT version FROM account_identity WHERE account_id = $1 AND region = $2 FOR UPDATE"
                 )
@@ -114,20 +113,23 @@ impl AccountRepository for PostgresAccountRepository {
 
                 match db_v {
                     None => {
+                        // 💡 MODE INSERT : Ajout des deux colonnes de vérification
                         sqlx::query(
                             r#"INSERT INTO account_identity 
                                 (
-                                    account_id, region, sub_id, email, phone, 
+                                    account_id, region, sub_id, email, email_verified_at, phone, phone_verified_at, 
                                     state, birth_date, locale, version, last_active_at,
                                     created_at, updated_at, aggregate_updated_at
                                 )
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)"#
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"#
                         )
                         .bind(&ident_row.account_id)
                         .bind(&region_str)
                         .bind(&ident_row.sub_id)
                         .bind(&ident_row.email)
+                        .bind(&ident_row.email_verified_at)
                         .bind(&ident_row.phone)
+                        .bind(&ident_row.phone_verified_at)
                         .bind(&ident_row.state)
                         .bind(&ident_row.birth_date)
                         .bind(&ident_row.locale)
@@ -170,32 +172,37 @@ impl AccountRepository for PostgresAccountRepository {
                             ));
                         }
 
-                       sqlx::query(
+                        // 💡 MODE UPDATE : Ajout et alignement rigoureux des variables du SET
+                        sqlx::query(
                                 r#"UPDATE account_identity SET 
                                     sub_id = $3, 
                                     email = $4, 
-                                    phone = $5, 
-                                    state = $6, 
-                                    birth_date = $7, 
-                                    locale = $8, 
-                                    version = $9, 
-                                    last_active_at = $10,
-                                    updated_at = $11,
-                                    aggregate_updated_at = $12
+                                    email_verified_at = $5, 
+                                    phone = $6, 
+                                    phone_verified_at = $7, 
+                                    state = $8, 
+                                    birth_date = $9, 
+                                    locale = $10, 
+                                    version = $11, 
+                                    last_active_at = $12,
+                                    updated_at = $13,
+                                    aggregate_updated_at = $14
                                 WHERE account_id = $1 AND region = $2"#
                             )
-                        .bind(&ident_row.account_id)
-                        .bind(&region_str)
-                        .bind(&ident_row.sub_id)
-                        .bind(&ident_row.email)
-                        .bind(&ident_row.phone)
-                        .bind(&ident_row.state)
-                        .bind(&ident_row.birth_date)
-                        .bind(&ident_row.locale)
-                        .bind(target_version)
-                        .bind(ident_row.last_active_at)
-                        .bind(ident_updated_at)
-                        .bind(agg_updated_at)
+                        .bind(&ident_row.account_id)      // $1
+                        .bind(&region_str)                // $2
+                        .bind(&ident_row.sub_id)          // $3
+                        .bind(&ident_row.email)           // $4
+                        .bind(&ident_row.email_verified_at) // $5
+                        .bind(&ident_row.phone)           // $6
+                        .bind(&ident_row.phone_verified_at) //
+                        .bind(&ident_row.state)           // $8
+                        .bind(&ident_row.birth_date)      // $9
+                        .bind(&ident_row.locale)          // $10
+                        .bind(target_version)             // $11
+                        .bind(ident_row.last_active_at)   // $12
+                        .bind(ident_updated_at)           // $13
+                        .bind(agg_updated_at)             // $14
                         .execute(&mut *conn)
                         .await
                         .map_err(|e| Error::database(format!("Account update identity failed: {}", e)))?;

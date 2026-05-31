@@ -1,19 +1,18 @@
 // crates/account/src/application/fixture.rs
 
 use crate::repositories::{AccountRepositoryStub, GlobalIdentityRegistryStub};
-use account::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
 use account::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
-    BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,
-    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneCommand, ChangePhoneNumberHandler,
-    ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand, DeactivateHandler,
-    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler, IncreaseTrustScoreCommand,
-    IncreaseTrustScoreHandler, LiftShadowbanCommand, LiftShadowbanHandler, LinkSubIdentityCommand,
-    LinkSubIdentityHandler, RegisterCommand, RegisterHandler, RemovePushTokenCommand,
-    RemovePushTokenHandler, ShadowbanCommand, ShadowbanHandler, SuspendCommand, SuspendHandler,
-    UnbanCommand, UnbanHandler, UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand,
-    UpdateLocaleHandler, UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
-    UpdateTimezoneHandler,
+    BanHandler, ChangeBetaTierCommand, ChangeBetaTierHandler, ChangeBirthDateCommand,
+    ChangeBirthDateHandler, ChangeEmailCommand, ChangeEmailHandler, ChangePhoneCommand,
+    ChangePhoneNumberHandler, ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand,
+    DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
+    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
+    LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
+    RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
+    ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler, UnsuspendCommand,
+    UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler, UpdatePreferencesCommand,
+    UpdatePreferencesHandler, UpdateTimezoneCommand, UpdateTimezoneHandler,
 };
 use account::context::{AccountAppContext, AccountCommandContext, AccountQueryContext};
 use account::entities::{Account, AccountBuilder};

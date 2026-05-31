@@ -157,7 +157,3 @@ reqwest = { version = "0.12.28", features = ["json", "rustls-tls"] }
 # Tests
 testcontainers = "0.26"
 testcontainers-modules = { version = "0.14" }
-
-
-[workspace.dev-dependencies]
-tokio = { version = "1.40", features = ["test-util"] }
