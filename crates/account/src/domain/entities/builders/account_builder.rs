@@ -102,7 +102,7 @@ impl AccountBuilder {
                     .governance
                     .with_trust_score(TrustScore::from_raw(TrustScore::CRITICAL_THRESHOLD));
             }
-            AccountState::ACTIVE | AccountState::PENDING => {
+            AccountState::ACTIVE | AccountState::UNVERIFIED | AccountState::PENDING => {
                 // On laisse le score par défaut (100) ou on ne touche à rien
             }
             AccountState::DEACTIVATED => {

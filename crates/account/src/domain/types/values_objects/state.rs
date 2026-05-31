@@ -8,6 +8,7 @@ use std::str::FromStr;
 #[serde(rename_all = "lowercase")]
 pub enum AccountState {
     PENDING,
+    UNVERIFIED,
     ACTIVE,
     DEACTIVATED,
     SUSPENDED,
@@ -28,6 +29,7 @@ impl AccountState {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::PENDING => "PENDING",
+            Self::UNVERIFIED => "UNVERIFIED",
             Self::ACTIVE => "ACTIVE",
             Self::DEACTIVATED => "DEACTIVATED",
             Self::SUSPENDED => "SUSPENDED",
@@ -42,7 +44,7 @@ impl AccountState {
     }
 
     pub fn can_authenticate(&self) -> bool {
-        matches!(self, Self::ACTIVE | Self::PENDING)
+        matches!(self, Self::ACTIVE | Self::UNVERIFIED)
     }
 }
 
@@ -54,7 +56,7 @@ impl ValueObject for AccountState {
 
 impl Default for AccountState {
     fn default() -> Self {
-        Self::PENDING
+        Self::UNVERIFIED
     }
 }
 
@@ -66,6 +68,7 @@ impl FromStr for AccountState {
     fn from_str(s: &str) -> Result<Self> {
         match s.trim().to_uppercase().as_str() {
             "PENDING" => Ok(Self::PENDING),
+            "UNVERFIED" => Ok(Self::UNVERIFIED),
             "ACTIVE" => Ok(Self::ACTIVE),
             "DEACTIVATED" => Ok(Self::DEACTIVATED),
             "SUSPENDED" => Ok(Self::SUSPENDED),

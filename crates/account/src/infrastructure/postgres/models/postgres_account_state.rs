@@ -6,6 +6,7 @@ use infra_sqlx::sqlx::Type;
 #[sqlx(type_name = "TEXT")]
 pub enum PostgresAccountState {
     PENDING,
+    UNVERIFIED,
     ACTIVE,
     DEACTIVATED,
     SUSPENDED,
@@ -19,6 +20,7 @@ impl From<PostgresAccountState> for AccountState {
     fn from(sql_status: PostgresAccountState) -> Self {
         match sql_status {
             PostgresAccountState::PENDING => Self::PENDING,
+            PostgresAccountState::UNVERIFIED => Self::UNVERIFIED,
             PostgresAccountState::ACTIVE => Self::ACTIVE,
             PostgresAccountState::DEACTIVATED => Self::DEACTIVATED,
             PostgresAccountState::SUSPENDED => Self::SUSPENDED,
@@ -32,6 +34,7 @@ impl From<&AccountState> for PostgresAccountState {
     fn from(domain_status: &AccountState) -> Self {
         match domain_status {
             AccountState::PENDING => PostgresAccountState::PENDING,
+            AccountState::UNVERIFIED => PostgresAccountState::UNVERIFIED,
             AccountState::ACTIVE => PostgresAccountState::ACTIVE,
             AccountState::DEACTIVATED => PostgresAccountState::DEACTIVATED,
             AccountState::SUSPENDED => PostgresAccountState::SUSPENDED,

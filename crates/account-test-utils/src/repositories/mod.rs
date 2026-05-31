@@ -1,3 +1,5 @@
-mod stub;
+mod account_stub;
+mod global_registry_stub;
 
-pub use stub::AccountRepositoryStub;
+pub use account_stub::AccountRepositoryStub;
+pub use global_registry_stub::GlobalIdentityRegistryStub;

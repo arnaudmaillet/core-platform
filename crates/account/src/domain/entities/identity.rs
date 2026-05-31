@@ -215,8 +215,8 @@ impl AccountIdentity {
         self.state == AccountState::ACTIVE
     }
 
-    pub fn is_pending(&self) -> bool {
-        self.state == AccountState::PENDING
+    pub fn is_unverified(&self) -> bool {
+        self.state == AccountState::UNVERIFIED
     }
 
     pub fn is_deactivated(&self) -> bool {

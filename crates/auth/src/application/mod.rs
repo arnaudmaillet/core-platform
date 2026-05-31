@@ -1,1 +1,1 @@
-pub mod interceptor;
+pub mod interceptors;

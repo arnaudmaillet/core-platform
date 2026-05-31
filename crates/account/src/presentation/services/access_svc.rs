@@ -7,12 +7,12 @@ use shared_kernel::types::{AccountId, SubId};
 
 use shared_proto::account::v1::account_access_service_server::AccountAccessService as ProtoAccountAccessService;
 use shared_proto::account::v1::{
-    LinkSubIdentityRequest, LinkSubIdentityResponse, RegisterRequest, RegisterResponse,
-    ResolveIdentityRequest, ResolveIdentityResponse,
+    LinkSubIdentityRequest, LinkSubIdentityResponse, ResolveIdentityRequest,
+    ResolveIdentityResponse,
 };
 
 use crate::application::context::AccountAppContext;
-use crate::commands::{LinkSubIdentityCommand, RegisterCommand};
+use crate::commands::LinkSubIdentityCommand;
 use crate::presentation::utils::GrpcServiceUtils;
 
 pub struct AccountAccessService<TM> {
@@ -39,35 +39,6 @@ impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountA
 impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
     for AccountAccessService<TM>
 {
-    async fn register(
-        &self,
-        request: Request<RegisterRequest>,
-    ) -> Result<Response<RegisterResponse>, Status> {
-        let (_, extensions, req) = request.into_parts();
-        let generated_account_id = AccountId::generate();
-
-        let ctx = self.build_creation_context(&extensions)?;
-
-        let command: RegisterCommand = RegisterCommand::try_from_proto(req, generated_account_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let response_payload = RegisterResponse {
-            account_id: generated_account_id.to_string(),
-        };
-
-        // 4. Dispatch sur le CommandBus
-        self.dispatch_command::<RegisterCommand, (), RegisterResponse>(
-            &ctx,
-            command,
-            response_payload,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(target: "account_debug", error = ?e, "CRASH DANS REGISTER");
-            e
-        })
-    }
-
     async fn link_sub_identity(
         &self,
         request: Request<LinkSubIdentityRequest>,

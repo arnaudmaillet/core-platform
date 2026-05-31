@@ -27,10 +27,11 @@ pub struct KeycloakTestContext {
     pub validator: Arc<dyn TokenValidator>,
     pub uri: String,
     pub realm: String,
+    pub audience: String,
 }
 
 impl KeycloakTestContext {
-    pub async fn restore(realm_name: &str) -> Self {
+    pub async fn restore(realm_name: &str, audience: String) -> Self {
         // 1. Initialisation unique du CONTAINER
         let instance = KEYCLOAK_INSTANCE
             .get_or_init(|| async {
@@ -59,7 +60,7 @@ impl KeycloakTestContext {
 
         // 2. Initialisation du Validateur (Infrastructure)
         // Note: Ici on utilise "master" par défaut, ou on pourrait créer un realm via API
-        let validator = KeycloakValidator::new(&instance.uri, realm_name)
+        let validator = KeycloakValidator::new(&instance.uri, realm_name, audience.to_string())
             .await
             .expect("Failed to create KeycloakValidator");
 
@@ -67,71 +68,7 @@ impl KeycloakTestContext {
             validator: Arc::new(validator) as Arc<dyn TokenValidator>,
             uri: instance.uri.clone(),
             realm: realm_name.to_string(),
+            audience,
         }
-    }
-
-    pub async fn get_admin_token(&self) -> Result<KeycloakAuthResponse> {
-        let client = reqwest::Client::new();
-        let token_url = format!("{}/realms/master/protocol/openid-connect/token", self.uri);
-        let params = [
-            ("client_id", "admin-cli"),
-            ("username", "admin"),
-            ("password", "admin"),
-            ("grant_type", "password"),
-        ];
-
-        let mut last_error = String::new();
-
-        // On garde la boucle de retry car Keycloak peut mettre quelques secondes
-        // à être opérationnel APRÈS que le port soit ouvert.
-        for _i in 0..10 {
-            let response = client.post(&token_url).form(&params).send().await;
-
-            match response {
-                Ok(res) if res.status().is_success() => {
-                    let json: serde_json::Value = res.json().await.map_err(|_| {
-                        Error::internal("Invalid JSON response from Keycloak".to_string())
-                    })?;
-
-                    let raw_token = json["access_token"]
-                        .as_str()
-                        .ok_or_else(|| Error::internal("access_token missing".to_string()))?;
-
-                    let jwt_token = JwtToken::try_new(raw_token)?;
-
-                    // Extraction du SubId avec validation réelle (pas de hardcode)
-                    let sub_id_str = match json["sub"].as_str() {
-                        Some(s) => s.to_string(),
-                        None => {
-                            let claims = self.validator.validate(&jwt_token).map_err(|e| {
-                                Error::internal(format!("JWT Validation failed: {:?}", e))
-                            })?;
-                            claims.sub_id.to_string()
-                        }
-                    };
-
-                    return Ok(KeycloakAuthResponse {
-                        token: jwt_token,
-                        sub_id: SubId::try_new(sub_id_str)?,
-                    });
-                }
-                Ok(res) => {
-                    last_error = format!(
-                        "Status: {}, Body: {}",
-                        res.status(),
-                        res.text().await.unwrap_or_default()
-                    );
-                }
-                Err(e) => {
-                    last_error = format!("Connection error: {}", e);
-                }
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        }
-
-        Err(Error::internal(format!(
-            "Keycloak admin auth failed after multiple retries. Last error: {}",
-            last_error
-        )))
     }
 }

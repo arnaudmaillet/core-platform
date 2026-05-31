@@ -5,6 +5,7 @@ members = [
     "backend/services/account/api/command-server",
     "backend/services/account/workers/outbox-producer",
     "backend/services/account/workers/cache-invalidator",
+    "backend/services/account/workers/janitor",
     "backend/services/profile/workers/outbox-producer",
     "backend/services/profile/workers/cache-invalidator",
     "backend/services/profile/workers/events-consumer",
@@ -88,6 +89,7 @@ rand = "0.9.2"
 url = "2.5.7"
 dyn-clone = "1.0.17"
 dotenvy = "0.15.7"
+sha2 = "0.11.0"
 
 # Observabilité
 tracing = "0.1"

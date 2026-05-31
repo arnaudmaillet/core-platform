@@ -1,8 +1,10 @@
+// crates/account/tests/handlers/change_email.rs
 
 use account::commands::settings::ChangeEmailCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account::types::RegistrationIdentifier;
 use account_test_utils::AccountTestFixture;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
@@ -16,15 +18,26 @@ async fn test_change_email_success() -> Result<()> {
     let old_email = Email::try_new("old@test.com")?;
     let new_email = Email::try_new("new@test.com")?;
 
-    // 1. Arrange : Compte actif avec l'ancien email
     let account = f
         .builder()?
         .with_state(AccountState::ACTIVE)
-        .with_email(old_email)
+        .with_email(old_email.clone())
         .build()?;
 
     let version_snapshot = account.version();
     f.account_repo().insert(account);
+
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_email(old_email),
+            state: AccountState::ACTIVE,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
 
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
@@ -34,7 +47,10 @@ async fn test_change_email_success() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -54,8 +70,6 @@ async fn test_change_email_technical_idempotency() -> Result<()> {
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
     let requested_email = Email::try_new("other@test.com")?;
-
-    // Arrange : Commande déjà enregistrée
     f.idempotency_repo().seed(cmd_id);
 
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
@@ -71,16 +85,15 @@ async fn test_change_email_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert
-    assert!(
-        result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
-    );
+    assert!(result.is_ok());
 
-    // VERIFICATION : L'email n'a pas été modifié
     f.assert_account(|acc| {
         assert_ne!(acc.identity().email(), Some(&requested_email));
         assert_eq!(acc.version(), version_snapshot);
@@ -96,7 +109,6 @@ async fn test_change_email_business_idempotency() -> Result<()> {
     let f = AccountTestFixture::new();
     let email = Email::try_new("same@test.com")?;
 
-    // 1. Arrange : Compte possédant déjà cet email
     let account = f
         .builder()?
         .with_state(AccountState::ACTIVE)
@@ -106,6 +118,18 @@ async fn test_change_email_business_idempotency() -> Result<()> {
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_email(email.clone()),
+            state: AccountState::ACTIVE,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
+
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
@@ -114,16 +138,15 @@ async fn test_change_email_business_idempotency() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
     f.assert_account(|acc| {
-        assert_eq!(
-            acc.version(),
-            version_snapshot,
-            "La version ne doit pas bouger"
-        );
+        assert_eq!(acc.version(), version_snapshot);
     })
     .await?;
 
@@ -135,11 +158,29 @@ async fn test_change_email_business_idempotency() -> Result<()> {
 async fn test_change_email_forbidden_when_restricted() -> Result<()> {
     let f = AccountTestFixture::new();
     let requested_email = Email::try_new("new@test.com")?;
+    let old_email = Email::try_new("old@test.com")?;
 
     // Arrange : Un banni ne peut pas modifier ses réglages
-    let account = f.builder()?.with_state(AccountState::BANNED).build()?;
+    let account = f
+        .builder()?
+        .with_state(AccountState::BANNED)
+        .with_email(old_email.clone())
+        .build()?;
+
     let version_snapshot = account.version();
     f.account_repo().insert(account);
+
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_email(old_email),
+            state: AccountState::BANNED,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
 
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
@@ -150,10 +191,12 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
-    // Assert
     match result {
         Err(e) => {
             assert_eq!(e.code, ErrorCode::Forbidden);
@@ -161,7 +204,6 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
         Ok(_) => panic!("Should have failed: a banned account cannot change its email"),
     }
 
-    // VERIFICATION : Intégrité conservée
     f.assert_account(|acc| {
         assert_ne!(acc.identity().email(), Some(&requested_email));
         assert_eq!(acc.version(), version_snapshot);
@@ -175,13 +217,30 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
 async fn test_change_email_succeeds_after_retry() -> Result<()> {
     let f = AccountTestFixture::new();
     let requested_email = Email::try_new("b@c.com")?;
+    let old_email = Email::try_new("old@test.com")?;
 
-    let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
+    let account = f
+        .builder()?
+        .with_state(AccountState::ACTIVE)
+        .with_email(old_email.clone())
+        .build()?;
+
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
-    // 1. Arrange : Simulation d'une erreur OCC (Optimistic Concurrency Control)
-    // Le repo renverra l'erreur une seule fois, puis réussira au retry.
+    f.global_registry()
+        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+            account_id: f.account_id(),
+            region: f.region(),
+            sub_id: None,
+            identifiers: RegistrationIdentifier::from_email(old_email),
+            state: AccountState::ACTIVE,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
+
+    // 1. Arrange : Simulation d'une erreur OCC
     f.account_repo()
         .set_error_once(Error::concurrency_conflict("Version mismatch"));
 
@@ -191,27 +250,24 @@ async fn test_change_email_succeeds_after_retry() -> Result<()> {
         new_email: requested_email.clone(),
     };
 
-    // 2. Act : Le Bus intercepte le conflit et relance le handler
+    // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
-    // 3. Assert : On s'attend maintenant à un SUCCÈS
-    assert!(
-        result.is_ok(),
-        "Le retry automatique aurait dû sauver l'opération"
-    );
+    // 3. Assert
+    assert!(result.is_ok());
 
     f.assert_account(|acc| {
-        // L'email a bien été mis à jour après le retry
         assert_eq!(acc.identity().email(), Some(&requested_email));
-        // La version a bien été incrémentée
         assert_eq!(acc.version(), version_snapshot + 1);
     })
     .await?;
 
-    // L'événement doit être présent dans l'outbox
     f.assert_outbox(1, Some(AccountEvent::EMAIL_CHANGED));
 
     Ok(())

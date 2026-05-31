@@ -15,4 +15,4 @@ pub use application::context;
 
 pub use infrastructure::postgres::repositories as db;
 
-pub use presentation::services;
+pub use presentation::{services, workers};

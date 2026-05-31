@@ -25,3 +25,5 @@ uuid = { workspace = true }
 auth-test-utils = { workspace = true }
 shared-kernel = { workspace = true }
 post-test-utils = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

@@ -1,6 +1,6 @@
 // backend/services/post/api/command-server/src/main.rs
 
-use auth::{AuthInterceptor, KeycloakValidator};
+use auth::{KeycloakValidator, interceptors::AuthInterceptor};
 use dotenvy::dotenv;
 use infra_fred::{RedisContext, RedisIdempotencyRepository};
 use infra_scylla::ScyllaContext;
@@ -36,6 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let keycloak_url = std::env::var("KEYCLOAK_URL").expect("KEYCLOAK_URL must be set");
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").expect("KEYCLOAK_REALM must be set");
+    let keycloak_audience =
+        std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "post-service".to_string());
     let profile_service_url =
         std::env::var("PROFILE_SERVICE_URL").expect("PROFILE_SERVICE_URL must be set");
 
@@ -88,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
     let validator = Arc::new(
-        KeycloakValidator::new(&keycloak_url, &keycloak_realm)
+        KeycloakValidator::new(&keycloak_url, &keycloak_realm, keycloak_audience)
             .await
             .expect("Failed to initialize Keycloak validator pour le service Post"),
     );

@@ -28,3 +28,5 @@ dotenvy = { workspace = true }
 infra-test = { workspace = true }
 auth-test-utils = { workspace = true }
 social-test-utils = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

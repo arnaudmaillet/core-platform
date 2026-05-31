@@ -2,7 +2,7 @@
 
 use crate::resolvers::ProfileResolverStub;
 use crate::utils::PostTestContext;
-use auth::{AuthInterceptor, KeycloakValidator};
+use auth::{TokenValidator, interceptors::AuthInterceptor}; // 💡 Import du trait TokenValidator
 use auth_test_utils::KeycloakTestContext;
 use infra_fred::RedisIdempotencyRepository;
 use infra_test::TestContextBuilder;
@@ -17,6 +17,7 @@ pub struct PostTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
     with_grpc: bool,
     migrations_paths: Vec<String>,
+    mock_validator: Option<Arc<dyn TokenValidator>>, // 💡 Ajout du champ pour le mock d'auth
 }
 
 impl PostTestContextBuilder {
@@ -25,6 +26,7 @@ impl PostTestContextBuilder {
             kernel_builder: TestContextBuilder::new().with_redis(),
             with_grpc: false,
             migrations_paths: vec!["crates/post/migrations/scylla".to_string()],
+            mock_validator: None, // Par défaut, on n'utilise pas de mock
         }
     }
 
@@ -39,10 +41,15 @@ impl PostTestContextBuilder {
         self
     }
 
+    /// 💡 NOUVELLE MÉTHODE : Permet d'injecter le MockTokenValidator depuis post_e2e_it.rs
+    pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
+        self.mock_validator = Some(validator);
+        self
+    }
+
     pub async fn build_e2e(mut self) -> PostTestContext {
         tracing::info!("Building Post test infrastructure...");
 
-        // Configuration des chemins de migrations au kernel builder avant de build
         let paths_refs: Vec<&str> = self.migrations_paths.iter().map(|s| s.as_str()).collect();
         self.kernel_builder = self.kernel_builder.with_scylla(paths_refs);
 
@@ -60,23 +67,28 @@ impl PostTestContextBuilder {
 
         if self.with_grpc {
             tracing::info!("Starting Post gRPC server for End-to-End testing...");
-            tokio::spawn(async move {
-                let auth_ctx = KeycloakTestContext::restore("master").await;
-                let validator = Arc::new(
-                    KeycloakValidator::new(&auth_ctx.uri, &auth_ctx.realm)
-                        .await
-                        .unwrap(),
-                );
-                let interceptor = AuthInterceptor::new(validator);
+            let custom_validator = self.mock_validator.clone(); // Clônage pour le thread tokio
 
-                // Isolation du dépôt d'idempotence pour l'E2E
+            tokio::spawn(async move {
+                // 💡 CHOIX DU VALIDATEUR : Si un mock est fourni, on l'utilise.
+                // Sinon, fallback transparent sur Keycloak en Docker.
+                let validator = match custom_validator {
+                    Some(mock) => mock,
+                    None => {
+                        let auth_ctx =
+                            KeycloakTestContext::restore("master", "post-service-test".to_string())
+                                .await;
+                        auth_ctx.validator.clone()
+                    }
+                };
+
+                let interceptor = AuthInterceptor::new(validator);
                 let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
                     redis_pool.clone(),
                     "post_e2e",
                     300,
                 ));
 
-                // On utilise ton PostServiceBuilder d'application
                 let builder = PostServiceBuilder::new(
                     scylla_keyspace,
                     scylla_session,
@@ -89,7 +101,6 @@ impl PostTestContextBuilder {
                 let bus = builder.build_command_bus();
                 let post_svc = PostService::new(bus, app_ctx);
 
-                // Port 0 force le système d'exploitation à allouer un port TCP éphémère libre
                 let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
                 let actual_addr = listener.local_addr().unwrap();
                 let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
