@@ -5,6 +5,7 @@ pub mod settings;
 
 pub use access_management::{
     LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand, RegisterHandler,
+    VerifyEmailCommand, VerifyEmailHandler, VerifyPhoneCommand, VerifyPhoneHandler,
 };
 
 pub use lifecycle::{
@@ -21,7 +22,7 @@ pub use moderation::{
 
 pub use settings::{
     AddPushTokenCommand, AddPushTokenHandler, ChangeBirthDateCommand, ChangeBirthDateHandler,
-    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
+    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneCommand, ChangePhoneNumberHandler,
     RemovePushTokenCommand, RemovePushTokenHandler, UpdateLocaleCommand, UpdateLocaleHandler,
     UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
     UpdateTimezoneHandler,

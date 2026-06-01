@@ -13,9 +13,6 @@ use crate::{
     types::{AccountRole, BetaTier, IpAddr, TrustAmount, TrustScore},
 };
 
-/// Entité Metadata (Interne à l'Agrégat Account)
-///
-/// Gère les scores de confiance, les rôles et les informations de modération.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountGovernance {
     account_id: AccountId,
@@ -85,10 +82,6 @@ impl AccountGovernance {
     pub fn last_ip_addr(&self) -> Option<&IpAddr> {
         self.last_ip_addr.as_ref()
     }
-
-    // ==========================================
-    // MUTATIONS INTERNES (pub(crate))
-    // ==========================================
 
     pub fn apply_trust_reward(
         &mut self,
@@ -176,10 +169,6 @@ impl AccountGovernance {
     pub fn apply_ip_record(&mut self, ip: IpAddr) {
         self.last_ip_addr = Some(ip);
     }
-
-    // ==========================================
-    // HELPERS PRIVÉS
-    // ==========================================
 
     fn record_moderation_log(&mut self, log_entry: &str) {
         let now = Utc::now();

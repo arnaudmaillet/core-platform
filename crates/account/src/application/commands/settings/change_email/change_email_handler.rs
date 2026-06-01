@@ -44,7 +44,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeEmailHan
         let account_id = account.account_id();
         let new_identifiers = RegistrationIdentifier::try_from_options(
             Some(cmd.new_email.clone()),
-            account.identity().phone_number().cloned(),
+            account.identity().phone().cloned(),
         )?;
 
         ctx.global_registry()

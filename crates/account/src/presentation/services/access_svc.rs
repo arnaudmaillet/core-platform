@@ -8,11 +8,12 @@ use shared_kernel::types::{AccountId, SubId};
 use shared_proto::account::v1::account_access_service_server::AccountAccessService as ProtoAccountAccessService;
 use shared_proto::account::v1::{
     LinkSubIdentityRequest, LinkSubIdentityResponse, ResolveIdentityRequest,
-    ResolveIdentityResponse,
+    ResolveIdentityResponse, VerifyEmailRequest, VerifyEmailResponse, VerifyPhoneRequest,
+    VerifyPhoneResponse,
 };
 
 use crate::application::context::AccountAppContext;
-use crate::commands::LinkSubIdentityCommand;
+use crate::commands::{LinkSubIdentityCommand, VerifyEmailCommand, VerifyPhoneCommand};
 use crate::presentation::utils::GrpcServiceUtils;
 
 pub struct AccountAccessService<TM> {
@@ -95,5 +96,58 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
             state: account.identity().state().to_string(),
             role: account.governance().role().to_string(),
         }))
+    }
+
+    async fn verify_email(
+        &self,
+        request: Request<VerifyEmailRequest>,
+    ) -> Result<Response<VerifyEmailResponse>, Status> {
+        let (_, extensions, req) = request.into_parts();
+
+        let proto_target = req
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target identity context"))?;
+
+        let account_id = AccountId::try_from(proto_target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = VerifyEmailCommand::try_from_proto(req)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        self.dispatch_command::<VerifyEmailCommand, (), VerifyEmailResponse>(
+            &ctx,
+            command,
+            VerifyEmailResponse {},
+        )
+        .await
+    }
+
+    async fn verify_phone(
+        &self,
+        request: Request<VerifyPhoneRequest>,
+    ) -> Result<Response<VerifyPhoneResponse>, Status> {
+        let (_, extensions, req) = request.into_parts();
+        let proto_target = req
+            .target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("Missing target identity context"))?;
+
+        let account_id = AccountId::try_from(proto_target.account_id.as_str()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
+        })?;
+
+        let ctx = self.build_command_context(account_id, &extensions)?;
+        let command = VerifyPhoneCommand::try_from_proto(req)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        self.dispatch_command::<VerifyPhoneCommand, (), VerifyPhoneResponse>(
+            &ctx,
+            command,
+            VerifyPhoneResponse {},
+        )
+        .await
     }
 }

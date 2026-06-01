@@ -1,19 +1,19 @@
 // crates/account/src/application/fixture.rs
 
-use crate::repositories::{AccountRepositoryStub, GlobalIdentityRegistryStub};
-use account::commands::lifecycle::change_beta_tier::change_beta_tier_handler::ChangeBetaTierHandler;
+use crate::repositories::{AccountRepositoryStub, GlobalIdentityRegistryStub, OtpRepositoryStub};
 use account::commands::{
     ActivateCommand, ActivateHandler, AddPushTokenCommand, AddPushTokenHandler, BanCommand,
-    BanHandler, ChangeBetaTierCommand, ChangeBirthDateCommand, ChangeBirthDateHandler,
-    ChangeEmailCommand, ChangeEmailHandler, ChangePhoneNumberCommand, ChangePhoneNumberHandler,
-    ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand, DeactivateHandler,
-    DecreaseTrustScoreCommand, DecreaseTrustScoreHandler, IncreaseTrustScoreCommand,
-    IncreaseTrustScoreHandler, LiftShadowbanCommand, LiftShadowbanHandler, LinkSubIdentityCommand,
-    LinkSubIdentityHandler, RegisterCommand, RegisterHandler, RemovePushTokenCommand,
-    RemovePushTokenHandler, ShadowbanCommand, ShadowbanHandler, SuspendCommand, SuspendHandler,
-    UnbanCommand, UnbanHandler, UnsuspendCommand, UnsuspendHandler, UpdateLocaleCommand,
-    UpdateLocaleHandler, UpdatePreferencesCommand, UpdatePreferencesHandler, UpdateTimezoneCommand,
-    UpdateTimezoneHandler,
+    BanHandler, ChangeBetaTierCommand, ChangeBetaTierHandler, ChangeBirthDateCommand,
+    ChangeBirthDateHandler, ChangeEmailCommand, ChangeEmailHandler, ChangePhoneCommand,
+    ChangePhoneNumberHandler, ChangeRoleCommand, ChangeRoleHandler, DeactivateCommand,
+    DeactivateHandler, DecreaseTrustScoreCommand, DecreaseTrustScoreHandler,
+    IncreaseTrustScoreCommand, IncreaseTrustScoreHandler, LiftShadowbanCommand,
+    LiftShadowbanHandler, LinkSubIdentityCommand, LinkSubIdentityHandler, RegisterCommand,
+    RegisterHandler, RemovePushTokenCommand, RemovePushTokenHandler, ShadowbanCommand,
+    ShadowbanHandler, SuspendCommand, SuspendHandler, UnbanCommand, UnbanHandler, UnsuspendCommand,
+    UnsuspendHandler, UpdateLocaleCommand, UpdateLocaleHandler, UpdatePreferencesCommand,
+    UpdatePreferencesHandler, UpdateTimezoneCommand, UpdateTimezoneHandler, VerifyEmailCommand,
+    VerifyEmailHandler, VerifyPhoneCommand, VerifyPhoneHandler,
 };
 use account::context::{AccountAppContext, AccountCommandContext, AccountQueryContext};
 use account::entities::{Account, AccountBuilder};
@@ -39,6 +39,7 @@ pub struct AccountTestFixture {
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
     outbox_repo: Arc<OutboxRepositoryStub>,
     global_registry: Arc<GlobalIdentityRegistryStub>,
+    otp_repo: Arc<OtpRepositoryStub>,
 }
 
 impl AccountTestFixture {
@@ -49,6 +50,7 @@ impl AccountTestFixture {
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
         let global_registry = Arc::new(GlobalIdentityRegistryStub::new());
+        let otp_repo = Arc::new(OtpRepositoryStub::new());
 
         let app_ctx = AccountAppContext::new(
             tx_manager,
@@ -68,6 +70,12 @@ impl AccountTestFixture {
         bus.register::<AccountCommandContext<TransactionManagerStub>, RegisterCommand, RegisterHandler<TransactionManagerStub>>(RegisterHandler::new());
         bus.register::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, LinkSubIdentityHandler<TransactionManagerStub>>(
             LinkSubIdentityHandler::new(),
+        );
+        bus.register::<AccountCommandContext<TransactionManagerStub>, VerifyEmailCommand, VerifyEmailHandler<TransactionManagerStub>>(
+            VerifyEmailHandler::new(otp_repo.clone()),
+        );
+        bus.register::<AccountCommandContext<TransactionManagerStub>, VerifyPhoneCommand, VerifyPhoneHandler<TransactionManagerStub>>(
+            VerifyPhoneHandler::new(otp_repo.clone()),
         );
         bus.register::<AccountCommandContext<TransactionManagerStub>, ActivateCommand, ActivateHandler<TransactionManagerStub>>(ActivateHandler::new());
         bus.register::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, DeactivateHandler<TransactionManagerStub>>(
@@ -102,7 +110,7 @@ impl AccountTestFixture {
         bus.register::<AccountCommandContext<TransactionManagerStub>, ChangeEmailCommand, ChangeEmailHandler<TransactionManagerStub>>(
             ChangeEmailHandler::new(),
         );
-        bus.register::<AccountCommandContext<TransactionManagerStub>, ChangePhoneNumberCommand, ChangePhoneNumberHandler<TransactionManagerStub>>(
+        bus.register::<AccountCommandContext<TransactionManagerStub>, ChangePhoneCommand, ChangePhoneNumberHandler<TransactionManagerStub>>(
             ChangePhoneNumberHandler::new(),
         );
         bus.register::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ChangeBirthDateHandler<TransactionManagerStub>>(
@@ -129,6 +137,7 @@ impl AccountTestFixture {
             idempotency_repo,
             outbox_repo,
             global_registry,
+            otp_repo,
         }
     }
 
@@ -176,6 +185,10 @@ impl AccountTestFixture {
 
     pub fn global_registry(&self) -> &GlobalIdentityRegistryStub {
         &self.global_registry
+    }
+
+    pub fn otp_repo(&self) -> Arc<OtpRepositoryStub> {
+        self.otp_repo.clone()
     }
 
     pub fn builder(&self) -> Result<AccountBuilder> {

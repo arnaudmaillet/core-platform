@@ -5,13 +5,13 @@ use tonic::{Request, Response, Status};
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalService as ProtoAccountPersonalService;
 use shared_proto::account::v1::{
     ActivateRequest, ActivateResponse, ChangeBirthDateRequest, ChangeBirthDateResponse,
-    ChangeEmailRequest, ChangeEmailResponse, ChangePhoneNumberRequest, ChangePhoneNumberResponse,
+    ChangeEmailRequest, ChangeEmailResponse, ChangePhoneRequest, ChangePhoneResponse,
     DeactivateRequest, DeactivateResponse, UpdateLocaleRequest, UpdateLocaleResponse,
 };
 
 use crate::application::context::AccountAppContext;
 use crate::commands::{
-    ActivateCommand, ChangeBirthDateCommand, ChangeEmailCommand, ChangePhoneNumberCommand,
+    ActivateCommand, ChangeBirthDateCommand, ChangeEmailCommand, ChangePhoneCommand,
     DeactivateCommand, UpdateLocaleCommand,
 };
 use crate::presentation::utils::GrpcServiceUtils;
@@ -68,10 +68,10 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountPersonalService
         .await
     }
 
-    async fn change_phone_number(
+    async fn change_phone(
         &self,
-        request: Request<ChangePhoneNumberRequest>,
-    ) -> Result<Response<ChangePhoneNumberResponse>, Status> {
+        request: Request<ChangePhoneRequest>,
+    ) -> Result<Response<ChangePhoneResponse>, Status> {
         let (_, extensions, req_inner) = request.into_parts();
 
         let target = req_inner
@@ -83,13 +83,13 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountPersonalService
         })?;
 
         let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = ChangePhoneNumberCommand::try_from_proto(req_inner)
+        let command = ChangePhoneCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        self.dispatch_command::<ChangePhoneNumberCommand, (), ChangePhoneNumberResponse>(
+        self.dispatch_command::<ChangePhoneCommand, (), ChangePhoneResponse>(
             &ctx,
             command,
-            ChangePhoneNumberResponse {},
+            ChangePhoneResponse {},
         )
         .await
     }

@@ -4,14 +4,16 @@ use crate::entities::AccountIdentity;
 use crate::types::{AccountState, BirthDate, Locale};
 use chrono::{DateTime, Utc};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{AccountId, Email, PhoneNumber, SubId};
+use shared_kernel::types::{AccountId, Email, Phone, SubId};
 
 pub struct AccountIdentityBuilder {
     account_id: AccountId,
     sub_id: Option<SubId>,
     email: Option<Email>,
+    phone: Option<Phone>,
+    email_verified_at: Option<DateTime<Utc>>,
+    phone_verified_at: Option<DateTime<Utc>>,
     locale: Option<Locale>,
-    phone: Option<PhoneNumber>,
     birth_date: Option<BirthDate>,
     state: AccountState,
     last_active_at: Option<DateTime<Utc>>,
@@ -21,10 +23,12 @@ impl AccountIdentityBuilder {
     pub(crate) fn new(account_id: AccountId) -> Self {
         Self {
             account_id,
-            email: None,
             sub_id: None,
-            locale: None,
+            email: None,
             phone: None,
+            email_verified_at: None,
+            phone_verified_at: None,
+            locale: None,
             birth_date: None,
             state: AccountState::UNVERIFIED,
             last_active_at: None,
@@ -53,8 +57,28 @@ impl AccountIdentityBuilder {
         self
     }
 
-    pub fn with_phone(mut self, phone: PhoneNumber) -> Self {
+    pub fn with_phone(mut self, phone: Phone) -> Self {
         self.phone = Some(phone);
+        self
+    }
+
+    pub fn with_email_verified_at(mut self, verified_at: DateTime<Utc>) -> Self {
+        self.email_verified_at = Some(verified_at);
+        self
+    }
+
+    pub fn with_optional_email_verified_at(mut self, verified_at: Option<DateTime<Utc>>) -> Self {
+        self.email_verified_at = verified_at;
+        self
+    }
+
+    pub fn with_phone_verified_at(mut self, verified_at: DateTime<Utc>) -> Self {
+        self.phone_verified_at = Some(verified_at);
+        self
+    }
+
+    pub fn with_optional_phone_verified_at(mut self, verified_at: Option<DateTime<Utc>>) -> Self {
+        self.phone_verified_at = verified_at;
         self
     }
 
@@ -98,10 +122,11 @@ impl AccountIdentityBuilder {
             self.sub_id,
             self.email,
             self.phone,
+            self.email_verified_at,
+            self.phone_verified_at,
             self.state,
             self.birth_date,
             self.locale.unwrap_or_default(),
-            now,
             now,
             now,
             self.last_active_at,

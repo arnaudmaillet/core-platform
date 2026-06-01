@@ -1,21 +1,21 @@
-// crates/account/src/application/change_email/change_phone_number_command.rs
+// crates/account/src/application/change_email/change_phone_command.rs
 
 use shared_kernel::{
     command::{CommandTarget, IdentifiableCommand},
     core::{Error, Result},
-    types::{AccountId, PhoneNumber, Region},
+    types::{AccountId, Phone, Region},
 };
-use shared_proto::account::v1::ChangePhoneNumberRequest;
+use shared_proto::account::v1::ChangePhoneRequest;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
-pub struct ChangePhoneNumberCommand {
+pub struct ChangePhoneCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
-    pub new_phone: PhoneNumber,
+    pub new_phone: Phone,
 }
 
-impl IdentifiableCommand for ChangePhoneNumberCommand {
+impl IdentifiableCommand for ChangePhoneCommand {
     fn command_id(&self) -> Uuid {
         self.command_id
     }
@@ -37,8 +37,8 @@ impl IdentifiableCommand for ChangePhoneNumberCommand {
     }
 }
 
-impl ChangePhoneNumberCommand {
-    pub fn try_from_proto(req: ChangePhoneNumberRequest) -> Result<Self> {
+impl ChangePhoneCommand {
+    pub fn try_from_proto(req: ChangePhoneRequest) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -52,7 +52,7 @@ impl ChangePhoneNumberCommand {
             expected_version: proto_target.expected_version,
         };
 
-        let new_phone = PhoneNumber::try_from(req.new_phone)
+        let new_phone = Phone::try_from(req.new_phone)
             .map_err(|e| Error::validation("new_phone", e.to_string()))?;
 
         Ok(Self {

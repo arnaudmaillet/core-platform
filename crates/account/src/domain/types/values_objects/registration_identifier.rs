@@ -4,15 +4,15 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use shared_kernel::{
     core::{Error, Result, ValueObject},
-    types::{Email, PhoneNumber},
+    types::{Email, Phone},
 };
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 enum RegistrationMethod {
     Email(Email),
-    Phone(PhoneNumber),
-    Both { email: Email, phone: PhoneNumber },
+    Phone(Phone),
+    Both { email: Email, phone: Phone },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,20 +27,20 @@ impl RegistrationIdentifier {
         }
     }
 
-    pub fn from_phone(phone: PhoneNumber) -> Self {
+    pub fn from_phone(phone: Phone) -> Self {
         Self {
             method: RegistrationMethod::Phone(phone),
         }
     }
 
-    pub fn from_both(email: Email, phone: PhoneNumber) -> Self {
+    pub fn from_both(email: Email, phone: Phone) -> Self {
         Self {
             method: RegistrationMethod::Both { email, phone },
         }
     }
 
     /// Constructeur robuste à partir d'options (Typique des handlers/endpoints gRPC)
-    pub fn try_from_options(email: Option<Email>, phone: Option<PhoneNumber>) -> Result<Self> {
+    pub fn try_from_options(email: Option<Email>, phone: Option<Phone>) -> Result<Self> {
         match (email, phone) {
             (Some(e), Some(p)) => Ok(Self::from_both(e, p)),
             (Some(e), None) => Ok(Self::from_email(e)),
@@ -61,7 +61,7 @@ impl RegistrationIdentifier {
         }
     }
 
-    pub fn phone(&self) -> Option<&PhoneNumber> {
+    pub fn phone(&self) -> Option<&Phone> {
         match &self.method {
             RegistrationMethod::Phone(p) | RegistrationMethod::Both { phone: p, .. } => Some(p),
             RegistrationMethod::Email(_) => None,

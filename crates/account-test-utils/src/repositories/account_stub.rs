@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use shared_kernel::{
     core::{AggregateRoot, Error, Result, Transaction},
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, Phone, Region, SubId},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -119,14 +119,12 @@ impl AccountRepository for AccountRepositoryStub {
     async fn exists_by_phone(
         &self,
         _region: Region,
-        phone: &PhoneNumber,
+        phone: &Phone,
         _tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
         self.check_error()?;
         let map = self.accounts.lock().unwrap();
-        Ok(map
-            .values()
-            .any(|a| a.identity().phone_number() == Some(phone)))
+        Ok(map.values().any(|a| a.identity().phone() == Some(phone)))
     }
 
     async fn exists_by_sub_id(

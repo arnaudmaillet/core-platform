@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS account_identity (
     region VARCHAR(10) NOT NULL,
     sub_id TEXT,
     email TEXT,
-    phone_number TEXT,
+    email_verified_at TIMESTAMPTZ NULL,
+    phone TEXT,
+    phone_verified_at TIMESTAMPTZ NULL,
     state TEXT NOT NULL DEFAULT 'UNVERIFIED',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'EN',
@@ -27,7 +29,7 @@ CREATE TABLE IF NOT EXISTS account_identity (
     last_active_at TIMESTAMPTZ,
     PRIMARY KEY (region, account_id),
     CONSTRAINT uq_email UNIQUE (email, region),
-    CONSTRAINT uq_phone_number UNIQUE (phone_number, region)
+    CONSTRAINT uq_phone UNIQUE (phone, region)
 );
 
 -- 3. SETTINGS (Relation 1:1 co-localisée)
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS account_settings (
     preferences JSONB NOT NULL DEFAULT '{}',
     timezone TEXT NOT NULL DEFAULT 'UTC',
     push_tokens TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (region, account_id),
     CONSTRAINT fk_settings_identity FOREIGN KEY (region, account_id) REFERENCES account_identity(region, account_id) ON DELETE CASCADE
@@ -53,6 +56,7 @@ CREATE TABLE IF NOT EXISTS account_governance (
     moderation_notes TEXT,
     last_moderation_at TIMESTAMPTZ,
     last_ip_addr INET,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (region, account_id),
     CONSTRAINT fk_governance_identity FOREIGN KEY (region, account_id) REFERENCES account_identity(region, account_id) ON DELETE CASCADE

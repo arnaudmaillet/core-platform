@@ -1,9 +1,9 @@
-pub mod activate;
-pub mod change_beta_tier;
-pub mod change_role;
-pub mod deactivate;
-pub mod suspend;
-pub mod unsuspend;
+mod activate;
+mod change_beta_tier;
+mod change_role;
+mod deactivate;
+mod suspend;
+mod unsuspend;
 
 pub use activate::activate_command::ActivateCommand;
 pub use change_beta_tier::change_beta_tier_command::ChangeBetaTierCommand;

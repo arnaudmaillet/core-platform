@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use infra_sqlx::sqlx;
 use shared_kernel::core::{Error, Identifier, Result};
 use shared_kernel::types::{AccountId, Region, SubId};
-use shared_kernel::types::{Email, PhoneNumber};
+use shared_kernel::types::{Email, Phone};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -45,7 +45,7 @@ impl PostgresGlobalIdentityRow {
         let identifiers = match (self.email_hash.is_some(), self.phone_hash.is_some()) {
             (true, true) => {
                 let email = Email::try_new("placeholder@global.registry")?;
-                let phone = PhoneNumber::try_new("+00000000000")?;
+                let phone = Phone::try_new("+00000000000")?;
                 RegistrationIdentifier::from_both(email, phone)
             }
             (true, false) => {
@@ -53,7 +53,7 @@ impl PostgresGlobalIdentityRow {
                 RegistrationIdentifier::from_email(email)
             }
             (false, true) => {
-                let phone = PhoneNumber::try_new("+00000000000")?;
+                let phone = Phone::try_new("+00000000000")?;
                 RegistrationIdentifier::from_phone(phone)
             }
             (false, false) => {

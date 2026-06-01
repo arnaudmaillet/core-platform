@@ -8,7 +8,7 @@ use crate::types::{AccountRole, AccountState, BirthDate, IpAddr};
 use shared_kernel::geo::Timezone;
 use shared_kernel::{
     core::{AggregateMetadata, Result},
-    types::{AccountId, Email, PhoneNumber, SubId},
+    types::{AccountId, Email, Phone, SubId},
 };
 
 pub struct AccountBuilder {
@@ -58,7 +58,7 @@ impl AccountBuilder {
         self
     }
 
-    pub fn with_phone(mut self, phone: PhoneNumber) -> Self {
+    pub fn with_phone(mut self, phone: Phone) -> Self {
         self.identity = self.identity.with_phone(phone);
         self
     }

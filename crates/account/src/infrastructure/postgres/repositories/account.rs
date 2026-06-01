@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use infra_sqlx::sqlx::{self, Pool, Postgres, query_scalar};
 use infra_sqlx::TransactionExecuteExt;
+use infra_sqlx::sqlx::{self, Pool, Postgres, query_scalar};
 
 use shared_kernel::core::{AggregateRoot, Entity, Identifier};
 use shared_kernel::{
     core::{Error, Result, Transaction},
-    types::{AccountId, Email, PhoneNumber, Region, SubId},
+    types::{AccountId, Email, Phone, Region, SubId},
 };
 
 use crate::domain::entities::Account;
@@ -14,6 +14,96 @@ use crate::infrastructure::postgres::rows::{
     PostgresAccountGovernanceRow, PostgresAccountIdentityRow, PostgresAccountRow,
     PostgresAccountSettingsRow,
 };
+
+const FIND_BY_ID_QUERY: &str = r#"
+    SELECT i.*, i.updated_at as identity_updated_at,
+           s.preferences, s.timezone, s.push_tokens, s.updated_at as settings_updated_at,
+           g.role, g.beta_tier, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
+           g.last_moderation_at, g.last_ip_addr, g.updated_at as governance_updated_at
+    FROM account_identity i
+    LEFT JOIN account_settings s ON i.account_id = s.account_id AND i.region = s.region
+    LEFT JOIN account_governance g ON i.account_id = g.account_id AND i.region = g.region
+    WHERE i.account_id = $1 AND i.region = $2
+"#;
+
+const OCC_LOCK_QUERY: &str = r#"
+    SELECT version FROM account_identity WHERE account_id = $1 AND region = $2 FOR UPDATE
+"#;
+
+const INSERT_IDENTITY_QUERY: &str = r#"
+    INSERT INTO account_identity 
+        (
+            account_id, region, sub_id, email, email_verified_at, phone, phone_verified_at, 
+            state, birth_date, locale, version, last_active_at,
+            created_at, updated_at, aggregate_updated_at
+        )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+"#;
+
+const INSERT_GOVERNANCE_QUERY: &str = r#"
+    INSERT INTO account_governance 
+        (account_id, region, role, beta_tier, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+"#;
+
+const INSERT_SETTINGS_QUERY: &str = r#"
+    INSERT INTO account_settings (account_id, region, preferences, timezone, push_tokens, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6)
+"#;
+
+const UPDATE_IDENTITY_QUERY: &str = r#"
+    UPDATE account_identity SET 
+        sub_id = $3, 
+        email = $4, 
+        email_verified_at = $5, 
+        phone = $6, 
+        phone_verified_at = $7, 
+        state = $8, 
+        birth_date = $9, 
+        locale = $10, 
+        version = $11, 
+        last_active_at = $12,
+        updated_at = $13,
+        aggregate_updated_at = $14
+    WHERE account_id = $1 AND region = $2
+"#;
+
+const UPDATE_GOVERNANCE_QUERY: &str = r#"
+    UPDATE account_governance SET
+        role = $3, beta_tier = $4, is_shadowbanned = $5, trust_score = $6, 
+        moderation_notes = $7, last_moderation_at = $8, last_ip_addr = $9, updated_at = $10
+    WHERE account_id = $1 AND region = $2
+"#;
+
+const UPDATE_SETTINGS_QUERY: &str = r#"
+    UPDATE account_settings SET 
+        preferences = $3, timezone = $4, push_tokens = $5, updated_at = $6
+    WHERE account_id = $1 AND region = $2
+"#;
+
+const FIND_ID_BY_EMAIL_QUERY: &str = r#"
+    SELECT account_id FROM account_identity WHERE email = $1 AND region = $2
+"#;
+
+const FIND_ID_BY_SUB_ID_QUERY: &str = r#"
+    SELECT account_id FROM account_identity WHERE sub_id = $1 AND region = $2
+"#;
+
+const EXISTS_BY_EMAIL_QUERY: &str = r#"
+    SELECT EXISTS(SELECT 1 FROM account_identity WHERE email = $1 AND region = $2)
+"#;
+
+const EXISTS_BY_PHONE_QUERY: &str = r#"
+    SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone = $1 AND region = $2)
+"#;
+
+const EXISTS_BY_SUB_ID_QUERY: &str = r#"
+    SELECT EXISTS(SELECT 1 FROM account_identity WHERE sub_id = $1 AND region = $2)
+"#;
+
+const DELETE_ACCOUNT_QUERY: &str = r#"
+    DELETE FROM account_identity WHERE account_id = $1 AND region = $2
+"#;
 
 pub struct PostgresAccountRepository {
     pool: Pool<Postgres>,
@@ -32,36 +122,30 @@ impl AccountRepository for PostgresAccountRepository {
         region: Region,
         id: AccountId,
         tx: Option<&mut dyn Transaction>,
-    ) -> Result<Option<Account>>
-    {
+    ) -> Result<Option<Account>> {
         let uid = id.uuid();
         let region_str = region.to_string();
 
-        let account_opt = self.pool.execute_on(tx, |conn| {
-            Box::pin(async move {
-                let sql = r#"
-                    SELECT i.*, i.updated_at as identity_updated_at,
-                           s.preferences, s.timezone, s.push_tokens, s.updated_at as settings_updated_at,
-                           g.role, g.beta_tier, g.is_shadowbanned, g.trust_score, g.moderation_notes, 
-                           g.last_moderation_at, g.last_ip_addr, g.updated_at as governance_updated_at
-                    FROM account_identity i
-                    LEFT JOIN account_settings s ON i.account_id = s.account_id AND i.region = s.region
-                    LEFT JOIN account_governance g ON i.account_id = g.account_id AND i.region = g.region
-                    WHERE i.account_id = $1 AND i.region = $2"#;
+        let account_opt = self
+            .pool
+            .execute_on(tx, |conn| {
+                Box::pin(async move {
+                    let row_opt = sqlx::query_as::<_, PostgresAccountRow>(FIND_BY_ID_QUERY)
+                        .bind(uid)
+                        .bind(region_str)
+                        .fetch_optional(conn)
+                        .await
+                        .map_err(|e| {
+                            Error::database(format!("Account find_by_id repository: {}", e))
+                        })?;
 
-                let row_opt = sqlx::query_as::<_, PostgresAccountRow>(sql)
-                    .bind(uid)
-                    .bind(region_str)
-                    .fetch_optional(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account find_by_id repository: {}", e)))?;
-
-                match row_opt {
-                    Some(row) => Ok(Some(row.to_domain()?)),
-                    None => Ok(None),
-                }
+                    match row_opt {
+                        Some(row) => Ok(Some(row.to_domain()?)),
+                        None => Ok(None),
+                    }
+                })
             })
-        }).await?;
+            .await?;
 
         Ok(account_opt)
     }
@@ -72,7 +156,9 @@ impl AccountRepository for PostgresAccountRepository {
         ext_id: &SubId,
         mut tx: Option<&mut dyn Transaction>,
     ) -> Result<Option<Account>> {
-        let account_id_opt = self.find_id_by_sub_id(region, ext_id, tx.as_deref_mut()).await?;
+        let account_id_opt = self
+            .find_id_by_sub_id(region, ext_id, tx.as_deref_mut())
+            .await?;
 
         match account_id_opt {
             Some(id) => self.find_by_id(region, id, tx).await,
@@ -81,10 +167,10 @@ impl AccountRepository for PostgresAccountRepository {
     }
 
     async fn save(
-        &self, 
-        region: Region, 
-        account: &mut Account, 
-        tx: Option<&mut dyn Transaction>
+        &self,
+        region: Region,
+        account: &mut Account,
+        tx: Option<&mut dyn Transaction>,
     ) -> Result<()> {
         let region_str = region.to_string();
         let ident_row = PostgresAccountIdentityRow::from_domain(account);
@@ -99,146 +185,149 @@ impl AccountRepository for PostgresAccountRepository {
         let gov_updated_at = account.governance().updated_at();
         let sett_updated_at = account.settings().updated_at();
 
-
-        self.pool.execute_on(tx, |conn| {
-            Box::pin(async move {
-                // 1. Lock d'idempotence et d'OCC (FOR UPDATE) aligné territorialement
-                let db_v: Option<i64> = sqlx::query_scalar(
-                    "SELECT version FROM account_identity WHERE account_id = $1 AND region = $2 FOR UPDATE"
-                )
-                .bind(&ident_row.account_id)
-                .bind(&region_str)
-                .fetch_optional(&mut *conn)
-                .await
-                .map_err(|e| Error::database(format!("Account save repository lookup: {}", e)))?;
-
-                match db_v {
-                    None => {
-                        sqlx::query(
-                            r#"INSERT INTO account_identity 
-                                (
-                                    account_id, region, sub_id, email, phone_number, 
-                                    state, birth_date, locale, version, last_active_at,
-                                    created_at, updated_at, aggregate_updated_at
-                                )
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)"#
-                        )
+        self.pool
+            .execute_on(tx, |conn| {
+                Box::pin(async move {
+                    // 1. Lock d'idempotence et d'OCC (FOR UPDATE)
+                    let db_v: Option<i64> = sqlx::query_scalar(OCC_LOCK_QUERY)
                         .bind(&ident_row.account_id)
                         .bind(&region_str)
-                        .bind(&ident_row.sub_id)
-                        .bind(&ident_row.email)
-                        .bind(&ident_row.phone_number)
-                        .bind(&ident_row.state)
-                        .bind(&ident_row.birth_date)
-                        .bind(&ident_row.locale)
-                        .bind(next_version)
-                        .bind(ident_row.last_active_at)
-                        .bind(agg_created_at)
-                        .bind(ident_updated_at)
-                        .bind(agg_updated_at)
-                        .execute(&mut *conn)
+                        .fetch_optional(&mut *conn)
                         .await
-                        .map_err(|e| Error::database(format!("Account insert identity failed: {}", e)))?;
+                        .map_err(|e| {
+                            Error::database(format!("Account save repository lookup: {}", e))
+                        })?;
 
-                        sqlx::query(
-                            r#"INSERT INTO account_governance 
-                                (account_id, region, role, beta_tier, is_shadowbanned, trust_score, moderation_notes, last_moderation_at, last_ip_addr, updated_at)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#
-                        )
-                        .bind(&ident_row.account_id).bind(&region_str).bind(gov_row.role).bind(gov_row.beta_tier)
-                        .bind(gov_row.is_shadowbanned).bind(gov_row.trust_score)
-                        .bind(gov_row.moderation_notes).bind(gov_row.last_moderation_at)
-                        .bind(gov_row.last_ip_addr).bind(gov_updated_at)
-                        .execute(&mut *conn).await.map_err(|e| Error::database(format!("Account insert governance: {}", e)))?;
+                    match db_v {
+                        None => {
+                            // --- MODE INSERT ---
+                            sqlx::query(INSERT_IDENTITY_QUERY)
+                                .bind(&ident_row.account_id)
+                                .bind(&region_str)
+                                .bind(&ident_row.sub_id)
+                                .bind(&ident_row.email)
+                                .bind(&ident_row.email_verified_at)
+                                .bind(&ident_row.phone)
+                                .bind(&ident_row.phone_verified_at)
+                                .bind(&ident_row.state)
+                                .bind(&ident_row.birth_date)
+                                .bind(&ident_row.locale)
+                                .bind(next_version)
+                                .bind(ident_row.last_active_at)
+                                .bind(agg_created_at)
+                                .bind(ident_updated_at)
+                                .bind(agg_updated_at)
+                                .execute(&mut *conn)
+                                .await
+                                .map_err(|e| {
+                                    Error::database(format!(
+                                        "Account insert identity failed: {}",
+                                        e
+                                    ))
+                                })?;
 
-                        sqlx::query(
-                            r#"INSERT INTO account_settings (account_id, region, preferences, timezone, push_tokens, updated_at)
-                               VALUES ($1, $2, $3, $4, $5, $6)"#
-                        )
-                        .bind(&ident_row.account_id).bind(&region_str).bind(sett_row.preferences).bind(sett_row.timezone).bind(sett_row.push_tokens).bind(sett_updated_at)
-                        .execute(&mut *conn).await.map_err(|e| Error::database(format!("Account insert settings: {}", e)))?;
-                    }
-                    Some(v) => {
-                        // --- MODE UPDATE (OCC) ---
-                        let is_noop = next_version == v && is_events_empty;
-                        let target_version = if is_noop { v } else { next_version };
-                        let current_version_expected = target_version - 1;
+                            sqlx::query(INSERT_GOVERNANCE_QUERY)
+                                .bind(&ident_row.account_id)
+                                .bind(&region_str)
+                                .bind(gov_row.role)
+                                .bind(gov_row.beta_tier)
+                                .bind(gov_row.is_shadowbanned)
+                                .bind(gov_row.trust_score)
+                                .bind(gov_row.moderation_notes)
+                                .bind(gov_row.last_moderation_at)
+                                .bind(gov_row.last_ip_addr)
+                                .bind(gov_updated_at)
+                                .execute(&mut *conn)
+                                .await
+                                .map_err(|e| {
+                                    Error::database(format!("Account insert governance: {}", e))
+                                })?;
 
-                        if !is_noop && v != current_version_expected {
-                            return Err(Error::concurrency_conflict(
-                                format!("Account {}: OCC mismatch (DB v{}, App expected v{})", &ident_row.account_id, v, current_version_expected),
-                            ));
+                            sqlx::query(INSERT_SETTINGS_QUERY)
+                                .bind(&ident_row.account_id)
+                                .bind(&region_str)
+                                .bind(sett_row.preferences)
+                                .bind(sett_row.timezone)
+                                .bind(sett_row.push_tokens)
+                                .bind(sett_updated_at)
+                                .execute(&mut *conn)
+                                .await
+                                .map_err(|e| {
+                                    Error::database(format!("Account insert settings: {}", e))
+                                })?;
                         }
+                        Some(v) => {
+                            // --- MODE UPDATE (OCC) ---
+                            let is_noop = next_version == v && is_events_empty;
+                            let target_version = if is_noop { v } else { next_version };
+                            let current_version_expected = target_version - 1;
 
-                       sqlx::query(
-                                r#"UPDATE account_identity SET 
-                                    sub_id = $3, 
-                                    email = $4, 
-                                    phone_number = $5, 
-                                    state = $6, 
-                                    birth_date = $7, 
-                                    locale = $8, 
-                                    version = $9, 
-                                    last_active_at = $10,
-                                    updated_at = $11,
-                                    aggregate_updated_at = $12
-                                WHERE account_id = $1 AND region = $2"#
-                            )
-                        .bind(&ident_row.account_id)
-                        .bind(&region_str)
-                        .bind(&ident_row.sub_id)
-                        .bind(&ident_row.email)
-                        .bind(&ident_row.phone_number)
-                        .bind(&ident_row.state)
-                        .bind(&ident_row.birth_date)
-                        .bind(&ident_row.locale)
-                        .bind(target_version)
-                        .bind(ident_row.last_active_at)
-                        .bind(ident_updated_at)
-                        .bind(agg_updated_at)
-                        .execute(&mut *conn)
-                        .await
-                        .map_err(|e| Error::database(format!("Account update identity failed: {}", e)))?;
+                            if !is_noop && v != current_version_expected {
+                                return Err(Error::concurrency_conflict(format!(
+                                    "Account {}: OCC mismatch (DB v{}, App expected v{})",
+                                    &ident_row.account_id, v, current_version_expected
+                                )));
+                            }
 
-                        sqlx::query(
-                            r#"UPDATE account_governance SET
-                                role = $3, beta_tier = $4, is_shadowbanned = $5, trust_score = $6, 
-                                moderation_notes = $7, last_moderation_at = $8, last_ip_addr = $9, updated_at = $10
-                            WHERE account_id = $1 AND region = $2"#
-                        )
-                        .bind(&ident_row.account_id)
-                        .bind(&region_str)
-                        .bind(gov_row.role)
-                        .bind(gov_row.beta_tier)
-                        .bind(gov_row.is_shadowbanned)
-                        .bind(gov_row.trust_score)
-                        .bind(gov_row.moderation_notes)
-                        .bind(gov_row.last_moderation_at)
-                        .bind(gov_row.last_ip_addr)
-                        .bind(gov_updated_at)
-                        .execute(&mut *conn)
-                        .await
-                        .map_err(|e| Error::database(format!("Account update governance: {}", e)))?;
+                            sqlx::query(UPDATE_IDENTITY_QUERY)
+                                .bind(&ident_row.account_id)
+                                .bind(&region_str)
+                                .bind(&ident_row.sub_id)
+                                .bind(&ident_row.email)
+                                .bind(&ident_row.email_verified_at)
+                                .bind(&ident_row.phone)
+                                .bind(&ident_row.phone_verified_at)
+                                .bind(&ident_row.state)
+                                .bind(&ident_row.birth_date)
+                                .bind(&ident_row.locale)
+                                .bind(target_version)
+                                .bind(ident_row.last_active_at)
+                                .bind(ident_updated_at)
+                                .bind(agg_updated_at)
+                                .execute(&mut *conn)
+                                .await
+                                .map_err(|e| {
+                                    Error::database(format!(
+                                        "Account update identity failed: {}",
+                                        e
+                                    ))
+                                })?;
 
-                        sqlx::query(
-                            r#"UPDATE account_settings SET 
-                                preferences = $3, timezone = $4, push_tokens = $5, updated_at = $6
-                            WHERE account_id = $1 AND region = $2"#
-                        )
-                        .bind(&ident_row.account_id)
-                        .bind(&region_str)
-                        .bind(sett_row.preferences)
-                        .bind(sett_row.timezone) 
-                        .bind(sett_row.push_tokens)
-                        .bind(sett_updated_at)
-                        .execute(&mut *conn)
-                        .await
-                        .map_err(|e| Error::database(format!("Account update settings: {}", e)))?;
+                            sqlx::query(UPDATE_GOVERNANCE_QUERY)
+                                .bind(&ident_row.account_id)
+                                .bind(&region_str)
+                                .bind(gov_row.role)
+                                .bind(gov_row.beta_tier)
+                                .bind(gov_row.is_shadowbanned)
+                                .bind(gov_row.trust_score)
+                                .bind(gov_row.moderation_notes)
+                                .bind(gov_row.last_moderation_at)
+                                .bind(gov_row.last_ip_addr)
+                                .bind(gov_updated_at)
+                                .execute(&mut *conn)
+                                .await
+                                .map_err(|e| {
+                                    Error::database(format!("Account update governance: {}", e))
+                                })?;
+
+                            sqlx::query(UPDATE_SETTINGS_QUERY)
+                                .bind(&ident_row.account_id)
+                                .bind(&region_str)
+                                .bind(sett_row.preferences)
+                                .bind(sett_row.timezone)
+                                .bind(sett_row.push_tokens)
+                                .bind(sett_updated_at)
+                                .execute(&mut *conn)
+                                .await
+                                .map_err(|e| {
+                                    Error::database(format!("Account update settings: {}", e))
+                                })?;
+                        }
                     }
-                }
-                Ok(())
+                    Ok(())
+                })
             })
-        }).await?;
+            .await?;
 
         Ok(())
     }
@@ -252,21 +341,21 @@ impl AccountRepository for PostgresAccountRepository {
         let email_raw = email.to_string();
         let region_str = region.to_string();
 
-        self.pool.execute_on(tx, |conn| {
-            let email_owned = email_raw.clone();
-            let region_owned = region_str.clone();
-            Box::pin(async move {
-                let sql = "SELECT account_id FROM account_identity WHERE email = $1 AND region = $2";
-                let res = query_scalar::<_, uuid::Uuid>(sql)
-                    .bind(email_owned)
-                    .bind(region_owned)
-                    .fetch_optional(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account find_id_by_email: {}", e)))?;
-                Ok(res.map(AccountId::from_uuid))
+        self.pool
+            .execute_on(tx, |conn| {
+                let email_owned = email_raw.clone();
+                let region_owned = region_str.clone();
+                Box::pin(async move {
+                    let res = query_scalar::<_, uuid::Uuid>(FIND_ID_BY_EMAIL_QUERY)
+                        .bind(email_owned)
+                        .bind(region_owned)
+                        .fetch_optional(conn)
+                        .await
+                        .map_err(|e| Error::database(format!("Account find_id_by_email: {}", e)))?;
+                    Ok(res.map(AccountId::from_uuid))
+                })
             })
-        })
-        .await
+            .await
     }
 
     async fn find_id_by_sub_id(
@@ -278,23 +367,25 @@ impl AccountRepository for PostgresAccountRepository {
         let ext_id_raw = ext_id.to_string();
         let region_str = region.to_string();
 
-        self.pool.execute_on(tx, |conn| {
-            let ext_id_owned = ext_id_raw.clone();
-            let region_owned = region_str.clone();
+        self.pool
+            .execute_on(tx, |conn| {
+                let ext_id_owned = ext_id_raw.clone();
+                let region_owned = region_str.clone();
 
-            Box::pin(async move {
-                let sql = "SELECT account_id FROM account_identity WHERE sub_id = $1 AND region = $2";
-                let res = sqlx::query_scalar::<_, uuid::Uuid>(sql)
-                    .bind(ext_id_owned)
-                    .bind(region_owned)
-                    .fetch_optional(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account find_id_by_sub_id: {}", e)))?;
+                Box::pin(async move {
+                    let res = sqlx::query_scalar::<_, uuid::Uuid>(FIND_ID_BY_SUB_ID_QUERY)
+                        .bind(ext_id_owned)
+                        .bind(region_owned)
+                        .fetch_optional(conn)
+                        .await
+                        .map_err(|e| {
+                            Error::database(format!("Account find_id_by_sub_id: {}", e))
+                        })?;
 
-                Ok(res.map(AccountId::from_uuid))
+                    Ok(res.map(AccountId::from_uuid))
+                })
             })
-        })
-        .await
+            .await
     }
 
     async fn exists_by_email(
@@ -306,47 +397,47 @@ impl AccountRepository for PostgresAccountRepository {
         let email_raw = email.to_string();
         let region_str = region.to_string();
 
-        self.pool.execute_on(tx, |conn| {
-            let email_owned = email_raw.clone();
-            let region_owned = region_str.clone();
-            Box::pin(async move {
-                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE email = $1 AND region = $2)";
-                let exists = query_scalar::<_, bool>(sql)
-                    .bind(email_owned)
-                    .bind(region_owned)
-                    .fetch_one(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account exists_by_email: {}", e)))?;
-                Ok(exists)
+        self.pool
+            .execute_on(tx, |conn| {
+                let email_owned = email_raw.clone();
+                let region_owned = region_str.clone();
+                Box::pin(async move {
+                    let exists = query_scalar::<_, bool>(EXISTS_BY_EMAIL_QUERY)
+                        .bind(email_owned)
+                        .bind(region_owned)
+                        .fetch_one(conn)
+                        .await
+                        .map_err(|e| Error::database(format!("Account exists_by_email: {}", e)))?;
+                    Ok(exists)
+                })
             })
-        })
-        .await
+            .await
     }
 
     async fn exists_by_phone(
         &self,
         region: Region,
-        phone: &PhoneNumber,
+        phone: &Phone,
         tx: Option<&mut dyn Transaction>,
     ) -> Result<bool> {
         let phone_raw = phone.to_string();
         let region_str = region.to_string();
 
-        self.pool.execute_on(tx, |conn| {
-            let phone_owned = phone_raw.clone();
-            let region_owned = region_str.clone();
-            Box::pin(async move {
-                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE phone_number = $1 AND region = $2)";
-                let exists = sqlx::query_scalar::<_, bool>(sql)
-                    .bind(phone_owned)
-                    .bind(region_owned)
-                    .fetch_one(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account exists_by_phone: {}", e)))?;
-                Ok(exists)
+        self.pool
+            .execute_on(tx, |conn| {
+                let phone_owned = phone_raw.clone();
+                let region_owned = region_str.clone();
+                Box::pin(async move {
+                    let exists = sqlx::query_scalar::<_, bool>(EXISTS_BY_PHONE_QUERY)
+                        .bind(phone_owned)
+                        .bind(region_owned)
+                        .fetch_one(conn)
+                        .await
+                        .map_err(|e| Error::database(format!("Account exists_by_phone: {}", e)))?;
+                    Ok(exists)
+                })
             })
-        })
-        .await
+            .await
     }
 
     async fn exists_by_sub_id(
@@ -358,24 +449,29 @@ impl AccountRepository for PostgresAccountRepository {
         let ext_id_raw = ext_id.to_string();
         let region_str = region.to_string();
 
-        self.pool.execute_on(tx, |conn| {
-            let ext_id_owned = ext_id_raw.clone();
-            let region_owned = region_str.clone();
-            Box::pin(async move {
-                let sql = "SELECT EXISTS(SELECT 1 FROM account_identity WHERE sub_id = $1 AND region = $2)";
-                let exists = sqlx::query_scalar::<_, bool>(sql)
-                    .bind(ext_id_owned)
-                    .bind(region_owned)
-                    .fetch_one(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account exists_by_sub_id: {}", e)))?;
-                Ok(exists)
+        self.pool
+            .execute_on(tx, |conn| {
+                let ext_id_owned = ext_id_raw.clone();
+                let region_owned = region_str.clone();
+                Box::pin(async move {
+                    let exists = sqlx::query_scalar::<_, bool>(EXISTS_BY_SUB_ID_QUERY)
+                        .bind(ext_id_owned)
+                        .bind(region_owned)
+                        .fetch_one(conn)
+                        .await
+                        .map_err(|e| Error::database(format!("Account exists_by_sub_id: {}", e)))?;
+                    Ok(exists)
+                })
             })
-        })
-        .await
+            .await
     }
 
-    async fn create(&self, region: Region, account: &Account, tx: &mut dyn Transaction) -> Result<()> {
+    async fn create(
+        &self,
+        region: Region,
+        account: &Account,
+        tx: &mut dyn Transaction,
+    ) -> Result<()> {
         let mut acc = account.clone();
         self.save(region, &mut acc, Some(tx)).await
     }
@@ -384,21 +480,22 @@ impl AccountRepository for PostgresAccountRepository {
         let uid = id.uuid();
         let region_str = region.to_string();
 
-        self.pool.execute_on(Some(tx), |conn| {
-            Box::pin(async move {
-                let sql = "DELETE FROM account_identity WHERE account_id = $1 AND region = $2";
+        self.pool
+            .execute_on(Some(tx), |conn| {
+                Box::pin(async move {
+                    sqlx::query(DELETE_ACCOUNT_QUERY)
+                        .bind(uid)
+                        .bind(region_str)
+                        .execute(conn)
+                        .await
+                        .map_err(|e| {
+                            Error::database(format!("Account delete repository: {}", e))
+                        })?;
 
-                sqlx::query(sql)
-                    .bind(uid)
-                    .bind(region_str)
-                    .execute(conn)
-                    .await
-                    .map_err(|e| Error::database(format!("Account delete repository: {}", e)))?;
-
-                Ok(())
+                    Ok(())
+                })
             })
-        })
-        .await?;
+            .await?;
 
         Ok(())
     }
