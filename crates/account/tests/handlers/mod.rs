@@ -10,6 +10,8 @@ mod deactivate;
 mod decrease_trust_score;
 mod increase_trust_score;
 mod lift_shadowban;
+mod verify_email;
+mod verify_phone;
 // mod link_sub_identity;
 // mod change_region_test;
 mod register;

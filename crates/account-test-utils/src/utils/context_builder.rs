@@ -19,7 +19,7 @@ use shared_proto::account::v1::account_moderation_service_server::AccountModerat
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;
 use shared_proto::account::v1::account_registration_service_server::AccountRegistrationServiceServer;
 use shared_proto::account::v1::account_settings_service_server::AccountSettingsServiceServer;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::oneshot;
 use tonic::transport::Server;
 
@@ -67,6 +67,7 @@ impl AccountTestContextBuilder {
             let global_pg = global_pg_pool.clone();
             let redis = redis_repo.clone();
             let custom_validator = self.mock_validator.clone();
+            let otp_ttl = Duration::from_secs(60 * 15);
 
             tokio::spawn(async move {
                 let validator = match custom_validator {
@@ -84,7 +85,7 @@ impl AccountTestContextBuilder {
                 let auth_interceptor = AuthInterceptor::new(validator.clone());
                 let registration_interceptor = RegistrationInterceptor::new(validator);
 
-                let builder = AccountServiceBuilder::new(pg, global_pg, redis);
+                let builder = AccountServiceBuilder::new(pg, global_pg, redis, otp_ttl);
                 let app_ctx = builder.build_context();
                 let bus = builder.build_command_bus();
 

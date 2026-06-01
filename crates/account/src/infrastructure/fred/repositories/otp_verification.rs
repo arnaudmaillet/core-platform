@@ -10,11 +10,12 @@ use std::time::Duration;
 
 pub struct FredOtpRepository {
     cache: Arc<dyn CacheRepository>,
+    default_ttl: Duration,
 }
 
 impl FredOtpRepository {
-    pub fn new(cache: Arc<dyn CacheRepository>) -> Self {
-        Self { cache }
+    pub fn new(cache: Arc<dyn CacheRepository>, default_ttl: Duration) -> Self {
+        Self { cache, default_ttl }
     }
 
     fn format_key(&self, account_id: &AccountId, purpose: &str) -> String {
@@ -26,8 +27,7 @@ impl FredOtpRepository {
 impl OtpRepository for FredOtpRepository {
     async fn store_code(&self, account_id: &AccountId, purpose: &str, code: &str) -> Result<()> {
         let key = self.format_key(account_id, purpose);
-        let ttl = Duration::from_secs(15 * 60); // 15 minutes
-        self.cache.set(&key, code, Some(ttl)).await
+        self.cache.set(&key, code, Some(self.default_ttl)).await
     }
 
     async fn get_code(&self, account_id: &AccountId, purpose: &str) -> Result<Option<String>> {

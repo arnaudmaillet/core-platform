@@ -14,7 +14,7 @@ use auth::{
 use dotenvy::dotenv;
 use infra_fred::RedisContext;
 use infra_sqlx::PostgresContext;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tonic::transport::Server;
 
 use shared_proto::account::v1::{
@@ -39,6 +39,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keycloak_audience =
         std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "account-service".to_string());
 
+    let otp_ttl_secs = std::env::var("OTP_TTL_SECONDS")
+        .unwrap_or_else(|_| "900".to_string()) // 15 minutes par défaut (900s)
+        .parse::<u64>()
+        .expect("OTP_TTL_SECONDS must be a valid u64");
+    let otp_ttl = Duration::from_secs(otp_ttl_secs);
+
     let pg_ctx = PostgresContext::builder()?
         .with_url(database_url)
         .with_max_connections(20)
@@ -52,8 +58,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
-    let builder =
-        AccountServiceBuilder::new(pg_ctx.pool(), global_pg_ctx.pool(), redis_ctx.repository());
+    let builder = AccountServiceBuilder::new(
+        pg_ctx.pool(),
+        global_pg_ctx.pool(),
+        redis_ctx.repository(),
+        otp_ttl,
+    );
     let app_ctx = builder.build_context();
     let bus = builder.build_command_bus();
 

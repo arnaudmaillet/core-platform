@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     commands::{
@@ -30,14 +30,21 @@ pub struct AccountServiceBuilder {
     pool: PgPool,
     global_pool: PgPool,
     cache_repo: Arc<dyn CacheRepository>,
+    otp_ttl: Duration,
 }
 
 impl AccountServiceBuilder {
-    pub fn new(pool: PgPool, global_pool: PgPool, cache_repo: Arc<dyn CacheRepository>) -> Self {
+    pub fn new(
+        pool: PgPool,
+        global_pool: PgPool,
+        cache_repo: Arc<dyn CacheRepository>,
+        otp_ttl: Duration,
+    ) -> Self {
         Self {
             pool,
             global_pool,
             cache_repo,
+            otp_ttl,
         }
     }
 
@@ -61,8 +68,10 @@ impl AccountServiceBuilder {
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
         let mut bus = CommandBus::new(self.cache_repo.clone());
-        let otp_repo: Arc<dyn OtpRepository> =
-            Arc::new(FredOtpRepository::new(self.cache_repo.clone()));
+        let otp_repo: Arc<dyn OtpRepository> = Arc::new(FredOtpRepository::new(
+            self.cache_repo.clone(),
+            self.otp_ttl,
+        ));
 
         bus.register::<AccountCommandContext<PostgresTransactionManager>, RegisterCommand, RegisterHandler<PostgresTransactionManager>>(RegisterHandler::new());
         bus.register::<AccountCommandContext<PostgresTransactionManager>, LinkSubIdentityCommand, LinkSubIdentityHandler<PostgresTransactionManager>>(
