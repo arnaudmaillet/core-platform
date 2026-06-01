@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS account_identity (
     email TEXT,
     email_verified_at TIMESTAMPTZ NULL,
     phone TEXT,
-    phone_verified_at TIMESTAMPTZ NULL;
+    phone_verified_at TIMESTAMPTZ NULL,
     state TEXT NOT NULL DEFAULT 'UNVERIFIED',
     birth_date DATE,
     locale VARCHAR(10) NOT NULL DEFAULT 'EN',
