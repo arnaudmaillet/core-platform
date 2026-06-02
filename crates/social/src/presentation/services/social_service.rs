@@ -13,8 +13,8 @@ use shared_proto::social::v1::{
 };
 
 // Application & Context Imports
+use crate::application::context::SocialAppContext;
 use crate::commands::{FollowCommand, UnfollowCommand};
-use crate::context::SocialAppContext;
 use crate::utils::{GrpcServiceUtils, map_domain_err_to_status};
 
 pub struct SocialService {
@@ -41,7 +41,6 @@ impl GrpcServiceUtils for SocialService {
 
 #[tonic::async_trait]
 impl ProtoSocialService for SocialService {
-    // --- WRITES ---
     async fn follow_profile(
         &self,
         request: Request<FollowProfileRequest>,
@@ -58,9 +57,9 @@ impl ProtoSocialService for SocialService {
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid target profile_id: {}", e)))?;
 
-        let ctx = self.build_context(target_profile_id, &extensions)?;
+        // Utilisation du contexte de commande
+        let ctx = self.build_command_context(target_profile_id, &extensions)?;
 
-        // On map le proto sur ta commande interne
         let command = FollowCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -88,7 +87,8 @@ impl ProtoSocialService for SocialService {
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid target profile_id: {}", e)))?;
 
-        let ctx = self.build_context(target_profile_id, &extensions)?;
+        // Utilisation du contexte de commande
+        let ctx = self.build_command_context(target_profile_id, &extensions)?;
 
         let command = UnfollowCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -101,14 +101,11 @@ impl ProtoSocialService for SocialService {
         .await
     }
 
-    // --- READS ---
-
-    // AJOUT : Implémentation de la vérification de relation
     async fn is_following(
         &self,
         request: Request<IsFollowingRequest>,
     ) -> Result<Response<IsFollowingResponse>, Status> {
-        let req = request.into_inner();
+        let (_metadata, extensions, req) = request.into_parts();
 
         let follower_id = req
             .follower_id
@@ -120,10 +117,11 @@ impl ProtoSocialService for SocialService {
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid following_id: {}", e)))?;
 
-        let is_following = self
-            .app_ctx
-            .relation_repo()
-            .is_following(follower_id, following_id)
+        // Récupération sécurisée via le Query Context
+        let query_ctx = self.build_query_context(&extensions)?;
+
+        let is_following = query_ctx
+            .is_already_following(follower_id, following_id)
             .await
             .map_err(map_domain_err_to_status)?;
 
@@ -134,21 +132,17 @@ impl ProtoSocialService for SocialService {
         &self,
         request: Request<GetProfileCountersRequest>,
     ) -> Result<Response<GetProfileCountersResponse>, Status> {
-        let req = request.into_inner();
+        let (_metadata, extensions, req) = request.into_parts();
 
         let profile_id = req
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
 
-        let region = req
-            .region
-            .parse::<Region>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid region format: {}", e)))?;
+        // Récupération sécurisée via le Query Context
+        let query_ctx = self.build_query_context(&extensions)?;
 
-        let context = self.app_ctx.create_context(profile_id, region);
-
-        let counters = context
+        let counters = query_ctx
             .get_profile_counters(profile_id)
             .await
             .map_err(map_domain_err_to_status)?;
@@ -163,21 +157,17 @@ impl ProtoSocialService for SocialService {
         &self,
         request: Request<GetFollowingRequest>,
     ) -> Result<Response<GetFollowingResponse>, Status> {
-        let req = request.into_inner();
+        let (_metadata, extensions, req) = request.into_parts();
 
         let follower_id = req
             .follower_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid follower_id format: {}", e)))?;
 
-        let region = req
-            .region
-            .parse::<Region>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid region format: {}", e)))?;
+        // Récupération sécurisée via le Query Context
+        let query_ctx = self.build_query_context(&extensions)?;
 
-        let context = self.app_ctx.create_context(follower_id, region);
-
-        let ids = context
+        let ids = query_ctx
             .get_following_list(
                 follower_id,
                 req.limit.unwrap_or(20),
@@ -197,21 +187,16 @@ impl ProtoSocialService for SocialService {
         &self,
         request: Request<GetFollowersRequest>,
     ) -> Result<Response<GetFollowersResponse>, Status> {
-        let req = request.into_inner();
+        let (_metadata, extensions, req) = request.into_parts();
 
         let following_id = req
             .following_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid following_id format: {}", e)))?;
 
-        let region = req
-            .region
-            .parse::<Region>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid region format: {}", e)))?;
+        let query_ctx = self.build_query_context(&extensions)?;
 
-        let context = self.app_ctx.create_context(following_id, region);
-
-        let ids = context
+        let ids = query_ctx
             .get_followers_list(
                 following_id,
                 req.limit.unwrap_or(20),

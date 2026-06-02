@@ -1,3 +1,7 @@
-mod context;
+mod app;
+mod command;
+mod query;
 
-pub use context::{SocialAppContext, SocialContext};
+pub use app::SocialAppContext;
+pub use command::SocialCommandContext;
+pub use query::SocialQueryContext;

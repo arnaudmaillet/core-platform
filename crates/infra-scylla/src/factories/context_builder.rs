@@ -21,7 +21,11 @@ impl Default for ScyllaContextBuilder {
 }
 
 impl ScyllaContextBuilder {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_env() -> Result<Self> {
         let nodes_str = std::env::var("PROFILE_SCYLLA_NODES")
             .map_err(|_| Error::internal("PROFILE_SCYLLA_NODES must be set"))?;
 

@@ -15,8 +15,12 @@ pub struct ScyllaContext {
 }
 
 impl ScyllaContext {
-    pub fn builder() -> Result<ScyllaContextBuilder> {
+    pub fn builder() -> ScyllaContextBuilder {
         ScyllaContextBuilder::new()
+    }
+
+    pub fn builder_from_env() -> Result<ScyllaContextBuilder> {
+        ScyllaContextBuilder::from_env()
     }
 
     pub fn session(&self) -> Arc<Session> {

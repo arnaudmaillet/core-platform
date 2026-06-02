@@ -4,21 +4,20 @@ use shared_kernel::command::CommandBus;
 use shared_kernel::types::{ProfileId, Region};
 use shared_kernel_test_utils::repositories::CacheRepositoryStub;
 use shared_kernel_test_utils::repositories::IdempotencyRepositoryStub;
-use std::sync::Arc;
-
-// Application & Context
 use social::commands::{FollowCommand, FollowHandler, UnfollowCommand, UnfollowHandler};
-use social::context::{SocialAppContext, SocialContext};
+use social::context::{SocialAppContext, SocialCommandContext, SocialQueryContext};
 use social::repositories::{CounterRepository, RelationRepository};
+use std::sync::Arc;
 
 use crate::repositories::{CounterRepositoryStub, RelationRepositoryStub};
 
 pub struct SocialTestFixture {
     bus: Arc<CommandBus>,
+    region: Region,
+    target_profile_id: ProfileId,
     app_ctx: SocialAppContext,
-    social_ctx: SocialContext,
-
-    // Accès direct aux stubs pour configurer l'état ou inspecter les mutations
+    command_ctx: SocialCommandContext,
+    query_ctx: SocialQueryContext,
     relation_repo: Arc<RelationRepositoryStub>,
     cache_counter_repo: Arc<CounterRepositoryStub>,
     db_counter_repo: Arc<CounterRepositoryStub>,
@@ -27,14 +26,12 @@ pub struct SocialTestFixture {
 
 impl SocialTestFixture {
     pub fn new() -> Self {
-        // 1. Instanciation des stubs d'infrastructure
         let relation_repo = Arc::new(RelationRepositoryStub::new());
         let cache_counter_repo = Arc::new(CounterRepositoryStub::new(true)); // Comportement Redis (Cache Miss / Set Dirty)
         let db_counter_repo = Arc::new(CounterRepositoryStub::new(false)); // Comportement ScyllaDB
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
 
-        // 2. Assemblage du SocialAppContext global
         let app_ctx = SocialAppContext::new(
             relation_repo.clone(),
             cache_counter_repo.clone(),
@@ -42,30 +39,29 @@ impl SocialTestFixture {
             idempotency_repo.clone(),
         );
 
-        // 3. Configuration d'acteurs par défaut pour le test
         let region = Region::default();
-        let default_target_id = ProfileId::generate();
+        let target_profile_id = ProfileId::generate();
 
-        // Le contexte unifié centré sur notre cible
-        let social_ctx = app_ctx.create_context(default_target_id, region);
+        let command_ctx = app_ctx.command(target_profile_id, region);
+        let query_ctx = app_ctx.query(region);
 
-        // 4. Enregistrement des Handlers d'écriture dans le CommandBus
         let mut bus = CommandBus::new(cache);
-        bus.register::<SocialContext, FollowCommand, FollowHandler>(FollowHandler);
-        bus.register::<SocialContext, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
+        bus.register::<SocialCommandContext, FollowCommand, FollowHandler>(FollowHandler);
+        bus.register::<SocialCommandContext, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
 
         Self {
             bus: Arc::new(bus),
+            region,
+            target_profile_id,
             app_ctx,
-            social_ctx,
+            command_ctx,
+            query_ctx,
             relation_repo,
             cache_counter_repo,
             db_counter_repo,
             idempotency_repo,
         }
     }
-
-    // --- ACCESSEURS ---
 
     pub fn bus(&self) -> Arc<CommandBus> {
         self.bus.clone()
@@ -75,16 +71,20 @@ impl SocialTestFixture {
         &self.app_ctx
     }
 
-    pub fn social_ctx(&self) -> &SocialContext {
-        &self.social_ctx
+    pub fn command_ctx(&self) -> &SocialCommandContext {
+        &self.command_ctx
+    }
+
+    pub fn query_ctx(&self) -> &SocialQueryContext {
+        &self.query_ctx
     }
 
     pub fn target_profile_id(&self) -> ProfileId {
-        ProfileId::generate()
+        self.target_profile_id
     }
 
     pub fn region(&self) -> Region {
-        self.social_ctx.region()
+        self.region
     }
 
     pub fn relation_repo(&self) -> &RelationRepositoryStub {
@@ -103,8 +103,6 @@ impl SocialTestFixture {
         &self.idempotency_repo
     }
 
-    // --- HELPERS : GIVEN (Configuration de l'état initial) ---
-
     pub fn given_existing_relation(&self, follower_id: ProfileId, following_id: ProfileId) {
         self.relation_repo.seed_relation(follower_id, following_id);
     }
@@ -115,8 +113,6 @@ impl SocialTestFixture {
         self.db_counter_repo
             .seed_counters(profile_id, followers, following);
     }
-
-    // --- HELPERS : THEN (Assertions fluides) ---
 
     pub async fn assert_relation_exists(&self, follower_id: ProfileId, following_id: ProfileId) {
         let exists = self

@@ -47,10 +47,7 @@ async fn test_get_counters_cache_hit_should_return_immediately() -> Result<()> {
         .seed_counters(profile_id, 100, 50);
 
     // When
-    let counters = fixture
-        .social_ctx()
-        .get_profile_counters(profile_id)
-        .await?;
+    let counters = fixture.query_ctx().get_profile_counters(profile_id).await?;
 
     // Then
     assert_eq!(counters.followers_count().value(), 100);
@@ -70,10 +67,7 @@ async fn test_get_counters_cache_miss_should_fallback_and_warm_cache() -> Result
         .seed_counters(profile_id, 1250, 420);
 
     // When
-    let counters = fixture
-        .social_ctx()
-        .get_profile_counters(profile_id)
-        .await?;
+    let counters = fixture.query_ctx().get_profile_counters(profile_id).await?;
 
     // Then
     assert_eq!(counters.followers_count().value(), 1250);
@@ -108,7 +102,7 @@ async fn test_ensure_executable_should_fail_on_region_mismatch() -> Result<()> {
     // When
     // Hypothèse : Ta fonction 'ensure_executable' prend maintenant un '&Region' ou un '&RegionCode'
     let result = fixture
-        .social_ctx()
+        .command_ctx()
         .ensure_executable(command_id, &wrong_region)
         .await;
 
@@ -140,7 +134,7 @@ async fn test_ensure_executable_should_return_false_if_command_already_exists() 
 
     // When
     let executable = fixture
-        .social_ctx()
+        .command_ctx()
         .ensure_executable(command_id, &region)
         .await?;
 
@@ -167,7 +161,7 @@ async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()
 
     // When
     fixture
-        .social_ctx()
+        .command_ctx()
         .save_relation(&mut relation, command_id)
         .await?;
 
@@ -204,7 +198,7 @@ async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Re
 
     // When
     fixture
-        .social_ctx()
+        .command_ctx()
         .delete_relation(&mut relation, command_id)
         .await?;
 

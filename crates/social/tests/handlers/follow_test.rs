@@ -1,10 +1,9 @@
-
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepository;
 use shared_kernel::types::ProfileId;
 use social::commands::FollowCommand;
-use social::context::SocialContext;
+use social::context::SocialCommandContext;
 use social::repositories::CounterRepository;
 use social_test_utils::SocialTestFixture;
 use uuid::Uuid;
@@ -24,7 +23,7 @@ async fn test_follow_handler_success_nominal_path() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<SocialContext, FollowCommand, ()>(f.social_ctx().clone(), cmd)
+        .execute::<SocialCommandContext, FollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -58,7 +57,7 @@ async fn test_follow_handler_should_abort_silently_when_idempotency_barrier_trig
 
     // Act
     f.bus()
-        .execute::<SocialContext, FollowCommand, ()>(f.social_ctx().clone(), cmd)
+        .execute::<SocialCommandContext, FollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -84,7 +83,7 @@ async fn test_follow_handler_should_ignore_self_following_attempts() -> Result<(
 
     // Act
     f.bus()
-        .execute::<SocialContext, FollowCommand, ()>(f.social_ctx().clone(), cmd)
+        .execute::<SocialCommandContext, FollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -114,7 +113,7 @@ async fn test_follow_handler_should_skip_execution_if_already_following() -> Res
 
     // Act
     f.bus()
-        .execute::<SocialContext, FollowCommand, ()>(f.social_ctx().clone(), cmd)
+        .execute::<SocialCommandContext, FollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
