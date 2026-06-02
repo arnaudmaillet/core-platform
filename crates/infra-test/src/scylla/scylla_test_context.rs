@@ -82,7 +82,6 @@ impl ScyllaTestContext {
         }
 
         let mut scylla_builder = ScyllaContext::builder()
-            .expect("Failed to build scylla context from builder")
             .with_nodes(vec![container_info.uri.clone()])
             .with_keyspace(&ks_name);
 

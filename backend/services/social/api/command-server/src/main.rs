@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.trim().to_string())
         .collect();
 
-    let scylla_ctx = ScyllaContext::builder()?
+    let scylla_ctx = ScyllaContext::builder_from_env()?
         .with_nodes(scylla_nodes)
         .with_keyspace("social_network")
         .build()
