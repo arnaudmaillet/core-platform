@@ -2,17 +2,19 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::FollowCommand, context::SocialContext, domain::entities::FollowRelation};
+use crate::{
+    commands::FollowCommand, context::SocialCommandContext, domain::entities::FollowRelation,
+};
 
 pub struct FollowHandler;
 
 #[async_trait]
 impl CommandHandler for FollowHandler {
-    type Context = SocialContext;
+    type Context = SocialCommandContext;
     type Command = FollowCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &SocialContext, cmd: FollowCommand) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &SocialCommandContext, cmd: FollowCommand) -> Result<Self::Output> {
         if !ctx
             .ensure_executable(cmd.command_id, &cmd.target.region)
             .await?
@@ -24,7 +26,8 @@ impl CommandHandler for FollowHandler {
             return Ok(());
         }
 
-        let already_following = ctx
+        let query_ctx = ctx.app().query(ctx.region());
+        let already_following = query_ctx
             .is_already_following(cmd.follower_id, cmd.target.id)
             .await?;
         if already_following {

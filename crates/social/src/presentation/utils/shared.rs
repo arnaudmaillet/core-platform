@@ -1,8 +1,10 @@
-use crate::context::{SocialAppContext, SocialContext};
+// crates/social/src/presentation/utils/shared.rs
+
+use crate::application::context::{SocialAppContext, SocialCommandContext, SocialQueryContext};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};
-use tonic::{Request, Response, Status};
+use tonic::{Response, Status};
 
 #[tonic::async_trait]
 pub trait GrpcServiceUtils {
@@ -11,30 +13,33 @@ pub trait GrpcServiceUtils {
     fn app_ctx(&self) -> &SocialAppContext;
     fn bus(&self) -> &CommandBus;
 
-    fn get_context<T>(
-        &self,
-        request: &Request<T>,
-        profile_id: ProfileId,
-    ) -> Result<SocialContext, Status> {
-        let region = self.extract_region(request)?;
-        Ok(self.app_ctx().create_context(profile_id, region))
+    fn extract_region(&self, extensions: &tonic::Extensions) -> Result<Region, Status> {
+        extensions
+            .get::<Region>()
+            .cloned()
+            .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))
     }
 
-    fn build_context(
+    fn build_command_context(
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
-    ) -> Result<SocialContext, Status> {
-        let region: Region = extensions
-            .get::<Region>()
-            .cloned()
-            .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))?;
-        Ok(self.app_ctx().create_context(profile_id, region))
+    ) -> Result<SocialCommandContext, Status> {
+        let region = self.extract_region(extensions)?;
+        Ok(self.app_ctx().command(profile_id, region))
+    }
+
+    fn build_query_context(
+        &self,
+        extensions: &tonic::Extensions,
+    ) -> Result<SocialQueryContext, Status> {
+        let region = self.extract_region(extensions)?;
+        Ok(self.app_ctx().query(region))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &SocialContext,
+        ctx: &SocialCommandContext,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
@@ -44,29 +49,23 @@ pub trait GrpcServiceUtils {
         R: Send,
     {
         self.bus()
-            .execute::<SocialContext, C, Output>(ctx.clone(), cmd)
+            .execute::<SocialCommandContext, C, Output>(ctx.clone(), cmd)
             .await
-            .map_err(|err| map_domain_err_to_status(err))?;
-        Ok(Response::new(response_payload))
-    }
+            .map_err(map_domain_err_to_status)?;
 
-    /// Helper privé pour factoriser l'extraction de la région depuis les extensions de la requête
-    fn extract_region<T>(&self, request: &Request<T>) -> Result<Region, Status> {
-        request
-            .extensions()
-            .get::<Region>()
-            .cloned()
-            .ok_or_else(|| Status::unauthenticated("Missing region context in request extensions"))
+        Ok(Response::new(response_payload))
     }
 }
 
 pub fn map_domain_err_to_status(err: Error) -> Status {
-    let error: Error = err.into();
-    match error.code {
-        ErrorCode::NotFound => Status::not_found(error.message),
-        ErrorCode::AlreadyExists => Status::already_exists(error.message),
-        ErrorCode::ValidationFailed => Status::invalid_argument(error.message),
-        ErrorCode::ConcurrencyConflict => Status::aborted(error.message),
-        _ => Status::internal(error.message),
+    match err.code {
+        ErrorCode::NotFound => Status::not_found(err.message),
+        ErrorCode::AlreadyExists => Status::already_exists(err.message),
+        ErrorCode::ValidationFailed => Status::invalid_argument(err.message),
+        ErrorCode::ConcurrencyConflict => Status::aborted(err.message),
+        ErrorCode::Unauthorized => Status::unauthenticated(err.message),
+        ErrorCode::Forbidden => Status::permission_denied(err.message),
+        ErrorCode::PreconditionFailed => Status::failed_precondition(err.message),
+        _ => Status::internal(err.message),
     }
 }

@@ -77,7 +77,7 @@ mod integration_tests {
         repo.delete(follower_id, following_id).await?;
 
         // --- Assert: Étape 5 (Vérification de la purge totale) ---
-        let missing_find = repo.find(follower_id, following_id).await?;
+        let missing_find: Option<FollowRelation> = repo.find(follower_id, following_id).await?;
         assert!(
             missing_find.is_none(),
             "La relation aurait dû disparaître de la table principale"

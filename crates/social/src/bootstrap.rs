@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::{
     commands::{FollowCommand, FollowHandler, UnfollowCommand, UnfollowHandler},
-    context::{SocialAppContext, SocialContext},
+    context::{SocialAppContext, SocialCommandContext},
     domain::repositories::{CounterRepository, RelationRepository},
     redis::RedisCounterRepository,
     scylla::{ScyllaCounterRepository, ScyllaRelationRepository},
@@ -65,9 +65,9 @@ impl SocialServiceBuilder {
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
         let mut bus = CommandBus::new(self.redis_cache_repo.clone());
 
-        bus.register::<SocialContext, FollowCommand, FollowHandler>(FollowHandler);
+        bus.register::<SocialCommandContext, FollowCommand, FollowHandler>(FollowHandler);
 
-        bus.register::<SocialContext, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
+        bus.register::<SocialCommandContext, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
 
         Arc::new(bus)
     }
