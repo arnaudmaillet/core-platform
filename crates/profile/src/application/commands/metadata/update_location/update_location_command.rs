@@ -3,7 +3,7 @@
 use crate::types::Location;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
-use shared_kernel::core::{Error, Identifier, Result};
+use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
 use shared_proto::profile::v1::UpdateLocationRequest;
 use uuid::Uuid;
@@ -16,24 +16,14 @@ pub struct UpdateLocationCommand {
 }
 
 impl IdentifiableCommand for UpdateLocationCommand {
+    type Id = ProfileId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
 
-    fn aggregate_id(&self) -> String {
-        self.target.id.to_string()
-    }
-
-    fn region(&self) -> String {
-        self.target.region.to_string()
-    }
-
-    fn cache_key(&self) -> Option<String> {
-        Some(format!(
-            "profile:aggregate:{}:{}",
-            self.target.region.as_str(),
-            self.target.id.as_uuid()
-        ))
+    fn target(&self) -> &CommandTarget<ProfileId> {
+        &self.target
     }
 }
 
@@ -49,7 +39,7 @@ impl UpdateLocationCommand {
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,
             region: Region::try_new(proto_target.region)?,
-            expected_version: proto_target.expected_version,
+            expected_version: Some(proto_target.expected_version),
         };
 
         let new_location = req

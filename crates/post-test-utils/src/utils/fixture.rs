@@ -100,8 +100,7 @@ impl PostTestFixture {
     }
 
     pub fn writer_ctx(&self) -> PostCommandContext {
-        self.app_ctx
-            .command(self.author_id, self.post_id, self.region)
+        self.app_ctx.command(self.author_id, self.region)
     }
 
     pub fn reader_ctx(&self) -> PostQueryContext {

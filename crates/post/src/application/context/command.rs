@@ -12,16 +12,14 @@ use crate::{context::PostAppContext, entities::Post};
 pub struct PostCommandContext {
     app: PostAppContext,
     author_id: ProfileId,
-    post_id: PostId,
     region: Region,
 }
 
 impl PostCommandContext {
-    pub fn new(app: PostAppContext, author_id: ProfileId, post_id: PostId, region: Region) -> Self {
+    pub fn new(app: PostAppContext, author_id: ProfileId, region: Region) -> Self {
         Self {
             app,
             author_id,
-            post_id,
             region,
         }
     }
@@ -32,10 +30,6 @@ impl PostCommandContext {
 
     pub fn region(&self) -> Region {
         self.region
-    }
-
-    pub fn post_id(&self) -> &PostId {
-        &self.post_id
     }
 
     pub async fn ensure_executable(
@@ -68,20 +62,24 @@ impl PostCommandContext {
             .await?
             .ok_or_else(|| Error::not_found("Post", target.id.to_string()))?;
 
-        if post.version() != target.expected_version {
+        let expected_version = target.expected_version.ok_or_else(|| {
+            Error::validation(
+                "expected_version",
+                "Sharding strict: Expected version is missing for this transaction",
+            )
+        })?;
+
+        if post.version() != expected_version {
             return Err(Error::concurrency_conflict(format!(
                 "OCC Conflict: DB v{}, Expected v{}",
                 post.version(),
-                target.expected_version
+                expected_version
             )));
         }
         Ok(post)
     }
 
     pub async fn save(&self, post: &mut Post, command_id: Option<Uuid>) -> Result<()> {
-        if post.post_id() != self.post_id {
-            return Err(Error::validation("post_id", "Identity mismatch violation"));
-        }
         if post.author_id() != self.author_id {
             return Err(Error::forbidden(&format!(
                 "Action non autorisée pour {}",
@@ -104,9 +102,6 @@ impl PostCommandContext {
     }
 
     pub async fn delete(&self, post: &Post, command_id: Uuid) -> Result<()> {
-        if post.post_id() != self.post_id {
-            return Err(Error::validation("post_id", "Identity mismatch violation"));
-        }
         if post.author_id() != self.author_id {
             return Err(Error::forbidden(&format!(
                 "Action non autorisée pour {}",

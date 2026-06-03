@@ -17,24 +17,14 @@ pub struct ChangeRegionCommand {
 }
 
 impl IdentifiableCommand for ChangeRegionCommand {
+    type Id = AccountId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
 
-    fn aggregate_id(&self) -> String {
-        self.target.id.to_string()
-    }
-
-    fn region(&self) -> String {
-        self.target.region.to_string()
-    }
-
-    fn cache_key(&self) -> Option<String> {
-        Some(format!(
-            "account:aggregate:{}:{}",
-            self.target.region.as_str(),
-            self.target.id.uuid()
-        ))
+    fn target(&self) -> &CommandTarget<AccountId> {
+        &self.target
     }
 }
 
@@ -50,7 +40,7 @@ impl ChangeRegionCommand {
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
             region: Region::try_new(proto_target.region)?,
-            expected_version: proto_target.expected_version,
+            expected_version: Some(proto_target.expected_version),
         };
 
         let new_region = Region::try_new(&req.new_region)

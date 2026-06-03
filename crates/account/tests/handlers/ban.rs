@@ -21,7 +21,7 @@ async fn test_ban_account_success() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("TOS Violation")?,
     };
 
@@ -55,7 +55,7 @@ async fn test_ban_technical_idempotency() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Duplicate Ban")?,
     };
 
@@ -88,7 +88,7 @@ async fn test_ban_business_idempotency() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Second attempt")?,
     };
 
@@ -115,7 +115,7 @@ async fn test_worst_case_account_not_found() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         reason: AuditReason::try_new("Violating TOS")?,
     };
 
@@ -151,7 +151,7 @@ async fn test_concurrency_retry_success() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("System ban")?,
     };
 
@@ -184,7 +184,7 @@ async fn test_worst_case_atomic_outbox_failure() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("System ban")?,
     };
 

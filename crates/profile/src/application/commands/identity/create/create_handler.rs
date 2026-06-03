@@ -34,14 +34,14 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for CreateProfileH
         cmd: CreateProfileCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_creatable(cmd.command_id, cmd.region, &cmd.handle)
+            .ensure_creatable(cmd.command_id, cmd.target.region, &cmd.handle)
             .await?
         {
             return Ok(());
         }
 
         let display_name = DisplayName::from_raw(cmd.handle.as_str());
-        let mut profile = Profile::builder(cmd.account_id, cmd.profile_id, cmd.handle)?
+        let mut profile = Profile::builder(cmd.account_id, cmd.target.id, cmd.handle)?
             .with_display_name(display_name)
             .build()?;
         profile.create_profile()?;

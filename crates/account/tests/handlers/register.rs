@@ -1,6 +1,7 @@
 // crates/account/src/application/access_management/register/register_use_case_test.rs
 
 use account::repositories::GlobalIdentityRegistration;
+use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{AggregateMetadata, Error, ErrorCode, Result, Versioned};
 use shared_kernel::types::{Email, SubId};
 use shared_kernel_test_utils::repositories::TransactionManagerStub;
@@ -22,11 +23,11 @@ async fn test_register_success() -> Result<()> {
 
     // La source unique de vérité pour l'identité de ce test
     let expected_account_id = f.account_id();
+    let target = CommandTarget::stateless(expected_account_id, f.region());
 
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
-        region: f.region(),
-        account_id: expected_account_id,
+        target,
         sub_id: Some(ext_id.clone()),
         identifier: RegistrationIdentifier::from_email(email.clone()),
         locale: Locale::try_new("en-US")?,
@@ -84,10 +85,11 @@ async fn test_register_fails_if_sub_id_already_exists() -> Result<()> {
 
     f.global_registry().insert_fixture(registration).await;
 
+    let target = CommandTarget::stateless(f.account_id(), f.region());
+
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
-        region: f.region(),
-        account_id: f.account_id(),
+        target,
         sub_id: Some(existing_ext_id),
         identifier: RegistrationIdentifier::from_email(email),
         locale: Locale::try_new("en-US")?,
@@ -127,11 +129,11 @@ async fn test_register_atomic_rollback_on_outbox_failure() -> Result<()> {
 
     // 1. Arrange : On force une erreur d'infrastructure dans l'outbox stub
     f.outbox_repo().set_error(Error::internal(error_msg));
+    let target = CommandTarget::stateless(f.account_id(), f.region());
 
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
-        region: f.region(),
-        account_id: f.account_id(),
+        target,
         sub_id: Some(SubId::from_raw("atomic_ext")),
         identifier: RegistrationIdentifier::from_email(email),
         locale: Locale::try_new("en-US")?,

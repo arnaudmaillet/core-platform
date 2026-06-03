@@ -35,11 +35,14 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for RegisterHandle
         ctx: &AccountCommandContext<TM>,
         cmd: RegisterCommand,
     ) -> Result<Self::Output> {
-        if !ctx.ensure_creatable(cmd.command_id, cmd.region).await? {
+        if !ctx
+            .ensure_creatable(cmd.command_id, cmd.target.region)
+            .await?
+        {
             return Ok(());
         }
 
-        let account_id = cmd.account_id;
+        let account_id = cmd.target.id;
         let now = Utc::now();
         let registration = GlobalIdentityRegistration {
             account_id,
@@ -52,7 +55,6 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for RegisterHandle
         };
 
         ctx.global_registry().reserve(&registration).await?;
-
 
         let mut builder = Account::builder(account_id, cmd.identifier);
         if let Some(ext_id) = cmd.sub_id {

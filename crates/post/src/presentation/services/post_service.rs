@@ -45,9 +45,9 @@ impl ProtoPostService for PostService {
         let author_id = ProfileId::try_new(req.author_id.clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let post_id = PostId::generate();
-        let ctx = self.build_context(author_id, post_id, &ext)?;
+        let ctx = self.build_command_context(author_id, &ext)?;
 
-        let command = CreatePostCommand::try_from_proto(req)
+        let command = CreatePostCommand::try_from_proto(req, post_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<CreatePostCommand, (), CreatePostResponse>(
@@ -74,10 +74,8 @@ impl ProtoPostService for PostService {
             .author_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        let post_id = PostId::try_from(target.post_id.clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.build_context(author_id, post_id, &ext)?;
+        let ctx = self.build_command_context(author_id, &ext)?;
 
         let command = UpdateCaptionCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -104,10 +102,8 @@ impl ProtoPostService for PostService {
             .author_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        let post_id = PostId::try_from(target.post_id.clone())
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.build_context(author_id, post_id, &ext)?;
+        let ctx = self.build_command_context(author_id, &ext)?;
 
         let command = ChangeVisibilityCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -138,7 +134,7 @@ impl ProtoPostService for PostService {
         let post_id = PostId::try_from(target.post_id.clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.build_context(author_id, post_id, &ext)?;
+        let ctx = self.build_command_context(author_id, &ext)?;
 
         let command = ToggleCommentsCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -169,7 +165,7 @@ impl ProtoPostService for PostService {
         let post_id = PostId::try_from(target.post_id.clone())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let ctx = self.build_context(author_id, post_id, &ext)?;
+        let ctx = self.build_command_context(author_id, &ext)?;
 
         let command = DeletePostCommand::try_from_proto(req)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;

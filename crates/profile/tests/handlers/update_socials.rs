@@ -27,7 +27,7 @@ async fn test_update_socials_success() -> Result<()> {
 
     let cmd = UpdateSocialsCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_socials: Some(socials.clone()),
     };
 
@@ -69,7 +69,7 @@ async fn test_update_socials_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateSocialsCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
         new_socials: Some(new_socials), // Ici, c'est différent de l'état actuel (None)
     };
 
@@ -108,7 +108,7 @@ async fn test_update_socials_business_idempotency() -> Result<()> {
 
     let cmd = UpdateSocialsCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_socials: Some(socials), // Identique
     };
 
@@ -140,7 +140,7 @@ async fn test_update_socials_concurrency_conflict() -> Result<()> {
 
     let cmd = UpdateSocialsCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 42), // Version erronée
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 42), // Version erronée
         new_socials: None,
     };
 

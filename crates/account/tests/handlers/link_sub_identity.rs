@@ -1,4 +1,3 @@
-
 use account::commands::access_management::LinkSubIdentityCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -27,7 +26,10 @@ async fn test_link_sub_identity_success() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -58,13 +60,16 @@ async fn test_link_sub_identity_business_idempotency() -> Result<()> {
 
     let cmd = LinkSubIdentityCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         sub_id: ext_id,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert: La version et l'outbox restent inchangées
@@ -90,7 +95,7 @@ async fn test_link_sub_identity_technical_idempotency() -> Result<()> {
 
     let cmd = LinkSubIdentityCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         // On met une valeur qui ne devrait pas poser de problème
         sub_id: SubId::try_new("apple_789")?,
     };
@@ -98,7 +103,10 @@ async fn test_link_sub_identity_technical_idempotency() -> Result<()> {
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert : Ici on s'attend à ce que l'infra bloque AVANT le domaine
@@ -127,13 +135,16 @@ async fn test_link_sub_identity_concurrency_retry() -> Result<()> {
 
     let cmd = LinkSubIdentityCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         sub_id: SubId::try_new("discord_000")?,
     };
 
     // 2. Act : Le CommandBus doit gérer le retry automatiquement
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert

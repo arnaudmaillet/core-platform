@@ -2,6 +2,7 @@ use crate::application::context::{ProfileAppContext, ProfileCommandContext};
 use crate::commands::CreateProfileCommand;
 use crate::types::Handle;
 use serde::Deserialize;
+use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Identifier, TransactionManager};
 use shared_kernel::{
     command::CommandBus,
@@ -55,13 +56,13 @@ impl<TM: TransactionManager + Clone + 'static> AccountConsumer<TM> {
                 let region_vo = Region::try_new(region).map_err(|e| e.to_string())?;
                 let creation_ctx = self.app_ctx.creation_command(region_vo.clone());
                 let generated_profile_id = ProfileId::generate();
+                let target = CommandTarget::stateless(generated_profile_id, region_vo);
 
                 let command = CreateProfileCommand {
                     command_id: Uuid::new_v4(),
-                    profile_id: generated_profile_id,
+                    target,
                     account_id: AccountId::from_uuid(account_id),
                     handle,
-                    region: region_vo,
                 };
 
                 match self

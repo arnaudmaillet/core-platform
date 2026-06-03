@@ -16,17 +16,14 @@ pub struct UpdateCaptionCommand {
 }
 
 impl IdentifiableCommand for UpdateCaptionCommand {
+    type Id = PostId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
-    fn aggregate_id(&self) -> String {
-        self.target.id.to_string()
-    }
-    fn region(&self) -> String {
-        self.target.region.to_string()
-    }
-    fn cache_key(&self) -> Option<String> {
-        Some(format!("posts:{}:{}", self.target.region, self.target.id))
+
+    fn target(&self) -> &CommandTarget<PostId> {
+        &self.target
     }
 }
 
@@ -48,7 +45,7 @@ impl UpdateCaptionCommand {
             target: CommandTarget {
                 id: PostId::try_from(proto_target.post_id)?,
                 region: Region::try_new(proto_target.region)?,
-                expected_version: proto_target.expected_version,
+                expected_version: Some(proto_target.expected_version),
             },
             new_caption,
         })

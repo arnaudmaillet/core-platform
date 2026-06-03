@@ -1,6 +1,6 @@
 use crate::domain::types::{IpAddr, Locale, RegistrationIdentifier};
 use shared_kernel::{
-    command::IdentifiableCommand,
+    command::{CommandTarget, IdentifiableCommand},
     types::{AccountId, Email, Phone, Region, SubId},
 };
 use shared_proto::account::v1::{RegisterRequest, registration_identifier::Method};
@@ -10,8 +10,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct RegisterCommand {
     pub command_id: Uuid,
-    pub region: Region,
-    pub account_id: AccountId,
+    pub target: CommandTarget<AccountId>,
     pub sub_id: Option<SubId>,
     pub identifier: RegistrationIdentifier,
     pub locale: Locale,
@@ -19,16 +18,14 @@ pub struct RegisterCommand {
 }
 
 impl IdentifiableCommand for RegisterCommand {
+    type Id = AccountId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
 
-    fn aggregate_id(&self) -> String {
-        self.account_id.uuid().to_string()
-    }
-
-    fn region(&self) -> String {
-        self.region.to_string()
+    fn target(&self) -> &CommandTarget<AccountId> {
+        &self.target
     }
 }
 
@@ -54,11 +51,12 @@ impl RegisterCommand {
         let region = Region::try_new(req.region)
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
+        let target = CommandTarget::stateless(account_id, region);
+
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
-            account_id,
-            region,
+            target,
             sub_id: match req.sub_id {
                 Some(id) if !id.is_empty() => {
                     Some(SubId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?)

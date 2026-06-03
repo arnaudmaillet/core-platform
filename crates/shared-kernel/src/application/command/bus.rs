@@ -56,8 +56,7 @@ impl CommandBus {
         TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
         TOutput: 'static + Send + Default,
     {
-        // 0. Récupère la clé avant que cmd soit déplacé
-        let cache_key = cmd.cache_key();
+        let cache_key = cmd.resolve_cache_key();
 
         let type_id = TypeId::of::<TCommand>();
 
@@ -93,7 +92,6 @@ impl CommandBus {
     }
 }
 
-// Correction du PhantomData : on n'utilise plus la signature de fonction fn()
 struct HandlerWrapper<THandler, TContext, TCommand> {
     handler: THandler,
     _phantom: PhantomData<(TContext, TCommand)>,
@@ -104,7 +102,7 @@ impl<THandler, TContext, TCommand> AnyCommandHandler
     for HandlerWrapper<THandler, TContext, TCommand>
 where
     TContext: 'static + Send + Sync + Clone,
-    TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone, // Ajout des bounds ici
+    TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
     THandler: CommandHandler<Context = TContext, Command = TCommand> + Send + Sync,
     THandler::Output: 'static + Send,
 {
@@ -123,16 +121,15 @@ where
             .downcast::<TContext>()
             .map_err(|_| Error::internal("AnyCommandHandler: Invalid context type"))?;
 
-        // 1. Préparation des métadonnées de logging (venant du trait IdentifiableCommand)
+        let target = concrete_cmd.target();
         let span = info_span!(
             "handle_command",
             command_type = %std::any::type_name::<TCommand>(),
             command_id = %concrete_cmd.command_id(),
-            aggregate_id = %concrete_cmd.aggregate_id(),
-            region = %concrete_cmd.region()
+            target_id = %target.id,
+            region = %target.region.as_str()
         );
 
-        // 2. Exécution enveloppée dans la span et le retry
         let config = self.handler.retry_config();
 
         let result_fut = async {
@@ -153,7 +150,6 @@ where
             output
         };
 
-        // On instrumente le futur et on attend le résultat
         let output = result_fut.instrument(span).await?;
 
         Ok(Box::new(output))

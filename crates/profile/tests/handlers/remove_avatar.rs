@@ -24,7 +24,7 @@ async fn test_remove_avatar_success() -> Result<()> {
 
     let cmd = RemoveAvatarCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
     };
 
     // Act
@@ -62,7 +62,7 @@ async fn test_remove_avatar_business_idempotency() -> Result<()> {
 
     let cmd = RemoveAvatarCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
     };
 
     // Act
@@ -103,7 +103,7 @@ async fn test_remove_avatar_technical_idempotency() -> Result<()> {
 
     let cmd = RemoveAvatarCommand {
         command_id: cmd_id, // Même ID que celui enregistré en "seed"
-        target: CommandTarget::new(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
     };
 
     // Act
@@ -144,7 +144,7 @@ async fn test_remove_avatar_concurrency_conflict() -> Result<()> {
 
     let cmd = RemoveAvatarCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 42), // Version erronée
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 42), // Version erronée
     };
 
     // Act

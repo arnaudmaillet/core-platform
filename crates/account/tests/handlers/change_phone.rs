@@ -42,7 +42,7 @@ async fn test_change_phone_success() -> Result<()> {
 
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_phone: new_phone.clone(),
     };
 
@@ -84,7 +84,7 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
 
     let cmd = ChangePhoneCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_phone: requested_phone.clone(),
     };
 
@@ -143,7 +143,7 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
 
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_phone: phone.clone(),
     };
 
@@ -200,7 +200,7 @@ async fn test_worst_case_outbox_failure_propagation() -> Result<()> {
     let requested_phone = Phone::try_new("+33611223344")?;
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         new_phone: requested_phone.clone(),
     };
 

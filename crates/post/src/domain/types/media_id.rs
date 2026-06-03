@@ -11,17 +11,14 @@ use uuid::Uuid;
 pub struct MediaId(Uuid);
 
 impl MediaId {
-    /// Crée un MediaId à partir d'un UUID existant (lecture DB ou payload réseau)
     pub fn new(uuid: Uuid) -> Self {
         Self(uuid)
     }
 
-    /// Génère un nouvel identifiant unique aléatoire (UUIDv4)
     pub fn generate() -> Self {
         Self(Uuid::new_v4())
     }
 
-    /// Accesseur pour l'UUID brut (indispensable pour les drivers d'infrastructure)
     pub fn uuid(&self) -> Uuid {
         self.0
     }
@@ -39,6 +36,10 @@ impl Identifier for MediaId {
     fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
     }
+
+    fn identifier_scope() -> &'static str {
+        "media"
+    }
 }
 
 impl ValueObject for MediaId {
@@ -47,7 +48,6 @@ impl ValueObject for MediaId {
             return Err(Error::validation("media_id", "Media UUID cannot be nil"));
         }
 
-        // On s'assure que c'est un UUIDv4 (Random)
         if self.0.get_version_num() != 4 {
             return Err(Error::validation(
                 "media_id",
@@ -59,15 +59,13 @@ impl ValueObject for MediaId {
     }
 }
 
-// --- CONVERSIONS ---
-
 impl FromStr for MediaId {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         let uuid = Uuid::parse_str(s).map_err(|_| {
             Error::validation("media_id", format!("'{}' is not a valid UUID string", s))
         })?;
-        
+
         let media_id = Self(uuid);
         media_id.validate()?;
         Ok(media_id)

@@ -41,7 +41,7 @@ async fn test_verify_email_success() -> Result<()> {
 
     let cmd = VerifyEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         code: code.to_string(),
     };
 
@@ -78,7 +78,7 @@ async fn test_verify_email_fails_if_otp_invalid() -> Result<()> {
 
     let cmd = VerifyEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         code: "654321".to_string(), // Mauvais code !
     };
 
@@ -126,7 +126,7 @@ async fn test_verify_email_fails_if_otp_expired() -> Result<()> {
 
     let cmd = VerifyEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         code: "123456".to_string(),
     };
 
@@ -163,7 +163,7 @@ async fn test_verify_email_technical_idempotency() -> Result<()> {
 
     let cmd = VerifyEmailCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         code: "123456".to_string(),
     };
 

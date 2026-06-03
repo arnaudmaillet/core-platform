@@ -13,20 +13,18 @@ pub struct FollowCommand {
 }
 
 impl IdentifiableCommand for FollowCommand {
+    type Id = ProfileId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
 
-    fn aggregate_id(&self) -> String {
-        format!("{}:{}", self.follower_id, self.target.id)
+    fn target(&self) -> &CommandTarget<ProfileId> {
+        &self.target
     }
 
-    fn region(&self) -> String {
-        self.target.region.to_string()
-    }
-
-    fn cache_key(&self) -> Option<String> {
-        None
+    fn cache_enabled(&self) -> bool {
+        false
     }
 }
 
@@ -44,7 +42,7 @@ impl FollowCommand {
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,
             region: Region::try_new(proto_target.region)?,
-            expected_version: proto_target.expected_version,
+            expected_version: Some(proto_target.expected_version),
         };
 
         Ok(Self {

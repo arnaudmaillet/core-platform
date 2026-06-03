@@ -3,9 +3,9 @@
 use std::str::FromStr;
 
 use serde::Deserialize;
-use shared_kernel::command::IdentifiableCommand;
+use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{MusicId, ProfileId, Region, Url};
+use shared_kernel::types::{MusicId, PostId, ProfileId, Region, Url};
 use shared_proto::post::v1::CreatePostRequest;
 use shared_proto::post::v1::MediaAsset as ProtoMediaAsset;
 use uuid::Uuid;
@@ -20,8 +20,8 @@ use crate::types::{
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreatePostCommand {
     pub command_id: Uuid,
-    pub region: Region,
-    pub author_id: ProfileId,
+    pub target: CommandTarget<ProfileId>,
+    pub post_id: PostId,
     pub post_type: PostType,
     pub caption: Option<Caption>,
     pub media_list: Vec<MediaAsset>,
@@ -32,33 +32,36 @@ pub struct CreatePostCommand {
 }
 
 impl IdentifiableCommand for CreatePostCommand {
+    type Id = ProfileId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
-    fn aggregate_id(&self) -> String {
-        self.author_id.to_string()
+
+    fn target(&self) -> &CommandTarget<ProfileId> {
+        &self.target
     }
-    fn region(&self) -> String {
-        self.region.to_string()
-    }
-    fn cache_key(&self) -> Option<String> {
-        None
+
+    fn cache_enabled(&self) -> bool {
+        false
     }
 }
 
 impl CreatePostCommand {
-    pub fn try_from_proto(req: CreatePostRequest) -> Result<Self> {
+    pub fn try_from_proto(req: CreatePostRequest, post_id: PostId) -> Result<Self> {
         let command_id = Uuid::parse_str(&req.command_id)
             .map_err(|_| Error::validation("command_id", "Invalid UUID"))?;
         let region = Region::try_new(req.region)
             .map_err(|_| Error::validation("region", "Invalid region"))?;
 
         let author_id = ProfileId::try_new(req.author_id)?;
+        let target = CommandTarget::stateless(author_id, region);
         let post_type = PostType::try_from(req.post_type)?;
         let caption = match req.caption {
             Some(text) if !text.trim().is_empty() => Some(Caption::try_new(text)?),
             _ => None,
         };
+
         let dynamic_metadata = if req.dynamic_metadata.trim().is_empty() {
             None
         } else {
@@ -76,8 +79,8 @@ impl CreatePostCommand {
 
         Ok(Self {
             command_id,
-            region,
-            author_id,
+            post_id,
+            target,
             post_type,
             caption,
             media_list,

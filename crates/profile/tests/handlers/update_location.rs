@@ -22,7 +22,7 @@ async fn test_update_location_success() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_location: new_location.clone(),
     };
 
@@ -56,7 +56,7 @@ async fn test_update_location_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
         new_location: Some(Location::try_new("Tokyo, Japan")?),
     };
 
@@ -91,7 +91,7 @@ async fn test_update_location_business_idempotency() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_location: Some(location),
     };
 
@@ -120,7 +120,7 @@ async fn test_update_location_concurrency_conflict() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 123), // Version dans le futur
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 123), // Version dans le futur
         new_location: Some(Location::try_new("Nowhere")?),
     };
 

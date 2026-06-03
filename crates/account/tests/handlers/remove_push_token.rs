@@ -1,4 +1,3 @@
-
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
 use account::types::AccountState;
@@ -32,13 +31,16 @@ async fn test_remove_push_token_success() -> Result<()> {
 
     let cmd = RemovePushTokenCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token: token_to_remove.clone(),
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, RemovePushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, RemovePushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -75,13 +77,16 @@ async fn test_remove_push_token_technical_idempotency() -> Result<()> {
 
     let cmd = RemovePushTokenCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token: token.clone(),
     };
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, RemovePushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, RemovePushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     assert!(
@@ -116,13 +121,16 @@ async fn test_remove_push_token_business_idempotency() -> Result<()> {
 
     let cmd = RemovePushTokenCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token: non_existent_token.clone(),
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, RemovePushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, RemovePushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
