@@ -27,7 +27,7 @@ async fn test_update_locale_success() -> Result<()> {
 
     let cmd = UpdateLocaleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_locale: new_locale.clone(),
     };
 
@@ -63,7 +63,7 @@ async fn test_update_locale_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateLocaleCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_locale: requested_locale.clone(),
     };
 
@@ -107,7 +107,7 @@ async fn test_update_locale_business_idempotency() -> Result<()> {
 
     let cmd = UpdateLocaleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_locale: current_locale,
     };
 

@@ -21,7 +21,7 @@ async fn test_update_bio_success() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_bio: new_bio.clone(),
     };
 
@@ -57,7 +57,7 @@ async fn test_update_bio_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.profile_id(), f.region(), initial_version),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), initial_version),
         new_bio: Some(Bio::try_new("Duplicate bio")?),
     };
 
@@ -98,7 +98,7 @@ async fn test_update_bio_business_idempotency() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_bio: Some(bio), // Même contenu
     };
 
@@ -127,7 +127,7 @@ async fn test_update_bio_concurrency_conflict() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 42), // Version obsolète
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 42), // Version obsolète
         new_bio: Some(Bio::try_new("Conflict bio")?),
     };
 

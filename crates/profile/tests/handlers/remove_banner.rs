@@ -24,7 +24,7 @@ async fn test_remove_banner_success() -> Result<()> {
 
     let cmd = RemoveBannerCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
     };
 
     // Act
@@ -64,7 +64,7 @@ async fn test_remove_banner_technical_idempotency() -> Result<()> {
 
     let cmd = RemoveBannerCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
     };
 
     // Act
@@ -106,7 +106,7 @@ async fn test_remove_banner_business_idempotency() -> Result<()> {
 
     let cmd = RemoveBannerCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
     };
 
     // Act
@@ -135,7 +135,7 @@ async fn test_remove_banner_concurrency_conflict() -> Result<()> {
 
     let cmd = RemoveBannerCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 123), // Version désuète
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 123), // Version désuète
     };
 
     // Act

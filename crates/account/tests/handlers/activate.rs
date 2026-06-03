@@ -28,7 +28,7 @@ async fn test_activate_account_success() -> Result<()> {
 
     let cmd = ActivateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
     };
 
     f.bus()
@@ -66,7 +66,7 @@ async fn test_activate_technical_idempotency() -> Result<()> {
 
     let cmd = ActivateCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
     };
 
     // 2. Act
@@ -108,7 +108,7 @@ async fn test_activate_business_idempotency() -> Result<()> {
 
     let cmd = ActivateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
     };
 
     // 2. Act
@@ -143,7 +143,7 @@ async fn test_activate_forbidden_if_banned() -> Result<()> {
 
     let cmd = ActivateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
     };
 
     // 2. Act

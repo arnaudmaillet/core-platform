@@ -43,7 +43,7 @@ async fn test_verify_phone_success() -> Result<()> {
 
     let cmd = VerifyPhoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         code: code.to_string(),
     };
 
@@ -92,7 +92,7 @@ async fn test_verify_phone_fails_if_otp_invalid() -> Result<()> {
 
     let cmd = VerifyPhoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         code: "654321".to_string(), // Mauvais code fourni
     };
 
@@ -140,7 +140,7 @@ async fn test_verify_phone_fails_if_otp_expired() -> Result<()> {
 
     let cmd = VerifyPhoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         code: "123456".to_string(),
     };
 
@@ -182,7 +182,7 @@ async fn test_verify_phone_technical_idempotency() -> Result<()> {
 
     let cmd = VerifyPhoneCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
         code: "123456".to_string(),
     };
 

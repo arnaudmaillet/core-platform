@@ -1,4 +1,3 @@
-
 use account::commands::settings::AddPushTokenCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -26,13 +25,16 @@ async fn test_add_push_token_success() -> Result<()> {
 
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token: token.clone(),
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -62,14 +64,17 @@ async fn test_add_push_token_technical_idempotency() -> Result<()> {
 
     let cmd = AddPushTokenCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token: token.clone(),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert
@@ -105,13 +110,16 @@ async fn test_add_push_token_business_idempotency() -> Result<()> {
 
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -144,14 +152,17 @@ async fn test_add_push_token_succeeds_after_retry() -> Result<()> {
 
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         token: token.clone(),
     };
 
     // 2. Act : Le bus doit absorber le conflit et retenter l'opération
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert : Succès attendu !

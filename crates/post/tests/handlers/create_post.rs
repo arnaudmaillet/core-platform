@@ -5,6 +5,7 @@ mod tests {
     use post::repositories::PostRepository;
     use post::types::{Caption, PostType};
     use post_test_utils::PostTestFixture;
+    use shared_kernel::command::CommandTarget;
     use shared_kernel::core::Result;
     use shared_kernel::idempotency::IdempotencyRepository;
     use shared_kernel::types::ProfileId;
@@ -19,17 +20,17 @@ mod tests {
         let target_profile = ProfileId::generate();
         let slug = "arnaud".to_string();
 
-        // Configurer le stub de résolution
         let mut map = BTreeMap::new();
         map.insert(slug.clone(), target_profile);
         f.profile_resolver().set_stub_map(map);
 
         let caption = Caption::try_from(format!("Hello @{}", slug).as_str()).unwrap();
+        let target = CommandTarget::stateless(f.author_id(), f.region());
 
         let cmd = CreatePostCommand {
             command_id,
-            region: f.region(),
-            author_id: f.author_id(),
+            target,
+            post_id: f.post_id(),
             post_type: PostType::Text,
             caption: Some(caption),
             media_list: vec![],
@@ -61,14 +62,14 @@ mod tests {
         // Arrange
         let f = PostTestFixture::new();
         let command_id = Uuid::now_v7();
-
-        // Simuler une exécution précédente
         f.idempotency_repo().save(None, &command_id).await?;
+
+        let target = CommandTarget::stateless(f.author_id(), f.region());
 
         let cmd = CreatePostCommand {
             command_id,
-            region: f.region(),
-            author_id: f.author_id(),
+            target,
+            post_id: f.post_id(),
             post_type: PostType::Text,
             caption: None,
             media_list: vec![],
@@ -84,7 +85,6 @@ mod tests {
             .await?;
 
         // Assert
-        // Le repo doit être vide car le handler a dû s'arrêter au ensure_executable
         let post = f.post_repo().find_by_id(f.region(), &f.post_id()).await?;
         assert!(post.is_none());
 

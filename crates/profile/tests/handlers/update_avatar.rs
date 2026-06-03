@@ -23,7 +23,7 @@ async fn test_update_avatar_success() -> Result<()> {
 
     let cmd = UpdateAvatarCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_avatar_url: new_url.clone(),
     };
 
@@ -59,7 +59,7 @@ async fn test_update_avatar_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateAvatarCommand {
         command_id: cmd_id, // Même ID que celui seedé
-        target: CommandTarget::new(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
         new_avatar_url: Url::try_new("https://cdn.test.com/new.png")?,
     };
 
@@ -98,7 +98,7 @@ async fn test_update_avatar_business_idempotency() -> Result<()> {
 
     let cmd = UpdateAvatarCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_avatar_url: current_url, // Même URL
     };
 
@@ -128,7 +128,7 @@ async fn test_update_avatar_conflict() -> Result<()> {
 
     let cmd = UpdateAvatarCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 10), // Mauvaise version
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 10), // Mauvaise version
         new_avatar_url: Url::try_new("https://cdn.test.com/fail.png")?,
     };
 

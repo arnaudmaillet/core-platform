@@ -22,7 +22,7 @@ async fn test_change_handle_success() -> Result<()> {
 
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_handle: new_handle.clone(),
     };
 
@@ -69,7 +69,7 @@ async fn test_change_handle_conflict_already_exists() -> Result<()> {
     // 3. On essaie de donner le handle déjà pris à notre profil initial
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
         new_handle: taken_handle,
     };
 
@@ -109,7 +109,7 @@ async fn test_change_handle_business_idempotency() -> Result<()> {
 
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
         new_handle: handle,
     };
 
@@ -142,7 +142,7 @@ async fn test_change_handle_concurrency_conflict() -> Result<()> {
 
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.profile_id(), f.region(), 99), // Mauvaise version pour déclencher l'OCC
+        target: CommandTarget::versioned(f.profile_id(), f.region(), 99), // Mauvaise version pour déclencher l'OCC
         new_handle: Handle::try_new("new.alice")?,
     };
 

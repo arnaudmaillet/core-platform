@@ -42,6 +42,10 @@ impl Identifier for ProfileId {
     fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
     }
+
+    fn identifier_scope() -> &'static str {
+        "profile"
+    }
 }
 
 impl ValueObject for ProfileId {

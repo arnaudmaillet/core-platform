@@ -123,11 +123,18 @@ impl<TM: TransactionManager> ProfileCommandContext<TM> {
             .await?
             .ok_or_else(|| Error::not_found("Profile", target.id.to_string()))?;
 
-        if profile.version() != target.expected_version {
+        let expected_version = target.expected_version.ok_or_else(|| {
+            Error::validation(
+                "expected_version",
+                "Sharding strict: Expected version is missing for this transaction",
+            )
+        })?;
+
+        if profile.version() != expected_version {
             return Err(Error::concurrency_conflict(format!(
                 "OCC Mismatch: DB v{}, Expected v{}",
                 profile.version(),
-                target.expected_version
+                expected_version
             )));
         }
 

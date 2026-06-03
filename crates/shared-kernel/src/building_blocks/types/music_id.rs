@@ -35,6 +35,10 @@ impl Identifier for MusicId {
     fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
     }
+
+    fn identifier_scope() -> &'static str {
+        "music"
+    }
 }
 
 impl ValueObject for MusicId {

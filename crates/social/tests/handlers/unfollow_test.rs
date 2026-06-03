@@ -23,7 +23,7 @@ async fn test_unfollow_handler_success_nominal_path() -> Result<()> {
     let cmd = UnfollowCommand {
         command_id: Uuid::new_v4(),
         follower_id,
-        target: CommandTarget::new(target_id, f.region(), 1),
+        target: CommandTarget::stateless(target_id, f.region()),
     };
 
     // Act
@@ -61,7 +61,7 @@ async fn test_unfollow_handler_should_abort_silently_when_idempotency_barrier_tr
     let cmd = UnfollowCommand {
         command_id,
         follower_id,
-        target: CommandTarget::new(target_id, f.region(), 1),
+        target: CommandTarget::stateless(target_id, f.region()),
     };
 
     // Act
@@ -86,7 +86,7 @@ async fn test_unfollow_handler_should_ignore_self_unfollowing_attempts() -> Resu
     let cmd = UnfollowCommand {
         command_id: Uuid::new_v4(),
         follower_id: actor_id,
-        target: CommandTarget::new(actor_id, f.region(), 1),
+        target: CommandTarget::stateless(actor_id, f.region()),
     };
 
     // Act
@@ -116,7 +116,7 @@ async fn test_unfollow_handler_should_skip_execution_if_not_following() -> Resul
     let cmd = UnfollowCommand {
         command_id,
         follower_id,
-        target: CommandTarget::new(target_id, f.region(), 1),
+        target: CommandTarget::stateless(target_id, f.region()),
     };
 
     // Act

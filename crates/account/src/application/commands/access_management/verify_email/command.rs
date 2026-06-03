@@ -14,16 +14,14 @@ pub struct VerifyEmailCommand {
 }
 
 impl IdentifiableCommand for VerifyEmailCommand {
+    type Id = AccountId;
+
     fn command_id(&self) -> Uuid {
         self.command_id
     }
 
-    fn aggregate_id(&self) -> String {
-        self.target.id.uuid().to_string()
-    }
-
-    fn region(&self) -> String {
-        self.target.region.to_string()
+    fn target(&self) -> &CommandTarget<AccountId> {
+        &self.target
     }
 }
 
@@ -47,7 +45,7 @@ impl VerifyEmailCommand {
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
             region: Region::try_new(proto_target.region)?,
-            expected_version: proto_target.expected_version,
+            expected_version: Some(proto_target.expected_version),
         };
 
         Ok(Self {

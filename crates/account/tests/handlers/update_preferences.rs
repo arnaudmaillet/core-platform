@@ -27,7 +27,7 @@ async fn test_update_preferences_success() -> Result<()> {
 
     let cmd = UpdatePreferencesCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         privacy: None,
         notifications: None,
         appearance: Some(new_appearance.clone()),
@@ -70,7 +70,7 @@ async fn test_update_preferences_technical_idempotency() -> Result<()> {
 
     let cmd = UpdatePreferencesCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         privacy: None,
         notifications: None,
         appearance: None,
@@ -121,7 +121,7 @@ async fn test_update_preferences_business_idempotency() -> Result<()> {
 
     let cmd = UpdatePreferencesCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         privacy: None,
         notifications: None,
         appearance: Some(initial_appearance),

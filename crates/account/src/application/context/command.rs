@@ -121,11 +121,18 @@ impl<TM: TransactionManager> AccountCommandContext<TM> {
             .await?
             .ok_or_else(|| Error::not_found("Account", target.id.to_string()))?;
 
-        if account.version() != target.expected_version {
+        let expected_version = target.expected_version.ok_or_else(|| {
+            Error::validation(
+                "expected_version",
+                "Sharding strict: Expected version is missing for this transaction",
+            )
+        })?;
+
+        if account.version() != expected_version {
             return Err(Error::concurrency_conflict(format!(
                 "OCC Mismatch: DB v{}, Expected v{}",
                 account.version(),
-                target.expected_version
+                expected_version
             )));
         }
 

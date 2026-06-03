@@ -1,4 +1,3 @@
-
 use account::commands::lifecycle::SuspendCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -21,13 +20,16 @@ async fn test_suspend_account_success() -> Result<()> {
 
     let cmd = SuspendCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Under investigation for fraud")?,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -56,14 +58,17 @@ async fn test_suspend_technical_idempotency() -> Result<()> {
 
     let cmd = SuspendCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Duplicate call")?,
     };
 
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert
@@ -96,13 +101,16 @@ async fn test_suspend_business_idempotency() -> Result<()> {
 
     let cmd = SuspendCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Second call")?,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert

@@ -23,7 +23,7 @@ async fn test_shadowban_account_success() -> Result<()> {
 
     let cmd = ShadowbanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Spam behavior detected")?,
     };
 
@@ -58,7 +58,7 @@ async fn test_shadowban_technical_idempotency() -> Result<()> {
 
     let cmd = ShadowbanCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Duplicate network call")?,
     };
 
@@ -94,7 +94,7 @@ async fn test_shadowban_business_idempotency() -> Result<()> {
 
     let cmd = ShadowbanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         reason: AuditReason::try_new("Second report")?,
     };
 

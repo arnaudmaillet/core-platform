@@ -23,7 +23,7 @@ impl CommandHandler for CreatePostHandler {
         cmd: CreatePostCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
+            .ensure_executable(cmd.command_id, cmd.target.region)
             .await?
         {
             return Ok(());
@@ -53,8 +53,8 @@ impl CommandHandler for CreatePostHandler {
         let hashtags = Hashtags::try_from(extracted_tags.into_iter().collect::<Vec<String>>())?;
 
         let mut post = Post::builder(
-            ctx.post_id().clone(),
-            cmd.author_id,
+            cmd.post_id,
+            cmd.target.id,
             cmd.post_type,
             cmd.visibility_level.parse()?,
         )

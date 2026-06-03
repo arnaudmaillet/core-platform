@@ -32,7 +32,7 @@ mod tests {
             Caption::try_from(format!("New caption with @{}", slug).as_str()).unwrap();
         let cmd = UpdateCaptionCommand {
             command_id,
-            target: CommandTarget::new(post.post_id(), f.region(), post.version()),
+            target: CommandTarget::stateless(post.post_id(), f.region()),
             new_caption: Some(new_caption),
         };
 
@@ -68,7 +68,7 @@ mod tests {
 
         let cmd = UpdateCaptionCommand {
             command_id,
-            target: CommandTarget::new(post.post_id(), f.region(), post.version()),
+            target: CommandTarget::stateless(post.post_id(), f.region()),
             new_caption: Some(caption),
         };
 

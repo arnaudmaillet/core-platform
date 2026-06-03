@@ -1,4 +1,3 @@
-
 use account::commands::settings::ChangeBirthDateCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -26,12 +25,15 @@ async fn test_change_birth_date_success() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_birth_date: new_date.clone(),
     };
 
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     f.assert_account(|acc| {
@@ -60,13 +62,16 @@ async fn test_change_birth_date_technical_idempotency() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_birth_date: new_date.clone(),
     };
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     assert!(
@@ -97,13 +102,16 @@ async fn test_change_birth_date_forbidden_when_restricted() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_birth_date: new_date.clone(),
     };
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     match result {
@@ -138,14 +146,17 @@ async fn test_change_birth_date_succeeds_after_retry() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_birth_date: new_date.clone(),
     };
 
     // 2. Act : Le Bus intercepte le ConcurrencyConflict et relance le Handler
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeBirthDateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert : Succès final attendu

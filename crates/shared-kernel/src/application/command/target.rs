@@ -6,15 +6,23 @@ use crate::types::Region;
 pub struct CommandTarget<ID> {
     pub id: ID,
     pub region: Region,
-    pub expected_version: u64,
+    pub expected_version: Option<u64>,
 }
 
 impl<ID> CommandTarget<ID> {
-    pub fn new(id: ID, region: Region, expected_version: u64) -> Self {
+    pub fn versioned(id: ID, region: Region, version: u64) -> Self {
         Self {
             id,
             region,
-            expected_version,
+            expected_version: Some(version),
+        }
+    }
+
+    pub fn stateless(id: ID, region: Region) -> Self {
+        Self {
+            id,
+            region,
+            expected_version: None,
         }
     }
 }

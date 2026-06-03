@@ -57,6 +57,10 @@ impl Identifier for PostId {
     fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
     }
+
+    fn identifier_scope() -> &'static str {
+        "post"
+    }
 }
 
 impl ValueObject for PostId {

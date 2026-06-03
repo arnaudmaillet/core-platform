@@ -31,13 +31,16 @@ async fn test_change_region_success() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(old_id, f.region(), version_snapshot),
+        target: CommandTarget::versioned(old_id, f.region(), version_snapshot),
         new_region,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -76,13 +79,16 @@ async fn test_change_region_business_idempotency() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_region: current_region,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -112,13 +118,16 @@ async fn test_change_region_technical_idempotency() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_region: Region::try_new("US")?,
     };
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     assert!(
@@ -139,13 +148,16 @@ async fn test_change_region_restricted_account() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_region: Region::try_new("US")?,
     };
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     assert!(matches!(

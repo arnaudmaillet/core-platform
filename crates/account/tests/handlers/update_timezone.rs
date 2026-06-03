@@ -29,7 +29,7 @@ async fn test_update_timezone_success() -> Result<()> {
 
     let cmd = UpdateTimezoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_timezone: new_tz.clone(),
     };
 
@@ -68,7 +68,7 @@ async fn test_update_timezone_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateTimezoneCommand {
         command_id: cmd_id,
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_timezone: requested_tz.clone(),
     };
 
@@ -115,7 +115,7 @@ async fn test_update_timezone_business_idempotency() -> Result<()> {
 
     let cmd = UpdateTimezoneCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::new(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
         new_timezone: current_tz,
     };
 

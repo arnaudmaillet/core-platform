@@ -45,13 +45,8 @@ impl PostAppContext {
         PostQueryContext::new(self.clone(), region)
     }
 
-    pub fn command(
-        &self,
-        author_id: ProfileId,
-        post_id: PostId,
-        region: Region,
-    ) -> PostCommandContext {
-        PostCommandContext::new(self.clone(), author_id, post_id, region)
+    pub fn command(&self, author_id: ProfileId, region: Region) -> PostCommandContext {
+        PostCommandContext::new(self.clone(), author_id, region)
     }
 
     pub fn post_repo(&self) -> Arc<dyn PostRepository> {

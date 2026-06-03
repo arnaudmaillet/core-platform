@@ -1,23 +1,37 @@
 // crates/post/src/application/utils.rs
 
-use crate::application::context::{PostAppContext, PostCommandContext};
+use crate::application::context::{PostAppContext, PostCommandContext, PostQueryContext};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
-use shared_kernel::types::{PostId, ProfileId, Region};
+use shared_kernel::types::{ProfileId, Region};
 use tonic::{Response, Status};
 
 pub trait GrpcServiceUtils {
     fn app_ctx(&self) -> &PostAppContext;
     fn bus(&self) -> &CommandBus;
 
-    fn build_context(
+    fn extract_region(&self, extensions: &tonic::Extensions) -> Result<Region, Status> {
+        extensions
+            .get::<Region>()
+            .cloned()
+            .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))
+    }
+
+    fn build_command_context(
         &self,
         author_id: ProfileId,
-        post_id: PostId,
         extensions: &tonic::Extensions,
     ) -> Result<PostCommandContext, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().command(author_id, post_id, region))
+        Ok(self.app_ctx().command(author_id, region))
+    }
+
+    fn build_query_context(
+        &self,
+        extensions: &tonic::Extensions,
+    ) -> Result<PostQueryContext, Status> {
+        let region = self.extract_region(extensions)?;
+        Ok(self.app_ctx().query(region))
     }
 
     async fn dispatch_command<C, Output, R>(
@@ -28,6 +42,7 @@ pub trait GrpcServiceUtils {
     ) -> Result<Response<R>, Status>
     where
         C: IdentifiableCommand + std::fmt::Debug + Send + Sync + 'static + Clone,
+        C::Id: std::fmt::Display,
         Output: Send + Default + 'static,
         R: Send,
     {
@@ -38,12 +53,6 @@ pub trait GrpcServiceUtils {
 
         Ok(Response::new(response_payload))
     }
-
-    fn extract_region(&self, ext: &tonic::Extensions) -> Result<Region, Status> {
-        ext.get::<Region>()
-            .cloned()
-            .ok_or_else(|| Status::invalid_argument("Missing region in request extensions"))
-    }
 }
 
 pub fn map_domain_err_to_status(err: Error) -> Status {
@@ -52,6 +61,9 @@ pub fn map_domain_err_to_status(err: Error) -> Status {
         ErrorCode::AlreadyExists => Status::already_exists(err.message),
         ErrorCode::ValidationFailed => Status::invalid_argument(err.message),
         ErrorCode::ConcurrencyConflict => Status::aborted(err.message),
+        ErrorCode::Unauthorized => Status::unauthenticated(err.message),
+        ErrorCode::Forbidden => Status::permission_denied(err.message),
+        ErrorCode::PreconditionFailed => Status::failed_precondition(err.message),
         _ => Status::internal(err.message),
     }
 }

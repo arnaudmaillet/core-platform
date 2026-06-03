@@ -4,6 +4,7 @@ use profile::events::ProfileEvent;
 use profile::repositories::ProfileRepository;
 use profile::types::Handle;
 use profile_test_utils::ProfileTestFixture;
+use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ErrorCode, Result, Versioned};
 use shared_kernel::types::ProfileId;
 use shared_kernel_test_utils::repositories::TransactionManagerStub;
@@ -14,13 +15,15 @@ async fn test_create_profile_success() -> Result<()> {
     let f = ProfileTestFixture::new();
     let generated_profile_id = ProfileId::generate();
     let creation_ctx = f.app_ctx().creation_command(f.region());
+    let handle = Handle::try_new("bob_dev")?;
+
+    let target = CommandTarget::stateless(generated_profile_id, f.region());
 
     let cmd = CreateProfileCommand {
         command_id: Uuid::new_v4(),
-        profile_id: generated_profile_id,
+        target,
         account_id: f.account_id(),
-        handle: Handle::try_new("bob_dev")?,
-        region: f.region(),
+        handle: handle.clone(),
     };
 
     // Act - On exécute avec le ProfileCommandContext
@@ -60,12 +63,13 @@ async fn test_create_profile_technical_idempotency() -> Result<()> {
         .save_direct(f.region(), existing_profile)
         .await;
 
+    let target = CommandTarget::stateless(profile_id, f.region());
+
     let cmd = CreateProfileCommand {
         command_id: cmd_id,
-        profile_id,
+        target,
         account_id: f.account_id(),
         handle: Handle::try_new("bob_dev")?,
-        region: f.region(),
     };
 
     let result = f
@@ -100,14 +104,14 @@ async fn test_create_profile_conflict_handle() -> Result<()> {
         .profile_repo()
         .save_direct(f.region(), profile_with_handle)
         .await;
+    let target = CommandTarget::stateless(ProfileId::generate(), f.region());
 
     // 2. On tente de créer un NOUVEAU profil avec le même handle usurpé
     let cmd = CreateProfileCommand {
         command_id: Uuid::new_v4(),
-        profile_id: ProfileId::generate(),
+        target, // 🛠️ Remplacement final
         account_id: f.account_id(),
         handle: Handle::try_new(duplicated_handle)?,
-        region: f.region(),
     };
 
     // Act
