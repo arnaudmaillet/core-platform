@@ -1,0 +1,5 @@
+mod fred_map_cache_repository;
+mod scylla_map_persistence_repository;
+
+pub use fred_map_cache_repository::FredMapCacheRepository;
+pub use scylla_map_persistence_repository::ScyllaMapPersistenceRepository;

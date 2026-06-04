@@ -31,7 +31,7 @@ members = [
     "crates/auth-test-utils",
     "crates/post",
     "crates/post-test-utils",
-    "crates/shared-kernel-test-utils",
+    "crates/shared-kernel-test-utils", "crates/geo-discovery",
 ]
 resolver = "2"
 

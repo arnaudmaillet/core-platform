@@ -1,3 +1,5 @@
+// crates/post/src/application/context/command.rs
+
 use shared_kernel::{
     command::CommandTarget,
     core::{Error, Result, Versioned},

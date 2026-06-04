@@ -1,3 +1,5 @@
+// crates/post/src/application/context/query.rs
+
 use shared_kernel::{
     core::{PageQuery, PagedResult, Result},
     types::{PostId, ProfileId, Region},
