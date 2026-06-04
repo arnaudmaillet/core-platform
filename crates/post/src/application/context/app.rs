@@ -1,3 +1,5 @@
+// crates/post/src/application/context/app.rs
+
 use crate::{
     context::{PostCommandContext, PostQueryContext},
     domain::repositories::PostRepository,
