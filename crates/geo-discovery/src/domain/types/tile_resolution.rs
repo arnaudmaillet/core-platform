@@ -30,21 +30,19 @@ impl TileResolution {
         self.0 as i32
     }
 
-    /// Détermine dynamiquement la résolution Uber H3 appropriée selon le niveau de zoom du client (0.0 - 20.0)
-    /// Cette correspondance est le standard de l'industrie pour équilibrer la densité des marqueurs à l'écran.
     pub fn from_client_zoom(zoom: f32) -> Self {
         let res = match zoom {
-            z if z <= 2.0 => 0, // Échelle mondiale (Continent)
-            z if z <= 4.0 => 1,
-            z if z <= 6.0 => 2,
-            z if z <= 8.0 => 3,  // Échelle nationale (ex: la France entière)
-            z if z <= 10.0 => 5, // Échelle régionale
-            z if z <= 12.0 => 7, // Échelle d'une grande ville / Métropole
-            z if z <= 14.0 => 8,
-            z if z <= 16.0 => 9, // Échelle d'un quartier dense
-            _ => 10,             // Échelle d'une rue / piéton
+            z if z < 4.0 => 3,  // Vue macro : Pays / Continents
+            z if z < 7.0 => 5,  // Vue régionale
+            z if z < 11.0 => 7, // Vue urbaine (Grande ville / Métropole) -> Notre zone chaude
+            z if z < 14.0 => 9, // Vue quartier
+            _ => 10,                 // Vue rue / hyper-locale (Plafond de sécurité pour l'infra)
         };
         Self(res)
+    }
+
+    pub fn from_client_zoom_int(zoom: i32) -> Self {
+        Self::from_client_zoom(zoom as f32)
     }
 }
 

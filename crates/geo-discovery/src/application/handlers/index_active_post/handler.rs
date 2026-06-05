@@ -1,12 +1,14 @@
 // crates/geo_discovery/src/application/handlers/index_active_post_handler.rs
 
 use async_trait::async_trait;
-use std::time::Duration;
+use std::str::FromStr;
 
 use shared_kernel::command::CommandHandler;
 use shared_kernel::core::Result;
+use shared_kernel::types::PostType;
 
 use crate::context::GeoDiscoveryCommandContext;
+use crate::domain::types::TilePostMetadata;
 use crate::handlers::IndexActivePostCommand;
 
 pub struct IndexActivePostHandler;
@@ -29,14 +31,23 @@ impl CommandHandler for IndexActivePostHandler {
             return Ok(());
         }
 
-        let ttl_duration = Duration::from_hours(48);
+        let post_type = PostType::from_str(&cmd.post_type)?;
+        let thumbnail_url = cmd.thumbnail_url.filter(|url| !url.is_empty());
+
+        let metadata = TilePostMetadata::new(
+            cmd.post_id,
+            cmd.location.lat(),
+            cmd.location.lon(),
+            post_type,
+            thumbnail_url,
+        );
 
         ctx.index_active_post(
-            cmd.post_id,
+            metadata,
             cmd.location,
             cmd.created_at,
+            cmd.expires_at,
             cmd.initial_score,
-            ttl_duration,
             Some(cmd.command_id),
         )
         .await?;

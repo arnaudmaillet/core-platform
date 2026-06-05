@@ -6,7 +6,7 @@ use shared_kernel::{
     core::{AggregateMetadata, AggregateRoot, Versioned},
     geo::GeoPoint,
     messaging::{Event, EventEmitter},
-    types::PostId,
+    types::{PostId, PostType},
 };
 
 use crate::{
@@ -21,7 +21,10 @@ pub struct ActiveMapPost {
     resolution: TileResolution,
     tile_id: H3Tile,
     bucket_hour: BucketHour,
+    post_type: PostType,
+    thumbnail_url: Option<String>,
     created_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
     metadata: AggregateMetadata,
 }
 
@@ -75,7 +78,10 @@ impl ActiveMapPost {
         resolution: TileResolution,
         tile_id: H3Tile,
         bucket_hour: BucketHour,
+        post_type: PostType,
+        thumbnail_url: Option<String>,
         created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
         metadata: AggregateMetadata,
     ) -> Self {
         Self {
@@ -84,7 +90,10 @@ impl ActiveMapPost {
             resolution,
             tile_id,
             bucket_hour,
+            post_type,
+            thumbnail_url,
             created_at,
+            expires_at,
             metadata,
         }
     }
@@ -104,7 +113,16 @@ impl ActiveMapPost {
     pub fn bucket_hour(&self) -> BucketHour {
         self.bucket_hour
     }
+    pub fn post_type(&self) -> PostType {
+        self.post_type
+    }
+    pub fn thumbnail_url(&self) -> Option<&str> {
+        self.thumbnail_url.as_deref()
+    }
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
+    }
+    pub fn expires_at(&self) -> DateTime<Utc> {
+        self.expires_at
     }
 }

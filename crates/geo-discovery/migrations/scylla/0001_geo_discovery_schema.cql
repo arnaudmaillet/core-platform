@@ -8,6 +8,9 @@ CREATE TABLE geo_discovery.active_posts_by_tile (
     post_id uuid,
     latitude double,
     longitude double,
+    post_type text,
+    thumbnail_url text,
     created_at timestamp,
+    expires_at timestamp,
     PRIMARY KEY ((tile_resolution, tile_id, bucket_hour), post_id)
 );

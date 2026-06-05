@@ -10,23 +10,23 @@ use shared_kernel::types::PostId;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::domain::repositories::MapPersistenceRepository;
-use crate::domain::types::{BucketHour, H3Tile, TileResolution};
 use crate::entities::ActiveMapPost;
 use crate::mappers::CqlMapPostRow;
+use crate::repositories::MapPersistenceRepository;
+use crate::types::{BucketHour, H3Tile, TileResolution};
 
 macro_rules! insert_tile_cql {
     () => {
         "INSERT INTO geo_discovery.active_posts_by_tile \
-         (tile_resolution, tile_id, bucket_hour, post_id, latitude, longitude, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?) \
+         (tile_resolution, tile_id, bucket_hour, post_id, latitude, longitude, post_type, thumbnail_url, created_at, expires_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          USING TTL ?"
     };
 }
 
 macro_rules! find_by_tile_cql {
     () => {
-        "SELECT tile_resolution, tile_id, bucket_hour, post_id, latitude, longitude, created_at \
+        "SELECT tile_resolution, tile_id, bucket_hour, post_id, latitude, longitude, post_type, thumbnail_url, created_at, expires_at \
          FROM geo_discovery.active_posts_by_tile \
          WHERE tile_resolution = ? AND tile_id = ? AND bucket_hour = ?"
     };
@@ -67,6 +67,10 @@ impl MapPersistenceRepository for ScyllaMapPersistenceRepository {
         let ttl_seconds = ttl.as_secs() as i32;
         let bucket_cql = CqlTimestamp(post.bucket_hour().value());
         let created_at_cql = CqlTimestamp(post.created_at().timestamp_millis());
+        let expires_at_cql = CqlTimestamp(post.expires_at().timestamp_millis());
+
+        let post_type_str = post.post_type().to_string();
+        let thumbnail_cql = post.thumbnail_url().map(|url| url.to_string());
 
         let params = (
             post.resolution().value(),
@@ -75,7 +79,10 @@ impl MapPersistenceRepository for ScyllaMapPersistenceRepository {
             post.post_id().uuid(),
             post.location().lat(),
             post.location().lon(),
+            post_type_str,
+            thumbnail_cql,
             created_at_cql,
+            expires_at_cql,
             ttl_seconds,
         );
 

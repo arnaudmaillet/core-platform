@@ -4,11 +4,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use shared_kernel::messaging::Event;
-use shared_kernel::types::{PostId, ProfileId, Region};
+use shared_kernel::types::{PostId, PostType, ProfileId, Region};
 use std::borrow::Cow;
 use uuid::Uuid;
 
-use crate::domain::types::{PostType, VisibilityLevel};
+use crate::domain::types::VisibilityLevel;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]

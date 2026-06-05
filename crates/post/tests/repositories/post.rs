@@ -5,11 +5,11 @@ mod scylla_integration_tests {
     use infra_test::ScyllaTestContext;
     use post::repositories_impl::ScyllaPostRepository;
     use shared_kernel::core::{PageQuery, Result};
-    use shared_kernel::types::{PostId, ProfileId, Region};
+    use shared_kernel::types::{PostId, PostType, ProfileId, Region};
 
     use post::entities::Post;
     use post::repositories::PostRepository;
-    use post::types::{Caption, PostType, VisibilityLevel};
+    use post::types::{Caption, VisibilityLevel};
 
     async fn get_test_context() -> (ScyllaPostRepository, ScyllaTestContext) {
         let valid_path = ["./migrations/scylla"]

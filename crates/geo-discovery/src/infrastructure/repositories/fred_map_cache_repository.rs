@@ -3,13 +3,17 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use infra_fred::fred::clients::Pool;
-use infra_fred::fred::interfaces::SortedSetsInterface;
-use shared_kernel::core::{Error, Identifier, Result};
-use shared_kernel::types::PostId;
-use uuid::Uuid;
+use infra_fred::fred::interfaces::{HashesInterface, SetsInterface, SortedSetsInterface};
+use infra_fred::fred::types::Value as RedisValue;
+use prost::Message;
+use shared_kernel::core::{Error, Result};
+use shared_kernel::types::{PostId, PostType};
+use std::str::FromStr;
 
 use crate::domain::repositories::MapCacheRepository;
-use crate::domain::types::{H3Tile, TileResolution};
+use crate::domain::types::{H3Tile, TilePostMetadata, TileResolution};
+use crate::types::{PopularityScore, ScoredPostTile};
+use shared_proto::geo_discovery::v1::TilePostMetadata as ProtoTilePostMetadata;
 
 pub struct FredMapCacheRepository {
     pool: Pool,
@@ -20,14 +24,20 @@ impl FredMapCacheRepository {
         Self { pool }
     }
 
-    /// Clé pour le ZSET de popularité / visibilité
     fn popularity_key(&self, resolution: TileResolution, tile_id: &H3Tile) -> String {
         format!("geo:tile:{}:{}", resolution.value(), tile_id.value())
     }
 
-    /// Clé pour le ZSET temporel (Suivi de l'obsolescence des 48h)
     fn time_key(&self, resolution: TileResolution, tile_id: &H3Tile) -> String {
         format!("geo:tile:{}:{}:time", resolution.value(), tile_id.value())
+    }
+
+    fn post_metadata_key(&self) -> &'static str {
+        "geo:post:metadata"
+    }
+
+    fn global_active_tiles_key(&self) -> &'static str {
+        "geo:active_tiles"
     }
 }
 
@@ -37,34 +47,49 @@ impl MapCacheRepository for FredMapCacheRepository {
         &self,
         resolution: TileResolution,
         tile_id: &H3Tile,
-        post_id: &PostId,
+        metadata: &TilePostMetadata,
         initial_score: f64,
-        created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
     ) -> Result<()> {
         let pop_key = self.popularity_key(resolution, tile_id);
         let time_key = self.time_key(resolution, tile_id);
-        let post_id_str = post_id.to_string();
-        let timestamp = created_at.timestamp_millis() as f64;
+        let expires_at_ts = expires_at.timestamp_millis() as f64;
+        let post_id_str = metadata.post_id.to_string();
 
         let pop_values = vec![(initial_score, post_id_str.clone())];
-        let time_values = vec![(timestamp, post_id_str)];
+        let time_values = vec![(expires_at_ts, post_id_str.clone())];
 
-        let fut_pop = self.pool.zadd::<i64, _, _>(
-            pop_key, None,  // Option<SetOptions>
-            None,  // Option<Ordering>
-            false, // changed
-            false, // incr
-            pop_values,
-        );
-
+        let fut_pop = self
+            .pool
+            .zadd::<i64, _, _>(pop_key, None, None, false, false, pop_values);
         let fut_time = self
             .pool
             .zadd::<i64, _, _>(time_key, None, None, false, false, time_values);
 
-        let (res_pop, res_time) = tokio::join!(fut_pop, fut_time);
+        let proto_message = ProtoTilePostMetadata {
+            post_id: post_id_str.clone(),
+            latitude: metadata.latitude,
+            longitude: metadata.longitude,
+            post_type: metadata.post_type.to_string(),
+            thumbnail_url: metadata.thumbnail_url.clone(),
+        };
+
+        let mut buffer = Vec::with_capacity(proto_message.encoded_len());
+        proto_message.encode(&mut buffer).map_err(|e| {
+            Error::internal(format!("Failed to serialize metadata to Protobuf: {}", e))
+        })?;
+
+        let fut_hash = self.pool.hset::<i64, _, _>(
+            self.post_metadata_key(),
+            (post_id_str, RedisValue::Bytes(buffer.into())),
+        );
+
+        let (res_pop, res_time, res_hash) = tokio::join!(fut_pop, fut_time, fut_hash);
 
         res_pop.map_err(|e| Error::internal(format!("Redis popularity write failed: {}", e)))?;
         res_time.map_err(|e| Error::internal(format!("Redis time track write failed: {}", e)))?;
+        res_hash
+            .map_err(|e| Error::internal(format!("Redis metadata HASH write failed: {}", e)))?;
 
         Ok(())
     }
@@ -92,29 +117,54 @@ impl MapCacheRepository for FredMapCacheRepository {
         resolution: TileResolution,
         tile_id: &H3Tile,
         limit: usize,
-    ) -> Result<Vec<PostId>> {
+    ) -> Result<Vec<ScoredPostTile>> {
         let pop_key = self.popularity_key(resolution, tile_id);
-
         if limit == 0 {
             return Ok(Vec::new());
         }
 
-        // ZREVRANGE key 0 (limit - 1) pour avoir les meilleurs scores décroissants
         let end_idx = (limit - 1) as i64;
-
-        let raw_ids: Vec<String> = self
+        let redis_pairs: Vec<(String, f64)> = self
             .pool
-            .zrevrange(&pop_key, 0, end_idx, false)
+            .zrevrange(&pop_key, 0, end_idx, true)
             .await
-            .map_err(|e| Error::internal(format!("Redis ZREVRANGE failed: {}", e)))?;
+            .map_err(|e| Error::internal(format!("Redis ZREVRANGE WITHSCORES failed: {}", e)))?;
 
-        let post_ids = raw_ids
-            .into_iter()
-            .filter_map(|id_str| Uuid::parse_str(&id_str).ok())
-            .map(|uuid| PostId::from_uuid(uuid))
-            .collect();
+        if redis_pairs.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        Ok(post_ids)
+        let post_ids: Vec<String> = redis_pairs.iter().map(|(id, _)| id.clone()).collect();
+
+        let raw_buffers: Vec<Option<Vec<u8>>> = self
+            .pool
+            .hmget(self.post_metadata_key(), post_ids)
+            .await
+            .map_err(|e| Error::internal(format!("Redis HMGET metadata failed: {}", e)))?;
+
+        let mut result_list = Vec::with_capacity(redis_pairs.len());
+
+        for (index, (id, score)) in redis_pairs.into_iter().enumerate() {
+            if let Some(Some(bytes)) = raw_buffers.get(index) {
+                if let Ok(proto_meta) = ProtoTilePostMetadata::decode(bytes.as_slice()) {
+                    // PARSING ROBUSTE : On valide la String infra vers l'Enum Domaine
+                    if let Ok(domain_post_type) = PostType::from_str(&proto_meta.post_type) {
+                        let domain_meta = TilePostMetadata::new(
+                            PostId::from_str(&proto_meta.post_id)?,
+                            proto_meta.latitude,
+                            proto_meta.longitude,
+                            domain_post_type,
+                            proto_meta.thumbnail_url,
+                        );
+
+                        let popularity = PopularityScore::from_raw(score);
+                        result_list.push(ScoredPostTile::new(domain_meta, popularity));
+                    }
+                }
+            }
+        }
+
+        Ok(result_list)
     }
 
     async fn remove_from_tile(
@@ -128,7 +178,7 @@ impl MapCacheRepository for FredMapCacheRepository {
         let post_id_str = post_id.to_string();
 
         let fut_pop = self.pool.zrem::<i64, _, _>(&pop_key, post_id_str.clone());
-        let fut_time = self.pool.zrem::<i64, _, _>(&time_key, post_id_str);
+        let fut_time = self.pool.zrem::<i64, _, _>(&time_key, post_id_str.clone());
 
         let (res_pop, res_time) = tokio::join!(fut_pop, fut_time);
         res_pop.map_err(|e| Error::internal(format!("Redis ZREM popularity failed: {}", e)))?;
@@ -142,43 +192,58 @@ impl MapCacheRepository for FredMapCacheRepository {
         resolution: TileResolution,
         tile_id: &H3Tile,
         older_than: DateTime<Utc>,
-    ) -> Result<Vec<PostId>> {
+    ) -> Result<Vec<TilePostMetadata>> {
         let pop_key = self.popularity_key(resolution, tile_id);
         let time_key = self.time_key(resolution, tile_id);
-
-        // Calcul du score plafond (Maintenant - 48h) en ms
         let max_score = older_than.timestamp_millis() as f64;
 
-        // 1. On récupère d'abord les IDs qui vont être dégagés
-        // zrangebyscore(key, min, max, withscores, limit)
-        let expired_ids_raw: Vec<String> = self
+        let expired_ids: Vec<String> = self
             .pool
-            .zrangebyscore(
-                &time_key,
-                f64::MIN,  // Fred accepte directement le f64 grâce à TryInto<ZRange>
-                max_score, // Idem ici
-                false,     // withscores: bool -> FALSE car on veut uniquement les membres (IDs)
-                None,      // limit: Option<Limit> -> NONE car on purge tout sans limite
-            )
+            .zrangebyscore(&time_key, f64::MIN, max_score, false, None)
             .await
             .map_err(|e| Error::internal(format!("Redis scanning expired posts failed: {}", e)))?;
 
-        if expired_ids_raw.is_empty() {
+        if expired_ids.is_empty() {
             return Ok(Vec::new());
         }
 
-        // 2. Nettoyage effectif dans les deux sets
-        // ZREMRANGEBYSCORE pour le set temporel
+        let raw_buffers: Vec<Option<Vec<u8>>> = self
+            .pool
+            .hmget(self.post_metadata_key(), expired_ids.clone())
+            .await
+            .map_err(|e| Error::internal(format!("Redis HMGET for eviction failed: {}", e)))?;
+
+        let evicted_metadata: Vec<TilePostMetadata> = raw_buffers
+            .into_iter()
+            .flatten()
+            .filter_map(|bytes| {
+                ProtoTilePostMetadata::decode(bytes.as_slice())
+                    .ok()
+                    .and_then(|proto_meta| {
+                        let domain_post_type = PostType::from_str(&proto_meta.post_type).ok()?;
+                        Some(TilePostMetadata::new(
+                            PostId::from_str(&proto_meta.post_id).ok()?,
+                            proto_meta.latitude,
+                            proto_meta.longitude,
+                            domain_post_type,
+                            proto_meta.thumbnail_url,
+                        ))
+                    })
+            })
+            .collect();
+
         let fut_rem_time =
             self.pool
                 .zremrangebyscore::<i64, _, _, _>(&time_key, f64::MIN, max_score);
+        let fut_rem_pop = self.pool.zrem::<i64, _, _>(&pop_key, expired_ids.clone());
 
-        // ZREM groupé pour purger le set de popularité
-        let fut_rem_pop = self
+        let fut_rem_hash = self
             .pool
-            .zrem::<i64, _, _>(&pop_key, expired_ids_raw.clone());
+            .hdel::<i64, _, _>(self.post_metadata_key(), expired_ids);
 
-        let (res_rem_time, res_rem_pop) = tokio::join!(fut_rem_time, fut_rem_pop);
+        let (res_rem_time, res_rem_pop, res_rem_hash) =
+            tokio::join!(fut_rem_time, fut_rem_pop, fut_rem_hash);
+
         res_rem_time.map_err(|e| {
             Error::internal(format!("Redis eviction from time track failed: {}", e))
         })?;
@@ -188,14 +253,69 @@ impl MapCacheRepository for FredMapCacheRepository {
                 e
             ))
         })?;
+        res_rem_hash.map_err(|e| {
+            Error::internal(format!("Redis eviction from metadata HASH failed: {}", e))
+        })?;
 
-        // 3. Mapping vers nos domaines types
-        let evicted_ids = expired_ids_raw
-            .into_iter()
-            .filter_map(|id_str| Uuid::parse_str(&id_str).ok())
-            .map(|uuid| PostId::from_uuid(uuid))
-            .collect();
+        Ok(evicted_metadata)
+    }
 
-        Ok(evicted_ids)
+    async fn track_active_tile(&self, resolution: TileResolution, tile_id: &H3Tile) -> Result<()> {
+        let entry = format!("{}:{}", resolution.value(), tile_id.value());
+        self.pool
+            .sadd::<i64, _, _>(self.global_active_tiles_key(), entry)
+            .await
+            .map_err(|e| Error::internal(format!("Redis SADD active tile failed: {}", e)))?;
+        Ok(())
+    }
+
+    async fn untrack_active_tile(
+        &self,
+        resolution: TileResolution,
+        tile_id: &H3Tile,
+    ) -> Result<()> {
+        let entry = format!("{}:{}", resolution.value(), tile_id.value());
+        self.pool
+            .srem::<i64, _, _>(self.global_active_tiles_key(), entry)
+            .await
+            .map_err(|e| Error::internal(format!("Redis SREM active tile failed: {}", e)))?;
+        Ok(())
+    }
+
+    async fn get_all_active_tiles(&self) -> Result<Vec<(TileResolution, H3Tile)>> {
+        let raw_entries: Vec<String> = self
+            .pool
+            .smembers(self.global_active_tiles_key())
+            .await
+            .map_err(|e| Error::internal(format!("Redis SMEMBERS failed: {}", e)))?;
+
+        let mut parsed_tiles = Vec::new();
+        for entry in raw_entries {
+            let parts: Vec<&str> = entry.split(':').collect();
+            if parts.len() == 2 {
+                if let Ok(res_val) = parts[0].parse::<i32>() {
+                    if let Ok(resolution) = TileResolution::try_new(res_val) {
+                        if let Ok(tile_id) = H3Tile::from_str(parts[1]) {
+                            parsed_tiles.push((resolution, tile_id));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(parsed_tiles)
+    }
+
+    async fn get_tile_post_count(
+        &self,
+        resolution: TileResolution,
+        tile_id: &H3Tile,
+    ) -> Result<usize> {
+        let pop_key = self.popularity_key(resolution, tile_id);
+        let count: usize = self
+            .pool
+            .zcard(&pop_key)
+            .await
+            .map_err(|e| Error::internal(format!("Redis ZCARD failed: {}", e)))?;
+        Ok(count)
     }
 }

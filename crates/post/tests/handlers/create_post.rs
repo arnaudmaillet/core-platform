@@ -3,12 +3,12 @@ mod tests {
     use post::commands::CreatePostCommand;
     use post::context::PostCommandContext;
     use post::repositories::PostRepository;
-    use post::types::{Caption, PostType};
+    use post::types::Caption;
     use post_test_utils::PostTestFixture;
     use shared_kernel::command::CommandTarget;
     use shared_kernel::core::Result;
     use shared_kernel::idempotency::IdempotencyRepository;
-    use shared_kernel::types::ProfileId;
+    use shared_kernel::types::{PostType, ProfileId};
     use std::collections::BTreeMap;
     use uuid::Uuid;
 

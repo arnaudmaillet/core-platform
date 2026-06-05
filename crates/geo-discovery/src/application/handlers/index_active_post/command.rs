@@ -13,7 +13,10 @@ pub struct IndexActivePostCommand {
     pub target: CommandTarget<ProfileId>,
     pub post_id: PostId,
     pub location: GeoPoint,
+    pub post_type: String,
+    pub thumbnail_url: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
     pub initial_score: f64,
 }
 
@@ -34,13 +37,17 @@ impl IdentifiableCommand for IndexActivePostCommand {
 }
 
 impl IndexActivePostCommand {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         command_id: Uuid,
         author_id: ProfileId,
         region: Region,
         post_id: PostId,
         location: GeoPoint,
+        post_type: String,
+        thumbnail_url: Option<String>,
         created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
         initial_score: f64,
     ) -> Self {
         Self {
@@ -48,7 +55,10 @@ impl IndexActivePostCommand {
             target: CommandTarget::stateless(author_id, region),
             post_id,
             location,
+            post_type,
+            thumbnail_url,
             created_at,
+            expires_at,
             initial_score,
         }
     }

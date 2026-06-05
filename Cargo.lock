@@ -1310,12 +1310,20 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "dashmap 7.0.0-rc2",
+ "futures",
  "h3o",
  "infra-fred",
  "infra-scylla",
+ "prost",
+ "prost-types",
  "serde",
+ "serde_json",
  "shared-kernel",
+ "shared-proto",
  "tokio",
+ "tonic",
+ "tracing",
  "uuid",
 ]
 

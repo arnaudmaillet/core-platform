@@ -5,10 +5,11 @@ mod tests {
     use post::entities::MediaAsset;
     use post::entities::Post;
     use post::types::{
-        Caption, DurationSeconds, Height, MediaType, MimeType, PostType, VisibilityLevel, Width,
+        Caption, DurationSeconds, Height, MediaType, MimeType, VisibilityLevel, Width,
     };
     use post::types::{MediaId, Mentions};
     use shared_kernel::messaging::EventEmitter;
+    use shared_kernel::types::PostType;
     use shared_kernel::types::{PostId, ProfileId, Url};
 
     // Helper pour créer un MediaAsset valide

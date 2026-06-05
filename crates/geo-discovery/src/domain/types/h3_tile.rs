@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{Error, Result, ValueObject};
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -60,5 +60,11 @@ impl FromStr for H3Tile {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         Self::try_new(s.to_string())
+    }
+}
+
+impl fmt::Display for H3Tile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.value())
     }
 }

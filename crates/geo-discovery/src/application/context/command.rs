@@ -13,6 +13,7 @@ use shared_kernel::types::{PostId, ProfileId, Region};
 use crate::context::GeoDiscoveryAppContext;
 use crate::domain::types::{BucketHour, H3Tile, TileResolution};
 use crate::entities::ActiveMapPost;
+use crate::types::TilePostMetadata;
 
 #[derive(Clone)]
 pub struct GeoDiscoveryCommandContext {
@@ -64,11 +65,11 @@ impl GeoDiscoveryCommandContext {
     /// et propage dans les 5 niveaux produits de Redis de manière transparente.
     pub async fn index_active_post(
         &self,
-        post_id: PostId,
+        metadata: TilePostMetadata,
         location: GeoPoint,
         created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
         initial_score: f64,
-        ttl: Duration,
         command_id: Option<Uuid>,
     ) -> Result<()> {
         if let Some(cmd_id) = command_id {
@@ -84,36 +85,55 @@ impl GeoDiscoveryCommandContext {
         let persistence_repo = self.app.persistence_repo();
         let cache_repo = self.app.cache_repo();
 
-        // 1. Projection H3 native
         let h3_lat_lng = LatLng::new(location.lat(), location.lon()).map_err(|e| {
             Error::validation("location", format!("Invalid coordinates for H3: {}", e))
         })?;
 
-        // 2. Préparation et écriture ScyllaDB (Résolution Pivot 7)
         let scylla_res = TileResolution::try_new(7)?;
         let scylla_cell = h3_lat_lng.to_cell(Resolution::try_from(7).unwrap());
         let scylla_tile = H3Tile::from_str(&scylla_cell.to_string())?;
 
-        let active_post_scylla = ActiveMapPost::builder(post_id, location, scylla_res, scylla_tile)
-            .with_created_at(created_at)
-            .build()?;
+        let active_post_scylla =
+            ActiveMapPost::builder(metadata.post_id, location, scylla_res, scylla_tile)
+                .with_post_type(metadata.post_type)
+                .with_thumbnail_url(metadata.thumbnail_url.clone())
+                .with_created_at(created_at)
+                .with_expires_at(expires_at) // Injecté de manière personnalisée !
+                .build()?;
 
-        // On lance la sauvegarde ScyllaDB
-        persistence_repo.save(&active_post_scylla, ttl).await?;
+        let ttl_duration = if active_post_scylla.expires_at() > active_post_scylla.created_at() {
+            Duration::from_secs(
+                (active_post_scylla.expires_at() - active_post_scylla.created_at()).num_seconds()
+                    as u64,
+            )
+        } else {
+            Duration::from_secs(0)
+        };
 
-        // 3. Multi-indexation Redis en arrière-plan
+        persistence_repo
+            .save(&active_post_scylla, ttl_duration)
+            .await?;
+
+        // Multi-indexation Redis
         let target_resolutions = vec![3, 5, 7, 9, 10];
-
         for res_value in target_resolutions {
             let resolution = TileResolution::try_new(res_value)?;
             let h3_resolution = Resolution::try_from(res_value as u8).unwrap();
             let cell = h3_lat_lng.to_cell(h3_resolution);
             let tile_id = H3Tile::from_str(&cell.to_string())?;
 
-            // Alimentation synchrone ou concurrente de chaque niveau Redis
+            // Redis reçoit la vraie date d'expiration pour son ZSET temporel d'éviction
             cache_repo
-                .add_to_tile(resolution, &tile_id, &post_id, initial_score, created_at)
+                .add_to_tile(
+                    resolution,
+                    &tile_id,
+                    &metadata,
+                    initial_score,
+                    active_post_scylla.expires_at(),
+                )
                 .await?;
+
+            cache_repo.track_active_tile(resolution, &tile_id).await?;
         }
 
         if let Some(cmd_id) = command_id {
@@ -149,7 +169,7 @@ impl GeoDiscoveryCommandContext {
         let h3_lat_lng = LatLng::new(location.lat(), location.lon()).map_err(|e| {
             Error::validation(
                 "location",
-                &format!(
+                format!(
                     "Coordonnées géographiques invalides pour la projection H3 : {}",
                     e
                 ),
@@ -165,7 +185,7 @@ impl GeoDiscoveryCommandContext {
             .delete(TileResolution::try_new(7)?, &scylla_tile, bucket, post_id)
             .await?;
 
-        // 2. Nettoyage de tous les niveaux de zoom Redis
+        // 2. Nettoyage chirurgical de tous les index de tuiles Redis via l'ID brut
         let target_resolutions = vec![3, 5, 7, 9, 10];
         for res_value in target_resolutions {
             let resolution = TileResolution::try_new(res_value)?;
@@ -188,9 +208,15 @@ impl GeoDiscoveryCommandContext {
         tile_id: &H3Tile,
         older_than: DateTime<Utc>,
     ) -> Result<Vec<PostId>> {
-        self.app
+        let evicted_metadata = self
+            .app
             .cache_repo()
             .evict_old_posts(resolution, tile_id, older_than)
-            .await
+            .await?;
+
+        Ok(evicted_metadata
+            .into_iter()
+            .map(|meta| meta.post_id)
+            .collect())
     }
 }

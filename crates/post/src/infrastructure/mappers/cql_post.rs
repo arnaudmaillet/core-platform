@@ -9,12 +9,12 @@ use infra_scylla::scylla;
 use infra_scylla::scylla::value::CqlTimestamp;
 use infra_scylla::scylla_macros::DeserializeRow;
 use shared_kernel::core::{Error, Identifier, Result};
-use shared_kernel::types::{MusicId, PostId, ProfileId, Region}; // Ajout de Region si nécessaire
+use shared_kernel::types::{MusicId, PostId, PostType, ProfileId};
 
 use crate::domain::entities::MediaAsset;
 use crate::domain::entities::Post;
 use crate::domain::types::{
-    Caption, DynamicMetadata, Hashtags, Mentions, PostType, VisibilityLevel,
+    Caption, DynamicMetadata, Hashtags, Mentions, VisibilityLevel,
 }; // Ajout des types domaine
 use crate::mappers::CqlMediaAsset;
 

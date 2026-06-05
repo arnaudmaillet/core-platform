@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use shared_kernel::{
     core::{AggregateMetadata, AggregateRoot, Error, Result, Versioned},
     messaging::{Event, EventEmitter, OperationTracker},
-    types::{MusicId, PostId, ProfileId},
+    types::{MusicId, PostId, PostType, ProfileId},
 };
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
         builders::PostBuilder,
         entities::MediaAsset,
         events::PostEvent,
-        types::{Caption, DynamicMetadata, Hashtags, PostType, VisibilityLevel},
+        types::{Caption, DynamicMetadata, Hashtags, VisibilityLevel},
     },
     types::Mentions,
 };

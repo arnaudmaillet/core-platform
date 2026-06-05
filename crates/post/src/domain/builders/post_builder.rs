@@ -2,11 +2,11 @@
 
 use chrono::{DateTime, Utc};
 use shared_kernel::core::{AggregateMetadata, Result};
-use shared_kernel::types::{MusicId, PostId, ProfileId};
+use shared_kernel::types::{MusicId, PostId, PostType, ProfileId};
 
 use crate::domain::entities::MediaAsset;
 use crate::domain::entities::Post;
-use crate::domain::types::{Caption, DynamicMetadata, Hashtags, PostType, VisibilityLevel};
+use crate::domain::types::{Caption, DynamicMetadata, Hashtags, VisibilityLevel};
 use crate::types::Mentions;
 
 pub struct PostBuilder {
