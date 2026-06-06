@@ -1330,6 +1330,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "geo-discovery-server"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "auth-test-utils",
+ "chrono",
+ "dotenvy",
+ "geo-discovery",
+ "geo-discovery-test-utils",
+ "infra-fred",
+ "infra-scylla",
+ "infra-test",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "geo-discovery-test-utils"
 version = "0.1.0"
 dependencies = [

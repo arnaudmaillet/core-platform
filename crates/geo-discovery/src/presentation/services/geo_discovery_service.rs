@@ -3,27 +3,27 @@
 use crate::context::GeoDiscoveryQueryContext;
 use crate::types::{MapViewport, TileResolution};
 use shared_proto::geo_discovery::v1::{
-    GetMapFeedRequest, GetMapFeedResponse,
-    geo_discovery_query_service_server::GeoDiscoveryQueryService,
+    GetMapPinsRequest, GetMapPinsResponse,
+    geo_discovery_service_server::GeoDiscoveryService as ProtoGeoDiscoveryService,
 };
 use tonic::{Request, Response, Status};
 
-pub struct GeoDiscoveryGrpcService {
+pub struct GeoDiscoveryService {
     query_ctx: GeoDiscoveryQueryContext,
 }
 
-impl GeoDiscoveryGrpcService {
+impl GeoDiscoveryService {
     pub fn new(query_ctx: GeoDiscoveryQueryContext) -> Self {
         Self { query_ctx }
     }
 }
 
 #[tonic::async_trait]
-impl GeoDiscoveryQueryService for GeoDiscoveryGrpcService {
-    async fn get_map_feed(
+impl ProtoGeoDiscoveryService for GeoDiscoveryService {
+    async fn get_map_pins(
         &self,
-        request: Request<GetMapFeedRequest>,
-    ) -> Result<Response<GetMapFeedResponse>, Status> {
+        request: Request<GetMapPinsRequest>,
+    ) -> Result<Response<GetMapPinsResponse>, Status> {
         let req = request.into_inner();
 
         let protobuf_viewport = req
@@ -55,6 +55,6 @@ impl GeoDiscoveryQueryService for GeoDiscoveryGrpcService {
             .await
             .map_err(|e| Status::internal(format!("Failed to resolve map feed: {}", e)))?;
 
-        Ok(Response::new(GetMapFeedResponse { pins }))
+        Ok(Response::new(GetMapPinsResponse { pins }))
     }
 }

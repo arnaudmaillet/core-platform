@@ -12,6 +12,7 @@ members = [
     "backend/services/profile/api/command-server",
     "backend/services/social/api/command-server",
     "backend/services/post/api/command-server",
+    "backend/services/geo-discovery/api/server",
     "common/rust/shared-proto",
     "crates/account",
     "crates/auth",

@@ -1,3 +1,3 @@
 mod geo_discovery_service;
 
-pub use geo_discovery_service::GeoDiscoveryGrpcService;
+pub use geo_discovery_service::GeoDiscoveryService;

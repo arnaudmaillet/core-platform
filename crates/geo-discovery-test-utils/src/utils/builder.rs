@@ -3,13 +3,13 @@
 use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::TokenValidatorStub;
 use geo_discovery::db::FredMapCacheRepository;
-use geo_discovery::services::GeoDiscoveryGrpcService;
+use geo_discovery::services::GeoDiscoveryService;
 use geo_discovery::{db::ScyllaMapPersistenceRepository, handlers::HydrateTileCacheHandler};
 use infra_fred::RedisIdempotencyRepository;
 use infra_scylla::scylla::client::session::Session;
 use infra_test::TestContextBuilder;
 use shared_kernel::types::Region;
-use shared_proto::geo_discovery::v1::geo_discovery_query_service_server::GeoDiscoveryQueryServiceServer;
+use shared_proto::geo_discovery::v1::geo_discovery_service_server::GeoDiscoveryServiceServer;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Server;
@@ -114,7 +114,7 @@ impl GeoDiscoveryTestContextBuilder {
             });
 
             let query_ctx = app_ctx.query(Region::default());
-            let geo_grpc_svc = GeoDiscoveryGrpcService::new(query_ctx);
+            let geo_grpc_svc = GeoDiscoveryService::new(query_ctx);
 
             let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
             let actual_addr = listener.local_addr().unwrap();
@@ -124,7 +124,7 @@ impl GeoDiscoveryTestContextBuilder {
             ready_tx.send(actual_addr).ok();
 
             Server::builder()
-                .add_service(GeoDiscoveryQueryServiceServer::with_interceptor(
+                .add_service(GeoDiscoveryServiceServer::with_interceptor(
                     geo_grpc_svc,
                     interceptor,
                 ))
