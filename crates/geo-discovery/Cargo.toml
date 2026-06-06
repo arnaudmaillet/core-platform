@@ -25,3 +25,7 @@ tonic = { workspace = true }
 dashmap = { workspace = true }
 prost = { workspace = true }
 h3o = { version = "0.10.0", default-features = false }
+
+[dev-dependencies]
+geo-discovery-test-utils = { workspace = true }
+infra-test = { workspace = true }

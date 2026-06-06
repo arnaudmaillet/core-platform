@@ -1,0 +1,26 @@
+[package]
+name = "geo-discovery-test-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+auth = { workspace = true }
+auth-test-utils = { workspace = true }
+shared-kernel = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
+shared-proto = { workspace = true, features = ["geo-discovery"] }
+infra-fred = { workspace = true }
+infra-scylla = { workspace = true }
+infra-test = { workspace = true }
+geo-discovery = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }

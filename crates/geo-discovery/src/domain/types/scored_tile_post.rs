@@ -6,11 +6,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScoredPostTile {
     pub metadata: TilePostMetadata,
-    pub score: PopularityScore,
+    pub popularity_score: PopularityScore,
 }
 
 impl ScoredPostTile {
-    pub fn new(metadata: TilePostMetadata, score: PopularityScore) -> Self {
-        Self { metadata, score }
+    pub fn new(metadata: TilePostMetadata, popularity_score: PopularityScore) -> Self {
+        Self {
+            metadata,
+            popularity_score,
+        }
     }
 }

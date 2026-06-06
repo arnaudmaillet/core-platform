@@ -1,7 +1,7 @@
 // crates/geo_discovery/src/domain/builders/active_map_post.rs
 
 use crate::entities::ActiveMapPost;
-use crate::types::{BucketHour, H3Tile, TileResolution};
+use crate::types::{BucketHour, TileH3, TileResolution};
 use chrono::{DateTime, Duration, Utc};
 use shared_kernel::core::{AggregateMetadata, Result};
 use shared_kernel::geo::GeoPoint;
@@ -11,7 +11,7 @@ pub struct ActiveMapPostBuilder {
     post_id: PostId,
     location: GeoPoint,
     resolution: TileResolution,
-    tile_id: H3Tile,
+    tile_id: TileH3,
     post_type: Option<PostType>,
     thumbnail_url: Option<String>,
     created_at: Option<DateTime<Utc>>,
@@ -24,7 +24,7 @@ impl ActiveMapPostBuilder {
         post_id: PostId,
         location: GeoPoint,
         resolution: TileResolution,
-        tile_id: H3Tile,
+        tile_id: TileH3,
     ) -> Self {
         Self {
             post_id,

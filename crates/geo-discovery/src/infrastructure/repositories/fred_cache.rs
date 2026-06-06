@@ -11,7 +11,7 @@ use shared_kernel::types::{PostId, PostType};
 use std::str::FromStr;
 
 use crate::domain::repositories::MapCacheRepository;
-use crate::domain::types::{H3Tile, TilePostMetadata, TileResolution};
+use crate::domain::types::{TileH3, TilePostMetadata, TileResolution};
 use crate::types::{PopularityScore, ScoredPostTile};
 use shared_proto::geo_discovery::v1::TilePostMetadata as ProtoTilePostMetadata;
 
@@ -24,11 +24,11 @@ impl FredMapCacheRepository {
         Self { pool }
     }
 
-    fn popularity_key(&self, resolution: TileResolution, tile_id: &H3Tile) -> String {
+    fn popularity_key(&self, resolution: TileResolution, tile_id: &TileH3) -> String {
         format!("geo:tile:{}:{}", resolution.value(), tile_id.value())
     }
 
-    fn time_key(&self, resolution: TileResolution, tile_id: &H3Tile) -> String {
+    fn time_key(&self, resolution: TileResolution, tile_id: &TileH3) -> String {
         format!("geo:tile:{}:{}:time", resolution.value(), tile_id.value())
     }
 
@@ -46,7 +46,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn add_to_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         metadata: &TilePostMetadata,
         initial_score: f64,
         expires_at: DateTime<Utc>,
@@ -97,7 +97,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn increment_score(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         post_id: &PostId,
         delta: f64,
     ) -> Result<()> {
@@ -115,7 +115,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn get_top_posts(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         limit: usize,
     ) -> Result<Vec<ScoredPostTile>> {
         let pop_key = self.popularity_key(resolution, tile_id);
@@ -170,7 +170,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn remove_from_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         post_id: &PostId,
     ) -> Result<()> {
         let pop_key = self.popularity_key(resolution, tile_id);
@@ -190,7 +190,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn evict_old_posts(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         older_than: DateTime<Utc>,
     ) -> Result<Vec<TilePostMetadata>> {
         let pop_key = self.popularity_key(resolution, tile_id);
@@ -260,7 +260,7 @@ impl MapCacheRepository for FredMapCacheRepository {
         Ok(evicted_metadata)
     }
 
-    async fn track_active_tile(&self, resolution: TileResolution, tile_id: &H3Tile) -> Result<()> {
+    async fn track_active_tile(&self, resolution: TileResolution, tile_id: &TileH3) -> Result<()> {
         let entry = format!("{}:{}", resolution.value(), tile_id.value());
         self.pool
             .sadd::<i64, _, _>(self.global_active_tiles_key(), entry)
@@ -272,7 +272,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn untrack_active_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
     ) -> Result<()> {
         let entry = format!("{}:{}", resolution.value(), tile_id.value());
         self.pool
@@ -282,7 +282,7 @@ impl MapCacheRepository for FredMapCacheRepository {
         Ok(())
     }
 
-    async fn get_all_active_tiles(&self) -> Result<Vec<(TileResolution, H3Tile)>> {
+    async fn get_all_active_tiles(&self) -> Result<Vec<(TileResolution, TileH3)>> {
         let raw_entries: Vec<String> = self
             .pool
             .smembers(self.global_active_tiles_key())
@@ -295,7 +295,7 @@ impl MapCacheRepository for FredMapCacheRepository {
             if parts.len() == 2 {
                 if let Ok(res_val) = parts[0].parse::<i32>() {
                     if let Ok(resolution) = TileResolution::try_new(res_val) {
-                        if let Ok(tile_id) = H3Tile::from_str(parts[1]) {
+                        if let Ok(tile_id) = TileH3::from_str(parts[1]) {
                             parsed_tiles.push((resolution, tile_id));
                         }
                     }
@@ -308,7 +308,7 @@ impl MapCacheRepository for FredMapCacheRepository {
     async fn get_tile_post_count(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
     ) -> Result<usize> {
         let pop_key = self.popularity_key(resolution, tile_id);
         let count: usize = self

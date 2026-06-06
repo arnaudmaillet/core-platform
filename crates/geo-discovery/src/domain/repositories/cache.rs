@@ -1,6 +1,6 @@
 // crates/geo_discovery/src/domain/repositories/map_cache_repository.rs
 
-use crate::domain::types::{H3Tile, TileResolution};
+use crate::domain::types::{TileH3, TileResolution};
 use crate::types::{ScoredPostTile, TilePostMetadata};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -13,7 +13,7 @@ pub trait MapCacheRepository: Send + Sync {
     async fn add_to_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         metadata: &TilePostMetadata,
         initial_score: f64,
         created_at: DateTime<Utc>,
@@ -23,7 +23,7 @@ pub trait MapCacheRepository: Send + Sync {
     async fn increment_score(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         post_id: &PostId,
         delta: f64,
     ) -> Result<()>;
@@ -32,7 +32,7 @@ pub trait MapCacheRepository: Send + Sync {
     async fn get_top_posts(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         limit: usize,
     ) -> Result<Vec<ScoredPostTile>>;
 
@@ -40,7 +40,7 @@ pub trait MapCacheRepository: Send + Sync {
     async fn remove_from_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         post_id: &PostId,
     ) -> Result<()>;
 
@@ -49,24 +49,24 @@ pub trait MapCacheRepository: Send + Sync {
     async fn evict_old_posts(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         older_than: DateTime<Utc>,
     ) -> Result<Vec<TilePostMetadata>>;
 
     /// Enregistre une tuile dans l'index global pour indiquer qu'elle contient des posts actifs
-    async fn track_active_tile(&self, resolution: TileResolution, tile_id: &H3Tile) -> Result<()>;
+    async fn track_active_tile(&self, resolution: TileResolution, tile_id: &TileH3) -> Result<()>;
 
     /// Retire une tuile de l'index global (à utiliser lorsqu'elle n'a plus aucun post actif)
-    async fn untrack_active_tile(&self, resolution: TileResolution, tile_id: &H3Tile)
+    async fn untrack_active_tile(&self, resolution: TileResolution, tile_id: &TileH3)
     -> Result<()>;
 
     /// Récupère l'intégralité des tuiles géographiques ayant enregistré de l'activité
-    async fn get_all_active_tiles(&self) -> Result<Vec<(TileResolution, H3Tile)>>;
+    async fn get_all_active_tiles(&self) -> Result<Vec<(TileResolution, TileH3)>>;
 
     /// Retourne le nombre total de posts indexés dans le ZSET de popularité pour une tuile donnée
     async fn get_tile_post_count(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
     ) -> Result<usize>;
 }

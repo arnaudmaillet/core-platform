@@ -11,7 +11,7 @@ use tokio::sync::{Semaphore, mpsc};
 use crate::context::GeoDiscoveryAppContext;
 use crate::handlers::HydrateTileCacheCommand;
 use crate::repositories::MapPersistenceRepository;
-use crate::types::{BucketHour, H3Tile, TilePostMetadata, TileResolution};
+use crate::types::{BucketHour, TileH3, TilePostMetadata, TileResolution};
 use crate::types::{MapViewport, PopularityScore, ScoredPostTile};
 use shared_proto::geo_discovery::v1::{LatLng, MapPostPin};
 
@@ -79,13 +79,13 @@ impl GeoDiscoveryQueryContext {
                     Error::internal(format!("Semaphore acquisition failure: {}", e))
                 })?;
 
-                let res: Result<(H3Tile, Vec<ScoredPostTile>)> =
+                let res: Result<(TileH3, Vec<ScoredPostTile>)> =
                     match repo.get_top_posts(res_kv, &t, limit_per_tile).await {
                         // Cache Hit
                         Ok(scored_posts) if !scored_posts.is_empty() => Ok((t, scored_posts)),
                         // Cache Miss
                         _ => {
-                            let fallback_data =
+                            let fallback_data: Vec<TilePostMetadata> =
                                 Self::execute_pure_scylla_read(&p_repo, res_kv, &t, limit_per_tile)
                                     .await?;
 
@@ -118,7 +118,7 @@ impl GeoDiscoveryQueryContext {
                         }),
                         media_type: item.metadata.post_type.to_string(),
                         thumbnail_url: item.metadata.thumbnail_url.unwrap_or_default(),
-                        popularity_score: item.score.value(),
+                        popularity_score: item.popularity_score.value(),
                         created_at: Some(now_proto.clone()),
                     });
                 }
@@ -131,7 +131,7 @@ impl GeoDiscoveryQueryContext {
     async fn execute_pure_scylla_read(
         persistence_repo: &Arc<dyn MapPersistenceRepository>,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         limit: usize,
     ) -> Result<Vec<TilePostMetadata>> {
         let now = Utc::now();

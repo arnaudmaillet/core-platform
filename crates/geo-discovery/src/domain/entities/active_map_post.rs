@@ -11,7 +11,7 @@ use shared_kernel::{
 
 use crate::{
     builders::ActiveMapPostBuilder,
-    domain::types::{BucketHour, H3Tile, TileResolution},
+    domain::types::{BucketHour, TileH3, TileResolution},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +19,7 @@ pub struct ActiveMapPost {
     post_id: PostId,
     location: GeoPoint,
     resolution: TileResolution,
-    tile_id: H3Tile,
+    tile_id: TileH3,
     bucket_hour: BucketHour,
     post_type: PostType,
     thumbnail_url: Option<String>,
@@ -66,7 +66,7 @@ impl ActiveMapPost {
         post_id: PostId,
         location: GeoPoint,
         resolution: TileResolution,
-        tile_id: H3Tile,
+        tile_id: TileH3,
     ) -> ActiveMapPostBuilder {
         ActiveMapPostBuilder::new(post_id, location, resolution, tile_id)
     }
@@ -76,7 +76,7 @@ impl ActiveMapPost {
         post_id: PostId,
         location: GeoPoint,
         resolution: TileResolution,
-        tile_id: H3Tile,
+        tile_id: TileH3,
         bucket_hour: BucketHour,
         post_type: PostType,
         thumbnail_url: Option<String>,
@@ -107,7 +107,7 @@ impl ActiveMapPost {
     pub fn resolution(&self) -> TileResolution {
         self.resolution
     }
-    pub fn tile_id(&self) -> &H3Tile {
+    pub fn tile_id(&self) -> &TileH3 {
         &self.tile_id
     }
     pub fn bucket_hour(&self) -> BucketHour {

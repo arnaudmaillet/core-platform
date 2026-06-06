@@ -61,7 +61,7 @@ impl HydrateTileCacheHandler {
                 post.post_id(),
                 post.location().lat(),
                 post.location().lon(),
-                post.post_type(), // Utilise directement l'Enum PostType
+                post.post_type(),
                 post.thumbnail_url().map(|url| url.to_string()),
             );
 

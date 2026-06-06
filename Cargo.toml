@@ -31,7 +31,9 @@ members = [
     "crates/auth-test-utils",
     "crates/post",
     "crates/post-test-utils",
-    "crates/shared-kernel-test-utils", "crates/geo-discovery",
+    "crates/shared-kernel-test-utils",
+    "crates/geo-discovery",
+    "crates/geo-discovery-test-utils",
 ]
 resolver = "2"
 
@@ -55,6 +57,8 @@ profile = { path = "crates/profile" }
 profile-test-utils = { path = "crates/profile-test-utils" }
 post = { path = "crates/post" }
 post-test-utils = { path = "crates/post-test-utils" }
+geo-discovery = { path = "crates/geo-discovery" }
+geo-discovery-test-utils = { path = "crates/geo-discovery-test-utils" }
 auth = { path = "crates/auth" }
 auth-test-utils = { path = "crates/auth-test-utils" }
 infra-sqlx = { path = "crates/infra-sqlx" }

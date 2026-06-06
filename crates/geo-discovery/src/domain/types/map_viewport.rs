@@ -1,6 +1,6 @@
 // crates/geo_discovery/src/domain/types/map_viewport.rs
 
-use crate::domain::types::H3Tile;
+use crate::domain::types::TileH3;
 use h3o::Resolution;
 use shared_kernel::core::{Error, Result};
 use shared_proto::geo_discovery::v1::LatLng;
@@ -40,7 +40,7 @@ impl MapViewport {
     /// Calcule et extrait toutes les cellules H3 uniques intersectant ce Viewport.
     /// La densité du maillage (steps = 10) assure un excellent compromis entre
     /// la couverture sans "trous" visuels et les performances de traitement CPU.
-    pub fn get_intersecting_tiles(&self, resolution: Resolution) -> Result<Vec<H3Tile>> {
+    pub fn get_intersecting_tiles(&self, resolution: Resolution) -> Result<Vec<TileH3>> {
         let mut tiles = Vec::new();
         let steps = 10;
 
@@ -58,7 +58,7 @@ impl MapViewport {
                 {
                     let cell_id = h3_coord.to_cell(resolution);
 
-                    if let Ok(tile) = H3Tile::from_str(&cell_id.to_string()) {
+                    if let Ok(tile) = TileH3::from_str(&cell_id.to_string()) {
                         if !tiles.contains(&tile) {
                             tiles.push(tile);
                         }

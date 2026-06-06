@@ -11,7 +11,7 @@ use shared_kernel::geo::GeoPoint;
 use shared_kernel::types::{PostId, ProfileId, Region};
 
 use crate::context::GeoDiscoveryAppContext;
-use crate::domain::types::{BucketHour, H3Tile, TileResolution};
+use crate::domain::types::{BucketHour, TileH3, TileResolution};
 use crate::entities::ActiveMapPost;
 use crate::types::TilePostMetadata;
 
@@ -91,7 +91,7 @@ impl GeoDiscoveryCommandContext {
 
         let scylla_res = TileResolution::try_new(7)?;
         let scylla_cell = h3_lat_lng.to_cell(Resolution::try_from(7).unwrap());
-        let scylla_tile = H3Tile::from_str(&scylla_cell.to_string())?;
+        let scylla_tile = TileH3::from_str(&scylla_cell.to_string())?;
 
         let active_post_scylla =
             ActiveMapPost::builder(metadata.post_id, location, scylla_res, scylla_tile)
@@ -120,7 +120,7 @@ impl GeoDiscoveryCommandContext {
             let resolution = TileResolution::try_new(res_value)?;
             let h3_resolution = Resolution::try_from(res_value as u8).unwrap();
             let cell = h3_lat_lng.to_cell(h3_resolution);
-            let tile_id = H3Tile::from_str(&cell.to_string())?;
+            let tile_id = TileH3::from_str(&cell.to_string())?;
 
             // Redis reçoit la vraie date d'expiration pour son ZSET temporel d'éviction
             cache_repo
@@ -178,7 +178,7 @@ impl GeoDiscoveryCommandContext {
 
         // 1. Nettoyage ScyllaDB (Basé sur la rés. pivot 7)
         let scylla_cell = h3_lat_lng.to_cell(Resolution::try_from(7).unwrap());
-        let scylla_tile = H3Tile::from_str(&scylla_cell.to_string())?;
+        let scylla_tile = TileH3::from_str(&scylla_cell.to_string())?;
         let bucket = BucketHour::from_timestamp(created_at.timestamp_millis());
 
         persistence_repo
@@ -191,7 +191,7 @@ impl GeoDiscoveryCommandContext {
             let resolution = TileResolution::try_new(res_value)?;
             let h3_resolution = Resolution::try_from(res_value as u8).unwrap();
             let cell = h3_lat_lng.to_cell(h3_resolution);
-            let tile_id = H3Tile::from_str(&cell.to_string())?;
+            let tile_id = TileH3::from_str(&cell.to_string())?;
 
             cache_repo
                 .remove_from_tile(resolution, &tile_id, post_id)
@@ -205,7 +205,7 @@ impl GeoDiscoveryCommandContext {
     pub async fn execute_cache_eviction(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         older_than: DateTime<Utc>,
     ) -> Result<Vec<PostId>> {
         let evicted_metadata = self

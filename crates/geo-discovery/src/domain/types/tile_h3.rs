@@ -4,9 +4,9 @@ use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct H3Tile(String);
+pub struct TileH3(String);
 
-impl H3Tile {
+impl TileH3 {
     pub fn try_new(index_str: String) -> Result<Self> {
         let tile = Self(index_str.trim().to_lowercase());
         tile.validate()?;
@@ -18,7 +18,7 @@ impl H3Tile {
     }
 }
 
-impl ValueObject for H3Tile {
+impl ValueObject for TileH3 {
     fn validate(&self) -> Result<()> {
         if self.0.is_empty() {
             return Err(Error::validation(
@@ -43,27 +43,27 @@ impl ValueObject for H3Tile {
     }
 }
 
-impl TryFrom<String> for H3Tile {
+impl TryFrom<String> for TileH3 {
     type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         Self::try_new(value)
     }
 }
 
-impl From<H3Tile> for String {
-    fn from(tile: H3Tile) -> Self {
+impl From<TileH3> for String {
+    fn from(tile: TileH3) -> Self {
         tile.0
     }
 }
 
-impl FromStr for H3Tile {
+impl FromStr for TileH3 {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         Self::try_new(s.to_string())
     }
 }
 
-impl fmt::Display for H3Tile {
+impl fmt::Display for TileH3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.value())
     }

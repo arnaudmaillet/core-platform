@@ -1,7 +1,7 @@
-CREATE KEYSPACE IF NOT EXISTS geo_discovery 
-WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
+CREATE KEYSPACE IF NOT EXISTS geo_discovery
+WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
 
-CREATE TABLE geo_discovery.active_posts_by_tile (
+CREATE TABLE IF NOT EXISTS geo_discovery.active_posts_by_tile (
     tile_resolution int,
     tile_id text,
     bucket_hour timestamp,

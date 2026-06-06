@@ -13,7 +13,7 @@ use std::time::Duration;
 use crate::entities::ActiveMapPost;
 use crate::mappers::CqlMapPostRow;
 use crate::repositories::MapPersistenceRepository;
-use crate::types::{BucketHour, H3Tile, TileResolution};
+use crate::types::{BucketHour, TileH3, TileResolution};
 
 macro_rules! insert_tile_cql {
     () => {
@@ -97,7 +97,7 @@ impl MapPersistenceRepository for ScyllaMapPersistenceRepository {
     async fn find_by_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         bucket: BucketHour,
     ) -> Result<Vec<ActiveMapPost>> {
         let bucket_cql = CqlTimestamp(bucket.value());
@@ -119,11 +119,21 @@ impl MapPersistenceRepository for ScyllaMapPersistenceRepository {
             .rows::<CqlMapPostRow>()
             .map_err(|e| Error::database(format!("Geo row iterator failure: {}", e)))?;
 
+        let now_utc = chrono::Utc::now(); // On capture l'instant T actuel
         let mut posts = Vec::new();
+
         for row_res in rows_iter {
             let cql_row =
                 row_res.map_err(|e| Error::database(format!("Geo row parsing failed: {}", e)))?;
-            posts.push(ActiveMapPost::try_from(cql_row)?);
+
+            let post = ActiveMapPost::try_from(cql_row)?;
+
+            // CORRECTION : Filtrage applicatif strict contre les fantômes non purgés par ScyllaDB
+            if post.expires_at() <= now_utc {
+                continue;
+            }
+
+            posts.push(post);
         }
 
         Ok(posts)
@@ -132,7 +142,7 @@ impl MapPersistenceRepository for ScyllaMapPersistenceRepository {
     async fn delete(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         bucket: BucketHour,
         post_id: &PostId,
     ) -> Result<()> {
