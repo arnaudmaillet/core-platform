@@ -6,5 +6,6 @@ mod presentation;
 
 pub use application::{context, handlers};
 pub use bootstrap::GeoDiscoveryServiceBuilder;
-pub use domain::{builders, entities, repositories, types};
+pub use domain::{builders, entities, repositories, resolvers, types};
 pub use infrastructure::{mappers, repositories as db};
+pub use presentation::{services, workers};

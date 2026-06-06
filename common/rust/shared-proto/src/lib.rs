@@ -28,5 +28,12 @@ pub mod social {
     }
 }
 
+#[cfg(feature = "geo-discovery")]
+pub mod geo_discovery {
+    pub mod v1 {
+        tonic::include_proto!("geo_discovery.v1");
+    }
+}
+
 pub const SERVICE_DESCRIPTOR_SET: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/service_descriptor.bin"));

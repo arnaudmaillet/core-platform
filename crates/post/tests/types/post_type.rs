@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::types::PostType;
+    use shared_kernel::types::PostType;
     use std::str::FromStr;
 
     #[test]

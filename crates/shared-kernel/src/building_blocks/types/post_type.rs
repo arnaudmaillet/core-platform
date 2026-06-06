@@ -1,14 +1,14 @@
-// crates/post/src/domain/types/post_type.rs
+// crates/shared_kernel/src/types/post_type.rs
 
+use crate::core::{Error, Result, ValueObject};
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{Error, Result, ValueObject};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PostType {
-    Video,    // Une vidéo unique en plein écran (Format standard TikTok)
-    Carousel, // Un diaporama de plusieurs images/vidéos (Format swipe)
+    Video,    // Une vidéo unique (Format TikTok)
+    Carousel, // Un diaporama d'images/vidéos (Format swipe)
     Image,    // Une image unique statique
     Text,     // Un post textuel pur (sans aucun média associé)
 }
@@ -34,12 +34,9 @@ impl PostType {
 
 impl ValueObject for PostType {
     fn validate(&self) -> Result<()> {
-        // L'invariant fort est garanti par la structure stricte de l'enum Rust.
         Ok(())
     }
 }
-
-// --- CONVERSIONS ---
 
 impl TryFrom<String> for PostType {
     type Error = Error;

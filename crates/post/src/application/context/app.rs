@@ -7,7 +7,7 @@ use crate::{
 };
 use shared_kernel::{
     idempotency::IdempotencyRepository,
-    types::{PostId, ProfileId, Region},
+    types::{ProfileId, Region},
 };
 use std::sync::Arc;
 

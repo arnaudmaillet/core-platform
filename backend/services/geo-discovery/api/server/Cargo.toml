@@ -1,0 +1,31 @@
+
+[package]
+name = "geo-discovery-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+shared-kernel = { workspace = true }
+geo-discovery = { workspace = true }
+shared-proto = { workspace = true, features = ["geo-discovery"] }
+auth = { workspace = true }
+infra-fred = { workspace = true }
+infra-scylla = { workspace = true }
+
+tokio = { workspace = true }
+tonic = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+
+[dev-dependencies]
+infra-test = { workspace = true }
+auth-test-utils = { workspace = true }
+geo-discovery-test-utils = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

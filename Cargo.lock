@@ -1310,13 +1310,68 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "dashmap 7.0.0-rc2",
+ "futures",
+ "geo-discovery-test-utils",
  "h3o",
  "infra-fred",
  "infra-scylla",
+ "infra-test",
+ "prost",
+ "prost-types",
  "serde",
+ "serde_json",
  "shared-kernel",
+ "shared-proto",
  "tokio",
+ "tonic",
+ "tracing",
  "uuid",
+]
+
+[[package]]
+name = "geo-discovery-server"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "auth-test-utils",
+ "chrono",
+ "dotenvy",
+ "geo-discovery",
+ "geo-discovery-test-utils",
+ "infra-fred",
+ "infra-scylla",
+ "infra-test",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "geo-discovery-test-utils"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth",
+ "auth-test-utils",
+ "chrono",
+ "geo-discovery",
+ "infra-fred",
+ "infra-scylla",
+ "infra-test",
+ "prost",
+ "shared-kernel",
+ "shared-kernel-test-utils",
+ "shared-proto",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
 ]
 
 [[package]]

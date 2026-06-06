@@ -1,15 +1,16 @@
+// crates/geo-discovery/src/domain/types/bucket_hour.rs
+
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::core::{Error, Result, ValueObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct BucketHour(i64); // Timestamp millisecondes représentant le début de la tranche de 24h
+pub struct BucketHour(i64);
 
 impl BucketHour {
-    const MILLIS_IN_DAY: i64 = 24 * 60 * 60 * 1000;
+    pub const MILLIS_IN_DAY: i64 = 24 * 60 * 60 * 1000;
 
     pub fn from_timestamp(timestamp_millis: i64) -> Self {
-        // Tronque le timestamp à la racine de la journée en cours (24h bucket)
         let truncated = (timestamp_millis / Self::MILLIS_IN_DAY) * Self::MILLIS_IN_DAY;
         Self(truncated)
     }

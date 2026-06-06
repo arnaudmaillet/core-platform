@@ -7,7 +7,6 @@ mod media_type;
 mod mentions;
 mod metadata;
 mod mime_type;
-mod post_type;
 mod visibility_level;
 
 pub use caption::Caption;
@@ -19,5 +18,4 @@ pub use media_type::MediaType;
 pub use mentions::Mentions;
 pub use metadata::DynamicMetadata;
 pub use mime_type::MimeType;
-pub use post_type::PostType;
 pub use visibility_level::VisibilityLevel;

@@ -1,7 +1,7 @@
 // crates/geo_discovery/src/domain/repositories/map_persistence_repository.rs
 
 use crate::entities::ActiveMapPost;
-use crate::types::{BucketHour, H3Tile, TileResolution};
+use crate::types::{BucketHour, TileH3, TileResolution};
 use async_trait::async_trait;
 use shared_kernel::core::Result;
 use shared_kernel::types::PostId;
@@ -17,7 +17,7 @@ pub trait MapPersistenceRepository: Send + Sync {
     async fn find_by_tile(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         bucket: BucketHour,
     ) -> Result<Vec<ActiveMapPost>>;
 
@@ -25,7 +25,7 @@ pub trait MapPersistenceRepository: Send + Sync {
     async fn delete(
         &self,
         resolution: TileResolution,
-        tile_id: &H3Tile,
+        tile_id: &TileH3,
         bucket: BucketHour,
         post_id: &PostId,
     ) -> Result<()>;

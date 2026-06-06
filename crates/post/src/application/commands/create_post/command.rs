@@ -5,7 +5,7 @@ use std::str::FromStr;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{MusicId, PostId, ProfileId, Region, Url};
+use shared_kernel::types::{MusicId, PostId, PostType, ProfileId, Region, Url};
 use shared_proto::post::v1::CreatePostRequest;
 use shared_proto::post::v1::MediaAsset as ProtoMediaAsset;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::entities::MediaAsset;
 
 use crate::types::{
-    Caption, DurationSeconds, DynamicMetadata, Height, MediaId, MediaType, MimeType, PostType,
+    Caption, DurationSeconds, DynamicMetadata, Height, MediaId, MediaType, MimeType,
     Width,
 };
 

@@ -3,7 +3,7 @@ use tonic::{Request, Response, Status};
 
 // Kernel & Shared Proto Imports
 use shared_kernel::command::CommandBus;
-use shared_kernel::types::{ProfileId, Region};
+use shared_kernel::types::ProfileId;
 use shared_proto::social::v1::social_service_server::SocialService as ProtoSocialService;
 use shared_proto::social::v1::{
     FollowProfileRequest, FollowProfileResponse, GetFollowersRequest, GetFollowersResponse,
