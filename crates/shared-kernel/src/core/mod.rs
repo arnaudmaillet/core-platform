@@ -9,7 +9,7 @@ mod transaction;
 pub use clock::{Clock, SystemClock};
 pub use errors::{Error, ErrorCode, Result};
 pub use identity::{
-    AggregateMetadata, AggregateRoot, Entity, EntityOptionExt, Identifier, ValueObject, Versioned,
+    LifecycleTracker, ManagedEntity, Entity, EntityOptionExt, Identifier, ValueObject, Versioned,
 };
 pub use pagination::{PageQuery, PagedResult};
 pub use resilience::{RetryConfig, with_retry};

@@ -31,5 +31,4 @@ message Post {
   bool                        is_edited              = 11;
   google.protobuf.Timestamp   updated_at             = 12;
   string                      dynamic_metadata       = 13;
-  uint64                      version                = 14;
 }

@@ -3,16 +3,14 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
-    core::{AggregateMetadata, AggregateRoot, Versioned},
+    core::{Entity, LifecycleTracker},
     geo::GeoPoint,
     messaging::{Event, EventEmitter},
     types::{PostId, PostType},
 };
 
-use crate::{
-    builders::ActiveMapPostBuilder,
-    domain::types::{BucketHour, TileH3, TileResolution},
-};
+use crate::builders::ActiveMapPostBuilder;
+use crate::types::{BucketHour, TileH3, TileResolution};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveMapPost {
@@ -25,39 +23,35 @@ pub struct ActiveMapPost {
     thumbnail_url: Option<String>,
     created_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,
-    metadata: AggregateMetadata,
-}
-
-impl Versioned for ActiveMapPost {
-    fn version(&self) -> u64 {
-        self.metadata.version()
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
-    }
-    fn record_change(&mut self) {
-        self.metadata.record_change();
-    }
+    lifecycle: LifecycleTracker,
 }
 
 impl EventEmitter for ActiveMapPost {
-    fn push_event(&mut self, _event: Box<dyn Event>) {
-        self.metadata.push_event(_event);
+    fn push_event(&mut self, event: Box<dyn Event>) {
+        self.lifecycle.push_event(event);
     }
     fn pull_events(&mut self) -> Vec<Box<dyn Event>> {
-        self.metadata.pull_events()
+        self.lifecycle.pull_events()
     }
 }
 
-impl AggregateRoot for ActiveMapPost {
-    fn id(&self) -> String {
-        self.post_id.to_string()
+impl Entity for ActiveMapPost {
+    type Id = PostId;
+
+    fn entity_name() -> &'static str {
+        "ActiveMapPost"
     }
-    fn metadata(&self) -> &AggregateMetadata {
-        &self.metadata
+
+    fn map_constraint_to_field(_constraint: &str) -> &'static str {
+        "post_id"
     }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
-        &mut self.metadata
+
+    fn id(&self) -> &Self::Id {
+        self.post_id_as_ref()
+    }
+
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.lifecycle.updated_at()
     }
 }
 
@@ -82,7 +76,7 @@ impl ActiveMapPost {
         thumbnail_url: Option<String>,
         created_at: DateTime<Utc>,
         expires_at: DateTime<Utc>,
-        metadata: AggregateMetadata,
+        updated_at: DateTime<Utc>,
     ) -> Self {
         Self {
             post_id,
@@ -94,13 +88,18 @@ impl ActiveMapPost {
             thumbnail_url,
             created_at,
             expires_at,
-            metadata,
+            lifecycle: LifecycleTracker::restore(updated_at),
         }
     }
 
     pub fn post_id(&self) -> PostId {
         self.post_id
     }
+
+    pub(crate) fn post_id_as_ref(&self) -> &PostId {
+        &self.post_id
+    }
+
     pub fn location(&self) -> GeoPoint {
         self.location
     }

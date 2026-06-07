@@ -2,7 +2,7 @@
 
 use account::repositories::GlobalIdentityRegistration;
 use shared_kernel::command::CommandTarget;
-use shared_kernel::core::{AggregateMetadata, Error, ErrorCode, Result, Versioned};
+use shared_kernel::core::{Error, ErrorCode, LifecycleTracker, Result, Versioned};
 use shared_kernel::types::{Email, SubId};
 use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
@@ -58,7 +58,7 @@ async fn test_register_success() -> Result<()> {
         assert_eq!(acc.governance().last_ip_addr(), Some(&ip));
 
         // v1 car INITIAL_VERSION (0) + 1 (register call)
-        assert_eq!(acc.version(), AggregateMetadata::INITIAL_VERSION + 1);
+        assert_eq!(acc.version(), 1);
     })
     .await?;
 

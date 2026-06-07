@@ -5,7 +5,9 @@ use infra_scylla::scylla::errors::PrepareError;
 use infra_scylla::scylla::{
     client::session::Session, statement::prepared::PreparedStatement, value::CqlTimestamp,
 };
-use shared_kernel::core::{Error, Identifier, PageQuery, PagedResult, Result, Versioned};
+use shared_kernel::core::{
+    ManagedEntity, Error, Identifier, PageQuery, PagedResult, Result, Versioned,
+};
 use shared_kernel::types::{PostId, ProfileId, Region};
 use std::sync::Arc;
 
@@ -114,7 +116,9 @@ impl PostRepository for ScyllaPostRepository {
             .map(|id| id.as_uuid())
             .collect();
 
-        let updated_at = Some(CqlTimestamp(post.updated_at().timestamp_millis()));
+        let updated_at = Some(CqlTimestamp(
+            post.lifecycle().updated_at().timestamp_millis(),
+        ));
 
         let params = (
             &region_str,

@@ -23,8 +23,7 @@ impl RelationRepositoryStub {
 
     /// Permet de pré-alimenter le graphe social pour les scénarios de test (Given)
     pub fn seed_relation(&self, follower_id: ProfileId, following_id: ProfileId) {
-        let relation =
-            FollowRelation::restore(follower_id, following_id, 1, Utc::now(), Utc::now());
+        let relation = FollowRelation::restore(follower_id, following_id, Utc::now(), Utc::now());
 
         let mut followings_map = self.followings.write().unwrap();
         followings_map
@@ -43,8 +42,8 @@ impl RelationRepositoryStub {
 #[async_trait]
 impl RelationRepository for RelationRepositoryStub {
     async fn save(&self, relation: &FollowRelation) -> Result<()> {
-        let follower_id = *relation.follower_id();
-        let following_id = *relation.following_id();
+        let follower_id = relation.follower_id();
+        let following_id = relation.following_id();
 
         // 1. Écriture dans la table principale (followings)
         let mut followings_map = self.followings.write().unwrap();

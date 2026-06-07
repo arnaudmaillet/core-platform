@@ -109,8 +109,6 @@ async fn test_redis_save_should_overwrite_entire_hash() -> Result<()> {
         profile_id,
         Counter::from_raw(42),
         Counter::from_raw(84),
-        1,
-        Utc::now(),
         Utc::now(),
     );
 

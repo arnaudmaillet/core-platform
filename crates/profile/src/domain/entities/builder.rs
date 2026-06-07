@@ -3,7 +3,7 @@
 use crate::entities::Profile;
 use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
-use shared_kernel::core::{AggregateMetadata, Result};
+use shared_kernel::core::Result;
 use shared_kernel::types::{AccountId, ProfileId, Url};
 
 pub struct ProfileBuilder {
@@ -94,8 +94,6 @@ impl ProfileBuilder {
     pub fn build(self) -> Result<Profile> {
         let now = Utc::now();
 
-        let metadata = AggregateMetadata::default();
-
         Ok(Profile::restore(
             self.profile_id,
             self.account_id,
@@ -107,9 +105,9 @@ impl ProfileBuilder {
             self.location_label,
             self.social_links,
             self.is_private,
-            metadata.version(),
+            0,
             self.created_at.unwrap_or(now),
-            now,
+            Utc::now(),
         ))
     }
 }

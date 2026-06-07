@@ -34,6 +34,11 @@ impl PostCommandContext {
         self.region
     }
 
+    pub async fn save_idempotency(&self, command_id: Uuid) -> Result<()> {
+        self.app.idempotency_repo().save(None, &command_id).await?;
+        Ok(())
+    }
+
     pub async fn ensure_executable(
         &self,
         command_id: Uuid,
@@ -64,20 +69,6 @@ impl PostCommandContext {
             .await?
             .ok_or_else(|| Error::not_found("Post", target.id.to_string()))?;
 
-        let expected_version = target.expected_version.ok_or_else(|| {
-            Error::validation(
-                "expected_version",
-                "Sharding strict: Expected version is missing for this transaction",
-            )
-        })?;
-
-        if post.version() != expected_version {
-            return Err(Error::concurrency_conflict(format!(
-                "OCC Conflict: DB v{}, Expected v{}",
-                post.version(),
-                expected_version
-            )));
-        }
         Ok(post)
     }
 
@@ -87,11 +78,6 @@ impl PostCommandContext {
                 "Action non autorisée pour {}",
                 self.author_id
             )));
-        }
-        if let Some(cmd_id) = command_id {
-            if self.app.idempotency_repo().exists(None, &cmd_id).await? {
-                return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
-            }
         }
 
         let _events = post.pull_events();

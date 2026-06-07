@@ -118,6 +118,8 @@ impl CounterRepository for ScyllaCounterRepository {
             .into_rows_result()
             .map_err(|e| Error::internal(format!("Invalid rows result for counters: {}", e)))?;
 
+        let now = Utc::now();
+
         if let Some((followers_opt, following_opt)) = rows_result
             .maybe_first_row::<(Option<ScyllaCounter>, Option<ScyllaCounter>)>()
             .map_err(|e| Error::internal(format!("Counter decoding error: {}", e)))?
@@ -132,9 +134,7 @@ impl CounterRepository for ScyllaCounterRepository {
                 profile_id,
                 followers_count,
                 following_count,
-                1,
-                Utc::now(),
-                Utc::now(),
+                now,
             ));
         }
 
@@ -142,9 +142,7 @@ impl CounterRepository for ScyllaCounterRepository {
             profile_id,
             DomainCounter::default(),
             DomainCounter::default(),
-            1,
-            Utc::now(),
-            Utc::now(),
+            now,
         ))
     }
 

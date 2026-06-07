@@ -35,6 +35,7 @@ impl CommandHandler for ChangeVisibilityHandler {
                 "visibility is already set to {:?}, skipping save",
                 cmd.new_visibility
             );
+            ctx.save_idempotency(cmd.command_id).await?;
         }
 
         Ok(())

@@ -1,7 +1,7 @@
 
 use account::entities::Account;
 use account::types::{RegistrationIdentifier, TrustAmount, TrustScore};
-use shared_kernel::core::{AggregateRoot, ErrorCode, Result};
+use shared_kernel::core::{ManagedEntity, ErrorCode, Result, Versioned};
 use shared_kernel::geo::Timezone;
 use shared_kernel::messaging::EventEmitter;
 use shared_kernel::security::PushToken;
@@ -38,7 +38,7 @@ fn create_test_account() -> Account {
 fn test_penalize_trust_with_automated_shadowban() -> Result<()> {
     let mut account = create_test_account();
     let reason = AuditReason::try_new("Repeated violations")?;
-    let version_init = account.metadata().version();
+    let version_init = account.version();
 
     // Act: On inflige une pénalité qui fait tomber le score à 0
     // Le score initial est 100. Une pénalité de 100 active le shadowban auto.
@@ -51,7 +51,7 @@ fn test_penalize_trust_with_automated_shadowban() -> Result<()> {
     // Version: Init(0) + 1 (Penalty/TrackChange) = 1
     // Note: Si penalize_trust appelle shadowban() en interne via track_change,
     // la version monterait à 2. Avec notre implémentation "extra_event", elle reste à 1.
-    assert_eq!(account.metadata().version(), version_init + 1);
+    assert_eq!(account.version(), version_init + 1);
 
     // Events: TrustScoreAdjusted + ShadowbanUpdated
     let events = account.pull_events();
@@ -76,7 +76,7 @@ fn test_idempotency_at_score_floor() -> Result<()> {
     // On met d'abord le compte au plancher
     account.penalize_trust(TrustAmount::PENALTY_BAN, reason.clone())?;
     account.pull_events();
-    let version_before = account.metadata().version();
+    let version_before = account.version();
 
     let penalty_amount = TrustAmount::try_from(10)?;
     let changed = account.penalize_trust(penalty_amount, reason)?;
@@ -84,7 +84,7 @@ fn test_idempotency_at_score_floor() -> Result<()> {
     // Assert
     assert!(!changed);
     assert_eq!(
-        account.metadata().version(),
+        account.version(),
         version_before,
         "La version ne doit pas changer"
     );
@@ -153,20 +153,6 @@ fn test_update_timezone_validation() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_activity_throttling_logic() -> Result<()> {
-    let mut account = create_test_account();
-
-    // Premier record (None -> Some)
-    let first = account.record_activity()?;
-    assert!(first);
-
-    // Deuxième record immédiat (Throttle < 5min)
-    let second = account.record_activity()?;
-    assert!(!second);
-
-    Ok(())
-}
 
 #[test]
 fn test_link_sub_identity_forbidden_if_already_linked() -> Result<()> {

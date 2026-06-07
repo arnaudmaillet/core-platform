@@ -15,7 +15,7 @@ use infra_sqlx::sqlx::FromRow;
 use shared_kernel::geo::Timezone;
 use shared_kernel::security::PushToken;
 use shared_kernel::{
-    core::{AggregateMetadata, Error, Result},
+    core::{Error, LifecycleTracker, Result},
     types::{AccountId, Email, Phone, SubId},
 };
 
@@ -117,11 +117,8 @@ impl PostgresAccountRow {
             identity,
             governance,
             settings,
-            AggregateMetadata::restore(
-                self.version as u64,
-                self.created_at,
-                self.aggregate_updated_at,
-            ),
+            self.version as u64,
+            LifecycleTracker::restore(self.aggregate_updated_at),
         ))
     }
 }

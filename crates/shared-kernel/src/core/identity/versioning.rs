@@ -1,3 +1,5 @@
+// crates/shared-kernel/src/core/identity/versioning.rs
+
 use chrono::{DateTime, Utc};
 
 pub trait Versioned {

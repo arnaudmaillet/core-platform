@@ -10,7 +10,6 @@ message PostTarget {
   string post_id          = 1;
   string author_id        = 2;
   string region           = 3;
-  uint64 expected_version = 4;
 }
 
 message QueryMetadata {

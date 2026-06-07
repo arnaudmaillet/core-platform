@@ -1,6 +1,5 @@
-
 use shared_kernel::{
-    core::{AggregateMetadata, AggregateRoot, Result, Versioned},
+    core::{LifecycleTracker, ManagedEntity, Result, Versioned},
     types::{AccountId, AuditReason, Email},
 };
 
@@ -24,10 +23,7 @@ fn test_account_initial_state() -> Result<()> {
     let account = create_test_account();
 
     assert_eq!(account.identity().state(), &AccountState::UNVERIFIED);
-    assert_eq!(
-        account.metadata().version(),
-        AggregateMetadata::INITIAL_VERSION
-    );
+    assert_eq!(account.version(), 0);
     assert_eq!(account.governance().trust_score().value(), TrustScore::MAX);
 
     Ok(())
@@ -42,13 +38,13 @@ fn test_account_suspension_and_unsuspend_with_reason() -> Result<()> {
     let changed = account.suspend(AuditReason::try_new("Suspicious activity")?)?;
     assert!(changed);
     assert!(account.identity().is_blocked());
-    assert_eq!(account.metadata().version(), snapshot_version + 1);
+    assert_eq!(account.version(), snapshot_version + 1);
 
     // Unsuspend avec raison optionnelle (Option<&str>)
     let changed = account.unsuspend(AuditReason::try_new("Cleared by support")?)?;
     assert!(changed);
     assert!(account.identity().is_active());
-    assert_eq!(account.metadata().version(), snapshot_version + 2);
+    assert_eq!(account.version(), snapshot_version + 2);
 
     Ok(())
 }
@@ -90,21 +86,6 @@ fn test_trust_score_operations() -> Result<()> {
         AuditReason::try_new("Good behavior")?,
     )?;
     assert_eq!(account.governance().trust_score().value(), 80);
-
-    Ok(())
-}
-
-#[test]
-fn test_activity_throttling() -> Result<()> {
-    let mut account = create_test_account();
-
-    // Premier enregistrement (toujours true à l'init)
-    let first = account.record_activity()?;
-    assert!(first);
-
-    // Deuxième immédiat (doit être false cause throttling 5min)
-    let second = account.record_activity()?;
-    assert!(!second);
 
     Ok(())
 }

@@ -22,13 +22,11 @@ fn test_builder_should_instantiate_relation_correctly() -> Result<()> {
     // When
     let relation = FollowRelationBuilder::new(follower, following)
         .with_created_at(custom_time)
-        .with_version(5)
         .build()?;
 
     // Then
-    assert_eq!(relation.follower_id(), &follower);
-    assert_eq!(relation.following_id(), &following);
-    assert_eq!(relation.version(), 5);
+    assert_eq!(relation.follower_id(), follower);
+    assert_eq!(relation.following_id(), following);
     assert_eq!(relation.created_at(), custom_time);
     Ok(())
 }

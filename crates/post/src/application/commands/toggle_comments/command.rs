@@ -38,7 +38,7 @@ impl ToggleCommentsCommand {
             target: CommandTarget {
                 id: PostId::try_from(proto_target.post_id)?,
                 region: Region::try_new(proto_target.region)?,
-                expected_version: Some(proto_target.expected_version),
+                expected_version: None,
             },
             allowed: req.allowed,
         })

@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS followings (
     follower_id uuid,
     following_id uuid,
     created_at timestamp,
-    version bigint,
     PRIMARY KEY (follower_id, following_id)
 ) 
 WITH CLUSTERING ORDER BY (following_id DESC)

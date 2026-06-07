@@ -6,7 +6,7 @@ mod tests {
     use post::types::VisibilityLevel;
     use post_test_utils::PostTestFixture;
     use shared_kernel::command::CommandTarget;
-    use shared_kernel::core::{Result, Versioned};
+    use shared_kernel::core::{ManagedEntity, Result};
     use shared_kernel::idempotency::IdempotencyRepository;
     use uuid::Uuid;
 
@@ -56,13 +56,24 @@ mod tests {
             new_visibility: VisibilityLevel::Public,
         };
 
-        // Act
         f.bus()
             .execute::<PostCommandContext, ChangeVisibilityCommand, ()>(f.writer_ctx(), cmd)
             .await?;
 
-        // Assert
-        assert!(!f.idempotency_repo().exists(None, &command_id).await?);
+        assert!(f.idempotency_repo().exists(None, &command_id).await?);
+
+        let post_in_db = f
+            .post_repo()
+            .find_by_id(f.region(), &post.post_id())
+            .await?
+            .unwrap();
+
+        assert_eq!(
+            post_in_db.lifecycle().updated_at(),
+            post.lifecycle().updated_at()
+        );
+
+        assert!(post_in_db.updated_at().is_none());
 
         Ok(())
     }

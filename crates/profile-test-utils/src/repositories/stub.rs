@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use profile::entities::Profile;
 use profile::repositories::ProfileRepository;
 use profile::types::Handle;
-use shared_kernel::core::{AggregateRoot, Error, Result, Transaction, Versioned};
+use shared_kernel::core::{ManagedEntity, Error, Result, Transaction, Versioned};
 use shared_kernel::types::{AccountId, ProfileId, Region};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
@@ -114,7 +114,7 @@ impl ProfileRepository for ProfileRepositoryStub {
             // 💡 FIX IDEMPOTENCE : C'est une écriture blanche technique si la version
             // est identique en DB et qu'aucun événement métier n'a été produit.
             let is_noop =
-                next_version == current_db_version && profile.metadata().is_events_empty();
+                next_version == current_db_version && profile.lifecycle().is_events_empty();
 
             if is_noop {
                 // On court-circuite immédiatement l'écriture pour ne pas corrompre

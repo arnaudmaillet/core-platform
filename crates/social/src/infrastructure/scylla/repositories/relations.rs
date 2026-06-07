@@ -10,7 +10,7 @@ use infra_scylla::scylla::{
     value::CqlTimestamp,
 };
 use shared_kernel::{
-    core::{Error, Identifier, Result, Versioned},
+    core::{Error, Identifier, Result},
     types::ProfileId,
 };
 use std::sync::Arc;
@@ -31,8 +31,12 @@ pub struct ScyllaRelationRepository {
 
 impl ScyllaRelationRepository {
     pub async fn new(session: Arc<Session>) -> Result<Self> {
-        let insert_following_stmt = session.prepare("INSERT INTO followings (follower_id, following_id, created_at, version) VALUES (?, ?, ?, ?)")
-            .await.map_err(|e| Error::internal(format!("Prepare failed: {}", e)))?;
+        let insert_following_stmt = session
+            .prepare(
+                "INSERT INTO followings (follower_id, following_id, created_at) VALUES (?, ?, ?)",
+            )
+            .await
+            .map_err(|e| Error::internal(format!("Prepare failed: {}", e)))?;
 
         let insert_follower_stmt = session
             .prepare(
@@ -51,7 +55,7 @@ impl ScyllaRelationRepository {
             .await
             .map_err(|e| Error::internal(format!("Prepare failed: {}", e)))?;
 
-        let find_stmt = session.prepare("SELECT created_at, version FROM followings WHERE follower_id = ? AND following_id = ? LIMIT 1")
+        let find_stmt = session.prepare("SELECT created_at FROM followings WHERE follower_id = ? AND following_id = ? LIMIT 1")
             .await.map_err(|e| Error::internal(format!("Prepare failed: {}", e)))?;
 
         let is_following_stmt = session.prepare("SELECT follower_id FROM followings WHERE follower_id = ? AND following_id = ? LIMIT 1")
@@ -91,12 +95,10 @@ impl RelationRepository for ScyllaRelationRepository {
 
         let follower_uuid = relation.follower_id().as_uuid();
         let following_uuid = relation.following_id().as_uuid();
-
         let created_at_cql = CqlTimestamp(relation.created_at().timestamp_millis());
-        let version = relation.version() as i64;
 
         let values = (
-            (follower_uuid, following_uuid, created_at_cql, version),
+            (follower_uuid, following_uuid, created_at_cql),
             (following_uuid, follower_uuid, created_at_cql),
         );
 
@@ -145,20 +147,15 @@ impl RelationRepository for ScyllaRelationRepository {
             .into_rows_result()
             .map_err(|e| Error::internal(format!("Invalid rows result: {}", e)))?;
 
-        if let Some((cql_created_at, cql_version)) = rows_result
-            .maybe_first_row::<(CqlTimestamp, i64)>()
+        if let Some((cql_created_at,)) = rows_result
+            .maybe_first_row::<(CqlTimestamp,)>()
             .map_err(|e| Error::internal(format!("Mapping error: {}", e)))?
         {
             let created_at = chrono::DateTime::from_timestamp_millis(cql_created_at.0)
                 .ok_or_else(|| Error::internal("Invalid timestamp from ScyllaDB"))?;
 
-            let relation = FollowRelation::restore(
-                follower_id,
-                following_id,
-                cql_version as u64,
-                created_at,
-                chrono::Utc::now(),
-            );
+            let relation =
+                FollowRelation::restore(follower_id, following_id, created_at, chrono::Utc::now());
             return Ok(Some(relation));
         }
 

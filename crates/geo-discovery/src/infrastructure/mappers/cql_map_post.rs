@@ -3,7 +3,7 @@
 use chrono::{TimeZone, Utc};
 use infra_scylla::scylla::value::CqlTimestamp;
 use infra_scylla::scylla::{self, DeserializeRow};
-use shared_kernel::core::{AggregateMetadata, Error, Identifier, Result};
+use shared_kernel::core::{Error, Identifier, Result};
 use shared_kernel::geo::GeoPoint;
 use shared_kernel::types::{PostId, PostType};
 use std::str::FromStr;
@@ -63,7 +63,7 @@ impl TryFrom<CqlMapPostRow> for ActiveMapPost {
             thumbnail_url,
             created_at,
             expires_at,
-            AggregateMetadata::default(),
+            Utc::now(),
         ))
     }
 }

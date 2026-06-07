@@ -40,7 +40,6 @@ mod integration_tests {
         let following_id = ProfileId::generate();
 
         let relation = FollowRelation::builder(follower_id, following_id)
-            .with_version(1)
             .build()?;
 
         // --- Act: Étape 1 (Sauvegarde via le Batch Logged ScyllaDB) ---
@@ -59,9 +58,8 @@ mod integration_tests {
         );
 
         let found = found_opt.unwrap();
-        assert_eq!(found.version(), 1);
-        assert_eq!(found.follower_id(), &follower_id);
-        assert_eq!(found.following_id(), &following_id);
+        assert_eq!(found.follower_id(), follower_id);
+        assert_eq!(found.following_id(), following_id);
 
         // --- Assert: Étape 3 (Vérification des Index / Tables Miroirs) ---
         // On vérifie que la table miroir `followers` a bien été alimentée par le Batch

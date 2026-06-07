@@ -1,11 +1,15 @@
 // crates/post/src/presentation/mappers/mod.rs
 
-use crate::domain::entities::Post;
-use shared_kernel::core::Versioned;
+use crate::entities::Post;
 use shared_proto::post::v1::Post as ProtoPost;
 
 impl Post {
     pub fn to_proto(&self) -> ProtoPost {
+        let proto_updated_at = self.updated_at().map(|dt| prost_types::Timestamp {
+            seconds: dt.timestamp(),
+            nanos: dt.timestamp_subsec_nanos() as i32,
+        });
+
         ProtoPost {
             post_id: self.post_id().to_string(),
             author_id: self.author_id().to_string(),
@@ -31,12 +35,8 @@ impl Post {
             music_id: self.music_id().map(|id| id.to_string()),
             hashtags: self.hashtags().value().iter().cloned().collect(),
             is_edited: self.is_edited(),
-            updated_at: Some(prost_types::Timestamp {
-                seconds: self.updated_at().timestamp(),
-                nanos: self.updated_at().timestamp_subsec_nanos() as i32,
-            }),
+            updated_at: proto_updated_at,
             dynamic_metadata: self.dynamic_metadata().to_string(),
-            version: self.version(),
         }
     }
 }

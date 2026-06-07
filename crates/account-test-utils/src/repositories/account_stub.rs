@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use shared_kernel::{
-    core::{AggregateRoot, Error, Result, Transaction},
+    core::{Error, Result, Transaction, Versioned},
     types::{AccountId, Email, Phone, Region, SubId},
 };
 use std::collections::HashMap;
@@ -150,7 +150,7 @@ impl AccountRepository for AccountRepositoryStub {
 
         let mut map = self.accounts.lock().unwrap();
         let new_id = account.account_id();
-        let new_version = account.metadata().version();
+        let new_version = account.version();
 
         let old_id_opt = map
             .iter()
@@ -186,7 +186,7 @@ impl AccountRepository for AccountRepositoryStub {
                 }
             }
             Some(existing) => {
-                let current_version = existing.metadata().version();
+                let current_version = existing.version();
 
                 if new_version == current_version {
                     return Ok(());
