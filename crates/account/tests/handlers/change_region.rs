@@ -79,7 +79,8 @@ async fn test_change_region_business_idempotency() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_region: current_region,
     };
 
@@ -118,7 +119,8 @@ async fn test_change_region_technical_idempotency() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_region: Region::try_new("US")?,
     };
 
@@ -148,7 +150,8 @@ async fn test_change_region_restricted_account() -> Result<()> {
 
     let cmd = ChangeRegionCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_region: Region::try_new("US")?,
     };
 

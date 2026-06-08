@@ -10,10 +10,12 @@ pub struct UnfollowCommand {
     pub command_id: Uuid,
     pub follower_id: ProfileId,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
 }
 
 impl IdentifiableCommand for UnfollowCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -23,8 +25,12 @@ impl IdentifiableCommand for UnfollowCommand {
         &self.target
     }
 
-    fn cache_enabled(&self) -> bool {
-        false
+    fn routing(&self) -> Self::Routing {
+        self.region
+    }
+
+    fn resolve_cache_key(&self) -> Option<String> {
+        None
     }
 }
 
@@ -41,14 +47,16 @@ impl UnfollowCommand {
 
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
+
+        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,
             follower_id,
             target,
+            region,
         })
     }
 }

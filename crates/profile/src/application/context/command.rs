@@ -111,8 +111,11 @@ impl<TM: TransactionManager> ProfileCommandContext<TM> {
         Ok(!exists)
     }
 
-    pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
-        if target.region != self.region || Some(&target.id) != self.profile_id.as_ref() {
+    pub async fn fetch_verified(
+        &self,
+        target: &CommandTarget<ProfileId>,
+    ) -> Result<Profile> {
+        if Some(&target.id) != self.profile_id.as_ref() {
             return Err(Error::validation("target", "Context/Target mismatch"));
         }
 

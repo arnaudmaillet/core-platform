@@ -10,6 +10,11 @@ impl Post {
             nanos: dt.timestamp_subsec_nanos() as i32,
         });
 
+        let proto_edited_at = self.edited_at().map(|dt| prost_types::Timestamp {
+            seconds: dt.timestamp(),
+            nanos: dt.timestamp_subsec_nanos() as i32,
+        });
+
         ProtoPost {
             post_id: self.post_id().to_string(),
             author_id: self.author_id().to_string(),
@@ -34,7 +39,7 @@ impl Post {
             visibility_level: self.visibility_level().to_string(),
             music_id: self.music_id().map(|id| id.to_string()),
             hashtags: self.hashtags().value().iter().cloned().collect(),
-            is_edited: self.is_edited(),
+            edited_at: proto_edited_at,
             updated_at: proto_updated_at,
             dynamic_metadata: self.dynamic_metadata().to_string(),
         }

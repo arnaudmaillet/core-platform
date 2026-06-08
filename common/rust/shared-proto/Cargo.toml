@@ -10,12 +10,13 @@ repository.workspace = true
 description.workspace = true
 
 [features]
-default = ["account", "profile", "post", "social", "geo-discovery"]
+default = ["account", "profile", "post", "social", "geo-discovery", "comment"]
 account = []
 profile = []
 post = []
 social = []
 geo-discovery = []
+comment = []
 
 [dependencies]
 tonic = { workspace = true }

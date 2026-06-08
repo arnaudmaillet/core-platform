@@ -23,11 +23,12 @@ async fn test_register_success() -> Result<()> {
 
     // La source unique de vérité pour l'identité de ce test
     let expected_account_id = f.account_id();
-    let target = CommandTarget::stateless(expected_account_id, f.region());
+    let target = CommandTarget::stateless(expected_account_id);
 
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
         target,
+        region: f.region(),
         sub_id: Some(ext_id.clone()),
         identifier: RegistrationIdentifier::from_email(email.clone()),
         locale: Locale::try_new("en-US")?,
@@ -85,11 +86,12 @@ async fn test_register_fails_if_sub_id_already_exists() -> Result<()> {
 
     f.global_registry().insert_fixture(registration).await;
 
-    let target = CommandTarget::stateless(f.account_id(), f.region());
+    let target = CommandTarget::stateless(f.account_id());
 
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
         target,
+        region: f.region(),
         sub_id: Some(existing_ext_id),
         identifier: RegistrationIdentifier::from_email(email),
         locale: Locale::try_new("en-US")?,
@@ -129,11 +131,12 @@ async fn test_register_atomic_rollback_on_outbox_failure() -> Result<()> {
 
     // 1. Arrange : On force une erreur d'infrastructure dans l'outbox stub
     f.outbox_repo().set_error(Error::internal(error_msg));
-    let target = CommandTarget::stateless(f.account_id(), f.region());
+    let target = CommandTarget::stateless(f.account_id());
 
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
         target,
+        region: f.region(),
         sub_id: Some(SubId::from_raw("atomic_ext")),
         identifier: RegistrationIdentifier::from_email(email),
         locale: Locale::try_new("en-US")?,

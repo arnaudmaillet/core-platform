@@ -28,7 +28,7 @@ message Post {
   string                      visibility_level       = 8;
   optional string             music_id               = 9;
   repeated string             hashtags               = 10;
-  bool                        is_edited              = 11;
+  google.protobuf.Timestamp   edited_at              = 11;
   google.protobuf.Timestamp   updated_at             = 12;
   string                      dynamic_metadata       = 13;
 }

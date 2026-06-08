@@ -20,7 +20,8 @@ mod tests {
         // On part de 'true' par défaut, on désactive
         let cmd = ToggleCommentsCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+region: f.region(),
             allowed: false,
         };
 
@@ -53,7 +54,8 @@ mod tests {
         // Déjà 'true' par défaut, on tente de mettre 'true'
         let cmd = ToggleCommentsCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+region: f.region(),
             allowed: true,
         };
 
@@ -80,7 +82,8 @@ mod tests {
 
         let cmd = ToggleCommentsCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+region: f.region(),
             allowed: false,
         };
 

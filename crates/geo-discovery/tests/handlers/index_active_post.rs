@@ -32,7 +32,8 @@ async fn test_index_active_post_handler_success() -> Result<()> {
 
     let cmd = IndexActivePostCommand {
         command_id,
-        target: CommandTarget::stateless(profile_id, f.region()),
+        target: CommandTarget::stateless(profile_id),
+        region: f.region(),
         post_id,
         location,
         post_type: "video".to_string(),
@@ -99,7 +100,8 @@ async fn test_index_active_post_handler_idempotency_barrier() -> Result<()> {
 
     let cmd = IndexActivePostCommand {
         command_id,
-        target: CommandTarget::stateless(profile_id, f.region()),
+        target: CommandTarget::stateless(profile_id),
+        region: f.region(),
         post_id,
         location,
         post_type: "image".to_string(),
@@ -154,7 +156,8 @@ async fn test_index_active_post_handler_region_sharding_violation() -> Result<()
 
     let cmd = IndexActivePostCommand {
         command_id,
-        target: CommandTarget::stateless(profile_id, invalid_region),
+        target: CommandTarget::stateless(profile_id),
+        region: invalid_region,
         post_id: PostId::generate(),
         location: GeoPoint::try_new(48.8156, 2.3204).unwrap(),
         post_type: "text".to_string(),

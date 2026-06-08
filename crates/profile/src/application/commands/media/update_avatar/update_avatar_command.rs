@@ -10,11 +10,13 @@ use uuid::Uuid;
 pub struct UpdateAvatarCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
     pub new_avatar_url: Url,
 }
 
 impl IdentifiableCommand for UpdateAvatarCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -22,6 +24,10 @@ impl IdentifiableCommand for UpdateAvatarCommand {
 
     fn target(&self) -> &CommandTarget<ProfileId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -36,13 +42,15 @@ impl UpdateAvatarCommand {
 
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
+
+        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,
             target,
+            region,
             new_avatar_url: Url::try_new(req.new_avatar_url)?,
         })
     }

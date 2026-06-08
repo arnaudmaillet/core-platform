@@ -12,11 +12,13 @@ use uuid::Uuid;
 pub struct ChangePhoneCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+    pub region: Region,
     pub new_phone: Phone,
 }
 
 impl IdentifiableCommand for ChangePhoneCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -24,6 +26,10 @@ impl IdentifiableCommand for ChangePhoneCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -38,16 +44,18 @@ impl ChangePhoneCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
 
         let new_phone = Phone::try_from(req.new_phone)
             .map_err(|e| Error::validation("new_phone", e.to_string()))?;
 
+        let region = Region::try_new(proto_target.region)?;
+
         Ok(Self {
             command_id,
             target,
+            region,
             new_phone,
         })
     }

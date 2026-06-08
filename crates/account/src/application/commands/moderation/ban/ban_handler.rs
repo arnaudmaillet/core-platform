@@ -33,7 +33,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for BanHandler<TM>
         cmd: BanCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.region)
             .await?
         {
             return Ok(());

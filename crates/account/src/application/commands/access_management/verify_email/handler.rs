@@ -38,7 +38,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for VerifyEmailHan
         cmd: VerifyEmailCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_creatable(cmd.command_id, cmd.target.region)
+            .ensure_creatable(cmd.command_id, cmd.region)
             .await?
         {
             return Ok(());

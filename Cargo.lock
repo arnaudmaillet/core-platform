@@ -509,6 +509,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "comment"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "infra-scylla",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "shared-kernel",
+ "shared-proto",
+ "tokio",
+ "tonic",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -20,7 +20,8 @@ mod tests {
 
         let cmd = ChangeVisibilityCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+            region: f.region(),
             new_visibility: VisibilityLevel::Private,
         };
 
@@ -52,7 +53,8 @@ mod tests {
 
         let cmd = ChangeVisibilityCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+            region: f.region(),
             new_visibility: VisibilityLevel::Public,
         };
 
@@ -90,7 +92,8 @@ mod tests {
 
         let cmd = ChangeVisibilityCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+            region: f.region(),
             new_visibility: VisibilityLevel::Private,
         };
 

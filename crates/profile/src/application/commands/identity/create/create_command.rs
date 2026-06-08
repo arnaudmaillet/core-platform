@@ -15,12 +15,14 @@ use crate::types::Handle;
 pub struct CreateProfileCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
     pub account_id: AccountId,
     pub handle: Handle,
 }
 
 impl IdentifiableCommand for CreateProfileCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -28,6 +30,10 @@ impl IdentifiableCommand for CreateProfileCommand {
 
     fn target(&self) -> &CommandTarget<ProfileId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -39,11 +45,12 @@ impl CreateProfileCommand {
         let account_id = AccountId::try_from(req.account_id.as_str())?;
         let handle = Handle::try_new(&req.handle)?;
         let region = Region::try_new(&req.region)?;
-        let target = CommandTarget::stateless(profile_id, region);
+        let target = CommandTarget::stateless(profile_id);
 
         Ok(Self {
             command_id,
             target,
+            region,
             account_id,
             handle,
         })

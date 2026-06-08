@@ -128,7 +128,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(post.hashtags().len(), 2);
-        assert!(post.is_edited());
+        assert!(post.edited_at().is_some());
     }
 
     #[test]
@@ -165,7 +165,7 @@ mod tests {
         assert_eq!(post.mentions().len(), 2);
         assert!(post.mentions().contains(&target_profile_1));
         assert!(post.mentions().contains(&target_profile_2));
-        assert!(post.is_edited());
+        assert!(post.edited_at().is_some());
     }
 
     #[test]

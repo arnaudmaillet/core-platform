@@ -1,0 +1,67 @@
+syntax = "proto3";
+package comment.v1;
+
+import "comment/v1/models.proto";
+
+option go_package = "github.com/core-platform/proto/comment/v1";
+
+message CommentTarget {
+  string          comment_id        = 1;
+  string          post_id           = 2;
+  optional string parent_comment_id = 3;
+}
+
+service CommentService {
+  rpc PublishComment(PublishCommentRequest) returns (PublishCommentResponse);
+  rpc EditCommentContent(EditCommentContentRequest) returns (EditCommentContentResponse);
+  rpc DeleteComment(DeleteCommentRequest) returns (DeleteCommentResponse);
+
+  rpc GetRootComments(GetRootCommentsRequest) returns (GetCommentsResponse);
+  rpc GetReplies(GetRepliesRequest) returns (GetCommentsResponse);
+}
+
+message PublishCommentRequest {
+  string          command_id        = 1;
+  string          post_id           = 2; 
+  string          profile_id        = 3;
+  optional string parent_comment_id = 4;
+  string          content           = 5;
+}
+
+message PublishCommentResponse {
+  string comment_id = 1;
+}
+
+message EditCommentContentRequest {
+  string        command_id  = 1;
+  string        operator_id = 2;
+  CommentTarget target      = 3;
+  string        new_content = 4;
+}
+
+message EditCommentContentResponse {}
+
+message DeleteCommentRequest {
+  string        command_id  = 1;
+  string        operator_id = 2;
+  CommentTarget target      = 3;
+}
+
+message DeleteCommentResponse {}
+
+message GetRootCommentsRequest {
+  string          post_id = 1;
+  int32           limit   = 2;
+  optional string cursor  = 3;
+}
+
+message GetRepliesRequest {
+  string          parent_comment_id = 1;
+  int32           limit             = 2;
+  optional string cursor            = 3;
+}
+
+message GetCommentsResponse {
+  repeated Comment items       = 1;
+  optional string  next_cursor = 2;
+}

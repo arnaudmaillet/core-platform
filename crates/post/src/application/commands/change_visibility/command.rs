@@ -13,11 +13,13 @@ use uuid::Uuid;
 pub struct ChangeVisibilityCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<PostId>,
+    pub region: Region,
     pub new_visibility: VisibilityLevel,
 }
 
 impl IdentifiableCommand for ChangeVisibilityCommand {
     type Id = PostId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -25,6 +27,10 @@ impl IdentifiableCommand for ChangeVisibilityCommand {
 
     fn target(&self) -> &CommandTarget<PostId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -34,14 +40,16 @@ impl ChangeVisibilityCommand {
             .target
             .ok_or_else(|| Error::validation("target", "Missing target"))?;
 
+        let region = Region::try_new(proto_target.region)?;
+
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|_| Error::validation("command_id", "Invalid UUID"))?,
             target: CommandTarget {
                 id: PostId::try_from(proto_target.post_id)?,
-                region: Region::try_new(proto_target.region)?,
                 expected_version: None,
             },
+            region,
             new_visibility: VisibilityLevel::from_str(&req.new_visibility_level)?,
         })
     }

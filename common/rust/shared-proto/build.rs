@@ -27,10 +27,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         protos.push("post/v1/models.proto");
         protos.push("post/v1/service.proto");
     }
-
     if env::var("CARGO_FEATURE_POST").is_ok() {
         protos.push("geo_discovery/v1/models.proto");
         protos.push("geo_discovery/v1/service.proto");
+    }
+    if env::var("CARGO_FEATURE_POST").is_ok() {
+        protos.push("comment/v1/models.proto");
+        protos.push("comment/v1/service.proto");
     }
     if protos.is_empty() {
         return Ok(());

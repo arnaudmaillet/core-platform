@@ -1,3 +1,5 @@
+// crates/account/src/application/register/register_command.rs
+
 use crate::domain::types::{IpAddr, Locale, RegistrationIdentifier};
 use shared_kernel::{
     command::{CommandTarget, IdentifiableCommand},
@@ -11,6 +13,7 @@ use uuid::Uuid;
 pub struct RegisterCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+    pub region: Region,
     pub sub_id: Option<SubId>,
     pub identifier: RegistrationIdentifier,
     pub locale: Locale,
@@ -19,6 +22,7 @@ pub struct RegisterCommand {
 
 impl IdentifiableCommand for RegisterCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -26,6 +30,10 @@ impl IdentifiableCommand for RegisterCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -51,12 +59,13 @@ impl RegisterCommand {
         let region = Region::try_new(req.region)
             .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
-        let target = CommandTarget::stateless(account_id, region);
+        let target = CommandTarget::stateless(account_id);
 
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)
                 .map_err(|e| Status::invalid_argument(format!("Invalid CommandId: {}", e)))?,
             target,
+            region,
             sub_id: match req.sub_id {
                 Some(id) if !id.is_empty() => {
                     Some(SubId::try_new(id).map_err(|e| Status::invalid_argument(e.to_string()))?)

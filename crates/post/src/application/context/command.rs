@@ -2,7 +2,7 @@
 
 use shared_kernel::{
     command::CommandTarget,
-    core::{Error, Result, Versioned},
+    core::{Error, Result},
     messaging::EventEmitter,
     types::{PostId, ProfileId, Region},
 };

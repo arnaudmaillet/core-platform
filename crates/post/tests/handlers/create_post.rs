@@ -25,11 +25,12 @@ mod tests {
         f.profile_resolver().set_stub_map(map);
 
         let caption = Caption::try_from(format!("Hello @{}", slug).as_str()).unwrap();
-        let target = CommandTarget::stateless(f.author_id(), f.region());
+        let target = CommandTarget::stateless(f.author_id());
 
         let cmd = CreatePostCommand {
             command_id,
             target,
+            region: f.region(),
             post_id: f.post_id(),
             post_type: PostType::Text,
             caption: Some(caption),
@@ -64,11 +65,12 @@ mod tests {
         let command_id = Uuid::now_v7();
         f.idempotency_repo().save(None, &command_id).await?;
 
-        let target = CommandTarget::stateless(f.author_id(), f.region());
+        let target = CommandTarget::stateless(f.author_id());
 
         let cmd = CreatePostCommand {
             command_id,
             target,
+            region: f.region(),
             post_id: f.post_id(),
             post_type: PostType::Text,
             caption: None,

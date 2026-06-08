@@ -1,5 +1,7 @@
+// crates/shared-kernel/src/application/command/bus.rs
+
 use crate::cache::CacheRepository;
-use crate::command::{CommandHandler, IdentifiableCommand};
+use crate::command::{CacheKeyComponent, CommandHandler, IdentifiableCommand};
 use crate::core::{Error, ErrorCode, Result, with_retry};
 use async_trait::async_trait;
 use std::any::{Any, TypeId};
@@ -33,6 +35,8 @@ impl CommandBus {
     where
         TContext: 'static + Send + Sync + Clone,
         TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
+        // 🎯 On s'assure que le type associé Routing de la commande est compatible avec le cache
+        TCommand::Routing: CacheKeyComponent,
         THandler: CommandHandler<Context = TContext, Command = TCommand> + 'static + Send + Sync,
         THandler::Output: 'static + Send,
     {
@@ -54,6 +58,7 @@ impl CommandBus {
     where
         TContext: 'static + Send + Sync + Clone,
         TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
+        TCommand::Routing: CacheKeyComponent,
         TOutput: 'static + Send + Default,
     {
         let cache_key = cmd.resolve_cache_key();
@@ -103,6 +108,7 @@ impl<THandler, TContext, TCommand> AnyCommandHandler
 where
     TContext: 'static + Send + Sync + Clone,
     TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
+    TCommand::Routing: CacheKeyComponent,
     THandler: CommandHandler<Context = TContext, Command = TCommand> + Send + Sync,
     THandler::Output: 'static + Send,
 {
@@ -122,12 +128,18 @@ where
             .map_err(|_| Error::internal("AnyCommandHandler: Invalid context type"))?;
 
         let target = concrete_cmd.target();
+
+        let routing_log = concrete_cmd
+            .routing()
+            .to_key_component()
+            .unwrap_or_else(|| "global".to_string());
+
         let span = info_span!(
             "handle_command",
             command_type = %std::any::type_name::<TCommand>(),
             command_id = %concrete_cmd.command_id(),
             target_id = %target.id,
-            region = %target.region.as_str()
+            routing_strategy = %routing_log
         );
 
         let config = self.handler.retry_config();

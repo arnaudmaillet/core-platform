@@ -11,10 +11,12 @@ use uuid::Uuid;
 pub struct RemoveBannerCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
 }
 
 impl IdentifiableCommand for RemoveBannerCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -22,6 +24,10 @@ impl IdentifiableCommand for RemoveBannerCommand {
 
     fn target(&self) -> &CommandTarget<ProfileId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -36,10 +42,15 @@ impl RemoveBannerCommand {
 
         let target = CommandTarget {
             id: ProfileId::try_new(proto_target.profile_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
 
-        Ok(Self { command_id, target })
+        let region = Region::try_new(proto_target.region)?;
+
+        Ok(Self {
+            command_id,
+            region,
+            target,
+        })
     }
 }

@@ -12,11 +12,13 @@ use uuid::Uuid;
 pub struct LinkSubIdentityCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+    pub region: Region,
     pub sub_id: SubId,
 }
 
 impl IdentifiableCommand for LinkSubIdentityCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -24,6 +26,10 @@ impl IdentifiableCommand for LinkSubIdentityCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -39,15 +45,17 @@ impl LinkSubIdentityCommand {
         let sub_id =
             SubId::try_from(req.sub_id).map_err(|e| Error::validation("sub_id", e.to_string()))?;
 
+        let region = Region::try_new(proto_target.region)?;
+
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
 
         Ok(Self {
             command_id,
             target,
+            region,
             sub_id,
         })
     }

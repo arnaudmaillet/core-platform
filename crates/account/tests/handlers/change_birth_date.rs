@@ -25,7 +25,8 @@ async fn test_change_birth_date_success() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_birth_date: new_date.clone(),
     };
 
@@ -62,7 +63,8 @@ async fn test_change_birth_date_technical_idempotency() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_birth_date: new_date.clone(),
     };
 
@@ -102,7 +104,8 @@ async fn test_change_birth_date_forbidden_when_restricted() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_birth_date: new_date.clone(),
     };
 
@@ -146,7 +149,8 @@ async fn test_change_birth_date_succeeds_after_retry() -> Result<()> {
     let new_date = adult_birth_date();
     let cmd = ChangeBirthDateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_birth_date: new_date.clone(),
     };
 

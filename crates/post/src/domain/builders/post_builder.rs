@@ -18,7 +18,6 @@ pub struct PostBuilder {
     media_list: Vec<MediaAsset>,
     music_id: Option<MusicId>,
     allowed_comment_hands: bool,
-    is_edited: bool,
     hashtags: Hashtags,
     mentions: Mentions,
     edited_at: Option<DateTime<Utc>>,
@@ -41,7 +40,6 @@ impl PostBuilder {
             media_list: Vec::new(),
             music_id: None,
             allowed_comment_hands: true,
-            is_edited: false,
             hashtags: Hashtags::empty(),
             mentions: Mentions::empty(),
             edited_at: None,
@@ -81,9 +79,8 @@ impl PostBuilder {
         self
     }
 
-    pub fn with_edit_status(mut self, is_edited: bool, updated_at: Option<DateTime<Utc>>) -> Self {
-        self.is_edited = is_edited;
-        self.edited_at = updated_at;
+    pub fn with_edited_at(mut self, edited_at: Option<DateTime<Utc>>) -> Self {
+        self.edited_at = edited_at;
         self
     }
 

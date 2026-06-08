@@ -17,11 +17,12 @@ async fn test_create_profile_success() -> Result<()> {
     let creation_ctx = f.app_ctx().creation_command(f.region());
     let handle = Handle::try_new("bob_dev")?;
 
-    let target = CommandTarget::stateless(generated_profile_id, f.region());
+    let target = CommandTarget::stateless(generated_profile_id);
 
     let cmd = CreateProfileCommand {
         command_id: Uuid::new_v4(),
         target,
+        region: f.region(),
         account_id: f.account_id(),
         handle: handle.clone(),
     };
@@ -63,11 +64,12 @@ async fn test_create_profile_technical_idempotency() -> Result<()> {
         .save_direct(f.region(), existing_profile)
         .await;
 
-    let target = CommandTarget::stateless(profile_id, f.region());
+    let target = CommandTarget::stateless(profile_id);
 
     let cmd = CreateProfileCommand {
         command_id: cmd_id,
         target,
+        region: f.region(),
         account_id: f.account_id(),
         handle: Handle::try_new("bob_dev")?,
     };
@@ -104,12 +106,13 @@ async fn test_create_profile_conflict_handle() -> Result<()> {
         .profile_repo()
         .save_direct(f.region(), profile_with_handle)
         .await;
-    let target = CommandTarget::stateless(ProfileId::generate(), f.region());
+    let target = CommandTarget::stateless(ProfileId::generate());
 
     // 2. On tente de créer un NOUVEAU profil avec le même handle usurpé
     let cmd = CreateProfileCommand {
         command_id: Uuid::new_v4(),
-        target, // 🛠️ Remplacement final
+        target,
+        region: f.region(),
         account_id: f.account_id(),
         handle: Handle::try_new(duplicated_handle)?,
     };

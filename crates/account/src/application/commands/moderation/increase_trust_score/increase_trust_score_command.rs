@@ -15,12 +15,14 @@ use crate::types::TrustAmount;
 pub struct IncreaseTrustScoreCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+    pub region: Region,
     pub amount: TrustAmount,
     pub reason: AuditReason,
 }
 
 impl IdentifiableCommand for IncreaseTrustScoreCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -28,6 +30,10 @@ impl IdentifiableCommand for IncreaseTrustScoreCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -42,7 +48,6 @@ impl IncreaseTrustScoreCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
         let amount = TrustAmount::try_from(req.amount)
@@ -51,9 +56,12 @@ impl IncreaseTrustScoreCommand {
         let reason = AuditReason::try_from(req.reason)
             .map_err(|e| Error::validation("reason", e.to_string()))?;
 
+        let region = Region::try_new(proto_target.region)?;
+
         Ok(Self {
             command_id,
             target,
+            region,
             reason,
             amount,
         })

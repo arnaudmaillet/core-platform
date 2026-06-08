@@ -17,10 +17,7 @@ impl CommandHandler for DeletePostHandler {
         ctx: &PostCommandContext,
         cmd: DeletePostCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
-            .await?
-        {
+        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
             return Ok(());
         }
 

@@ -29,7 +29,7 @@ pub struct CqlPostRow {
     pub music_id: Option<Uuid>,
     pub hashtags: HashSet<String>,
     pub mentions: HashSet<Uuid>,
-    pub is_edited: bool,
+    pub edited_at: Option<CqlTimestamp>,
     pub updated_at: Option<CqlTimestamp>,
     pub dynamic_metadata: String,
 }
@@ -59,10 +59,9 @@ impl TryFrom<CqlPostRow> for Post {
             None => created_at,
         };
 
-        let edited_at = if row.is_edited {
-            Some(system_updated_at)
-        } else {
-            None
+        let edited_at = match row.edited_at {
+            Some(cql_ts) => Utc.timestamp_millis_opt(cql_ts.0).single(),
+            None => None,
         };
 
         let post_type = PostType::from_str(&row.post_type).map_err(|e| {

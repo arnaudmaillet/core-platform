@@ -22,7 +22,8 @@ async fn test_update_display_name_success() -> Result<()> {
 
     let cmd = UpdateDisplayNameCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
+        region: f.region(),
         new_display_name: new_name.clone(),
     };
 
@@ -62,7 +63,8 @@ async fn test_update_display_name_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateDisplayNameCommand {
         command_id: cmd_id, // Même ID que seedé
-        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), 0),
+        region: f.region(),
         new_display_name: DisplayName::try_new("New Name")?,
     };
 
@@ -101,7 +103,8 @@ async fn test_update_display_name_business_idempotency() -> Result<()> {
 
     let cmd = UpdateDisplayNameCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
+        region: f.region(),
         new_display_name: name,
     };
 
@@ -135,7 +138,8 @@ async fn test_update_display_name_conflict() -> Result<()> {
     let cmd = UpdateDisplayNameCommand {
         command_id: Uuid::new_v4(),
         // On envoie une version attendue de 5 alors que le profil est en version 0
-        target: CommandTarget::versioned(f.profile_id(), f.region(), 5),
+        target: CommandTarget::versioned(f.profile_id(), 5),
+        region: f.region(),
         new_display_name: DisplayName::try_new("wont_work")?,
     };
 

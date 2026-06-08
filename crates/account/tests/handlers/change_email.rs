@@ -41,7 +41,8 @@ async fn test_change_email_success() -> Result<()> {
 
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_email: new_email.clone(),
     };
 
@@ -78,7 +79,8 @@ async fn test_change_email_technical_idempotency() -> Result<()> {
 
     let cmd = ChangeEmailCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_email: requested_email.clone(),
     };
 
@@ -132,7 +134,8 @@ async fn test_change_email_business_idempotency() -> Result<()> {
 
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_email: email,
     };
 
@@ -184,7 +187,8 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
 
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_email: requested_email.clone(),
     };
 
@@ -246,7 +250,8 @@ async fn test_change_email_succeeds_after_retry() -> Result<()> {
 
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_email: requested_email.clone(),
     };
 

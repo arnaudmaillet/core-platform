@@ -156,9 +156,6 @@ impl Post {
     pub fn mentions(&self) -> &Mentions {
         &self.mentions
     }
-    pub fn is_edited(&self) -> bool {
-        self.edited_at.is_some()
-    }
     pub fn edited_at(&self) -> Option<DateTime<Utc>> {
         self.edited_at
     }
