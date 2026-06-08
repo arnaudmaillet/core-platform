@@ -12,10 +12,12 @@ use uuid::Uuid;
 pub struct ActivateCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+    pub region: Region,
 }
 
 impl IdentifiableCommand for ActivateCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -23,6 +25,10 @@ impl IdentifiableCommand for ActivateCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -37,10 +43,15 @@ impl ActivateCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
 
-        Ok(Self { command_id, target })
+        let region = Region::try_new(proto_target.region)?;
+
+        Ok(Self {
+            command_id,
+            region,
+            target,
+        })
     }
 }

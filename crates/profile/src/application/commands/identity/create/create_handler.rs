@@ -34,7 +34,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for CreateProfileH
         cmd: CreateProfileCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_creatable(cmd.command_id, cmd.target.region, &cmd.handle)
+            .ensure_creatable(cmd.command_id, cmd.region, &cmd.handle)
             .await?
         {
             return Ok(());

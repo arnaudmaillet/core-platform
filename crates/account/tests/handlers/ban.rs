@@ -1,4 +1,3 @@
-
 use account::commands::moderation::BanCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -21,13 +20,17 @@ async fn test_ban_account_success() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: AuditReason::try_new("TOS Violation")?,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -55,14 +58,18 @@ async fn test_ban_technical_idempotency() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: AuditReason::try_new("Duplicate Ban")?,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert
@@ -88,13 +95,17 @@ async fn test_ban_business_idempotency() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: AuditReason::try_new("Second attempt")?,
     };
 
     // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // Assert
@@ -115,14 +126,18 @@ async fn test_worst_case_account_not_found() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), 0),
+        region: f.region(),
         reason: AuditReason::try_new("Violating TOS")?,
     };
 
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert
@@ -151,14 +166,18 @@ async fn test_concurrency_retry_success() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: AuditReason::try_new("System ban")?,
     };
 
     // ACT : Le bus doit absorber l'erreur et réussir au 2ème essai
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // ASSERT
@@ -184,13 +203,17 @@ async fn test_worst_case_atomic_outbox_failure() -> Result<()> {
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: AuditReason::try_new("System ban")?,
     };
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // La transaction globale échoue si l'outbox échoue

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{AggregateMetadata, AggregateRoot, Entity, Result, Versioned};
+use shared_kernel::core::{Entity, LifecycleTracker, ManagedEntity, Result};
 use shared_kernel::messaging::{Event, EventEmitter};
 use shared_kernel::types::{Counter, ProfileId};
 
@@ -9,19 +9,7 @@ pub struct ProfileCounters {
     profile_id: ProfileId,
     followers_count: Counter,
     following_count: Counter,
-    metadata: AggregateMetadata,
-}
-
-impl Versioned for ProfileCounters {
-    fn version(&self) -> u64 {
-        self.metadata.version()
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
-    }
-    fn record_change(&mut self) {
-        self.metadata.record_change();
-    }
+    metadata: LifecycleTracker,
 }
 
 impl EventEmitter for ProfileCounters {
@@ -33,14 +21,11 @@ impl EventEmitter for ProfileCounters {
     }
 }
 
-impl AggregateRoot for ProfileCounters {
-    fn id(&self) -> String {
-        self.profile_id.to_string()
-    }
-    fn metadata(&self) -> &AggregateMetadata {
+impl ManagedEntity for ProfileCounters {
+    fn lifecycle(&self) -> &LifecycleTracker {
         &self.metadata
     }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
+    fn lifecycle_mut(&mut self) -> &mut LifecycleTracker {
         &mut self.metadata
     }
 }
@@ -52,15 +37,12 @@ impl Entity for ProfileCounters {
         "ProfileCounters"
     }
 
-    fn map_constraint_to_field(constraint: &str) -> &'static str {
-        match constraint {
-            "profile_counters_pkey" => "profile_id",
-            _ => "internal_governance",
-        }
+    fn map_constraint_to_field(_constraint: &str) -> &'static str {
+        "profile_id"
     }
 
     fn id(&self) -> &Self::Id {
-        &self.profile_id
+        self.profile_id_as_ref()
     }
     fn updated_at(&self) -> DateTime<Utc> {
         self.metadata.updated_at()
@@ -68,36 +50,34 @@ impl Entity for ProfileCounters {
 }
 
 impl ProfileCounters {
-    /// Initialise les compteurs par défaut à zéro pour un nouveau profil
     pub fn new(profile_id: ProfileId) -> Self {
         ProfileCounters {
             profile_id,
             followers_count: Counter::default(),
             following_count: Counter::default(),
-            metadata: AggregateMetadata::default(),
+            metadata: LifecycleTracker::default(),
         }
     }
 
-    /// Reconstitue l'état de l'agrégat depuis l'infrastructure (ScyllaDB / Redis)
     pub fn restore(
         profile_id: ProfileId,
         followers_count: Counter,
         following_count: Counter,
-        version: u64,
-        created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
         ProfileCounters {
             profile_id,
             followers_count,
             following_count,
-            metadata: AggregateMetadata::restore(version, created_at, updated_at),
+            metadata: LifecycleTracker::restore(updated_at),
         }
     }
 
     // --- GETTERS ---
-
-    pub fn profile_id(&self) -> &ProfileId {
+    pub fn profile_id(&self) -> ProfileId {
+        self.profile_id
+    }
+    pub(crate) fn profile_id_as_ref(&self) -> &ProfileId {
         &self.profile_id
     }
     pub fn followers_count(&self) -> Counter {
@@ -108,26 +88,23 @@ impl ProfileCounters {
     }
 
     // --- MUTATEURS MÉTIERS ---
-
-    /// Applique une variation sur le compteur de followers
     pub fn apply_follower_change(&mut self, increment: bool) -> Result<bool> {
         if increment {
             self.followers_count.increment();
         } else {
             self.followers_count.decrement();
         }
-        self.record_change();
+        self.metadata.record_change();
         Ok(true)
     }
 
-    /// Applique une variation sur le compteur de following
     pub fn apply_following_change(&mut self, increment: bool) -> Result<bool> {
         if increment {
             self.following_count.increment();
         } else {
             self.following_count.decrement();
         }
-        self.record_change();
+        self.metadata.record_change();
         Ok(true)
     }
 }

@@ -15,10 +15,7 @@ impl CommandHandler for FollowHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &SocialCommandContext, cmd: FollowCommand) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, &cmd.target.region)
-            .await?
-        {
+        if !ctx.ensure_executable(cmd.command_id, &cmd.region).await? {
             return Ok(());
         }
 

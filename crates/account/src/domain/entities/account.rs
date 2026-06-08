@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
-    core::{AggregateMetadata, AggregateRoot, Error, Result, Versioned},
+    core::{Entity, Error, LifecycleTracker, ManagedEntity, Result, Versioned},
     geo::Timezone,
     messaging::{Event, EventEmitter, OperationTracker},
     security::{PushToken, TrustContext},
@@ -25,39 +25,63 @@ pub struct Account {
     identity: AccountIdentity,
     governance: AccountGovernance,
     settings: AccountSettings,
-    metadata: AggregateMetadata,
+    lifecycle: LifecycleTracker,
+    version: u64,
 }
 
 impl Versioned for Account {
     fn version(&self) -> u64 {
-        self.metadata.version()
+        self.version
     }
     fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
+        self.lifecycle.updated_at()
     }
     fn record_change(&mut self) {
-        self.metadata.record_change();
+        self.version += 1;
+        self.lifecycle.record_change();
     }
 }
 
 impl EventEmitter for Account {
     fn push_event(&mut self, event: Box<dyn Event>) {
-        self.metadata.push_event(event);
+        self.lifecycle.push_event(event);
     }
     fn pull_events(&mut self) -> Vec<Box<dyn Event>> {
-        self.metadata.pull_events()
+        self.lifecycle.pull_events()
     }
 }
 
-impl AggregateRoot for Account {
-    fn id(&self) -> String {
-        self.identity.account_id().to_string()
+impl ManagedEntity for Account {
+    fn lifecycle(&self) -> &LifecycleTracker {
+        &self.lifecycle
     }
-    fn metadata(&self) -> &AggregateMetadata {
-        &self.metadata
+
+    fn lifecycle_mut(&mut self) -> &mut LifecycleTracker {
+        &mut self.lifecycle
     }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
-        &mut self.metadata
+}
+
+impl Entity for Account {
+    type Id = AccountId;
+
+    fn entity_name() -> &'static str {
+        "Account"
+    }
+
+    fn map_constraint_to_field(constraint: &str) -> &'static str {
+        match constraint {
+            "accounts_pkey" => "account_id",
+            "accounts_email_key" => "email",
+            _ => "internal_security",
+        }
+    }
+
+    fn id(&self) -> &Self::Id {
+        &self.identity.account_id_as_ref()
+    }
+
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.lifecycle.updated_at()
     }
 }
 
@@ -70,20 +94,21 @@ impl Account {
         identity: AccountIdentity,
         governance: AccountGovernance,
         settings: AccountSettings,
-        metadata: AggregateMetadata,
+        version: u64,
+        lifecycle: LifecycleTracker,
     ) -> Self {
         Self {
             identity,
             governance,
             settings,
-            metadata,
+            version,
+            lifecycle,
         }
     }
 
     pub fn account_id(&self) -> AccountId {
         self.identity.account_id()
     }
-
     pub fn identity(&self) -> &AccountIdentity {
         &self.identity
     }
@@ -93,12 +118,13 @@ impl Account {
     pub fn settings(&self) -> &AccountSettings {
         &self.settings
     }
-    fn id_typed(&self) -> AccountId {
-        self.identity.account_id()
-    }
 
-    pub fn record_activity(&mut self) -> Result<bool> {
-        let changed = self.identity.apply_activity_record()?;
+    fn track_change<F, E>(&mut self, action: F, event_factory: E) -> Result<bool>
+    where
+        F: FnOnce(&mut Self) -> Result<bool>,
+        E: FnOnce(&Self) -> Box<dyn Event>,
+    {
+        let changed = OperationTracker::track_change(self, action, event_factory)?;
 
         if changed {
             self.record_change();
@@ -116,13 +142,13 @@ impl Account {
             },
             |s| {
                 Box::new(AccountEvent::AccountRegistered {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     email: s.identity.email().cloned(),
                     phone: s.identity.phone().cloned(),
                     sub_id: s.identity.sub_id().cloned(),
                     locale: s.identity.locale().clone(),
                     ip_addr,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -142,10 +168,10 @@ impl Account {
     //         },
     //         |s| {
     //             Box::new(AccountEvent::AccountRegionChanged {
-    //                 account_id: s.id_typed(),
+    //                 account_id: s.account_id(),
     //                 old_region,
     //                 new_region: new_region,
-    //                 occurred_at: s.updated_at(),
+    //                 occurred_at: s.lifecycle().updated_at(),
     //             })
     //         },
     //     )
@@ -171,10 +197,10 @@ impl Account {
             },
             |s| {
                 Box::new(AccountEvent::SubIdentityLinked {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     old_sub_id: current_id,
                     new_sub_id: new_id.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -187,7 +213,7 @@ impl Account {
             |s| s.identity.apply_birth_date_change(new_date),
             |s| {
                 Box::new(AccountEvent::BirthDateChanged {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     old_birth_date: s.identity.birth_date().cloned(),
                     new_birth_date: new_date,
                     occurred_at: Utc::now(),
@@ -204,10 +230,10 @@ impl Account {
             |s| s.identity.apply_email_change(new_email.clone()),
             |s| {
                 Box::new(AccountEvent::EmailChanged {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     old_email,
                     new_email: new_email.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -221,10 +247,10 @@ impl Account {
             |s| s.identity.apply_phone_change(new_phone.clone()),
             |s| {
                 Box::new(AccountEvent::PhoneChanged {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     old_phone,
                     new_phone: new_phone.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -242,9 +268,9 @@ impl Account {
             |s| s.identity.apply_email_verification(verified_at),
             |s| {
                 Box::new(AccountEvent::EmailVerified {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     email: target_email,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -264,9 +290,9 @@ impl Account {
             |s| s.identity.apply_phone_verification(verified_at),
             |s| {
                 Box::new(AccountEvent::PhoneVerified {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     phone: target_phone,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -277,9 +303,9 @@ impl Account {
             |s| s.identity.apply_ban_state(),
             |s| {
                 Box::new(AccountEvent::AccountBanned {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )?;
@@ -299,9 +325,9 @@ impl Account {
             |s| s.identity.apply_unban_state(),
             |s| {
                 Box::new(AccountEvent::AccountUnbanned {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )?;
@@ -321,9 +347,9 @@ impl Account {
             |s| s.identity.apply_suspension_state(),
             |s| {
                 Box::new(AccountEvent::AccountSuspended {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     reason: reason.into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -334,9 +360,9 @@ impl Account {
             |s| s.identity.apply_unsuspend_state(),
             |s| {
                 Box::new(AccountEvent::AccountUnsuspended {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )?;
@@ -368,9 +394,9 @@ impl Account {
             |s| s.identity.apply_active_state(),
             |s| {
                 Box::new(AccountEvent::AccountActivated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     reason: "User initiated activation".into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -385,9 +411,9 @@ impl Account {
             |s| s.identity.apply_deactivation_state(),
             |s| {
                 Box::new(AccountEvent::AccountDeactivated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     reason: final_reason,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -402,11 +428,11 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::TrustScoreRewarded {
                     id: uuid::Uuid::new_v4(),
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     amount,
                     new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -428,10 +454,10 @@ impl Account {
                     s.governance.apply_shadowban(&auto_reason)?;
 
                     extra_event = Some(Box::new(AccountEvent::ShadowbanUpdated {
-                        account_id: s.id_typed(),
+                        account_id: s.account_id(),
                         is_shadowbanned: true,
                         reason: auto_reason.into(),
-                        occurred_at: s.updated_at(),
+                        occurred_at: s.lifecycle().updated_at(),
                     }));
                     return Ok(true);
                 }
@@ -440,11 +466,11 @@ impl Account {
             |s| {
                 Box::new(AccountEvent::TrustScorePenalized {
                     id: uuid::Uuid::new_v4(),
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     amount,
                     new_score: s.governance.trust_score(),
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )?;
@@ -461,10 +487,10 @@ impl Account {
             |s| s.governance.apply_shadowban(&reason),
             |s| {
                 Box::new(AccountEvent::ShadowbanUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     is_shadowbanned: true,
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -475,10 +501,10 @@ impl Account {
             |s| s.governance.apply_lift_shadowban(&reason),
             |s| {
                 Box::new(AccountEvent::ShadowbanUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     is_shadowbanned: false,
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -492,11 +518,11 @@ impl Account {
             |s| s.governance.apply_role_change(new_role, &reason),
             |s| {
                 Box::new(AccountEvent::AccountRoleChanged {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     old_role,
                     new_role: new_role.clone(),
                     reason: reason.clone().into(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -510,10 +536,10 @@ impl Account {
             |s| s.governance.apply_beta_tier_change(new_tier),
             |s| {
                 Box::new(AccountEvent::BetaTierChanged {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     old_tier,
                     new_tier: new_tier.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -526,9 +552,9 @@ impl Account {
             |s| s.settings.apply_timezone_update(new_tz.clone()),
             |s| {
                 Box::new(AccountEvent::TimezoneUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     new_timezone: new_tz.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -541,9 +567,9 @@ impl Account {
             |s| s.identity.apply_locale_change(new_locale.clone()),
             |s| {
                 Box::new(AccountEvent::LocaleUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     new_locale: new_locale.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -555,9 +581,9 @@ impl Account {
             |s| Ok(s.settings.apply_push_token_add(token.clone())),
             |s| {
                 Box::new(AccountEvent::PushTokenAdded {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     token: token.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -569,9 +595,9 @@ impl Account {
             |s| Ok(s.settings.apply_push_token_remove(&token)),
             |s| {
                 Box::new(AccountEvent::PushTokenRemoved {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     token: token.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -586,9 +612,9 @@ impl Account {
             |s| Ok(s.settings.apply_notifications_update(new_prefs.clone())),
             |s| {
                 Box::new(AccountEvent::NotificationsPreferencesUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     new_preferences: new_prefs.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -603,9 +629,9 @@ impl Account {
             |s| Ok(s.settings.apply_appearance_update(new_prefs.clone())),
             |s| {
                 Box::new(AccountEvent::AppearancePreferencesUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     new_preferences: new_prefs.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -617,9 +643,9 @@ impl Account {
             |s| Ok(s.settings.apply_privacy_update(new_prefs.clone())),
             |s| {
                 Box::new(AccountEvent::PrivacyPreferencesUpdated {
-                    account_id: s.id_typed(),
+                    account_id: s.account_id(),
                     new_preferences: new_prefs.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )

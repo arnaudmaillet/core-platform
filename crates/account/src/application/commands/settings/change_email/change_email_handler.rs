@@ -34,7 +34,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeEmailHan
         cmd: ChangeEmailCommand,
     ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.region)
             .await?
         {
             return Ok(());

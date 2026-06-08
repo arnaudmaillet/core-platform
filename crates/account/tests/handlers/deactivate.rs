@@ -1,4 +1,3 @@
-
 use account::commands::lifecycle::DeactivateCommand;
 use account::context::AccountCommandContext;
 use account::events::AccountEvent;
@@ -22,13 +21,17 @@ async fn test_deactivate_account_success() -> Result<()> {
 
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: None,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -57,14 +60,18 @@ async fn test_deactivate_technical_idempotency() -> Result<()> {
 
     let cmd = DeactivateCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: None,
     };
 
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // 3. Assert
@@ -97,13 +104,17 @@ async fn test_deactivate_business_idempotency() -> Result<()> {
 
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+        region: f.region(),
         reason: None,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // 3. Assert
@@ -124,14 +135,18 @@ async fn test_deactivate_not_found() -> Result<()> {
 
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.account_id(), 0),
+        region: f.region(),
         reason: None,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert

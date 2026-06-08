@@ -1,7 +1,7 @@
 // crates/social/src/application/context/command.rs
 
 use crate::application::context::SocialAppContext;
-use crate::domain::entities::FollowRelation;
+use crate::entities::FollowRelation;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
 use uuid::Uuid;
@@ -63,7 +63,7 @@ impl SocialCommandContext {
         self.app.relation_repo().save(relation).await?;
         self.app
             .cache_counter_repo()
-            .increment_counters(*relation.follower_id(), *relation.following_id())
+            .increment_counters(relation.follower_id(), relation.following_id())
             .await?;
 
         Ok(())
@@ -75,13 +75,15 @@ impl SocialCommandContext {
         command_id: Uuid,
     ) -> Result<()> {
         self.app.idempotency_repo().save(None, &command_id).await?;
+
         self.app
             .relation_repo()
-            .delete(*relation.follower_id(), *relation.following_id())
+            .delete(relation.follower_id(), relation.following_id())
             .await?;
+
         self.app
             .cache_counter_repo()
-            .decrement_counters(*relation.follower_id(), *relation.following_id())
+            .decrement_counters(relation.follower_id(), relation.following_id())
             .await?;
 
         Ok(())

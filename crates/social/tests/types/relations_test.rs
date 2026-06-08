@@ -1,8 +1,9 @@
 use chrono::{Duration, Utc};
-use shared_kernel::core::{AggregateRoot, Entity, Result, Versioned};
+use shared_kernel::core::{Entity, Result};
 use shared_kernel::messaging::EventEmitter;
 use shared_kernel::types::ProfileId;
 use social::entities::FollowRelation;
+use social::types::FollowRelationId;
 use uuid::Uuid;
 
 fn create_mock_profile_id() -> ProfileId {
@@ -19,17 +20,12 @@ fn test_should_create_follow_relation_via_builder() -> Result<()> {
     let relation = FollowRelation::builder(follower, following).build()?;
 
     // Then
-    assert_eq!(relation.follower_id(), &follower);
-    assert_eq!(relation.following_id(), &following);
-    assert_eq!(relation.version(), 1); // Version initiale DDD standard
+    assert_eq!(relation.follower_id(), follower);
+    assert_eq!(relation.following_id(), following);
     assert!(relation.created_at() <= Utc::now());
 
-    // Validation des IDs d'entité et d'agrégat
-    assert_eq!(Entity::id(&relation), &follower);
-    assert_eq!(
-        AggregateRoot::id(&relation),
-        format!("{}:{}", follower, following)
-    );
+    let expected_id = FollowRelationId::new(follower, following);
+    assert_eq!(Entity::id(&relation), &expected_id);
     assert_eq!(FollowRelation::entity_name(), "FollowRelation");
 
     Ok(())
@@ -42,43 +38,36 @@ fn test_should_restore_relation_with_correct_historical_state() -> Result<()> {
     let following = create_mock_profile_id();
     let past_creation = Utc::now() - Duration::days(5);
     let past_update = Utc::now() - Duration::days(1);
-    let expected_version = 42;
 
-    let relation = FollowRelation::restore(
-        follower,
-        following,
-        expected_version,
-        past_creation,
-        past_update,
-    );
+    // When
+    let relation = FollowRelation::restore(follower, following, past_creation, past_update);
 
-    assert_eq!(relation.follower_id(), &follower);
-    assert_eq!(relation.following_id(), &following);
-    assert_eq!(relation.version(), expected_version);
+    // Then
+    assert_eq!(relation.follower_id(), follower);
+    assert_eq!(relation.following_id(), following);
     assert_eq!(relation.created_at(), past_creation);
-    assert_eq!(relation.updated_at(), past_update);
+    assert_eq!(Entity::updated_at(&relation), past_update);
 
     Ok(())
 }
 
 #[test]
 fn test_execute_follow_should_mutate_state_and_emit_domain_event() -> Result<()> {
+    // Given
     let follower = create_mock_profile_id();
     let following = create_mock_profile_id();
     let mut relation = FollowRelation::builder(follower, following).build()?;
 
-    let initial_version = relation.version();
-    let initial_update_time = relation.updated_at();
+    let initial_update_time = Entity::updated_at(&relation);
+
+    // When
     let result = relation.execute_follow();
 
+    // Then
     assert!(result.is_ok());
     assert!(result.unwrap());
+    assert!(Entity::updated_at(&relation) >= initial_update_time);
 
-    // L'état de versionnement de l'agrégat doit s'incrémenter via record_change/track_change
-    assert_eq!(relation.version(), initial_version + 1);
-    assert!(relation.updated_at() >= initial_update_time);
-
-    // Extraction et analyse de l'événement émis
     let mut events = relation.pull_events();
     assert_eq!(
         events.len(),
@@ -87,8 +76,6 @@ fn test_execute_follow_should_mutate_state_and_emit_domain_event() -> Result<()>
     );
 
     let event = events.pop().unwrap();
-
-    // On vérifie le type de l'événement et son contenu textuel/structurel
     let event_debug = format!("{:?}", event);
     assert!(event_debug.contains("ProfileFollowed"));
     assert!(event_debug.contains(&follower.to_string()));
@@ -98,23 +85,23 @@ fn test_execute_follow_should_mutate_state_and_emit_domain_event() -> Result<()>
 
 #[test]
 fn test_execute_unfollow_should_mutate_state_and_emit_domain_event() -> Result<()> {
+    // Given
     let follower = create_mock_profile_id();
     let following = create_mock_profile_id();
 
-    // On simule une relation déjà existante restaurée depuis ScyllaDB
     let mut relation = FollowRelation::restore(
         follower,
         following,
-        12,
         Utc::now() - Duration::hours(12),
         Utc::now() - Duration::hours(12),
     );
 
+    // When
     let result = relation.execute_unfollow();
 
+    // Then
     assert!(result.is_ok());
     assert!(result.unwrap());
-    assert_eq!(relation.version(), 13); // 12 + 1
 
     let mut events = relation.pull_events();
     assert_eq!(events.len(), 1);
@@ -153,14 +140,14 @@ fn test_pull_events_should_clear_aggregate_internal_queue() -> Result<()> {
 
 #[test]
 fn test_map_constraint_to_field_should_match_scylla_indexes() -> Result<()> {
-    // Test de robustesse des contraintes d'infrastructure mappées au domaine
     assert_eq!(
         FollowRelation::map_constraint_to_field("social_relations_pkey"),
         "follower_id_following_id"
     );
+
     assert_eq!(
         FollowRelation::map_constraint_to_field("unknown_error_db"),
-        "internal_governance"
+        "follower_id_following_id"
     );
 
     Ok(())

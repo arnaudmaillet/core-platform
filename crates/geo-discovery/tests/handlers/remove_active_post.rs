@@ -29,7 +29,8 @@ async fn test_remove_post_from_map_handler_success() -> Result<()> {
     // 1. GIVEN : On indexe d'abord le post pour qu'il existe dans nos stubs d'infra
     let index_cmd = IndexActivePostCommand {
         command_id: Uuid::now_v7(),
-        target: CommandTarget::stateless(profile_id, f.region()),
+        target: CommandTarget::stateless(profile_id),
+        region: f.region(),
         post_id,
         location,
         post_type: "video".to_string(),
@@ -63,7 +64,8 @@ async fn test_remove_post_from_map_handler_success() -> Result<()> {
     let remove_command_id = Uuid::now_v7();
     let remove_cmd = RemovePostFromMapCommand {
         command_id: remove_command_id,
-        target: CommandTarget::stateless(profile_id, f.region()),
+        target: CommandTarget::stateless(profile_id),
+        region: f.region(),
         post_id,
         location,
         created_at,
@@ -125,7 +127,8 @@ async fn test_remove_post_from_map_handler_idempotency_barrier() -> Result<()> {
 
     let remove_cmd = RemovePostFromMapCommand {
         command_id,
-        target: CommandTarget::stateless(profile_id, f.region()),
+        target: CommandTarget::stateless(profile_id),
+        region: f.region(),
         post_id,
         location,
         created_at,
@@ -159,7 +162,8 @@ async fn test_remove_post_from_map_handler_sharding_violation() -> Result<()> {
 
     let remove_cmd = RemovePostFromMapCommand {
         command_id,
-        target: CommandTarget::stateless(profile_id, invalid_region),
+        target: CommandTarget::stateless(profile_id),
+        region: invalid_region,
         post_id: PostId::generate(),
         location: GeoPoint::try_new(48.8156, 2.3204).unwrap(),
         created_at: Utc::now(),

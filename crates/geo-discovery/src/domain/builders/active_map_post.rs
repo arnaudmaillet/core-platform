@@ -3,7 +3,7 @@
 use crate::entities::ActiveMapPost;
 use crate::types::{BucketHour, TileH3, TileResolution};
 use chrono::{DateTime, Duration, Utc};
-use shared_kernel::core::{AggregateMetadata, Result};
+use shared_kernel::core::Result;
 use shared_kernel::geo::GeoPoint;
 use shared_kernel::types::{PostId, PostType};
 
@@ -16,7 +16,6 @@ pub struct ActiveMapPostBuilder {
     thumbnail_url: Option<String>,
     created_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
-    metadata: AggregateMetadata,
 }
 
 impl ActiveMapPostBuilder {
@@ -35,7 +34,6 @@ impl ActiveMapPostBuilder {
             thumbnail_url: None,
             created_at: None,
             expires_at: None,
-            metadata: AggregateMetadata::default(),
         }
     }
 
@@ -59,13 +57,9 @@ impl ActiveMapPostBuilder {
         self
     }
 
-    pub fn with_metadata(mut self, metadata: AggregateMetadata) -> Self {
-        self.metadata = metadata;
-        self
-    }
-
     pub fn build(self) -> Result<ActiveMapPost> {
-        let created_at = self.created_at.unwrap_or_else(Utc::now);
+        let now = Utc::now();
+        let created_at = self.created_at.unwrap_or(now);
         let bucket_hour = BucketHour::from_timestamp(created_at.timestamp_millis());
         let expires_at = self
             .expires_at
@@ -83,7 +77,7 @@ impl ActiveMapPostBuilder {
             self.thumbnail_url,
             created_at,
             expires_at,
-            self.metadata,
+            now,
         ))
     }
 }

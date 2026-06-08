@@ -15,9 +15,13 @@ impl CommandHandler for ChangeRegionHandler {
     type Command = ChangeRegionCommand;
     type Output = ();
 
-    async fn handle(&self, ctx: &AccountCommandContext, cmd: ChangeRegionCommand) -> Result<Self::Output> {
+    async fn handle(
+        &self,
+        ctx: &AccountCommandContext,
+        cmd: ChangeRegionCommand,
+    ) -> Result<Self::Output> {
         if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
+            .ensure_executable(cmd.command_id, cmd.region)
             .await?
         {
             return Ok(());

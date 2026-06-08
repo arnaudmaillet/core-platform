@@ -5,7 +5,7 @@ use infra_scylla::scylla::errors::PrepareError;
 use infra_scylla::scylla::{
     client::session::Session, statement::prepared::PreparedStatement, value::CqlTimestamp,
 };
-use shared_kernel::core::{Error, Identifier, PageQuery, PagedResult, Result, Versioned};
+use shared_kernel::core::{Error, Identifier, ManagedEntity, PageQuery, PagedResult, Result};
 use shared_kernel::types::{PostId, ProfileId, Region};
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ use crate::repositories::PostRepository;
 macro_rules! insert_author_cql {
     () => {
         "INSERT INTO {}.posts_by_author \
-         (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, is_edited, updated_at, dynamic_metadata) \
+         (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, edited_at, updated_at, dynamic_metadata) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     };
 }
@@ -24,7 +24,7 @@ macro_rules! insert_author_cql {
 macro_rules! insert_id_cql {
     () => {
         "INSERT INTO {}.posts_by_id \
-         (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, is_edited, updated_at, dynamic_metadata) \
+         (region, post_id, author_id, post_type, caption, media_list, total_duration_seconds, allowed_comment_hands, visibility_level, music_id, hashtags, mentions, edited_at, updated_at, dynamic_metadata) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     };
 }
@@ -114,7 +114,13 @@ impl PostRepository for ScyllaPostRepository {
             .map(|id| id.as_uuid())
             .collect();
 
-        let updated_at = Some(CqlTimestamp(post.updated_at().timestamp_millis()));
+        let edited_at = post
+            .edited_at()
+            .map(|dt| CqlTimestamp(dt.timestamp_millis()));
+
+        let updated_at = Some(CqlTimestamp(
+            post.lifecycle().updated_at().timestamp_millis(),
+        ));
 
         let params = (
             &region_str,
@@ -129,7 +135,7 @@ impl PostRepository for ScyllaPostRepository {
             post.music_id().map(|m| m.uuid()),
             hashtags,
             mentions,
-            post.is_edited(),
+            edited_at,
             updated_at,
             post.dynamic_metadata().to_string(),
         );

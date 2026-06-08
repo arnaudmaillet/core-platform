@@ -60,7 +60,8 @@ async fn test_link_sub_identity_business_idempotency() -> Result<()> {
 
     let cmd = LinkSubIdentityCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         sub_id: ext_id,
     };
 
@@ -95,7 +96,8 @@ async fn test_link_sub_identity_technical_idempotency() -> Result<()> {
 
     let cmd = LinkSubIdentityCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         // On met une valeur qui ne devrait pas poser de problème
         sub_id: SubId::try_new("apple_789")?,
     };
@@ -135,7 +137,8 @@ async fn test_link_sub_identity_concurrency_retry() -> Result<()> {
 
     let cmd = LinkSubIdentityCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         sub_id: SubId::try_new("discord_000")?,
     };
 

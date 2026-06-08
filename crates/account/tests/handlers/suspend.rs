@@ -20,7 +20,8 @@ async fn test_suspend_account_success() -> Result<()> {
 
     let cmd = SuspendCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         reason: AuditReason::try_new("Under investigation for fraud")?,
     };
 
@@ -58,7 +59,8 @@ async fn test_suspend_technical_idempotency() -> Result<()> {
 
     let cmd = SuspendCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         reason: AuditReason::try_new("Duplicate call")?,
     };
 
@@ -101,7 +103,8 @@ async fn test_suspend_business_idempotency() -> Result<()> {
 
     let cmd = SuspendCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         reason: AuditReason::try_new("Second call")?,
     };
 

@@ -56,11 +56,12 @@ impl<TM: TransactionManager + Clone + 'static> AccountConsumer<TM> {
                 let region_vo = Region::try_new(region).map_err(|e| e.to_string())?;
                 let creation_ctx = self.app_ctx.creation_command(region_vo.clone());
                 let generated_profile_id = ProfileId::generate();
-                let target = CommandTarget::stateless(generated_profile_id, region_vo);
+                let target = CommandTarget::stateless(generated_profile_id);
 
                 let command = CreateProfileCommand {
                     command_id: Uuid::new_v4(),
                     target,
+                    region: region_vo,
                     account_id: AccountId::from_uuid(account_id),
                     handle,
                 };

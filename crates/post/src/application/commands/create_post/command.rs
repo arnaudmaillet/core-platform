@@ -13,14 +13,14 @@ use uuid::Uuid;
 use crate::entities::MediaAsset;
 
 use crate::types::{
-    Caption, DurationSeconds, DynamicMetadata, Height, MediaId, MediaType, MimeType,
-    Width,
+    Caption, DurationSeconds, DynamicMetadata, Height, MediaId, MediaType, MimeType, Width,
 };
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreatePostCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
     pub post_id: PostId,
     pub post_type: PostType,
     pub caption: Option<Caption>,
@@ -33,6 +33,7 @@ pub struct CreatePostCommand {
 
 impl IdentifiableCommand for CreatePostCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -42,8 +43,12 @@ impl IdentifiableCommand for CreatePostCommand {
         &self.target
     }
 
-    fn cache_enabled(&self) -> bool {
-        false
+    fn routing(&self) -> Self::Routing {
+        self.region
+    }
+
+    fn resolve_cache_key(&self) -> Option<String> {
+        None
     }
 }
 
@@ -55,7 +60,7 @@ impl CreatePostCommand {
             .map_err(|_| Error::validation("region", "Invalid region"))?;
 
         let author_id = ProfileId::try_new(req.author_id)?;
-        let target = CommandTarget::stateless(author_id, region);
+        let target = CommandTarget::stateless(author_id);
         let post_type = PostType::try_from(req.post_type)?;
         let caption = match req.caption {
             Some(text) if !text.trim().is_empty() => Some(Caption::try_new(text)?),
@@ -81,6 +86,7 @@ impl CreatePostCommand {
             command_id,
             post_id,
             target,
+            region,
             post_type,
             caption,
             media_list,

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use infra_sqlx::TransactionExecuteExt;
 use infra_sqlx::sqlx::{self, Pool, Postgres, query_scalar};
 
-use shared_kernel::core::{AggregateRoot, Entity, Identifier};
+use shared_kernel::core::{Entity, Identifier, ManagedEntity, Versioned};
 use shared_kernel::{
     core::{Error, Result, Transaction},
     types::{AccountId, Email, Phone, Region, SubId},
@@ -177,10 +177,10 @@ impl AccountRepository for PostgresAccountRepository {
         let gov_row = PostgresAccountGovernanceRow::from_domain(account);
         let sett_row = PostgresAccountSettingsRow::from_domain(account);
 
-        let next_version = account.metadata().version() as i64;
-        let is_events_empty = account.metadata().is_events_empty();
-        let agg_created_at = account.metadata().created_at();
-        let agg_updated_at = account.metadata().updated_at();
+        let next_version = account.version() as i64;
+        let is_events_empty = account.lifecycle().is_events_empty();
+        let agg_created_at = account.identity().created_at();
+        let agg_updated_at = account.lifecycle().updated_at();
         let ident_updated_at = account.identity().updated_at();
         let gov_updated_at = account.governance().updated_at();
         let sett_updated_at = account.settings().updated_at();

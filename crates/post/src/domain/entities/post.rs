@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
-    core::{AggregateMetadata, AggregateRoot, Error, Result, Versioned},
+    core::{Entity, Error, LifecycleTracker, ManagedEntity, Result},
     messaging::{Event, EventEmitter, OperationTracker},
     types::{MusicId, PostId, PostType, ProfileId},
 };
@@ -31,42 +31,49 @@ pub struct Post {
     music_id: Option<MusicId>,
     hashtags: Hashtags,
     mentions: Mentions,
-    is_edited: bool,
-    updated_at: Option<DateTime<Utc>>,
+    edited_at: Option<DateTime<Utc>>,
     dynamic_metadata: DynamicMetadata,
-    metadata: AggregateMetadata,
-}
-
-impl Versioned for Post {
-    fn version(&self) -> u64 {
-        self.metadata.version()
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
-    }
-    fn record_change(&mut self) {
-        self.metadata.record_change();
-    }
+    lifecycle: LifecycleTracker,
 }
 
 impl EventEmitter for Post {
     fn push_event(&mut self, event: Box<dyn Event>) {
-        self.metadata.push_event(event);
+        self.lifecycle.push_event(event);
     }
     fn pull_events(&mut self) -> Vec<Box<dyn Event>> {
-        self.metadata.pull_events()
+        self.lifecycle.pull_events()
     }
 }
 
-impl AggregateRoot for Post {
-    fn id(&self) -> String {
-        self.post_id.to_string()
+impl ManagedEntity for Post {
+    fn lifecycle(&self) -> &LifecycleTracker {
+        &self.lifecycle
     }
-    fn metadata(&self) -> &AggregateMetadata {
-        &self.metadata
+    fn lifecycle_mut(&mut self) -> &mut LifecycleTracker {
+        &mut self.lifecycle
     }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
-        &mut self.metadata
+}
+
+impl Entity for Post {
+    type Id = PostId;
+
+    fn entity_name() -> &'static str {
+        "Post"
+    }
+
+    fn map_constraint_to_field(constraint: &str) -> &'static str {
+        match constraint {
+            "posts_pkey" => "post_id",
+            _ => "internal_security",
+        }
+    }
+
+    fn id(&self) -> &Self::Id {
+        &self.post_id
+    }
+
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.lifecycle.updated_at()
     }
 }
 
@@ -93,10 +100,9 @@ impl Post {
         music_id: Option<MusicId>,
         hashtags: Hashtags,
         mentions: Mentions,
-        is_edited: bool,
-        updated_at: Option<DateTime<Utc>>,
         dynamic_metadata: DynamicMetadata,
-        metadata: AggregateMetadata,
+        edited_at: Option<DateTime<Utc>>,
+        lifecycle: LifecycleTracker,
     ) -> Self {
         Self {
             post_id,
@@ -110,10 +116,9 @@ impl Post {
             music_id,
             hashtags,
             mentions,
-            is_edited,
-            updated_at,
             dynamic_metadata,
-            metadata,
+            edited_at,
+            lifecycle,
         }
     }
 
@@ -151,8 +156,11 @@ impl Post {
     pub fn mentions(&self) -> &Mentions {
         &self.mentions
     }
-    pub fn is_edited(&self) -> bool {
-        self.is_edited
+    pub fn edited_at(&self) -> Option<DateTime<Utc>> {
+        self.edited_at
+    }
+    pub fn updated_at(&self) -> Option<DateTime<Utc>> {
+        self.edited_at
     }
     pub fn dynamic_metadata(&self) -> &DynamicMetadata {
         &self.dynamic_metadata
@@ -179,15 +187,14 @@ impl Post {
                 s.caption = new_caption;
                 s.hashtags = new_tags;
                 s.mentions = new_mentions;
-                s.is_edited = true;
-                s.updated_at = Some(Utc::now());
+                s.edited_at = Some(Utc::now());
                 Ok(true)
             },
             |s| {
                 Box::new(PostEvent::PostCaptionUpdated {
                     post_id: s.post_id,
                     author_id: s.author_id,
-                    occurred_at: s.updated_at.unwrap_or_else(Utc::now),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -208,7 +215,7 @@ impl Post {
                     post_id: s.post_id,
                     author_id: s.author_id,
                     allowed_comment_hands: allowed,
-                    occurred_at: Utc::now(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -229,7 +236,7 @@ impl Post {
                     post_id: s.post_id,
                     author_id: s.author_id,
                     new_visibility: new_level,
-                    occurred_at: Utc::now(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )

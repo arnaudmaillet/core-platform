@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS posts_by_author (
     music_id uuid,                 -- Optionnel : ID de la piste audio associée au post
     hashtags set<text>,            -- Set natif pour indexer les tags du post (#rust, #devops... -> [rust, devops,...])
     mentions set<uuid>,            -- Liste unique des profiles notifiés/mentionnés (@alex, @lucie...  -> [019e5cef, 2e9c89a8,...])
-    is_edited boolean,             -- Flag indiquant si la caption a été modifiée
-    updated_at timestamp,          -- Date de la dernière modification
+    edited_at timestamp,           -- Date de la dernière modification (Metier)
+    updated_at timestamp,          -- Date de la dernière modification (Infrastructure)
     dynamic_metadata text,         -- Chaîne JSON (Serde) de secours pour les futures features clients
     PRIMARY KEY ((region), author_id, post_id)
 ) WITH CLUSTERING ORDER BY (author_id ASC, post_id DESC)
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS posts_by_id (
     music_id uuid,
     hashtags set<text>,
     mentions set<uuid>,
-    is_edited boolean,
+    edited_at timestamp,
     updated_at timestamp,
     dynamic_metadata text,
     PRIMARY KEY ((region), post_id)

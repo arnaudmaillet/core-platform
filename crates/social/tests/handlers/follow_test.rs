@@ -18,7 +18,8 @@ async fn test_follow_handler_success_nominal_path() -> Result<()> {
     let cmd = FollowCommand {
         command_id: Uuid::new_v4(),
         follower_id,
-        target: CommandTarget::stateless(target_id, f.region()),
+        target: CommandTarget::stateless(target_id),
+        region: f.region(),
     };
 
     // Act
@@ -52,7 +53,8 @@ async fn test_follow_handler_should_abort_silently_when_idempotency_barrier_trig
     let cmd = FollowCommand {
         command_id,
         follower_id,
-        target: CommandTarget::stateless(target_id, f.region()),
+        target: CommandTarget::stateless(target_id),
+        region: f.region(),
     };
 
     // Act
@@ -78,7 +80,8 @@ async fn test_follow_handler_should_ignore_self_following_attempts() -> Result<(
     let cmd = FollowCommand {
         command_id: Uuid::new_v4(),
         follower_id: actor_id,
-        target: CommandTarget::stateless(actor_id, f.region()),
+        target: CommandTarget::stateless(actor_id),
+        region: f.region(),
     };
 
     // Act
@@ -108,7 +111,8 @@ async fn test_follow_handler_should_skip_execution_if_already_following() -> Res
     let cmd = FollowCommand {
         command_id,
         follower_id,
-        target: CommandTarget::stateless(target_id, f.region()),
+        target: CommandTarget::stateless(target_id),
+        region: f.region(),
     };
 
     // Act

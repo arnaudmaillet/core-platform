@@ -107,10 +107,10 @@ impl<TM: TransactionManager> AccountCommandContext<TM> {
     }
 
     pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
-        if target.region != self.region || Some(&target.id) != self.account_id.as_ref() {
+        if Some(&target.id) != self.account_id.as_ref() {
             return Err(Error::validation(
                 "target",
-                "Context/Target identity or sharding mismatch",
+                "Context/Target identity mismatch",
             ));
         }
 

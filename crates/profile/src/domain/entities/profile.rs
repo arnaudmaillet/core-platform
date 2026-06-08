@@ -5,8 +5,8 @@ use crate::events::ProfileEvent;
 use crate::types::{Bio, DisplayName, Handle, Location, Socials};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{AggregateMetadata, AggregateRoot, Result};
 use shared_kernel::core::{Entity, Versioned};
+use shared_kernel::core::{LifecycleTracker, ManagedEntity, Result};
 use shared_kernel::messaging::{Event, EventEmitter, OperationTracker};
 use shared_kernel::types::{AccountId, ProfileId, Url};
 use uuid::Uuid;
@@ -24,39 +24,38 @@ pub struct Profile {
     socials: Option<Socials>,
     is_private: bool,
     created_at: DateTime<Utc>,
-    metadata: AggregateMetadata,
+    version: u64,
+    lifecycle: LifecycleTracker,
 }
 
 impl Versioned for Profile {
     fn version(&self) -> u64 {
-        self.metadata.version()
+        self.version
     }
     fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
+        self.lifecycle.updated_at()
     }
     fn record_change(&mut self) {
-        self.metadata.record_change();
+        self.version += 1;
+        self.lifecycle.record_change();
     }
 }
 
 impl EventEmitter for Profile {
     fn push_event(&mut self, event: Box<dyn Event>) {
-        self.metadata.push_event(event);
+        self.lifecycle.push_event(event);
     }
     fn pull_events(&mut self) -> Vec<Box<dyn Event>> {
-        self.metadata.pull_events()
+        self.lifecycle.pull_events()
     }
 }
 
-impl AggregateRoot for Profile {
-    fn id(&self) -> String {
-        self.profile_id.to_string()
+impl ManagedEntity for Profile {
+    fn lifecycle(&self) -> &LifecycleTracker {
+        &self.lifecycle
     }
-    fn metadata(&self) -> &AggregateMetadata {
-        &self.metadata
-    }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
-        &mut self.metadata
+    fn lifecycle_mut(&mut self) -> &mut LifecycleTracker {
+        &mut self.lifecycle
     }
 }
 
@@ -68,18 +67,15 @@ impl Entity for Profile {
         "Profile"
     }
 
-    fn map_constraint_to_field(constraint: &str) -> &'static str {
-        match constraint {
-            "account_governance_pkey" => "account_id",
-            _ => "internal_governance",
-        }
+    fn map_constraint_to_field(_constraint: &str) -> &'static str {
+        "profile_id"
     }
 
     fn id(&self) -> &Self::Id {
         &self.profile_id
     }
     fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
+        self.lifecycle.updated_at()
     }
 }
 
@@ -119,7 +115,8 @@ impl Profile {
             socials,
             is_private,
             created_at,
-            metadata: AggregateMetadata::restore(version, created_at, updated_at),
+            version,
+            lifecycle: LifecycleTracker::restore(updated_at),
         }
     }
 
@@ -158,8 +155,19 @@ impl Profile {
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
-    pub fn updated_at(&self) -> DateTime<Utc> {
-        Versioned::updated_at(self)
+
+    fn track_change<F, E>(&mut self, action: F, event_factory: E) -> Result<bool>
+    where
+        F: FnOnce(&mut Self) -> Result<bool>,
+        E: FnOnce(&Self) -> Box<dyn Event>,
+    {
+        let changed = OperationTracker::track_change(self, action, event_factory)?;
+
+        if changed {
+            self.record_change();
+        }
+
+        Ok(changed)
     }
 
     // --- MUTATEURS MÉTIER
@@ -174,7 +182,7 @@ impl Profile {
                     account_id: s.account_id,
                     display_name: s.display_name.clone(),
                     handle: s.handle.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -199,7 +207,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_handle,
                     new_handle: s.handle.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -224,7 +232,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_display_name,
                     new_display_name: s.display_name.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -249,7 +257,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_bio,
                     new_bio: s.bio.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -273,7 +281,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_avatar_url,
                     new_avatar_url: s.avatar.clone().unwrap(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -297,7 +305,7 @@ impl Profile {
                     profile_id: s.profile_id,
                     account_id: s.account_id,
                     old_avatar_url,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -322,7 +330,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_banner_url,
                     new_banner_url: s.banner.clone().unwrap(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -346,7 +354,7 @@ impl Profile {
                     profile_id: s.profile_id,
                     account_id: s.account_id,
                     old_banner_url,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -372,7 +380,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_socials,
                     new_socials: s.socials.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -397,7 +405,7 @@ impl Profile {
                     account_id: s.account_id,
                     old_location,
                     new_location: s.location.clone(),
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )
@@ -419,7 +427,7 @@ impl Profile {
                     profile_id: s.profile_id,
                     account_id: s.account_id,
                     is_private,
-                    occurred_at: s.updated_at(),
+                    occurred_at: s.lifecycle().updated_at(),
                 })
             },
         )

@@ -1,31 +1,21 @@
+// crates/social/src/domain/aggregates/follow_relation.rs
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared_kernel::core::{AggregateMetadata, AggregateRoot, Entity, Result, Versioned};
+use shared_kernel::core::{Entity, LifecycleTracker, ManagedEntity, Result};
 use shared_kernel::messaging::{Event, EventEmitter, OperationTracker};
 use shared_kernel::types::ProfileId;
 use uuid::Uuid;
 
+use crate::domain::events::SocialEvent;
+use crate::domain::types::FollowRelationId;
 use crate::entities::FollowRelationBuilder;
-use crate::events::SocialEvent;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FollowRelation {
-    follower_id: ProfileId,
-    following_id: ProfileId,
+    id: FollowRelationId,
     created_at: DateTime<Utc>,
-    metadata: AggregateMetadata,
-}
-
-impl Versioned for FollowRelation {
-    fn version(&self) -> u64 {
-        self.metadata.version()
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.metadata.updated_at()
-    }
-    fn record_change(&mut self) {
-        self.metadata.record_change();
-    }
+    metadata: LifecycleTracker,
 }
 
 impl EventEmitter for FollowRelation {
@@ -37,35 +27,30 @@ impl EventEmitter for FollowRelation {
     }
 }
 
-impl AggregateRoot for FollowRelation {
-    fn id(&self) -> String {
-        format!("{}:{}", self.follower_id, self.following_id)
-    }
-    fn metadata(&self) -> &AggregateMetadata {
+impl ManagedEntity for FollowRelation {
+    fn lifecycle(&self) -> &LifecycleTracker {
         &self.metadata
     }
-    fn metadata_mut(&mut self) -> &mut AggregateMetadata {
+    fn lifecycle_mut(&mut self) -> &mut LifecycleTracker {
         &mut self.metadata
     }
 }
 
 impl Entity for FollowRelation {
-    type Id = ProfileId;
+    type Id = FollowRelationId;
 
     fn entity_name() -> &'static str {
         "FollowRelation"
     }
 
-    fn map_constraint_to_field(constraint: &str) -> &'static str {
-        match constraint {
-            "social_relations_pkey" => "follower_id_following_id",
-            _ => "internal_governance",
-        }
+    fn map_constraint_to_field(_constraint: &str) -> &'static str {
+        "follower_id_following_id"
     }
 
     fn id(&self) -> &Self::Id {
-        &self.follower_id
+        &self.id
     }
+
     fn updated_at(&self) -> DateTime<Utc> {
         self.metadata.updated_at()
     }
@@ -79,60 +64,51 @@ impl FollowRelation {
     pub fn restore(
         follower_id: ProfileId,
         following_id: ProfileId,
-        version: u64,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
         FollowRelation {
-            follower_id,
-            following_id,
+            id: FollowRelationId::new(follower_id, following_id), // Construit à la restauration
             created_at,
-            metadata: AggregateMetadata::restore(version, created_at, updated_at),
+            metadata: LifecycleTracker::restore(updated_at),
         }
     }
 
-    // --- GETTERS ---
-
-    pub fn follower_id(&self) -> &ProfileId {
-        &self.follower_id
+    pub fn follower_id(&self) -> ProfileId {
+        self.id.follower_id()
     }
-    pub fn following_id(&self) -> &ProfileId {
-        &self.following_id
+    pub fn following_id(&self) -> ProfileId {
+        self.id.following_id()
     }
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
-    pub fn updated_at(&self) -> DateTime<Utc> {
-        Versioned::updated_at(self)
-    }
 
-    // --- MUTATEURS MÉTIERS ---
-
-    /// Exécute l'action de follow et enregistre l'événement de domaine
     pub fn execute_follow(&mut self) -> Result<bool> {
-        self.track_change(
+        OperationTracker::track_change(
+            self,
             |_s| Ok(true),
             |s| {
                 Box::new(SocialEvent::ProfileFollowed {
                     id: Uuid::now_v7(),
-                    follower_id: s.follower_id,
-                    following_id: s.following_id,
-                    occurred_at: s.updated_at(),
+                    follower_id: s.follower_id(),
+                    following_id: s.following_id(),
+                    occurred_at: s.metadata.updated_at(),
                 })
             },
         )
     }
 
-    /// Exécute l'action d'unfollow et enregistre l'événement de domaine
     pub fn execute_unfollow(&mut self) -> Result<bool> {
-        self.track_change(
+        OperationTracker::track_change(
+            self,
             |_s| Ok(true),
             |s| {
                 Box::new(SocialEvent::ProfileUnfollowed {
                     id: Uuid::now_v7(),
-                    follower_id: s.follower_id,
-                    following_id: s.following_id,
-                    occurred_at: s.updated_at(),
+                    follower_id: s.follower_id(),
+                    following_id: s.following_id(),
+                    occurred_at: s.metadata.updated_at(),
                 })
             },
         )

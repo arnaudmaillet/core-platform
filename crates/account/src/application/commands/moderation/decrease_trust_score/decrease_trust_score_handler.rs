@@ -32,10 +32,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for DecreaseTrustS
         ctx: &AccountCommandContext<TM>,
         cmd: DecreaseTrustScoreCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
-            .await?
-        {
+        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
             return Ok(());
         }
 

@@ -18,10 +18,7 @@ impl CommandHandler for ChangeVisibilityHandler {
         ctx: &PostCommandContext,
         cmd: ChangeVisibilityCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
-            .await?
-        {
+        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
             return Ok(());
         }
 
@@ -35,6 +32,7 @@ impl CommandHandler for ChangeVisibilityHandler {
                 "visibility is already set to {:?}, skipping save",
                 cmd.new_visibility
             );
+            ctx.save_idempotency(cmd.command_id).await?;
         }
 
         Ok(())

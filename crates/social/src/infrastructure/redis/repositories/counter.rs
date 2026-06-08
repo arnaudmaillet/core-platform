@@ -8,8 +8,8 @@ use shared_kernel::core::{Error, Result};
 use shared_kernel::types::ProfileId;
 use std::collections::HashMap;
 
-use crate::domain::entities::ProfileCounters;
-use crate::domain::repositories::CounterRepository;
+use crate::entities::ProfileCounters;
+use crate::repositories::CounterRepository;
 
 pub struct RedisCounterRepository {
     pool: Pool,
@@ -20,7 +20,7 @@ impl RedisCounterRepository {
         Self { pool }
     }
 
-    fn make_key(&self, profile_id: &ProfileId) -> String {
+    fn make_key(&self, profile_id: ProfileId) -> String {
         format!("profile:counters:{}", profile_id)
     }
 }
@@ -32,8 +32,8 @@ impl CounterRepository for RedisCounterRepository {
         follower_id: ProfileId,
         following_id: ProfileId,
     ) -> Result<()> {
-        let follower_key = self.make_key(&follower_id);
-        let following_key = self.make_key(&following_id);
+        let follower_key = self.make_key(follower_id);
+        let following_key = self.make_key(following_id);
 
         self.pool
             .hincrby::<i64, _, _>(&follower_key, "following", 1)
@@ -61,8 +61,8 @@ impl CounterRepository for RedisCounterRepository {
         follower_id: ProfileId,
         following_id: ProfileId,
     ) -> Result<()> {
-        let follower_key = self.make_key(&follower_id);
-        let following_key = self.make_key(&following_id);
+        let follower_key = self.make_key(follower_id);
+        let following_key = self.make_key(following_id);
 
         self.pool
             .hincrby::<i64, _, _>(&follower_key, "following", -1)
@@ -86,7 +86,7 @@ impl CounterRepository for RedisCounterRepository {
     }
 
     async fn get_counters(&self, profile_id: ProfileId) -> Result<ProfileCounters> {
-        let key = self.make_key(&profile_id);
+        let key = self.make_key(profile_id);
 
         let raw_values: HashMap<String, i64> = self
             .pool
@@ -105,8 +105,6 @@ impl CounterRepository for RedisCounterRepository {
             profile_id,
             followers_raw.try_into()?,
             following_raw.try_into()?,
-            1,
-            Utc::now(),
             Utc::now(),
         ))
     }

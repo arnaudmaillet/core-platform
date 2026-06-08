@@ -19,7 +19,8 @@ mod tests {
 
         let cmd = DeletePostCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+            region: f.region(),
         };
 
         // Act
@@ -52,7 +53,8 @@ mod tests {
 
         let cmd = DeletePostCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id(), f.region()),
+            target: CommandTarget::stateless(post.post_id()),
+            region: f.region(),
         };
 
         // Act

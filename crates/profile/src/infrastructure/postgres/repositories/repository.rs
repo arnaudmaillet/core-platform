@@ -1,13 +1,13 @@
 // crates/profile/src/infrastructure/postgres/repositories/postgres_identity_repository.rs
 
 use crate::entities::Profile;
-use crate::infrastructure::postgres::rows::PostgresProfileRow;
+use crate::infrastructure::postgres::mappers::PostgresProfileRow;
 use crate::repositories::ProfileRepository;
 use crate::types::Handle;
 use async_trait::async_trait;
 use infra_sqlx::TransactionExecuteExt;
 use infra_sqlx::{sqlx, sqlx::PgPool};
-use shared_kernel::core::{AggregateRoot, Error, Identifier, Result, Transaction, Versioned};
+use shared_kernel::core::{ManagedEntity, Error, Identifier, Result, Transaction, Versioned};
 use shared_kernel::types::{AccountId, ProfileId, Region};
 
 const OCC_LOCK_QUERY: &str = r#"
@@ -81,7 +81,7 @@ impl ProfileRepository for PostgresProfileRepository {
         let row = PostgresProfileRow::from_domain(profile);
         let next_version = profile.version() as i64;
         let region_str = region.as_str().to_string();
-        let is_events_empty = profile.metadata().is_events_empty();
+        let is_events_empty = profile.lifecycle().is_events_empty();
 
         let result = self
             .pool

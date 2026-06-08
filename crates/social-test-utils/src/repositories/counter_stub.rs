@@ -3,10 +3,10 @@ use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
-use social::entities::ProfileCounters;
-use social::repositories::CounterRepository;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{Counter, ProfileId};
+use social::entities::ProfileCounters;
+use social::repositories::CounterRepository;
 
 pub struct CounterRepositoryStub {
     // Simule la table ou le Hash des compteurs par profil
@@ -100,23 +100,17 @@ impl CounterRepository for CounterRepositoryStub {
                 profile_id,
                 Counter::from_raw(followers),
                 Counter::from_raw(following),
-                1,
                 Utc::now(),
-                Utc::now()
             )),
             None => {
                 if self.is_cache_behavior {
-                    // Comportement Redis : Erreur de Cache Miss (NotFound)
                     Err(Error::not_found("ProfileCounters", profile_id.to_string()))
                 } else {
-                    // Comportement ScyllaDB : Retourne un objet initialisé par défaut à 0
                     Ok(ProfileCounters::restore(
                         profile_id,
                         Counter::default(),
                         Counter::default(),
-                        1,
                         Utc::now(),
-                        Utc::now()
                     ))
                 }
             }
@@ -127,18 +121,15 @@ impl CounterRepository for CounterRepositoryStub {
         let mut store = self.storage.write().unwrap();
 
         if self.is_cache_behavior {
-            // Comportement Redis (HSET) : Remplace la valeur brute
             store.insert(
-                *counters.profile_id(),
+                counters.profile_id(),
                 (
                     counters.followers_count().value(),
                     counters.following_count().value(),
                 ),
             );
         } else {
-            // Comportement ScyllaDB (UPDATE ... SET x = x + delta)
-            // Dans notre stub, pour être simple, on ajoute le delta à la valeur existante
-            let entry = store.entry(*counters.profile_id()).or_insert((0, 0));
+            let entry = store.entry(counters.profile_id()).or_insert((0, 0));
             entry.0 = entry.0.saturating_add(counters.followers_count().value());
             entry.1 = entry.1.saturating_add(counters.following_count().value());
         }

@@ -10,11 +10,13 @@ use uuid::Uuid;
 pub struct AddPushTokenCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+    pub region: Region,
     pub token: PushToken,
 }
 
 impl IdentifiableCommand for AddPushTokenCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -22,6 +24,10 @@ impl IdentifiableCommand for AddPushTokenCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+    fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -36,16 +42,18 @@ impl AddPushTokenCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
 
         let token = PushToken::try_new(&req.token)
             .map_err(|e| Error::validation("push_token", e.to_string()))?;
 
+        let region = Region::try_new(proto_target.region)?;
+
         Ok(Self {
             command_id,
             target,
+            region,
             token,
         })
     }

@@ -39,7 +39,7 @@ async fn test_counter_fallback_when_no_row_exists() -> Result<()> {
 
     // --- Assert ---
     // Le pattern fallback doit renvoyer un agrégat propre initialisé à 0 sans crasher
-    assert_eq!(counters.profile_id(), &random_profile_id);
+    assert_eq!(counters.profile_id(), random_profile_id);
     assert_eq!(counters.followers_count().value(), 0);
     assert_eq!(counters.following_count().value(), 0);
 
@@ -106,8 +106,6 @@ async fn test_counter_save_custom_delta_sync() -> Result<()> {
         profile_id,
         Counter::from_raw(5),
         Counter::from_raw(12),
-        1,
-        Utc::now(),
         Utc::now(),
     );
 
@@ -139,8 +137,6 @@ async fn test_counter_save_should_noop_when_deltas_are_zero() -> Result<()> {
         profile_id,
         Counter::from_raw(0),
         Counter::from_raw(0),
-        1,
-        Utc::now(),
         Utc::now(),
     );
 

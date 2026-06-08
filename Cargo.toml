@@ -35,6 +35,7 @@ members = [
     "crates/shared-kernel-test-utils",
     "crates/geo-discovery",
     "crates/geo-discovery-test-utils",
+    "crates/comment",
 ]
 resolver = "2"
 

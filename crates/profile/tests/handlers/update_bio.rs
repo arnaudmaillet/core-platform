@@ -21,13 +21,17 @@ async fn test_update_bio_success() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
+        region: f.region(),
         new_bio: new_bio.clone(),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // Assert
@@ -57,13 +61,17 @@ async fn test_update_bio_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.profile_id(), f.region(), initial_version),
+        target: CommandTarget::versioned(f.profile_id(), initial_version),
+        region: f.region(),
         new_bio: Some(Bio::try_new("Duplicate bio")?),
     };
 
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     assert!(
@@ -98,13 +106,17 @@ async fn test_update_bio_business_idempotency() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
+        region: f.region(),
         new_bio: Some(bio), // Même contenu
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // Assert
@@ -127,14 +139,18 @@ async fn test_update_bio_concurrency_conflict() -> Result<()> {
 
     let cmd = UpdateBioCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), 42), // Version obsolète
+        target: CommandTarget::versioned(f.profile_id(), 42), // Version obsolète
+        region: f.region(),
         new_bio: Some(Bio::try_new("Conflict bio")?),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateBioCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert

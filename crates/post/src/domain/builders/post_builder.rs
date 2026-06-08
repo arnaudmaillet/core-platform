@@ -1,7 +1,7 @@
 // crates/post/src/domain/builders/post.rs
 
 use chrono::{DateTime, Utc};
-use shared_kernel::core::{AggregateMetadata, Result};
+use shared_kernel::core::{LifecycleTracker, Result};
 use shared_kernel::types::{MusicId, PostId, PostType, ProfileId};
 
 use crate::domain::entities::MediaAsset;
@@ -18,10 +18,9 @@ pub struct PostBuilder {
     media_list: Vec<MediaAsset>,
     music_id: Option<MusicId>,
     allowed_comment_hands: bool,
-    is_edited: bool,
     hashtags: Hashtags,
     mentions: Mentions,
-    updated_at: Option<DateTime<Utc>>,
+    edited_at: Option<DateTime<Utc>>,
     dynamic_metadata: Option<DynamicMetadata>,
 }
 
@@ -41,10 +40,9 @@ impl PostBuilder {
             media_list: Vec::new(),
             music_id: None,
             allowed_comment_hands: true,
-            is_edited: false,
             hashtags: Hashtags::empty(),
             mentions: Mentions::empty(),
-            updated_at: None,
+            edited_at: None,
             dynamic_metadata: None,
         }
     }
@@ -81,9 +79,8 @@ impl PostBuilder {
         self
     }
 
-    pub fn with_edit_status(mut self, is_edited: bool, updated_at: Option<DateTime<Utc>>) -> Self {
-        self.is_edited = is_edited;
-        self.updated_at = updated_at;
+    pub fn with_edited_at(mut self, edited_at: Option<DateTime<Utc>>) -> Self {
+        self.edited_at = edited_at;
         self
     }
 
@@ -122,10 +119,9 @@ impl PostBuilder {
             self.music_id,
             self.hashtags,
             self.mentions,
-            self.is_edited,
-            self.updated_at,
             self.dynamic_metadata.unwrap_or_else(DynamicMetadata::empty),
-            AggregateMetadata::default(),
+            self.edited_at,
+            LifecycleTracker::default(),
         ))
     }
 }

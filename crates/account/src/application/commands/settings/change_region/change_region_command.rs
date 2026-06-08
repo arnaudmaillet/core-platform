@@ -13,11 +13,13 @@ use uuid::Uuid;
 pub struct ChangeRegionCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
+pub region: Region,
     pub new_region: Region,
 }
 
 impl IdentifiableCommand for ChangeRegionCommand {
     type Id = AccountId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -25,6 +27,10 @@ impl IdentifiableCommand for ChangeRegionCommand {
 
     fn target(&self) -> &CommandTarget<AccountId> {
         &self.target
+    }
+
+   fn routing(&self) -> Self::Routing {
+        self.region
     }
 }
 
@@ -39,7 +45,6 @@ impl ChangeRegionCommand {
 
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
-            region: Region::try_new(proto_target.region)?,
             expected_version: Some(proto_target.expected_version),
         };
 

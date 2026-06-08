@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct IndexActivePostCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
     pub post_id: PostId,
     pub location: GeoPoint,
     pub post_type: String,
@@ -22,6 +23,7 @@ pub struct IndexActivePostCommand {
 
 impl IdentifiableCommand for IndexActivePostCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -31,8 +33,12 @@ impl IdentifiableCommand for IndexActivePostCommand {
         &self.target
     }
 
-    fn cache_enabled(&self) -> bool {
-        false
+    fn routing(&self) -> Self::Routing {
+        self.region
+    }
+
+    fn resolve_cache_key(&self) -> Option<String> {
+        None
     }
 }
 
@@ -52,7 +58,8 @@ impl IndexActivePostCommand {
     ) -> Self {
         Self {
             command_id,
-            target: CommandTarget::stateless(author_id, region),
+            target: CommandTarget::stateless(author_id),
+            region,
             post_id,
             location,
             post_type,

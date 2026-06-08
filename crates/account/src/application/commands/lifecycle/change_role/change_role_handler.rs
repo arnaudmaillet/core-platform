@@ -32,10 +32,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeRoleHand
         ctx: &AccountCommandContext<TM>,
         cmd: ChangeRoleCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.target.region)
-            .await?
-        {
+        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
             return Ok(());
         }
         let mut account = ctx.fetch_verified(&cmd.target).await?;

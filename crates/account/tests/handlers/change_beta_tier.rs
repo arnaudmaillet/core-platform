@@ -21,7 +21,8 @@ async fn test_change_beta_tier_success() -> Result<()> {
 
     let cmd = ChangeBetaTierCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_tier: BetaTier::BETA,
     };
 
@@ -61,7 +62,8 @@ async fn test_change_beta_tier_technical_idempotency() -> Result<()> {
 
     let cmd = ChangeBetaTierCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_tier: BetaTier::ALPHA,
     };
 
@@ -103,7 +105,8 @@ async fn test_change_beta_tier_business_idempotency() -> Result<()> {
 
     let cmd = ChangeBetaTierCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.account_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.account_id(), version_snapshot),
+region: f.region(),
         new_tier: BetaTier::ALPHA, // On redemande ALPHA
     };
 

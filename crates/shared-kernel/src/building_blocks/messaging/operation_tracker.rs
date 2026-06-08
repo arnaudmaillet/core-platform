@@ -1,22 +1,21 @@
+// crates/shared-kernel/src/core/identity/operation_tracker.rs
+
 use crate::{
-    core::{Result, Versioned},
-    messaging::{Event, EventEmitter},
+    core::{ManagedEntity, Result},
+    messaging::Event,
 };
 
-pub trait OperationTracker: Versioned + EventEmitter {
-    /// Coordonne : Action métier -> Versioning -> Événement
+pub trait OperationTracker: ManagedEntity {
     fn track_change<F, E>(&mut self, action: F, event_factory: E) -> Result<bool>
     where
         Self: Sized,
         F: FnOnce(&mut Self) -> Result<bool>,
         E: FnOnce(&Self) -> Box<dyn Event>,
     {
-        // 1. Exécuter l'action (qui peut échouer ou ne rien changer)
+        // 1. Exécuter l'action métier
         if action(self)? {
-            // 2. Marquer le changement technique (Version + Date)
-            self.record_change();
+            self.lifecycle_mut().record_change();
 
-            // 3. Produire et stocker l'événement
             let event = event_factory(self);
             self.push_event(event);
 
@@ -27,5 +26,4 @@ pub trait OperationTracker: Versioned + EventEmitter {
     }
 }
 
-// Implémentation automatique
-impl<T: Versioned + EventEmitter> OperationTracker for T {}
+impl<T: ManagedEntity> OperationTracker for T {}

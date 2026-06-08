@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct RemovePostFromMapCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
+    pub region: Region,
     pub post_id: PostId,
     pub location: GeoPoint,
     pub created_at: DateTime<Utc>,
@@ -18,6 +19,7 @@ pub struct RemovePostFromMapCommand {
 
 impl IdentifiableCommand for RemovePostFromMapCommand {
     type Id = ProfileId;
+    type Routing = Region;
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -27,8 +29,12 @@ impl IdentifiableCommand for RemovePostFromMapCommand {
         &self.target
     }
 
-    fn cache_enabled(&self) -> bool {
-        false
+    fn routing(&self) -> Self::Routing {
+        self.region
+    }
+
+    fn resolve_cache_key(&self) -> Option<String> {
+        None
     }
 }
 
@@ -43,7 +49,8 @@ impl RemovePostFromMapCommand {
     ) -> Self {
         Self {
             command_id,
-            target: CommandTarget::stateless(operator_id, region),
+            target: CommandTarget::stateless(operator_id),
+            region,
             post_id,
             location,
             created_at,

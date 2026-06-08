@@ -7,7 +7,7 @@ use crate::domain::{
 use crate::types::{AccountRole, AccountState, BirthDate, IpAddr};
 use shared_kernel::geo::Timezone;
 use shared_kernel::{
-    core::{AggregateMetadata, Result},
+    core::{LifecycleTracker, Result},
     types::{AccountId, Email, Phone, SubId},
 };
 
@@ -137,11 +137,12 @@ impl AccountBuilder {
     }
 
     pub fn build(self) -> Result<Account> {
-        let metadata: AggregateMetadata = AggregateMetadata::default();
+        let metadata: LifecycleTracker = LifecycleTracker::default();
         Ok(Account::restore(
             self.identity.build()?,
             self.governance.build()?,
             self.settings.build()?,
+            0,
             metadata,
         ))
     }

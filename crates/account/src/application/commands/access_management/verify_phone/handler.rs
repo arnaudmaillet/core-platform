@@ -37,10 +37,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for VerifyPhoneHan
         ctx: &AccountCommandContext<TM>,
         cmd: VerifyPhoneCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_creatable(cmd.command_id, cmd.target.region)
-            .await?
-        {
+        if !ctx.ensure_creatable(cmd.command_id, cmd.region).await? {
             return Ok(());
         }
 

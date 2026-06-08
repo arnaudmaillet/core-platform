@@ -67,6 +67,9 @@ impl AccountIdentity {
     pub fn account_id(&self) -> AccountId {
         self.account_id
     }
+    pub(crate) fn account_id_as_ref(&self) -> &AccountId {
+        &self.account_id
+    }
     pub fn sub_id(&self) -> Option<&SubId> {
         self.sub_id.as_ref()
     }

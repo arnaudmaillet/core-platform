@@ -22,13 +22,17 @@ async fn test_update_location_success() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
+        region: f.region(),
         new_location: new_location.clone(),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // Assert
@@ -56,14 +60,18 @@ async fn test_update_location_technical_idempotency() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.profile_id(), f.region(), 0),
+        target: CommandTarget::versioned(f.profile_id(), 0),
+        region: f.region(),
         new_location: Some(Location::try_new("Tokyo, Japan")?),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert
@@ -91,13 +99,17 @@ async fn test_update_location_business_idempotency() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), version_snapshot),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
+        region: f.region(),
         new_location: Some(location),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await?;
 
     // Assert
@@ -120,14 +132,18 @@ async fn test_update_location_concurrency_conflict() -> Result<()> {
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), f.region(), 123), // Version dans le futur
+        target: CommandTarget::versioned(f.profile_id(), 123), // Version dans le futur
+        region: f.region(),
         new_location: Some(Location::try_new("Nowhere")?),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
+            f.command_ctx().clone(),
+            cmd,
+        )
         .await;
 
     // Assert
