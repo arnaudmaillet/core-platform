@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use infra_test::ScyllaTestContext;
-    use shared_kernel::core::{Result, Versioned};
+    use shared_kernel::core::Result;
     use shared_kernel::types::ProfileId;
     use social::entities::FollowRelation;
     use social::repositories::RelationRepository;
@@ -38,12 +38,10 @@ mod integration_tests {
 
         let follower_id = ProfileId::generate();
         let following_id = ProfileId::generate();
-
-        let relation = FollowRelation::builder(follower_id, following_id)
-            .build()?;
+        let mut relation = FollowRelation::builder(follower_id, following_id).build()?;
 
         // --- Act: Étape 1 (Sauvegarde via le Batch Logged ScyllaDB) ---
-        repo.save(&relation).await?;
+        repo.save(&mut relation).await?;
 
         // --- Assert: Étape 2 (Vérification de la double écriture synchrone) ---
         // 1. Validation de l'existence générale
@@ -62,7 +60,6 @@ mod integration_tests {
         assert_eq!(found.following_id(), following_id);
 
         // --- Assert: Étape 3 (Vérification des Index / Tables Miroirs) ---
-        // On vérifie que la table miroir `followers` a bien été alimentée par le Batch
         let followers_list = repo.get_followers_ids(following_id, 10, 0).await?;
         assert_eq!(followers_list.len(), 1);
         assert_eq!(followers_list[0], follower_id);
@@ -72,7 +69,7 @@ mod integration_tests {
         assert_eq!(following_list[0], following_id);
 
         // --- Act: Étape 4 (Suppression Atomique) ---
-        repo.delete(follower_id, following_id).await?;
+        repo.delete(&mut relation).await?;
 
         // --- Assert: Étape 5 (Vérification de la purge totale) ---
         let missing_find: Option<FollowRelation> = repo.find(follower_id, following_id).await?;
@@ -107,12 +104,11 @@ mod integration_tests {
         // On génère 5 followers différents qui vont follow notre target
         for _ in 0..5 {
             let follower_id = ProfileId::generate();
-            let relation = FollowRelation::builder(follower_id, target_user).build()?;
-            repo.save(&relation).await?;
+            let mut relation = FollowRelation::builder(follower_id, target_user).build()?;
+            repo.save(&mut relation).await?;
         }
 
         // --- Act & Assert ---
-        // On teste le paramètre de limite (Clamping des lignes CQL)
         let limited_followers = repo.get_followers_ids(target_user, 3, 0).await?;
         assert_eq!(
             limited_followers.len(),

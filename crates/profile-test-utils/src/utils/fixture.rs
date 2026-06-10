@@ -57,8 +57,6 @@ impl ProfileTestFixture {
         }
     }
 
-    // --- Configuration des stubs de données (Arrange) ---
-
     pub async fn given_profile(&self, profile: Profile) {
         self.profile_repo.save_direct(profile).await;
     }
@@ -77,8 +75,6 @@ impl ProfileTestFixture {
                 .with_profile_id(self.profile_id()),
         )
     }
-
-    // --- Accesseurs d'infrastructure explicites ---
 
     pub fn bus(&self) -> Arc<CommandBus> {
         self.bus.clone()
@@ -102,8 +98,6 @@ impl ProfileTestFixture {
     pub fn idempotency_repo(&self) -> &IdempotencyRepositoryStub {
         &self.idempotency_repo
     }
-
-    // --- Context Factories Explicites ---
 
     pub fn command_ctx(&self) -> ProfileCommandContext {
         self.app_ctx.command(self.profile_id)

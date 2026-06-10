@@ -4,7 +4,6 @@ use crate::application::context::SocialAppContext;
 use crate::entities::FollowRelation;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
-use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct SocialCommandContext {
@@ -34,32 +33,17 @@ impl SocialCommandContext {
         self.target_profile_id
     }
 
-    pub async fn ensure_executable(&self, command_id: Uuid, region: &Region) -> Result<bool> {
+    pub async fn ensure_executable(&self, region: &Region) -> Result<()> {
         if region != &self.region {
             return Err(Error::validation(
                 "region",
                 "Region mismatch (sharding violation prevention)",
             ));
         }
-
-        let exists = self
-            .app
-            .idempotency_repo()
-            .exists(None, &command_id)
-            .await?;
-
-        if exists {
-            return Ok(false);
-        }
-        Ok(true)
+        Ok(())
     }
 
-    pub async fn save_relation(
-        &self,
-        relation: &mut FollowRelation,
-        command_id: Uuid,
-    ) -> Result<()> {
-        self.app.idempotency_repo().save(None, &command_id).await?;
+    pub async fn save_relation(&self, relation: &mut FollowRelation) -> Result<()> {
         self.app.relation_repo().save(relation).await?;
         self.app
             .cache_counter_repo()
@@ -69,17 +53,8 @@ impl SocialCommandContext {
         Ok(())
     }
 
-    pub async fn delete_relation(
-        &self,
-        relation: &mut FollowRelation,
-        command_id: Uuid,
-    ) -> Result<()> {
-        self.app.idempotency_repo().save(None, &command_id).await?;
-
-        self.app
-            .relation_repo()
-            .delete(relation.follower_id(), relation.following_id())
-            .await?;
+    pub async fn delete_relation(&self, relation: &mut FollowRelation) -> Result<()> {
+        self.app.relation_repo().delete(relation).await?;
 
         self.app
             .cache_counter_repo()

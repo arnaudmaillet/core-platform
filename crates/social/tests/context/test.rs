@@ -1,14 +1,12 @@
 // crates/social/src/application/context/test.rs
 
 use chrono::{Duration, Utc};
-use shared_kernel::core::{ErrorCode, Result, Versioned};
-use shared_kernel::idempotency::IdempotencyRepository;
+use shared_kernel::core::{ErrorCode, Result};
 use shared_kernel::types::{ProfileId, Region, RegionCode};
 use social::entities::FollowRelation;
 use social::entities::FollowRelationBuilder;
-use social::repositories::CounterRepository;
 use social_test_utils::SocialTestFixture;
-use uuid::Uuid;
+use social_test_utils::assertions::{CounterRepositoryAsserts, RelationRepositoryAsserts};
 
 // --- TESTS DU BUILDER ---
 
@@ -30,8 +28,6 @@ fn test_builder_should_instantiate_relation_correctly() -> Result<()> {
     assert_eq!(relation.created_at(), custom_time);
     Ok(())
 }
-
-// --- TESTS DU CONTEXTE (LECTURES & CACHE STRATEGY) ---
 
 #[tokio::test]
 async fn test_get_counters_cache_hit_should_return_immediately() -> Result<()> {
@@ -71,22 +67,18 @@ async fn test_get_counters_cache_miss_should_fallback_and_warm_cache() -> Result
     assert_eq!(counters.followers_count().value(), 1250);
     assert_eq!(counters.following_count().value(), 420);
 
-    // Verification du CACHE WARMING : Redis doit maintenant avoir la donnée
-    let cached = fixture
+    // Verification du CACHE WARMING : Redis doit maintenant avoir la donnée via notre méthode d'assertion
+    fixture
         .cache_counter_repo()
-        .get_counters(profile_id)
-        .await?;
-    assert_eq!(cached.followers_count().value(), 1250);
+        .assert_counters_values(profile_id, 1250, 420)
+        .await;
     Ok(())
 }
-
-// --- TESTS DE LA BARRIÈRE D'IDEMPOTENCE ---
 
 #[tokio::test]
 async fn test_ensure_executable_should_fail_on_region_mismatch() -> Result<()> {
     // Given
     let fixture = SocialTestFixture::new();
-    let command_id = Uuid::now_v7();
 
     let context_region_code = fixture.region().inner();
     let wrong_region_code = match context_region_code {
@@ -94,15 +86,10 @@ async fn test_ensure_executable_should_fail_on_region_mismatch() -> Result<()> {
         _ => RegionCode::EU,
     };
 
-    // On crée le Value Object Region à partir de l'enum brute (Infaillible, pas de try_new)
     let wrong_region = Region::from_raw(wrong_region_code);
 
     // When
-    // Hypothèse : Ta fonction 'ensure_executable' prend maintenant un '&Region' ou un '&RegionCode'
-    let result = fixture
-        .command_ctx()
-        .ensure_executable(command_id, &wrong_region)
-        .await;
+    let result = fixture.command_ctx().ensure_executable(&wrong_region).await;
 
     // Then
     assert!(
@@ -121,36 +108,9 @@ async fn test_ensure_executable_should_fail_on_region_mismatch() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_ensure_executable_should_return_false_if_command_already_exists() -> Result<()> {
-    // Given
-    let fixture = SocialTestFixture::new();
-    let command_id = Uuid::now_v7();
-    let region = fixture.region();
-
-    // On simule une commande déjà exécutée enregistrée dans le stub d'idempotence
-    fixture.idempotency_repo().save(None, &command_id).await?;
-
-    // When
-    let executable = fixture
-        .command_ctx()
-        .ensure_executable(command_id, &region)
-        .await?;
-
-    // Then
-    assert!(
-        !executable,
-        "La commande rejouée devrait être bloquée (executable = false)"
-    );
-    Ok(())
-}
-
-// --- TESTS DES ÉCRITURES ET MUTATIONS (SANS TRANSACTION DISTRIBUÉE) ---
-
-#[tokio::test]
 async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()> {
     // Given
     let fixture = SocialTestFixture::new();
-    let command_id = Uuid::now_v7();
 
     let follower_id = fixture.target_profile_id();
     let following_id = ProfileId::generate();
@@ -158,23 +118,28 @@ async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()
     let mut relation = FollowRelation::builder(follower_id, following_id).build()?;
 
     // When
-    fixture
-        .command_ctx()
-        .save_relation(&mut relation, command_id)
-        .await?;
+    fixture.command_ctx().save_relation(&mut relation).await?;
 
     // Then
-    // 1. Vérification de la barrière d'idempotence posée dans Redis
-    assert!(fixture.idempotency_repo().exists(None, &command_id).await?);
-
-    // 2. Vérification de l'écriture Graphe synchrone (ScyllaDB)
+    // 1. Vérification de l'écriture Graphe synchrone (ScyllaDB)
     fixture
+        .relation_repo()
         .assert_relation_exists(follower_id, following_id)
         .await;
 
-    // 3. Vérification du Hot Path Compteurs & Marquage Dirty dans Redis
-    fixture.assert_counters_values(follower_id, 0, 1).await; // Il suit quelqu'un (+1 following)
-    fixture.assert_counters_values(following_id, 1, 0).await; // L'autre gagne un follower (+1 follower)
+    // 2. Vérification du Hot Path Compteurs & Marquage Dirty dans le cache Redis
+    fixture
+        .cache_counter_repo()
+        .assert_counters_values(follower_id, 0, 1)
+        .await; // Il suit quelqu'un (+1 following)
+    fixture
+        .cache_counter_repo()
+        .assert_counters_values(following_id, 1, 0)
+        .await; // L'autre gagne un follower (+1 follower)
+    fixture
+        .cache_counter_repo()
+        .assert_profile_is_dirty(&follower_id);
+
     Ok(())
 }
 
@@ -182,7 +147,6 @@ async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()
 async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Result<()> {
     // Given
     let fixture = SocialTestFixture::new();
-    let command_id = Uuid::now_v7();
 
     let follower_id = fixture.target_profile_id();
     let following_id = ProfileId::generate();
@@ -195,22 +159,24 @@ async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Re
     let mut relation = FollowRelation::builder(follower_id, following_id).build()?;
 
     // When
-    fixture
-        .command_ctx()
-        .delete_relation(&mut relation, command_id)
-        .await?;
+    fixture.command_ctx().delete_relation(&mut relation).await?;
 
     // Then
-    // 1. Idempotence verrouillée
-    assert!(fixture.idempotency_repo().exists(None, &command_id).await?);
-
-    // 2. Retrait immédiat du graphe (ScyllaDB)
+    // 1. Retrait immédiat du graphe (ScyllaDB)
     fixture
+        .relation_repo()
         .assert_relation_does_not_exist(follower_id, following_id)
         .await;
 
-    // 3. Décrémentation atomique Redis & marquage Dirty
-    fixture.assert_counters_values(follower_id, 0, 0).await;
-    fixture.assert_counters_values(following_id, 0, 0).await;
+    // 2. Décrémentation atomique Redis & marquage Dirty
+    fixture
+        .cache_counter_repo()
+        .assert_counters_values(follower_id, 0, 0)
+        .await;
+    fixture
+        .cache_counter_repo()
+        .assert_counters_values(following_id, 0, 0)
+        .await;
+
     Ok(())
 }

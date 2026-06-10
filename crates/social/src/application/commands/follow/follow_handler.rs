@@ -15,9 +15,7 @@ impl CommandHandler for FollowHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &SocialCommandContext, cmd: FollowCommand) -> Result<Self::Output> {
-        if !ctx.ensure_executable(cmd.command_id, &cmd.region).await? {
-            return Ok(());
-        }
+        ctx.ensure_executable(&cmd.region).await?;
 
         if cmd.follower_id == cmd.target.id {
             return Ok(());
@@ -39,7 +37,7 @@ impl CommandHandler for FollowHandler {
         let mut relation = FollowRelation::builder(cmd.follower_id, cmd.target.id).build()?;
 
         if relation.execute_follow()? {
-            ctx.save_relation(&mut relation, cmd.command_id).await?;
+            ctx.save_relation(&mut relation).await?;
         }
 
         Ok(())

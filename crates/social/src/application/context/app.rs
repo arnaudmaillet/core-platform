@@ -5,7 +5,6 @@ use crate::{
     domain::repositories::{CounterRepository, RelationRepository},
 };
 use shared_kernel::{
-    idempotency::IdempotencyRepository,
     types::{ProfileId, Region},
 };
 use std::sync::Arc;
@@ -15,7 +14,6 @@ pub struct SocialAppContext {
     relation_repo: Arc<dyn RelationRepository>,
     cache_counter_repo: Arc<dyn CounterRepository>,
     counter_repo: Arc<dyn CounterRepository>,
-    idempotency_repo: Arc<dyn IdempotencyRepository>,
 }
 
 impl SocialAppContext {
@@ -23,13 +21,11 @@ impl SocialAppContext {
         relation_repo: Arc<dyn RelationRepository>,
         cache_counter_repo: Arc<dyn CounterRepository>,
         counter_repo: Arc<dyn CounterRepository>,
-        idempotency_repo: Arc<dyn IdempotencyRepository>,
     ) -> Self {
         Self {
             relation_repo,
             cache_counter_repo,
             counter_repo,
-            idempotency_repo,
         }
     }
 
@@ -51,9 +47,5 @@ impl SocialAppContext {
 
     pub(crate) fn counter_repo(&self) -> Arc<dyn CounterRepository> {
         self.counter_repo.clone()
-    }
-
-    pub(crate) fn idempotency_repo(&self) -> Arc<dyn IdempotencyRepository> {
-        self.idempotency_repo.clone()
     }
 }

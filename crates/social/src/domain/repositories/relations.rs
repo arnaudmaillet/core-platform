@@ -8,10 +8,10 @@ use shared_kernel::types::ProfileId;
 #[async_trait]
 pub trait RelationRepository: Send + Sync {
     /// Persiste une nouvelle relation de suivi ou met à jour une relation existante.
-    async fn save(&self, relation: &FollowRelation) -> Result<()>;
+    async fn save(&self, relation: &mut FollowRelation) -> Result<()>;
 
     /// Supprime définitivement la relation entre un follower et un following.
-    async fn delete(&self, follower_id: ProfileId, following_id: ProfileId) -> Result<()>;
+    async fn delete(&self, relation: &mut FollowRelation) -> Result<()>;
 
     /// Récupère une relation spécifique pour vérification ou reconstruction (Pattern Restore).
     async fn find(

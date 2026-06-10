@@ -45,7 +45,8 @@ pub trait GrpcServiceUtils {
     ) -> Result<Response<R>, Status>
     where
         C: IdentifiableCommand + std::fmt::Debug + Send + Sync + 'static + Clone,
-        Output: Send + Default + 'static,
+        C::Routing: shared_kernel::command::CacheKeyComponent,
+        Output: Send + Sync + Default + Clone + 'static,
         R: Send,
     {
         self.bus()

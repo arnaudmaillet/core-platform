@@ -17,9 +17,7 @@ impl CommandHandler for UnfollowHandler {
         ctx: &SocialCommandContext,
         cmd: UnfollowCommand,
     ) -> Result<Self::Output> {
-        if !ctx.ensure_executable(cmd.command_id, &cmd.region).await? {
-            return Ok(());
-        }
+        ctx.ensure_executable(&cmd.region).await?;
 
         if cmd.follower_id == cmd.target.id {
             return Ok(());
@@ -40,7 +38,7 @@ impl CommandHandler for UnfollowHandler {
         let mut relation = FollowRelation::builder(cmd.follower_id, cmd.target.id).build()?;
 
         if relation.execute_unfollow()? {
-            ctx.delete_relation(&mut relation, cmd.command_id).await?;
+            ctx.delete_relation(&mut relation).await?;
         }
 
         Ok(())

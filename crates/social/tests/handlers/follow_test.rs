@@ -4,8 +4,9 @@ use shared_kernel::idempotency::IdempotencyRepository;
 use shared_kernel::types::ProfileId;
 use social::commands::FollowCommand;
 use social::context::SocialCommandContext;
-use social::repositories::CounterRepository;
+use social::events::SocialEvent;
 use social_test_utils::SocialTestFixture;
+use social_test_utils::assertions::{CounterRepositoryAsserts, RelationRepositoryAsserts};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -29,11 +30,39 @@ async fn test_follow_handler_success_nominal_path() -> Result<()> {
 
     // Assert
     // 1. Le graphe de relation est bien écrit en synchrone dans ScyllaDB
-    f.assert_relation_exists(follower_id, target_id).await;
+    f.relation_repo()
+        .assert_relation_exists(follower_id, target_id)
+        .await;
 
     // 2. Le Hot Path des compteurs est incrémenté et marqué DIRTY dans Redis
-    f.assert_counters_values(follower_id, 0, 1).await; // Le follower suit 1 profil (+1 following)
-    f.assert_counters_values(target_id, 1, 0).await; // La cible gagne 1 follower (+1 follower)
+    f.cache_counter_repo()
+        .assert_counters_values(follower_id, 0, 1)
+        .await; // Le follower suit 1 profil (+1 following)
+    f.cache_counter_repo()
+        .assert_counters_values(target_id, 1, 0)
+        .await; // La cible gagne 1 follower (+1 follower)
+    f.cache_counter_repo().assert_profile_is_dirty(&follower_id);
+
+    // 3. 💡 VÉRIFICATION DE L'ÉVÉNEMENT DU DOMAINE (Indexé par follower_id)
+    f.relation_repo()
+        .assert_captured_event_for(follower_id, |event| match event {
+            SocialEvent::ProfileFollowed {
+                follower_id: f_id,
+                following_id: tg_id,
+                ..
+            } => {
+                assert_eq!(
+                    *f_id, follower_id,
+                    "L'ID du follower dans l'événement est incorrect"
+                );
+                assert_eq!(
+                    *tg_id, target_id,
+                    "L'ID du following dans l'événement est incorrect"
+                );
+            }
+            _ => panic!("Type d'événement incorrect capturé : attendu ProfileFollowed"),
+        })
+        .await;
 
     Ok(())
 }
@@ -64,8 +93,12 @@ async fn test_follow_handler_should_abort_silently_when_idempotency_barrier_trig
 
     // Assert
     // L'idempotence technique a bloqué le flux : aucune écriture ne doit avoir eu lieu
-    f.assert_relation_does_not_exist(follower_id, target_id)
+    f.relation_repo()
+        .assert_relation_does_not_exist(follower_id, target_id)
         .await;
+
+    // Aucun événement ne doit avoir été déclenché pour ce follower_id
+    f.relation_repo().assert_no_events_for(follower_id).await;
 
     Ok(())
 }
@@ -90,7 +123,12 @@ async fn test_follow_handler_should_ignore_self_following_attempts() -> Result<(
         .await?;
 
     // Assert
-    f.assert_relation_does_not_exist(actor_id, actor_id).await;
+    f.relation_repo()
+        .assert_relation_does_not_exist(actor_id, actor_id)
+        .await;
+
+    // 💡 La validation de l'invariant doit empêcher la levée d'événements
+    f.relation_repo().assert_no_events_for(actor_id).await;
 
     Ok(())
 }
@@ -121,12 +159,19 @@ async fn test_follow_handler_should_skip_execution_if_already_following() -> Res
         .await?;
 
     // Assert
-    // L'idempotence technique Redis ne doit pas avoir été posée car on a skip dès le début du Handler
-    assert!(!f.idempotency_repo().exists(None, &command_id).await?);
+    // Le CommandBus centralisé DOIT avoir enregistré l'idempotence
+    assert!(
+        f.idempotency_repo().exists(None, &command_id).await?,
+        "Le CommandBus aurait dû marquer la commande comme traitée"
+    );
 
     // Les compteurs n'ont pas bougé (pas de double incrémentation accidentelle)
-    let redis_follower = f.cache_counter_repo().get_counters(follower_id).await?;
-    assert_eq!(redis_follower.following_count().value(), 1);
+    f.cache_counter_repo()
+        .assert_counters_values(follower_id, 0, 1)
+        .await;
+
+    // Comme le handler fait un skip précoce (early exit), aucun nouvel événement n'est généré
+    f.relation_repo().assert_no_events_for(follower_id).await;
 
     Ok(())
 }

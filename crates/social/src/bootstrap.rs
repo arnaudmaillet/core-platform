@@ -58,12 +58,11 @@ impl SocialServiceBuilder {
             relation_repo,
             redis_counter_repo,
             scylla_counter_repo,
-            self.idempotency_repo.clone(),
         ))
     }
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new(self.redis_cache_repo.clone());
+        let mut bus = CommandBus::new(self.redis_cache_repo.clone(), self.idempotency_repo.clone());
 
         bus.register::<SocialCommandContext, FollowCommand, FollowHandler>(FollowHandler);
 
