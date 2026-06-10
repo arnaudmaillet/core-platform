@@ -3,7 +3,7 @@
 use crate::types::DisplayName;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
-use shared_kernel::core::{Error, Identifier, Result};
+use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
 use shared_proto::profile::v1::UpdateDisplayNameRequest;
 use uuid::Uuid;
@@ -12,13 +12,12 @@ use uuid::Uuid;
 pub struct UpdateDisplayNameCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
-    pub region: Region,
     pub new_display_name: DisplayName,
 }
 
 impl IdentifiableCommand for UpdateDisplayNameCommand {
     type Id = ProfileId;
-    type Routing = Region;
+    type Routing = ();
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -29,7 +28,7 @@ impl IdentifiableCommand for UpdateDisplayNameCommand {
     }
 
     fn routing(&self) -> Self::Routing {
-        self.region
+        ()
     }
 }
 
@@ -47,12 +46,9 @@ impl UpdateDisplayNameCommand {
             expected_version: Some(proto_target.expected_version),
         };
 
-        let region = Region::try_new(proto_target.region)?;
-
         Ok(Self {
             command_id,
             target,
-            region,
             new_display_name: DisplayName::try_new(req.new_display_name)?,
         })
     }

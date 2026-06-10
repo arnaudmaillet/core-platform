@@ -1,8 +1,7 @@
 // crates/profile/src/application/builder.rs
 
-use infra_sqlx::sqlx::PgPool;
-use infra_sqlx::{
-    PostgresIdempotencyRepository, PostgresOutboxRepository, PostgresTransactionManager,
+use shared_kernel::{
+    cache::CacheRepository, command::CommandBus, idempotency::IdempotencyRepository, types::Region,
 };
 use std::sync::Arc;
 
@@ -16,68 +15,76 @@ use crate::{
         UpdateSocialsCommand, UpdateSocialsHandler,
     },
     context::{ProfileAppContext, ProfileCommandContext},
-    repositories_impl::PostgresProfileRepository,
+    repositories::{ProfileRepository, ProfileRoutingRepository},
 };
 
-use shared_kernel::{cache::CacheRepository, command::CommandBus};
-
 pub struct ProfileServiceBuilder {
-    pool: PgPool,
+    profile_repo: Arc<dyn ProfileRepository>,
+    routing_repo: Arc<dyn ProfileRoutingRepository>,
     redis_repo: Arc<dyn CacheRepository>,
+    idempotency_repo: Arc<dyn IdempotencyRepository>,
+    local_region: Region,
 }
 
 impl ProfileServiceBuilder {
-    pub fn new(pool: PgPool, redis_repo: Arc<dyn CacheRepository>) -> Self {
-        Self { pool, redis_repo }
+    pub fn new(
+        profile_repo: Arc<dyn ProfileRepository>,
+        routing_repo: Arc<dyn ProfileRoutingRepository>,
+        redis_repo: Arc<dyn CacheRepository>,
+        idempotency_repo: Arc<dyn IdempotencyRepository>,
+        local_region: Region,
+    ) -> Self {
+        Self {
+            profile_repo,
+            routing_repo,
+            redis_repo,
+            idempotency_repo,
+            local_region,
+        }
     }
 
-    pub fn build_context(&self) -> Arc<ProfileAppContext<PostgresTransactionManager>> {
-        let tx_manager = Arc::new(PostgresTransactionManager::new(self.pool.clone()));
-        let profile_repo = Arc::new(PostgresProfileRepository::new(self.pool.clone()));
-        let outbox_repo = Arc::new(PostgresOutboxRepository::new(self.pool.clone()));
-        let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new("profile_idempotency"));
-
-        Arc::new(ProfileAppContext::new(
-            tx_manager,
-            profile_repo,
-            outbox_repo,
-            idempotency_repo,
-        ))
+    pub fn build_context(&self) -> ProfileAppContext {
+        ProfileAppContext::new(
+            self.profile_repo.clone(),
+            self.routing_repo.clone(),
+            self.local_region,
+        )
     }
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new(self.redis_repo.clone());
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, CreateProfileCommand, CreateProfileHandler<PostgresTransactionManager>>(
+        let mut bus = CommandBus::new(self.redis_repo.clone(), self.idempotency_repo.clone());
+
+        bus.register::<ProfileCommandContext, CreateProfileCommand, CreateProfileHandler>(
             CreateProfileHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdateDisplayNameCommand, UpdateDisplayNameHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, UpdateDisplayNameCommand, UpdateDisplayNameHandler>(
             UpdateDisplayNameHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, ChangeHandleCommand, ChangeHandleHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, ChangeHandleCommand, ChangeHandleHandler>(
             ChangeHandleHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdatePrivacyCommand, UpdatePrivacyHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, UpdatePrivacyCommand, UpdatePrivacyHandler>(
             UpdatePrivacyHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdateAvatarCommand, UpdateAvatarHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, UpdateAvatarCommand, UpdateAvatarHandler>(
             UpdateAvatarHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, RemoveAvatarCommand, RemoveAvatarHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, RemoveAvatarCommand, RemoveAvatarHandler>(
             RemoveAvatarHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdateBannerCommand, UpdateBannerHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, UpdateBannerCommand, UpdateBannerHandler>(
             UpdateBannerHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, RemoveBannerCommand, RemoveBannerHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, RemoveBannerCommand, RemoveBannerHandler>(
             RemoveBannerHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdateBioCommand, UpdateBioHandler<PostgresTransactionManager>>(
-            UpdateBioHandler::new()
+        bus.register::<ProfileCommandContext, UpdateBioCommand, UpdateBioHandler>(
+            UpdateBioHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdateLocationCommand, UpdateLocationHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, UpdateLocationCommand, UpdateLocationHandler>(
             UpdateLocationHandler::new(),
         );
-        bus.register::<ProfileCommandContext<PostgresTransactionManager>, UpdateSocialsCommand, UpdateSocialsHandler<PostgresTransactionManager>>(
+        bus.register::<ProfileCommandContext, UpdateSocialsCommand, UpdateSocialsHandler>(
             UpdateSocialsHandler::new(),
         );
 

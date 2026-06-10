@@ -1,4 +1,4 @@
 
-mod events;
+mod profile_events;
 
-pub use events::ProfileEvent;
+pub use profile_events::ProfileEvent;

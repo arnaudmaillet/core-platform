@@ -180,6 +180,32 @@ impl Socials {
             Ok(Some(self))
         }
     }
+
+    pub fn into_map(self) -> HashMap<String, String> {
+        let json_value: serde_json::Value = self.into();
+        if let serde_json::Value::Object(map) = json_value {
+            map.into_iter()
+                .map(|(k, v)| {
+                    let v_str = match v {
+                        serde_json::Value::String(s) => s,
+                        other => other.to_string(),
+                    };
+                    (k, v_str)
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        }
+    }
+
+    pub fn from_map(map: HashMap<String, String>) -> Self {
+        let json_map: serde_json::Map<String, serde_json::Value> = map
+            .into_iter()
+            .map(|(k, v)| (k, serde_json::Value::String(v)))
+            .collect();
+
+        serde_json::Value::Object(json_map).into()
+    }
 }
 // --- CONVERSIONS---
 

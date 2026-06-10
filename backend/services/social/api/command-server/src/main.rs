@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
-    let redis_cache_repo = redis_ctx.repository();
+    let redis_cache_repo = redis_ctx.cache_repository();
     let redis_pool = redis_cache_repo.pool().clone();
 
     let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(

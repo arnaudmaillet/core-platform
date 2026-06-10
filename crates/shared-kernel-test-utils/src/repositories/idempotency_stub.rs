@@ -1,8 +1,8 @@
 // crates/shared_kernel/src/domain/repositories/idempotency_repository_stub.rs
 
+use async_trait::async_trait;
 use shared_kernel::core::{Error, Result, Transaction};
 use shared_kernel::idempotency::IdempotencyRepository;
-use async_trait::async_trait;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -57,5 +57,9 @@ impl IdempotencyRepository for IdempotencyRepositoryStub {
         let mut ids = self.processed_ids.lock().expect("Lock failed");
         ids.insert(*command_id);
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

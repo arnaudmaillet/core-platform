@@ -3,7 +3,7 @@
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{ProfileId, Region, Url};
+use shared_kernel::types::{ProfileId, Url};
 use shared_proto::profile::v1::UpdateBannerRequest;
 use uuid::Uuid;
 
@@ -11,13 +11,12 @@ use uuid::Uuid;
 pub struct UpdateBannerCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
-    pub region: Region,
     pub new_banner_url: Url,
 }
 
 impl IdentifiableCommand for UpdateBannerCommand {
     type Id = ProfileId;
-    type Routing = Region;
+    type Routing = ();
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -28,7 +27,7 @@ impl IdentifiableCommand for UpdateBannerCommand {
     }
 
     fn routing(&self) -> Self::Routing {
-        self.region
+        ()
     }
 }
 
@@ -46,12 +45,9 @@ impl UpdateBannerCommand {
             expected_version: Some(proto_target.expected_version),
         };
 
-        let region = Region::try_new(proto_target.region)?;
-
         Ok(Self {
             command_id,
             target,
-            region,
             new_banner_url: Url::try_new(req.new_banner_url)?,
         })
     }

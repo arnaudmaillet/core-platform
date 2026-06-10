@@ -1,14 +1,18 @@
 // crates/profile/src/test_utils/test_context_builder.rs
 
 use crate::ProfileTestContext;
-use auth::{TokenValidator, interceptors::AuthInterceptor}; // 💡 Import du trait générique TokenValidator
+use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::KeycloakTestContext;
 use infra_kafka::KafkaEventConsumer;
-use infra_test::TestContextBuilder;
+use infra_test::{
+    InfrastructureOrchestrator, ScyllaOrchestrator, ScyllaTableTarget, TestContextBuilder,
+};
 use profile::ProfileServiceBuilder;
 use profile::kafka::AccountConsumer;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
 use shared_kernel::messaging::{EventConsumer, EventEnvelope};
+use shared_kernel::types::Region;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataServiceServer;
@@ -27,17 +31,19 @@ pub struct ProfileTestContextBuilder {
     service_mode: Option<ServiceMode>,
     has_kafka: bool,
     mock_validator: Option<Arc<dyn TokenValidator>>,
+    local_region: Region,
 }
 
 impl ProfileTestContextBuilder {
     pub fn new() -> Self {
         Self {
             kernel_builder: TestContextBuilder::new()
-                .with_postgres(vec!["crates/profile/migrations/postgres"])
+                .with_scylla(Vec::<String>::new())
                 .with_redis(),
             service_mode: None,
             has_kafka: false,
             mock_validator: None,
+            local_region: Region::default(),
         }
     }
 
@@ -53,36 +59,66 @@ impl ProfileTestContextBuilder {
         self
     }
 
-    /// 💡 NOUVELLE MÉTHODE : Permet d'injecter ton MockTokenValidator depuis e2e_it.rs
     pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
         self.mock_validator = Some(validator);
         self
     }
 
+    pub fn with_region(mut self, region: Region) -> Self {
+        self.local_region = region;
+        self
+    }
+
     pub async fn build_e2e(self) -> ProfileTestContext {
-        tracing::info!("Starting E2E infrastructure build...");
+        tracing::info!("Starting E2E infrastructure build (Containers startup)...");
 
         let kernel_infra = self.kernel_builder.build().await;
-        let pg_pool = kernel_infra.postgres().pool().clone();
+        let scylla_session = kernel_infra.scylla().session().clone();
         let redis_repo = kernel_infra.redis().repository();
         let kafka_brokers = self
             .has_kafka
             .then(|| kernel_infra.kafka().bootstrap_servers().to_string());
 
+        let mut infra_orchestrator = InfrastructureOrchestrator::new();
+
+        let mut base_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        if base_path.ends_with("profile-test-utils")
+            || base_path.ends_with("profile-command-server")
+        {
+            base_path.pop();
+            base_path.push("profile");
+        }
+        let migration_path = base_path.join("migrations/scylla");
+
+        // 💡 Tables cibles uniques pour valider les deux zones (Global + Régional)
+        let targets = vec![
+            ScyllaTableTarget::new("slugs", 3), // Valide global_routing
+            ScyllaTableTarget::new("profiles_by_account", 6), // Valide {region}_profile_storage
+        ];
+
+        // 💡 On récupère le nom de la région dynamiquement depuis ton build context
+        let region_str = self.local_region.to_string();
+
+        let scylla_orch =
+            ScyllaOrchestrator::new(scylla_session.clone(), migration_path, targets, region_str);
+        infra_orchestrator.add(Box::new(scylla_orch));
+
+        infra_orchestrator
+            .run_all()
+            .await
+            .expect("Database orchestrator failed to stabilize schema");
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
 
         match self.service_mode {
             Some(ServiceMode::Grpc) => {
-                tracing::info!("Mode selected: gRPC Server");
-                let pg = pg_pool.clone();
+                let session = scylla_session.clone();
                 let redis = redis_repo.clone();
-                let custom_validator = self.mock_validator.clone(); // Clônage pour l'isoler dans le thread
+                let custom_validator = self.mock_validator.clone();
+                let region = self.local_region;
+                let idempotency = kernel_infra.redis().idempotency();
 
                 tokio::spawn(async move {
-                    tracing::debug!("gRPC server task spawning...");
-
-                    // 💡 BRANCHEMENT ADAPTATIF : Mock ou Keycloak réel par défaut
                     let validator = match custom_validator {
                         Some(mock) => mock,
                         None => {
@@ -97,8 +133,23 @@ impl ProfileTestContextBuilder {
 
                     let interceptor = AuthInterceptor::new(validator);
 
-                    let builder = ProfileServiceBuilder::new(pg, redis);
-                    let app_ctx = builder.build_context();
+                    // Garanti sans crash ni Race Condition désormais
+                    let routing_store = Arc::new(
+                        ScyllaProfileRoutingStore::new(session.clone())
+                            .await
+                            .unwrap(),
+                    );
+                    let profile_store =
+                        Arc::new(ScyllaProfileStore::new(session, region).await.unwrap());
+
+                    let builder = ProfileServiceBuilder::new(
+                        profile_store,
+                        routing_store,
+                        redis,
+                        idempotency,
+                        region,
+                    );
+                    let app_ctx = Arc::new(builder.build_context());
                     let bus = builder.build_command_bus();
 
                     let svc = Server::builder()
@@ -116,33 +167,42 @@ impl ProfileTestContextBuilder {
                         ));
 
                     let addr = "[::1]:0".parse::<SocketAddr>().unwrap();
-                    let listener = tokio::net::TcpListener::bind(addr)
-                        .await
-                        .expect("Failed to bind gRPC port");
+                    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
                     let actual_addr = listener.local_addr().unwrap();
                     let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
 
-                    tracing::info!(port = %actual_addr.port(), "gRPC server listening");
                     ready_tx.send(actual_addr).ok();
-
                     svc.serve_with_incoming_shutdown(incoming, async {
                         shutdown_rx.await.ok();
-                        tracing::info!("gRPC server shutting down");
                     })
                     .await
                     .unwrap();
                 });
             }
             Some(ServiceMode::KafkaWorker) => {
-                tracing::info!("Mode selected: Kafka Worker");
-                let pg = pg_pool.clone();
+                let session = scylla_session.clone();
                 let redis = redis_repo.clone();
                 let brokers = kafka_brokers.unwrap();
+                let region = self.local_region;
+                let idempotency = kernel_infra.redis().idempotency();
 
                 tokio::spawn(async move {
-                    tracing::debug!("Kafka worker task spawning...");
-                    let builder = ProfileServiceBuilder::new(pg, redis);
-                    let app_ctx = builder.build_context();
+                    let routing_store = Arc::new(
+                        ScyllaProfileRoutingStore::new(session.clone())
+                            .await
+                            .unwrap(),
+                    );
+                    let profile_store =
+                        Arc::new(ScyllaProfileStore::new(session, region).await.unwrap());
+
+                    let builder = ProfileServiceBuilder::new(
+                        profile_store,
+                        routing_store,
+                        redis,
+                        idempotency,
+                        region,
+                    );
+                    let app_ctx = Arc::new(builder.build_context());
                     let bus = builder.build_command_bus();
 
                     let account_consumer =
@@ -152,36 +212,36 @@ impl ProfileTestContextBuilder {
 
                     let handler = Box::new(move |envelope: EventEnvelope| {
                         let consumer = Arc::clone(&account_consumer);
-                        let fut: std::pin::Pin<
-                            Box<
-                                dyn std::future::Future<Output = shared_kernel::core::Result<()>>
-                                    + Send,
-                            >,
-                        > = Box::pin(async move {
-                            let raw = serde_json::to_vec(&envelope.payload).unwrap();
+
+                        Box::pin(async move {
+                            let raw = serde_json::to_vec(&envelope.payload)
+                                .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
+
                             consumer
                                 .on_message_received(&raw)
                                 .await
                                 .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))
-                        });
-                        fut
+                        })
+                            as std::pin::Pin<
+                                Box<
+                                    dyn std::future::Future<
+                                            Output = shared_kernel::core::Result<()>,
+                                        > + Send,
+                                >,
+                            >
                     });
 
-                    tracing::info!("Kafka consumer loop started");
                     ready_tx.send("[::1]:0".parse().unwrap()).ok();
-
-                    if let Err(e) = kafka_transport.consume("account.events", handler).await {
-                        tracing::error!(error = %e, "Kafka consumer loop crashed");
-                    }
+                    kafka_transport
+                        .consume("account.events", handler)
+                        .await
+                        .ok();
                 });
             }
             None => tracing::warn!("No service mode selected for E2E build"),
         }
 
-        let addr = ready_rx
-            .await
-            .expect("Service failed to start (timeout or crash)");
-        tracing::info!(addr = %addr, "E2E infrastructure ready");
+        let addr = ready_rx.await.expect("Service failed to start");
         ProfileTestContext::new(kernel_infra, Some(addr), Some(shutdown_tx))
     }
 }

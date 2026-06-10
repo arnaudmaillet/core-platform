@@ -1,72 +1,62 @@
-use crate::{
-    context::{ProfileCommandContext, ProfileQueryContext},
-    repositories::ProfileRepository,
-};
-use shared_kernel::{
-    core::TransactionManager,
-    idempotency::IdempotencyRepository,
-    messaging::OutboxRepository,
-    types::{ProfileId, Region},
-};
+// crates/profile/src/context/app_context.rs
+
+use crate::context::ProfileCommandContext;
+use crate::context::ProfileQueryContext;
+use crate::repositories::ProfileRepository;
+use crate::repositories::ProfileRoutingRepository;
+use shared_kernel::types::{ProfileId, Region};
 use std::sync::Arc;
 
-pub struct ProfileAppContext<TM> {
-    transaction_manager: Arc<TM>,
+pub struct ProfileAppContext {
     profile_repo: Arc<dyn ProfileRepository>,
-    outbox_repo: Arc<dyn OutboxRepository>,
-    idempotency_repo: Arc<dyn IdempotencyRepository>,
+    routing_repo: Arc<dyn ProfileRoutingRepository>,
+    local_region: Region,
 }
 
-impl<TM> ProfileAppContext<TM> {
+impl ProfileAppContext {
     pub fn new(
-        transaction_manager: Arc<TM>,
         profile_repo: Arc<dyn ProfileRepository>,
-        outbox_repo: Arc<dyn OutboxRepository>,
-        idempotency_repo: Arc<dyn IdempotencyRepository>,
+        routing_repo: Arc<dyn ProfileRoutingRepository>,
+        local_region: Region,
     ) -> Self {
         Self {
-            transaction_manager,
             profile_repo,
-            outbox_repo,
-            idempotency_repo,
+            routing_repo,
+            local_region,
         }
     }
 
-    pub fn transaction_manager(&self) -> Arc<TM> {
-        self.transaction_manager.clone()
-    }
     pub(crate) fn profile_repo(&self) -> Arc<dyn ProfileRepository> {
         self.profile_repo.clone()
     }
-    pub(crate) fn outbox_repo(&self) -> Arc<dyn OutboxRepository> {
-        self.outbox_repo.clone()
+
+    pub(crate) fn routing_repo(&self) -> Arc<dyn ProfileRoutingRepository> {
+        self.routing_repo.clone()
     }
-    pub(crate) fn idempotency_repo(&self) -> Arc<dyn IdempotencyRepository> {
-        self.idempotency_repo.clone()
+
+    pub fn local_region(&self) -> Region {
+        self.local_region
+    }
+
+    pub fn query(&self) -> ProfileQueryContext {
+        ProfileQueryContext::new(self.clone())
+    }
+
+    pub fn command(&self, profile_id: ProfileId) -> ProfileCommandContext {
+        ProfileCommandContext::new(self.clone(), Some(profile_id))
+    }
+
+    pub fn creation_command(&self) -> ProfileCommandContext {
+        ProfileCommandContext::new(self.clone(), None)
     }
 }
 
-impl<TM: TransactionManager> ProfileAppContext<TM> {
-    pub fn query(&self, region: Region) -> ProfileQueryContext<TM> {
-        ProfileQueryContext::new(self.clone(), region)
-    }
-
-    pub fn command(&self, profile_id: ProfileId, region: Region) -> ProfileCommandContext<TM> {
-        ProfileCommandContext::new(self.clone(), Some(profile_id), region)
-    }
-
-    pub fn creation_command(&self, region: Region) -> ProfileCommandContext<TM> {
-        ProfileCommandContext::new(self.clone(), None, region)
-    }
-}
-
-impl<TM> Clone for ProfileAppContext<TM> {
+impl Clone for ProfileAppContext {
     fn clone(&self) -> Self {
         Self {
-            transaction_manager: self.transaction_manager.clone(),
             profile_repo: self.profile_repo.clone(),
-            outbox_repo: self.outbox_repo.clone(),
-            idempotency_repo: self.idempotency_repo.clone(),
+            routing_repo: self.routing_repo.clone(),
+            local_region: self.local_region,
         }
     }
 }

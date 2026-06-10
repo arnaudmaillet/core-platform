@@ -6,7 +6,7 @@ use crate::commands::{
 use crate::context::ProfileAppContext;
 use crate::presentation::utils::shared::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
-use shared_kernel::core::TransactionManager;
+use shared_kernel::core::Identifier;
 use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityService as ProtoProfileIdentityService;
 use shared_proto::profile::v1::{
@@ -17,19 +17,19 @@ use shared_proto::profile::v1::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
-pub struct ProfileIdentityService<TM> {
+pub struct ProfileIdentityService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext<TM>>,
+    app_ctx: Arc<ProfileAppContext>,
 }
 
-impl<TM> ProfileIdentityService<TM> {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext<TM>>) -> Self {
+impl ProfileIdentityService {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileIdentityService<TM> {
-    fn app_ctx(&self) -> &ProfileAppContext<TM> {
+impl GrpcServiceUtils for ProfileIdentityService {
+    fn app_ctx(&self) -> &ProfileAppContext {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -38,15 +38,14 @@ impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileI
 }
 
 #[tonic::async_trait]
-impl<TM: TransactionManager + Clone + 'static> ProtoProfileIdentityService
-    for ProfileIdentityService<TM>
-{
+impl ProtoProfileIdentityService for ProfileIdentityService {
     async fn create_profile(
         &self,
         request: Request<CreateProfileRequest>,
     ) -> Result<Response<CreateProfileResponse>, Status> {
         let (_, extensions, req_inner) = request.into_parts();
         let generated_profile_id = ProfileId::generate();
+
         let ctx = self.build_creation_context(&extensions)?;
         let command = CreateProfileCommand::try_from_proto(req_inner, generated_profile_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -71,13 +70,15 @@ impl<TM: TransactionManager + Clone + 'static> ProtoProfileIdentityService
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
 
-        let profile_id = target
-            .profile_id
-            .parse::<ProfileId>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+        let profile_id =
+            ProfileId::from_uuid(uuid::Uuid::parse_str(&target.profile_id).map_err(|e| {
+                Status::invalid_argument(format!("Invalid profile_id format: {}", e))
+            })?);
+
         let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = UpdateDisplayNameCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         self.dispatch_command::<UpdateDisplayNameCommand, (), UpdateDisplayNameResponse>(
             &ctx,
             command,
@@ -90,17 +91,18 @@ impl<TM: TransactionManager + Clone + 'static> ProtoProfileIdentityService
         &self,
         request: Request<ChangeHandleRequest>,
     ) -> Result<Response<ChangeHandleResponse>, Status> {
-        let (_metadata, extensions, req_inner) = request.into_parts();
+        let (_metadata, ext, req_inner) = request.into_parts();
         let target = req_inner
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
-        let profile_id = target
-            .profile_id
-            .parse::<ProfileId>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let profile_id =
+            ProfileId::from_uuid(uuid::Uuid::parse_str(&target.profile_id).map_err(|e| {
+                Status::invalid_argument(format!("Invalid profile_id format: {}", e))
+            })?);
+
+        let ctx = self.build_command_context(profile_id, &ext)?;
         let command = ChangeHandleCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -121,10 +123,12 @@ impl<TM: TransactionManager + Clone + 'static> ProtoProfileIdentityService
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
-        let profile_id = target
-            .profile_id
-            .parse::<ProfileId>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
+
+        let profile_id =
+            ProfileId::from_uuid(uuid::Uuid::parse_str(&target.profile_id).map_err(|e| {
+                Status::invalid_argument(format!("Invalid profile_id format: {}", e))
+            })?);
+
         let ctx = self.build_command_context(profile_id, &extensions)?;
         let command = UpdatePrivacyCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;

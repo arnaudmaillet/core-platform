@@ -1,3 +1,4 @@
+pub mod assertions;
 pub mod repositories;
 mod utils;
 

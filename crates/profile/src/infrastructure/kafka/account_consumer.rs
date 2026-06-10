@@ -3,7 +3,7 @@ use crate::commands::CreateProfileCommand;
 use crate::types::Handle;
 use serde::Deserialize;
 use shared_kernel::command::CommandTarget;
-use shared_kernel::core::{Identifier, TransactionManager};
+use shared_kernel::core::Identifier;
 use shared_kernel::{
     command::CommandBus,
     core::ErrorCode,
@@ -21,18 +21,16 @@ enum AccountIncomingEvent {
     Ignored,
 }
 
-pub struct AccountConsumer<TM> {
+pub struct AccountConsumer {
     bus: Arc<CommandBus>,
-    app_ctx: ProfileAppContext<TM>,
+    app_ctx: ProfileAppContext,
 }
 
-impl<TM> AccountConsumer<TM> {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext<TM>) -> Self {
+impl AccountConsumer {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
         Self { bus, app_ctx }
     }
-}
 
-impl<TM: TransactionManager + Clone + 'static> AccountConsumer<TM> {
     pub async fn on_message_received(
         &self,
         payload: &[u8],
@@ -47,14 +45,25 @@ impl<TM: TransactionManager + Clone + 'static> AccountConsumer<TM> {
             AccountIncomingEvent::Registered {
                 account_id, region, ..
             } => {
+                let region_vo = Region::try_from(region.as_str()).map_err(|e| e.to_string())?;
+
+                if region_vo != self.app_ctx.local_region() {
+                    tracing::debug!(
+                        account_id = %account_id,
+                        event_region = ?region_vo,
+                        local_region = ?self.app_ctx.local_region(),
+                        "Account registered in another region, skipping locally"
+                    );
+                    return Ok(());
+                }
+
                 let short_id = &account_id.to_string()[0..8];
                 let default_username = format!("user_{}", short_id);
 
                 let handle = Handle::try_new(default_username)
                     .map_err(|e| format!("Failed to generate default handle: {}", e))?;
 
-                let region_vo = Region::try_new(region).map_err(|e| e.to_string())?;
-                let creation_ctx = self.app_ctx.creation_command(region_vo.clone());
+                let creation_ctx = self.app_ctx.creation_command();
                 let generated_profile_id = ProfileId::generate();
                 let target = CommandTarget::stateless(generated_profile_id);
 
@@ -68,7 +77,7 @@ impl<TM: TransactionManager + Clone + 'static> AccountConsumer<TM> {
 
                 match self
                     .bus
-                    .execute::<ProfileCommandContext<TM>, CreateProfileCommand, ()>(
+                    .execute::<ProfileCommandContext, CreateProfileCommand, ()>(
                         creation_ctx,
                         command,
                     )

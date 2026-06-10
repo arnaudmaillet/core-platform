@@ -8,10 +8,10 @@ members = [
     "backend/services/account/workers/janitor",
     "backend/services/profile/workers/outbox-producer",
     "backend/services/profile/workers/cache-invalidator",
-    "backend/services/profile/workers/events-consumer",
+    # "backend/services/profile/workers/events-consumer",
     "backend/services/profile/api/command-server",
     "backend/services/social/api/command-server",
-    "backend/services/post/api/command-server",
+    # "backend/services/post/api/command-server",
     "backend/services/geo-discovery/api/server",
     "common/rust/shared-proto",
     "crates/account",
@@ -30,12 +30,12 @@ members = [
     "crates/profile-test-utils",
     "crates/social-test-utils",
     "crates/auth-test-utils",
-    "crates/post",
-    "crates/post-test-utils",
+    # "crates/post",
+    # "crates/post-test-utils",
     "crates/shared-kernel-test-utils",
     "crates/geo-discovery",
     "crates/geo-discovery-test-utils",
-    "crates/comment",
+    # "crates/comment",
 ]
 resolver = "2"
 

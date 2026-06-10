@@ -1,11 +1,12 @@
 // crates/shared-kernel/src/infrastructure/redis/factories/redis_context.rs
 
-use crate::{RedisCacheRepository, RedisConfig, RedisContextBuilder};
+use crate::{RedisCacheRepository, RedisConfig, RedisContextBuilder, RedisIdempotencyRepository};
 use shared_kernel::core::{Error, ErrorCode, Result};
 use std::sync::Arc;
 
 pub struct RedisContext {
-    repository: Arc<RedisCacheRepository>,
+    cache_repository: Arc<RedisCacheRepository>,
+    idempotency_repository: Arc<RedisIdempotencyRepository>,
     url: String,
     max_clients: usize,
 }
@@ -19,8 +20,12 @@ impl RedisContext {
         RedisContextBuilder::default()
     }
 
-    pub fn repository(&self) -> Arc<RedisCacheRepository> {
-        self.repository.clone()
+    pub fn cache_repository(&self) -> Arc<RedisCacheRepository> {
+        self.cache_repository.clone()
+    }
+
+    pub fn idempotency_repository(&self) -> Arc<RedisIdempotencyRepository> {
+        self.idempotency_repository.clone()
     }
 
     pub fn url(&self) -> String {
@@ -37,12 +42,18 @@ impl RedisContext {
         let repository = RedisCacheRepository::new(&builder.url).await.map_err(|e| {
             Error::new(
                 ErrorCode::InternalError,
-                format!("Failed to connect to Redis at {}: {}", builder.url, e),
+                format!("Failed to connect to Redis Cache at {}: {}", builder.url, e),
             )
         })?;
 
+        let raw_pool = repository.pool().clone();
+
+        let idempotency =
+            RedisIdempotencyRepository::new(raw_pool, "core-platform-idempotency", 86400);
+
         Ok(Self {
-            repository: Arc::new(repository),
+            cache_repository: Arc::new(repository),
+            idempotency_repository: Arc::new(idempotency),
             url: builder.url,
             max_clients: builder.max_clients,
         })

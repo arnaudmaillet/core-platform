@@ -34,6 +34,8 @@ pub trait Event: DynClone + Debug + Send + Sync {
     fn correlation_id(&self) -> Option<Uuid> {
         None
     }
+
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 dyn_clone::clone_trait_object!(Event);

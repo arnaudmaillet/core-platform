@@ -5,7 +5,7 @@ use crate::types::Socials;
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
 use shared_kernel::core::{Error, Result};
-use shared_kernel::types::{ProfileId, Region};
+use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::UpdateSocialsRequest;
 use uuid::Uuid;
 
@@ -13,13 +13,12 @@ use uuid::Uuid;
 pub struct UpdateSocialsCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
-    pub region: Region,
     pub new_socials: Option<Socials>,
 }
 
 impl IdentifiableCommand for UpdateSocialsCommand {
     type Id = ProfileId;
-    type Routing = Region;
+    type Routing = ();
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -30,7 +29,7 @@ impl IdentifiableCommand for UpdateSocialsCommand {
     }
 
     fn routing(&self) -> Self::Routing {
-        self.region
+        ()
     }
 }
 
@@ -54,12 +53,9 @@ impl UpdateSocialsCommand {
             .transpose()?
             .flatten();
 
-        let region = Region::try_new(proto_target.region)?;
-
         Ok(Self {
             command_id,
             target,
-            region,
             new_socials,
         })
     }

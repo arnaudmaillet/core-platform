@@ -2,6 +2,7 @@
 
 use crate::core::{Result, Transaction};
 use async_trait::async_trait;
+use std::any::Any;
 use uuid::Uuid;
 
 #[async_trait]
@@ -12,4 +13,6 @@ pub trait IdempotencyRepository: Send + Sync {
         command_id: &Uuid,
     ) -> Result<bool>;
     async fn save(&self, tx: Option<&mut (dyn Transaction + '_)>, command_id: &Uuid) -> Result<()>;
+
+    fn as_any(&self) -> &dyn Any;
 }

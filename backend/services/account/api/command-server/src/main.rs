@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let builder = AccountServiceBuilder::new(
         pg_ctx.pool(),
         global_pg_ctx.pool(),
-        redis_ctx.repository(),
+        redis_ctx.cache_repository(),
         otp_ttl,
     );
     let app_ctx = builder.build_context();

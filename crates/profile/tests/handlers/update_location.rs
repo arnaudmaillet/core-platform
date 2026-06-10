@@ -1,13 +1,11 @@
-// crates/profile/src/application/commands/metadata/update_location_label/update_location_label_handler.rs
-
 use profile::commands::UpdateLocationCommand;
 use profile::context::ProfileCommandContext;
 use profile::events::ProfileEvent;
-use profile::types::Location;
+use profile::types::{Handle, Location};
 use profile_test_utils::ProfileTestFixture;
+use profile_test_utils::assertions::ProfileRepositoryAsserts;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ErrorCode, Result, Versioned};
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -17,33 +15,52 @@ async fn test_update_location_success() -> Result<()> {
     let profile = f.builder("alice")?.build()?;
     let version_snapshot = profile.version();
     f.given_profile(profile).await;
+    // 💡 Index requis pour le validateur d'identité
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let new_location = Some(Location::try_new("Paris, France")?);
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        region: f.region(),
         new_location: new_location.clone(),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
         .await?;
 
     // Assert
-    let _ = f
-        .assert_profile(|p| {
+    f.profile_repo()
+        .assert_profile_state(f.profile_id(), |p| {
             assert_eq!(p.location(), new_location.as_ref());
             assert_eq!(p.version(), version_snapshot + 1);
         })
         .await;
 
-    f.assert_outbox(1, Some(ProfileEvent::LOCATION_UPDATED));
+    f.profile_repo()
+        .assert_captured_event_for(f.profile_id(), |event| match event {
+            ProfileEvent::LocationUpdated {
+                profile_id,
+                account_id,
+                old_location,
+                new_location: captured_new_location,
+                ..
+            } => {
+                assert_eq!(profile_id, &f.profile_id());
+                assert_eq!(account_id, &f.account_id());
+                assert_eq!(old_location, &None);
+                assert_eq!(captured_new_location, &new_location);
+            }
+            _ => panic!("Type d'événement incorrect"),
+        })
+        .await;
 
     Ok(())
 }
@@ -56,30 +73,30 @@ async fn test_update_location_technical_idempotency() -> Result<()> {
     f.idempotency_repo().seed(cmd_id);
 
     let profile = f.builder("alice")?.build()?;
+    let version_snapshot = profile.version();
     f.given_profile(profile).await;
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let cmd = UpdateLocationCommand {
         command_id: cmd_id,
-        target: CommandTarget::versioned(f.profile_id(), 0),
-        region: f.region(),
+        target: CommandTarget::versioned(f.profile_id(), version_snapshot),
         new_location: Some(Location::try_new("Tokyo, Japan")?),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
         .await;
 
     // Assert
-    assert!(
-        result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
-    );
-    f.assert_outbox(0, None);
+    assert!(result.is_ok());
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }
@@ -96,29 +113,32 @@ async fn test_update_location_business_idempotency() -> Result<()> {
         .build()?;
     let version_snapshot = profile.version();
     f.given_profile(profile).await;
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        region: f.region(),
         new_location: Some(location),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
         .await?;
 
     // Assert
-    let _ = f
-        .assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas de changement
+    f.profile_repo()
+        .assert_profile_state(f.profile_id(), |p| {
+            assert_eq!(p.version(), version_snapshot);
         })
         .await;
-    f.assert_outbox(0, None);
+
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }
@@ -129,28 +149,28 @@ async fn test_update_location_concurrency_conflict() -> Result<()> {
     let f = ProfileTestFixture::new();
     let profile = f.builder("alice")?.build()?;
     f.given_profile(profile).await;
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let cmd = UpdateLocationCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), 123), // Version dans le futur
-        region: f.region(),
+        target: CommandTarget::versioned(f.profile_id(), 123),
         new_location: Some(Location::try_new("Nowhere")?),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdateLocationCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
         .await;
 
     // Assert
-    assert!(matches!(
-        result,
-        Err(e) if e.code == ErrorCode::ConcurrencyConflict
-    ));
+    assert!(matches!(result, Err(e) if e.code == ErrorCode::ConcurrencyConflict));
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }

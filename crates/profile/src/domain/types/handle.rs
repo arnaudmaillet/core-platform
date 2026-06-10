@@ -1,6 +1,7 @@
 // crates/profile/src/domain/types/handle.rs
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::Slug;
 
@@ -22,6 +23,13 @@ impl Handle {
     }
     pub fn hash_value(&self) -> u64 {
         self.0.hash_value()
+    }
+
+    pub fn to_sha256_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(self.as_str().as_bytes());
+        let result = hasher.finalize();
+        result.iter().map(|b| format!("{:02x}", b)).collect()
     }
 }
 

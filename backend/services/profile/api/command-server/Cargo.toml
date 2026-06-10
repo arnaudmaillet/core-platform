@@ -14,7 +14,7 @@ shared-kernel = { workspace = true }
 shared-proto = { workspace = true, features = ["profile"] }
 profile = { workspace = true }
 auth = { workspace = true }
-infra-sqlx = { workspace = true }
+infra-scylla = { workspace = true }
 infra-fred = { workspace = true }
 
 tokio = { workspace = true }

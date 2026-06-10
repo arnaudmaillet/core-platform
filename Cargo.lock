@@ -509,25 +509,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "comment"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "infra-scylla",
- "prost-types",
- "serde",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "tokio",
- "tonic",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "compression-codecs"
 version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1947,6 +1928,7 @@ dependencies = [
 name = "infra-test"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "infra-fred",
  "infra-kafka",
@@ -2660,67 +2642,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
 
 [[package]]
-name = "post"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "infra-scylla",
- "infra-test",
- "post-test-utils",
- "prost-types",
- "serde",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "tokio",
- "tonic",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "post-command-server"
-version = "0.1.0"
-dependencies = [
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-scylla",
- "post",
- "post-test-utils",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "tokio",
- "tonic",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "post-test-utils"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "auth",
- "auth-test-utils",
- "infra-fred",
- "infra-test",
- "post",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "tokio",
- "tokio-stream",
- "tonic",
- "tracing",
-]
-
-[[package]]
 name = "potential_utf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2790,11 +2711,13 @@ dependencies = [
  "chrono",
  "elasticsearch",
  "futures",
+ "infra-scylla",
  "infra-sqlx",
  "infra-test",
  "profile-test-utils",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "shared-kernel",
  "shared-kernel-test-utils",
  "shared-proto",
@@ -2827,7 +2750,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "infra-fred",
- "infra-sqlx",
+ "infra-scylla",
  "infra-test",
  "profile",
  "profile-test-utils",
@@ -2836,27 +2759,6 @@ dependencies = [
  "shared-proto",
  "tokio",
  "tonic",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "profile-events-consumer"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-kafka",
- "infra-sqlx",
- "infra-test",
- "profile",
- "profile-test-utils",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tokio-util",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -2881,6 +2783,7 @@ dependencies = [
  "async-trait",
  "auth",
  "auth-test-utils",
+ "infra-fred",
  "infra-kafka",
  "infra-sqlx",
  "infra-test",

@@ -1,7 +1,7 @@
 // crates/infra-test/src/redis/redis_test_context.rs
 
 use crate::RedisTestContextBuilder;
-use infra_fred::{RedisCacheRepository, RedisContext};
+use infra_fred::{RedisCacheRepository, RedisContext, RedisIdempotencyRepository};
 use std::sync::Arc;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
@@ -18,7 +18,11 @@ impl RedisTestContext {
     }
 
     pub fn repository(&self) -> Arc<RedisCacheRepository> {
-        self.context.repository()
+        self.context.cache_repository()
+    }
+
+    pub fn idempotency(&self) -> Arc<RedisIdempotencyRepository> {
+        self.context.idempotency_repository()
     }
 
     pub fn url(&self) -> String {
