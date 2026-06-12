@@ -1,12 +1,12 @@
-use crate::application::context::{AccountAppContext, AccountCommandContext, AccountQueryContext};
+use crate::application::context::{AccountCommandCtx, AccountKernelCtx, AccountQueryCtx};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
-use shared_kernel::core::{Error, ErrorCode, TransactionManager};
+use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{AccountId, Region};
 use tonic::{Response, Status};
 
 #[tonic::async_trait]
-pub trait GrpcServiceUtils<TM: TransactionManager + Clone + 'static> {
-    fn app_ctx(&self) -> &AccountAppContext<TM>;
+pub trait GrpcServiceUtils {
+    fn kernel_ctx(&self) -> &AccountKernelCtx;
     fn bus(&self) -> &CommandBus;
 
     fn extract_region(&self, extensions: &tonic::Extensions) -> Result<Region, Status> {
@@ -16,44 +16,42 @@ pub trait GrpcServiceUtils<TM: TransactionManager + Clone + 'static> {
             .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))
     }
 
-    fn build_command_context(
+    fn build_command_ctx(
         &self,
         account_id: AccountId,
         extensions: &tonic::Extensions,
-    ) -> Result<AccountCommandContext<TM>, Status> {
+    ) -> Result<AccountCommandCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().command(account_id, region))
+        Ok(self.kernel_ctx().command(account_id, region))
     }
 
-    fn build_creation_context(
+    fn build_creation_ctx(
         &self,
         extensions: &tonic::Extensions,
-    ) -> Result<AccountCommandContext<TM>, Status> {
+    ) -> Result<AccountCommandCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().creation_command(region))
+        Ok(self.kernel_ctx().creation_command(region))
     }
 
-    fn build_query_context(
-        &self,
-        extensions: &tonic::Extensions,
-    ) -> Result<AccountQueryContext<TM>, Status> {
+    fn build_query_ctx(&self, extensions: &tonic::Extensions) -> Result<AccountQueryCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().query(region))
+        Ok(self.kernel_ctx().query(region))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
     where
         C: IdentifiableCommand + std::fmt::Debug + Send + Sync + 'static + Clone,
-        Output: Send + Default + 'static,
+        C::Routing: shared_kernel::command::CacheKeyComponent,
+        Output: Send + Sync + Default + Clone + 'static,
         R: Send,
     {
         self.bus()
-            .execute::<AccountCommandContext<TM>, C, Output>(ctx.clone(), cmd)
+            .execute::<AccountCommandCtx, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(map_domain_err_to_status)?;
 

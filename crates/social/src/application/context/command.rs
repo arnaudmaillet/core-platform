@@ -33,34 +33,38 @@ impl SocialCommandContext {
         self.target_profile_id
     }
 
-    pub async fn ensure_executable(&self, region: &Region) -> Result<()> {
-        if region != &self.region {
+    pub fn verify_actors(&self, follower_id: ProfileId, target_id: ProfileId) -> Result<()> {
+        if target_id != self.target_profile_id {
             return Err(Error::validation(
-                "region",
-                "Region mismatch (sharding violation prevention)",
+                "target",
+                "Context/Target mismatch violation",
             ));
         }
         Ok(())
     }
 
     pub async fn save_relation(&self, relation: &mut FollowRelation) -> Result<()> {
+        if relation.following_id() != self.target_profile_id {
+            return Err(Error::validation(
+                "following_id",
+                "Identity mismatch violation",
+            ));
+        }
+
         self.app.relation_repo().save(relation).await?;
         self.app
             .cache_counter_repo()
             .increment_counters(relation.follower_id(), relation.following_id())
             .await?;
-
         Ok(())
     }
 
     pub async fn delete_relation(&self, relation: &mut FollowRelation) -> Result<()> {
         self.app.relation_repo().delete(relation).await?;
-
         self.app
             .cache_counter_repo()
             .decrement_counters(relation.follower_id(), relation.following_id())
             .await?;
-
         Ok(())
     }
 }

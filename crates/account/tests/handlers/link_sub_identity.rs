@@ -26,10 +26,7 @@ async fn test_link_sub_identity_success() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // 3. Assert
@@ -61,16 +58,13 @@ async fn test_link_sub_identity_business_idempotency() -> Result<()> {
     let cmd = LinkSubIdentityCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         sub_id: ext_id,
     };
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // 3. Assert: La version et l'outbox restent inchangées
@@ -97,7 +91,7 @@ async fn test_link_sub_identity_technical_idempotency() -> Result<()> {
     let cmd = LinkSubIdentityCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         // On met une valeur qui ne devrait pas poser de problème
         sub_id: SubId::try_new("apple_789")?,
     };
@@ -105,10 +99,7 @@ region: f.region(),
     // 2. Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // 3. Assert : Ici on s'attend à ce que l'infra bloque AVANT le domaine
@@ -138,16 +129,13 @@ async fn test_link_sub_identity_concurrency_retry() -> Result<()> {
     let cmd = LinkSubIdentityCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         sub_id: SubId::try_new("discord_000")?,
     };
 
     // 2. Act : Le CommandBus doit gérer le retry automatiquement
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, LinkSubIdentityCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandContext, LinkSubIdentityCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // 3. Assert

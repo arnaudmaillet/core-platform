@@ -2,45 +2,34 @@
 
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{Result, TransactionManager};
-use std::marker::PhantomData;
+use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::lifecycle::DeactivateCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 
-pub struct DeactivateHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct DeactivateHandler;
 
-impl<TM> DeactivateHandler<TM> {
+impl DeactivateHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for DeactivateHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for DeactivateHandler {
+    type Context = AccountCommandCtx;
     type Command = DeactivateCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: DeactivateCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.deactivate(cmd.reason)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
         } else {
             info!(
                 account_id = %account.account_id(),

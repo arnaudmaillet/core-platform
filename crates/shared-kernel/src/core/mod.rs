@@ -9,11 +9,11 @@ mod transaction;
 pub use clock::{Clock, SystemClock};
 pub use errors::{Error, ErrorCode, Result};
 pub use identity::{
-    LifecycleTracker, ManagedEntity, Entity, EntityOptionExt, Identifier, ValueObject, Versioned,
+    Entity, EntityOptionExt, Identifier, LifecycleTracker, ManagedEntity, ValueObject, Versioned,
 };
 pub use pagination::{PageQuery, PagedResult};
 pub use resilience::{RetryConfig, with_retry};
-pub use transaction::{Transaction, TransactionManager};
+pub use transaction::{Transaction, TransactionManager, TransactionManagerExt};
 
 #[cfg(feature = "concurrency")]
 mod concurrency;

@@ -1,15 +1,40 @@
 // crates/shared-kernel/src/domain/transaction/transaction_manager.rs
 
 use crate::core::{Result, Transaction};
-use std::future::Future;
 use std::pin::Pin;
 
-/// Le futur est désormais générique sur T
-pub type TransactionFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
-
 pub trait TransactionManager: Send + Sync {
-    fn in_transaction<'a, T, F>(&'a self, f: F) -> TransactionFuture<'a, T>
-    where
-        F: FnOnce(Box<dyn Transaction>) -> TransactionFuture<'a, T> + Send + 'a,
-        T: Send + 'a;
+    fn run_in_transaction<'a>(
+        &'a self,
+        f: Box<
+            dyn for<'b> FnOnce(
+                    &'b mut dyn Transaction,
+                )
+                    -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+                + Send
+                + 'a,
+        >,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
 }
+
+pub trait TransactionManagerExt: TransactionManager {
+    fn run_transaction<'a, F>(
+        &'a self,
+        f: F,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+    where
+        F: FnOnce(&'a mut dyn Transaction) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+            + Send
+            + 'a,
+    {
+        let boxed_closure = Box::new(move |tx: &mut dyn Transaction| {
+            let unsafe_tx =
+                unsafe { std::mem::transmute::<&mut dyn Transaction, &'a mut dyn Transaction>(tx) };
+            f(unsafe_tx)
+        });
+
+        TransactionManager::run_in_transaction(self, boxed_closure)
+    }
+}
+
+impl<T: TransactionManager + ?Sized> TransactionManagerExt for T {}

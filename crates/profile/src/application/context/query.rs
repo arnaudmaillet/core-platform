@@ -24,7 +24,7 @@ impl ProfileQueryContext {
     }
 
     pub fn local_region(&self) -> Region {
-        self.app_ctx.local_region()
+        self.app_ctx.region()
     }
 
     pub async fn find_by_id(&self, profile_id: ProfileId) -> Result<Option<Profile>> {

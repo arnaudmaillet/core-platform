@@ -7,37 +7,30 @@ use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::lifecycle::UnsuspendCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 
-pub struct UnsuspendHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct UnsuspendHandler;
 
-impl<TM> UnsuspendHandler<TM> {
+impl UnsuspendHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for UnsuspendHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for UnsuspendHandler {
+    type Context = AccountCommandCtx;
     type Command = UnsuspendCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: UnsuspendCommand,
     ) -> Result<Self::Output> {
-        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
-            return Ok(());
-        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.unsuspend(cmd.reason)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
         } else {
             info!(
                 account_id = %account.account_id(),

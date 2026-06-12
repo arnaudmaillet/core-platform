@@ -18,11 +18,11 @@ use tonic::{Request, Response, Status};
 
 pub struct ProfileMediaService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext>,
+    app_ctx: ProfileAppContext,
 }
 
 impl ProfileMediaService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
         Self { bus, app_ctx }
     }
 }
@@ -53,7 +53,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateAvatarCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -80,7 +80,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateBannerCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -107,7 +107,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = RemoveAvatarCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -134,7 +134,7 @@ impl ProtoProfileMediaService for ProfileMediaService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = RemoveBannerCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

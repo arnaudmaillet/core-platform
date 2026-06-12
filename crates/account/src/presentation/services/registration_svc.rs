@@ -1,6 +1,5 @@
 // crates/account/src/presentation/grpc/registration_service.rs
 
-use shared_kernel::core::TransactionManager;
 use shared_proto::account::v1::registration_identifier::Method as ProtoMethod;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -14,26 +13,24 @@ use shared_proto::account::v1::{
     RegisterRequest, RegisterResponse, RegistrationIdentifier as ProtoRegistrationIdentifier,
 };
 
-use crate::application::context::AccountAppContext;
+use crate::application::context::AccountKernelCtx;
 use crate::commands::RegisterCommand;
 use crate::presentation::utils::GrpcServiceUtils;
 
-pub struct AccountRegistrationService<TM> {
+pub struct AccountRegistrationService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext<TM>>,
+    kernel_ctx: AccountKernelCtx,
 }
 
-impl<TM> AccountRegistrationService<TM> {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
-        Self { bus, app_ctx }
+impl AccountRegistrationService {
+    pub fn new(bus: Arc<CommandBus>, kernel_ctx: AccountKernelCtx) -> Self {
+        Self { bus, kernel_ctx }
     }
 }
 
-impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM>
-    for AccountRegistrationService<TM>
-{
-    fn app_ctx(&self) -> &AccountAppContext<TM> {
-        &self.app_ctx
+impl GrpcServiceUtils for AccountRegistrationService {
+    fn kernel_ctx(&self) -> &AccountKernelCtx {
+        &self.kernel_ctx
     }
     fn bus(&self) -> &CommandBus {
         &self.bus
@@ -41,9 +38,7 @@ impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM>
 }
 
 #[tonic::async_trait]
-impl<TM: TransactionManager + Clone + 'static> ProtoAccountRegistrationService
-    for AccountRegistrationService<TM>
-{
+impl ProtoAccountRegistrationService for AccountRegistrationService {
     async fn register(
         &self,
         request: Request<RegisterRequest>,
@@ -63,9 +58,9 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountRegistrationService
         }
 
         let generated_account_id = AccountId::generate();
-        let ctx = self.build_creation_context(&extensions)?;
+        let ctx = self.build_creation_ctx(&extensions)?;
 
-        let command = RegisterCommand::try_from_proto(req, generated_account_id)
+        let command = RegisterCommand::try_from_proto(req, generated_account_id, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let response_payload = RegisterResponse {

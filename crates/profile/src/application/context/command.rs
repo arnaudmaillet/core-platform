@@ -26,8 +26,8 @@ impl ProfileCommandContext {
         self.app.routing_repo()
     }
 
-    pub fn local_region(&self) -> Region {
-        self.app.local_region()
+    pub fn region(&self) -> Region {
+        self.app.region()
     }
 
     pub async fn exists_by_handle(&self, handle: &Handle) -> Result<bool> {
@@ -41,7 +41,7 @@ impl ProfileCommandContext {
             return Err(Error::validation("target", "Context/Target mismatch"));
         }
 
-        let profile = self
+        let profile: Profile = self
             .app
             .profile_repo()
             .find_by_id(target.id)

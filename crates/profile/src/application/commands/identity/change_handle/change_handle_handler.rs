@@ -43,7 +43,7 @@ impl CommandHandler for ChangeHandleHandler {
                 profile.profile_id(),
                 &old_slug_hash,
                 &new_slug_hash,
-                ctx.local_region(),
+                ctx.region(),
             )
             .await?;
 

@@ -2,44 +2,32 @@
 
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{Result, TransactionManager};
-use std::marker::PhantomData;
+use shared_kernel::core::Result;
 use tracing::info;
 
 use crate::application::commands::settings::ChangePhoneCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 use crate::domain::types::RegistrationIdentifier;
 
-pub struct ChangePhoneNumberHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct ChangePhoneNumberHandler;
 
-impl<TM> ChangePhoneNumberHandler<TM> {
+impl ChangePhoneNumberHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangePhoneNumberHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for ChangePhoneNumberHandler {
+    type Context = AccountCommandCtx;
     type Command = ChangePhoneCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: ChangePhoneCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         let account_id = account.account_id();
 
@@ -53,7 +41,8 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangePhoneNum
             .await?;
 
         if account.change_phone(cmd.new_phone)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
+
             info!(
                 account_id = %account_id,
                 "Account phone updated successfully both globally and regionally"

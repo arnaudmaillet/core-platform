@@ -16,7 +16,7 @@ mod redis_cache_integration_tests {
     /// Helper pour initialiser le repository connecté au conteneur Redis éphémère
     async fn get_test_context() -> (FredMapCacheRepository, RedisTestContext) {
         let redis_ctx = RedisTestContext::builder().build().await;
-        let pool = redis_ctx.repository().pool().clone();
+        let pool = redis_ctx.cache().pool().clone();
 
         let repo = FredMapCacheRepository::new(pool);
         (repo, redis_ctx)

@@ -16,11 +16,11 @@ use tonic::{Request, Response, Status};
 
 pub struct ProfileMetadataService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext>,
+    app_ctx: ProfileAppContext,
 }
 
 impl ProfileMetadataService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
         Self { bus, app_ctx }
     }
 }
@@ -51,7 +51,7 @@ impl ProtoProfileMetadataService for ProfileMetadataService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateBioCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -78,7 +78,7 @@ impl ProtoProfileMetadataService for ProfileMetadataService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateLocationCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -105,7 +105,7 @@ impl ProtoProfileMetadataService for ProfileMetadataService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateSocialsCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

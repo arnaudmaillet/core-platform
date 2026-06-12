@@ -34,7 +34,7 @@ impl IdentifiableCommand for ChangeEmailCommand {
 }
 
 impl ChangeEmailCommand {
-    pub fn try_from_proto(req: ChangeEmailRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ChangeEmailRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -49,8 +49,6 @@ impl ChangeEmailCommand {
 
         let new_email = Email::try_from(req.new_email)
             .map_err(|e| Error::validation("account_id", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

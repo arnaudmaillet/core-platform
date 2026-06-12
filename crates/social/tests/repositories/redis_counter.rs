@@ -1,4 +1,3 @@
-
 use chrono::Utc;
 use infra_fred::fred::interfaces::SetsInterface;
 use infra_test::RedisTestContext;
@@ -17,7 +16,7 @@ async fn get_test_context() -> (RedisCounterRepository, RedisTestContext) {
         .await;
 
     // Extraction du pool fred via le RedisCacheRepository exposé par le contexte
-    let pool = test_ctx.repository().pool().clone();
+    let pool = test_ctx.cache().pool().clone();
     let repo = RedisCounterRepository::new(pool);
 
     (repo, test_ctx)
@@ -52,7 +51,7 @@ async fn test_redis_counter_increment_and_dirty_set_lifecycle() -> Result<()> {
 
     let follower_id = ProfileId::generate();
     let following_id = ProfileId::generate();
-    let pool = test_ctx.repository().pool().clone();
+    let pool = test_ctx.cache().pool().clone();
 
     // --- Act: Étape 1 - Incrémentation atomique des Hashes ---
     repo.increment_counters(follower_id, following_id).await?;

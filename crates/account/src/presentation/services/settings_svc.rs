@@ -1,4 +1,3 @@
-use shared_kernel::core::TransactionManager;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -9,7 +8,7 @@ use shared_proto::account::v1::{
     UpdateTimezoneResponse,
 };
 
-use crate::application::context::AccountAppContext;
+use crate::application::context::AccountKernelCtx;
 use crate::commands::{
     AddPushTokenCommand, RemovePushTokenCommand, UpdatePreferencesCommand, UpdateTimezoneCommand,
 };
@@ -17,20 +16,20 @@ use crate::presentation::utils::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 use shared_kernel::types::AccountId;
 
-pub struct AccountSettingsService<TM> {
+pub struct AccountSettingsService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext<TM>>,
+    kernel_ctx: AccountKernelCtx,
 }
 
-impl<TM> AccountSettingsService<TM> {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
-        Self { bus, app_ctx }
+impl AccountSettingsService {
+    pub fn new(bus: Arc<CommandBus>, kernel_ctx: AccountKernelCtx) -> Self {
+        Self { bus, kernel_ctx }
     }
 }
 
-impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountSettingsService<TM> {
-    fn app_ctx(&self) -> &AccountAppContext<TM> {
-        &self.app_ctx
+impl GrpcServiceUtils for AccountSettingsService {
+    fn kernel_ctx(&self) -> &AccountKernelCtx {
+        &self.kernel_ctx
     }
     fn bus(&self) -> &CommandBus {
         &self.bus
@@ -38,16 +37,14 @@ impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountS
 }
 
 #[tonic::async_trait]
-impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
-    for AccountSettingsService<TM>
-{
+impl ProtoAccountSettingsService for AccountSettingsService {
     async fn update_preferences(
         &self,
         request: Request<UpdatePreferencesRequest>,
     ) -> Result<Response<UpdatePreferencesResponse>, Status> {
-        let (_, extensions, req_inner) = request.into_parts();
+        let (_, extensions, req) = request.into_parts();
 
-        let target = req_inner
+        let target = req
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
@@ -55,8 +52,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = UpdatePreferencesCommand::try_from_proto(req_inner)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = UpdatePreferencesCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<UpdatePreferencesCommand, (), UpdatePreferencesResponse>(
@@ -71,9 +68,9 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
         &self,
         request: Request<UpdateTimezoneRequest>,
     ) -> Result<Response<UpdateTimezoneResponse>, Status> {
-        let (_, extensions, req_inner) = request.into_parts();
+        let (_, extensions, req) = request.into_parts();
 
-        let target = req_inner
+        let target = req
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
@@ -81,8 +78,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = UpdateTimezoneCommand::try_from_proto(req_inner)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = UpdateTimezoneCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<UpdateTimezoneCommand, (), UpdateTimezoneResponse>(
@@ -97,9 +94,9 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
         &self,
         request: Request<AddPushTokenRequest>,
     ) -> Result<Response<AddPushTokenResponse>, Status> {
-        let (_, extensions, req_inner) = request.into_parts();
+        let (_, extensions, req) = request.into_parts();
 
-        let target = req_inner
+        let target = req
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
@@ -107,8 +104,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = AddPushTokenCommand::try_from_proto(req_inner)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = AddPushTokenCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<AddPushTokenCommand, (), AddPushTokenResponse>(
@@ -123,9 +120,9 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
         &self,
         request: Request<RemovePushTokenRequest>,
     ) -> Result<Response<RemovePushTokenResponse>, Status> {
-        let (_, extensions, req_inner) = request.into_parts();
+        let (_, extensions, req) = request.into_parts();
 
-        let target = req_inner
+        let target = req
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
@@ -133,8 +130,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountSettingsService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = RemovePushTokenCommand::try_from_proto(req_inner)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = RemovePushTokenCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<RemovePushTokenCommand, (), RemovePushTokenResponse>(

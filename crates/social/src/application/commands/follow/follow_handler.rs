@@ -1,3 +1,5 @@
+// crates/social/src/application/commands/follow/follow_handler.rs
+
 use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
@@ -15,16 +17,16 @@ impl CommandHandler for FollowHandler {
     type Output = ();
 
     async fn handle(&self, ctx: &SocialCommandContext, cmd: FollowCommand) -> Result<Self::Output> {
-        ctx.ensure_executable(&cmd.region).await?;
+        ctx.verify_actors(cmd.follower_id, cmd.target.id)?;
 
         if cmd.follower_id == cmd.target.id {
             return Ok(());
         }
-
-        let query_ctx = ctx.app().query(ctx.region());
+        let query_ctx = ctx.app().query(cmd.region);
         let already_following = query_ctx
             .is_already_following(cmd.follower_id, cmd.target.id)
             .await?;
+
         if already_following {
             info!(
                 follower_id = %cmd.follower_id,

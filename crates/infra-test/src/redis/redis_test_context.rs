@@ -17,7 +17,7 @@ impl RedisTestContext {
         RedisTestContextBuilder::new()
     }
 
-    pub fn repository(&self) -> Arc<RedisCacheRepository> {
+    pub fn cache(&self) -> Arc<RedisCacheRepository> {
         self.context.cache_repository()
     }
 

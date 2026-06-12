@@ -11,13 +11,13 @@ pub trait GrpcServiceUtils {
     fn app_ctx(&self) -> &ProfileAppContext;
     fn bus(&self) -> &CommandBus;
 
-    fn build_command_context(
+    fn build_command_ctx(
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
     ) -> Result<ProfileCommandContext, Status> {
         let routed_region = self.extract_region(extensions)?;
-        let local_region = self.app_ctx().local_region();
+        let local_region = self.app_ctx().region();
         if routed_region != local_region {
             return Err(Status::failed_precondition(format!(
                 "Routing violation: This pod ({:?}) cannot process data belonging to region {:?}",
@@ -28,12 +28,12 @@ pub trait GrpcServiceUtils {
         Ok(self.app_ctx().command(profile_id))
     }
 
-    fn build_creation_context(
+    fn build_creation_ctx(
         &self,
         extensions: &tonic::Extensions,
     ) -> Result<ProfileCommandContext, Status> {
         let routed_region = self.extract_region(extensions)?;
-        let local_region = self.app_ctx().local_region();
+        let local_region = self.app_ctx().region();
 
         if routed_region != local_region {
             return Err(Status::failed_precondition(format!(
@@ -45,7 +45,10 @@ pub trait GrpcServiceUtils {
         Ok(self.app_ctx().creation_command())
     }
 
-    fn build_query(&self, _extensions: &tonic::Extensions) -> Result<ProfileQueryContext, Status> {
+    fn build_query_ctx(
+        &self,
+        _extensions: &tonic::Extensions,
+    ) -> Result<ProfileQueryContext, Status> {
         Ok(self.app_ctx().query())
     }
 

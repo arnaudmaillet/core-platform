@@ -32,7 +32,7 @@ impl IdentifiableCommand for UpdateTimezoneCommand {
 }
 
 impl UpdateTimezoneCommand {
-    pub fn try_from_proto(req: UpdateTimezoneRequest) -> Result<Self> {
+    pub fn try_from_proto(req: UpdateTimezoneRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -47,8 +47,6 @@ impl UpdateTimezoneCommand {
 
         let new_timezone = Timezone::try_new(&req.timezone)
             .map_err(|e| Error::validation("timezone", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

@@ -38,7 +38,7 @@ impl IdentifiableCommand for DecreaseTrustScoreCommand {
 }
 
 impl DecreaseTrustScoreCommand {
-    pub fn try_from_proto(req: DecreaseTrustScoreRequest) -> Result<Self> {
+    pub fn try_from_proto(req: DecreaseTrustScoreRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -55,8 +55,6 @@ impl DecreaseTrustScoreCommand {
             .map_err(|e| Error::validation("reason", e.to_string()))?;
 
         let amount = TrustAmount::try_from(req.amount)?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

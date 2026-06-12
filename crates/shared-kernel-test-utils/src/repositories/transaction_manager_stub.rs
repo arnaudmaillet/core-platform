@@ -9,19 +9,23 @@ use std::pin::Pin;
 pub struct TransactionManagerStub;
 
 impl TransactionManager for TransactionManagerStub {
-    fn in_transaction<'a, T, F>(
+    fn run_in_transaction<'a>(
         &'a self,
-        f: F,
-    ) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>
-    where
-        F: FnOnce(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>
-            + Send
-            + 'a,
-        T: Send + 'a,
-    {
+        f: Box<
+            dyn for<'b> FnOnce(
+                    &'b mut dyn Transaction,
+                )
+                    -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+                + Send
+                + 'a,
+        >,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
-            let tx = Box::new(TransactionStub::new());
-            f(tx as Box<dyn Transaction>).await
+            let mut tx = TransactionStub::new();
+
+            f(&mut tx).await?;
+
+            Ok(())
         })
     }
 }

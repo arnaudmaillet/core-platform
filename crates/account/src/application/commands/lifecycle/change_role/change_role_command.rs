@@ -37,7 +37,7 @@ impl IdentifiableCommand for ChangeRoleCommand {
 }
 
 impl ChangeRoleCommand {
-    pub fn try_from_proto(req: ChangeRoleRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ChangeRoleRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -55,8 +55,6 @@ impl ChangeRoleCommand {
             id: AccountId::try_from(proto_target.account_id)?,
             expected_version: Some(proto_target.expected_version),
         };
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

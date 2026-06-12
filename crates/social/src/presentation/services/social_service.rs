@@ -56,11 +56,9 @@ impl ProtoSocialService for SocialService {
             .profile_id
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid target profile_id: {}", e)))?;
-
-        // Utilisation du contexte de commande
         let ctx = self.build_command_context(target_profile_id, &extensions)?;
 
-        let command = FollowCommand::try_from_proto(req_inner)
+        let command = FollowCommand::try_from_proto(req_inner, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<FollowCommand, (), FollowProfileResponse>(
@@ -87,10 +85,9 @@ impl ProtoSocialService for SocialService {
             .parse::<ProfileId>()
             .map_err(|e| Status::invalid_argument(format!("Invalid target profile_id: {}", e)))?;
 
-        // Utilisation du contexte de commande
         let ctx = self.build_command_context(target_profile_id, &extensions)?;
 
-        let command = UnfollowCommand::try_from_proto(req_inner)
+        let command = UnfollowCommand::try_from_proto(req_inner, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<UnfollowCommand, (), UnfollowProfileResponse>(

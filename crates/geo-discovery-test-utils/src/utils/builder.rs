@@ -59,7 +59,7 @@ impl GeoDiscoveryTestContextBuilder {
         let kernel_infra = self.kernel_builder.build().await;
 
         let scylla_session: Arc<Session> = kernel_infra.scylla().session();
-        let redis_repo = kernel_infra.redis().repository();
+        let redis_repo = kernel_infra.redis().cache();
         let redis_pool = redis_repo.pool().clone();
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();

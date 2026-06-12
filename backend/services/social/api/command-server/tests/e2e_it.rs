@@ -90,7 +90,7 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
         .unwrap();
     assert_eq!(scylla_rows.rows_num(), 1);
 
-    let redis_pool = ctx.kernel().redis().repository().pool().clone();
+    let redis_pool = ctx.kernel().redis().cache().pool().clone();
     let count: i64 = redis_pool
         .hget(format!("profile:counters:{}", follower_id), "following")
         .await
@@ -134,7 +134,7 @@ async fn test_e2e_complete_social_graph_lifecycle() -> Result<()> {
     );
 
     // B. Vérifier que le compteur Redis est revenu à 0
-    let redis_pool = ctx.kernel().redis().repository().pool().clone();
+    let redis_pool = ctx.kernel().redis().cache().pool().clone();
     let final_count: Option<i64> = redis_pool
         .hget(format!("profile:counters:{}", follower_id), "following")
         .await

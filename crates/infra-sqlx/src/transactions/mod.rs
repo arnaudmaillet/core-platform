@@ -1,5 +1,5 @@
 mod transaction;
 mod transaction_manager;
 
-pub use transaction::{PostgresTransaction, TransactionExt, TransactionExecuteExt};
-pub use transaction_manager::{PostgresTransactionManager, TransactionManagerExt};
+pub use transaction::{PostgresTransaction, TransactionExecuteExt, TransactionExt};
+pub use transaction_manager::PostgresTransactionManager;

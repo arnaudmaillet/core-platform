@@ -74,7 +74,7 @@ impl ProfileTestContextBuilder {
 
         let kernel_infra = self.kernel_builder.build().await;
         let scylla_session = kernel_infra.scylla().session().clone();
-        let redis_repo = kernel_infra.redis().repository();
+        let redis_repo = kernel_infra.redis().cache();
         let kafka_brokers = self
             .has_kafka
             .then(|| kernel_infra.kafka().bootstrap_servers().to_string());
@@ -149,7 +149,7 @@ impl ProfileTestContextBuilder {
                         idempotency,
                         region,
                     );
-                    let app_ctx = Arc::new(builder.build_context());
+                    let app_ctx = builder.build_context();
                     let bus = builder.build_command_bus();
 
                     let svc = Server::builder()

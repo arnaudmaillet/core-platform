@@ -109,6 +109,7 @@ impl Account {
     pub fn account_id(&self) -> AccountId {
         self.identity.account_id()
     }
+
     pub fn identity(&self) -> &AccountIdentity {
         &self.identity
     }

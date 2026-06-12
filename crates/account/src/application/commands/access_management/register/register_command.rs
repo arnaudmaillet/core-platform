@@ -41,6 +41,7 @@ impl RegisterCommand {
     pub fn try_from_proto(
         req: RegisterRequest,
         account_id: AccountId,
+        region: Region,
     ) -> Result<Self, tonic::Status> {
         let identifier = match req.identifier.and_then(|i| i.method) {
             Some(Method::Email(e)) => RegistrationIdentifier::from_email(
@@ -55,9 +56,6 @@ impl RegisterCommand {
             ),
             None => return Err(Status::invalid_argument("Missing registration identifier")),
         };
-
-        let region = Region::try_new(req.region)
-            .map_err(|e| Status::invalid_argument(format!("Invalid region: {}", e)))?;
 
         let target = CommandTarget::stateless(account_id);
 

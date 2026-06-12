@@ -1,7 +1,8 @@
-// crates/account/src/application/context.rs (ou son chemin équivalent)
+// crates/account/src/application/context.rs
 
-use crate::application::context::{AccountCommandContext, AccountQueryContext};
+use crate::application::context::{AccountCommandCtx, AccountQueryCtx};
 use crate::repositories::{AccountRepository, GlobalIdentityRegistry};
+use shared_kernel::application::environment::ClusterContext;
 use shared_kernel::core::TransactionManager;
 use shared_kernel::{
     idempotency::IdempotencyRepository,
@@ -10,33 +11,24 @@ use shared_kernel::{
 };
 use std::sync::Arc;
 
-pub struct AccountAppContext<TM> {
-    transaction_manager: Arc<TM>,
+#[derive(Clone)]
+pub struct AccountKernelCtx {
+    transaction_manager: Arc<dyn TransactionManager>,
     account_repo: Arc<dyn AccountRepository>,
     outbox_repo: Arc<dyn OutboxRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
     global_registry: Arc<dyn GlobalIdentityRegistry>,
+    cluster_ctx: ClusterContext,
 }
 
-impl<TM> Clone for AccountAppContext<TM> {
-    fn clone(&self) -> Self {
-        Self {
-            transaction_manager: self.transaction_manager.clone(),
-            account_repo: self.account_repo.clone(),
-            outbox_repo: self.outbox_repo.clone(),
-            idempotency_repo: self.idempotency_repo.clone(),
-            global_registry: self.global_registry.clone(),
-        }
-    }
-}
-
-impl<TM> AccountAppContext<TM> {
+impl AccountKernelCtx {
     pub fn new(
-        transaction_manager: Arc<TM>,
+        transaction_manager: Arc<dyn TransactionManager>,
         account_repo: Arc<dyn AccountRepository>,
         outbox_repo: Arc<dyn OutboxRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
         global_registry: Arc<dyn GlobalIdentityRegistry>,
+        cluster_ctx: ClusterContext,
     ) -> Self {
         Self {
             transaction_manager,
@@ -44,10 +36,11 @@ impl<TM> AccountAppContext<TM> {
             outbox_repo,
             idempotency_repo,
             global_registry,
+            cluster_ctx,
         }
     }
 
-    pub fn transaction_manager(&self) -> Arc<TM> {
+    pub fn transaction_manager(&self) -> Arc<dyn TransactionManager> {
         self.transaction_manager.clone()
     }
 
@@ -66,18 +59,24 @@ impl<TM> AccountAppContext<TM> {
     pub(crate) fn global_registry(&self) -> Arc<dyn GlobalIdentityRegistry> {
         self.global_registry.clone()
     }
-}
 
-impl<TM: TransactionManager> AccountAppContext<TM> {
-    pub fn query(&self, region: Region) -> AccountQueryContext<TM> {
-        AccountQueryContext::new(self.clone(), region)
+    pub fn cluster_ctx(&self) -> ClusterContext {
+        self.cluster_ctx
     }
 
-    pub fn command(&self, account_id: AccountId, region: Region) -> AccountCommandContext<TM> {
-        AccountCommandContext::new(self.clone(), Some(account_id), region)
+    pub fn region(&self) -> Region {
+        self.cluster_ctx.region()
     }
 
-    pub fn creation_command(&self, region: Region) -> AccountCommandContext<TM> {
-        AccountCommandContext::new(self.clone(), None, region)
+    pub fn query(&self, region_query: Region) -> AccountQueryCtx {
+        AccountQueryCtx::new(self.clone(), region_query)
+    }
+
+    pub fn command(&self, account_id: AccountId, region_cmd: Region) -> AccountCommandCtx {
+        AccountCommandCtx::new(self.clone(), Some(account_id), region_cmd)
+    }
+
+    pub fn creation_command(&self, region_cmd: Region) -> AccountCommandCtx {
+        AccountCommandCtx::new(self.clone(), None, region_cmd)
     }
 }

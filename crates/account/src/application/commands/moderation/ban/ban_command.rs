@@ -32,7 +32,7 @@ impl IdentifiableCommand for BanCommand {
 }
 
 impl BanCommand {
-    pub fn try_from_proto(req: BanRequest) -> Result<Self> {
+    pub fn try_from_proto(req: BanRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -47,8 +47,6 @@ impl BanCommand {
 
         let reason = AuditReason::try_from(req.reason)
             .map_err(|e| Error::validation("reason", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

@@ -35,7 +35,7 @@ impl IdentifiableCommand for FollowCommand {
 }
 
 impl FollowCommand {
-    pub fn try_from_proto(req: FollowProfileRequest) -> Result<Self> {
+    pub fn try_from_proto(req: FollowProfileRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing target profile metadata"))?;
@@ -49,8 +49,6 @@ impl FollowCommand {
             id: ProfileId::try_new(proto_target.profile_id)?,
             expected_version: Some(proto_target.expected_version),
         };
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

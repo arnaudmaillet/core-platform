@@ -21,25 +21,25 @@ use crate::{
 pub struct ProfileServiceBuilder {
     profile_repo: Arc<dyn ProfileRepository>,
     routing_repo: Arc<dyn ProfileRoutingRepository>,
-    redis_repo: Arc<dyn CacheRepository>,
+    cache_repo: Arc<dyn CacheRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
-    local_region: Region,
+    region: Region,
 }
 
 impl ProfileServiceBuilder {
     pub fn new(
         profile_repo: Arc<dyn ProfileRepository>,
         routing_repo: Arc<dyn ProfileRoutingRepository>,
-        redis_repo: Arc<dyn CacheRepository>,
+        cache_repo: Arc<dyn CacheRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
-        local_region: Region,
+        region: Region,
     ) -> Self {
         Self {
             profile_repo,
             routing_repo,
-            redis_repo,
+            cache_repo,
             idempotency_repo,
-            local_region,
+            region,
         }
     }
 
@@ -47,12 +47,12 @@ impl ProfileServiceBuilder {
         ProfileAppContext::new(
             self.profile_repo.clone(),
             self.routing_repo.clone(),
-            self.local_region,
+            self.region,
         )
     }
 
     pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new(self.redis_repo.clone(), self.idempotency_repo.clone());
+        let mut bus = CommandBus::new(self.cache_repo.clone(), self.idempotency_repo.clone());
 
         bus.register::<ProfileCommandContext, CreateProfileCommand, CreateProfileHandler>(
             CreateProfileHandler::new(),

@@ -1,49 +1,51 @@
+// crates/account/src/application/use_cases/settings/add_push_token/add_push_token_use_case_test.rs
+
 use account::commands::settings::AddPushTokenCommand;
-use account::context::AccountCommandContext;
+use account::context::AccountCommandCtx;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account_test_utils::asserts::AccountRepositoryAsserts;
+
 use account_test_utils::AccountTestFixture;
 use shared_kernel::{
     command::CommandTarget,
     core::{Error, Result, Versioned},
+    idempotency::IdempotencyRepository,
     messaging::EventEmitter,
     security::PushToken,
 };
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_add_push_token_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let token = PushToken::try_new("valid_push_token_long_enough")?;
 
-    // 1. Arrange : Compte actif sans tokens
+    // 1. Compte actif initialisé sans tokens
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
-
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         token: token.clone(),
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert!(acc.settings().push_tokens().contains(&token));
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // Assert
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert!(acc.settings().push_tokens().contains(&token));
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
     f.assert_outbox(1, Some(AccountEvent::PUSH_TOKEN_ADDED));
 
@@ -52,12 +54,13 @@ region: f.region(),
 
 #[tokio::test]
 async fn test_add_push_token_technical_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
     let token = PushToken::try_new("idempotent_token_123")?;
 
-    // Arrange : Commande déjà vue par l'infra
-    f.idempotency_repo().seed(cmd_id);
+    // On simule une commande déjà interceptée au premier rideau (Idempotency Barrière)
+    f.idempotency_repo().save(None, &cmd_id).await?;
 
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
     let version_snapshot = account.version();
@@ -66,46 +69,48 @@ async fn test_add_push_token_technical_idempotency() -> Result<()> {
     let cmd = AddPushTokenCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         token: token.clone(),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
     assert!(
         result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
+        "L'idempotence technique doit court-circuiter de façon transparente (Ok)"
     );
-    f.assert_account(|acc| {
-        assert!(!acc.settings().push_tokens().contains(&token));
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
-    f.assert_outbox(0, None);
+
+    // L'agrégat n'a subi aucune mutation interne, pas de token ajouté
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert!(!acc.settings().push_tokens().contains(&token));
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
+
+    // L'outbox locale reste vierge d'événements dupliqués
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_add_push_token_business_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let token = PushToken::try_new("existing_token_123")?;
 
-    // 1. Arrange : Token déjà présent dans l'agrégat
-    let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
-
-    // On utilise une petite closure de test pour injecter le token sans passer par le bus
-    let mut account = account;
+    // Le token est déjà présent dans l'agrégat avant l'envoi de la commande
+    let mut account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
     account.add_push_token(token.clone())?;
-    account.pull_events(); // On vide l'event du setup
+    account.pull_events();
 
     let version_snapshot = account.version();
     f.account_repo().insert(account);
@@ -113,77 +118,79 @@ async fn test_add_push_token_business_idempotency() -> Result<()> {
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         token,
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(
-            acc.version(),
-            version_snapshot,
-            "La version ne doit pas bouger"
-        );
-    })
-    .await?;
+    // Assert
+    // Pas de modification d'état, pas d'incrément de version (No-Op transactionnel)
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version de l'agrégat ne doit pas changer"
+            );
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // L'invariant d'unicité métier bloque l'émission de nouveaux événements
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_add_push_token_succeeds_after_retry() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
     let version_snapshot = account.version();
     let token = PushToken::try_new("retry_token_123")?;
     f.account_repo().insert(account);
 
-    // On simule UNE erreur de concurrence.
-    // Le Stub la renverra une fois, puis redeviendra normal au retry.
-    f.account_repo()
-        .set_error_once(Error::concurrency_conflict("Database high pressure"));
+    // Simulation d'une erreur de concurrence transitoire (ex: Optimistic Locking Failure / OCC)
+    // Le Stub lève l'erreur une fois lors du premier .exists / .save, puis fonctionne au retry.
+    f.account_repo().set_error_once(Error::concurrency_conflict(
+        "Database high pressure / OCC Concurrency conflict",
+    ));
 
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         token: token.clone(),
     };
 
-    // 2. Act : Le bus doit absorber le conflit et retenter l'opération
+    // Act : Le middleware with_retry du CommandBus intercepte ConcurrencyConflict et relance le flux
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, AddPushTokenCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, AddPushTokenCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
-    // 3. Assert : Succès attendu !
+    // Assert
     assert!(
         result.is_ok(),
-        "Le bus aurait dû réussir après le retry automatique"
+        "Le middleware de retry du bus de commande aurait dû absorber l'erreur et réussir au second essai"
     );
 
-    f.assert_account(|acc| {
-        // Le token doit être présent car l'opération a fini par réussir
-        assert!(acc.settings().push_tokens().contains(&token));
-        // La version doit être incrémentée (version initiale + 1)
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // L'état final après retry automatique est correct
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert!(acc.settings().push_tokens().contains(&token));
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
-    // Un événement doit être présent dans l'outbox
+    // Un seul événement propre est poussé dans l'outbox après la tentative réussie
     f.assert_outbox(1, Some(AccountEvent::PUSH_TOKEN_ADDED));
+
     Ok(())
 }

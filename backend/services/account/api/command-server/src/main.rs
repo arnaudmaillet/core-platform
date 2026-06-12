@@ -1,5 +1,7 @@
 // backend/services/account/api/command-server/src/main.rs
 
+use account::db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry};
+use account::fred::FredOtpRepository;
 use account::{
     AccountServiceBuilder,
     services::{
@@ -13,7 +15,13 @@ use auth::{
 };
 use dotenvy::dotenv;
 use infra_fred::RedisContext;
-use infra_sqlx::PostgresContext;
+use infra_sqlx::{
+    PostgresContext, PostgresIdempotencyRepository, PostgresOutboxRepository,
+    PostgresTransactionManager,
+};
+use shared_kernel::command::CommandBus;
+use shared_kernel::environment::ClusterContext;
+use shared_kernel::types::Region;
 use std::{sync::Arc, time::Duration};
 use tonic::transport::Server;
 
@@ -30,6 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
+    // 1. Chargement et validation des variables d'environnement
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let global_database_url =
         std::env::var("GLOBAL_DATABASE_URL").expect("GLOBAL_DATABASE_URL must be set");
@@ -39,12 +48,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keycloak_audience =
         std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "account-service".to_string());
 
+    let region_raw = std::env::var("REGION").unwrap_or_else(|_| "eu-west-1".to_string());
+    let region = Region::try_from(region_raw.as_str())?;
+    let cluster_ctx = ClusterContext::new(region);
+
     let otp_ttl_secs = std::env::var("OTP_TTL_SECONDS")
         .unwrap_or_else(|_| "900".to_string()) // 15 minutes par défaut (900s)
         .parse::<u64>()
         .expect("OTP_TTL_SECONDS must be a valid u64");
     let otp_ttl = Duration::from_secs(otp_ttl_secs);
 
+    // 2. Initialisation des Contextes d'Infrastructure Drivers
     let pg_ctx = PostgresContext::builder()?
         .with_url(database_url)
         .with_max_connections(20)
@@ -58,15 +72,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
-    let builder = AccountServiceBuilder::new(
-        pg_ctx.pool(),
-        global_pg_ctx.pool(),
-        redis_ctx.cache_repository(),
-        otp_ttl,
-    );
-    let app_ctx = builder.build_context();
-    let bus = builder.build_command_bus();
 
+    // 3. Instanciation des Adaptateurs (Repositories Concrets)
+    let pool = pg_ctx.pool();
+    let global_pool = global_pg_ctx.pool();
+    let cache_client = redis_ctx.cache_repository();
+
+    let account_repo = Arc::new(PostgresAccountRepository::new(pool.clone()));
+    let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+    let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new_with_pool(
+        pool.clone(),
+        "account",
+    ));
+    let global_registry = Arc::new(PostgresGlobalIdentityRegistry::new(global_pool));
+    let otp_repo = Arc::new(FredOtpRepository::new(cache_client.clone(), otp_ttl));
+    let tx_manager = Arc::new(PostgresTransactionManager::new(pool));
+
+    // 4. Assemblage via le Builder de Service et configuration du Kernel
+    let builder = AccountServiceBuilder::new(
+        account_repo,
+        outbox_repo,
+        idempotency_repo.clone(),
+        global_registry,
+        otp_repo,
+        tx_manager,
+        cluster_ctx,
+    );
+
+    let app_ctx = builder.build_context();
+
+    // 5. Initialisation et configuration du CommandBus avec ses Gardes Idempotents
+    // On passe ici tes dépôts globaux d'infrastructure requis par le constructeur du Bus
+    let mut command_bus = CommandBus::new(redis_ctx.cache_repository(), idempotency_repo);
+
+    builder.register_handlers(&mut command_bus);
+    let bus = Arc::new(command_bus);
+
+    // 6. Configuration de la couche de transport gRPC Server & Interceptors
     let port = std::env::var("PORT").unwrap_or_else(|_| "50051".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
@@ -85,7 +127,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let personal_svc = AccountPersonalService::new(bus.clone(), app_ctx.clone());
     let settings_svc = AccountSettingsService::new(bus, app_ctx);
 
-    tracing::info!("🚀 Account Command Service listening on {}", addr);
+    tracing::info!(
+        "🚀 Account Command Service Shard [{}] listening on {}",
+        region,
+        addr
+    );
 
     Server::builder()
         .add_service(AccountRegistrationServiceServer::with_interceptor(

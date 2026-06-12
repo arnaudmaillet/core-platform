@@ -32,7 +32,7 @@ impl IdentifiableCommand for VerifyPhoneCommand {
 }
 
 impl VerifyPhoneCommand {
-    pub fn try_from_proto(req: VerifyPhoneRequest) -> Result<Self> {
+    pub fn try_from_proto(req: VerifyPhoneRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -48,9 +48,7 @@ impl VerifyPhoneCommand {
             ));
         }
 
-        let region = Region::try_new(proto_target.region)?;
-
-let target = CommandTarget {
+        let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
             expected_version: Some(proto_target.expected_version),
         };

@@ -7,39 +7,28 @@ use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::settings::ChangeEmailCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 use crate::domain::types::RegistrationIdentifier;
 
-pub struct ChangeEmailHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct ChangeEmailHandler;
 
-impl<TM> ChangeEmailHandler<TM> {
+impl ChangeEmailHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeEmailHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for ChangeEmailHandler {
+    type Context = AccountCommandCtx;
     type Command = ChangeEmailCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: ChangeEmailCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         let account_id = account.account_id();
         let new_identifiers = RegistrationIdentifier::try_from_options(
@@ -52,7 +41,7 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeEmailHan
             .await?;
 
         if account.change_email(cmd.new_email)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
             info!(
                 account_id = %account_id,
                 "Account email updated successfully both globally and regionally"

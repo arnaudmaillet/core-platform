@@ -1,4 +1,3 @@
-use shared_kernel::core::TransactionManager;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -12,24 +11,24 @@ use shared_proto::account::v1::{
     VerifyPhoneResponse,
 };
 
-use crate::application::context::AccountAppContext;
+use crate::application::context::AccountKernelCtx;
 use crate::commands::{LinkSubIdentityCommand, VerifyEmailCommand, VerifyPhoneCommand};
 use crate::presentation::utils::GrpcServiceUtils;
 
-pub struct AccountAccessService<TM> {
+pub struct AccountAccessService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<AccountAppContext<TM>>,
+    kernel_ctx: AccountKernelCtx,
 }
 
-impl<TM> AccountAccessService<TM> {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<AccountAppContext<TM>>) -> Self {
-        Self { bus, app_ctx }
+impl AccountAccessService {
+    pub fn new(bus: Arc<CommandBus>, kernel_ctx: AccountKernelCtx) -> Self {
+        Self { bus, kernel_ctx }
     }
 }
 
-impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountAccessService<TM> {
-    fn app_ctx(&self) -> &AccountAppContext<TM> {
-        &self.app_ctx
+impl GrpcServiceUtils for AccountAccessService {
+    fn kernel_ctx(&self) -> &AccountKernelCtx {
+        &self.kernel_ctx
     }
     fn bus(&self) -> &CommandBus {
         &self.bus
@@ -37,9 +36,7 @@ impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for AccountA
 }
 
 #[tonic::async_trait]
-impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
-    for AccountAccessService<TM>
-{
+impl ProtoAccountAccessService for AccountAccessService {
     async fn link_sub_identity(
         &self,
         request: Request<LinkSubIdentityRequest>,
@@ -54,8 +51,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = LinkSubIdentityCommand::try_from_proto(req)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = LinkSubIdentityCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<LinkSubIdentityCommand, (), LinkSubIdentityResponse>(
@@ -75,10 +72,10 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
         let sub_id =
             SubId::try_new(req.sub_id).map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let query_ctx = self.build_query_context(&extensions)?;
+        let query_ctx = self.build_query_ctx(&extensions)?;
 
         let account = self
-            .app_ctx
+            .kernel_ctx
             .account_repo()
             .find_by_sub_id(query_ctx.region(), &sub_id, None)
             .await
@@ -113,8 +110,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = VerifyEmailCommand::try_from_proto(req)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = VerifyEmailCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<VerifyEmailCommand, (), VerifyEmailResponse>(
@@ -139,8 +136,8 @@ impl<TM: TransactionManager + Clone + 'static> ProtoAccountAccessService
             Status::invalid_argument(format!("Invalid account_id format: {}", e.message))
         })?;
 
-        let ctx = self.build_command_context(account_id, &extensions)?;
-        let command = VerifyPhoneCommand::try_from_proto(req)
+        let ctx = self.build_command_ctx(account_id, &extensions)?;
+        let command = VerifyPhoneCommand::try_from_proto(req, ctx.region())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         self.dispatch_command::<VerifyPhoneCommand, (), VerifyPhoneResponse>(

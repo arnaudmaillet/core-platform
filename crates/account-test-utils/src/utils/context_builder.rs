@@ -3,6 +3,8 @@
 use crate::AccountTestContext;
 use account::{
     AccountServiceBuilder,
+    db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry},
+    fred::FredOtpRepository,
     services::{
         AccountAccessService, AccountModerationService, AccountPersonalService,
         AccountRegistrationService, AccountSettingsService,
@@ -13,7 +15,13 @@ use auth::{
     interceptors::{AuthInterceptor, RegistrationInterceptor},
 };
 use auth_test_utils::KeycloakTestContext;
+use infra_sqlx::{
+    PostgresIdempotencyRepository, PostgresOutboxRepository, PostgresTransactionManager,
+};
 use infra_test::TestContextBuilder;
+use shared_kernel::command::CommandBus;
+use shared_kernel::environment::ClusterContext;
+use shared_kernel::types::Region;
 use shared_proto::account::v1::account_access_service_server::AccountAccessServiceServer;
 use shared_proto::account::v1::account_moderation_service_server::AccountModerationServiceServer;
 use shared_proto::account::v1::account_personal_service_server::AccountPersonalServiceServer;
@@ -27,6 +35,7 @@ pub struct AccountTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
     with_grpc: bool,
     mock_validator: Option<Arc<dyn TokenValidator>>,
+    cluster_ctx: ClusterContext,
 }
 
 impl AccountTestContextBuilder {
@@ -37,6 +46,7 @@ impl AccountTestContextBuilder {
                 .with_redis(),
             with_grpc: false,
             mock_validator: None,
+            cluster_ctx: ClusterContext::new(Region::default()),
         }
     }
 
@@ -50,13 +60,17 @@ impl AccountTestContextBuilder {
         self
     }
 
+    pub fn with_cluster_ctx(mut self, ctx: ClusterContext) -> Self {
+        self.cluster_ctx = ctx;
+        self
+    }
+
     pub async fn build(self) -> AccountTestContext {
         tracing::info!("Building Account test infrastructure...");
         let kernel_infra = self.kernel_builder.build().await;
         let pg_pool = kernel_infra.postgres().pool().clone();
-        let global_pg_pool = kernel_infra.postgres().pool().clone();
-
-        let redis_repo = kernel_infra.redis().repository();
+        let fred_cache_repo = kernel_infra.redis().cache();
+        let fred_idempotency_repo = kernel_infra.redis().idempotency();
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -64,9 +78,11 @@ impl AccountTestContextBuilder {
         if self.with_grpc {
             tracing::info!("Starting gRPC server...");
             let pg = pg_pool.clone();
-            let global_pg = global_pg_pool.clone();
-            let redis = redis_repo.clone();
+            let fred_cache = fred_cache_repo.clone();
+            let fred_idempotency = fred_idempotency_repo.clone();
             let custom_validator = self.mock_validator.clone();
+
+            let cluster_ctx = self.cluster_ctx;
             let otp_ttl = Duration::from_secs(60 * 15);
 
             tokio::spawn(async move {
@@ -84,30 +100,51 @@ impl AccountTestContextBuilder {
 
                 let auth_interceptor = AuthInterceptor::new(validator.clone());
                 let registration_interceptor = RegistrationInterceptor::new(validator);
+                let mut command_bus = CommandBus::new(fred_cache.clone(), fred_idempotency.clone());
 
-                let builder = AccountServiceBuilder::new(pg, global_pg, redis, otp_ttl);
-                let app_ctx = builder.build_context();
-                let bus = builder.build_command_bus();
+                let account_repo = Arc::new(PostgresAccountRepository::new(pg.clone()));
+                let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg.clone()));
+                let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new_with_pool(
+                    pg.clone(),
+                    "account",
+                ));
+                let global_registry = Arc::new(PostgresGlobalIdentityRegistry::new(pg.clone()));
+                let otp_repo = Arc::new(FredOtpRepository::new(fred_cache, otp_ttl));
+                let tx_manager = Arc::new(PostgresTransactionManager::new(pg));
+
+                let builder = AccountServiceBuilder::new(
+                    account_repo,
+                    outbox_repo,
+                    idempotency_repo,
+                    global_registry,
+                    otp_repo,
+                    tx_manager,
+                    cluster_ctx,
+                );
+
+                let kernel_ctx = builder.build_context();
+                builder.register_handlers(&mut command_bus);
+                let shared_bus = Arc::new(command_bus);
 
                 let svc = Server::builder()
                     .add_service(AccountRegistrationServiceServer::with_interceptor(
-                        AccountRegistrationService::new(bus.clone(), app_ctx.clone()),
+                        AccountRegistrationService::new(shared_bus.clone(), kernel_ctx.clone()),
                         registration_interceptor,
                     ))
                     .add_service(AccountAccessServiceServer::with_interceptor(
-                        AccountAccessService::new(bus.clone(), app_ctx.clone()),
+                        AccountAccessService::new(shared_bus.clone(), kernel_ctx.clone()),
                         auth_interceptor.clone(),
                     ))
                     .add_service(AccountModerationServiceServer::with_interceptor(
-                        AccountModerationService::new(bus.clone(), app_ctx.clone()),
+                        AccountModerationService::new(shared_bus.clone(), kernel_ctx.clone()),
                         auth_interceptor.clone(),
                     ))
                     .add_service(AccountPersonalServiceServer::with_interceptor(
-                        AccountPersonalService::new(bus.clone(), app_ctx.clone()),
+                        AccountPersonalService::new(shared_bus.clone(), kernel_ctx.clone()),
                         auth_interceptor.clone(),
                     ))
                     .add_service(AccountSettingsServiceServer::with_interceptor(
-                        AccountSettingsService::new(bus, app_ctx),
+                        AccountSettingsService::new(shared_bus, kernel_ctx),
                         auth_interceptor,
                     ));
 

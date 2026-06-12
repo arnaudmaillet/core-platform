@@ -25,7 +25,7 @@ impl CommandHandler for CreateProfileHandler {
         ctx: &ProfileCommandContext,
         cmd: CreateProfileCommand,
     ) -> Result<Self::Output> {
-        if cmd.region != ctx.local_region() {
+        if cmd.region != ctx.region() {
             return Err(Error::validation(
                 "region",
                 "Routing mismatch: Attempting to create a profile for another region on this cluster",

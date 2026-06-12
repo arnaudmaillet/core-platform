@@ -3,50 +3,39 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{Result, RetryConfig, TransactionManager};
-use std::marker::PhantomData;
+use shared_kernel::core::Result;
 
 use crate::application::commands::access_management::RegisterCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 use crate::domain::entities::Account;
 use crate::repositories::GlobalIdentityRegistration;
 use crate::types::AccountState;
 
-pub struct RegisterHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct RegisterHandler;
 
-impl<TM> RegisterHandler<TM> {
+impl RegisterHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for RegisterHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for RegisterHandler {
+    type Context = AccountCommandCtx;
     type Command = RegisterCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: RegisterCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_creatable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
         let account_id = cmd.target.id;
         let now = Utc::now();
+
         let registration = GlobalIdentityRegistration {
             account_id,
-            region: ctx.region(),
+            region: cmd.region,
             sub_id: cmd.sub_id.clone(),
             identifiers: cmd.identifier.clone(),
             state: AccountState::PENDING,
@@ -64,14 +53,12 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for RegisterHandle
         let mut account = builder.with_locale(cmd.locale).build()?;
         account.register(cmd.ip_addr)?;
 
-        if let Err(e) = ctx.save(&mut account, Some(cmd.command_id)).await {
+        if let Err(e) = ctx.save(&mut account, cmd.command_id).await {
             tracing::error!(
                 account_id = %account_id,
                 error = %e,
                 "Regional account persistence failed after global reservation"
             );
-            // On laisse la ligne globale en PENDING. Le Garbage Collector mondial s'occupera
-            // de purger la réservation s'il ne voit pas le compte sur le shard régional d'ici 15m.
             return Err(e);
         }
 
@@ -80,12 +67,5 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for RegisterHandle
             .await?;
 
         Ok(())
-    }
-
-    fn retry_config(&self) -> RetryConfig {
-        RetryConfig {
-            max_retries: 0,
-            initial_backoff_ms: 0,
-        }
     }
 }

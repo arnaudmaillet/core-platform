@@ -37,7 +37,7 @@ impl IdentifiableCommand for ChangeBirthDateCommand {
 }
 
 impl ChangeBirthDateCommand {
-    pub fn try_from_proto(req: ChangeBirthDateRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ChangeBirthDateRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -62,8 +62,6 @@ impl ChangeBirthDateCommand {
                 BirthDate::try_new(date)
                     .map_err(|e| Error::validation("new_birth_date", e.to_string()))
             })?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

@@ -17,20 +17,22 @@ impl CommandHandler for UnfollowHandler {
         ctx: &SocialCommandContext,
         cmd: UnfollowCommand,
     ) -> Result<Self::Output> {
-        ctx.ensure_executable(&cmd.region).await?;
+        ctx.verify_actors(cmd.follower_id, cmd.target.id)?;
 
         if cmd.follower_id == cmd.target.id {
             return Ok(());
         }
+
         let query_ctx = ctx.app().query(ctx.region());
         let is_following = query_ctx
             .is_already_following(cmd.follower_id, cmd.target.id)
             .await?;
+
         if !is_following {
             info!(
                 follower_id = %cmd.follower_id,
                 following_id = %cmd.target.id,
-                "user is not following this profile, skipping execute"
+                "User is not following this profile, skipping execute"
             );
             return Ok(());
         }

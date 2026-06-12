@@ -319,4 +319,8 @@ impl Event for AccountEvent {
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

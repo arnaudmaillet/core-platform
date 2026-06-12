@@ -19,11 +19,11 @@ use tonic::{Request, Response, Status};
 
 pub struct ProfileIdentityService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext>,
+    app_ctx: ProfileAppContext,
 }
 
 impl ProfileIdentityService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext>) -> Self {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
         Self { bus, app_ctx }
     }
 }
@@ -46,7 +46,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
         let (_, extensions, req_inner) = request.into_parts();
         let generated_profile_id = ProfileId::generate();
 
-        let ctx = self.build_creation_context(&extensions)?;
+        let ctx = self.build_creation_ctx(&extensions)?;
         let command = CreateProfileCommand::try_from_proto(req_inner, generated_profile_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -75,7 +75,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateDisplayNameCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -102,7 +102,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &ext)?;
+        let ctx = self.build_command_ctx(profile_id, &ext)?;
         let command = ChangeHandleCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -129,7 +129,7 @@ impl ProtoProfileIdentityService for ProfileIdentityService {
                 Status::invalid_argument(format!("Invalid profile_id format: {}", e))
             })?);
 
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdatePrivacyCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

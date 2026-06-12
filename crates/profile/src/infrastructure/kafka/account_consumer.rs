@@ -47,11 +47,11 @@ impl AccountConsumer {
             } => {
                 let region_vo = Region::try_from(region.as_str()).map_err(|e| e.to_string())?;
 
-                if region_vo != self.app_ctx.local_region() {
+                if region_vo != self.app_ctx.region() {
                     tracing::debug!(
                         account_id = %account_id,
                         event_region = ?region_vo,
-                        local_region = ?self.app_ctx.local_region(),
+                        local_region = ?self.app_ctx.region(),
                         "Account registered in another region, skipping locally"
                     );
                     return Ok(());

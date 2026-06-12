@@ -2,7 +2,7 @@
 
 use chrono::{Duration, Utc};
 use shared_kernel::core::{ErrorCode, Result};
-use shared_kernel::types::{ProfileId, Region, RegionCode};
+use shared_kernel::types::ProfileId;
 use social::entities::FollowRelation;
 use social::entities::FollowRelationBuilder;
 use social_test_utils::SocialTestFixture;
@@ -28,6 +28,8 @@ fn test_builder_should_instantiate_relation_correctly() -> Result<()> {
     assert_eq!(relation.created_at(), custom_time);
     Ok(())
 }
+
+// --- TESTS DES COMPTEURS (QUERY FLOWS) ---
 
 #[tokio::test]
 async fn test_get_counters_cache_hit_should_return_immediately() -> Result<()> {
@@ -75,47 +77,71 @@ async fn test_get_counters_cache_miss_should_fallback_and_warm_cache() -> Result
     Ok(())
 }
 
+// --- TESTS DE VÉRIFICATION & SÉCURITÉ DU CONTEXTE ---
+
 #[tokio::test]
-async fn test_ensure_executable_should_fail_on_region_mismatch() -> Result<()> {
+async fn test_verify_actors_should_fail_on_target_mismatch() -> Result<()> {
     // Given
     let fixture = SocialTestFixture::new();
-
-    let context_region_code = fixture.region().inner();
-    let wrong_region_code = match context_region_code {
-        RegionCode::EU => RegionCode::US,
-        _ => RegionCode::EU,
-    };
-
-    let wrong_region = Region::from_raw(wrong_region_code);
+    let follower_id = ProfileId::generate();
+    let malicious_target_id = ProfileId::generate();
 
     // When
-    let result = fixture.command_ctx().ensure_executable(&wrong_region).await;
+    let result = fixture
+        .command_ctx()
+        .verify_actors(follower_id, malicious_target_id);
 
     // Then
-    assert!(
-        result.is_err(),
-        "L'exécution aurait dû être bloquée pour cause de mismatch de région"
-    );
+    assert!(result.is_err(), "La validation aurait dû échouer");
     let error = result.unwrap_err();
-
     assert_eq!(error.code, ErrorCode::ValidationFailed);
+
     assert!(
-        error.message.contains("region"),
-        "Le message aurait dû cibler le champ 'region', reçu: '{}'",
+        error.message.contains("target"),
+        "Le message reçu était: '{}'",
         error.message
     );
+
     Ok(())
 }
+
+#[tokio::test]
+async fn test_save_relation_should_fail_on_identity_mismatch_violation() -> Result<()> {
+    // Given
+    let fixture = SocialTestFixture::new();
+    let follower_id = ProfileId::generate();
+    let untrusted_following_id = ProfileId::generate();
+
+    let mut relation = FollowRelation::builder(follower_id, untrusted_following_id).build()?;
+
+    // When
+    let result = fixture.command_ctx().save_relation(&mut relation).await;
+
+    // Then
+    assert!(result.is_err(), "Le contexte aurait dû refuser");
+    let error = result.unwrap_err();
+    assert_eq!(error.code, ErrorCode::ValidationFailed);
+
+    assert!(
+        error.message.contains("following_id"),
+        "Le message reçu était: '{}'",
+        error.message
+    );
+
+    Ok(())
+}
+
+// --- TESTS DE PERSISTANCE SYNCHRONE ---
 
 #[tokio::test]
 async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()> {
     // Given
     let fixture = SocialTestFixture::new();
 
-    let follower_id = fixture.target_profile_id();
-    let following_id = ProfileId::generate();
+    let follower_id = ProfileId::generate();
+    let target_id = fixture.target_profile_id(); // Doit être l'identité du contexte
 
-    let mut relation = FollowRelation::builder(follower_id, following_id).build()?;
+    let mut relation = FollowRelation::builder(follower_id, target_id).build()?;
 
     // When
     fixture.command_ctx().save_relation(&mut relation).await?;
@@ -124,7 +150,7 @@ async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()
     // 1. Vérification de l'écriture Graphe synchrone (ScyllaDB)
     fixture
         .relation_repo()
-        .assert_relation_exists(follower_id, following_id)
+        .assert_relation_exists(follower_id, target_id)
         .await;
 
     // 2. Vérification du Hot Path Compteurs & Marquage Dirty dans le cache Redis
@@ -134,7 +160,7 @@ async fn test_save_relation_should_execute_gpc_flow_synchronously() -> Result<()
         .await; // Il suit quelqu'un (+1 following)
     fixture
         .cache_counter_repo()
-        .assert_counters_values(following_id, 1, 0)
+        .assert_counters_values(target_id, 1, 0)
         .await; // L'autre gagne un follower (+1 follower)
     fixture
         .cache_counter_repo()
@@ -148,15 +174,15 @@ async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Re
     // Given
     let fixture = SocialTestFixture::new();
 
-    let follower_id = fixture.target_profile_id();
-    let following_id = ProfileId::generate();
+    let follower_id = ProfileId::generate();
+    let target_id = fixture.target_profile_id(); // Doit être l'identité du contexte
 
     // État initial (Given): La relation existe et les compteurs sont déjà chauds
-    fixture.given_existing_relation(follower_id, following_id);
+    fixture.given_existing_relation(follower_id, target_id);
     fixture.given_initial_counters(follower_id, 0, 1);
-    fixture.given_initial_counters(following_id, 1, 0);
+    fixture.given_initial_counters(target_id, 1, 0);
 
-    let mut relation = FollowRelation::builder(follower_id, following_id).build()?;
+    let mut relation = FollowRelation::builder(follower_id, target_id).build()?;
 
     // When
     fixture.command_ctx().delete_relation(&mut relation).await?;
@@ -165,7 +191,7 @@ async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Re
     // 1. Retrait immédiat du graphe (ScyllaDB)
     fixture
         .relation_repo()
-        .assert_relation_does_not_exist(follower_id, following_id)
+        .assert_relation_does_not_exist(follower_id, target_id)
         .await;
 
     // 2. Décrémentation atomique Redis & marquage Dirty
@@ -175,7 +201,7 @@ async fn test_delete_relation_should_execute_unfollow_flow_synchronously() -> Re
         .await;
     fixture
         .cache_counter_repo()
-        .assert_counters_values(following_id, 0, 0)
+        .assert_counters_values(target_id, 0, 0)
         .await;
 
     Ok(())

@@ -1,44 +1,49 @@
+// crates/account/src/application/use_cases/lifecycle/suspend/suspend_use_case_test.rs
+
 use account::commands::lifecycle::SuspendCommand;
-use account::context::AccountCommandContext;
+use account::context::AccountCommandCtx;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account_test_utils::asserts::AccountRepositoryAsserts;
+
 use account_test_utils::AccountTestFixture;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Result, Versioned};
+use shared_kernel::idempotency::IdempotencyRepository;
+use shared_kernel::messaging::EventEmitter;
 use shared_kernel::types::AuditReason;
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_suspend_account_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // 1. Arrange
+    // 1. On prépare un compte initial actif
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
+    let reason = AuditReason::try_new("Under investigation for fraud")?;
     let cmd = SuspendCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
-        reason: AuditReason::try_new("Under investigation for fraud")?,
+        region: f.region(),
+        reason: reason.clone(),
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::SUSPENDED);
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // Assert
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::SUSPENDED);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
     f.assert_outbox(1, Some(AccountEvent::SUSPENDED));
 
@@ -47,11 +52,12 @@ region: f.region(),
 
 #[tokio::test]
 async fn test_suspend_technical_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
 
-    // Arrange : Commande déjà enregistrée
-    f.idempotency_repo().seed(cmd_id);
+    // On simule une commande déjà enregistrée dans le premier rideau d'idempotence technique
+    f.idempotency_repo().save(None, &cmd_id).await?;
 
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
@@ -60,43 +66,47 @@ async fn test_suspend_technical_idempotency() -> Result<()> {
     let cmd = SuspendCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         reason: AuditReason::try_new("Duplicate call")?,
     };
 
-    // 2. Act
+    // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
-    // 3. Assert
+    // Assert
     assert!(
         result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
+        "L'idempotence technique doit court-circuiter de façon transparente (Ok)"
     );
 
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::UNVERIFIED);
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
+    // L'agrégat n'a subi aucun changement d'état ou de version
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::UNVERIFIED);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Pas de duplication ou d'émission d'événements dans l'outbox locale
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_suspend_business_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // Arrange : Compte déjà suspendu
+    // Idempotence métier : Le compte est déjà suspendu au niveau du domaine avant l'envoi du message
     let mut account = f.builder()?.build()?;
     account.suspend(AuditReason::try_new("Original reason")?)?;
+    account.pull_events();
 
     let version_snapshot = account.version();
     f.account_repo().insert(account);
@@ -104,26 +114,32 @@ async fn test_suspend_business_idempotency() -> Result<()> {
     let cmd = SuspendCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.region(),
         reason: AuditReason::try_new("Second call")?,
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, SuspendCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, SuspendCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::SUSPENDED);
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
+    // Assert
+    // L'exécution réussit mais ne produit aucune mutation (No-Op transactionnel)
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::SUSPENDED);
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger"
+            );
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Aucun événement produit puisque l'état est resté identique
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }

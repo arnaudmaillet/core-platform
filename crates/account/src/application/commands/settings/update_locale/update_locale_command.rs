@@ -36,7 +36,7 @@ impl IdentifiableCommand for UpdateLocaleCommand {
 }
 
 impl UpdateLocaleCommand {
-    pub fn try_from_proto(req: UpdateLocaleRequest) -> Result<Self> {
+    pub fn try_from_proto(req: UpdateLocaleRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -51,8 +51,6 @@ impl UpdateLocaleCommand {
 
         let new_locale = Locale::try_new(&req.locale)
             .map_err(|e| Error::validation("new_locale", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

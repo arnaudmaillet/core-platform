@@ -49,7 +49,6 @@ impl CommandBus {
         };
 
         let arc_handler: Arc<dyn AnyCommandHandler> = Arc::new(wrapper);
-
         self.handlers.insert(TypeId::of::<TCommand>(), arc_handler);
     }
 
@@ -68,7 +67,6 @@ impl CommandBus {
         let cache_key = cmd.resolve_cache_key();
         let type_id = TypeId::of::<TCommand>();
 
-        // 1. Coupe-circuit Idempotence
         if self.idempotency.exists(None, &cmd_id).await? {
             tracing::info!(
                 command_id = %cmd_id,
@@ -78,7 +76,6 @@ impl CommandBus {
             return Ok(TOutput::default());
         }
 
-        // 2. Résolution du Handler
         let handler = self.handlers.get(&type_id).ok_or_else(|| {
             Error::internal(format!(
                 "No handler registered for {}",
@@ -86,28 +83,21 @@ impl CommandBus {
             ))
         })?;
 
-        // 💡 Utilisation de Arc pour l'effacement de type compatible dyn
         let ctx_arc = Arc::new(ctx);
         let cmd_arc = Arc::new(cmd);
 
-        // 3. Exécution
         let result = handler.execute_any(ctx_arc, cmd_arc).await?;
-
-        // 4. Enregistrement Idempotence
         self.idempotency.save(None, &cmd_id).await?;
 
-        // 5. Invalidation Cache
         if let Some(key) = cache_key {
             let _ = self.cache.delete(&key).await;
             tracing::info!(key = %key, "CommandBus: Cache invalidated");
         }
 
-        // 6. Downcast de l'output depuis l'Arc
         let output = result
             .downcast::<TOutput>()
             .map_err(|_| Error::internal("CommandBus: Downcast output failed"))?;
 
-        // On extrait la valeur de l'Arc en la clonant (TOutput implémente Clone)
         Ok((*output).clone())
     }
 }
@@ -134,7 +124,6 @@ where
     ) -> Result<Arc<dyn Any + Send + Sync>> {
         use tracing::{Instrument, info_span};
 
-        // Downcast sécurisé depuis l'Arc
         let concrete_cmd = cmd
             .downcast::<TCommand>()
             .map_err(|_| Error::internal("AnyCommandHandler: Invalid command type"))?;
@@ -144,7 +133,6 @@ where
             .map_err(|_| Error::internal("AnyCommandHandler: Invalid context type"))?;
 
         let target = concrete_cmd.target();
-
         let routing_log = concrete_cmd
             .routing()
             .to_key_component()
@@ -179,7 +167,6 @@ where
         };
 
         let output = result_fut.instrument(span).await?;
-
         Ok(Arc::new(output))
     }
 }

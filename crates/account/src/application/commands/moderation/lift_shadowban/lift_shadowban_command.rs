@@ -35,7 +35,7 @@ impl IdentifiableCommand for LiftShadowbanCommand {
 }
 
 impl LiftShadowbanCommand {
-    pub fn try_from_proto(req: LiftShadowbanRequest) -> Result<Self> {
+    pub fn try_from_proto(req: LiftShadowbanRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -50,8 +50,6 @@ impl LiftShadowbanCommand {
 
         let reason = AuditReason::try_from(req.reason)
             .map_err(|e| Error::validation("reason", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

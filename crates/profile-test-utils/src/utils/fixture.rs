@@ -16,7 +16,6 @@ pub struct ProfileTestFixture {
     app_ctx: ProfileAppContext,
     account_id: AccountId,
     profile_id: ProfileId,
-    query_ctx: ProfileQueryContext,
     profile_repo: Arc<ProfileRepositoryStub>,
     routing_repo: Arc<ProfileRoutingRepositoryStub>,
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
@@ -37,20 +36,18 @@ impl ProfileTestFixture {
             idempotency_repo.clone(),
             region,
         );
-        
+
         let app_ctx = builder.build_context();
         let bus = builder.build_command_bus();
 
         let account_id = AccountId::generate();
         let profile_id = ProfileId::generate();
-        let query_ctx = app_ctx.query();
 
         Self {
             bus,
             app_ctx,
             account_id,
             profile_id,
-            query_ctx,
             profile_repo,
             routing_repo,
             idempotency_repo,
@@ -80,7 +77,7 @@ impl ProfileTestFixture {
         self.bus.clone()
     }
     pub fn region(&self) -> Region {
-        self.app_ctx.local_region()
+        self.app_ctx.region()
     }
     pub fn account_id(&self) -> AccountId {
         self.account_id

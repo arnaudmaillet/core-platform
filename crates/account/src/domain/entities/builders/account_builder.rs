@@ -38,11 +38,6 @@ impl AccountBuilder {
         }
     }
 
-    pub fn with_account_id(mut self, account_id: AccountId) -> Self {
-        self.identity = self.identity.with_account_id(account_id);
-        self
-    }
-
     pub fn with_sub_id(mut self, sub_id: SubId) -> Self {
         self.identity = self.identity.with_sub_id(sub_id);
         self
