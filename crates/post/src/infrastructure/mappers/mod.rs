@@ -1,5 +1,5 @@
-mod cql_media_asset;
-mod cql_post;
+mod media_assets;
+mod post;
 
-pub use cql_media_asset::CqlMediaAsset;
-pub use cql_post::CqlPostRow;
+pub use media_assets::CqlMediaAssetRow;
+pub use post::CqlPostRow;

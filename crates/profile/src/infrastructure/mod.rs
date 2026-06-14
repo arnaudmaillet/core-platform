@@ -1,3 +1,3 @@
 pub mod kafka;
-mod postgres;
-pub use postgres::repositories;
+mod scylla;
+pub use scylla::stores;

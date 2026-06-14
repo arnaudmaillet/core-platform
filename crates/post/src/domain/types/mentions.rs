@@ -42,6 +42,10 @@ impl Mentions {
     pub fn contains(&self, profile_id: &ProfileId) -> bool {
         self.0.contains(profile_id)
     }
+
+    pub fn iter(&self) -> std::collections::btree_set::Iter<'_, ProfileId> {
+        self.0.iter()
+    }
 }
 
 impl ValueObject for Mentions {
@@ -82,5 +86,14 @@ impl From<Mentions> for Vec<String> {
 impl From<Mentions> for BTreeSet<ProfileId> {
     fn from(mentions: Mentions) -> Self {
         mentions.0
+    }
+}
+
+impl<'a> IntoIterator for &'a Mentions {
+    type Item = &'a ProfileId;
+    type IntoIter = std::collections::btree_set::Iter<'a, ProfileId>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }

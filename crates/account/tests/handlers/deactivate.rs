@@ -1,20 +1,25 @@
+// crates/account/src/application/use_cases/lifecycle/deactivate/deactivate_use_case_test.rs
+
 use account::commands::lifecycle::DeactivateCommand;
-use account::context::AccountCommandContext;
+use account::context::AccountCommandCtx;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account_test_utils::asserts::AccountRepositoryAsserts;
+
 use account_test_utils::AccountTestFixture;
 use shared_kernel::{
     command::CommandTarget,
     core::{ErrorCode, Result, Versioned},
+    idempotency::IdempotencyRepository,
 };
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_deactivate_account_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // 1. Arrange : Compte initial actif
+    // 1. On prépare un compte initial actif
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
     f.account_repo().insert(account);
@@ -22,24 +27,22 @@ async fn test_deactivate_account_success() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // Assert
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
     f.assert_outbox(1, Some(AccountEvent::DEACTIVATED));
 
@@ -48,11 +51,12 @@ async fn test_deactivate_account_success() -> Result<()> {
 
 #[tokio::test]
 async fn test_deactivate_technical_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
 
-    // Arrange : Simulation d'une commande de désactivation déjà enregistrée
-    f.idempotency_repo().seed(cmd_id);
+    // On simule une commande déjà enregistrée dans le premier rideau d'idempotence
+    f.idempotency_repo().save(None, &cmd_id).await?;
 
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
@@ -61,43 +65,45 @@ async fn test_deactivate_technical_idempotency() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
-    // 2. Act
+    // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
-    // 3. Assert
+    // Assert
     assert!(
         result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
+        "L'idempotence technique doit court-circuiter de façon transparente (Ok)"
     );
 
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::UNVERIFIED);
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
+    // L'agrégat en base n'a pas subi de double mutation
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::UNVERIFIED);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Pas de duplication d'événements dans l'outbox locale
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_deactivate_business_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // Arrange : Compte DÉJÀ désactivé
-    let mut account = f.builder()?.build()?;
-    account.deactivate(None)?;
+    // Compte déjà désactivé au niveau du domaine (Idempotence métier)
+    let account = f.builder()?.with_state(AccountState::DEACTIVATED).build()?;
 
     let version_snapshot = account.version();
     f.account_repo().insert(account);
@@ -105,48 +111,48 @@ async fn test_deactivate_business_idempotency() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
+    // Assert
+    // Pas de modification d'état, pas d'incrément de version (No-Op transactionnel)
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::DEACTIVATED);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Aucun événement produit puisque l'état est inchangé
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_deactivate_not_found() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), 0),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, DeactivateCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, DeactivateCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -155,9 +161,12 @@ async fn test_deactivate_not_found() -> Result<()> {
             assert_eq!(e.code, ErrorCode::NotFound);
             assert!(e.message.contains("Account"));
         }
-        Ok(_) => panic!("Should have failed: Account does not exist"),
+        Ok(_) => panic!("Le cas d'usage aurait dû échouer : le compte n'existe pas"),
     }
-    f.assert_outbox(0, None);
+
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }

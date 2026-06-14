@@ -1,3 +1,2 @@
-pub mod redis;
-pub mod scylla;
+pub mod stores;
 pub mod workers;

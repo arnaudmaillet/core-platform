@@ -2,4 +2,4 @@ mod transaction;
 mod transaction_manager;
 
 pub use transaction::Transaction;
-pub use transaction_manager::TransactionManager;
+pub use transaction_manager::{TransactionManager, TransactionManagerExt};

@@ -6,44 +6,37 @@ use h3o::Resolution;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::Region;
 use std::sync::Arc;
-use tokio::sync::{Semaphore, mpsc};
+use tokio::sync::Semaphore;
 
-use crate::context::GeoDiscoveryAppContext;
-use crate::handlers::HydrateTileCacheCommand;
-use crate::repositories::MapPersistenceRepository;
+use crate::context::GeoDiscoveryKernelCtx;
+use crate::repositories::MapAnnotationArchiveRepository;
 use crate::types::{BucketHour, TileH3, TilePostMetadata, TileResolution};
 use crate::types::{MapViewport, PopularityScore, ScoredPostTile};
+use crate::use_cases::HydrateTileCacheCommand;
 use shared_proto::geo_discovery::v1::{LatLng, MapPostPin};
 
 const MAX_CONCURRENT_TILE_READS: usize = 16;
 
-pub struct GeoDiscoveryQueryContext {
-    app_ctx: GeoDiscoveryAppContext,
-    region: Region,
-    hydration_sender: mpsc::Sender<HydrateTileCacheCommand>,
+#[derive(Clone)]
+pub struct GeoDiscoveryQueryCtx {
+    kernel: GeoDiscoveryKernelCtx,
+    region_query: Region,
 }
 
-impl Clone for GeoDiscoveryQueryContext {
-    fn clone(&self) -> Self {
+impl GeoDiscoveryQueryCtx {
+    pub fn new(kernel: GeoDiscoveryKernelCtx, region_query: Region) -> Self {
         Self {
-            app_ctx: self.app_ctx.clone(),
-            region: self.region,
-            hydration_sender: self.hydration_sender.clone(),
+            kernel,
+            region_query,
         }
     }
-}
 
-impl GeoDiscoveryQueryContext {
-    pub fn new(
-        app_ctx: GeoDiscoveryAppContext,
-        region: Region,
-        hydration_sender: mpsc::Sender<HydrateTileCacheCommand>,
-    ) -> Self {
-        Self {
-            app_ctx,
-            region,
-            hydration_sender,
-        }
+    pub fn region(&self) -> Region {
+        self.region_query
+    }
+
+    pub fn app(&self) -> &GeoDiscoveryKernelCtx {
+        &self.kernel
     }
 
     pub async fn get_map_pins(
@@ -60,8 +53,9 @@ impl GeoDiscoveryQueryContext {
             return Ok(Vec::new());
         }
 
-        let cache_repo = self.app_ctx.cache_repo();
-        let persistence_repo = self.app_ctx.persistence_repo();
+        let cache_repo = self.kernel.cache_repo();
+        let persistence_repo = self.kernel.storage_repo();
+        let hydration_sender = self.kernel.hydration_sender();
 
         let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_TILE_READS));
         let mut workers = FuturesUnordered::new();
@@ -69,7 +63,7 @@ impl GeoDiscoveryQueryContext {
         for tile in visible_tiles {
             let repo = cache_repo.clone();
             let p_repo = persistence_repo.clone();
-            let h_sender = self.hydration_sender.clone();
+            let h_sender = hydration_sender.clone();
             let t = tile.clone();
             let res_kv = resolution;
             let sem_permit = semaphore.clone();
@@ -81,14 +75,13 @@ impl GeoDiscoveryQueryContext {
 
                 let res: Result<(TileH3, Vec<ScoredPostTile>)> =
                     match repo.get_top_posts(res_kv, &t, limit_per_tile).await {
-                        // Cache Hit
                         Ok(scored_posts) if !scored_posts.is_empty() => Ok((t, scored_posts)),
-                        // Cache Miss
                         _ => {
                             let fallback_data: Vec<TilePostMetadata> =
                                 Self::execute_pure_scylla_read(&p_repo, res_kv, &t, limit_per_tile)
                                     .await?;
 
+                            // Utilisation du sender extrait du kernel
                             let _ =
                                 h_sender.try_send(HydrateTileCacheCommand::new(res_kv, t.clone()));
 
@@ -129,7 +122,7 @@ impl GeoDiscoveryQueryContext {
     }
 
     async fn execute_pure_scylla_read(
-        persistence_repo: &Arc<dyn MapPersistenceRepository>,
+        persistence_repo: &Arc<dyn MapAnnotationArchiveRepository>,
         resolution: TileResolution,
         tile_id: &TileH3,
         limit: usize,

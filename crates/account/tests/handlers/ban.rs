@@ -1,44 +1,51 @@
+// crates/account/src/application/use_cases/moderation/ban/ban_use_case_test.rs
+
 use account::commands::moderation::BanCommand;
-use account::context::AccountCommandContext;
+use account::context::AccountCommandCtx;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account_test_utils::asserts::AccountRepositoryAsserts;
+
 use account_test_utils::AccountTestFixture;
-use shared_kernel::command::CommandTarget;
-use shared_kernel::core::{Error, ErrorCode, Result, Versioned};
-use shared_kernel::types::AuditReason;
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
+use shared_kernel::{
+    command::CommandTarget,
+    core::{Error, ErrorCode, Result, Versioned},
+    idempotency::IdempotencyRepository,
+    messaging::EventEmitter,
+    types::AuditReason,
+};
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_ban_account_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // 1. Arrange : Compte actif
+    // 1. On prépare un compte actif
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
+    let reason = AuditReason::try_new("TOS Violation")?;
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
-        reason: AuditReason::try_new("TOS Violation")?,
+        region: f.server_region(),
+        reason: reason.clone(),
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, BanCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::BANNED);
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // Assert
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::BANNED);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
     f.assert_outbox(1, Some(AccountEvent::BANNED));
 
@@ -47,10 +54,12 @@ async fn test_ban_account_success() -> Result<()> {
 
 #[tokio::test]
 async fn test_ban_technical_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
 
-    f.idempotency_repo().seed(cmd_id);
+    // On simule une commande déjà interceptée par la barrière d'idempotence technique
+    f.idempotency_repo().save(None, &cmd_id).await?;
 
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
@@ -59,36 +68,39 @@ async fn test_ban_technical_idempotency() -> Result<()> {
     let cmd = BanCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Duplicate Ban")?,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, BanCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
     assert!(
         result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
+        "L'idempotence technique doit court-circuiter de façon transparente (Ok)"
     );
-    f.assert_outbox(0, None);
+
+    // L'outbox locale reste vide
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_ban_business_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // Arrange : Compte déjà Banni
+    // Compte déjà Banni en amont
     let mut account = f.builder()?.build()?;
     account.ban(AuditReason::try_new("First reason")?)?;
+    account.pull_events(); // On vide l'outbox du setup
 
     let version_snapshot = account.version();
     f.account_repo().insert(account);
@@ -96,135 +108,142 @@ async fn test_ban_business_idempotency() -> Result<()> {
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Second attempt")?,
     };
 
     // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, BanCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
-    f.assert_account(|acc| {
-        assert_eq!(*acc.identity().state(), AccountState::BANNED);
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
+    // Pas de modification d'état, pas d'incrément de version
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::BANNED);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // L'invariant métier bloque l'émission de nouveaux événements
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_worst_case_account_not_found() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), 0),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Violating TOS")?,
     };
 
-    // 2. Act
+    // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, BanCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
-    // 3. Assert
+    // Assert
     match result {
         Err(e) => {
             assert_eq!(e.code, ErrorCode::NotFound);
             assert!(e.message.contains("Account"));
         }
-        Ok(_) => panic!("Should have failed: Account does not exist"),
+        Ok(_) => panic!("Le cas d'usage aurait dû échouer : le compte n'existe pas"),
     }
 
-    f.assert_outbox(0, None);
+    // Aucun événement produit
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_concurrency_retry_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
-    // On simule UN conflit (grâce au .take() dans le stub, seul le 1er appel échouera)
-    f.account_repo()
-        .set_error_once(Error::concurrency_conflict("Race condition"));
+    // On simule une erreur de concurrence transitoire (OCC conflict) qui disparaît au retry
+    f.account_repo().set_error_once(Error::concurrency_conflict(
+        "Race condition / Concurrency conflict",
+    ));
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("System ban")?,
     };
 
-    // ACT : Le bus doit absorber l'erreur et réussir au 2ème essai
+    // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, BanCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
-    // ASSERT
-    assert!(result.is_ok(), "Le bus aurait dû réussir après un retry");
-    f.assert_account(|acc| {
-        assert!(acc.identity().is_banned());
-    })
-    .await?;
+    // Assert
+    assert!(
+        result.is_ok(),
+        "Le bus aurait dû absorber le conflit initial et réussir après retry"
+    );
+
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(*acc.identity().state(), AccountState::BANNED);
+        })
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_worst_case_atomic_outbox_failure() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
     let account = f.builder()?.build()?;
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
-    // On simule une erreur lors de l'écriture de l'outbox (transaction fail)
+    // On simule une erreur bloquante lors du commit transactionnel de l'outbox (ex: partition pleine)
     f.outbox_repo().set_error(Error::internal("Disk full"));
 
     let cmd = BanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("System ban")?,
     };
 
+    // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, BanCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<AccountCommandCtx, BanCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
-    // La transaction globale échoue si l'outbox échoue
+    // Assert
     match result {
         Err(e) => {
             assert_eq!(e.code, ErrorCode::InternalError);
         }
-        Ok(_) => panic!("Should have failed with internal error"),
+        Ok(_) => panic!("La transaction globale aurait dû Rollback suite au crash Outbox"),
     }
 
-    // Vérification cruciale : l'état en base n'a pas dû changer (rollback simulé par le stub)
-    // Note: Le stub doit être configuré pour ne pas persister si check_error fail
+    // Le stub imite le comportement transactionnel : la modification sur l'agrégat n'est pas persistée
+    // car check_error a intercepté l'échec d'infrastructure avant le commit final.
     Ok(())
 }

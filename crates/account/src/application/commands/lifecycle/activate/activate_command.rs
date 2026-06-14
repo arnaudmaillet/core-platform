@@ -33,7 +33,7 @@ impl IdentifiableCommand for ActivateCommand {
 }
 
 impl ActivateCommand {
-    pub fn try_from_proto(req: ActivateRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ActivateRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -45,8 +45,6 @@ impl ActivateCommand {
             id: AccountId::try_from(proto_target.account_id)?,
             expected_version: Some(proto_target.expected_version),
         };
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

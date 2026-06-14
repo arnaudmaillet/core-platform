@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub struct SuspendCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
-pub region: Region,
+    pub region: Region,
     pub reason: AuditReason,
 }
 
@@ -28,13 +28,13 @@ impl IdentifiableCommand for SuspendCommand {
         &self.target
     }
 
-   fn routing(&self) -> Self::Routing {
+    fn routing(&self) -> Self::Routing {
         self.region
     }
 }
 
 impl SuspendCommand {
-    pub fn try_from_proto(req: SuspendRequest) -> Result<Self> {
+    pub fn try_from_proto(req: SuspendRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -45,9 +45,7 @@ impl SuspendCommand {
         let reason = AuditReason::try_from(req.reason)
             .map_err(|e| Error::validation("account_id", e.to_string()))?;
 
-        let region = Region::try_new(proto_target.region)?;
-
-let target = CommandTarget {
+        let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
             expected_version: Some(proto_target.expected_version),
         };

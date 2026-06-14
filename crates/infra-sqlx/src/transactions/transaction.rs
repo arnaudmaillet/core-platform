@@ -2,9 +2,9 @@
 
 use shared_kernel::core::{Error, Result, Transaction};
 use sqlx::{PgConnection, PgPool, Postgres, Transaction as PostgresTx};
+use std::future::Future;
 use std::pin::Pin;
 
-/// 1. La Structure (Le Conteneur)
 pub struct PostgresTransaction {
     inner: Option<PostgresTx<'static, Postgres>>,
 }
@@ -29,7 +29,6 @@ impl Transaction for PostgresTransaction {
 
     fn commit(&mut self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         let tx = self.inner.take();
-
         Box::pin(async move {
             if let Some(t) = tx {
                 t.commit()
@@ -42,7 +41,6 @@ impl Transaction for PostgresTransaction {
 
     fn rollback(&mut self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         let tx = self.inner.take();
-
         Box::pin(async move {
             if let Some(t) = tx {
                 t.rollback()
@@ -54,7 +52,6 @@ impl Transaction for PostgresTransaction {
     }
 }
 
-// --- Le Helper pour le downcast (reste tel quel) ---
 pub trait TransactionExt {
     fn downcast_mut_sqlx(&mut self) -> Result<&mut PostgresTx<'static, Postgres>>;
 }
@@ -68,7 +65,6 @@ impl TransactionExt for dyn Transaction + '_ {
     }
 }
 
-// --- Le Trait d'extension pour le Pool ---
 pub trait TransactionExecuteExt {
     fn execute_on<'a, F, T>(
         &self,

@@ -14,7 +14,6 @@ service SocialService {
 
 message CommandTarget {
   string profile_id = 1;
-  string region = 2;
   uint64 expected_version = 3;
 }
 

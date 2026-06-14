@@ -1,7 +1,7 @@
-mod app;
+mod kernel;
 mod command;
 mod query;
 
-pub use app::SocialAppContext;
-pub use command::SocialCommandContext;
-pub use query::SocialQueryContext;
+pub use kernel::SocialKernelCtx;
+pub use command::SocialCommandCtx;
+pub use query::SocialQueryCtx;

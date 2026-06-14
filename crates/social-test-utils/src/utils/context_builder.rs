@@ -5,9 +5,13 @@ use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::KeycloakTestContext;
 use infra_fred::RedisIdempotencyRepository;
 use infra_test::TestContextBuilder;
+use shared_kernel::command::CommandBus;
 use shared_proto::social::v1::social_service_server::SocialServiceServer;
 use social::SocialServiceBuilder;
 use social::services::SocialService;
+use social::stores::{
+    RedisProfileCountersStore, ScyllaFollowRelationStore, ScyllaProfileCountersStore,
+};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tonic::transport::Server;
@@ -50,10 +54,8 @@ impl SocialTestContextBuilder {
     pub async fn build_e2e(self) -> SocialTestContext {
         tracing::info!("Building Social test infrastructure...");
         let kernel_infra = self.kernel_builder.build().await;
-
-        // Extraction des ressources pour le serveur
         let scylla_session = kernel_infra.scylla().session();
-        let redis_repo = kernel_infra.redis().repository();
+        let redis_repo = kernel_infra.redis().cache();
         let redis_pool = redis_repo.pool().clone();
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -64,7 +66,6 @@ impl SocialTestContextBuilder {
             let custom_validator = self.mock_validator.clone();
 
             tokio::spawn(async move {
-                // 💡 CHOIX DU VALIDATEUR : Utilisation du mock s'il est fourni, sinon fallback Docker
                 let validator = match custom_validator {
                     Some(mock) => mock,
                     None => {
@@ -84,16 +85,28 @@ impl SocialTestContextBuilder {
                     "social_e2e",
                     300,
                 ));
-                let builder = SocialServiceBuilder::new(
-                    scylla_session,
-                    redis_pool,
-                    redis_repo,
-                    idempotency_repo,
+
+                let follow_relation_repo = Arc::new(
+                    ScyllaFollowRelationStore::new(scylla_session.clone())
+                        .await
+                        .unwrap(),
+                );
+                let profile_counters_index =
+                    Arc::new(RedisProfileCountersStore::new(redis_pool.clone()));
+                let profile_counters_storage = Arc::new(
+                    ScyllaProfileCountersStore::new(scylla_session)
+                        .await
+                        .unwrap(),
                 );
 
-                let app_ctx = builder.build_context().await;
-                let bus = builder.build_command_bus();
-                let social_svc = SocialService::new(bus, app_ctx);
+                let service =
+                    SocialServiceBuilder::new(follow_relation_repo, profile_counters_index);
+
+                let app_ctx = service.build_context().await;
+                let mut command_bus = CommandBus::new(redis_repo, idempotency_repo);
+                service.register_handlers(&mut command_bus);
+
+                let social_svc = SocialService::new(command_bus, app_ctx, profile_counters_storage);
 
                 let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
                 let actual_addr = listener.local_addr().unwrap();

@@ -35,12 +35,10 @@ impl IdentifiableCommand for ChangeVisibilityCommand {
 }
 
 impl ChangeVisibilityCommand {
-    pub fn try_from_proto(req: ChangeVisibilityRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ChangeVisibilityRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing target"))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)

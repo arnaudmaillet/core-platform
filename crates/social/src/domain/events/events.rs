@@ -66,13 +66,16 @@ impl Event for SocialEvent {
 
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
-            Self::ProfileFollowed { occurred_at, .. } | Self::ProfileUnfollowed { occurred_at, .. } => {
-                *occurred_at
-            }
+            Self::ProfileFollowed { occurred_at, .. }
+            | Self::ProfileUnfollowed { occurred_at, .. } => *occurred_at,
         }
     }
 
     fn payload(&self) -> Value {
         json!(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

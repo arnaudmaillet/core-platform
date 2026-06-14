@@ -5,25 +5,25 @@ use shared_kernel::{
     types::{PostId, ProfileId, Region},
 };
 
-use crate::{context::PostAppContext, entities::Post};
+use crate::{context::PostKernelCtx, entities::Post};
 
 #[derive(Clone)]
-pub struct PostQueryContext {
-    app: PostAppContext,
-    region: Region,
+pub struct PostQueryCtx {
+    kernel: PostKernelCtx,
+    region_query: Region,
 }
 
-impl PostQueryContext {
-    pub fn new(app: PostAppContext, region: Region) -> Self {
-        Self { app, region }
+impl PostQueryCtx {
+    pub fn new(kernel: PostKernelCtx, region_query: Region) -> Self {
+        Self { kernel, region_query }
     }
 
     pub fn region(&self) -> Region {
-        self.region
+        self.region_query
     }
 
     pub async fn find_by_id(&self, post_id: &PostId) -> Result<Option<Post>> {
-        self.app.post_repo().find_by_id(self.region, post_id).await
+        self.kernel.post_repo().find_by_id(self.region_query, post_id).await
     }
 
     pub async fn find_by_author(
@@ -31,9 +31,9 @@ impl PostQueryContext {
         author_id: &ProfileId,
         query: PageQuery,
     ) -> Result<PagedResult<Post>> {
-        self.app
+        self.kernel
             .post_repo()
-            .find_by_author(self.region, author_id, query)
+            .find_by_author(self.region_query, author_id, query)
             .await
     }
 }

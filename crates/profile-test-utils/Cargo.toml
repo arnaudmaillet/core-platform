@@ -16,6 +16,7 @@ auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
 infra-sqlx = { workspace = true }
 infra-kafka = { workspace = true }
+infra-fred = { workspace = true }
 shared-proto = { workspace = true, features = ["profile"] }
 async-trait = { workspace = true }
 tonic = { workspace = true }

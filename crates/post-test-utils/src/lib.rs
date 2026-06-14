@@ -1,4 +1,5 @@
-pub mod repositories;
+pub mod assertions;
+pub mod stores;
 pub mod resolvers;
 mod utils;
 

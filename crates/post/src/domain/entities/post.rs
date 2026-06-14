@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
-    core::{Entity, Error, LifecycleTracker, ManagedEntity, Result},
+    core::{Entity, Error, LifecycleTracker, ManagedEntity, Result, Versioned},
     messaging::{Event, EventEmitter, OperationTracker},
     types::{MusicId, PostId, PostType, ProfileId},
 };
@@ -31,9 +31,24 @@ pub struct Post {
     music_id: Option<MusicId>,
     hashtags: Hashtags,
     mentions: Mentions,
-    edited_at: Option<DateTime<Utc>>,
     dynamic_metadata: DynamicMetadata,
+    created_at: DateTime<Utc>,
+    edited_at: Option<DateTime<Utc>>,
     lifecycle: LifecycleTracker,
+    version: u64,
+}
+
+impl Versioned for Post {
+    fn version(&self) -> u64 {
+        self.version
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.lifecycle.updated_at()
+    }
+    fn record_change(&mut self) {
+        self.version += 1;
+        self.lifecycle.record_change();
+    }
 }
 
 impl EventEmitter for Post {
@@ -87,7 +102,6 @@ impl Post {
         PostBuilder::new(post_id, author_id, post_type, visibility)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn restore(
         post_id: PostId,
         author_id: ProfileId,
@@ -101,8 +115,10 @@ impl Post {
         hashtags: Hashtags,
         mentions: Mentions,
         dynamic_metadata: DynamicMetadata,
+        created_at: DateTime<Utc>,
         edited_at: Option<DateTime<Utc>>,
         lifecycle: LifecycleTracker,
+        version: u64,
     ) -> Self {
         Self {
             post_id,
@@ -117,12 +133,27 @@ impl Post {
             hashtags,
             mentions,
             dynamic_metadata,
+            created_at,
             edited_at,
             lifecycle,
+            version,
         }
     }
 
-    // --- GETTERS ---
+    fn track_change<F, E>(&mut self, action: F, event_factory: E) -> Result<bool>
+    where
+        F: FnOnce(&mut Self) -> Result<bool>,
+        E: FnOnce(&Self) -> Box<dyn Event>,
+    {
+        let changed = OperationTracker::track_change(self, action, event_factory)?;
+
+        if changed {
+            self.record_change();
+        }
+
+        Ok(changed)
+    }
+
     pub fn post_id(&self) -> PostId {
         self.post_id
     }
@@ -156,10 +187,10 @@ impl Post {
     pub fn mentions(&self) -> &Mentions {
         &self.mentions
     }
-    pub fn edited_at(&self) -> Option<DateTime<Utc>> {
-        self.edited_at
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
     }
-    pub fn updated_at(&self) -> Option<DateTime<Utc>> {
+    pub fn edited_at(&self) -> Option<DateTime<Utc>> {
         self.edited_at
     }
     pub fn dynamic_metadata(&self) -> &DynamicMetadata {

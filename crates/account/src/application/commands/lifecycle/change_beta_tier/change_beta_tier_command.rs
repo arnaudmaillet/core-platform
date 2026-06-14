@@ -15,7 +15,7 @@ use crate::types::BetaTier;
 pub struct ChangeBetaTierCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<AccountId>,
-pub region: Region,
+    pub region: Region,
     pub new_tier: BetaTier,
 }
 
@@ -31,13 +31,13 @@ impl IdentifiableCommand for ChangeBetaTierCommand {
         &self.target
     }
 
-   fn routing(&self) -> Self::Routing {
+    fn routing(&self) -> Self::Routing {
         self.region
     }
 }
 
 impl ChangeBetaTierCommand {
-    pub fn try_from_proto(req: ChangeBetaTierRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ChangeBetaTierRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -48,9 +48,7 @@ impl ChangeBetaTierCommand {
         let new_tier = BetaTier::try_from(req.new_tier)
             .map_err(|e| Error::validation("new_tier", e.to_string()))?;
 
-        let region = Region::try_new(proto_target.region)?;
-
-let target = CommandTarget {
+        let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
             expected_version: Some(proto_target.expected_version),
         };

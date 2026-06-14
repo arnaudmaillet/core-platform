@@ -1,6 +1,10 @@
 // crates/profile/src/presentation/services/profile_metadata_service.rs
 
-use shared_kernel::core::TransactionManager;
+use crate::commands::{UpdateBioCommand, UpdateLocationCommand, UpdateSocialsCommand};
+use crate::context::ProfileKernelCtx;
+use crate::presentation::utils::shared::GrpcServiceUtils;
+use shared_kernel::command::CommandBus;
+use shared_kernel::core::Identifier;
 use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataService as ProtoProfileMetadataService;
 use shared_proto::profile::v1::{
@@ -10,25 +14,19 @@ use shared_proto::profile::v1::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
-// Kernel & Application imports
-use crate::commands::{UpdateBioCommand, UpdateLocationCommand, UpdateSocialsCommand};
-use crate::context::ProfileAppContext;
-use crate::presentation::utils::shared::GrpcServiceUtils;
-use shared_kernel::command::CommandBus;
-
-pub struct ProfileMetadataService<TM> {
+pub struct ProfileMetadataService {
     bus: Arc<CommandBus>,
-    app_ctx: Arc<ProfileAppContext<TM>>,
+    app_ctx: ProfileKernelCtx,
 }
 
-impl<TM> ProfileMetadataService<TM> {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: Arc<ProfileAppContext<TM>>) -> Self {
+impl ProfileMetadataService {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileKernelCtx) -> Self {
         Self { bus, app_ctx }
     }
 }
 
-impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileMetadataService<TM> {
-    fn app_ctx(&self) -> &ProfileAppContext<TM> {
+impl GrpcServiceUtils for ProfileMetadataService {
+    fn kernel(&self) -> &ProfileKernelCtx {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {
@@ -37,9 +35,7 @@ impl<TM: TransactionManager + Clone + 'static> GrpcServiceUtils<TM> for ProfileM
 }
 
 #[tonic::async_trait]
-impl<TM: TransactionManager + Clone + 'static> ProtoProfileMetadataService
-    for ProfileMetadataService<TM>
-{
+impl ProtoProfileMetadataService for ProfileMetadataService {
     async fn update_bio(
         &self,
         request: Request<UpdateBioRequest>,
@@ -49,11 +45,13 @@ impl<TM: TransactionManager + Clone + 'static> ProtoProfileMetadataService
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
-        let profile_id = target
-            .profile_id
-            .parse::<ProfileId>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+
+        let profile_id =
+            ProfileId::from_uuid(uuid::Uuid::parse_str(&target.profile_id).map_err(|e| {
+                Status::invalid_argument(format!("Invalid profile_id format: {}", e))
+            })?);
+
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateBioCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -74,11 +72,13 @@ impl<TM: TransactionManager + Clone + 'static> ProtoProfileMetadataService
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
-        let profile_id = target
-            .profile_id
-            .parse::<ProfileId>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+
+        let profile_id =
+            ProfileId::from_uuid(uuid::Uuid::parse_str(&target.profile_id).map_err(|e| {
+                Status::invalid_argument(format!("Invalid profile_id format: {}", e))
+            })?);
+
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateLocationCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -99,11 +99,13 @@ impl<TM: TransactionManager + Clone + 'static> ProtoProfileMetadataService
             .target
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("Missing target context"))?;
-        let profile_id = target
-            .profile_id
-            .parse::<ProfileId>()
-            .map_err(|e| Status::invalid_argument(format!("Invalid profile_id format: {}", e)))?;
-        let ctx = self.build_command_context(profile_id, &extensions)?;
+
+        let profile_id =
+            ProfileId::from_uuid(uuid::Uuid::parse_str(&target.profile_id).map_err(|e| {
+                Status::invalid_argument(format!("Invalid profile_id format: {}", e))
+            })?);
+
+        let ctx = self.build_command_ctx(profile_id, &extensions)?;
         let command = UpdateSocialsCommand::try_from_proto(req_inner)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

@@ -1,13 +1,13 @@
 // crates/post/src/application/utils.rs
 
-use crate::application::context::{PostAppContext, PostCommandContext, PostQueryContext};
+use crate::application::context::{PostCommandCtx, PostKernelCtx, PostQueryCtx};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};
 use tonic::{Response, Status};
 
 pub trait GrpcServiceUtils {
-    fn app_ctx(&self) -> &PostAppContext;
+    fn kernel_ctx(&self) -> &PostKernelCtx;
     fn bus(&self) -> &CommandBus;
 
     fn extract_region(&self, extensions: &tonic::Extensions) -> Result<Region, Status> {
@@ -17,37 +17,38 @@ pub trait GrpcServiceUtils {
             .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))
     }
 
-    fn build_command_context(
+    fn build_command_ctx(
         &self,
         author_id: ProfileId,
         extensions: &tonic::Extensions,
-    ) -> Result<PostCommandContext, Status> {
+    ) -> Result<PostCommandCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().command(author_id, region))
+        Ok(PostCommandCtx::new(
+            self.kernel_ctx().clone(),
+            author_id,
+            region,
+        ))
     }
 
-    fn build_query_context(
-        &self,
-        extensions: &tonic::Extensions,
-    ) -> Result<PostQueryContext, Status> {
+    fn build_query_ctx(&self, extensions: &tonic::Extensions) -> Result<PostQueryCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().query(region))
+        Ok(PostQueryCtx::new(self.kernel_ctx().clone(), region))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &PostCommandContext,
+        ctx: &PostCommandCtx,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
     where
         C: IdentifiableCommand + std::fmt::Debug + Send + Sync + 'static + Clone,
-        C::Id: std::fmt::Display,
-        Output: Send + Default + 'static,
+        C::Routing: shared_kernel::command::CacheKeyComponent,
+        Output: Send + Sync + Default + Clone + 'static,
         R: Send,
     {
         self.bus()
-            .execute::<PostCommandContext, C, Output>(ctx.clone(), cmd)
+            .execute::<PostCommandCtx, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(map_domain_err_to_status)?;
 

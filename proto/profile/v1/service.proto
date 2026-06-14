@@ -9,12 +9,7 @@ option go_package = "github.com/core-platform/proto/profile/v1";
 
 message ProfileTarget {
   string profile_id = 1;
-  string region = 2;
   uint64 expected_version = 3;
-}
-
-message QueryMetadata {
-  string region = 1;
 }
 
 
@@ -110,12 +105,10 @@ message UpdateSocialsRequest {
 }
 
 message GetProfileRequest {
-  QueryMetadata metadata = 1;
   string profile_id = 2;
 }
 
 message GetProfilesByAccountRequest {
-  QueryMetadata metadata = 1;
   string account_id = 2;
 }
 
@@ -128,7 +121,6 @@ message GetProfileResponse {
 }
 
 message ResolveSlugsRequest {
-  QueryMetadata metadata = 1;
   repeated string slugs = 2;
 }
 

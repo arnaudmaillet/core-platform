@@ -34,7 +34,7 @@ impl IdentifiableCommand for UpdatePreferencesCommand {
 }
 
 impl UpdatePreferencesCommand {
-    pub fn try_from_proto(req: UpdatePreferencesRequest) -> Result<Self> {
+    pub fn try_from_proto(req: UpdatePreferencesRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -71,8 +71,6 @@ impl UpdatePreferencesCommand {
                 a.high_contrast,
             )
         });
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

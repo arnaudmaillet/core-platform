@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use shared_kernel::{
     core::{Error, Result, Transaction, Versioned},
+    messaging::{Event, EventEmitter},
     types::{AccountId, Email, Phone, Region, SubId},
 };
 use std::collections::HashMap;
@@ -13,6 +14,7 @@ use account::repositories::AccountRepository;
 pub struct AccountRepositoryStub {
     accounts: Arc<Mutex<HashMap<AccountId, Account>>>,
     error_to_return: Arc<Mutex<Option<Error>>>,
+    captured_events: Mutex<HashMap<AccountId, Vec<Box<dyn Event>>>>,
 }
 
 impl AccountRepositoryStub {
@@ -45,6 +47,11 @@ impl AccountRepositoryStub {
             return Err(err);
         }
         Ok(())
+    }
+
+    pub async fn get_captured_events(&self, account_id: AccountId) -> Vec<Box<dyn Event>> {
+        let captured = self.captured_events.lock().unwrap();
+        captured.get(&account_id).cloned().unwrap_or_default()
     }
 }
 
@@ -148,13 +155,22 @@ impl AccountRepository for AccountRepositoryStub {
     ) -> Result<()> {
         self.check_error()?;
 
+        let events = account.pull_events();
+        if !events.is_empty() {
+            let mut captured = self.captured_events.lock().unwrap();
+            captured
+                .entry(account.account_id())
+                .or_default()
+                .extend(events);
+        }
+
         let mut map = self.accounts.lock().unwrap();
         let new_id = account.account_id();
         let new_version = account.version();
 
         let old_id_opt = map
             .iter()
-            .find(|(_, a)| {
+            .find(|(_id, a)| {
                 a.identity().account_id().uuid() == new_id.uuid()
                     && a.identity().account_id() != new_id
             })
@@ -168,7 +184,6 @@ impl AccountRepository for AccountRepositoryStub {
 
         match existing_opt {
             None => {
-                // --- MODE INSERT ---
                 if new_version > 1 && old_id_opt.is_none() {
                     return Err(Error::concurrency_conflict(format!(
                         "Cannot insert new account with version {}",

@@ -1,55 +1,41 @@
 // crates/profile/src/application/commands/metadata/update_bio/update_bio_handler.rs
 
-use std::marker::PhantomData;
-
-use crate::{commands::UpdateBioCommand, context::ProfileCommandContext};
 use async_trait::async_trait;
-use shared_kernel::{
-    command::CommandHandler,
-    core::{Result, TransactionManager},
-};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-pub struct UpdateBioHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+use crate::{commands::UpdateBioCommand, context::ProfileCommandCtx};
 
-impl<TM> UpdateBioHandler<TM> {
+pub struct UpdateBioHandler;
+
+impl UpdateBioHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateBioHandler<TM> {
-    type Context = ProfileCommandContext<TM>;
+impl CommandHandler for UpdateBioHandler {
+    type Context = ProfileCommandCtx;
     type Command = UpdateBioCommand;
     type Output = ();
 
-    async fn handle(
-        &self,
-        ctx: &ProfileCommandContext<TM>,
-        cmd: UpdateBioCommand,
-    ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
+    async fn handle(&self, ctx: &ProfileCommandCtx, cmd: UpdateBioCommand) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
-
         if profile.update_bio(cmd.new_bio)? {
-            ctx.save(&mut profile, Some(cmd.command_id)).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
+
+            info!(
+                profile_id = %profile.profile_id(),
+                "Biography updated successfully"
+            );
         } else {
             info!(
                 profile_id = %profile.profile_id(),
-                "no changes detected, skipping save"
+                "Biography is already identical, skipping save"
             );
         }
+
         Ok(())
     }
 }

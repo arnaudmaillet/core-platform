@@ -210,4 +210,8 @@ impl Event for ProfileEvent {
     fn payload(&self) -> Value {
         json!(self)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

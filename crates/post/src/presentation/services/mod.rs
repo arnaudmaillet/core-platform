@@ -1,3 +1,3 @@
-mod post_service;
+mod post;
 
-pub use post_service::PostService;
+pub use post::PostService;

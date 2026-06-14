@@ -1,49 +1,69 @@
 use profile::commands::ChangeHandleCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::entities::Profile;
 use profile::events::ProfileEvent;
 use profile::types::Handle;
 use profile_test_utils::ProfileTestFixture;
+use profile_test_utils::assertions::ProfileRepositoryAsserts;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ErrorCode, Result, Versioned};
 use shared_kernel::types::{AccountId, ProfileId};
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_change_handle_success() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
+    let old_handle = Handle::try_new("old.handle")?;
+
     let profile = f.builder("old.handle")?.build()?;
     let version_snapshot = profile.version();
+
     f.given_profile(profile).await;
+    f.given_slug_routing(f.profile_id(), &old_handle.to_sha256_hash(), f.region())
+        .await;
 
     let new_handle = Handle::try_new("new.handle")?;
 
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        region: f.region(),
         new_handle: new_handle.clone(),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, ChangeHandleCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
-    let _ = f
-        .assert_profile(|p| {
+    f.profile_repo()
+        .assert_profile_state(f.profile_id(), |p| {
             assert_eq!(p.handle(), &new_handle);
             assert_eq!(p.version(), version_snapshot + 1);
         })
         .await;
 
-    f.assert_outbox(1, Some(ProfileEvent::HANDLE_CHANGED));
+    f.profile_repo()
+        .assert_captured_event_for(f.profile_id(), |event| match event {
+            ProfileEvent::HandleChanged {
+                profile_id,
+                account_id,
+                old_handle: captured_old,
+                new_handle: actual_new_handle,
+                ..
+            } => {
+                assert_eq!(profile_id, &f.profile_id());
+                assert_eq!(account_id, &f.account_id());
+                assert_eq!(captured_old.as_str(), "old.handle");
+                assert_eq!(actual_new_handle.as_str(), "new.handle");
+            }
+            _ => panic!(
+                "Type d'événement incorrect. Attendu: HandleChanged, Reçu: {:?}",
+                event
+            ),
+        })
+        .await;
 
     Ok(())
 }
@@ -52,13 +72,13 @@ async fn test_change_handle_success() -> Result<()> {
 async fn test_change_handle_conflict_already_exists() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
+    let my_handle = Handle::try_new("my.handle")?;
 
-    // 1. On crée le profil cible (celui qu'on veut modifier)
     let profile = f.builder("my.handle")?.build()?;
     f.given_profile(profile).await;
+    f.given_slug_routing(f.profile_id(), &my_handle.to_sha256_hash(), f.region())
+        .await;
 
-    // 2. On crée un AUTRE profil qui possède déjà le handle "taken.handle"
-    // L'UUID v7 ne prend plus de région en paramètre
     let other_id = ProfileId::generate();
     let taken_handle = Handle::try_new("taken.handle")?;
 
@@ -66,35 +86,30 @@ async fn test_change_handle_conflict_already_exists() -> Result<()> {
         Profile::builder(AccountId::generate(), other_id, taken_handle.clone())?.build()?;
 
     f.given_profile(other_profile).await;
+    f.given_slug_routing(other_id, &taken_handle.to_sha256_hash(), f.region())
+        .await;
 
-    // 3. On essaie de donner le handle déjà pris à notre profil initial
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), 0),
-        region: f.region(),
         new_handle: taken_handle,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, ChangeHandleCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
     match result {
         Err(e) => {
-            assert_eq!(e.code, ErrorCode::AlreadyExists);
-            assert!(e.message.contains("Profile"));
-            assert!(e.message.contains("handle"));
+            assert_eq!(e.code, ErrorCode::ConcurrencyConflict);
         }
-        Ok(_) => panic!("Should have failed with AlreadyExists"),
+        Ok(_) => panic!("Should have failed with ConcurrencyConflict because of LWT collision"),
     }
 
-    f.assert_outbox(0, None);
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }
@@ -107,31 +122,30 @@ async fn test_change_handle_business_idempotency() -> Result<()> {
 
     let profile = f.builder("alice.handle")?.build()?;
     let version_snapshot = profile.version();
+
     f.given_profile(profile).await;
+    f.given_slug_routing(f.profile_id(), &handle.to_sha256_hash(), f.region())
+        .await;
 
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        region: f.region(),
         new_handle: handle,
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, ChangeHandleCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
-    let _ = f
-        .assert_profile(|p| {
+    f.profile_repo()
+        .assert_profile_state(f.profile_id(), |p| {
             assert_eq!(p.version(), version_snapshot);
         })
         .await;
 
-    f.assert_outbox(0, None);
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }
@@ -145,18 +159,14 @@ async fn test_change_handle_concurrency_conflict() -> Result<()> {
 
     let cmd = ChangeHandleCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), 99), // Mauvaise version pour déclencher l'OCC
-        region: f.region(),
+        target: CommandTarget::versioned(f.profile_id(), 99),
         new_handle: Handle::try_new("new.alice")?,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, ChangeHandleCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -164,6 +174,8 @@ async fn test_change_handle_concurrency_conflict() -> Result<()> {
         result,
         Err(e) if e.code == ErrorCode::ConcurrencyConflict
     ));
+
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }

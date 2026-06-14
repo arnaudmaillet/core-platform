@@ -1,21 +1,25 @@
+// crates/account/src/application/use_cases/settings/update_locale/update_locale_use_case_test.rs
 
 use account::commands::settings::UpdateLocaleCommand;
-use account::context::AccountCommandContext;
+use account::context::AccountCommandCtx;
 use account::events::AccountEvent;
 use account::types::{AccountState, Locale};
+use account_test_utils::asserts::AccountRepositoryAsserts;
+
 use account_test_utils::AccountTestFixture;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Result, Versioned};
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
+use shared_kernel::idempotency::IdempotencyRepository;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_update_locale_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let old_locale = Locale::from_raw("fr");
     let new_locale = Locale::from_raw("en");
 
-    // 1. Arrange : Compte actif avec une locale spécifique
+    // 1. On prépare un compte actif avec une locale spécifique
     let account = f
         .builder()?
         .with_state(AccountState::ACTIVE)
@@ -28,21 +32,22 @@ async fn test_update_locale_success() -> Result<()> {
     let cmd = UpdateLocaleCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.server_region(),
         new_locale: new_locale.clone(),
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandCtx, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(acc.identity().locale(), &new_locale);
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // Assert
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(acc.identity().locale(), &new_locale);
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
     f.assert_outbox(1, Some(AccountEvent::LOCALE_UPDATED));
 
@@ -51,12 +56,13 @@ region: f.region(),
 
 #[tokio::test]
 async fn test_update_locale_technical_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
     let requested_locale = Locale::from_raw("it");
 
-    // Arrange : Commande déjà vue par l'infra
-    f.idempotency_repo().seed(cmd_id);
+    // On simule une commande déjà enregistrée interceptée au premier rideau d'idempotence technique
+    f.idempotency_repo().save(None, &cmd_id).await?;
 
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
     let version_snapshot = account.version();
@@ -65,39 +71,45 @@ async fn test_update_locale_technical_idempotency() -> Result<()> {
     let cmd = UpdateLocaleCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.server_region(),
         new_locale: requested_locale.clone(),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandCtx, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
     assert!(
         result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
+        "L'idempotence technique doit court-circuiter de façon transparente (Ok)"
     );
 
-    // Vérification intégrité : pas de changement
-    f.assert_account(|acc| {
-        assert_ne!(acc.identity().locale(), &requested_locale);
-        assert_eq!(acc.version(), version_snapshot);
-    })
-    .await?;
+    // L'agrégat en base n'a subi aucun changement d'état ou de version
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_ne!(acc.identity().locale(), &requested_locale);
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Aucun événement dupliqué n'est poussé dans l'outbox locale
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_update_locale_business_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let current_locale = Locale::from_raw("de");
 
-    // 1. Arrange : Compte possédant déjà cette locale
+    // Idempotence métier : le compte possède déjà la locale demandée
     let account = f
         .builder()?
         .with_state(AccountState::ACTIVE)
@@ -110,26 +122,31 @@ async fn test_update_locale_business_idempotency() -> Result<()> {
     let cmd = UpdateLocaleCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.server_region(),
         new_locale: current_locale,
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandCtx, UpdateLocaleCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert_eq!(
-            acc.version(),
-            version_snapshot,
-            "La version ne doit pas bouger"
-        );
-    })
-    .await?;
+    // Assert
+    // L'exécution réussit mais ne produit aucune mutation (No-Op transactionnel)
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger si la locale était déjà identique"
+            );
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Aucun événement produit puisque l'état est resté identique
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }

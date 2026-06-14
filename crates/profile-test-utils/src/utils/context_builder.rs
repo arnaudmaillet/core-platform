@@ -1,13 +1,18 @@
 // crates/profile/src/test_utils/test_context_builder.rs
 
 use crate::ProfileTestContext;
-use auth::{TokenValidator, interceptors::AuthInterceptor}; // 💡 Import du trait générique TokenValidator
+use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::KeycloakTestContext;
 use infra_kafka::KafkaEventConsumer;
-use infra_test::TestContextBuilder;
+use infra_test::{
+    InfrastructureOrchestrator, ScyllaOrchestrator, ScyllaTableTarget, TestContextBuilder,
+};
 use profile::ProfileServiceBuilder;
 use profile::kafka::AccountConsumer;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use shared_kernel::command::CommandBus;
+use shared_kernel::environment::ClusterContext;
 use shared_kernel::messaging::{EventConsumer, EventEnvelope};
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
@@ -27,17 +32,19 @@ pub struct ProfileTestContextBuilder {
     service_mode: Option<ServiceMode>,
     has_kafka: bool,
     mock_validator: Option<Arc<dyn TokenValidator>>,
+    cluster_ctx: ClusterContext,
 }
 
 impl ProfileTestContextBuilder {
     pub fn new() -> Self {
         Self {
             kernel_builder: TestContextBuilder::new()
-                .with_postgres(vec!["crates/profile/migrations/postgres"])
+                .with_scylla(Vec::<String>::new())
                 .with_redis(),
             service_mode: None,
             has_kafka: false,
             mock_validator: None,
+            cluster_ctx: ClusterContext::default(),
         }
     }
 
@@ -53,36 +60,72 @@ impl ProfileTestContextBuilder {
         self
     }
 
-    /// 💡 NOUVELLE MÉTHODE : Permet d'injecter ton MockTokenValidator depuis e2e_it.rs
     pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
         self.mock_validator = Some(validator);
         self
     }
 
+    pub fn with_cluster_ctx(mut self, ctx: ClusterContext) -> Self {
+        self.cluster_ctx = ctx;
+        self
+    }
+
     pub async fn build_e2e(self) -> ProfileTestContext {
-        tracing::info!("Starting E2E infrastructure build...");
+        tracing::info!("Starting E2E infrastructure build (Containers startup)...");
 
         let kernel_infra = self.kernel_builder.build().await;
-        let pg_pool = kernel_infra.postgres().pool().clone();
-        let redis_repo = kernel_infra.redis().repository();
+        let scylla_session = kernel_infra.scylla().session().clone();
+        let redis_repo = kernel_infra.redis().cache();
         let kafka_brokers = self
             .has_kafka
             .then(|| kernel_infra.kafka().bootstrap_servers().to_string());
+
+        let mut infra_orchestrator = InfrastructureOrchestrator::new();
+
+        let mut base_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        if base_path.ends_with("profile-test-utils")
+            || base_path.ends_with("profile-command-server")
+        {
+            base_path.pop();
+            base_path.push("profile");
+        }
+        let migration_path = base_path.join("migrations/scylla");
+
+        let targets = vec![
+            ScyllaTableTarget::new("slugs", 3),
+            ScyllaTableTarget::new("profiles_by_account", 6),
+        ];
+
+        let scylla_orch = ScyllaOrchestrator::new(
+            scylla_session.clone(),
+            migration_path,
+            targets,
+            self.cluster_ctx.region().to_string(),
+        );
+        infra_orchestrator.add(Box::new(scylla_orch));
+
+        infra_orchestrator
+            .run_all()
+            .await
+            .expect("Database orchestrator failed to stabilize schema");
+
+        let target_keyspace = format!(
+            "{}_profile_storage",
+            self.cluster_ctx.region().to_string().to_lowercase()
+        );
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
 
         match self.service_mode {
             Some(ServiceMode::Grpc) => {
-                tracing::info!("Mode selected: gRPC Server");
-                let pg = pg_pool.clone();
-                let redis = redis_repo.clone();
-                let custom_validator = self.mock_validator.clone(); // Clônage pour l'isoler dans le thread
+                let session = scylla_session.clone();
+                let cache_repo = redis_repo.clone();
+                let custom_validator = self.mock_validator.clone();
+                let idempotency_repo = kernel_infra.redis().idempotency();
+                let keyspace_name = target_keyspace.clone(); // Move dans le thread gRPC
 
                 tokio::spawn(async move {
-                    tracing::debug!("gRPC server task spawning...");
-
-                    // 💡 BRANCHEMENT ADAPTATIF : Mock ou Keycloak réel par défaut
                     let validator = match custom_validator {
                         Some(mock) => mock,
                         None => {
@@ -96,92 +139,128 @@ impl ProfileTestContextBuilder {
                     };
 
                     let interceptor = AuthInterceptor::new(validator);
+                    let mut command_bus = CommandBus::new(cache_repo, idempotency_repo.clone());
 
-                    let builder = ProfileServiceBuilder::new(pg, redis);
-                    let app_ctx = builder.build_context();
-                    let bus = builder.build_command_bus();
+                    let routing_store = Arc::new(
+                        ScyllaProfileRoutingStore::new(session.clone())
+                            .await
+                            .unwrap(),
+                    );
 
+                    let profile_store = Arc::new(
+                        ScyllaProfileStore::new(session, keyspace_name)
+                            .await
+                            .unwrap(),
+                    );
+
+                    let builder = ProfileServiceBuilder::new(
+                        profile_store,
+                        routing_store,
+                        idempotency_repo,
+                        self.cluster_ctx,
+                    );
+
+                    let kernel_ctx = builder.build_kernel_ctx();
+                    builder.register_handlers(&mut command_bus);
+
+                    let shared_bus = Arc::new(command_bus);
                     let svc = Server::builder()
                         .add_service(ProfileIdentityServiceServer::with_interceptor(
-                            ProfileIdentityService::new(bus.clone(), app_ctx.clone()),
+                            ProfileIdentityService::new(shared_bus.clone(), kernel_ctx.clone()),
                             interceptor.clone(),
                         ))
                         .add_service(ProfileMediaServiceServer::with_interceptor(
-                            ProfileMediaService::new(bus.clone(), app_ctx.clone()),
+                            ProfileMediaService::new(shared_bus.clone(), kernel_ctx.clone()),
                             interceptor.clone(),
                         ))
                         .add_service(ProfileMetadataServiceServer::with_interceptor(
-                            ProfileMetadataService::new(bus, app_ctx),
+                            ProfileMetadataService::new(shared_bus.clone(), kernel_ctx),
                             interceptor,
                         ));
 
                     let addr = "[::1]:0".parse::<SocketAddr>().unwrap();
-                    let listener = tokio::net::TcpListener::bind(addr)
-                        .await
-                        .expect("Failed to bind gRPC port");
+                    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
                     let actual_addr = listener.local_addr().unwrap();
                     let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
 
-                    tracing::info!(port = %actual_addr.port(), "gRPC server listening");
                     ready_tx.send(actual_addr).ok();
-
                     svc.serve_with_incoming_shutdown(incoming, async {
                         shutdown_rx.await.ok();
-                        tracing::info!("gRPC server shutting down");
                     })
                     .await
                     .unwrap();
                 });
             }
             Some(ServiceMode::KafkaWorker) => {
-                tracing::info!("Mode selected: Kafka Worker");
-                let pg = pg_pool.clone();
-                let redis = redis_repo.clone();
+                let session = scylla_session.clone();
+                let cache_repo = redis_repo.clone();
                 let brokers = kafka_brokers.unwrap();
+                let idempotency_repo = kernel_infra.redis().idempotency();
+                let keyspace_name = target_keyspace; // Move dans le thread Worker
 
                 tokio::spawn(async move {
-                    tracing::debug!("Kafka worker task spawning...");
-                    let builder = ProfileServiceBuilder::new(pg, redis);
-                    let app_ctx = builder.build_context();
-                    let bus = builder.build_command_bus();
+                    let routing_store = Arc::new(
+                        ScyllaProfileRoutingStore::new(session.clone())
+                            .await
+                            .unwrap(),
+                    );
 
-                    let account_consumer =
-                        Arc::new(AccountConsumer::new(bus.clone(), (*app_ctx).clone()));
+                    let profile_store = Arc::new(
+                        ScyllaProfileStore::new(session, keyspace_name)
+                            .await
+                            .unwrap(),
+                    );
+
+                    let builder = ProfileServiceBuilder::new(
+                        profile_store,
+                        routing_store,
+                        idempotency_repo.clone(),
+                        self.cluster_ctx,
+                    );
+
+                    let kernel_ctx = Arc::new(builder.build_kernel_ctx());
+                    let command_bus = CommandBus::new(cache_repo, idempotency_repo);
+
+                    let shared_bus = Arc::new(command_bus);
+                    let account_consumer = Arc::new(AccountConsumer::new(
+                        shared_bus.clone(),
+                        (*kernel_ctx).clone(),
+                    ));
                     let kafka_transport =
                         KafkaEventConsumer::new(&brokers, "profile-worker-test-group", 10);
 
                     let handler = Box::new(move |envelope: EventEnvelope| {
                         let consumer = Arc::clone(&account_consumer);
-                        let fut: std::pin::Pin<
-                            Box<
-                                dyn std::future::Future<Output = shared_kernel::core::Result<()>>
-                                    + Send,
-                            >,
-                        > = Box::pin(async move {
-                            let raw = serde_json::to_vec(&envelope.payload).unwrap();
+
+                        Box::pin(async move {
+                            let raw = serde_json::to_vec(&envelope.payload)
+                                .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))?;
+
                             consumer
                                 .on_message_received(&raw)
                                 .await
                                 .map_err(|e| shared_kernel::core::Error::internal(e.to_string()))
-                        });
-                        fut
+                        })
+                            as std::pin::Pin<
+                                Box<
+                                    dyn std::future::Future<
+                                            Output = shared_kernel::core::Result<()>,
+                                        > + Send,
+                                >,
+                            >
                     });
 
-                    tracing::info!("Kafka consumer loop started");
                     ready_tx.send("[::1]:0".parse().unwrap()).ok();
-
-                    if let Err(e) = kafka_transport.consume("account.events", handler).await {
-                        tracing::error!(error = %e, "Kafka consumer loop crashed");
-                    }
+                    kafka_transport
+                        .consume("account.events", handler)
+                        .await
+                        .ok();
                 });
             }
             None => tracing::warn!("No service mode selected for E2E build"),
         }
 
-        let addr = ready_rx
-            .await
-            .expect("Service failed to start (timeout or crash)");
-        tracing::info!(addr = %addr, "E2E infrastructure ready");
+        let addr = ready_rx.await.expect("Service failed to start");
         ProfileTestContext::new(kernel_infra, Some(addr), Some(shutdown_tx))
     }
 }

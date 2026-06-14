@@ -2,52 +2,42 @@
 
 use std::sync::Arc;
 
-use crate::application::context::AccountAppContext;
+use crate::application::context::AccountKernelCtx;
 use crate::domain::entities::Account;
 use crate::repositories::GlobalIdentityRegistry;
-use infra_sqlx::TransactionManagerExt;
 use shared_kernel::command::CommandTarget;
-use shared_kernel::core::TransactionManager;
+use shared_kernel::core::TransactionManagerExt;
 use shared_kernel::core::{Error, Result, Versioned};
 use shared_kernel::messaging::{Event, EventEmitter};
 use shared_kernel::types::{AccountId, Region};
 use uuid::Uuid;
 
-pub struct AccountCommandContext<TM> {
-    app: AccountAppContext<TM>,
+#[derive(Clone)]
+pub struct AccountCommandCtx {
+    kernel: AccountKernelCtx,
     account_id: Option<AccountId>,
-    region: Region,
+    region_cmd: Region,
 }
 
-impl<TM> Clone for AccountCommandContext<TM> {
-    fn clone(&self) -> Self {
-        Self {
-            app: self.app.clone(),
-            account_id: self.account_id,
-            region: self.region,
-        }
-    }
-}
-
-impl<TM> AccountCommandContext<TM> {
+impl AccountCommandCtx {
     pub(crate) fn new(
-        app: AccountAppContext<TM>,
+        kernel: AccountKernelCtx,
         account_id: Option<AccountId>,
-        region: Region,
+        region_cmd: Region,
     ) -> Self {
         Self {
-            app,
+            kernel,
             account_id,
-            region,
+            region_cmd,
         }
     }
 
-    pub fn app(&self) -> &AccountAppContext<TM> {
-        &self.app
+    pub fn app(&self) -> &AccountKernelCtx {
+        &self.kernel
     }
 
     pub fn region(&self) -> Region {
-        self.region
+        self.region_cmd
     }
 
     pub fn account_id(&self) -> Result<&AccountId> {
@@ -60,64 +50,39 @@ impl<TM> AccountCommandContext<TM> {
     }
 
     pub fn global_registry(&self) -> Arc<dyn GlobalIdentityRegistry> {
-        self.app.global_registry()
+        self.kernel.global_registry()
     }
-}
 
-impl<TM: TransactionManager> AccountCommandContext<TM> {
-    pub async fn ensure_creatable(&self, command_id: Uuid, command_region: Region) -> Result<bool> {
-        if command_region != self.region {
-            return Err(Error::validation(
-                "region",
-                "Region mismatch for account creation",
-            ));
+    pub fn verify_actors(&self, account_id: AccountId) -> Result<()> {
+        if let Some(expected_id) = self.account_id {
+            if account_id != expected_id {
+                return Err(Error::validation(
+                    "target",
+                    "Context/Target identity mismatch",
+                ));
+            }
         }
-        self.ensure_executable(command_id, command_region).await
+        Ok(())
     }
 
-    pub async fn ensure_executable(
-        &self,
-        command_id: Uuid,
-        command_region: Region,
-    ) -> Result<bool> {
-        if command_region != self.region {
+    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
+        if self.region_cmd != self.kernel.cluster_region() {
             return Err(Error::validation(
                 "region",
                 format!(
-                    "Sharding violation prevention: Command region '{}' mismatch with context region '{}'",
-                    command_region, self.region
+                    "Sharding violation prevention: Command region '{}' mismatch with deployment cluster region '{}'",
+                    self.region_cmd,
+                    self.kernel.cluster_region()
                 ),
             ));
         }
 
-        let exists = self
-            .app
-            .transaction_manager()
-            .run_in_transaction(|mut tx| async move {
-                let is_present = self
-                    .app
-                    .idempotency_repo()
-                    .exists(Some(&mut *tx), &command_id)
-                    .await?;
-                Ok(is_present)
-            })
-            .await?;
-
-        Ok(!exists)
-    }
-
-    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
-        if Some(&target.id) != self.account_id.as_ref() {
-            return Err(Error::validation(
-                "target",
-                "Context/Target identity mismatch",
-            ));
-        }
+        self.verify_actors(target.id)?;
 
         let account = self
-            .app
+            .kernel
             .account_repo()
-            .find_by_id(self.region, target.id, None)
+            .find_by_id(self.region_cmd, target.id, None)
             .await?
             .ok_or_else(|| Error::not_found("Account", target.id.to_string()))?;
 
@@ -139,56 +104,39 @@ impl<TM: TransactionManager> AccountCommandContext<TM> {
         Ok(account)
     }
 
-    pub async fn save(&self, account: &mut Account, command_id: Option<Uuid>) -> Result<()> {
-        if let Some(expected_id) = self.account_id {
-            if account.account_id() != expected_id {
-                return Err(Error::validation(
-                    "account_id",
-                    "Identity mismatch violation",
-                ));
-            }
-        }
+    pub async fn save(&self, account: &mut Account, command_id: Uuid) -> Result<()> {
+        self.verify_actors(account.account_id())?;
 
         let events = account.pull_events();
+        let account_repo = self.kernel.account_repo();
+        let outbox_repo = self.kernel.outbox_repo();
+        let idempotency_repo = self.kernel.idempotency_repo();
+        let region = self.region_cmd;
 
-        self.app
+        self.kernel
             .transaction_manager()
-            .run_in_transaction(|mut tx| async move {
-                if let Some(cmd_id) = command_id {
-                    if self
-                        .app
-                        .idempotency_repo()
-                        .exists(Some(&mut *tx), &cmd_id)
-                        .await?
-                    {
-                        return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
+            .run_transaction(move |tx| {
+                Box::pin(async move {
+                    let already_processed = idempotency_repo.exists(Some(tx), &command_id).await?;
+                    if already_processed {
+                        tracing::warn!(
+                            command_id = %command_id,
+                            "Idempotence DB : Commande déjà appliquée dans ce Shard. Skip."
+                        );
+                        return Ok(());
                     }
-                }
 
-                if !events.is_empty() {
-                    self.app
-                        .account_repo()
-                        .save(self.region, account, Some(&mut *tx))
-                        .await?;
+                    account_repo.save(region, account, Some(tx)).await?;
+                    if !events.is_empty() {
+                        let event_refs: Vec<&dyn Event> =
+                            events.iter().map(|e| e.as_ref()).collect();
+                        outbox_repo.save_all(region, tx, &event_refs).await?;
+                    }
 
-                    let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
-                    self.app
-                        .outbox_repo()
-                        .save_all(self.region, &mut *tx, &event_refs)
-                        .await?;
-                } else {
-                    tracing::debug!(account_id = %account.account_id(), "Idempotence métier : écriture du compte court-circuitée");
-                }
+                    idempotency_repo.save(Some(tx), &command_id).await?;
 
-                if let Some(cmd_id) = command_id {
-                    self.app
-                        .idempotency_repo()
-                        .save(Some(&mut *tx), &cmd_id)
-                        .await?;
-                }
-
-                tx.commit().await?;
-                Ok(())
+                    Ok(())
+                })
             })
             .await?;
 

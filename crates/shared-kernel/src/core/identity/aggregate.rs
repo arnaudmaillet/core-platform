@@ -40,6 +40,10 @@ impl LifecycleTracker {
         self.updated_at
     }
 
+    pub fn events(&self) -> &[Box<dyn Event>] {
+        &self.events
+    }
+
     pub fn is_events_empty(&self) -> bool {
         self.events.is_empty()
     }

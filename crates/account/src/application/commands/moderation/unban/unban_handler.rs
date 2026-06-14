@@ -7,37 +7,26 @@ use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::moderation::UnbanCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 
-pub struct UnbanHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct UnbanHandler;
 
-impl<TM> UnbanHandler<TM> {
+impl UnbanHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for UnbanHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for UnbanHandler {
+    type Context = AccountCommandCtx;
     type Command = UnbanCommand;
     type Output = ();
 
-    async fn handle(
-        &self,
-        ctx: &AccountCommandContext<TM>,
-        cmd: UnbanCommand,
-    ) -> Result<Self::Output> {
-        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
-            return Ok(());
-        }
+    async fn handle(&self, ctx: &AccountCommandCtx, cmd: UnbanCommand) -> Result<Self::Output> {
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.unban(cmd.reason)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
         } else {
             info!(
                 account_id = %account.account_id(),

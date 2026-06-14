@@ -9,11 +9,6 @@ option go_package = "github.com/core-platform/proto/post/v1";
 message PostTarget {
   string post_id          = 1;
   string author_id        = 2;
-  string region           = 3;
-}
-
-message QueryMetadata {
-  string region = 1;
 }
 
 service PostService {
@@ -66,16 +61,14 @@ message DeletePostRequest {
 }
 
 message GetPostRequest {
-  QueryMetadata metadata  = 1;
-  string        post_id   = 2;
-  string        author_id = 3;
+  string        post_id   = 1;
+  string        author_id = 2;
 }
 
 message GetPostsByAuthorRequest {
-  QueryMetadata   metadata  = 1;
-  string          author_id = 2;
-  int32           limit     = 3;
-  optional string cursor    = 4;
+  string          author_id = 1;
+  int32           limit     = 2;
+  optional string cursor    = 3;
 }
 
 message GetPostsByAuthorResponse {

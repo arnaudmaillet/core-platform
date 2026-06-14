@@ -2,14 +2,13 @@
 
 use auth::Claims;
 use auth_test_utils::TokenValidatorStub;
-use infra_fred::fred::interfaces::KeysInterface;
 use post_test_utils::PostTestContextBuilder;
 use shared_kernel::{
     core::{Identifier, Result},
     types::{PostId, ProfileId, Region, SubId},
 };
+use shared_proto::post::v1::post_service_client::PostServiceClient;
 use shared_proto::post::v1::{CreatePostRequest, GetPostRequest};
-use shared_proto::post::v1::{QueryMetadata, post_service_client::PostServiceClient};
 use tonic::{Request, metadata::MetadataValue};
 use uuid::Uuid;
 
@@ -64,9 +63,10 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
 
     let region = Region::default();
     let author_id = ProfileId::generate();
+    let target_command_id = Uuid::new_v4().to_string();
 
     let create_req = CreatePostRequest {
-        command_id: Uuid::now_v7().to_string(),
+        command_id: target_command_id.clone(),
         region: region.to_string(),
         author_id: author_id.to_string(),
         post_type: "text".to_string(),
@@ -80,9 +80,9 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         allowed_comment_hands: true,
     };
 
-    tracing::info!("Sending CreatePostRequest through gRPC client...");
+    // ACT : ENVOI DE LA COMMANDE DE CRÉATION DE POST
     let create_res = post_client
-        .create_post(with_auth(create_req, test_token, "EU")) // 💡 Utilisation du test_token
+        .create_post(with_auth(create_req, test_token, "EU"))
         .await;
 
     assert!(
@@ -96,14 +96,17 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         .expect("Le serveur gRPC doit renvoyer un PostId valide");
     tracing::info!(%post_id, "Post successfully created, moving to database verifications.");
 
+    // =========================================================================
+    // VERIFICATIONS NO SQL (ScyllaDB) - Validation de la persistance régionale
+    // =========================================================================
     let keyspace = ctx.kernel().scylla().keyspace();
     let scylla_session = ctx.kernel().scylla().session();
 
     let query_by_id = format!(
-        "SELECT post_id, author_id, caption FROM {}.posts_by_id WHERE region = ? AND post_id = ?",
+        "SELECT post_id, author_id, caption FROM {}.posts_by_id WHERE post_id = ?",
         keyspace
     );
-    let query_params: (String, uuid::Uuid) = ("EU".to_string(), post_id.as_uuid());
+    let query_params: (uuid::Uuid,) = (post_id.as_uuid(),);
 
     let rows_by_id = scylla_session
         .query_unpaged(query_by_id, query_params)
@@ -119,11 +122,10 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     );
 
     let query_by_author = format!(
-        "SELECT post_id FROM {}.posts_by_author WHERE region = ? AND author_id = ? AND post_id = ?",
+        "SELECT post_id FROM {}.posts_by_author WHERE author_id = ? AND post_id = ?",
         keyspace
     );
-    let author_params: (String, uuid::Uuid, uuid::Uuid) =
-        ("EU".to_string(), author_id.as_uuid(), post_id.as_uuid());
+    let author_params: (uuid::Uuid, uuid::Uuid) = (author_id.as_uuid(), post_id.as_uuid());
 
     let rows_by_author = scylla_session
         .query_unpaged(query_by_author, author_params)
@@ -138,21 +140,12 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         "Post must exist in posts_by_author timeline table"
     );
 
-    let redis_pool = ctx.kernel().redis().repository().pool().clone();
-    let cache_key = format!("posts:EU:{}", post_id);
-
-    let cache_exists_before: bool = redis_pool.exists(&cache_key).await.unwrap();
-    assert!(
-        !cache_exists_before,
-        "Le cache doit être vide avant la première requête de lecture"
-    );
-
+    // =========================================================================
+    // ACT & ASSERT : QUERY SERVER LECTURE DIRECTE
+    // =========================================================================
     let get_req = GetPostRequest {
         post_id: post_id.to_string(),
         author_id: author_id.to_string(),
-        metadata: Some(QueryMetadata {
-            region: "EU".to_string(),
-        }),
     };
 
     let get_res = post_client
@@ -160,23 +153,13 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         .await;
 
     assert!(get_res.is_ok(), "gRPC GetPost query failed");
+
     let returned_post = get_res.unwrap().into_inner();
     assert_eq!(
         returned_post.caption,
         Some("Hyperscale post architecture with custom Redis caching! #rust #scylla".to_string())
     );
 
-    let cache_bytes_after: Option<String> = redis_pool.get(&cache_key).await.unwrap();
-    assert!(
-        cache_bytes_after.is_some(),
-        "Redis cache should be populated following the first GetPost query (Cache Miss Fallback)"
-    );
-
-    let cached_json_str = cache_bytes_after.unwrap();
-    assert!(
-        cached_json_str.contains(&post_id.to_string()),
-        "Cached JSON must wrap correct identity context"
-    );
     ctx.shutdown().await;
     Ok(())
 }

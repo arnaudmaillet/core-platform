@@ -2,8 +2,8 @@
 
 use serde::Deserialize;
 use shared_kernel::command::{CommandTarget, IdentifiableCommand};
-use shared_kernel::core::{Error, Identifier, Result};
-use shared_kernel::types::{ProfileId, Region};
+use shared_kernel::core::{Error, Result};
+use shared_kernel::types::ProfileId;
 use shared_proto::profile::v1::UpdatePrivacyRequest;
 use uuid::Uuid;
 
@@ -11,13 +11,12 @@ use uuid::Uuid;
 pub struct UpdatePrivacyCommand {
     pub command_id: Uuid,
     pub target: CommandTarget<ProfileId>,
-    pub region: Region,
     pub is_private: bool,
 }
 
 impl IdentifiableCommand for UpdatePrivacyCommand {
     type Id = ProfileId;
-    type Routing = Region;
+    type Routing = ();
 
     fn command_id(&self) -> Uuid {
         self.command_id
@@ -28,7 +27,7 @@ impl IdentifiableCommand for UpdatePrivacyCommand {
     }
 
     fn routing(&self) -> Self::Routing {
-        self.region
+        ()
     }
 }
 
@@ -46,12 +45,9 @@ impl UpdatePrivacyCommand {
             expected_version: Some(proto_target.expected_version),
         };
 
-        let region = Region::try_new(proto_target.region)?;
-
         Ok(Self {
             command_id,
             target,
-            region,
             is_private: req.is_private,
         })
     }

@@ -1,56 +1,46 @@
 // crates/profile/src/application/commands/media/remove_banner/remove_banner_handler.rs
 
-use std::marker::PhantomData;
-
 use async_trait::async_trait;
-use shared_kernel::{
-    command::CommandHandler,
-    core::{Result, TransactionManager},
-};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::RemoveBannerCommand, context::ProfileCommandContext};
+use crate::{commands::RemoveBannerCommand, context::ProfileCommandCtx};
 
-pub struct RemoveBannerHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct RemoveBannerHandler;
 
-impl<TM> RemoveBannerHandler<TM> {
+impl RemoveBannerHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for RemoveBannerHandler<TM> {
-    type Context = ProfileCommandContext<TM>;
+impl CommandHandler for RemoveBannerHandler {
+    type Context = ProfileCommandCtx;
     type Command = RemoveBannerCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext<TM>,
+        ctx: &ProfileCommandCtx,
         cmd: RemoveBannerCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.remove_banner()? {
-            ctx.save(&mut profile, Some(cmd.command_id)).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
+
+            info!(
+                profile_id = %profile.profile_id(),
+                "Banner removed successfully"
+            );
         } else {
             info!(
                 profile_id = %profile.profile_id(),
-                "no changes detected, skipping save"
+                "No banner detected, skipping save"
             );
         }
+
         Ok(())
     }
 }

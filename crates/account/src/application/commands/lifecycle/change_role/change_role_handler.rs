@@ -7,37 +7,30 @@ use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::lifecycle::ChangeRoleCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 
-pub struct ChangeRoleHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct ChangeRoleHandler;
 
-impl<TM> ChangeRoleHandler<TM> {
+impl ChangeRoleHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for ChangeRoleHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for ChangeRoleHandler {
+    type Context = AccountCommandCtx;
     type Command = ChangeRoleCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: ChangeRoleCommand,
     ) -> Result<Self::Output> {
-        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
-            return Ok(());
-        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.change_role(cmd.new_role, cmd.reason)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
         } else {
             info!(
                 account_id = %account.account_id(),

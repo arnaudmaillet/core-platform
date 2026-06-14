@@ -1,44 +1,49 @@
+// crates/account/src/application/use_cases/moderation/shadowban/shadowban_use_case_test.rs
 
 use account::commands::moderation::ShadowbanCommand;
-use account::context::AccountCommandContext;
+use account::context::AccountCommandCtx;
 use account::entities::AccountGovernanceBuilder;
 use account::events::AccountEvent;
 use account::types::AccountState;
+use account_test_utils::asserts::AccountRepositoryAsserts;
+
 use account_test_utils::AccountTestFixture;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Result, Versioned};
+use shared_kernel::idempotency::IdempotencyRepository;
 use shared_kernel::types::AuditReason;
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_shadowban_account_success() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // 1. Arrange : Compte sain (v1)
+    // 1. Compte sain et actif
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
-
     let version_snapshot = account.version();
     f.account_repo().insert(account);
 
+    let reason = AuditReason::try_new("Spam behavior detected")?;
     let cmd = ShadowbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
-        reason: AuditReason::try_new("Spam behavior detected")?,
+        region: f.server_region(),
+        reason: reason.clone(),
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandCtx, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert!(acc.governance().is_shadowbanned());
-        assert_eq!(acc.version(), version_snapshot + 1);
-    })
-    .await?;
+    // Assert
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert!(acc.governance().is_shadowbanned());
+            assert_eq!(acc.version(), version_snapshot + 1);
+        })
+        .await;
 
     f.assert_outbox(1, Some(AccountEvent::SHADOWBAN_UPDATED));
 
@@ -47,11 +52,12 @@ region: f.region(),
 
 #[tokio::test]
 async fn test_shadowban_technical_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
     let cmd_id = Uuid::new_v4();
 
-    // Arrange
-    f.idempotency_repo().seed(cmd_id);
+    // On simule une commande déjà traitée techniquement interceptée au premier rideau
+    f.idempotency_repo().save(None, &cmd_id).await?;
 
     let account = f.builder()?.with_state(AccountState::ACTIVE).build()?;
     let version_snapshot = account.version();
@@ -60,35 +66,48 @@ async fn test_shadowban_technical_idempotency() -> Result<()> {
     let cmd = ShadowbanCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Duplicate network call")?,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandCtx, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
     assert!(
         result.is_ok(),
-        "L'idempotence technique doit être transparente (Ok)"
+        "L'idempotence technique doit court-circuiter de façon transparente (Ok)"
     );
-    f.assert_outbox(0, None);
+
+    // L'agrégat en base n'a subi aucune mutation
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert!(!acc.governance().is_shadowbanned());
+            assert_eq!(acc.version(), version_snapshot);
+        })
+        .await;
+
+    // Aucun événement n'est ré-émis ou dupliqué dans l'outbox locale
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_shadowban_business_idempotency() -> Result<()> {
+    // Arrange
     let f = AccountTestFixture::new();
 
-    // 1. Arrange : Déjà shadowbanné (on peut utiliser une closure ou un helper dédié)
+    // Idempotence métier : Le compte est déjà configuré comme shadowbanné via le builder
     let account = f
         .builder()?
         .with_state(AccountState::ACTIVE)
-        .governance(|g: AccountGovernanceBuilder| g.with_shadowban(true)) // Utilisation de la closure de ton builder
+        .governance(|g: AccountGovernanceBuilder| g.with_shadowban(true))
         .build()?;
 
     let version_snapshot = account.version();
@@ -97,27 +116,32 @@ async fn test_shadowban_business_idempotency() -> Result<()> {
     let cmd = ShadowbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Second report")?,
     };
 
-    // 2. Act
+    // Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<AccountCommandCtx, ShadowbanCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
-    // 3. Assert
-    f.assert_account(|acc| {
-        assert!(acc.governance().is_shadowbanned());
-        assert_eq!(
-            acc.version(),
-            version_snapshot,
-            "La version ne doit pas bouger"
-        );
-    })
-    .await?;
+    // Assert
+    // L'opération s'exécute avec succès mais ne produit aucune mutation (No-Op transactionnel)
+    f.account_assertions()
+        .assert_account_state(f.account_id(), |acc| {
+            assert!(acc.governance().is_shadowbanned());
+            assert_eq!(
+                acc.version(),
+                version_snapshot,
+                "La version ne doit pas bouger si l'état était déjà identique"
+            );
+        })
+        .await;
 
-    f.assert_outbox(0, None);
+    // Aucun événement métier produit puisque l'état est inchangé
+    f.account_assertions()
+        .assert_no_events_for(f.account_id())
+        .await;
 
     Ok(())
 }

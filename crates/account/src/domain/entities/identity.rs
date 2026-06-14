@@ -235,19 +235,6 @@ impl AccountIdentity {
         Ok(true)
     }
 
-    pub(crate) fn apply_activity_record(&mut self) -> Result<bool> {
-        let now = Utc::now();
-        if self
-            .last_active_at
-            .map_or(true, |l| now - l > Duration::minutes(5))
-        {
-            self.last_active_at = Some(now);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     pub fn is_active(&self) -> bool {
         self.state == AccountState::ACTIVE
     }

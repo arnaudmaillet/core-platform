@@ -34,7 +34,7 @@ impl IdentifiableCommand for ShadowbanCommand {
 }
 
 impl ShadowbanCommand {
-    pub fn try_from_proto(req: ShadowbanRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ShadowbanRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;

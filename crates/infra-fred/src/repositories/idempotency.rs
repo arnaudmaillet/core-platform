@@ -70,4 +70,8 @@ impl IdempotencyRepository for RedisIdempotencyRepository {
 
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

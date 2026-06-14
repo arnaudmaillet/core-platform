@@ -1,7 +1,7 @@
-mod app;
 mod command;
+mod kernel;
 mod query;
 
-pub use app::AccountAppContext;
-pub use command::AccountCommandContext;
-pub use query::AccountQueryContext;
+pub use command::AccountCommandCtx;
+pub use kernel::AccountKernelCtx;
+pub use query::AccountQueryCtx;

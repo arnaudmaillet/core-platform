@@ -34,7 +34,7 @@ impl IdentifiableCommand for ChangePhoneCommand {
 }
 
 impl ChangePhoneCommand {
-    pub fn try_from_proto(req: ChangePhoneRequest) -> Result<Self> {
+    pub fn try_from_proto(req: ChangePhoneRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -49,8 +49,6 @@ impl ChangePhoneCommand {
 
         let new_phone = Phone::try_from(req.new_phone)
             .map_err(|e| Error::validation("new_phone", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

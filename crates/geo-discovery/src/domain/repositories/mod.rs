@@ -1,5 +1,5 @@
-mod cache;
-mod persistence;
+mod archive;
+mod discovery;
 
-pub use cache::MapCacheRepository;
-pub use persistence::MapPersistenceRepository;
+pub use archive::MapAnnotationArchiveRepository;
+pub use discovery::MapAnnotationDiscoveryRepository;

@@ -1,56 +1,46 @@
 // crates/profile/src/application/commands/media/update_banner/update_banner_handler.rs
 
-use std::marker::PhantomData;
-
 use async_trait::async_trait;
-use shared_kernel::{
-    command::CommandHandler,
-    core::{Result, TransactionManager},
-};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateBannerCommand, context::ProfileCommandContext};
+use crate::{commands::UpdateBannerCommand, context::ProfileCommandCtx};
 
-pub struct UpdateBannerHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct UpdateBannerHandler;
 
-impl<TM> UpdateBannerHandler<TM> {
+impl UpdateBannerHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateBannerHandler<TM> {
-    type Context = ProfileCommandContext<TM>;
+impl CommandHandler for UpdateBannerHandler {
+    type Context = ProfileCommandCtx;
     type Command = UpdateBannerCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext<TM>,
+        ctx: &ProfileCommandCtx,
         cmd: UpdateBannerCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_banner(cmd.new_banner_url)? {
-            ctx.save(&mut profile, Some(cmd.command_id)).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
+
+            info!(
+                profile_id = %profile.profile_id(),
+                "Banner updated successfully"
+            );
         } else {
             info!(
                 profile_id = %profile.profile_id(),
-                "no changes detected, skipping save"
+                "Banner URL is already the same, skipping save"
             );
         }
+
         Ok(())
     }
 }

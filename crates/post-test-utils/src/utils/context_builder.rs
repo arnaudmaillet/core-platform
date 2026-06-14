@@ -2,12 +2,14 @@
 
 use crate::resolvers::ProfileResolverStub;
 use crate::utils::PostTestContext;
-use auth::{TokenValidator, interceptors::AuthInterceptor}; // 💡 Import du trait TokenValidator
+use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::KeycloakTestContext;
-use infra_fred::RedisIdempotencyRepository;
 use infra_test::TestContextBuilder;
 use post::PostServiceBuilder;
+use post::repositories_impl::ScyllaPostStore;
 use post::services::PostService;
+use shared_kernel::command::CommandBus;
+use shared_kernel::environment::ClusterContext;
 use shared_proto::post::v1::post_service_server::PostServiceServer;
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -17,7 +19,8 @@ pub struct PostTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
     with_grpc: bool,
     migrations_paths: Vec<String>,
-    mock_validator: Option<Arc<dyn TokenValidator>>, // 💡 Ajout du champ pour le mock d'auth
+    mock_validator: Option<Arc<dyn TokenValidator>>,
+    cluster_ctx: ClusterContext,
 }
 
 impl PostTestContextBuilder {
@@ -26,11 +29,11 @@ impl PostTestContextBuilder {
             kernel_builder: TestContextBuilder::new().with_redis(),
             with_grpc: false,
             migrations_paths: vec!["crates/post/migrations/scylla".to_string()],
-            mock_validator: None, // Par défaut, on n'utilise pas de mock
+            mock_validator: None,
+            cluster_ctx: ClusterContext::default(),
         }
     }
 
-    /// Permet de surcharger dynamiquement le chemin des migrations CQL si nécessaire depuis le test
     pub fn with_migrations(mut self, paths: &[&str]) -> Self {
         self.migrations_paths = paths.iter().map(|s| s.to_string()).collect();
         self
@@ -41,9 +44,13 @@ impl PostTestContextBuilder {
         self
     }
 
-    /// 💡 NOUVELLE MÉTHODE : Permet d'injecter le MockTokenValidator depuis post_e2e_it.rs
     pub fn with_mock_auth(mut self, validator: Arc<dyn TokenValidator>) -> Self {
         self.mock_validator = Some(validator);
+        self
+    }
+
+    pub fn with_cluster_ctx(mut self, ctx: ClusterContext) -> Self {
+        self.cluster_ctx = ctx;
         self
     }
 
@@ -55,11 +62,11 @@ impl PostTestContextBuilder {
 
         let kernel_infra = self.kernel_builder.build().await;
 
-        // Extraction des instances d'infra éphémères du conteneur de test
         let scylla_session = kernel_infra.scylla().session();
         let scylla_keyspace = kernel_infra.scylla().keyspace().to_string();
-        let redis_repo = kernel_infra.redis().repository();
-        let redis_pool = redis_repo.pool().clone();
+        let cache_repo = kernel_infra.redis().cache();
+        let idempotency_repo = kernel_infra.redis().idempotency();
+
         let profile_resolver = Arc::new(ProfileResolverStub::default());
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -67,11 +74,11 @@ impl PostTestContextBuilder {
 
         if self.with_grpc {
             tracing::info!("Starting Post gRPC server for End-to-End testing...");
-            let custom_validator = self.mock_validator.clone(); // Clônage pour le thread tokio
+            let custom_validator = self.mock_validator.clone();
+            let cluster_ctx = self.cluster_ctx;
+            let resolver = profile_resolver.clone();
 
             tokio::spawn(async move {
-                // 💡 CHOIX DU VALIDATEUR : Si un mock est fourni, on l'utilise.
-                // Sinon, fallback transparent sur Keycloak en Docker.
                 let validator = match custom_validator {
                     Some(mock) => mock,
                     None => {
@@ -83,23 +90,25 @@ impl PostTestContextBuilder {
                 };
 
                 let interceptor = AuthInterceptor::new(validator);
-                let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
-                    redis_pool.clone(),
-                    "post_e2e",
-                    300,
-                ));
 
-                let builder = PostServiceBuilder::new(
-                    scylla_keyspace,
-                    scylla_session,
-                    redis_repo,
-                    idempotency_repo,
-                    profile_resolver.clone(),
+                let mut command_bus = CommandBus::new(cache_repo, idempotency_repo.clone());
+
+                let real_post_repo = Arc::new(
+                    ScyllaPostStore::new(scylla_session, &scylla_keyspace)
+                        .await
+                        .expect("Failed to initialize real ScyllaPostRepository during test boot"),
                 );
 
-                let app_ctx = builder.build_context().await.unwrap();
-                let bus = builder.build_command_bus();
-                let post_svc = PostService::new(bus, app_ctx);
+                let builder = PostServiceBuilder::new(
+                    real_post_repo,
+                    resolver,
+                    cluster_ctx,
+                );
+
+                let kernel_ctx = builder.build_kernel_ctx();
+                builder.register_handlers(&mut command_bus);
+
+                let post_svc = PostService::new(command_bus, kernel_ctx);
 
                 let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
                 let actual_addr = listener.local_addr().unwrap();

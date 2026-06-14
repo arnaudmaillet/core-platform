@@ -32,7 +32,7 @@ impl IdentifiableCommand for AddPushTokenCommand {
 }
 
 impl AddPushTokenCommand {
-    pub fn try_from_proto(req: AddPushTokenRequest) -> Result<Self> {
+    pub fn try_from_proto(req: AddPushTokenRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -48,7 +48,6 @@ impl AddPushTokenCommand {
         let token = PushToken::try_new(&req.token)
             .map_err(|e| Error::validation("push_token", e.to_string()))?;
 
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

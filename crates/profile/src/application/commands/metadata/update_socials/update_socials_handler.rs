@@ -1,56 +1,45 @@
 // crates/profile/src/application/commands/metadata/update_social_links/update_social_links_handler.rs
 
-use std::marker::PhantomData;
-
 use async_trait::async_trait;
-use shared_kernel::{
-    command::CommandHandler,
-    core::{Result, TransactionManager},
-};
+use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateSocialsCommand, context::ProfileCommandContext};
+use crate::{commands::UpdateSocialsCommand, context::ProfileCommandCtx};
 
-pub struct UpdateSocialsHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct UpdateSocialsHandler;
 
-impl<TM> UpdateSocialsHandler<TM> {
+impl UpdateSocialsHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for UpdateSocialsHandler<TM> {
-    type Context = ProfileCommandContext<TM>;
+impl CommandHandler for UpdateSocialsHandler {
+    type Context = ProfileCommandCtx; // Contexte épuré Full ScyllaDB
     type Command = UpdateSocialsCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext<TM>,
+        ctx: &ProfileCommandCtx,
         cmd: UpdateSocialsCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
-
         if profile.update_socials(cmd.new_socials)? {
-            ctx.save(&mut profile, Some(cmd.command_id)).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
+
+            info!(
+                profile_id = %profile.profile_id(),
+                "Social links updated successfully"
+            );
         } else {
             info!(
                 profile_id = %profile.profile_id(),
-                "no changes detected, skipping save"
+                "Social links are already identical, skipping save"
             );
         }
+
         Ok(())
     }
 }

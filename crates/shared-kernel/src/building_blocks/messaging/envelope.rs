@@ -62,4 +62,8 @@ impl Event for EventEnvelope {
             .and_then(|v| v.as_str())
             .and_then(|s| Uuid::parse_str(s).ok())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

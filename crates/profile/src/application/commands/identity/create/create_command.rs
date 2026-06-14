@@ -1,5 +1,6 @@
 // crates/profile/src/application/commands/identity/create_profile.rs
 
+use crate::types::Handle;
 use serde::{Deserialize, Serialize};
 use shared_kernel::{
     command::{CommandTarget, IdentifiableCommand},
@@ -8,8 +9,6 @@ use shared_kernel::{
 };
 use shared_proto::profile::v1::CreateProfileRequest;
 use uuid::Uuid;
-
-use crate::types::Handle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateProfileCommand {
@@ -40,11 +39,13 @@ impl IdentifiableCommand for CreateProfileCommand {
 impl CreateProfileCommand {
     pub fn try_from_proto(req: CreateProfileRequest, profile_id: ProfileId) -> Result<Self> {
         let command_id = Uuid::parse_str(&req.command_id)
-            .map_err(|_| Error::validation("command_id", "Invalid UUID format".to_string()))?;
+            .map_err(|_| Error::validation("command_id", "Invalid UUID format"))?;
 
         let account_id = AccountId::try_from(req.account_id.as_str())?;
         let handle = Handle::try_new(&req.handle)?;
-        let region = Region::try_new(&req.region)?;
+
+        // On extrait la région passée par le client/la gateway à la création
+        let region = Region::try_from(req.region.as_str())?;
         let target = CommandTarget::stateless(profile_id);
 
         Ok(Self {

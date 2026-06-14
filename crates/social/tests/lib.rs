@@ -1,4 +1,4 @@
 mod context;
 mod handlers;
-mod repositories;
+mod stores;
 mod types;

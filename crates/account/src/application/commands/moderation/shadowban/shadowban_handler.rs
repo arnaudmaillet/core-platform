@@ -3,41 +3,33 @@
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
 use shared_kernel::core::{Result, TransactionManager};
-use std::marker::PhantomData;
 use tracing::info;
 
 use crate::application::commands::moderation::ShadowbanCommand;
-use crate::application::context::AccountCommandContext;
+use crate::application::context::AccountCommandCtx;
 
-pub struct ShadowbanHandler<TM> {
-    _marker: PhantomData<TM>,
-}
+pub struct ShadowbanHandler;
 
-impl<TM> ShadowbanHandler<TM> {
+impl ShadowbanHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for ShadowbanHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for ShadowbanHandler {
+    type Context = AccountCommandCtx;
     type Command = ShadowbanCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: ShadowbanCommand,
     ) -> Result<Self::Output> {
-        if !ctx.ensure_executable(cmd.command_id, cmd.region).await? {
-            return Ok(());
-        }
         let mut account = ctx.fetch_verified(&cmd.target).await?;
         if account.shadowban(cmd.reason)? {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
         } else {
             info!(
                 account_id = %account.account_id(),

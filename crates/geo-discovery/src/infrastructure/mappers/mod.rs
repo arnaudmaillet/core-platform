@@ -1,2 +1,2 @@
-mod cql_map_post;
-pub use cql_map_post::CqlMapPostRow;
+mod map_annotation;
+pub use map_annotation::CqlMapAnnotationRow;

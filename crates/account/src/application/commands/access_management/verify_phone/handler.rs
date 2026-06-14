@@ -1,46 +1,37 @@
 // crates/account/src/application/use_cases/verify_phone.rs
 
 use async_trait::async_trait;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::commands::VerifyPhoneCommand;
-use crate::context::AccountCommandContext;
+use crate::application::commands::access_management::VerifyPhoneCommand;
+use crate::application::context::AccountCommandCtx;
 use crate::repositories::OtpRepository;
 use crate::types::AccountState;
 use chrono::Utc;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{Error, Result, RetryConfig, TransactionManager};
+use shared_kernel::core::{Error, Result, RetryConfig};
 
-pub struct VerifyPhoneHandler<TM> {
+pub struct VerifyPhoneHandler {
     otp_repository: Arc<dyn OtpRepository>,
-    _marker: PhantomData<TM>,
 }
 
-impl<TM> VerifyPhoneHandler<TM> {
+impl VerifyPhoneHandler {
     pub fn new(otp_repository: Arc<dyn OtpRepository>) -> Self {
-        Self {
-            otp_repository,
-            _marker: PhantomData,
-        }
+        Self { otp_repository }
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for VerifyPhoneHandler<TM> {
-    type Context = AccountCommandContext<TM>;
+impl CommandHandler for VerifyPhoneHandler {
+    type Context = AccountCommandCtx;
     type Command = VerifyPhoneCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &AccountCommandContext<TM>,
+        ctx: &AccountCommandCtx,
         cmd: VerifyPhoneCommand,
     ) -> Result<Self::Output> {
-        if !ctx.ensure_creatable(cmd.command_id, cmd.region).await? {
-            return Ok(());
-        }
-
         let account_id = cmd.target.id;
         let stored_code = self.otp_repository.get_code(&account_id, "phone").await?;
 
@@ -63,7 +54,8 @@ impl<TM: TransactionManager + Clone + 'static> CommandHandler for VerifyPhoneHan
 
         let changed = account.verify_phone(now)?;
         if changed {
-            ctx.save(&mut account, Some(cmd.command_id)).await?;
+            ctx.save(&mut account, cmd.command_id).await?;
+
             if account.identity().is_active() {
                 ctx.global_registry()
                     .update_state(account_id, AccountState::ACTIVE)

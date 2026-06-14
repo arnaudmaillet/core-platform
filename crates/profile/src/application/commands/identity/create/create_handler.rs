@@ -1,51 +1,74 @@
-// crates/profile/src/application/use_cases/identity/create_profile/mod.rs
-
 use crate::commands::CreateProfileCommand;
-use crate::context::ProfileCommandContext;
+use crate::context::ProfileCommandCtx;
 use crate::domain::entities::Profile;
 use crate::types::DisplayName;
 use async_trait::async_trait;
 use shared_kernel::command::CommandHandler;
-use shared_kernel::core::{Result, TransactionManager};
+use shared_kernel::core::{Error, ErrorCode, Result};
 
-use std::marker::PhantomData;
+pub struct CreateProfileHandler;
 
-pub struct CreateProfileHandler<TM> {
-    _marker: PhantomData<TM>,
-}
-
-impl<TM> CreateProfileHandler<TM> {
+impl CreateProfileHandler {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self
     }
 }
 
 #[async_trait]
-impl<TM: TransactionManager + Clone + 'static> CommandHandler for CreateProfileHandler<TM> {
-    type Context = ProfileCommandContext<TM>;
+impl CommandHandler for CreateProfileHandler {
+    type Context = ProfileCommandCtx;
     type Command = CreateProfileCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext<TM>,
+        ctx: &ProfileCommandCtx,
         cmd: CreateProfileCommand,
     ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_creatable(cmd.command_id, cmd.region, &cmd.handle)
-            .await?
-        {
-            return Ok(());
+        if cmd.region != ctx.server_region() {
+            return Err(Error::validation(
+                "region",
+                "Routing mismatch: Attempting to create a profile for another region on this cluster",
+            ));
         }
 
+        let slug_hash = cmd.handle.to_sha256_hash();
         let display_name = DisplayName::from_raw(cmd.handle.as_str());
+        let handle_str = cmd.handle.as_str().to_string();
+
         let mut profile = Profile::builder(cmd.account_id, cmd.target.id, cmd.handle)?
             .with_display_name(display_name)
             .build()?;
+
         profile.create_profile()?;
-        ctx.save(&mut profile, Some(cmd.command_id)).await?;
+
+        if let Err(err) = ctx
+            .routing_repo()
+            .register_routing(cmd.target.id, &slug_hash, cmd.region)
+            .await
+        {
+            if err.code == ErrorCode::ConcurrencyConflict {
+                return Err(Error::already_exists("Profile", "handle", handle_str));
+            }
+            return Err(err);
+        }
+
+        if let Err(save_err) = ctx.save(&mut profile, cmd.command_id).await {
+            tracing::error!(
+                profile_id = %cmd.target.id,
+                command_id = %cmd.command_id,
+                error = ?save_err,
+                "Échec de la sauvegarde du profil. Lancement de la compensation du routage handle..."
+            );
+
+            // Compensation : Libération du handle
+            let _ = ctx
+                .routing_repo()
+                .delete_routing(cmd.target.id, &slug_hash)
+                .await;
+
+            return Err(save_err);
+        }
 
         Ok(())
     }

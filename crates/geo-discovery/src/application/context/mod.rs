@@ -1,7 +1,7 @@
-mod app;
 mod command;
+mod kernel;
 mod query;
 
-pub use app::GeoDiscoveryAppContext;
-pub use command::GeoDiscoveryCommandContext;
-pub use query::GeoDiscoveryQueryContext;
+pub use command::GeoDiscoveryCommandCtx;
+pub use kernel::GeoDiscoveryKernelCtx;
+pub use query::GeoDiscoveryQueryCtx;

@@ -1,128 +1,92 @@
-use crate::{context::ProfileAppContext, entities::Profile, types::Handle};
-use infra_sqlx::TransactionManagerExt;
+// crates/profile/src/context/command_context.rs
+
+use crate::{
+    context::ProfileKernelCtx, entities::Profile, repositories::ProfileRoutingRepository,
+    types::Handle,
+};
 use shared_kernel::{
     command::CommandTarget,
-    core::{Error, Result, TransactionManager, Versioned},
-    messaging::{Event, EventEmitter},
+    core::{Error, Result, Versioned},
     types::{ProfileId, Region},
 };
+use std::sync::Arc;
 use uuid::Uuid;
+
 #[derive(Clone)]
-pub struct ProfileCommandContext<TM> {
-    app: ProfileAppContext<TM>,
+pub struct ProfileCommandCtx {
+    kernel: ProfileKernelCtx,
     profile_id: Option<ProfileId>,
-    region: Region,
+    region_cmd: Region,
 }
 
-impl<TM> ProfileCommandContext<TM> {
-    pub(crate) fn new(
-        app: ProfileAppContext<TM>,
+impl ProfileCommandCtx {
+    pub fn new(
+        kernel: ProfileKernelCtx,
         profile_id: Option<ProfileId>,
-        region: Region,
+        region_cmd: Region,
     ) -> Self {
         Self {
-            app,
+            kernel,
             profile_id,
-            region,
+            region_cmd,
         }
     }
-
-    pub fn region(&self) -> Region {
-        self.region
+    
+    pub fn server_region(&self) -> Region {
+        self.kernel.server_region()
     }
 
-    pub fn profile_id(&self) -> Result<&ProfileId> {
-        self.profile_id.as_ref().ok_or_else(|| {
-            Error::validation(
-                "profile_id",
-                "Profile ID is missing in this context (Creation flow)",
-            )
-        })
+    pub fn profile_id(&self) -> Option<ProfileId> {
+        self.profile_id
+    }
+
+    pub fn routing_repo(&self) -> Arc<dyn ProfileRoutingRepository> {
+        self.kernel.routing_repo()
+    }
+
+    /// Valide l'adéquation entre l'identité de la commande et l'agrégat manipulé
+    pub fn verify_actors(&self, target_id: ProfileId) -> Result<()> {
+        if let Some(expected_id) = self.profile_id {
+            if target_id != expected_id {
+                return Err(Error::forbidden(&format!(
+                    "Action non autorisée : l'acteur {} tente de modifier le profil {}",
+                    expected_id, target_id
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Empêche l'exécution d'une transaction si la commande cible la mauvaise région de Sharding
+    fn verify_region_sharding(&self) -> Result<()> {
+        if self.region_cmd != self.kernel.server_region() {
+            return Err(Error::validation(
+                "region",
+                format!(
+                    "Sharding violation prevention: Command region '{}' mismatch with deployment cluster region '{}'",
+                    self.region_cmd,
+                    self.kernel.server_region()
+                ),
+            ));
+        }
+        Ok(())
     }
 
     pub async fn exists_by_handle(&self, handle: &Handle) -> Result<bool> {
-        self.app
-            .profile_repo()
-            .exists_by_handle(handle, self.region)
-            .await
-    }
-}
-
-impl<TM: TransactionManager> ProfileCommandContext<TM> {
-    pub async fn ensure_creatable(
-        &self,
-        command_id: Uuid,
-        command_region: Region,
-        handle: &Handle,
-    ) -> Result<bool> {
-        if command_region != self.region {
-            return Err(Error::validation(
-                "region",
-                "Region mismatch for profile creation",
-            ));
-        }
-
-        if !self.ensure_executable(command_id, command_region).await? {
-            return Ok(false);
-        }
-
-        if self
-            .app
-            .profile_repo()
-            .exists_by_handle(handle, self.region)
-            .await?
-        {
-            return Err(Error::already_exists(
-                "Profile",
-                "handle",
-                handle.as_str().to_string(),
-            ));
-        }
-
-        Ok(true)
+        let slug_hash = handle.to_sha256_hash();
+        let res = self.routing_repo().resolve_slug(&slug_hash).await?;
+        Ok(res.is_some())
     }
 
-    pub async fn ensure_executable(
-        &self,
-        command_id: Uuid,
-        command_region: Region,
-    ) -> Result<bool> {
-        if command_region != self.region {
-            return Err(Error::validation(
-                "region",
-                "Region mismatch (sharding violation prevention)",
-            ));
-        }
+    pub async fn fetch_verified(&self, target: &CommandTarget<ProfileId>) -> Result<Profile> {
+        self.verify_region_sharding()?;
+        self.verify_actors(target.id)?;
 
-        // Affectation directe et typée du retour de la transaction
-        let exists = self
-            .app
-            .transaction_manager()
-            .run_in_transaction(|mut tx| async move {
-                let is_present = self
-                    .app
-                    .idempotency_repo()
-                    .exists(Some(&mut *tx), &command_id)
-                    .await?;
-                Ok(is_present)
-            })
-            .await?;
-
-        Ok(!exists)
-    }
-
-    pub async fn fetch_verified(
-        &self,
-        target: &CommandTarget<ProfileId>,
-    ) -> Result<Profile> {
-        if Some(&target.id) != self.profile_id.as_ref() {
-            return Err(Error::validation("target", "Context/Target mismatch"));
-        }
-
-        let profile = self
-            .app
+        let profile: Profile = self
+            .kernel
             .profile_repo()
-            .find_by_id(target.id, self.region, None)
+            .find_by_id(target.id)
             .await?
             .ok_or_else(|| Error::not_found("Profile", target.id.to_string()))?;
 
@@ -144,56 +108,28 @@ impl<TM: TransactionManager> ProfileCommandContext<TM> {
         Ok(profile)
     }
 
-    pub async fn save(&self, profile: &mut Profile, command_id: Option<Uuid>) -> Result<()> {
-        if let Some(expected_id) = self.profile_id {
-            if profile.profile_id() != expected_id {
-                return Err(Error::validation(
-                    "profile_id",
-                    "Identity mismatch violation",
-                ));
-            }
+    pub async fn save(&self, profile: &mut Profile, command_id: Uuid) -> Result<()> {
+        // Validation préventive du Shard régional et des acteurs
+        self.verify_region_sharding()?;
+        self.verify_actors(profile.profile_id())?;
+
+        let idempotency_repo = self.kernel.idempotency_repo();
+
+        // Vérification de l'idempotence au niveau du Shard
+        let already_processed = idempotency_repo.exists(None, &command_id).await?;
+        if already_processed {
+            tracing::warn!(
+                command_id = %command_id,
+                "Idempotence DB : Commande de profil déjà appliquée sur ce Shard. Skip."
+            );
+            return Ok(());
         }
 
-        let events = profile.pull_events();
+        // Persistance effective de l'état de l'agrégat
+        self.kernel.profile_repo().save(profile).await?;
 
-        self.app
-            .transaction_manager()
-            .run_in_transaction(|mut tx| async move {
-                if let Some(cmd_id) = command_id {
-                    if self
-                        .app
-                        .idempotency_repo()
-                        .exists(Some(&mut *tx), &cmd_id)
-                        .await?
-                    {
-                        return Err(Error::already_exists("Command", "id", cmd_id.to_string()));
-                    }
-                }
-
-                self.app
-                    .profile_repo()
-                    .save(self.region, profile, Some(&mut *tx))
-                    .await?;
-
-                if !events.is_empty() {
-                    let event_refs: Vec<&dyn Event> = events.iter().map(|e| e.as_ref()).collect();
-                    self.app
-                        .outbox_repo()
-                        .save_all(self.region, &mut *tx, &event_refs)
-                        .await?;
-                }
-
-                if let Some(cmd_id) = command_id {
-                    self.app
-                        .idempotency_repo()
-                        .save(Some(&mut *tx), &cmd_id)
-                        .await?;
-                }
-
-                tx.commit().await?;
-                Ok(())
-            })
-            .await?;
+        // Enregistrement du token d'idempotence après succès
+        idempotency_repo.save(None, &command_id).await?;
 
         Ok(())
     }

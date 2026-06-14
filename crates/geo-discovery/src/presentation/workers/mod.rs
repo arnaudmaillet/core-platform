@@ -1,5 +1,3 @@
-mod cache_eviction;
-mod cache_hydration;
+mod cache;
 
-pub use cache_eviction::CacheEvictionWorker;
-pub use cache_hydration::MapCacheHydrationWorker;
+pub use cache::{CacheEvictionWorker, MapAnnotationCacheHydrationWorker};

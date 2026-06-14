@@ -1,11 +1,14 @@
-// backend/services/profile/api/command-server/tests/e2e_it.rs
+// backend/services/profile/api/command-server/tests/profile_e2e_test.rs (ou ton chemin de test)
 
 use auth::Claims;
 use auth_test_utils::TokenValidatorStub;
-use infra_sqlx::sqlx;
+use profile::entities::Profile;
+use profile::repositories::{ProfileRepository, ProfileRoutingRepository};
+use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use profile::types::{DisplayName, Handle};
 use profile_test_utils::ProfileTestContextBuilder;
-use shared_kernel::core::{Identifier, Result};
-use shared_kernel::types::{AccountId, ProfileId, Region, SubId};
+use shared_kernel::core::{Result, Versioned};
+use shared_kernel::types::{AccountId, ProfileId, Region};
 use shared_proto::profile::v1::profile_identity_service_client::ProfileIdentityServiceClient;
 use shared_proto::profile::v1::{ChangeHandleRequest, ProfileTarget};
 use tonic::Request;
@@ -33,7 +36,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let mock_validator = std::sync::Arc::new(TokenValidatorStub::new());
 
     let expected_claims = Claims {
-        sub_id: SubId::try_new(target_sub_id)?,
+        sub_id: shared_kernel::types::SubId::try_new(target_sub_id)?,
         aud: serde_json::Value::String("profile-service".to_string()),
         iss: "https://identity.core.platform/realms/master".to_string(),
         email: None,
@@ -46,7 +49,7 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
 
     mock_validator.stub_token(test_token, expected_claims);
 
-    // 2. SETUP INFRASTRUCTURE
+    // 1. SETUP INFRASTRUCTURE
     let ctx = ProfileTestContextBuilder::new()
         .with_mock_auth(mock_validator)
         .with_grpc_server()
@@ -57,40 +60,46 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
         .await
         .unwrap();
 
+    // 2. SETUP DONNÉES DE TEST via les Stores de Production
     let region = Region::default();
     let region_str = region.as_str();
     let real_profile_id = ProfileId::generate();
     let real_account_id = AccountId::generate();
+    let handle = Handle::try_new("alice_rocks")?;
 
-    sqlx::query(
-        "INSERT INTO user_profiles (profile_id, account_id, region, handle, display_name, version, is_private, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, 0, false, NOW(), NOW())"
-    )
-    .bind(real_profile_id.as_uuid())
-    .bind(real_account_id.uuid())
-    .bind(region_str)
-    .bind("alice_rocks")
-    .bind("Alice")
-    .execute(&ctx.pg_pool())
-    .await
-    .unwrap();
+    let session = ctx.kernel().scylla().session();
+    let keyspace_name = format!("{}_profile_storage", region.to_string().to_lowercase());
 
+    let profile_store = ScyllaProfileStore::new(session.clone(), keyspace_name)
+        .await
+        .unwrap();
+
+    let routing_store = ScyllaProfileRoutingStore::new(session.clone())
+        .await
+        .unwrap();
+
+    let mut profile = Profile::builder(real_account_id, real_profile_id, handle.clone())?
+        .with_display_name(DisplayName::try_new("Alice")?)
+        .build()?;
+
+    profile_store.save(&mut profile).await.unwrap();
+    routing_store
+        .register_routing(real_profile_id, &handle.to_sha256_hash(), region)
+        .await
+        .unwrap();
+
+    // 3. EXÉCUTION DU TEST E2E via gRPC
     let change_handle_req = ChangeHandleRequest {
         command_id: Uuid::now_v7().to_string(),
         target: Some(ProfileTarget {
             profile_id: real_profile_id.to_string(),
-            region: region_str.to_string(),
             expected_version: 0,
         }),
         new_handle: "alice_wonderland".to_string(),
     };
 
     let res = identity_client
-        .change_handle(with_auth(
-            change_handle_req,
-            test_token, // 💡 Utilisation du test_token
-            region_str,
-        ))
+        .change_handle(with_auth(change_handle_req, test_token, region_str))
         .await;
 
     assert!(
@@ -99,17 +108,15 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
         res.err()
     );
 
-    let row: (String, i64) = sqlx::query_as(
-        "SELECT handle, version FROM user_profiles WHERE profile_id = $1 AND region = $2",
-    )
-    .bind(real_profile_id.as_uuid())
-    .bind(region_str)
-    .fetch_one(&ctx.pg_pool())
-    .await
-    .expect("Profile should exist in DB");
+    // 4. ASSERTION via le Store de production
+    let saved_profile = profile_store
+        .find_by_id(real_profile_id)
+        .await
+        .unwrap()
+        .expect("Profile should exist in ScyllaDB");
 
-    assert_eq!(row.0, "alice_wonderland");
-    assert_eq!(row.1, 1);
+    assert_eq!(saved_profile.handle().as_str(), "alice_wonderland");
+    assert_eq!(saved_profile.version(), 1);
 
     ctx.shutdown().await;
     Ok(())

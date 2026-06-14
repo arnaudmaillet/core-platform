@@ -35,7 +35,7 @@ impl IdentifiableCommand for RemovePushTokenCommand {
 }
 
 impl RemovePushTokenCommand {
-    pub fn try_from_proto(req: RemovePushTokenRequest) -> Result<Self> {
+    pub fn try_from_proto(req: RemovePushTokenRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing profile target"))?;
@@ -50,8 +50,6 @@ impl RemovePushTokenCommand {
 
         let token = PushToken::try_new(&req.token)
             .map_err(|e| Error::validation("push_token", e.to_string()))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id,

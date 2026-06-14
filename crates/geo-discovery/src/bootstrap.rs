@@ -1,70 +1,77 @@
 // crates/geo_discovery/src/application/builder.rs
 
-use infra_fred::fred::clients::Pool;
-use infra_scylla::scylla::client::session::Session as ScyllaSession;
+use shared_kernel::command::CommandBus;
+use shared_kernel::environment::ClusterContext;
 use shared_kernel::idempotency::IdempotencyRepository;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::context::GeoDiscoveryAppContext;
-use crate::handlers::{HydrateTileCacheCommand, HydrateTileCacheHandler};
-use crate::infrastructure::repositories::{FredMapCacheRepository, ScyllaMapPersistenceRepository};
-use crate::repositories::{MapCacheRepository, MapPersistenceRepository};
+use crate::context::{GeoDiscoveryCommandCtx, GeoDiscoveryKernelCtx};
+use crate::repositories::{MapAnnotationArchiveRepository, MapAnnotationDiscoveryRepository};
 use crate::resolvers::EngagementResolver;
-use crate::workers::MapCacheHydrationWorker;
+use crate::use_cases::{
+    HydrateTileCacheCommand, HydrateTileCacheHandler, IndexMapAnnotationCommand,
+    IndexMapAnnotationHandler, RemoveMapAnnotationCommand, RemoveMapAnnotationHandler,
+};
+use crate::workers::MapAnnotationCacheHydrationWorker;
 
 pub struct GeoDiscoveryServiceBuilder {
-    scylla_session: Arc<ScyllaSession>,
-    fred_pool: Pool,
+    archive_repo: Arc<dyn MapAnnotationArchiveRepository>,
+    discovery_repo: Arc<dyn MapAnnotationDiscoveryRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
     engagement_resolver: Arc<dyn EngagementResolver>,
     max_posts_per_tile: usize,
+    cluster_ctx: ClusterContext,
 }
 
 impl GeoDiscoveryServiceBuilder {
     pub fn new(
-        scylla_session: Arc<ScyllaSession>,
-        fred_pool: Pool,
+        archive_repo: Arc<dyn MapAnnotationArchiveRepository>,
+        discovery_repo: Arc<dyn MapAnnotationDiscoveryRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
         engagement_resolver: Arc<dyn EngagementResolver>,
         max_posts_per_tile: usize,
+        cluster_ctx: ClusterContext,
     ) -> Self {
         Self {
-            scylla_session,
-            fred_pool,
+            archive_repo,
+            discovery_repo,
             idempotency_repo,
             engagement_resolver,
             max_posts_per_tile,
+            cluster_ctx,
         }
     }
 
-    pub async fn build_context(
-        &self,
-    ) -> Result<Arc<GeoDiscoveryAppContext>, infra_scylla::scylla::errors::PrepareError> {
-        let persistence_repo: Arc<dyn MapPersistenceRepository> =
-            Arc::new(ScyllaMapPersistenceRepository::new(self.scylla_session.clone()).await?);
-
-        let cache_repo: Arc<dyn MapCacheRepository> =
-            Arc::new(FredMapCacheRepository::new(self.fred_pool.clone()));
-
+    pub async fn build_context(&self) -> GeoDiscoveryKernelCtx {
         let (hydration_sender, hydration_receiver) =
             mpsc::channel::<HydrateTileCacheCommand>(10000);
 
         let hydration_handler = HydrateTileCacheHandler::new(
-            cache_repo.clone(),
-            persistence_repo.clone(),
+            self.discovery_repo.clone(),
+            self.archive_repo.clone(),
             self.max_posts_per_tile,
         );
 
-        let hydration_worker = MapCacheHydrationWorker::new(hydration_handler);
+        let hydration_worker = MapAnnotationCacheHydrationWorker::new(hydration_handler);
         hydration_worker.start(hydration_receiver);
 
-        Ok(Arc::new(GeoDiscoveryAppContext::new(
-            persistence_repo,
-            cache_repo,
+        GeoDiscoveryKernelCtx::new(
+            self.archive_repo.clone(),
+            self.discovery_repo.clone(),
             self.idempotency_repo.clone(),
             self.engagement_resolver.clone(),
             hydration_sender,
-        )))
+            self.cluster_ctx,
+        )
+    }
+
+    pub fn register_handlers(&self, bus: &mut CommandBus) {
+        bus.register::<GeoDiscoveryCommandCtx, IndexMapAnnotationCommand, IndexMapAnnotationHandler>(
+            IndexMapAnnotationHandler,
+        );
+        bus.register::<GeoDiscoveryCommandCtx, RemoveMapAnnotationCommand, RemoveMapAnnotationHandler>(
+            RemoveMapAnnotationHandler,
+        );
     }
 }

@@ -1,12 +1,11 @@
-// crates/profile/src/application/commands/identity/update_privacy/update_privacy_handler.rs
-
 use profile::commands::UpdatePrivacyCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
+use profile::types::Handle;
 use profile_test_utils::ProfileTestFixture;
+use profile_test_utils::assertions::ProfileRepositoryAsserts;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ErrorCode, Result, Versioned};
-use shared_kernel_test_utils::repositories::TransactionManagerStub;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -14,35 +13,51 @@ async fn test_update_privacy_success() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
 
-    // On part d'un profil public (is_private: false par défaut dans le builder)
+    // On part d'un profil public
     let profile = f.builder("alice")?.with_privacy(false).build()?;
     let version_snapshot = profile.version();
     f.given_profile(profile).await;
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let cmd = UpdatePrivacyCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        region: f.region(),
-        is_private: true, // On passe en privé
+        is_private: true,
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdatePrivacyCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, UpdatePrivacyCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
-    let _ = f
-        .assert_profile(|p| {
+    f.profile_repo()
+        .assert_profile_state(f.profile_id(), |p| {
             assert!(p.is_private());
             assert_eq!(p.version(), version_snapshot + 1);
         })
         .await;
 
-    f.assert_outbox(1, Some(ProfileEvent::PRIVACY_UPDATED));
+    f.profile_repo()
+        .assert_captured_event_for(f.profile_id(), |event| match event {
+            ProfileEvent::PrivacyChanged {
+                profile_id,
+                account_id,
+                is_private,
+                ..
+            } => {
+                assert_eq!(profile_id, &f.profile_id());
+                assert_eq!(account_id, &f.account_id());
+                assert!(*is_private);
+            }
+            _ => panic!("Type d'événement incorrect"),
+        })
+        .await;
 
     Ok(())
 }
@@ -56,30 +71,32 @@ async fn test_update_privacy_business_idempotency() -> Result<()> {
     let profile = f.builder("alice")?.with_privacy(true).build()?;
     let version_snapshot = profile.version();
     f.given_profile(profile).await;
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let cmd = UpdatePrivacyCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        region: f.region(),
-        is_private: true, // On demande encore du privé
+        is_private: true,
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdatePrivacyCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, UpdatePrivacyCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
-    let _ = f
-        .assert_profile(|p| {
-            assert_eq!(p.version(), version_snapshot); // Pas d'incrément
+    f.profile_repo()
+        .assert_profile_state(f.profile_id(), |p| {
+            assert_eq!(p.version(), version_snapshot);
         })
         .await;
 
-    f.assert_outbox(0, None);
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }
@@ -90,28 +107,28 @@ async fn test_update_privacy_concurrency_conflict() -> Result<()> {
     let f = ProfileTestFixture::new();
     let profile = f.builder("alice")?.build()?;
     f.given_profile(profile).await;
+    f.given_slug_routing(
+        f.profile_id(),
+        &Handle::try_new("alice")?.to_sha256_hash(),
+        f.region(),
+    )
+    .await;
 
     let cmd = UpdatePrivacyCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), 99), // Mauvaise version attendue
-        region: f.region(),
+        target: CommandTarget::versioned(f.profile_id(), 99),
         is_private: true,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext<TransactionManagerStub>, UpdatePrivacyCommand, ()>(
-            f.command_ctx().clone(),
-            cmd,
-        )
+        .execute::<ProfileCommandCtx, UpdatePrivacyCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
-    assert!(matches!(
-        result,
-        Err(e) if e.code == ErrorCode::ConcurrencyConflict
-    ));
+    assert!(matches!(result, Err(e) if e.code == ErrorCode::ConcurrencyConflict));
+    f.profile_repo().assert_no_events_for(f.profile_id()).await;
 
     Ok(())
 }

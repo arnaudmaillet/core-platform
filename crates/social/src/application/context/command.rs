@@ -1,29 +1,28 @@
 // crates/social/src/application/context/command.rs
 
-use crate::application::context::SocialAppContext;
-use crate::entities::FollowRelation;
+use crate::application::context::SocialKernelCtx;
+use crate::domain::entities::FollowRelation;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
-use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct SocialCommandContext {
-    app: SocialAppContext,
+pub struct SocialCommandCtx {
+    kernel: SocialKernelCtx,
     target_profile_id: ProfileId,
     region: Region,
 }
 
-impl SocialCommandContext {
-    pub(crate) fn new(app: SocialAppContext, target_profile_id: ProfileId, region: Region) -> Self {
+impl SocialCommandCtx {
+    pub fn new(kernel: SocialKernelCtx, target_profile_id: ProfileId, region: Region) -> Self {
         Self {
-            app,
+            kernel,
             target_profile_id,
             region,
         }
     }
 
-    pub fn app(&self) -> &SocialAppContext {
-        &self.app
+    pub fn kernel(&self) -> &SocialKernelCtx {
+        &self.kernel
     }
 
     pub fn region(&self) -> Region {
@@ -34,56 +33,51 @@ impl SocialCommandContext {
         self.target_profile_id
     }
 
-    pub async fn ensure_executable(&self, command_id: Uuid, region: &Region) -> Result<bool> {
-        if region != &self.region {
+    pub fn verify_actors(&self, _follower_id: ProfileId, target_id: ProfileId) -> Result<()> {
+        if target_id != self.target_profile_id {
             return Err(Error::validation(
-                "region",
-                "Region mismatch (sharding violation prevention)",
+                "target",
+                "Context/Target mismatch violation",
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn is_already_following(
+        &self,
+        follower_id: ProfileId,
+        following_id: ProfileId,
+    ) -> Result<bool> {
+        self.kernel
+            .follow_relation_repo()
+            .is_following(follower_id, following_id)
+            .await
+    }
+
+    pub async fn save_relation(&self, relation: &mut FollowRelation) -> Result<()> {
+        if relation.following_id() != self.target_profile_id {
+            return Err(Error::validation(
+                "following_id",
+                "Identity mismatch violation",
             ));
         }
 
-        let exists = self
-            .app
-            .idempotency_repo()
-            .exists(None, &command_id)
-            .await?;
+        self.kernel.follow_relation_repo().save(relation).await?;
 
-        if exists {
-            return Ok(false);
-        }
-        Ok(true)
-    }
-
-    pub async fn save_relation(
-        &self,
-        relation: &mut FollowRelation,
-        command_id: Uuid,
-    ) -> Result<()> {
-        self.app.idempotency_repo().save(None, &command_id).await?;
-        self.app.relation_repo().save(relation).await?;
-        self.app
-            .cache_counter_repo()
-            .increment_counters(relation.follower_id(), relation.following_id())
+        self.kernel
+            .profile_counters_index()
+            .increment(relation.follower_id(), relation.following_id())
             .await?;
 
         Ok(())
     }
 
-    pub async fn delete_relation(
-        &self,
-        relation: &mut FollowRelation,
-        command_id: Uuid,
-    ) -> Result<()> {
-        self.app.idempotency_repo().save(None, &command_id).await?;
+    pub async fn delete_relation(&self, relation: &mut FollowRelation) -> Result<()> {
+        self.kernel.follow_relation_repo().delete(relation).await?;
 
-        self.app
-            .relation_repo()
-            .delete(relation.follower_id(), relation.following_id())
-            .await?;
-
-        self.app
-            .cache_counter_repo()
-            .decrement_counters(relation.follower_id(), relation.following_id())
+        self.kernel
+            .profile_counters_index()
+            .decrement(relation.follower_id(), relation.following_id())
             .await?;
 
         Ok(())

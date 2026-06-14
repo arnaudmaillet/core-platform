@@ -34,7 +34,7 @@ impl IdentifiableCommand for LinkSubIdentityCommand {
 }
 
 impl LinkSubIdentityCommand {
-    pub fn try_from_proto(req: LinkSubIdentityRequest) -> Result<Self> {
+    pub fn try_from_proto(req: LinkSubIdentityRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing account target"))?;
@@ -45,8 +45,6 @@ impl LinkSubIdentityCommand {
         let sub_id =
             SubId::try_from(req.sub_id).map_err(|e| Error::validation("sub_id", e.to_string()))?;
 
-        let region = Region::try_new(proto_target.region)?;
-
         let target = CommandTarget {
             id: AccountId::try_from(proto_target.account_id)?,
             expected_version: Some(proto_target.expected_version),
@@ -55,8 +53,8 @@ impl LinkSubIdentityCommand {
         Ok(Self {
             command_id,
             target,
-            region,
             sub_id,
+            region,
         })
     }
 }

@@ -1,8 +1,7 @@
-// crates/shared-kernel/src/application/command/bus.rs
-
 use crate::cache::CacheRepository;
 use crate::command::{CacheKeyComponent, CommandHandler, IdentifiableCommand};
-use crate::core::{Error, ErrorCode, Result, with_retry};
+use crate::core::{Error, Result, with_retry};
+use crate::idempotency::IdempotencyRepository;
 use async_trait::async_trait;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -13,21 +12,26 @@ use std::sync::Arc;
 pub trait AnyCommandHandler: Send + Sync {
     async fn execute_any(
         &self,
-        ctx: Box<dyn Any + Send + Sync>,
-        cmd: Box<dyn Any + Send>,
-    ) -> Result<Box<dyn Any + Send>>;
+        ctx: Arc<dyn Any + Send + Sync>,
+        cmd: Arc<dyn Any + Send + Sync>,
+    ) -> Result<Arc<dyn Any + Send + Sync>>;
 }
 
 pub struct CommandBus {
     handlers: HashMap<TypeId, Arc<dyn AnyCommandHandler>>,
     cache: Arc<dyn CacheRepository>,
+    idempotency: Arc<dyn IdempotencyRepository>,
 }
 
 impl CommandBus {
-    pub fn new(cache: Arc<dyn CacheRepository>) -> Self {
+    pub fn new(
+        cache: Arc<dyn CacheRepository>,
+        idempotency: Arc<dyn IdempotencyRepository>,
+    ) -> Self {
         Self {
             handlers: HashMap::new(),
             cache,
+            idempotency,
         }
     }
 
@@ -35,10 +39,9 @@ impl CommandBus {
     where
         TContext: 'static + Send + Sync + Clone,
         TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
-        // 🎯 On s'assure que le type associé Routing de la commande est compatible avec le cache
         TCommand::Routing: CacheKeyComponent,
         THandler: CommandHandler<Context = TContext, Command = TCommand> + 'static + Send + Sync,
-        THandler::Output: 'static + Send,
+        THandler::Output: 'static + Send + Sync,
     {
         let wrapper = HandlerWrapper {
             handler,
@@ -46,7 +49,6 @@ impl CommandBus {
         };
 
         let arc_handler: Arc<dyn AnyCommandHandler> = Arc::new(wrapper);
-
         self.handlers.insert(TypeId::of::<TCommand>(), arc_handler);
     }
 
@@ -59,11 +61,20 @@ impl CommandBus {
         TContext: 'static + Send + Sync + Clone,
         TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
         TCommand::Routing: CacheKeyComponent,
-        TOutput: 'static + Send + Default,
+        TOutput: 'static + Send + Sync + Default + Clone,
     {
+        let cmd_id = cmd.command_id();
         let cache_key = cmd.resolve_cache_key();
-
         let type_id = TypeId::of::<TCommand>();
+
+        if self.idempotency.exists(None, &cmd_id).await? {
+            tracing::info!(
+                command_id = %cmd_id,
+                command_type = %std::any::type_name::<TCommand>(),
+                "CommandBus: Idempotence technique activée. Commande déjà traitée."
+            );
+            return Ok(TOutput::default());
+        }
 
         let handler = self.handlers.get(&type_id).ok_or_else(|| {
             Error::internal(format!(
@@ -72,28 +83,22 @@ impl CommandBus {
             ))
         })?;
 
-        let ctx_box = Box::new(ctx);
-        let cmd_box = Box::new(cmd);
+        let ctx_arc = Arc::new(ctx);
+        let cmd_arc = Arc::new(cmd);
 
-        let result = handler.execute_any(ctx_box, cmd_box).await;
-
-        let final_result = match result {
-            Err(e) if e.code == ErrorCode::AlreadyExists && e.message.contains("Command") => {
-                return Ok(TOutput::default());
-            }
-            res => res?,
-        };
+        let result = handler.execute_any(ctx_arc, cmd_arc).await?;
+        self.idempotency.save(None, &cmd_id).await?;
 
         if let Some(key) = cache_key {
             let _ = self.cache.delete(&key).await;
             tracing::info!(key = %key, "CommandBus: Cache invalidated");
         }
 
-        let output = final_result
+        let output = result
             .downcast::<TOutput>()
             .map_err(|_| Error::internal("CommandBus: Downcast output failed"))?;
 
-        Ok(*output)
+        Ok((*output).clone())
     }
 }
 
@@ -110,13 +115,13 @@ where
     TCommand: IdentifiableCommand + std::fmt::Debug + 'static + Send + Sync + Clone,
     TCommand::Routing: CacheKeyComponent,
     THandler: CommandHandler<Context = TContext, Command = TCommand> + Send + Sync,
-    THandler::Output: 'static + Send,
+    THandler::Output: 'static + Send + Sync,
 {
     async fn execute_any(
         &self,
-        ctx: Box<dyn Any + Send + Sync>,
-        cmd: Box<dyn Any + Send>,
-    ) -> Result<Box<dyn Any + Send>> {
+        ctx: Arc<dyn Any + Send + Sync>,
+        cmd: Arc<dyn Any + Send + Sync>,
+    ) -> Result<Arc<dyn Any + Send + Sync>> {
         use tracing::{Instrument, info_span};
 
         let concrete_cmd = cmd
@@ -128,7 +133,6 @@ where
             .map_err(|_| Error::internal("AnyCommandHandler: Invalid context type"))?;
 
         let target = concrete_cmd.target();
-
         let routing_log = concrete_cmd
             .routing()
             .to_key_component()
@@ -148,9 +152,9 @@ where
             tracing::info!("starting command execution");
 
             let output = with_retry(config, || {
-                let c = concrete_ctx.clone();
-                let command = concrete_cmd.clone();
-                async move { self.handler.handle(&c, *command).await }
+                let c = concrete_ctx.as_ref().clone();
+                let command = concrete_cmd.as_ref().clone();
+                async move { self.handler.handle(&c, command).await }
             })
             .await;
 
@@ -163,7 +167,6 @@ where
         };
 
         let output = result_fut.instrument(span).await?;
-
-        Ok(Box::new(output))
+        Ok(Arc::new(output))
     }
 }

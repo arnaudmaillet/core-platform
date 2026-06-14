@@ -10,70 +10,63 @@ use shared_kernel::core::{Error, Result};
 use shared_kernel::geo::GeoPoint;
 use shared_kernel::types::{PostId, ProfileId, Region};
 
-use crate::context::GeoDiscoveryAppContext;
+use crate::context::GeoDiscoveryKernelCtx;
 use crate::domain::types::{BucketHour, TileH3, TileResolution};
-use crate::entities::ActiveMapPost;
-use crate::types::TilePostMetadata;
+use crate::entities::MapAnnotation;
+use crate::types::{PopularityScore, TilePostMetadata};
 
 #[derive(Clone)]
-pub struct GeoDiscoveryCommandContext {
-    app: GeoDiscoveryAppContext,
+pub struct GeoDiscoveryCommandCtx {
+    kernel: GeoDiscoveryKernelCtx,
     operator_id: ProfileId,
-    region: Region,
+    region_cmd: Region,
 }
 
-impl GeoDiscoveryCommandContext {
-    pub fn new(app: GeoDiscoveryAppContext, operator_id: ProfileId, region: Region) -> Self {
+impl GeoDiscoveryCommandCtx {
+    pub fn new(kernel: GeoDiscoveryKernelCtx, operator_id: ProfileId, region_cmd: Region) -> Self {
         Self {
-            app,
+            kernel,
             operator_id,
-            region,
+            region_cmd,
         }
     }
 
-    pub fn app(&self) -> &GeoDiscoveryAppContext {
-        &self.app
+    pub fn app(&self) -> &GeoDiscoveryKernelCtx {
+        &self.kernel
     }
 
     pub fn region(&self) -> Region {
-        self.region
+        self.region_cmd
     }
 
-    pub async fn ensure_executable(
-        &self,
-        command_id: Uuid,
-        command_region: Region,
-    ) -> Result<bool> {
-        if command_region != self.region {
+    pub fn operator_id(&self) -> &ProfileId {
+        &self.operator_id
+    }
+
+    pub fn verify_region(&self, command_region: Region) -> Result<()> {
+        if command_region != self.region_cmd {
             return Err(Error::validation(
                 "region",
-                &format!(
-                    "Geo Sharding violation: Mismatch '{}' vs '{}'",
-                    command_region, self.region
+                format!(
+                    "Geo Sharding violation: Mismatch command region '{}' vs cluster sharding context '{}'",
+                    command_region, self.region_cmd
                 ),
             ));
         }
-        let exists = self
-            .app
-            .idempotency_repo()
-            .exists(None, &command_id)
-            .await?;
-        Ok(!exists)
+        Ok(())
     }
 
-    /// Centralise l'indexation : écrit 1 fois dans ScyllaDB (Pivot Rés. 7)
-    /// et propage dans les 5 niveaux produits de Redis de manière transparente.
     pub async fn index_active_post(
         &self,
         metadata: TilePostMetadata,
         location: GeoPoint,
         created_at: DateTime<Utc>,
         expires_at: DateTime<Utc>,
-        initial_score: f64,
+        popularity_score: PopularityScore,
         command_id: Option<Uuid>,
     ) -> Result<()> {
         if let Some(cmd_id) = command_id {
-            if self.app.idempotency_repo().exists(None, &cmd_id).await? {
+            if self.kernel.idempotency_repo().exists(None, &cmd_id).await? {
                 return Err(Error::already_exists(
                     "GeoCommand",
                     "id",
@@ -82,23 +75,24 @@ impl GeoDiscoveryCommandContext {
             }
         }
 
-        let persistence_repo = self.app.persistence_repo();
-        let cache_repo = self.app.cache_repo();
+        let persistence_repo = self.kernel.storage_repo();
+        let cache_repo = self.kernel.cache_repo();
 
-        let h3_lat_lng = LatLng::new(location.lat(), location.lon()).map_err(|e| {
-            Error::validation("location", format!("Invalid coordinates for H3: {}", e))
-        })?;
+        let h3_lat_lng = LatLng::new(location.lat().to_radians(), location.lon().to_radians())
+            .map_err(|e| {
+                Error::validation("location", format!("Invalid coordinates for H3: {}", e))
+            })?;
 
         let scylla_res = TileResolution::try_new(7)?;
         let scylla_cell = h3_lat_lng.to_cell(Resolution::try_from(7).unwrap());
         let scylla_tile = TileH3::from_str(&scylla_cell.to_string())?;
 
         let active_post_scylla =
-            ActiveMapPost::builder(metadata.post_id, location, scylla_res, scylla_tile)
+            MapAnnotation::builder(metadata.post_id, location, scylla_res, scylla_tile)
                 .with_post_type(metadata.post_type)
                 .with_thumbnail_url(metadata.thumbnail_url.clone())
                 .with_created_at(created_at)
-                .with_expires_at(expires_at) // Injecté de manière personnalisée !
+                .with_expires_at(expires_at)
                 .build()?;
 
         let ttl_duration = if active_post_scylla.expires_at() > active_post_scylla.created_at() {
@@ -122,13 +116,12 @@ impl GeoDiscoveryCommandContext {
             let cell = h3_lat_lng.to_cell(h3_resolution);
             let tile_id = TileH3::from_str(&cell.to_string())?;
 
-            // Redis reçoit la vraie date d'expiration pour son ZSET temporel d'éviction
             cache_repo
                 .add_to_tile(
                     resolution,
                     &tile_id,
                     &metadata,
-                    initial_score,
+                    popularity_score,
                     active_post_scylla.expires_at(),
                 )
                 .await?;
@@ -137,7 +130,7 @@ impl GeoDiscoveryCommandContext {
         }
 
         if let Some(cmd_id) = command_id {
-            self.app.idempotency_repo().save(None, &cmd_id).await?;
+            self.kernel.idempotency_repo().save(None, &cmd_id).await?;
         }
         Ok(())
     }
@@ -151,7 +144,7 @@ impl GeoDiscoveryCommandContext {
         command_id: Uuid,
     ) -> Result<()> {
         if self
-            .app
+            .kernel
             .idempotency_repo()
             .exists(None, &command_id)
             .await?
@@ -163,8 +156,8 @@ impl GeoDiscoveryCommandContext {
             ));
         }
 
-        let persistence_repo = self.app.persistence_repo();
-        let cache_repo = self.app.cache_repo();
+        let persistence_repo = self.kernel.storage_repo();
+        let cache_repo = self.kernel.cache_repo();
 
         let h3_lat_lng = LatLng::new(location.lat(), location.lon()).map_err(|e| {
             Error::validation(
@@ -198,7 +191,10 @@ impl GeoDiscoveryCommandContext {
                 .await?;
         }
 
-        self.app.idempotency_repo().save(None, &command_id).await?;
+        self.kernel
+            .idempotency_repo()
+            .save(None, &command_id)
+            .await?;
         Ok(())
     }
 
@@ -209,7 +205,7 @@ impl GeoDiscoveryCommandContext {
         older_than: DateTime<Utc>,
     ) -> Result<Vec<PostId>> {
         let evicted_metadata = self
-            .app
+            .kernel
             .cache_repo()
             .evict_old_posts(resolution, tile_id, older_than)
             .await?;

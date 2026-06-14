@@ -37,7 +37,7 @@ async fn test_change_region_success() -> Result<()> {
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+        .execute::<AccountCommandContext, ChangeRegionCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
@@ -86,7 +86,7 @@ region: f.region(),
 
     // 2. Act
     f.bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+        .execute::<AccountCommandContext, ChangeRegionCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
@@ -126,7 +126,7 @@ region: f.region(),
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+        .execute::<AccountCommandContext, ChangeRegionCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
@@ -157,7 +157,7 @@ region: f.region(),
 
     let result = f
         .bus()
-        .execute::<AccountCommandContext<TransactionManagerStub>, ChangeRegionCommand, ()>(
+        .execute::<AccountCommandContext, ChangeRegionCommand, ()>(
             f.command_ctx().clone(),
             cmd,
         )
