@@ -34,7 +34,7 @@ async fn test_verify_phone_success() -> Result<()> {
     f.global_registry()
         .insert_fixture(GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: account.identity().sub_id().cloned(),
             identifiers: RegistrationIdentifier::from_phone(phone),
             state: AccountState::UNVERIFIED,
@@ -49,7 +49,7 @@ async fn test_verify_phone_success() -> Result<()> {
     let cmd = VerifyPhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: code.to_string(),
     };
 
@@ -97,7 +97,7 @@ async fn test_verify_phone_fails_if_otp_invalid() -> Result<()> {
     let cmd = VerifyPhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: "654321".to_string(), // Mauvais code fourni
     };
 
@@ -153,7 +153,7 @@ async fn test_verify_phone_fails_if_otp_expired() -> Result<()> {
     let cmd = VerifyPhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: "123456".to_string(),
     };
 
@@ -198,7 +198,7 @@ async fn test_verify_phone_technical_idempotency() -> Result<()> {
     let cmd = VerifyPhoneCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: "123456".to_string(),
     };
 

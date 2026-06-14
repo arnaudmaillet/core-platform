@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateDisplayNameCommand, context::ProfileCommandContext};
+use crate::{commands::UpdateDisplayNameCommand, context::ProfileCommandCtx};
 
 pub struct UpdateDisplayNameHandler;
 
@@ -16,19 +16,19 @@ impl UpdateDisplayNameHandler {
 
 #[async_trait]
 impl CommandHandler for UpdateDisplayNameHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = UpdateDisplayNameCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: UpdateDisplayNameCommand,
     ) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_display_name(cmd.new_display_name)? {
-            ctx.save(&mut profile).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
 
             info!(
                 profile_id = %profile.profile_id(),

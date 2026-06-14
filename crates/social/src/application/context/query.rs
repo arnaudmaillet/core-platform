@@ -1,22 +1,35 @@
 // crates/social/src/application/context/query.rs
 
-use crate::application::context::SocialAppContext;
+use std::sync::Arc;
+
+use crate::application::context::SocialKernelCtx;
 use crate::domain::entities::ProfileCounters;
+use crate::repositories::ProfileCountersStorageRepository;
 use shared_kernel::core::ErrorCode;
+use shared_kernel::types::Counter;
 use shared_kernel::{
     core::{Error, Result},
     types::{ProfileId, Region},
 };
 
 #[derive(Clone)]
-pub struct SocialQueryContext {
-    app: SocialAppContext,
+pub struct SocialQueryCtx {
+    kernel: SocialKernelCtx,
+    profile_counters_storage: Arc<dyn ProfileCountersStorageRepository>,
     region: Region,
 }
 
-impl SocialQueryContext {
-    pub(crate) fn new(app: SocialAppContext, region: Region) -> Self {
-        Self { app, region }
+impl SocialQueryCtx {
+    pub fn new(
+        kernel: SocialKernelCtx,
+        profile_counters_storage: Arc<dyn ProfileCountersStorageRepository>,
+        region: Region,
+    ) -> Self {
+        Self {
+            kernel,
+            profile_counters_storage,
+            region,
+        }
     }
 
     pub fn region(&self) -> Region {
@@ -28,8 +41,8 @@ impl SocialQueryContext {
         follower_id: ProfileId,
         following_id: ProfileId,
     ) -> Result<bool> {
-        self.app
-            .relation_repo()
+        self.kernel
+            .follow_relation_repo()
             .is_following(follower_id, following_id)
             .await
     }
@@ -40,8 +53,8 @@ impl SocialQueryContext {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<ProfileId>> {
-        self.app
-            .relation_repo()
+        self.kernel
+            .follow_relation_repo()
             .get_following_ids(follower_id, limit, offset)
             .await
     }
@@ -52,22 +65,42 @@ impl SocialQueryContext {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<ProfileId>> {
-        self.app
-            .relation_repo()
+        self.kernel
+            .follow_relation_repo()
             .get_followers_ids(following_id, limit, offset)
             .await
     }
 
     pub async fn get_profile_counters(&self, profile_id: ProfileId) -> Result<ProfileCounters> {
-        match self.app.cache_counter_repo().get_counters(profile_id).await {
+        // 1. Tentative de lecture sur l'index à chaud (Redis)
+        match self.kernel.profile_counters_index().read(profile_id).await {
             Ok(counters) => Ok(counters),
 
+            // 2. Cache Miss ! L'information n'est pas dans Redis
             Err(Error {
                 code: ErrorCode::NotFound,
                 ..
             }) => {
-                let db_counters = self.app.counter_repo().get_counters(profile_id).await?;
-                if let Err(e) = self.app.cache_counter_repo().save(&db_counters).await {
+                // On interroge ScyllaDB (fetch retourne un Option<ProfileCounters>)
+                let db_counters_opt = self.profile_counters_storage.fetch(profile_id).await?;
+
+                // Si le profil n'existe pas non plus en base, on applique une structure par défaut
+                let db_counters = db_counters_opt.unwrap_or_else(|| {
+                    ProfileCounters::restore(
+                        profile_id,
+                        Counter::default(),
+                        Counter::default(),
+                        chrono::Utc::now(),
+                    )
+                });
+
+                // 3. Réchauffement asynchrone du cache Redis pour les prochaines requêtes
+                if let Err(e) = self
+                    .kernel
+                    .profile_counters_index()
+                    .save(&db_counters)
+                    .await
+                {
                     tracing::warn!(
                         "Failed to warm up Redis counter cache for {}: {:?}",
                         profile_id,

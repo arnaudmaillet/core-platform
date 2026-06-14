@@ -1,73 +1,39 @@
 // crates/social/src/application/builder.rs
 
-use infra_fred::fred::clients::Pool as RedisPool;
-use infra_scylla::scylla::client::session::Session as ScyllaSession;
-use std::sync::Arc;
+use shared_kernel::command::CommandBus;
 
 use crate::{
-    commands::{FollowCommand, FollowHandler, UnfollowCommand, UnfollowHandler},
-    context::{SocialAppContext, SocialCommandContext},
-    domain::repositories::{CounterRepository, RelationRepository},
-    redis::RedisCounterRepository,
-    scylla::{ScyllaCounterRepository, ScyllaRelationRepository},
+    context::{SocialCommandCtx, SocialKernelCtx},
+    domain::repositories::{FollowRelationRepository, ProfileCountersIndexRepository},
+    use_cases::{FollowCommand, FollowHandler, UnfollowCommand, UnfollowHandler},
 };
-
-use shared_kernel::{
-    cache::CacheRepository, command::CommandBus, idempotency::IdempotencyRepository,
-};
+use std::sync::Arc;
 
 pub struct SocialServiceBuilder {
-    scylla_session: Arc<ScyllaSession>,
-    redis_pool: RedisPool,
-    redis_cache_repo: Arc<dyn CacheRepository>,
-    idempotency_repo: Arc<dyn IdempotencyRepository>,
+    follow_relation_repo: Arc<dyn FollowRelationRepository>,
+    profile_counters_index: Arc<dyn ProfileCountersIndexRepository>,
 }
 
 impl SocialServiceBuilder {
     pub fn new(
-        scylla_session: Arc<ScyllaSession>,
-        redis_pool: RedisPool,
-        redis_cache_repo: Arc<dyn CacheRepository>,
-        idempotency_repo: Arc<dyn IdempotencyRepository>,
+        follow_relation_repo: Arc<dyn FollowRelationRepository>,
+        profile_counters_index: Arc<dyn ProfileCountersIndexRepository>,
     ) -> Self {
         Self {
-            scylla_session,
-            redis_pool,
-            redis_cache_repo,
-            idempotency_repo,
+            follow_relation_repo,
+            profile_counters_index,
         }
     }
 
-    pub async fn build_context(&self) -> Arc<SocialAppContext> {
-        let relation_repo: Arc<dyn RelationRepository> = Arc::new(
-            ScyllaRelationRepository::new(self.scylla_session.clone())
-                .await
-                .expect("💥 Impossible d'initialiser ScyllaRelationRepository"),
-        );
-
-        let scylla_counter_repo: Arc<dyn CounterRepository> = Arc::new(
-            ScyllaCounterRepository::new(self.scylla_session.clone())
-                .await
-                .expect("💥 Impossible d'initialiser ScyllaCounterRepository"),
-        );
-
-        let redis_counter_repo: Arc<dyn CounterRepository> =
-            Arc::new(RedisCounterRepository::new(self.redis_pool.clone()));
-
-        Arc::new(SocialAppContext::new(
-            relation_repo,
-            redis_counter_repo,
-            scylla_counter_repo,
-        ))
+    pub async fn build_context(&self) -> SocialKernelCtx {
+        SocialKernelCtx::new(
+            self.follow_relation_repo.clone(),
+            self.profile_counters_index.clone(),
+        )
     }
 
-    pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new(self.redis_cache_repo.clone(), self.idempotency_repo.clone());
-
-        bus.register::<SocialCommandContext, FollowCommand, FollowHandler>(FollowHandler);
-
-        bus.register::<SocialCommandContext, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
-
-        Arc::new(bus)
+    pub fn register_handlers(&self, bus: &mut CommandBus) {
+        bus.register::<SocialCommandCtx, FollowCommand, FollowHandler>(FollowHandler);
+        bus.register::<SocialCommandCtx, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
     }
 }

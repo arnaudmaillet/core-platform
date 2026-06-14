@@ -1,1 +1,3 @@
-mod post_mapper;
+mod post;
+
+pub use post::GrpcPostMapper;

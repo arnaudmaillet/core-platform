@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::RemoveBannerCommand, context::ProfileCommandContext};
+use crate::{commands::RemoveBannerCommand, context::ProfileCommandCtx};
 
 pub struct RemoveBannerHandler;
 
@@ -16,19 +16,19 @@ impl RemoveBannerHandler {
 
 #[async_trait]
 impl CommandHandler for RemoveBannerHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = RemoveBannerCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: RemoveBannerCommand,
     ) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.remove_banner()? {
-            ctx.save(&mut profile).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
 
             info!(
                 profile_id = %profile.profile_id(),

@@ -1,7 +1,9 @@
+// crates/social-test-utils/src/assertions/counter.rs (à adapter selon ton arborescence)
+
 use crate::repositories::CounterRepositoryStub;
 use async_trait::async_trait;
 use shared_kernel::types::ProfileId;
-use social::repositories::CounterRepository;
+use social::repositories::ProfileCountersIndexRepository;
 
 #[async_trait]
 pub trait CounterRepositoryAsserts {
@@ -22,7 +24,7 @@ impl CounterRepositoryAsserts for CounterRepositoryStub {
         expected_followers: u64,
         expected_following: u64,
     ) {
-        let res = self.get_counters(profile_id).await.unwrap();
+        let res = self.read(profile_id).await.unwrap();
 
         assert_eq!(
             res.followers_count().value(),

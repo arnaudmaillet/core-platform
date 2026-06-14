@@ -3,8 +3,8 @@
 use chrono::{Duration, Utc};
 use shared_kernel::core::{ErrorCode, Result};
 use shared_kernel::types::ProfileId;
+use social::builders::FollowRelationBuilder;
 use social::entities::FollowRelation;
-use social::entities::FollowRelationBuilder;
 use social_test_utils::SocialTestFixture;
 use social_test_utils::assertions::{CounterRepositoryAsserts, RelationRepositoryAsserts};
 

@@ -22,7 +22,7 @@ pub trait GrpcServiceUtils {
         extensions: &tonic::Extensions,
     ) -> Result<AccountCommandCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.kernel_ctx().command(account_id, region))
+        Ok(self.kernel_ctx().build_command_ctx(account_id, region))
     }
 
     fn build_creation_ctx(
@@ -30,12 +30,12 @@ pub trait GrpcServiceUtils {
         extensions: &tonic::Extensions,
     ) -> Result<AccountCommandCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.kernel_ctx().creation_command(region))
+        Ok(self.kernel_ctx().build_creation_command_ctx(region))
     }
 
     fn build_query_ctx(&self, extensions: &tonic::Extensions) -> Result<AccountQueryCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.kernel_ctx().query(region))
+        Ok(self.kernel_ctx().build_query_ctx(region))
     }
 
     async fn dispatch_command<C, Output, R>(

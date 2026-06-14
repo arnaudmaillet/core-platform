@@ -14,7 +14,7 @@ shared-kernel = { workspace = true }
 profile = { workspace = true }
 infra-fred = { workspace = true }
 infra-kafka = { workspace = true }
-infra-sqlx = { workspace = true }
+infra-scylla = { workspace = true }
 
 tokio = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }

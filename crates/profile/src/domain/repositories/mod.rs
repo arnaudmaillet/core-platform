@@ -1,5 +1,5 @@
-mod profile_repository;
-mod routing_repository;
+mod profile;
+mod routing;
 
-pub use profile_repository::ProfileRepository;
-pub use routing_repository::ProfileRoutingRepository;
+pub use profile::ProfileRepository;
+pub use routing::ProfileRoutingRepository;

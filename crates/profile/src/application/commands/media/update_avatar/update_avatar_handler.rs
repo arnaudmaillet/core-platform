@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateAvatarCommand, context::ProfileCommandContext};
+use crate::{commands::UpdateAvatarCommand, context::ProfileCommandCtx};
 
 pub struct UpdateAvatarHandler;
 
@@ -16,19 +16,19 @@ impl UpdateAvatarHandler {
 
 #[async_trait]
 impl CommandHandler for UpdateAvatarHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = UpdateAvatarCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: UpdateAvatarCommand,
     ) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_avatar(cmd.new_avatar_url)? {
-            ctx.save(&mut profile).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
 
             info!(
                 profile_id = %profile.profile_id(),

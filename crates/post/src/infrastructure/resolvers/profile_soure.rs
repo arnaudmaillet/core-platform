@@ -4,8 +4,8 @@ use crate::resolvers::ProfileSource;
 use async_trait::async_trait;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::ProfileId;
+use shared_proto::profile::v1::ResolveSlugsRequest;
 use shared_proto::profile::v1::profile_query_service_client::ProfileQueryServiceClient;
-use shared_proto::profile::v1::{QueryMetadata, ResolveSlugsRequest};
 use std::collections::{BTreeMap, BTreeSet};
 use tonic::transport::Channel;
 
@@ -27,9 +27,6 @@ impl ProfileSource for GrpcProfileSource {
         slugs: &BTreeSet<String>,
     ) -> Result<BTreeMap<String, ProfileId>> {
         let request = tonic::Request::new(ResolveSlugsRequest {
-            metadata: Some(QueryMetadata {
-                region: self.region.clone(),
-            }),
             slugs: slugs.iter().cloned().collect(),
         });
 

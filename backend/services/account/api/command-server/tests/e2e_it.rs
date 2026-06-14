@@ -84,13 +84,12 @@ async fn test_e2e_complete_account_lifecycle() -> Result<()> {
     let register_command_id = Uuid::now_v7().to_string();
 
     // 4. PRÉPARATION PAYLOAD
-    let register_payload = RegisterRequest {
+    let register_payload: RegisterRequest = RegisterRequest {
         command_id: register_command_id.clone(),
         sub_id: Some(target_sub_id.to_string()),
         identifier: Some(RegistrationIdentifier {
             method: Some(Method::Email("audit-e2e@test.com".to_string())),
         }),
-        region: region.to_string(),
         locale: "fr-FR".to_string(),
         ip_addr: "127.0.0.1".to_string(),
     };

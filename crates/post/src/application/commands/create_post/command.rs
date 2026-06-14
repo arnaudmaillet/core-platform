@@ -53,11 +53,9 @@ impl IdentifiableCommand for CreatePostCommand {
 }
 
 impl CreatePostCommand {
-    pub fn try_from_proto(req: CreatePostRequest, post_id: PostId) -> Result<Self> {
+    pub fn try_from_proto(req: CreatePostRequest, post_id: PostId, region: Region) -> Result<Self> {
         let command_id = Uuid::parse_str(&req.command_id)
             .map_err(|_| Error::validation("command_id", "Invalid UUID"))?;
-        let region = Region::try_new(req.region)
-            .map_err(|_| Error::validation("region", "Invalid region"))?;
 
         let author_id = ProfileId::try_new(req.author_id)?;
         let target = CommandTarget::stateless(author_id);

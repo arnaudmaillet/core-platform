@@ -2,121 +2,110 @@
 
 use shared_kernel::{
     command::CommandTarget,
-    core::{Error, Result},
-    messaging::EventEmitter,
+    core::{Error, Result, Versioned},
     types::{PostId, ProfileId, Region},
 };
 use uuid::Uuid;
 
-use crate::{context::PostAppContext, entities::Post};
+use crate::{context::PostKernelCtx, entities::Post};
 
 #[derive(Clone)]
-pub struct PostCommandContext {
-    app: PostAppContext,
+pub struct PostCommandCtx {
+    kernel: PostKernelCtx,
     author_id: ProfileId,
-    region: Region,
+    region_cmd: Region,
 }
 
-impl PostCommandContext {
-    pub fn new(app: PostAppContext, author_id: ProfileId, region: Region) -> Self {
+impl PostCommandCtx {
+    pub fn new(kernel: PostKernelCtx, author_id: ProfileId, region_cmd: Region) -> Self {
         Self {
-            app,
+            kernel,
             author_id,
-            region,
+            region_cmd,
         }
     }
 
-    pub fn app(&self) -> &PostAppContext {
-        &self.app
+    pub fn kernel(&self) -> &PostKernelCtx {
+        &self.kernel
     }
 
     pub fn region(&self) -> Region {
-        self.region
+        self.region_cmd
     }
 
-    pub async fn save_idempotency(&self, command_id: Uuid) -> Result<()> {
-        self.app.idempotency_repo().save(None, &command_id).await?;
+    pub fn author_id(&self) -> &ProfileId {
+        &self.author_id
+    }
+
+    pub fn verify_actors(&self, post_author_id: ProfileId) -> Result<()> {
+        if post_author_id != self.author_id {
+            return Err(Error::forbidden(&format!(
+                "Action non autorisée : l'acteur {} n'est pas l'auteur du post {}",
+                self.author_id, post_author_id
+            )));
+        }
         Ok(())
     }
 
-    pub async fn ensure_executable(
-        &self,
-        command_id: Uuid,
-        command_region: Region,
-    ) -> Result<bool> {
-        if command_region != self.region {
+    pub async fn fetch_verified(&self, target: &CommandTarget<PostId>) -> Result<Post> {
+        if self.region_cmd != self.kernel.server_region() {
             return Err(Error::validation(
                 "region",
-                &format!(
-                    "Sharding violation: Mismatch '{}' vs '{}'",
-                    command_region, self.region
+                format!(
+                    "Sharding violation prevention: Command region '{}' mismatch with deployment cluster region '{}'",
+                    self.region_cmd,
+                    self.kernel.server_region()
                 ),
             ));
         }
-        let exists = self
-            .app
-            .idempotency_repo()
-            .exists(None, &command_id)
-            .await?;
-        Ok(!exists)
-    }
 
-    pub async fn fetch_verified(&self, target: &CommandTarget<PostId>) -> Result<Post> {
         let post = self
-            .app
+            .kernel
             .post_repo()
-            .find_by_id(self.region, &target.id)
+            .find_by_id(self.region_cmd, &target.id)
             .await?
             .ok_or_else(|| Error::not_found("Post", target.id.to_string()))?;
+
+        self.verify_actors(post.author_id())?;
+
+        let expected_version = target.expected_version.ok_or_else(|| {
+            Error::validation(
+                "expected_version",
+                "Sharding strict: Expected version is missing for this transaction",
+            )
+        })?;
+
+        if post.version() != expected_version {
+            return Err(Error::concurrency_conflict(format!(
+                "OCC Mismatch: DB v{}, Expected v{}",
+                post.version(),
+                expected_version
+            )));
+        }
 
         Ok(post)
     }
 
-    pub async fn save(&self, post: &mut Post, command_id: Option<Uuid>) -> Result<()> {
-        if post.author_id() != self.author_id {
-            return Err(Error::forbidden(&format!(
-                "Action non autorisée pour {}",
-                self.author_id
-            )));
-        }
+    pub async fn save(&self, post: &mut Post, _command_id: Uuid) -> Result<()> {
+        self.verify_actors(post.author_id())?;
 
-        let _events = post.pull_events();
-        self.app.post_repo().save(self.region, post).await?;
+        let post_repo = self.kernel.post_repo();
+        let region = self.region_cmd;
 
-        if let Some(cmd_id) = command_id {
-            self.app.idempotency_repo().save(None, &cmd_id).await?;
-        }
+        post_repo.save(region, post).await?;
+
         Ok(())
     }
 
-    pub async fn delete(&self, post: &Post, command_id: Uuid) -> Result<()> {
-        if post.author_id() != self.author_id {
-            return Err(Error::forbidden(&format!(
-                "Action non autorisée pour {}",
-                self.author_id
-            )));
-        }
+    pub async fn delete(&self, post: &Post, _command_id: Uuid) -> Result<()> {
+        self.verify_actors(post.author_id())?;
 
-        if self
-            .app
-            .idempotency_repo()
-            .exists(None, &command_id)
-            .await?
-        {
-            return Err(Error::already_exists(
-                "Command",
-                "id",
-                command_id.to_string(),
-            ));
-        }
+        let region = self.region_cmd;
 
-        self.app
+        self.kernel
             .post_repo()
-            .delete(self.region, &post.post_id(), &post.author_id())
+            .delete(region, &post.post_id(), &post.author_id())
             .await?;
-
-        // 4. Marquage de l'idempotence
-        self.app.idempotency_repo().save(None, &command_id).await?;
 
         Ok(())
     }

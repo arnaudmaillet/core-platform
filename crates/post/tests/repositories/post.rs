@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod scylla_integration_tests {
     use infra_test::ScyllaTestContext;
-    use post::repositories_impl::ScyllaPostRepository;
+    use post::repositories_impl::ScyllaPostStore;
     use shared_kernel::core::{PageQuery, Result};
     use shared_kernel::types::{PostId, PostType, ProfileId, Region};
 
@@ -11,7 +11,7 @@ mod scylla_integration_tests {
     use post::repositories::PostRepository;
     use post::types::{Caption, VisibilityLevel};
 
-    async fn get_test_context() -> (ScyllaPostRepository, ScyllaTestContext) {
+    async fn get_test_context() -> (ScyllaPostStore, ScyllaTestContext) {
         let valid_path = ["./migrations/scylla"]
             .iter()
             .find(|p| std::path::Path::new(p).exists())
@@ -23,7 +23,7 @@ mod scylla_integration_tests {
             .build()
             .await;
 
-        let repo = ScyllaPostRepository::new(scylla_ctx.session().clone(), &scylla_ctx.keyspace())
+        let repo = ScyllaPostStore::new(scylla_ctx.session().clone(), &scylla_ctx.keyspace())
             .await
             .expect("Échec de l'initialisation du ScyllaPostRepository");
 

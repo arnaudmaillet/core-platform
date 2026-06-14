@@ -21,7 +21,6 @@ use std::sync::Arc;
 
 pub struct AccountTestFixture {
     bus: Arc<CommandBus>,
-    region: Region,
     account_id: AccountId,
 
     kernel_ctx: AccountKernelCtx,
@@ -48,11 +47,10 @@ impl AccountTestFixture {
         let global_registry = Arc::new(GlobalIdentityRegistryStub::new());
         let otp_repo = Arc::new(OtpRepositoryStub::new());
 
-        let region = Region::default();
-        let cluster_ctx = ClusterContext::new(region);
+        let cluster_ctx = ClusterContext::default();
         let mut command_bus = CommandBus::new(cache_repo.clone(), idempotency_repo.clone());
 
-        let builder = AccountServiceBuilder::new(
+        let service = AccountServiceBuilder::new(
             account_repo.clone() as Arc<dyn AccountRepository>,
             outbox_repo.clone() as Arc<dyn OutboxRepository>,
             idempotency_repo.clone() as Arc<dyn IdempotencyRepository>,
@@ -62,15 +60,14 @@ impl AccountTestFixture {
             cluster_ctx,
         );
 
-        let kernel_ctx = builder.build_context();
-        let command_ctx = kernel_ctx.command(account_id, region);
-        let query_ctx = kernel_ctx.query(region);
+        let kernel_ctx = service.build_kernel_ctx();
+        let command_ctx = kernel_ctx.build_command_ctx(account_id, cluster_ctx.region());
+        let query_ctx = kernel_ctx.build_query_ctx(cluster_ctx.region());
 
-        builder.register_handlers(&mut command_bus);
+        service.register_handlers(&mut command_bus);
 
         Self {
             bus: Arc::new(command_bus),
-            region,
             account_id,
             kernel_ctx,
             command_ctx,
@@ -92,8 +89,8 @@ impl AccountTestFixture {
         self.account_id
     }
 
-    pub fn region(&self) -> Region {
-        self.region
+    pub fn server_region(&self) -> Region {
+        self.cluster_ctx.region()
     }
 
     pub fn kernel_ctx(&self) -> &AccountKernelCtx {

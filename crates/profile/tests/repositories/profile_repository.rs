@@ -8,17 +8,19 @@ use tokio;
 
 use infra_test::ScyllaTestContext; // Ton environnement de test ScyllaDB
 use shared_kernel::core::{ErrorCode, Identifier, Result, Versioned};
-use shared_kernel::types::{AccountId, ProfileId, Region};
+use shared_kernel::types::{AccountId, ProfileId};
 
 async fn get_test_context() -> (ScyllaProfileStore, ScyllaTestContext) {
     let scylla_ctx = ScyllaTestContext::builder()
+        .with_keyspace("eu_profile")
         .with_migrations(&["./migrations/scylla"])
         .build()
         .await;
 
-    // Le store de production Scylla est instancié pour une région spécifique (silo local)
-    let region = Region::default();
-    let repo = ScyllaProfileStore::new(scylla_ctx.session().clone(), region)
+    let session = scylla_ctx.session();
+    let test_keyspace = scylla_ctx.keyspace().to_string();
+
+    let repo = ScyllaProfileStore::new(session.clone(), test_keyspace)
         .await
         .expect("Failed to initialize ScyllaProfileStore for testing");
 
@@ -145,17 +147,17 @@ async fn test_profile_partial_data_resilience() -> Result<()> {
     let profile_uuid = domain_profile_id.as_uuid();
     let account_uuid = domain_account_id.uuid();
 
-    // On force l'injection d'une ligne brute ScyllaDB sans les champs optionnels (bio, urls, etc.)
-    // pour valider la robustesse de notre mapper d'infrastructure (ScyllaProfileRow -> Domain)
     let raw_cql = r#"
         INSERT INTO test_profile_storage.profiles 
         (id, account_id, handle, display_name, is_private, version, created_at, updated_at)
         VALUES (?, ?, ?, ?, false, 1, toTimestamp(now()), toTimestamp(now()))
     "#;
 
-    let region = Region::default();
-    let ks = format!("{}_profile_storage", region.to_string().to_lowercase());
-    let cql = raw_cql.replace("test_profile_storage", &ks);
+    let ks = scylla_ctx.keyspace();
+    let cql = raw_cql.replace("test_profile_storage", ks);
+
+    // On s'assure également que la session sait où elle tape
+    scylla_ctx.session().use_keyspace(ks, false).await.unwrap();
 
     scylla_ctx
         .session()

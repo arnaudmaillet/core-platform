@@ -28,7 +28,11 @@ message Post {
   string                      visibility_level       = 8;
   optional string             music_id               = 9;
   repeated string             hashtags               = 10;
-  google.protobuf.Timestamp   edited_at              = 11;
-  google.protobuf.Timestamp   updated_at             = 12;
-  string                      dynamic_metadata       = 13;
+  optional google.protobuf.Timestamp edited_at       = 11;
+  string                      dynamic_metadata       = 12;
+  
+  // MÉTADONNÉES DE CYCLE DE VIE & PROTOCOLE DISTRIBUÉ
+  uint64                      version                = 13; // Impératif pour l'OCC (Lightweight Transactions)
+  google.protobuf.Timestamp   created_at             = 14; // Extrait à la volée de l'UUIDv7 côté Rust avant envoi
+  google.protobuf.Timestamp   updated_at             = 15; // Date de mise à jour système (Infrastructure/Lifecycle)
 }

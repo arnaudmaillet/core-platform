@@ -32,12 +32,10 @@ impl IdentifiableCommand for DeletePostCommand {
 }
 
 impl DeletePostCommand {
-    pub fn try_from_proto(req: DeletePostRequest) -> Result<Self> {
+    pub fn try_from_proto(req: DeletePostRequest, region: Region) -> Result<Self> {
         let proto_target = req
             .target
             .ok_or_else(|| Error::validation("target", "Missing target"))?;
-
-        let region = Region::try_new(proto_target.region)?;
 
         Ok(Self {
             command_id: Uuid::parse_str(&req.command_id)

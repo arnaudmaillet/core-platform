@@ -47,6 +47,10 @@ impl Hashtags {
     pub fn contains(&self, tag: &str) -> bool {
         self.0.contains(&tag.to_lowercase())
     }
+
+    pub fn iter(&self) -> std::collections::btree_set::Iter<'_, String> {
+        self.0.iter()
+    }
 }
 
 impl ValueObject for Hashtags {
@@ -115,5 +119,14 @@ impl From<Hashtags> for Vec<String> {
 impl From<Hashtags> for BTreeSet<String> {
     fn from(hashtags: Hashtags) -> Self {
         hashtags.0
+    }
+}
+
+impl<'a> IntoIterator for &'a Hashtags {
+    type Item = &'a String;
+    type IntoIter = std::collections::btree_set::Iter<'a, String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }

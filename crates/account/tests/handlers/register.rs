@@ -27,7 +27,7 @@ async fn test_register_success() -> Result<()> {
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
         target,
-        region: f.region(),
+        region: f.server_region(),
         sub_id: Some(ext_id.clone()),
         identifier: RegistrationIdentifier::from_email(email.clone()),
         locale: Locale::try_new("en-US")?,
@@ -73,7 +73,7 @@ async fn test_register_fails_if_sub_id_already_exists() -> Result<()> {
 
     let registration = GlobalIdentityRegistration {
         account_id: f.account_id(),
-        region: f.region(),
+        region: f.server_region(),
         sub_id: Some(existing_ext_id.clone()),
         identifiers: RegistrationIdentifier::from_email(Email::try_new("already_exists@test.com")?),
         state: AccountState::UNVERIFIED,
@@ -88,7 +88,7 @@ async fn test_register_fails_if_sub_id_already_exists() -> Result<()> {
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
         target,
-        region: f.region(),
+        region: f.server_region(),
         sub_id: Some(existing_ext_id),
         identifier: RegistrationIdentifier::from_email(email),
         locale: Locale::try_new("en-US")?,
@@ -136,7 +136,7 @@ async fn test_register_atomic_rollback_on_outbox_failure() -> Result<()> {
     let cmd = RegisterCommand {
         command_id: Uuid::new_v4(),
         target,
-        region: f.region(),
+        region: f.server_region(),
         sub_id: Some(SubId::from_raw("atomic_ext")),
         identifier: RegistrationIdentifier::from_email(email),
         locale: Locale::try_new("en-US")?,

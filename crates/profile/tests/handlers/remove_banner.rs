@@ -1,5 +1,5 @@
 use profile::commands::RemoveBannerCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::Handle;
 use profile_test_utils::ProfileTestFixture;
@@ -36,7 +36,7 @@ async fn test_remove_banner_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -92,7 +92,7 @@ async fn test_remove_banner_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -137,7 +137,7 @@ async fn test_remove_banner_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -180,7 +180,7 @@ async fn test_remove_banner_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, RemoveBannerCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveBannerCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

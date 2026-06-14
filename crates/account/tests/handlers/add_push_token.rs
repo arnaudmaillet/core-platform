@@ -30,7 +30,7 @@ async fn test_add_push_token_success() -> Result<()> {
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token: token.clone(),
     };
 
@@ -69,7 +69,7 @@ async fn test_add_push_token_technical_idempotency() -> Result<()> {
     let cmd = AddPushTokenCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token: token.clone(),
     };
 
@@ -118,7 +118,7 @@ async fn test_add_push_token_business_idempotency() -> Result<()> {
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token,
     };
 
@@ -165,7 +165,7 @@ async fn test_add_push_token_succeeds_after_retry() -> Result<()> {
     let cmd = AddPushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token: token.clone(),
     };
 

@@ -65,17 +65,14 @@ impl AccountCommandCtx {
         Ok(())
     }
 
-    pub async fn fetch_verified(
-        &self,
-        target: &CommandTarget<AccountId>,
-    ) -> Result<Account> {
-        if self.region_cmd != self.kernel.region() {
+    pub async fn fetch_verified(&self, target: &CommandTarget<AccountId>) -> Result<Account> {
+        if self.region_cmd != self.kernel.cluster_region() {
             return Err(Error::validation(
                 "region",
                 format!(
                     "Sharding violation prevention: Command region '{}' mismatch with deployment cluster region '{}'",
                     self.region_cmd,
-                    self.kernel.region()
+                    self.kernel.cluster_region()
                 ),
             ));
         }

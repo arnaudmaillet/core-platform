@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateBioCommand, context::ProfileCommandContext};
+use crate::{commands::UpdateBioCommand, context::ProfileCommandCtx};
 
 pub struct UpdateBioHandler;
 
@@ -16,18 +16,14 @@ impl UpdateBioHandler {
 
 #[async_trait]
 impl CommandHandler for UpdateBioHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = UpdateBioCommand;
     type Output = ();
 
-    async fn handle(
-        &self,
-        ctx: &ProfileCommandContext,
-        cmd: UpdateBioCommand,
-    ) -> Result<Self::Output> {
+    async fn handle(&self, ctx: &ProfileCommandCtx, cmd: UpdateBioCommand) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
         if profile.update_bio(cmd.new_bio)? {
-            ctx.save(&mut profile).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
 
             info!(
                 profile_id = %profile.profile_id(),

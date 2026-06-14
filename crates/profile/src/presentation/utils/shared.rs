@@ -1,6 +1,6 @@
 // crates/profile/src/presentation/utils/shared.rs
 
-use crate::context::{ProfileAppContext, ProfileCommandContext, ProfileQueryContext};
+use crate::context::{ProfileCommandCtx, ProfileKernelCtx, ProfileQueryCtx};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};
@@ -8,53 +8,56 @@ use tonic::{Response, Status};
 
 #[tonic::async_trait]
 pub trait GrpcServiceUtils {
-    fn app_ctx(&self) -> &ProfileAppContext;
+    fn kernel(&self) -> &ProfileKernelCtx;
     fn bus(&self) -> &CommandBus;
 
     fn build_command_ctx(
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
-    ) -> Result<ProfileCommandContext, Status> {
-        let routed_region = self.extract_region(extensions)?;
-        let local_region = self.app_ctx().region();
-        if routed_region != local_region {
+    ) -> Result<ProfileCommandCtx, Status> {
+        let command_region = self.extract_region(extensions)?;
+        let server_region = self.kernel().server_region();
+
+        // Barrière gRPC Fail-Fast pour le Sharding
+        if command_region != server_region {
             return Err(Status::failed_precondition(format!(
                 "Routing violation: This pod ({:?}) cannot process data belonging to region {:?}",
-                local_region, routed_region
+                server_region, command_region
             )));
         }
 
-        Ok(self.app_ctx().command(profile_id))
+        Ok(ProfileCommandCtx::new(
+            self.kernel().clone(),
+            Some(profile_id),
+            command_region,
+        ))
     }
 
     fn build_creation_ctx(
         &self,
         extensions: &tonic::Extensions,
-    ) -> Result<ProfileCommandContext, Status> {
-        let routed_region = self.extract_region(extensions)?;
-        let local_region = self.app_ctx().region();
+    ) -> Result<ProfileCommandCtx, Status> {
+        let query_region = self.extract_region(extensions)?;
+        let server_region = self.kernel().server_region();
 
-        if routed_region != local_region {
+        if query_region != server_region {
             return Err(Status::failed_precondition(format!(
                 "Routing violation: Creation request for region {:?} landed on pod region {:?}",
-                routed_region, local_region
+                query_region, server_region
             )));
         }
 
-        Ok(self.app_ctx().creation_command())
+        Ok(self.kernel().creation_command(query_region))
     }
 
-    fn build_query_ctx(
-        &self,
-        _extensions: &tonic::Extensions,
-    ) -> Result<ProfileQueryContext, Status> {
-        Ok(self.app_ctx().query())
+    fn build_query_ctx(&self, _extensions: &tonic::Extensions) -> Result<ProfileQueryCtx, Status> {
+        Ok(ProfileQueryCtx::new(self.kernel().clone()))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
@@ -65,7 +68,7 @@ pub trait GrpcServiceUtils {
         R: Send,
     {
         self.bus()
-            .execute::<ProfileCommandContext, C, Output>(ctx.clone(), cmd)
+            .execute::<ProfileCommandCtx, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(map_domain_err_to_status)?;
 

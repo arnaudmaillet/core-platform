@@ -33,7 +33,7 @@ async fn test_unban_account_success() -> Result<()> {
     let cmd = UnbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(target_account_id, version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: reason.clone(),
     };
 
@@ -76,7 +76,7 @@ async fn test_unban_technical_idempotency() -> Result<()> {
     let cmd = UnbanCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(target_account_id, version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Duplicate network call")?,
     };
 
@@ -122,7 +122,7 @@ async fn test_unban_business_idempotency() -> Result<()> {
     let cmd = UnbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(target_account_id, version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Accidental secondary unban call")?,
     };
 
@@ -157,7 +157,7 @@ async fn test_worst_case_account_not_found() -> Result<()> {
     let cmd = UnbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(target_account_id, 0),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Unban non-existent")?,
     };
 
@@ -204,7 +204,7 @@ async fn test_concurrency_retry_success() -> Result<()> {
     let cmd = UnbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(target_account_id, version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Appeal processed")?,
     };
 
@@ -248,7 +248,7 @@ async fn test_worst_case_atomic_outbox_failure() -> Result<()> {
     let cmd = UnbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(target_account_id, version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Failed appeal unban process")?,
     };
 

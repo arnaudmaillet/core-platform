@@ -4,7 +4,7 @@ use crate::repositories::RelationRepositoryStub;
 use async_trait::async_trait;
 use shared_kernel::types::ProfileId;
 use social::events::SocialEvent;
-use social::repositories::RelationRepository;
+use social::repositories::FollowRelationRepository;
 
 #[async_trait]
 pub trait RelationRepositoryAsserts {

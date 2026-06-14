@@ -1,5 +1,5 @@
 use profile::commands::UpdateLocationCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::{Handle, Location};
 use profile_test_utils::ProfileTestFixture;
@@ -33,7 +33,7 @@ async fn test_update_location_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -91,7 +91,7 @@ async fn test_update_location_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -128,7 +128,7 @@ async fn test_update_location_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -165,7 +165,7 @@ async fn test_update_location_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateLocationCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateLocationCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

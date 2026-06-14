@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::RemoveAvatarCommand, context::ProfileCommandContext};
+use crate::{commands::RemoveAvatarCommand, context::ProfileCommandCtx};
 
 pub struct RemoveAvatarHandler;
 
@@ -16,19 +16,19 @@ impl RemoveAvatarHandler {
 
 #[async_trait]
 impl CommandHandler for RemoveAvatarHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = RemoveAvatarCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: RemoveAvatarCommand,
     ) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.remove_avatar()? {
-            ctx.save(&mut profile).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
 
             info!(
                 profile_id = %profile.profile_id(),

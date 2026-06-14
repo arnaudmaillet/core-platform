@@ -1,13 +1,14 @@
+// crates/post/src/application/commands/update_caption/tests.rs
+
 #[cfg(test)]
 mod tests {
     use post::commands::UpdateCaptionCommand;
-    use post::context::PostCommandContext;
-    use post::repositories::PostRepository;
+    use post::context::PostCommandCtx;
     use post::types::Caption;
     use post_test_utils::PostTestFixture;
+    use post_test_utils::assertions::PostRepositoryAsserts;
     use shared_kernel::command::CommandTarget;
-    use shared_kernel::core::{Result, Versioned};
-    use shared_kernel::idempotency::IdempotencyRepository;
+    use shared_kernel::core::{ErrorCode, ManagedEntity, Result, Versioned};
     use shared_kernel::types::ProfileId;
     use std::collections::BTreeMap;
     use uuid::Uuid;
@@ -17,9 +18,11 @@ mod tests {
         // Arrange
         let f = PostTestFixture::new();
         let post = f.builder("Original caption").build().unwrap();
+        let version_snapshot = post.version();
+
         f.given_post(&post).await;
 
-        let command_id = Uuid::now_v7();
+        let command_id = Uuid::new_v4();
         let target_profile = ProfileId::generate();
         let slug = "arnaud".to_string();
 
@@ -30,30 +33,31 @@ mod tests {
 
         let new_caption =
             Caption::try_from(format!("New caption with @{}", slug).as_str()).unwrap();
+
+        // Utilisation du versionnement strict (OCC) exigé par le PostCommandCtx
         let cmd = UpdateCaptionCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id()),
-region: f.region(),
+            target: CommandTarget::versioned(f.post_id(), version_snapshot),
+            region: f.server_region(),
             new_caption: Some(new_caption),
         };
 
         // Act
         f.bus()
-            .execute::<PostCommandContext, UpdateCaptionCommand, ()>(f.writer_ctx(), cmd)
+            .execute::<PostCommandCtx, UpdateCaptionCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
-        // Assert
-        let updated_post = f
-            .post_repo()
-            .find_by_id(f.region(), &post.post_id())
-            .await?
-            .unwrap();
-        assert_eq!(
-            updated_post.caption().as_ref().unwrap().to_string(),
-            "New caption with @arnaud"
-        );
-        assert!(updated_post.mentions().contains(&target_profile));
-        assert!(f.idempotency_repo().exists(None, &command_id).await?);
+        // Assert : Vérification via la passerelle d'assertion
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert_eq!(
+                    p.caption().as_ref().unwrap().to_string(),
+                    "New caption with @arnaud"
+                );
+                assert!(p.mentions().contains(&target_profile));
+                assert_eq!(p.version(), version_snapshot + 1); // Incrémentation OCC valide
+            })
+            .await;
 
         Ok(())
     }
@@ -64,23 +68,73 @@ region: f.region(),
         let f = PostTestFixture::new();
         let caption = Caption::try_from("Same caption").unwrap();
         let post = f.builder("Same caption").build().unwrap();
+        let version_snapshot = post.version();
+
         f.given_post(&post).await;
-        let command_id = Uuid::now_v7();
+        let command_id = Uuid::new_v4();
 
         let cmd = UpdateCaptionCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id()),
-region: f.region(),
+            target: CommandTarget::versioned(f.post_id(), version_snapshot),
+            region: f.server_region(),
             new_caption: Some(caption),
         };
 
         // Act
         f.bus()
-            .execute::<PostCommandContext, UpdateCaptionCommand, ()>(f.writer_ctx(), cmd)
+            .execute::<PostCommandCtx, UpdateCaptionCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
+        // Assert : Idempotence métier, aucun changement d'état ni d'incrémentation de version
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert_eq!(p.version(), version_snapshot);
+                assert_eq!(p.lifecycle().updated_at(), post.lifecycle().updated_at());
+            })
+            .await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_caption_concurrency_conflict() -> Result<()> {
+        // Arrange
+        let f = PostTestFixture::new();
+        let post = f.builder("Original caption").build().unwrap();
+        f.given_post(&post).await;
+
+        let caption = Caption::try_from("Conflict caption").unwrap();
+
+        // Tentative de mise à jour avec une version obsolète
+        let cmd = UpdateCaptionCommand {
+            command_id: Uuid::new_v4(),
+            target: CommandTarget::versioned(f.post_id(), 99), // Conflit provoqué
+            region: f.server_region(),
+            new_caption: Some(caption),
+        };
+
+        // Act
+        let result = f
+            .bus()
+            .execute::<PostCommandCtx, UpdateCaptionCommand, ()>(f.command_ctx().clone(), cmd)
+            .await;
+
         // Assert
-        assert!(!f.idempotency_repo().exists(None, &command_id).await?);
+        assert!(matches!(
+            result,
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
+        ));
+
+        // L'ancienne caption reste la vérité de stockage brute
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert_eq!(
+                    p.caption().as_ref().unwrap().to_string(),
+                    "Original caption"
+                );
+                assert_eq!(p.version(), post.version());
+            })
+            .await;
 
         Ok(())
     }

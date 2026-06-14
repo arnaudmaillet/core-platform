@@ -27,7 +27,7 @@ async fn test_lift_shadowban_success() -> Result<()> {
     let cmd = LiftShadowbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: reason.clone(),
     };
 
@@ -68,7 +68,7 @@ async fn test_lift_shadowban_technical_idempotency() -> Result<()> {
     let cmd = LiftShadowbanCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Duplicate call")?,
     };
 
@@ -116,7 +116,7 @@ async fn test_lift_shadowban_business_idempotency() -> Result<()> {
     let cmd = LiftShadowbanCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: AuditReason::try_new("Accidental click")?,
     };
 

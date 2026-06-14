@@ -1,3 +1,3 @@
-mod social_service;
+mod social;
 
-pub use social_service::SocialService;
+pub use social::SocialService;

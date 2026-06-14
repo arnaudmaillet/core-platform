@@ -1,5 +1,5 @@
 use profile::commands::ChangeHandleCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::entities::Profile;
 use profile::events::ProfileEvent;
 use profile::types::Handle;
@@ -33,7 +33,7 @@ async fn test_change_handle_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -98,7 +98,7 @@ async fn test_change_handle_conflict_already_exists() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -135,7 +135,7 @@ async fn test_change_handle_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -166,7 +166,7 @@ async fn test_change_handle_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, ChangeHandleCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, ChangeHandleCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

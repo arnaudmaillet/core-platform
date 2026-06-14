@@ -1,5 +1,5 @@
 use profile::commands::UpdateDisplayNameCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::{DisplayName, Handle};
 use profile_test_utils::ProfileTestFixture;
@@ -33,7 +33,7 @@ async fn test_update_display_name_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateDisplayNameCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -89,7 +89,7 @@ async fn test_update_display_name_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateDisplayNameCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -126,7 +126,7 @@ async fn test_update_display_name_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateDisplayNameCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -163,7 +163,7 @@ async fn test_update_display_name_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateDisplayNameCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateDisplayNameCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

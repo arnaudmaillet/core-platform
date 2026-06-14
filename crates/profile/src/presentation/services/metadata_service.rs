@@ -1,7 +1,7 @@
 // crates/profile/src/presentation/services/profile_metadata_service.rs
 
 use crate::commands::{UpdateBioCommand, UpdateLocationCommand, UpdateSocialsCommand};
-use crate::context::ProfileAppContext;
+use crate::context::ProfileKernelCtx;
 use crate::presentation::utils::shared::GrpcServiceUtils;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Identifier;
@@ -16,17 +16,17 @@ use tonic::{Request, Response, Status};
 
 pub struct ProfileMetadataService {
     bus: Arc<CommandBus>,
-    app_ctx: ProfileAppContext,
+    app_ctx: ProfileKernelCtx,
 }
 
 impl ProfileMetadataService {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
+    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileKernelCtx) -> Self {
         Self { bus, app_ctx }
     }
 }
 
 impl GrpcServiceUtils for ProfileMetadataService {
-    fn app_ctx(&self) -> &ProfileAppContext {
+    fn kernel(&self) -> &ProfileKernelCtx {
         &self.app_ctx
     }
     fn bus(&self) -> &CommandBus {

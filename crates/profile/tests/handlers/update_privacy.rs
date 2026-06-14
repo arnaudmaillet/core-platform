@@ -1,5 +1,5 @@
 use profile::commands::UpdatePrivacyCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::Handle;
 use profile_test_utils::ProfileTestFixture;
@@ -32,7 +32,7 @@ async fn test_update_privacy_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdatePrivacyCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdatePrivacyCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -86,7 +86,7 @@ async fn test_update_privacy_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdatePrivacyCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdatePrivacyCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -123,7 +123,7 @@ async fn test_update_privacy_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdatePrivacyCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdatePrivacyCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

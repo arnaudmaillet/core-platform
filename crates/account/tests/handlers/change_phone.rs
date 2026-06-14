@@ -33,7 +33,7 @@ async fn test_change_phone_success() -> Result<()> {
     f.global_registry()
         .insert_fixture(GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_phone(old_phone),
             state: AccountState::ACTIVE,
@@ -45,7 +45,7 @@ async fn test_change_phone_success() -> Result<()> {
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_phone: new_phone.clone(),
     };
 
@@ -85,7 +85,7 @@ async fn test_change_phone_technical_idempotency() -> Result<()> {
     let cmd = ChangePhoneCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_phone: requested_phone.clone(),
     };
 
@@ -136,7 +136,7 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
     f.global_registry()
         .insert_fixture(account::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_phone(phone.clone()),
             state: AccountState::ACTIVE,
@@ -148,7 +148,7 @@ async fn test_change_phone_business_idempotency() -> Result<()> {
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_phone: phone,
     };
 
@@ -192,7 +192,7 @@ async fn test_change_phone_forbidden_when_restricted() -> Result<()> {
     f.global_registry()
         .insert_fixture(account::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_phone(old_phone),
             state: AccountState::BANNED,
@@ -204,7 +204,7 @@ async fn test_change_phone_forbidden_when_restricted() -> Result<()> {
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_phone: requested_phone.clone(),
     };
 
@@ -257,7 +257,7 @@ async fn test_change_phone_succeeds_after_retry() -> Result<()> {
     f.global_registry()
         .insert_fixture(GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_phone(old_phone),
             state: AccountState::ACTIVE,
@@ -274,7 +274,7 @@ async fn test_change_phone_succeeds_after_retry() -> Result<()> {
     let cmd = ChangePhoneCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_phone: requested_phone.clone(),
     };
 

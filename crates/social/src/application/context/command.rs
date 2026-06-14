@@ -1,28 +1,28 @@
 // crates/social/src/application/context/command.rs
 
-use crate::application::context::SocialAppContext;
-use crate::entities::FollowRelation;
+use crate::application::context::SocialKernelCtx;
+use crate::domain::entities::FollowRelation;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
 
 #[derive(Clone)]
-pub struct SocialCommandContext {
-    app: SocialAppContext,
+pub struct SocialCommandCtx {
+    kernel: SocialKernelCtx,
     target_profile_id: ProfileId,
     region: Region,
 }
 
-impl SocialCommandContext {
-    pub(crate) fn new(app: SocialAppContext, target_profile_id: ProfileId, region: Region) -> Self {
+impl SocialCommandCtx {
+    pub fn new(kernel: SocialKernelCtx, target_profile_id: ProfileId, region: Region) -> Self {
         Self {
-            app,
+            kernel,
             target_profile_id,
             region,
         }
     }
 
-    pub fn app(&self) -> &SocialAppContext {
-        &self.app
+    pub fn kernel(&self) -> &SocialKernelCtx {
+        &self.kernel
     }
 
     pub fn region(&self) -> Region {
@@ -33,7 +33,7 @@ impl SocialCommandContext {
         self.target_profile_id
     }
 
-    pub fn verify_actors(&self, follower_id: ProfileId, target_id: ProfileId) -> Result<()> {
+    pub fn verify_actors(&self, _follower_id: ProfileId, target_id: ProfileId) -> Result<()> {
         if target_id != self.target_profile_id {
             return Err(Error::validation(
                 "target",
@@ -41,6 +41,17 @@ impl SocialCommandContext {
             ));
         }
         Ok(())
+    }
+
+    pub async fn is_already_following(
+        &self,
+        follower_id: ProfileId,
+        following_id: ProfileId,
+    ) -> Result<bool> {
+        self.kernel
+            .follow_relation_repo()
+            .is_following(follower_id, following_id)
+            .await
     }
 
     pub async fn save_relation(&self, relation: &mut FollowRelation) -> Result<()> {
@@ -51,20 +62,24 @@ impl SocialCommandContext {
             ));
         }
 
-        self.app.relation_repo().save(relation).await?;
-        self.app
-            .cache_counter_repo()
-            .increment_counters(relation.follower_id(), relation.following_id())
+        self.kernel.follow_relation_repo().save(relation).await?;
+
+        self.kernel
+            .profile_counters_index()
+            .increment(relation.follower_id(), relation.following_id())
             .await?;
+
         Ok(())
     }
 
     pub async fn delete_relation(&self, relation: &mut FollowRelation) -> Result<()> {
-        self.app.relation_repo().delete(relation).await?;
-        self.app
-            .cache_counter_repo()
-            .decrement_counters(relation.follower_id(), relation.following_id())
+        self.kernel.follow_relation_repo().delete(relation).await?;
+
+        self.kernel
+            .profile_counters_index()
+            .decrement(relation.follower_id(), relation.following_id())
             .await?;
+
         Ok(())
     }
 }

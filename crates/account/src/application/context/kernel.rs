@@ -60,23 +60,23 @@ impl AccountKernelCtx {
         self.global_registry.clone()
     }
 
-    pub fn cluster_ctx(&self) -> ClusterContext {
-        self.cluster_ctx
-    }
-
-    pub fn region(&self) -> Region {
+    pub fn cluster_region(&self) -> Region {
         self.cluster_ctx.region()
     }
 
-    pub fn query(&self, region_query: Region) -> AccountQueryCtx {
+    pub fn build_query_ctx(&self, region_query: Region) -> AccountQueryCtx {
         AccountQueryCtx::new(self.clone(), region_query)
     }
 
-    pub fn command(&self, account_id: AccountId, region_cmd: Region) -> AccountCommandCtx {
+    pub fn build_command_ctx(
+        &self,
+        account_id: AccountId,
+        region_cmd: Region,
+    ) -> AccountCommandCtx {
         AccountCommandCtx::new(self.clone(), Some(account_id), region_cmd)
     }
 
-    pub fn creation_command(&self, region_cmd: Region) -> AccountCommandCtx {
+    pub fn build_creation_command_ctx(&self, region_cmd: Region) -> AccountCommandCtx {
         AccountCommandCtx::new(self.clone(), None, region_cmd)
     }
 }

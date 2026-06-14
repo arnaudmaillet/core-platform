@@ -27,7 +27,7 @@ async fn test_deactivate_account_success() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
@@ -65,7 +65,7 @@ async fn test_deactivate_technical_idempotency() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
@@ -111,7 +111,7 @@ async fn test_deactivate_business_idempotency() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 
@@ -145,7 +145,7 @@ async fn test_deactivate_not_found() -> Result<()> {
     let cmd = DeactivateCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), 0),
-        region: f.region(),
+        region: f.server_region(),
         reason: None,
     };
 

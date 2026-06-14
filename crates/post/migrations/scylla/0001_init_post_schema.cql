@@ -1,7 +1,11 @@
 -- =========================================================================
--- ARCHITECTURE DE STOCKAGE DU SERVICE "POST" (PROJET WYNN)
+-- ARCHITECTURE DE STOCKAGE RÉGIONALE DU SERVICE "POST"
 -- Optimisée pour ScyllaDB / Hyperscale (Design 100% Dé-normalisé)
 -- =========================================================================
+
+-- 💡 Le Keyspace régional sera créé et configuré dynamiquement par l'Orchestrateur en Rust.
+-- Les structures ci-dessous s'appliqueront dans le keyspace courant (via la commande USE).
+
 -- =========================================================================
 -- 1. DÉFINITION DE L'UDT (User Defined Type)
 -- Découple proprement la structure d'un média sans décalage d'index.
@@ -23,7 +27,6 @@ CREATE TYPE IF NOT EXISTS cql_media_asset (
 -- Tri chronologique natif décroissant assuré par l'UUIDv7 du post_id.
 -- =========================================================================
 CREATE TABLE IF NOT EXISTS posts_by_author (
-    region text,
     author_id uuid,
     post_id uuid,                  -- UUIDv7 (Timestamp 48-bit + 74-bit entropie aléatoire)
     post_type text,                -- 'video', 'carousel', 'image', 'text' (Format global du post)
@@ -36,22 +39,26 @@ CREATE TABLE IF NOT EXISTS posts_by_author (
     allowed_comment_hands boolean, -- Paramètre d'interaction (Activer/Désactiver les commentaires)
     visibility_level text,         -- Gestion de la confidentialité : 'public', 'friends', 'private'
     music_id uuid,                 -- Optionnel : ID de la piste audio associée au post
-    hashtags set<text>,            -- Set natif pour indexer les tags du post (#rust, #devops... -> [rust, devops,...])
-    mentions set<uuid>,            -- Liste unique des profiles notifiés/mentionnés (@alex, @lucie...  -> [019e5cef, 2e9c89a8,...])
-    edited_at timestamp,           -- Date de la dernière modification (Metier)
+    hashtags set<text>,            -- Set natif pour indexer les tags du post (#rust, #devops)
+    mentions set<uuid>,            -- Liste unique des profiles notifiés/mentionnés (@alex, @lucie)
+    
+    -- VERSIONNEMENT & HISTORIQUE (Pour l'OCC et le tri des consommateurs du CDC Kafka)
+    version bigint,                
+    edited_at timestamp,           -- Date de la dernière modification (Métier)
+    created_at timestamp,          -- Date de création du post
     updated_at timestamp,          -- Date de la dernière modification (Infrastructure)
+    
     dynamic_metadata text,         -- Chaîne JSON (Serde) de secours pour les futures features clients
-    PRIMARY KEY ((region), author_id, post_id)
-) WITH CLUSTERING ORDER BY (author_id ASC, post_id DESC)
-AND comment = 'Flux de profil utilisateur optimisé pour l''hyperscale (UUIDv7 + UDT)';
+    PRIMARY KEY (author_id, post_id)
+) WITH CLUSTERING ORDER BY (post_id DESC)
+AND comment = 'Flux de profil utilisateur optimisé pour l''hyperscale (UUIDv7 + Clustering Key DESC)';
 
 -- =========================================================================
 -- 3. TABLE DE LOOKUP : Accès direct (Lien partagé, Router GraphQL, Modération)
 -- Optimisée pour : SELECT * WHERE post_id = ...
--- Structure 100% identique pour éviter les requêtes multi-tables (Cross-Node Scans).
+-- Structure 100% dénormalisée pour éviter les requêtes multi-tables (Cross-Node Scans).
 -- =========================================================================
 CREATE TABLE IF NOT EXISTS posts_by_id (
-    region text,
     post_id uuid,
     author_id uuid,
     post_type text,
@@ -65,11 +72,20 @@ CREATE TABLE IF NOT EXISTS posts_by_id (
     music_id uuid,
     hashtags set<text>,
     mentions set<uuid>,
+    
+    -- ALIGNEMENT OCC
+    version bigint,
     edited_at timestamp,
+    created_at timestamp,
     updated_at timestamp,
     dynamic_metadata text,
-    PRIMARY KEY ((region), post_id)
+    PRIMARY KEY (post_id)
 ) WITH comment = 'Lookup direct par Post ID (Copie dénormalisée pour l''API Gateway)';
 
-ALTER TABLE posts_by_id WITH cdc = {'enabled': true};
+-- =========================================================================
+-- 4. ACTIVATION DU CDC (Change Data Capture) D'INFRASTRUCTURE
+-- C'est ce bloc qui permet de propager les événements vers Kafka de manière asynchrone,
+-- libérant le code applicatif Rust de toute gestion de table Outbox.
+-- =========================================================================
 ALTER TABLE posts_by_author WITH cdc = {'enabled': true};
+ALTER TABLE posts_by_id WITH cdc = {'enabled': true};

@@ -122,7 +122,7 @@ impl AccountTestContextBuilder {
                     cluster_ctx,
                 );
 
-                let kernel_ctx = builder.build_context();
+                let kernel_ctx = builder.build_kernel_ctx();
                 builder.register_handlers(&mut command_bus);
                 let shared_bus = Arc::new(command_bus);
 

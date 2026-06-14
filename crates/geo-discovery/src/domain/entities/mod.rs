@@ -1,3 +1,3 @@
-mod active_map_post;
+mod map_annotation;
 
-pub use active_map_post::ActiveMapPost;
+pub use map_annotation::MapAnnotation;

@@ -9,7 +9,7 @@ use shared_kernel::core::Result;
 use shared_kernel::messaging::{Event, EventEmitter};
 use shared_kernel::types::ProfileId;
 use social::entities::FollowRelation;
-use social::repositories::RelationRepository;
+use social::repositories::FollowRelationRepository;
 
 pub struct RelationRepositoryStub {
     followings: RwLock<HashMap<ProfileId, HashMap<ProfileId, FollowRelation>>>,
@@ -63,7 +63,7 @@ impl RelationRepositoryStub {
 }
 
 #[async_trait]
-impl RelationRepository for RelationRepositoryStub {
+impl FollowRelationRepository for RelationRepositoryStub {
     async fn save(&self, relation: &mut FollowRelation) -> Result<()> {
         let follower_id = relation.follower_id();
         let following_id = relation.following_id();

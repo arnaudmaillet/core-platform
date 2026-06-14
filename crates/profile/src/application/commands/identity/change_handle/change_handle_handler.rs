@@ -1,6 +1,6 @@
 // crates/profile/src/application/commands/identity/change_handle/change_handle_handler.rs
 
-use crate::{commands::ChangeHandleCommand, context::ProfileCommandContext};
+use crate::{commands::ChangeHandleCommand, context::ProfileCommandCtx};
 use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 
@@ -14,13 +14,13 @@ impl ChangeHandleHandler {
 
 #[async_trait]
 impl CommandHandler for ChangeHandleHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = ChangeHandleCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: ChangeHandleCommand,
     ) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
@@ -43,11 +43,11 @@ impl CommandHandler for ChangeHandleHandler {
                 profile.profile_id(),
                 &old_slug_hash,
                 &new_slug_hash,
-                ctx.region(),
+                ctx.server_region(),
             )
             .await?;
 
-        ctx.save(&mut profile).await?;
+        ctx.save(&mut profile, cmd.command_id).await?;
 
         Ok(())
     }

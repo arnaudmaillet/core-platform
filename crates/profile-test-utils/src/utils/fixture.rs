@@ -2,18 +2,24 @@ use profile::ProfileServiceBuilder;
 use profile::repositories::ProfileRoutingRepository;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
+use shared_kernel::environment::ClusterContext;
 use shared_kernel::types::{AccountId, ProfileId, Region};
 use shared_kernel_test_utils::repositories::{CacheRepositoryStub, IdempotencyRepositoryStub};
 use std::sync::Arc;
 
 use crate::repositories::{ProfileRepositoryStub, ProfileRoutingRepositoryStub};
-use profile::context::{ProfileAppContext, ProfileCommandContext, ProfileQueryContext};
+use profile::context::{ProfileCommandCtx, ProfileKernelCtx, ProfileQueryCtx};
 use profile::entities::{Profile, ProfileBuilder};
 use profile::types::Handle;
 
 pub struct ProfileTestFixture {
-    bus: Arc<CommandBus>,
-    app_ctx: ProfileAppContext,
+    bus: CommandBus,
+
+    kernel_ctx: ProfileKernelCtx,
+    command_ctx: ProfileCommandCtx,
+    query_ctx: ProfileQueryCtx,
+    cluster_ctx: ClusterContext,
+
     account_id: AccountId,
     profile_id: ProfileId,
     profile_repo: Arc<ProfileRepositoryStub>,
@@ -27,25 +33,32 @@ impl ProfileTestFixture {
         let routing_repo = Arc::new(ProfileRoutingRepositoryStub::new());
         let cache_repo = Arc::new(CacheRepositoryStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
-        let region = Region::default();
 
-        let builder = ProfileServiceBuilder::new(
+        let cluster_ctx = ClusterContext::default();
+        let profile_id = ProfileId::generate();
+        let account_id = AccountId::generate();
+
+        let service = ProfileServiceBuilder::new(
             profile_repo.clone(),
             routing_repo.clone(),
-            cache_repo.clone(),
             idempotency_repo.clone(),
-            region,
+            cluster_ctx,
         );
 
-        let app_ctx = builder.build_context();
-        let bus = builder.build_command_bus();
+        let kernel_ctx = service.build_kernel_ctx();
+        let command_ctx =
+            ProfileCommandCtx::new(kernel_ctx.clone(), Some(profile_id), cluster_ctx.region());
+        let query_ctx = ProfileQueryCtx::new(kernel_ctx.clone());
 
-        let account_id = AccountId::generate();
-        let profile_id = ProfileId::generate();
+        let mut bus = CommandBus::new(cache_repo, idempotency_repo.clone());
+        service.register_handlers(&mut bus);
 
         Self {
             bus,
-            app_ctx,
+            kernel_ctx,
+            command_ctx,
+            query_ctx,
+            cluster_ctx,
             account_id,
             profile_id,
             profile_repo,
@@ -73,11 +86,11 @@ impl ProfileTestFixture {
         )
     }
 
-    pub fn bus(&self) -> Arc<CommandBus> {
-        self.bus.clone()
+    pub fn bus(&self) -> &CommandBus {
+        &self.bus
     }
     pub fn region(&self) -> Region {
-        self.app_ctx.region()
+        self.kernel_ctx.server_region()
     }
     pub fn account_id(&self) -> AccountId {
         self.account_id
@@ -85,7 +98,6 @@ impl ProfileTestFixture {
     pub fn profile_id(&self) -> ProfileId {
         self.profile_id
     }
-
     pub fn profile_repo(&self) -> &ProfileRepositoryStub {
         &self.profile_repo
     }
@@ -95,14 +107,10 @@ impl ProfileTestFixture {
     pub fn idempotency_repo(&self) -> &IdempotencyRepositoryStub {
         &self.idempotency_repo
     }
-
-    pub fn command_ctx(&self) -> ProfileCommandContext {
-        self.app_ctx.command(self.profile_id)
+    pub fn command_ctx(&self) -> &ProfileCommandCtx {
+        &self.command_ctx
     }
-    pub fn command_ctx_for(&self, id: ProfileId) -> ProfileCommandContext {
-        self.app_ctx.command(id)
-    }
-    pub fn creation_ctx(&self) -> ProfileCommandContext {
-        self.app_ctx.creation_command()
+    pub fn creation_ctx(&self, region: Region) -> ProfileCommandCtx {
+        self.kernel_ctx.creation_command(region)
     }
 }

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use shared_kernel::{command::CommandHandler, core::Result};
 use tracing::info;
 
-use crate::{commands::UpdateBannerCommand, context::ProfileCommandContext};
+use crate::{commands::UpdateBannerCommand, context::ProfileCommandCtx};
 
 pub struct UpdateBannerHandler;
 
@@ -16,19 +16,19 @@ impl UpdateBannerHandler {
 
 #[async_trait]
 impl CommandHandler for UpdateBannerHandler {
-    type Context = ProfileCommandContext;
+    type Context = ProfileCommandCtx;
     type Command = UpdateBannerCommand;
     type Output = ();
 
     async fn handle(
         &self,
-        ctx: &ProfileCommandContext,
+        ctx: &ProfileCommandCtx,
         cmd: UpdateBannerCommand,
     ) -> Result<Self::Output> {
         let mut profile = ctx.fetch_verified(&cmd.target).await?;
 
         if profile.update_banner(cmd.new_banner_url)? {
-            ctx.save(&mut profile).await?;
+            ctx.save(&mut profile, cmd.command_id).await?;
 
             info!(
                 profile_id = %profile.profile_id(),

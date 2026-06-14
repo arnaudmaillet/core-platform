@@ -10,6 +10,7 @@ description.workspace = true
 [dependencies]
 auth = { workspace = true }
 post = { workspace = true }
+shared-kernel = { workspace = true }
 infra-fred = { workspace = true }
 infra-scylla = { workspace = true }
 shared-proto = { workspace = true, features = ["post"] }

@@ -2,89 +2,76 @@
 
 use std::sync::Arc;
 
-use crate::repositories::PostRepositoryStub;
 use crate::resolvers::ProfileResolverStub;
+use crate::stores::PostStoreStub;
+use post::PostServiceBuilder;
 use post::builders::PostBuilder;
-use post::commands::{
-    ChangeVisibilityCommand, ChangeVisibilityHandler, CreatePostCommand, CreatePostHandler,
-    DeletePostCommand, DeletePostHandler, ToggleCommentsCommand, ToggleCommentsHandler,
-    UpdateCaptionCommand, UpdateCaptionHandler,
-};
-use post::context::{PostAppContext, PostCommandContext, PostQueryContext};
+use post::context::{PostCommandCtx, PostKernelCtx, PostQueryCtx};
 use post::entities::Post;
 use post::repositories::PostRepository;
 use post::types::{Caption, VisibilityLevel};
 use shared_kernel::command::CommandBus;
-use shared_kernel::core::Result;
+use shared_kernel::environment::ClusterContext;
 use shared_kernel::types::{PostId, PostType, ProfileId, Region};
 use shared_kernel_test_utils::repositories::CacheRepositoryStub;
 use shared_kernel_test_utils::repositories::IdempotencyRepositoryStub;
 
 pub struct PostTestFixture {
-    bus: Arc<CommandBus>,
-    app_ctx: PostAppContext,
+    bus: CommandBus,
     author_id: ProfileId,
     post_id: PostId,
-    region: Region,
-    post_repo: Arc<PostRepositoryStub>,
+
+    kernel_ctx: PostKernelCtx,
+    command_ctx: PostCommandCtx,
+    query_ctx: PostQueryCtx,
+    cluster_ctx: ClusterContext,
+
+    post_repo: Arc<PostStoreStub>,
     idempotency_repo: Arc<IdempotencyRepositoryStub>,
     profile_resolver: Arc<ProfileResolverStub>,
 }
 
 impl PostTestFixture {
     pub fn new() -> Self {
-        let post_repo = Arc::new(PostRepositoryStub::new());
+        let post_repo = Arc::new(PostStoreStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let cache = Arc::new(CacheRepositoryStub::new());
         let profile_resolver = Arc::new(ProfileResolverStub::new());
 
-        // Utilisation du constructeur de stub
-        let app_ctx = PostAppContext::new_stubbed(
-            post_repo.clone(),
-            idempotency_repo.clone(),
-            profile_resolver.clone(),
-        );
+        let cluster_ctx = ClusterContext::default();
 
-        // Configuration par défaut pour isoler les régions dans les tests
-        let region = Region::default();
+        let service =
+            PostServiceBuilder::new(post_repo.clone(), profile_resolver.clone(), cluster_ctx);
+
         let author_id = ProfileId::generate();
         let post_id = PostId::generate();
 
-        let mut bus = CommandBus::new(cache);
+        let kernel_ctx = service.build_kernel_ctx();
+        let command_ctx = PostCommandCtx::new(kernel_ctx.clone(), author_id, cluster_ctx.region());
+        let query_ctx = PostQueryCtx::new(kernel_ctx.clone(), cluster_ctx.region());
 
-        // --- Enregistrement des Handlers de Commandes avec PostCommandContext ---
-        bus.register::<PostCommandContext, CreatePostCommand, CreatePostHandler>(CreatePostHandler);
-        bus.register::<PostCommandContext, UpdateCaptionCommand, UpdateCaptionHandler>(
-            UpdateCaptionHandler,
-        );
-        bus.register::<PostCommandContext, ToggleCommentsCommand, ToggleCommentsHandler>(
-            ToggleCommentsHandler,
-        );
-        bus.register::<PostCommandContext, ChangeVisibilityCommand, ChangeVisibilityHandler>(
-            ChangeVisibilityHandler,
-        );
-        bus.register::<PostCommandContext, DeletePostCommand, DeletePostHandler>(DeletePostHandler);
+        let mut bus = CommandBus::new(cache, idempotency_repo.clone());
+
+        service.register_handlers(&mut bus);
 
         Self {
-            bus: Arc::new(bus),
-            app_ctx,
+            bus,
             author_id,
             post_id,
-            region,
+            kernel_ctx,
+            command_ctx,
+            query_ctx,
+            cluster_ctx,
             post_repo,
             idempotency_repo,
             profile_resolver,
         }
     }
 
-    // --- Accesseurs ---
+    // --- Accesseurs unifiés (Alignés sur Account) ---
 
-    pub fn bus(&self) -> Arc<CommandBus> {
-        self.bus.clone()
-    }
-
-    pub fn app_ctx(&self) -> &PostAppContext {
-        &self.app_ctx
+    pub fn bus(&self) -> &CommandBus {
+        &self.bus
     }
 
     pub fn author_id(&self) -> ProfileId {
@@ -95,20 +82,24 @@ impl PostTestFixture {
         self.post_id
     }
 
-    pub fn region(&self) -> Region {
-        self.region
+    pub fn server_region(&self) -> Region {
+        self.cluster_ctx.region()
     }
 
-    pub fn writer_ctx(&self) -> PostCommandContext {
-        self.app_ctx.command(self.author_id, self.region)
+    pub fn kernel_ctx(&self) -> &PostKernelCtx {
+        &self.kernel_ctx
     }
 
-    pub fn reader_ctx(&self) -> PostQueryContext {
-        self.app_ctx.query(self.region)
+    pub fn command_ctx(&self) -> &PostCommandCtx {
+        &self.command_ctx
     }
 
-    pub fn post_repo(&self) -> &PostRepositoryStub {
-        &self.post_repo
+    pub fn query_ctx(&self) -> &PostQueryCtx {
+        &self.query_ctx
+    }
+
+    pub fn cluster_ctx(&self) -> &ClusterContext {
+        &self.cluster_ctx
     }
 
     pub fn idempotency_repo(&self) -> &IdempotencyRepositoryStub {
@@ -119,17 +110,17 @@ impl PostTestFixture {
         &self.profile_resolver
     }
 
-    // --- Helpers pour l'organisation des scénarios (`Given`) ---
-
-    /// Prépare un post pré-existant directement dans l'infrastructure de mock
-    pub async fn given_post(&self, post: &Post) {
-        self.post_repo
-            .save(self.region, post)
-            .await
-            .expect("Le setup de l'état initial via le stub a échoué");
+    pub fn post_assertions(&self) -> &PostStoreStub {
+        &self.post_repo
     }
 
-    /// Factory pré-configurée pour générer un builder valide aligné sur la fixture courante
+    pub async fn given_post(&self, post: &Post) {
+        self.post_repo
+            .save(self.server_region(), post)
+            .await
+            .expect("Le setup de l'état initial via le stub Scylla a échoué");
+    }
+
     pub fn builder(&self, raw_caption: &str) -> PostBuilder {
         Post::builder(
             self.post_id(),
@@ -138,39 +129,5 @@ impl PostTestFixture {
             VisibilityLevel::Public,
         )
         .with_caption(Caption::from_raw(raw_caption.to_string()))
-    }
-
-    // --- Assertions réutilisables ---
-
-    pub async fn assert_post<F>(&self, check: F) -> Result<()>
-    where
-        F: FnOnce(&Post),
-    {
-        let saved_option = self
-            .post_repo
-            .find_by_id(self.region, &self.post_id())
-            .await?;
-
-        let saved = saved_option.ok_or_else(|| {
-            shared_kernel::core::Error::not_found("Post", self.post_id().to_string())
-        })?;
-
-        check(&saved);
-        Ok(())
-    }
-
-    pub fn clone_with_post_id(&self, new_post_id: PostId) -> Self {
-        let author_id = ProfileId::generate();
-
-        Self {
-            bus: self.bus.clone(),
-            app_ctx: self.app_ctx.clone(),
-            author_id,
-            post_id: new_post_id,
-            region: self.region,
-            post_repo: self.post_repo.clone(),
-            idempotency_repo: self.idempotency_repo.clone(),
-            profile_resolver: self.profile_resolver.clone(),
-        }
     }
 }

@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tx_manager = Arc::new(PostgresTransactionManager::new(pool));
 
     // 4. Assemblage via le Builder de Service et configuration du Kernel
-    let builder = AccountServiceBuilder::new(
+    let service = AccountServiceBuilder::new(
         account_repo,
         outbox_repo,
         idempotency_repo.clone(),
@@ -99,13 +99,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cluster_ctx,
     );
 
-    let app_ctx = builder.build_context();
+    let kernel = service.build_kernel_ctx();
 
     // 5. Initialisation et configuration du CommandBus avec ses Gardes Idempotents
-    // On passe ici tes dépôts globaux d'infrastructure requis par le constructeur du Bus
     let mut command_bus = CommandBus::new(redis_ctx.cache_repository(), idempotency_repo);
 
-    builder.register_handlers(&mut command_bus);
+    service.register_handlers(&mut command_bus);
     let bus = Arc::new(command_bus);
 
     // 6. Configuration de la couche de transport gRPC Server & Interceptors
@@ -121,11 +120,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_interceptor = AuthInterceptor::new(validator.clone());
     let registration_interceptor = RegistrationInterceptor::new(validator);
 
-    let registration_svc = AccountRegistrationService::new(bus.clone(), app_ctx.clone());
-    let access_svc = AccountAccessService::new(bus.clone(), app_ctx.clone());
-    let moderation_svc = AccountModerationService::new(bus.clone(), app_ctx.clone());
-    let personal_svc = AccountPersonalService::new(bus.clone(), app_ctx.clone());
-    let settings_svc = AccountSettingsService::new(bus, app_ctx);
+    let registration_svc = AccountRegistrationService::new(bus.clone(), kernel.clone());
+    let access_svc = AccountAccessService::new(bus.clone(), kernel.clone());
+    let moderation_svc = AccountModerationService::new(bus.clone(), kernel.clone());
+    let personal_svc = AccountPersonalService::new(bus.clone(), kernel.clone());
+    let settings_svc = AccountSettingsService::new(bus, kernel);
 
     tracing::info!(
         "🚀 Account Command Service Shard [{}] listening on {}",

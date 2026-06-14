@@ -55,7 +55,7 @@ impl AccountServiceBuilder {
         }
     }
 
-    pub fn build_context(&self) -> AccountKernelCtx {
+    pub fn build_kernel_ctx(&self) -> AccountKernelCtx {
         AccountKernelCtx::new(
             self.tx_manager.clone(),
             self.account_repo.clone(),

@@ -11,8 +11,9 @@ use profile::ProfileServiceBuilder;
 use profile::kafka::AccountConsumer;
 use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
 use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use shared_kernel::command::CommandBus;
+use shared_kernel::environment::ClusterContext;
 use shared_kernel::messaging::{EventConsumer, EventEnvelope};
-use shared_kernel::types::Region;
 use shared_proto::profile::v1::profile_identity_service_server::ProfileIdentityServiceServer;
 use shared_proto::profile::v1::profile_media_service_server::ProfileMediaServiceServer;
 use shared_proto::profile::v1::profile_metadata_service_server::ProfileMetadataServiceServer;
@@ -31,7 +32,7 @@ pub struct ProfileTestContextBuilder {
     service_mode: Option<ServiceMode>,
     has_kafka: bool,
     mock_validator: Option<Arc<dyn TokenValidator>>,
-    local_region: Region,
+    cluster_ctx: ClusterContext,
 }
 
 impl ProfileTestContextBuilder {
@@ -43,7 +44,7 @@ impl ProfileTestContextBuilder {
             service_mode: None,
             has_kafka: false,
             mock_validator: None,
-            local_region: Region::default(),
+            cluster_ctx: ClusterContext::default(),
         }
     }
 
@@ -64,8 +65,8 @@ impl ProfileTestContextBuilder {
         self
     }
 
-    pub fn with_region(mut self, region: Region) -> Self {
-        self.local_region = region;
+    pub fn with_cluster_ctx(mut self, ctx: ClusterContext) -> Self {
+        self.cluster_ctx = ctx;
         self
     }
 
@@ -90,33 +91,39 @@ impl ProfileTestContextBuilder {
         }
         let migration_path = base_path.join("migrations/scylla");
 
-        // 💡 Tables cibles uniques pour valider les deux zones (Global + Régional)
         let targets = vec![
-            ScyllaTableTarget::new("slugs", 3), // Valide global_routing
-            ScyllaTableTarget::new("profiles_by_account", 6), // Valide {region}_profile_storage
+            ScyllaTableTarget::new("slugs", 3),
+            ScyllaTableTarget::new("profiles_by_account", 6),
         ];
 
-        // 💡 On récupère le nom de la région dynamiquement depuis ton build context
-        let region_str = self.local_region.to_string();
-
-        let scylla_orch =
-            ScyllaOrchestrator::new(scylla_session.clone(), migration_path, targets, region_str);
+        let scylla_orch = ScyllaOrchestrator::new(
+            scylla_session.clone(),
+            migration_path,
+            targets,
+            self.cluster_ctx.region().to_string(),
+        );
         infra_orchestrator.add(Box::new(scylla_orch));
 
         infra_orchestrator
             .run_all()
             .await
             .expect("Database orchestrator failed to stabilize schema");
+
+        let target_keyspace = format!(
+            "{}_profile_storage",
+            self.cluster_ctx.region().to_string().to_lowercase()
+        );
+
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
 
         match self.service_mode {
             Some(ServiceMode::Grpc) => {
                 let session = scylla_session.clone();
-                let redis = redis_repo.clone();
+                let cache_repo = redis_repo.clone();
                 let custom_validator = self.mock_validator.clone();
-                let region = self.local_region;
-                let idempotency = kernel_infra.redis().idempotency();
+                let idempotency_repo = kernel_infra.redis().idempotency();
+                let keyspace_name = target_keyspace.clone(); // Move dans le thread gRPC
 
                 tokio::spawn(async move {
                     let validator = match custom_validator {
@@ -132,37 +139,42 @@ impl ProfileTestContextBuilder {
                     };
 
                     let interceptor = AuthInterceptor::new(validator);
+                    let mut command_bus = CommandBus::new(cache_repo, idempotency_repo.clone());
 
-                    // Garanti sans crash ni Race Condition désormais
                     let routing_store = Arc::new(
                         ScyllaProfileRoutingStore::new(session.clone())
                             .await
                             .unwrap(),
                     );
-                    let profile_store =
-                        Arc::new(ScyllaProfileStore::new(session, region).await.unwrap());
+
+                    let profile_store = Arc::new(
+                        ScyllaProfileStore::new(session, keyspace_name)
+                            .await
+                            .unwrap(),
+                    );
 
                     let builder = ProfileServiceBuilder::new(
                         profile_store,
                         routing_store,
-                        redis,
-                        idempotency,
-                        region,
+                        idempotency_repo,
+                        self.cluster_ctx,
                     );
-                    let app_ctx = builder.build_context();
-                    let bus = builder.build_command_bus();
 
+                    let kernel_ctx = builder.build_kernel_ctx();
+                    builder.register_handlers(&mut command_bus);
+
+                    let shared_bus = Arc::new(command_bus);
                     let svc = Server::builder()
                         .add_service(ProfileIdentityServiceServer::with_interceptor(
-                            ProfileIdentityService::new(bus.clone(), app_ctx.clone()),
+                            ProfileIdentityService::new(shared_bus.clone(), kernel_ctx.clone()),
                             interceptor.clone(),
                         ))
                         .add_service(ProfileMediaServiceServer::with_interceptor(
-                            ProfileMediaService::new(bus.clone(), app_ctx.clone()),
+                            ProfileMediaService::new(shared_bus.clone(), kernel_ctx.clone()),
                             interceptor.clone(),
                         ))
                         .add_service(ProfileMetadataServiceServer::with_interceptor(
-                            ProfileMetadataService::new(bus, app_ctx),
+                            ProfileMetadataService::new(shared_bus.clone(), kernel_ctx),
                             interceptor,
                         ));
 
@@ -181,10 +193,10 @@ impl ProfileTestContextBuilder {
             }
             Some(ServiceMode::KafkaWorker) => {
                 let session = scylla_session.clone();
-                let redis = redis_repo.clone();
+                let cache_repo = redis_repo.clone();
                 let brokers = kafka_brokers.unwrap();
-                let region = self.local_region;
-                let idempotency = kernel_infra.redis().idempotency();
+                let idempotency_repo = kernel_infra.redis().idempotency();
+                let keyspace_name = target_keyspace; // Move dans le thread Worker
 
                 tokio::spawn(async move {
                     let routing_store = Arc::new(
@@ -192,21 +204,28 @@ impl ProfileTestContextBuilder {
                             .await
                             .unwrap(),
                     );
-                    let profile_store =
-                        Arc::new(ScyllaProfileStore::new(session, region).await.unwrap());
+
+                    let profile_store = Arc::new(
+                        ScyllaProfileStore::new(session, keyspace_name)
+                            .await
+                            .unwrap(),
+                    );
 
                     let builder = ProfileServiceBuilder::new(
                         profile_store,
                         routing_store,
-                        redis,
-                        idempotency,
-                        region,
+                        idempotency_repo.clone(),
+                        self.cluster_ctx,
                     );
-                    let app_ctx = Arc::new(builder.build_context());
-                    let bus = builder.build_command_bus();
 
-                    let account_consumer =
-                        Arc::new(AccountConsumer::new(bus.clone(), (*app_ctx).clone()));
+                    let kernel_ctx = Arc::new(builder.build_kernel_ctx());
+                    let command_bus = CommandBus::new(cache_repo, idempotency_repo);
+
+                    let shared_bus = Arc::new(command_bus);
+                    let account_consumer = Arc::new(AccountConsumer::new(
+                        shared_bus.clone(),
+                        (*kernel_ctx).clone(),
+                    ));
                     let kafka_transport =
                         KafkaEventConsumer::new(&brokers, "profile-worker-test-group", 10);
 

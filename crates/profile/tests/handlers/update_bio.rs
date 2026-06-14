@@ -1,5 +1,5 @@
 use profile::commands::UpdateBioCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::{Bio, Handle};
 use profile_test_utils::ProfileTestFixture;
@@ -33,7 +33,7 @@ async fn test_update_bio_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -91,7 +91,7 @@ async fn test_update_bio_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -130,7 +130,7 @@ async fn test_update_bio_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -167,7 +167,7 @@ async fn test_update_bio_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateBioCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateBioCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

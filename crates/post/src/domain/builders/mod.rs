@@ -1,5 +1,5 @@
-mod media_asset_builder;
-mod post_builder;
+mod media_assets;
+mod post;
 
-pub use media_asset_builder::MediaAssetBuilder;
-pub use post_builder::PostBuilder;
+pub use media_assets::MediaAssetBuilder;
+pub use post::PostBuilder;

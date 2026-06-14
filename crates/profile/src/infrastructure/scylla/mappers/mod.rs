@@ -1,5 +1,5 @@
-mod profile_mapper;
-mod routing_mapper;
+mod profile;
+mod routing;
 
-pub use profile_mapper::{ScyllaProfileByAccountRow, ScyllaProfileRow};
-pub use routing_mapper::{ScyllaRouterProfileRow, ScyllaRouterSlugRow};
+pub use profile::{CqlProfileByAccountRow, CqlProfileRow};
+pub use routing::{CqlRouterProfileRow, CqlRouterSlugRow};

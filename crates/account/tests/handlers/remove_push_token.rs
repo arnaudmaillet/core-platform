@@ -38,7 +38,7 @@ async fn test_remove_push_token_success() -> Result<()> {
     let cmd = RemovePushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token: token_to_remove.clone(),
     };
 
@@ -85,7 +85,7 @@ async fn test_remove_push_token_technical_idempotency() -> Result<()> {
     let cmd = RemovePushTokenCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token: token.clone(),
     };
 
@@ -134,7 +134,7 @@ async fn test_remove_push_token_business_idempotency() -> Result<()> {
     let cmd = RemovePushTokenCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         token: non_existent_token.clone(),
     };
 

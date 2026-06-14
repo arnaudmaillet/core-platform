@@ -2,21 +2,23 @@
 
 use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::TokenValidatorStub;
-use geo_discovery::db::FredMapCacheRepository;
+use geo_discovery::GeoDiscoveryServiceBuilder;
 use geo_discovery::services::GeoDiscoveryService;
-use geo_discovery::{db::ScyllaMapPersistenceRepository, handlers::HydrateTileCacheHandler};
+use geo_discovery::stores::RedisMapAnnotationStore;
+use geo_discovery::stores::ScyllaMapAnnotationStore;
 use infra_fred::RedisIdempotencyRepository;
 use infra_scylla::scylla::client::session::Session;
 use infra_test::TestContextBuilder;
+use shared_kernel::environment::ClusterContext;
 use shared_kernel::types::Region;
 use shared_proto::geo_discovery::v1::geo_discovery_service_server::GeoDiscoveryServiceServer;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 use tonic::transport::Server;
 
 use crate::GeoDiscoveryTestContext;
 use crate::resolvers::EngagementResolverStub;
-use geo_discovery::context::GeoDiscoveryAppContext;
+use geo_discovery::context::GeoDiscoveryQueryCtx;
 
 pub struct GeoDiscoveryTestContextBuilder {
     kernel_builder: TestContextBuilder<()>,
@@ -82,38 +84,28 @@ impl GeoDiscoveryTestContextBuilder {
             ));
 
             let persistence_repo = Arc::new(
-                ScyllaMapPersistenceRepository::new(scylla_session.clone())
+                ScyllaMapAnnotationStore::new(scylla_session.clone())
                     .await
                     .unwrap(),
             );
 
-            let cache_repo = Arc::new(FredMapCacheRepository::new(redis_pool.clone()));
+            let cache_repo = Arc::new(RedisMapAnnotationStore::new(redis_pool.clone()));
             let engagement_resolver = Arc::new(EngagementResolverStub);
 
             let max_posts_per_tile = 50;
-            let (hydration_sender, mut hydration_receiver) = mpsc::channel(100);
+            let cluster_ctx = ClusterContext::default();
 
-            let app_ctx = GeoDiscoveryAppContext::new(
-                persistence_repo.clone(),
-                cache_repo.clone(),
+            let service_builder = GeoDiscoveryServiceBuilder::new(
+                persistence_repo,
+                cache_repo,
                 idempotency_repo,
                 engagement_resolver,
-                hydration_sender,
+                max_posts_per_tile,
+                cluster_ctx.clone(),
             );
 
-            let hydration_handler = Arc::new(HydrateTileCacheHandler::new(
-                cache_repo,
-                persistence_repo,
-                max_posts_per_tile,
-            ));
-
-            tokio::spawn(async move {
-                while let Some(cmd) = hydration_receiver.recv().await {
-                    let _ = hydration_handler.handle(cmd).await;
-                }
-            });
-
-            let query_ctx = app_ctx.query(Region::default());
+            let app_ctx = service_builder.build_context().await;
+            let query_ctx = GeoDiscoveryQueryCtx::new(app_ctx, Region::default());
             let geo_grpc_svc = GeoDiscoveryService::new(query_ctx);
 
             let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
@@ -123,16 +115,18 @@ impl GeoDiscoveryTestContextBuilder {
             tracing::info!(port = %actual_addr.port(), "GeoDiscovery gRPC test server listening");
             ready_tx.send(actual_addr).ok();
 
-            Server::builder()
-                .add_service(GeoDiscoveryServiceServer::with_interceptor(
-                    geo_grpc_svc,
-                    interceptor,
-                ))
-                .serve_with_incoming_shutdown(incoming, async {
-                    let _ = shutdown_rx.await;
-                })
-                .await
-                .unwrap();
+            tokio::spawn(async move {
+                Server::builder()
+                    .add_service(GeoDiscoveryServiceServer::with_interceptor(
+                        geo_grpc_svc,
+                        interceptor,
+                    ))
+                    .serve_with_incoming_shutdown(incoming, async {
+                        let _ = shutdown_rx.await;
+                    })
+                    .await
+                    .unwrap();
+            });
         }
 
         let addr = if self.with_grpc {

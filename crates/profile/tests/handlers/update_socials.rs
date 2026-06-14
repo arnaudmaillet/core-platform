@@ -1,5 +1,5 @@
 use profile::commands::UpdateSocialsCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::{Handle, Socials};
 use profile_test_utils::ProfileTestFixture;
@@ -37,7 +37,7 @@ async fn test_update_socials_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -99,7 +99,7 @@ async fn test_update_socials_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -135,7 +135,7 @@ async fn test_update_socials_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -172,7 +172,7 @@ async fn test_update_socials_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, UpdateSocialsCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

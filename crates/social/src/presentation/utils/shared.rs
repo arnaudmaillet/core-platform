@@ -1,17 +1,20 @@
 // crates/social/src/presentation/utils/shared.rs
 
-use crate::application::context::{SocialAppContext, SocialCommandContext, SocialQueryContext};
+use crate::application::context::{SocialCommandCtx, SocialKernelCtx, SocialQueryCtx};
+use crate::domain::repositories::ProfileCountersStorageRepository; // Import du trait de stockage
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};
+use std::sync::Arc;
 use tonic::{Response, Status};
 
 #[tonic::async_trait]
 pub trait GrpcServiceUtils {
     type AppContext;
 
-    fn app_ctx(&self) -> &SocialAppContext;
+    fn kernel(&self) -> &SocialKernelCtx;
     fn bus(&self) -> &CommandBus;
+    fn profile_counters_storage(&self) -> &Arc<dyn ProfileCountersStorageRepository>;
 
     fn extract_region(&self, extensions: &tonic::Extensions) -> Result<Region, Status> {
         extensions
@@ -20,26 +23,32 @@ pub trait GrpcServiceUtils {
             .ok_or_else(|| Status::unauthenticated("Missing region context in extensions"))
     }
 
-    fn build_command_context(
+    fn build_command_ctx(
         &self,
         profile_id: ProfileId,
         extensions: &tonic::Extensions,
-    ) -> Result<SocialCommandContext, Status> {
+    ) -> Result<SocialCommandCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().command(profile_id, region))
+        Ok(SocialCommandCtx::new(
+            self.kernel().clone(),
+            profile_id,
+            region,
+        ))
     }
 
-    fn build_query_context(
-        &self,
-        extensions: &tonic::Extensions,
-    ) -> Result<SocialQueryContext, Status> {
+    fn build_query_ctx(&self, extensions: &tonic::Extensions) -> Result<SocialQueryCtx, Status> {
         let region = self.extract_region(extensions)?;
-        Ok(self.app_ctx().query(region))
+
+        Ok(SocialQueryCtx::new(
+            self.kernel().clone(),
+            self.profile_counters_storage().clone(),
+            region,
+        ))
     }
 
     async fn dispatch_command<C, Output, R>(
         &self,
-        ctx: &SocialCommandContext,
+        ctx: &SocialCommandCtx,
         cmd: C,
         response_payload: R,
     ) -> Result<Response<R>, Status>
@@ -50,7 +59,7 @@ pub trait GrpcServiceUtils {
         R: Send,
     {
         self.bus()
-            .execute::<SocialCommandContext, C, Output>(ctx.clone(), cmd)
+            .execute::<SocialCommandCtx, C, Output>(ctx.clone(), cmd)
             .await
             .map_err(map_domain_err_to_status)?;
 

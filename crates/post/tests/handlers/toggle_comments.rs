@@ -1,11 +1,13 @@
+// crates/post/src/application/commands/toggle_comments/tests.rs
+
 #[cfg(test)]
 mod tests {
     use post::commands::ToggleCommentsCommand;
-    use post::context::PostCommandContext;
-    use post::repositories::PostRepository;
+    use post::context::PostCommandCtx;
     use post_test_utils::PostTestFixture;
+    use post_test_utils::assertions::PostRepositoryAsserts;
     use shared_kernel::command::CommandTarget;
-    use shared_kernel::core::{Result, Versioned};
+    use shared_kernel::core::{ErrorCode, ManagedEntity, Result, Versioned};
     use shared_kernel::idempotency::IdempotencyRepository;
     use uuid::Uuid;
 
@@ -14,93 +16,139 @@ mod tests {
         // Arrange
         let f = PostTestFixture::new();
         let post = f.builder("Some caption").build().unwrap();
-        f.given_post(&post).await;
-        let command_id = Uuid::now_v7();
+        let version_snapshot = post.version();
 
-        // On part de 'true' par défaut, on désactive
+        f.given_post(&post).await;
+        let command_id = Uuid::new_v4();
+
+        // On part de 'true' par défaut, on désactive via le contrôle de version OCC
         let cmd = ToggleCommentsCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id()),
-region: f.region(),
+            target: CommandTarget::versioned(f.post_id(), version_snapshot),
+            region: f.server_region(),
             allowed: false,
         };
 
         // Act
         f.bus()
-            .execute::<PostCommandContext, ToggleCommentsCommand, ()>(f.writer_ctx(), cmd)
+            .execute::<PostCommandCtx, ToggleCommentsCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
-        // Assert
-        let updated_post = f
-            .post_repo()
-            .find_by_id(f.region(), &post.post_id())
-            .await?
-            .unwrap();
-        assert!(!updated_post.allowed_comment_hands());
-
-        assert!(f.idempotency_repo().exists(None, &command_id).await?);
+        // Assert : Vérification via la passerelle d'assertion
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert!(!p.allowed_comment_hands());
+                assert_eq!(p.version(), version_snapshot + 1); // Incrémentation OCC
+            })
+            .await;
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_toggle_comments_handler_skips_when_already_set() -> Result<()> {
+    async fn test_toggle_comments_handler_business_idempotency() -> Result<()> {
         // Arrange
         let f = PostTestFixture::new();
         let post = f.builder("Some caption").build().unwrap();
-        f.given_post(&post).await;
-        let command_id = Uuid::now_v7();
+        let version_snapshot = post.version();
 
-        // Déjà 'true' par défaut, on tente de mettre 'true'
+        f.given_post(&post).await;
+        let command_id = Uuid::new_v4();
+
         let cmd = ToggleCommentsCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id()),
-region: f.region(),
+            target: CommandTarget::versioned(f.post_id(), version_snapshot),
+            region: f.server_region(),
             allowed: true,
         };
 
         // Act
         f.bus()
-            .execute::<PostCommandContext, ToggleCommentsCommand, ()>(f.writer_ctx(), cmd)
+            .execute::<PostCommandCtx, ToggleCommentsCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
-        // Assert
-        assert!(!f.idempotency_repo().exists(None, &command_id).await?);
+        // Assert : Rien ne doit muter, la version et la date de mise à jour restent stables
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert!(p.allowed_comment_hands());
+                assert_eq!(p.version(), version_snapshot);
+                assert_eq!(p.lifecycle().updated_at(), post.lifecycle().updated_at());
+            })
+            .await;
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_toggle_comments_handler_idempotency_barrier() -> Result<()> {
+    async fn test_toggle_comments_handler_technical_idempotency_barrier() -> Result<()> {
         // Arrange
         let f = PostTestFixture::new();
         let post = f.builder("Some caption").build().unwrap();
-        f.given_post(&post).await;
-        let command_id = Uuid::now_v7();
+        let version_snapshot = post.version();
 
+        f.given_post(&post).await;
+        let command_id = Uuid::new_v4();
+
+        // On simule une commande déjà exécutée et enregistrée au premier rideau
         f.idempotency_repo().save(None, &command_id).await?;
 
         let cmd = ToggleCommentsCommand {
             command_id,
-            target: CommandTarget::stateless(post.post_id()),
-region: f.region(),
+            target: CommandTarget::versioned(f.post_id(), version_snapshot),
+            region: f.server_region(),
             allowed: false,
         };
 
         // Act
         f.bus()
-            .execute::<PostCommandContext, ToggleCommentsCommand, ()>(f.writer_ctx(), cmd)
+            .execute::<PostCommandCtx, ToggleCommentsCommand, ()>(f.command_ctx().clone(), cmd)
             .await?;
 
-        // Assert
-        let current_post = f
-            .post_repo()
-            .find_by_id(f.region(), &post.post_id())
-            .await?
-            .unwrap();
+        // Assert : Bloqué par la barrière technique Redis, l'état reste inchangé (true)
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert!(p.allowed_comment_hands());
+                assert_eq!(p.version(), version_snapshot);
+            })
+            .await;
 
-        // Rien ne doit avoir changé (toujours true par défaut)
-        assert!(current_post.allowed_comment_hands());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_toggle_comments_concurrency_conflict() -> Result<()> {
+        // Arrange
+        let f = PostTestFixture::new();
+        let post = f.builder("Some caption").build().unwrap();
+        f.given_post(&post).await;
+
+        // Concurrence conflict simulation (Mauvaise version fournie)
+        let cmd = ToggleCommentsCommand {
+            command_id: Uuid::new_v4(),
+            target: CommandTarget::versioned(f.post_id(), 99),
+            region: f.server_region(),
+            allowed: false,
+        };
+
+        // Act
+        let result = f
+            .bus()
+            .execute::<PostCommandCtx, ToggleCommentsCommand, ()>(f.command_ctx().clone(), cmd)
+            .await;
+
+        // Assert
+        assert!(matches!(
+            result,
+            Err(e) if e.code == ErrorCode::ConcurrencyConflict
+        ));
+
+        // L'état en base doit être resté intact
+        f.post_assertions()
+            .assert_post_state(f.post_id(), |p| {
+                assert!(p.allowed_comment_hands());
+                assert_eq!(p.version(), post.version());
+            })
+            .await;
 
         Ok(())
     }

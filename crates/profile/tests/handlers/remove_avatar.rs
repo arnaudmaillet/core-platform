@@ -1,5 +1,5 @@
 use profile::commands::RemoveAvatarCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::events::ProfileEvent;
 use profile::types::Handle;
 use profile_test_utils::ProfileTestFixture;
@@ -37,7 +37,7 @@ async fn test_remove_avatar_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -93,7 +93,7 @@ async fn test_remove_avatar_business_idempotency() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -138,7 +138,7 @@ async fn test_remove_avatar_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -181,7 +181,7 @@ async fn test_remove_avatar_concurrency_conflict() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, RemoveAvatarCommand, ()>(f.command_ctx(), cmd)
+        .execute::<ProfileCommandCtx, RemoveAvatarCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

@@ -9,7 +9,7 @@ use std::fmt;
 /// C'est un *Value Object* essentiel pour l'expérience développeur (DX) et l'évolutivité.
 /// Il encapsule les métadonnées de localisation nécessaires au Sharding et à la résilience
 /// sans coupler le code métier aux variables d'environnement brutes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ClusterContext {
     region: Region,
     // 💡 Prêt pour le futur : Tu pourras ajouter ici 'environment: Env' (prod, staging)

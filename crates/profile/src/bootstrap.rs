@@ -1,7 +1,7 @@
 // crates/profile/src/application/builder.rs
 
 use shared_kernel::{
-    cache::CacheRepository, command::CommandBus, idempotency::IdempotencyRepository, types::Region,
+    command::CommandBus, environment::ClusterContext, idempotency::IdempotencyRepository,
 };
 use std::sync::Arc;
 
@@ -14,80 +14,74 @@ use crate::{
         UpdateLocationCommand, UpdateLocationHandler, UpdatePrivacyCommand, UpdatePrivacyHandler,
         UpdateSocialsCommand, UpdateSocialsHandler,
     },
-    context::{ProfileAppContext, ProfileCommandContext},
+    context::{ProfileCommandCtx, ProfileKernelCtx},
     repositories::{ProfileRepository, ProfileRoutingRepository},
 };
 
 pub struct ProfileServiceBuilder {
     profile_repo: Arc<dyn ProfileRepository>,
     routing_repo: Arc<dyn ProfileRoutingRepository>,
-    cache_repo: Arc<dyn CacheRepository>,
     idempotency_repo: Arc<dyn IdempotencyRepository>,
-    region: Region,
+    cluster_ctx: ClusterContext,
 }
 
 impl ProfileServiceBuilder {
     pub fn new(
         profile_repo: Arc<dyn ProfileRepository>,
         routing_repo: Arc<dyn ProfileRoutingRepository>,
-        cache_repo: Arc<dyn CacheRepository>,
         idempotency_repo: Arc<dyn IdempotencyRepository>,
-        region: Region,
+        cluster_ctx: ClusterContext,
     ) -> Self {
         Self {
             profile_repo,
             routing_repo,
-            cache_repo,
             idempotency_repo,
-            region,
+            cluster_ctx,
         }
     }
 
-    pub fn build_context(&self) -> ProfileAppContext {
-        ProfileAppContext::new(
+    pub fn build_kernel_ctx(&self) -> ProfileKernelCtx {
+        ProfileKernelCtx::new(
             self.profile_repo.clone(),
             self.routing_repo.clone(),
-            self.region,
+            self.idempotency_repo.clone(),
+            self.cluster_ctx,
         )
     }
 
-    pub fn build_command_bus(&self) -> Arc<CommandBus> {
-        let mut bus = CommandBus::new(self.cache_repo.clone(), self.idempotency_repo.clone());
-
-        bus.register::<ProfileCommandContext, CreateProfileCommand, CreateProfileHandler>(
+    pub fn register_handlers(&self, bus: &mut CommandBus) {
+        bus.register::<ProfileCommandCtx, CreateProfileCommand, CreateProfileHandler>(
             CreateProfileHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdateDisplayNameCommand, UpdateDisplayNameHandler>(
+        bus.register::<ProfileCommandCtx, UpdateDisplayNameCommand, UpdateDisplayNameHandler>(
             UpdateDisplayNameHandler::new(),
         );
-        bus.register::<ProfileCommandContext, ChangeHandleCommand, ChangeHandleHandler>(
+        bus.register::<ProfileCommandCtx, ChangeHandleCommand, ChangeHandleHandler>(
             ChangeHandleHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdatePrivacyCommand, UpdatePrivacyHandler>(
+        bus.register::<ProfileCommandCtx, UpdatePrivacyCommand, UpdatePrivacyHandler>(
             UpdatePrivacyHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdateAvatarCommand, UpdateAvatarHandler>(
+        bus.register::<ProfileCommandCtx, UpdateAvatarCommand, UpdateAvatarHandler>(
             UpdateAvatarHandler::new(),
         );
-        bus.register::<ProfileCommandContext, RemoveAvatarCommand, RemoveAvatarHandler>(
+        bus.register::<ProfileCommandCtx, RemoveAvatarCommand, RemoveAvatarHandler>(
             RemoveAvatarHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdateBannerCommand, UpdateBannerHandler>(
+        bus.register::<ProfileCommandCtx, UpdateBannerCommand, UpdateBannerHandler>(
             UpdateBannerHandler::new(),
         );
-        bus.register::<ProfileCommandContext, RemoveBannerCommand, RemoveBannerHandler>(
+        bus.register::<ProfileCommandCtx, RemoveBannerCommand, RemoveBannerHandler>(
             RemoveBannerHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdateBioCommand, UpdateBioHandler>(
+        bus.register::<ProfileCommandCtx, UpdateBioCommand, UpdateBioHandler>(
             UpdateBioHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdateLocationCommand, UpdateLocationHandler>(
+        bus.register::<ProfileCommandCtx, UpdateLocationCommand, UpdateLocationHandler>(
             UpdateLocationHandler::new(),
         );
-        bus.register::<ProfileCommandContext, UpdateSocialsCommand, UpdateSocialsHandler>(
+        bus.register::<ProfileCommandCtx, UpdateSocialsCommand, UpdateSocialsHandler>(
             UpdateSocialsHandler::new(),
         );
-
-        Arc::new(bus)
     }
 }

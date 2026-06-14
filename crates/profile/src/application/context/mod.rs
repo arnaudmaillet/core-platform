@@ -1,7 +1,7 @@
-mod app;
+mod kernel;
 mod command;
 mod query;
 
-pub use app::ProfileAppContext;
-pub use command::ProfileCommandContext;
-pub use query::ProfileQueryContext;
+pub use kernel::ProfileKernelCtx;
+pub use command::ProfileCommandCtx;
+pub use query::ProfileQueryCtx;

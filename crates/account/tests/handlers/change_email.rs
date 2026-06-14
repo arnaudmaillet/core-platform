@@ -32,7 +32,7 @@ async fn test_change_email_success() -> Result<()> {
     f.global_registry()
         .insert_fixture(account::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_email(old_email),
             state: AccountState::ACTIVE,
@@ -44,7 +44,7 @@ async fn test_change_email_success() -> Result<()> {
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_email: new_email.clone(),
     };
 
@@ -83,7 +83,7 @@ async fn test_change_email_technical_idempotency() -> Result<()> {
     let cmd = ChangeEmailCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_email: requested_email.clone(),
     };
 
@@ -134,7 +134,7 @@ async fn test_change_email_business_idempotency() -> Result<()> {
     f.global_registry()
         .insert_fixture(account::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_email(email.clone()),
             state: AccountState::ACTIVE,
@@ -146,7 +146,7 @@ async fn test_change_email_business_idempotency() -> Result<()> {
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_email: email,
     };
 
@@ -191,7 +191,7 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
     f.global_registry()
         .insert_fixture(account::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_email(old_email),
             state: AccountState::BANNED,
@@ -203,7 +203,7 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_email: requested_email.clone(),
     };
 
@@ -257,7 +257,7 @@ async fn test_change_email_succeeds_after_retry() -> Result<()> {
     f.global_registry()
         .insert_fixture(account::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: None,
             identifiers: RegistrationIdentifier::from_email(old_email),
             state: AccountState::ACTIVE,
@@ -274,7 +274,7 @@ async fn test_change_email_succeeds_after_retry() -> Result<()> {
     let cmd = ChangeEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         new_email: requested_email.clone(),
     };
 

@@ -1,7 +1,7 @@
-mod app;
+mod kernel;
 mod command;
 mod query;
 
-pub use app::PostAppContext;
-pub use command::PostCommandContext;
-pub use query::PostQueryContext;
+pub use kernel::PostKernelCtx;
+pub use command::PostCommandCtx;
+pub use query::PostQueryCtx;

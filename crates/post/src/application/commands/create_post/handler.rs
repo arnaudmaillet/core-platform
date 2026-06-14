@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    application::{commands::CreatePostCommand, context::PostCommandContext},
+    application::{commands::CreatePostCommand, context::PostCommandCtx},
     domain::entities::Post,
     types::{DynamicMetadata, Hashtags, Mentions},
 };
@@ -13,22 +13,11 @@ pub struct CreatePostHandler;
 
 #[async_trait]
 impl CommandHandler for CreatePostHandler {
-    type Context = PostCommandContext;
+    type Context = PostCommandCtx;
     type Command = CreatePostCommand;
     type Output = ();
 
-    async fn handle(
-        &self,
-        ctx: &PostCommandContext,
-        cmd: CreatePostCommand,
-    ) -> Result<Self::Output> {
-        if !ctx
-            .ensure_executable(cmd.command_id, cmd.region)
-            .await?
-        {
-            return Ok(());
-        }
-
+    async fn handle(&self, ctx: &PostCommandCtx, cmd: CreatePostCommand) -> Result<Self::Output> {
         let mut extracted_slugs = BTreeSet::new();
         let mut extracted_tags = BTreeSet::new();
 
@@ -40,7 +29,7 @@ impl CommandHandler for CreatePostHandler {
         let mut resolved_profiles = BTreeSet::new();
         if !extracted_slugs.is_empty() {
             let profile_map = ctx
-                .app()
+                .kernel()
                 .profile_resolver()
                 .resolve_slugs(&extracted_slugs)
                 .await?;
@@ -67,7 +56,7 @@ impl CommandHandler for CreatePostHandler {
         .with_hashtags(hashtags)
         .build()?;
 
-        ctx.save(&mut post, Some(cmd.command_id)).await?;
+        ctx.save(&mut post, cmd.command_id).await?;
 
         Ok(())
     }

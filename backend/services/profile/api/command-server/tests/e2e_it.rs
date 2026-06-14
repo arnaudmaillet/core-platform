@@ -1,3 +1,5 @@
+// backend/services/profile/api/command-server/tests/profile_e2e_test.rs (ou ton chemin de test)
+
 use auth::Claims;
 use auth_test_utils::TokenValidatorStub;
 use profile::entities::Profile;
@@ -65,11 +67,13 @@ async fn test_e2e_complete_profile_lifecycle() -> Result<()> {
     let real_account_id = AccountId::generate();
     let handle = Handle::try_new("alice_rocks")?;
 
-    // Utilisation des stores officiels pour injecter les données dans Scylla
     let session = ctx.kernel().scylla().session();
-    let profile_store = ScyllaProfileStore::new(session.clone(), region)
+    let keyspace_name = format!("{}_profile_storage", region.to_string().to_lowercase());
+
+    let profile_store = ScyllaProfileStore::new(session.clone(), keyspace_name)
         .await
         .unwrap();
+
     let routing_store = ScyllaProfileRoutingStore::new(session.clone())
         .await
         .unwrap();

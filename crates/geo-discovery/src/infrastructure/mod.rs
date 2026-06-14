@@ -1,3 +1,3 @@
 pub mod mappers;
-pub mod repositories;
+pub mod stores;
 pub mod resolvers;

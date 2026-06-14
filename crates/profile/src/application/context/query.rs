@@ -1,43 +1,39 @@
 // crates/profile/src/context/query_context.rs
 
-use crate::{context::ProfileAppContext, entities::Profile, types::Handle};
+use crate::{context::ProfileKernelCtx, entities::Profile, types::Handle};
 use shared_kernel::{
     core::{Error, Result},
     types::{ProfileId, Region},
 };
 
-pub struct ProfileQueryContext {
-    app_ctx: ProfileAppContext,
+pub struct ProfileQueryCtx {
+    kernel: ProfileKernelCtx,
 }
 
-impl Clone for ProfileQueryContext {
+impl Clone for ProfileQueryCtx {
     fn clone(&self) -> Self {
         Self {
-            app_ctx: self.app_ctx.clone(),
+            kernel: self.kernel.clone(),
         }
     }
 }
 
-impl ProfileQueryContext {
-    pub(crate) fn new(app_ctx: ProfileAppContext) -> Self {
-        Self { app_ctx }
-    }
-
-    pub fn local_region(&self) -> Region {
-        self.app_ctx.region()
+impl ProfileQueryCtx {
+    pub fn new(kernel: ProfileKernelCtx) -> Self {
+        Self { kernel }
     }
 
     pub async fn find_by_id(&self, profile_id: ProfileId) -> Result<Option<Profile>> {
-        self.app_ctx.profile_repo().find_by_id(profile_id).await
+        self.kernel.profile_repo().find_by_id(profile_id).await
     }
 
     pub async fn find_by_handle(&self, handle: &Handle) -> Result<Option<Profile>> {
         let slug_hash = handle.to_sha256_hash();
 
         if let Some((profile_id, target_region)) =
-            self.app_ctx.routing_repo().resolve_slug(&slug_hash).await?
+            self.kernel.routing_repo().resolve_slug(&slug_hash).await?
         {
-            if target_region == self.local_region() {
+            if target_region == self.kernel.server_region() {
                 self.find_by_id(profile_id).await
             } else {
                 Err(Error::validation(

@@ -32,7 +32,7 @@ async fn test_increase_trust_score_success() -> Result<()> {
     let cmd = IncreaseTrustScoreCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         amount: TrustAmount::try_from(20)?, // 50 + 20 = 70
         reason: reason.clone(),
     };
@@ -73,7 +73,7 @@ async fn test_increase_trust_score_cap_at_one_hundred() -> Result<()> {
     let cmd = IncreaseTrustScoreCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         amount: TrustAmount::try_from(50)?, // 90 + 50 -> Cap à 100 au niveau du domaine
         reason: AuditReason::try_new("High activity")?,
     };
@@ -111,7 +111,7 @@ async fn test_increase_trust_score_technical_idempotency() -> Result<()> {
     let cmd = IncreaseTrustScoreCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         amount: TrustAmount::try_from(10)?,
         reason: AuditReason::try_new("Duplicate")?,
     };
@@ -165,7 +165,7 @@ async fn test_increase_trust_score_business_idempotency_at_max() -> Result<()> {
     let cmd = IncreaseTrustScoreCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         amount: TrustAmount::try_from(10)?,
         reason: AuditReason::try_new("Should do nothing")?,
     };

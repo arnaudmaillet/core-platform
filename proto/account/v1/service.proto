@@ -54,11 +54,10 @@ service AccountSettingsService {
 
 message RegisterRequest {
   string                 command_id = 1;
-  string                 region     = 2;
-  optional string        sub_id     = 3;
-  RegistrationIdentifier identifier = 4;
-  string                 locale     = 5;
-  string                 ip_addr    = 6;
+  optional string        sub_id     = 2;
+  RegistrationIdentifier identifier = 3;
+  string                 locale     = 4;
+  string                 ip_addr    = 5;
 }
 
 message RegisterResponse {

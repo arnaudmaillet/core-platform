@@ -1,5 +1,5 @@
-mod profile_store;
-mod routing_store;
+mod profile;
+mod routing;
 
-pub use profile_store::ScyllaProfileStore;
-pub use routing_store::ScyllaProfileRoutingStore;
+pub use profile::ScyllaProfileStore;
+pub use routing::ScyllaProfileRoutingStore;

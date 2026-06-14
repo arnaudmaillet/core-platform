@@ -30,7 +30,7 @@ async fn test_verify_email_success() -> Result<()> {
     f.global_registry()
         .insert_fixture(GlobalIdentityRegistration {
             account_id: f.account_id(),
-            region: f.region(),
+            region: f.server_region(),
             sub_id: account.identity().sub_id().cloned(),
             identifiers: RegistrationIdentifier::from_email(email),
             state: AccountState::UNVERIFIED,
@@ -45,7 +45,7 @@ async fn test_verify_email_success() -> Result<()> {
     let cmd = VerifyEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: code.to_string(),
     };
 
@@ -89,7 +89,7 @@ async fn test_verify_email_fails_if_otp_invalid() -> Result<()> {
     let cmd = VerifyEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: "654321".to_string(), // Mauvais code !
     };
 
@@ -142,7 +142,7 @@ async fn test_verify_email_fails_if_otp_expired() -> Result<()> {
     let cmd = VerifyEmailCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: "123456".to_string(),
     };
 
@@ -182,7 +182,7 @@ async fn test_verify_email_technical_idempotency() -> Result<()> {
     let cmd = VerifyEmailCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.account_id(), version_snapshot),
-        region: f.region(),
+        region: f.server_region(),
         code: "123456".to_string(),
     };
 

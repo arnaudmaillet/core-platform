@@ -1,5 +1,5 @@
 use profile::commands::CreateProfileCommand;
-use profile::context::ProfileCommandContext;
+use profile::context::ProfileCommandCtx;
 use profile::entities::Profile;
 use profile::events::ProfileEvent;
 use profile::types::Handle;
@@ -28,7 +28,7 @@ async fn test_create_profile_success() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<ProfileCommandContext, CreateProfileCommand, ()>(f.creation_ctx(), cmd)
+        .execute::<ProfileCommandCtx, CreateProfileCommand, ()>(f.creation_ctx(f.region()), cmd)
         .await?;
 
     // Assert
@@ -87,7 +87,7 @@ async fn test_create_profile_technical_idempotency() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, CreateProfileCommand, ()>(f.creation_ctx(), cmd)
+        .execute::<ProfileCommandCtx, CreateProfileCommand, ()>(f.creation_ctx(f.region()), cmd)
         .await;
 
     // Assert
@@ -134,7 +134,7 @@ async fn test_create_profile_conflict_handle() -> Result<()> {
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandContext, CreateProfileCommand, ()>(f.creation_ctx(), cmd)
+        .execute::<ProfileCommandCtx, CreateProfileCommand, ()>(f.creation_ctx(f.region()), cmd)
         .await;
 
     // Assert

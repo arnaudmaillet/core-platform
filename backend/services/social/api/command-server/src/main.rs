@@ -2,10 +2,12 @@
 
 use auth::{KeycloakValidator, interceptors::AuthInterceptor};
 use dotenvy::dotenv;
-use infra_fred::{RedisContext, RedisIdempotencyRepository};
+use infra_fred::RedisContext;
 use infra_scylla::ScyllaContext;
-use social::SocialServiceBuilder;
+use shared_kernel::command::CommandBus;
 use social::services::SocialService;
+use social::stores::{RedisProfileCountersStore, ScyllaFollowRelationStore};
+use social::{SocialServiceBuilder, stores::ScyllaProfileCountersStore};
 use std::sync::Arc;
 use tonic::transport::Server;
 use tracing_subscriber::{EnvFilter, fmt};
@@ -14,16 +16,15 @@ use shared_proto::social::v1::social_service_server::SocialServiceServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Initialisation unique et propre de la télémétrie
     let _ = fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,sqlx=debug,account=debug,tonic=debug")),
+                .unwrap_or_else(|_| EnvFilter::new("info,scylla=debug,social=debug,tonic=debug")),
         )
-        .with_test_writer()
         .try_init();
 
     dotenv().ok();
-    tracing_subscriber::fmt::init();
 
     let scylla_nodes_str =
         std::env::var("SOCIAL_SCYLLA_NODES").unwrap_or_else(|_| "127.0.0.1:9042".to_string());
@@ -33,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keycloak_audience =
         std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "social-service".to_string());
 
-    // 3. Initialisation des contextes technologiques
+    // 2. Initialisation des contextes technologiques (Drivers)
     let scylla_nodes: Vec<String> = scylla_nodes_str
         .split(',')
         .map(|s| s.trim().to_string())
@@ -41,30 +42,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scylla_ctx = ScyllaContext::builder_from_env()?
         .with_nodes(scylla_nodes)
-        .with_keyspace("social_network")
+        .with_keyspace("social_network") // Keyspace global ou partagé pour les graphes/compteurs
         .build()
         .await?;
 
     let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
-    let redis_cache_repo = redis_ctx.cache_repository();
-    let redis_pool = redis_cache_repo.pool().clone();
 
-    let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
-        redis_pool.clone(),
-        "social",
-        7200,
-    ));
+    // 3. Instanciation des dépôts (Repositories Concrets conforme aux traits DDD)
+    let session = scylla_ctx.session().clone();
+    let cache_repo = redis_ctx.cache_repository();
+    let idempotency_repo = redis_ctx.idempotency_repository();
 
-    let builder = SocialServiceBuilder::new(
-        scylla_ctx.session(),
-        redis_pool,
-        redis_cache_repo,
-        idempotency_repo,
-    );
+    // Abstractions ScyllaDB (Stockage persistant / froid)
+    let follow_relation_repo = Arc::new(ScyllaFollowRelationStore::new(session.clone()).await?);
+    let profile_counters_storage = Arc::new(ScyllaProfileCountersStore::new(session).await?);
 
-    let app_ctx = builder.build_context().await;
-    let bus = builder.build_command_bus();
+    // Abstraction Redis (Indexation rapide des deltas de compteurs)
+    let profile_counters_index =
+        Arc::new(RedisProfileCountersStore::new(cache_repo.pool().clone()));
 
+    // 4. Assemblage via le Builder de l'application
+    let service = SocialServiceBuilder::new(follow_relation_repo, profile_counters_index);
+
+    let kernel_ctx = service.build_context().await;
+    let mut command_bus = CommandBus::new(redis_ctx.cache_repository(), idempotency_repo);
+    service.register_handlers(&mut command_bus);
+
+    // 5. Configuration réseau & serveurs de transport
     let port = std::env::var("PORT").unwrap_or_else(|_| "50053".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
@@ -75,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let auth_interceptor = AuthInterceptor::new(validator.clone());
-    let social_svc = SocialService::new(bus, app_ctx);
+    let social_svc = SocialService::new(command_bus, kernel_ctx, profile_counters_storage);
 
     tracing::info!(
         "🚀 Social Service (Hyperscale Graphes & Compteurs de Production) listening on {}",

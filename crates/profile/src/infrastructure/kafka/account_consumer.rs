@@ -1,4 +1,4 @@
-use crate::application::context::{ProfileAppContext, ProfileCommandContext};
+use crate::application::context::{ProfileKernelCtx, ProfileCommandCtx};
 use crate::commands::CreateProfileCommand;
 use crate::types::Handle;
 use serde::Deserialize;
@@ -23,12 +23,12 @@ enum AccountIncomingEvent {
 
 pub struct AccountConsumer {
     bus: Arc<CommandBus>,
-    app_ctx: ProfileAppContext,
+    kernel: ProfileKernelCtx,
 }
 
 impl AccountConsumer {
-    pub fn new(bus: Arc<CommandBus>, app_ctx: ProfileAppContext) -> Self {
-        Self { bus, app_ctx }
+    pub fn new(bus: Arc<CommandBus>, kernel: ProfileKernelCtx) -> Self {
+        Self { bus, kernel }
     }
 
     pub async fn on_message_received(
@@ -47,11 +47,11 @@ impl AccountConsumer {
             } => {
                 let region_vo = Region::try_from(region.as_str()).map_err(|e| e.to_string())?;
 
-                if region_vo != self.app_ctx.region() {
+                if region_vo != self.kernel.server_region() {
                     tracing::debug!(
                         account_id = %account_id,
                         event_region = ?region_vo,
-                        local_region = ?self.app_ctx.region(),
+                        local_region = ?self.kernel.server_region(),
                         "Account registered in another region, skipping locally"
                     );
                     return Ok(());
@@ -63,7 +63,7 @@ impl AccountConsumer {
                 let handle = Handle::try_new(default_username)
                     .map_err(|e| format!("Failed to generate default handle: {}", e))?;
 
-                let creation_ctx = self.app_ctx.creation_command();
+                let creation_ctx = self.kernel.creation_command(region_vo);
                 let generated_profile_id = ProfileId::generate();
                 let target = CommandTarget::stateless(generated_profile_id);
 
@@ -77,7 +77,7 @@ impl AccountConsumer {
 
                 match self
                     .bus
-                    .execute::<ProfileCommandContext, CreateProfileCommand, ()>(
+                    .execute::<ProfileCommandCtx, CreateProfileCommand, ()>(
                         creation_ctx,
                         command,
                     )

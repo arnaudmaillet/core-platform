@@ -1,7 +1,5 @@
-mod counters;
-mod relations;
-mod relations_builder;
+mod profile_counters;
+mod follow_relations;
 
-pub use counters::ProfileCounters;
-pub use relations::FollowRelation;
-pub use relations_builder::FollowRelationBuilder;
+pub use profile_counters::ProfileCounters;
+pub use follow_relations::FollowRelation;

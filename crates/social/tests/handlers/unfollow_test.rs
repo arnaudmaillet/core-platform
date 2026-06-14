@@ -2,9 +2,9 @@ use shared_kernel::command::CommandTarget;
 use shared_kernel::core::Result;
 use shared_kernel::idempotency::IdempotencyRepository;
 use shared_kernel::types::ProfileId;
-use social::commands::UnfollowCommand;
-use social::context::SocialCommandContext;
+use social::context::SocialCommandCtx;
 use social::events::SocialEvent;
+use social::use_cases::UnfollowCommand;
 use social_test_utils::SocialTestFixture;
 use social_test_utils::assertions::{CounterRepositoryAsserts, RelationRepositoryAsserts};
 use uuid::Uuid;
@@ -30,7 +30,7 @@ async fn test_unfollow_handler_success_nominal_path() -> Result<()> {
 
     // Act
     f.bus()
-        .execute::<SocialCommandContext, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<SocialCommandCtx, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -84,7 +84,7 @@ async fn test_unfollow_handler_should_abort_silently_when_idempotency_barrier_tr
 
     // Act
     f.bus()
-        .execute::<SocialCommandContext, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<SocialCommandCtx, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -113,7 +113,7 @@ async fn test_unfollow_handler_should_ignore_self_unfollowing_attempts() -> Resu
 
     // Act
     f.bus()
-        .execute::<SocialCommandContext, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<SocialCommandCtx, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -147,7 +147,7 @@ async fn test_unfollow_handler_should_skip_execution_if_not_following() -> Resul
 
     // Act
     f.bus()
-        .execute::<SocialCommandContext, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<SocialCommandCtx, UnfollowCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
