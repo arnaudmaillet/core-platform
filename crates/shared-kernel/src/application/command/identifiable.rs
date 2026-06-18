@@ -17,6 +17,10 @@ pub trait IdentifiableCommand {
         Self::Id::identifier_scope()
     }
 
+    fn is_idempotency_enabled(&self) -> bool {
+        true
+    }
+
     fn resolve_cache_key(&self) -> Option<String> {
         let target = self.target();
         match self.routing().to_key_component() {

@@ -8,6 +8,7 @@ use shared_kernel::core::{Error, Result, Transaction};
 use shared_kernel::idempotency::IdempotencyRepository;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct RedisIdempotencyRepository {
     pool: Pool,
     namespace: String,

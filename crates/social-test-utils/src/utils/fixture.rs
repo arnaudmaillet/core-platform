@@ -28,7 +28,7 @@ impl SocialTestFixture {
         let cache_counter_repo = Arc::new(CounterRepositoryStub::new());
         let db_counter_repo = Arc::new(CounterRepositoryStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
-        let cache = Arc::new(CacheRepositoryStub::new());
+        let cache_repo = Arc::new(CacheRepositoryStub::new());
 
         let kernel_ctx = SocialKernelCtx::new(relation_repo.clone(), cache_counter_repo.clone());
 
@@ -38,7 +38,7 @@ impl SocialTestFixture {
         let command_ctx = SocialCommandCtx::new(kernel_ctx.clone(), target_profile_id, region);
         let query_ctx = SocialQueryCtx::new(kernel_ctx.clone(), db_counter_repo.clone(), region);
 
-        let mut bus = CommandBus::new(cache, idempotency_repo.clone());
+        let mut bus = CommandBus::new(Some(idempotency_repo.clone()), Some(cache_repo));
         bus.register::<SocialCommandCtx, FollowCommand, FollowHandler>(FollowHandler);
         bus.register::<SocialCommandCtx, UnfollowCommand, UnfollowHandler>(UnfollowHandler);
 

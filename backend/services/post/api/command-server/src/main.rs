@@ -1,26 +1,15 @@
-// backend/services/post/api/command-server/src/main.rs
-
 use auth::{KeycloakValidator, interceptors::AuthInterceptor};
 use dotenvy::dotenv;
 use infra_fred::RedisContext;
 use infra_scylla::ScyllaContext;
-use post::{
-    PostServiceBuilder,
-    repositories_impl::ScyllaPostStore,
-    resolvers_impl::{CachedProfileResolver, GrpcProfileSource},
-    services::PostService,
-};
+use post_assembly::PostCommandAssembly;
+use post_command_server::PostCommandService;
+use post_proto_bridge::v1::post_command_service_server::PostCommandServiceServer;
+use shared_kernel::types::Region;
+use shared_kernel::{command::CommandBus, environment::ClusterContext};
 use std::sync::Arc;
 use tonic::transport::Server;
 use tracing_subscriber::{EnvFilter, fmt};
-
-use shared_kernel::types::Region;
-use shared_kernel::{command::CommandBus, environment::ClusterContext};
-
-use shared_proto::{
-    post::v1::post_service_server::PostServiceServer,
-    profile::v1::profile_query_service_client::ProfileQueryServiceClient,
-};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,12 +22,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     dotenv().ok();
 
-    // 1. Chargement et validation des variables d'environnement de Sharding Régional
+    // Chargement et validation des variables d'environnement de Sharding Régional
     let region_str = std::env::var("CLUSTER_REGION")
-        .or_else(|_| std::env::var("REGION")) 
+        .or_else(|_| std::env::var("REGION"))
         .unwrap_or_else(|_| "EU".to_string());
     let local_region = Region::try_from(region_str.as_str())?;
-    let cluster_ctx = ClusterContext::new(local_region);
+    let cluster_ctx = ClusterContext::new(local_region.clone());
 
     let scylla_nodes_str =
         std::env::var("POST_SCYLLA_NODES").unwrap_or_else(|_| "127.0.0.1:9042".to_string());
@@ -47,55 +36,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").expect("KEYCLOAK_REALM must be set");
     let keycloak_audience =
         std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "post-service".to_string());
-    let profile_service_url =
-        std::env::var("PROFILE_SERVICE_URL").expect("PROFILE_SERVICE_URL must be set");
 
-    // 2. Initialisation des Contextes d'Infrastructure Drivers (ScyllaDB & Redis)
+    // Initialisation des Contextes d'Infrastructure Drivers (ScyllaDB & Redis)
     let scylla_nodes: Vec<String> = scylla_nodes_str
         .split(',')
         .map(|s| s.trim().to_string())
         .collect();
-
-    // Calcul déterministe du Keyspace de persistance souverain pour les Posts de cette région
     let keyspace_name = format!("{}_post_storage", local_region.to_string().to_lowercase());
 
+    // Drivers Redis
+    let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
+    let cache_repo = redis_ctx.cache_repository();
+
+    // Drivers ScyllaDB
     let scylla_ctx: ScyllaContext = ScyllaContext::builder_from_env()?
         .with_nodes(scylla_nodes)
         .with_keyspace(&keyspace_name)
         .build()
         .await?;
-    let session = scylla_ctx.session().clone();
-    let post_repo = Arc::new(ScyllaPostStore::new(session.clone(), keyspace_name.as_str()).await?);
-    let redis_ctx = RedisContext::builder()?.with_url(redis_url).build().await?;
-    let redis_cache_repo = redis_ctx.cache_repository();
-    let idempotency_repo = redis_ctx.idempotency_repository();
+    let command_bus = CommandBus::new(None, None);
 
-    // 3. Initialisation du Client gRPC d'inter-service pour le Profile Resolver
-    let grpc_channel = tonic::transport::Channel::from_shared(profile_service_url)?
-        .connect()
-        .await?;
-    let grpc_client = ProfileQueryServiceClient::new(grpc_channel);
+    // 4. Utilisation du Bootstrap d'écriture exclusif (Command)
+    let container = PostCommandAssembly::bootstrap(
+        scylla_ctx.session().clone(),
+        cache_repo.clone(),
+        keyspace_name,
+        cluster_ctx,
+        command_bus,
+    )
+    .await?;
 
-    // Injection de la région locale dans la source de fallback pour optimiser les requêtes cross-shards
-    let fallback_source = Arc::new(GrpcProfileSource::new(
-        grpc_client,
-        local_region.to_string(),
-    ));
+    let post_cmd_svc = PostCommandService::new(container);
 
-    let profile_resolver = Arc::new(CachedProfileResolver::new(
-        redis_cache_repo.clone(),
-        fallback_source,
-    ));
-
-    // 4. Assemblage via le Builder de Service et configuration du Kernel
-    let service = PostServiceBuilder::new(post_repo, profile_resolver, cluster_ctx);
-
-    let kernel = service.build_kernel_ctx();
-    let mut command_bus = CommandBus::new(redis_ctx.cache_repository(), idempotency_repo);
-
-    service.register_handlers(&mut command_bus);
-
-    // 5. Configuration réseau de l'exposition du serveur gRPC
+    // Configuration réseau de l'exposition du serveur gRPC
     let port = std::env::var("PORT").unwrap_or_else(|_| "50054".to_string());
     let addr = format!("0.0.0.0:{}", port).parse()?;
 
@@ -106,7 +79,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let auth_interceptor = AuthInterceptor::new(validator.clone());
-    let post_svc = PostService::new(command_bus, kernel);
 
     tracing::info!(
         "🚀 Post Command Service Shard [{:?}] listening on {}",
@@ -114,10 +86,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         addr
     );
 
-    // 6. Lancement du Serveur gRPC
+    // 5. Lancement du Serveur gRPC avec le serveur spécifique généré
     Server::builder()
-        .add_service(PostServiceServer::with_interceptor(
-            post_svc,
+        .add_service(PostCommandServiceServer::with_interceptor(
+            post_cmd_svc,
             auth_interceptor,
         ))
         .serve(addr)

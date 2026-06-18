@@ -10,6 +10,7 @@ use std::time::Duration;
 use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::{Error, Result};
 
+#[derive(Clone)]
 pub struct RedisCacheRepository {
     pool: Pool,
 }

@@ -1,15 +1,14 @@
-// backend/services/post/api/command-server/tests/post_e2e_it.rs
-
+mod utils;
 use auth::Claims;
 use auth_test_utils::TokenValidatorStub;
-use post_test_utils::PostTestContextBuilder;
+use post_proto_bridge::v1::CreatePostRequest;
+use post_proto_bridge::v1::post_command_service_client::PostCommandServiceClient;
 use shared_kernel::{
     core::{Identifier, Result},
     types::{PostId, ProfileId, Region, SubId},
 };
-use shared_proto::post::v1::post_service_client::PostServiceClient;
-use shared_proto::post::v1::{CreatePostRequest, GetPostRequest};
 use tonic::{Request, metadata::MetadataValue};
+use utils::PostTestContextBuilder;
 use uuid::Uuid;
 
 /// Helper d'injection des métadonnées d'authentification gRPC et de routing géographique
@@ -52,14 +51,17 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
 
     mock_validator.stub_token(test_token, expected_claims);
 
-    // 2. SETUP INFRASTRUCTURE
+    // 2. SETUP INFRASTRUCTURE (Initialise le serveur de commande)
     let ctx = PostTestContextBuilder::new()
         .with_mock_auth(mock_validator)
         .with_grpc_server()
         .build_e2e()
         .await;
 
-    let mut post_client = PostServiceClient::connect(ctx.grpc_url()).await.unwrap();
+    // Connexion via le client de commande exclusif
+    let mut post_command_client = PostCommandServiceClient::connect(ctx.grpc_url())
+        .await
+        .unwrap();
 
     let region = Region::default();
     let author_id = ProfileId::generate();
@@ -81,7 +83,7 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
     };
 
     // ACT : ENVOI DE LA COMMANDE DE CRÉATION DE POST
-    let create_res = post_client
+    let create_res = post_command_client
         .create_post(with_auth(create_req, test_token, "EU"))
         .await;
 
@@ -121,6 +123,16 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         "Post must exist in posts_by_id table"
     );
 
+    let mut rows = rows_by_id.rows().unwrap();
+    let next_row_result = rows.next().unwrap();
+    let (_db_post_id, _db_author_id, db_caption): (uuid::Uuid, uuid::Uuid, Option<String>) =
+        next_row_result.unwrap();
+
+    assert_eq!(
+        db_caption,
+        Some("Hyperscale post architecture with custom Redis caching! #rust #scylla".to_string())
+    );
+
     let query_by_author = format!(
         "SELECT post_id FROM {}.posts_by_author WHERE author_id = ? AND post_id = ?",
         keyspace
@@ -138,26 +150,6 @@ async fn test_e2e_complete_post_lifecycle_with_cache_aside() -> Result<()> {
         rows_by_author.rows_num(),
         1,
         "Post must exist in posts_by_author timeline table"
-    );
-
-    // =========================================================================
-    // ACT & ASSERT : QUERY SERVER LECTURE DIRECTE
-    // =========================================================================
-    let get_req = GetPostRequest {
-        post_id: post_id.to_string(),
-        author_id: author_id.to_string(),
-    };
-
-    let get_res = post_client
-        .get_post(with_auth(get_req, test_token, "EU"))
-        .await;
-
-    assert!(get_res.is_ok(), "gRPC GetPost query failed");
-
-    let returned_post = get_res.unwrap().into_inner();
-    assert_eq!(
-        returned_post.caption,
-        Some("Hyperscale post architecture with custom Redis caching! #rust #scylla".to_string())
     );
 
     ctx.shutdown().await;

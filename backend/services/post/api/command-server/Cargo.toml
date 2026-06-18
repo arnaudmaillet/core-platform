@@ -10,21 +10,24 @@ description.workspace = true
 [dependencies]
 auth = { workspace = true }
 post = { workspace = true }
+post-assembly = { workspace = true }
 shared-kernel = { workspace = true }
 infra-fred = { workspace = true }
 infra-scylla = { workspace = true }
-shared-proto = { workspace = true, features = ["post"] }
+post-proto-bridge = { workspace = true }
 dotenvy = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
+prost-types = { workspace = true }
 
 
 [dev-dependencies]
 uuid = { workspace = true }
 auth-test-utils = { workspace = true }
 shared-kernel = { workspace = true }
-post-test-utils = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
+infra-test = { workspace = true }
+tokio-stream = { workspace = true }

@@ -74,8 +74,11 @@ impl ProfileTestContextBuilder {
         tracing::info!("Starting E2E infrastructure build (Containers startup)...");
 
         let kernel_infra = self.kernel_builder.build().await;
-        let scylla_session = kernel_infra.scylla().session().clone();
-        let redis_repo = kernel_infra.redis().cache();
+        // 1. EXTRACTION ET CLONES POSSÉDÉS (OWNED) DANS LE THREAD PRINCIPAL
+        let scylla_session_owned = kernel_infra.scylla().session().clone();
+        let fred_cache_owned = (*kernel_infra.redis().cache()).clone();
+        let fred_idempotency_owned = (*kernel_infra.redis().idempotency()).clone();
+
         let kafka_brokers = self
             .has_kafka
             .then(|| kernel_infra.kafka().bootstrap_servers().to_string());
@@ -97,7 +100,7 @@ impl ProfileTestContextBuilder {
         ];
 
         let scylla_orch = ScyllaOrchestrator::new(
-            scylla_session.clone(),
+            scylla_session_owned.clone(),
             migration_path,
             targets,
             self.cluster_ctx.region().to_string(),
@@ -117,13 +120,14 @@ impl ProfileTestContextBuilder {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
 
+        // 2. DISPATCH DES COPIES POSSÉDÉES SELON LE MODE DE SERVICE
         match self.service_mode {
             Some(ServiceMode::Grpc) => {
-                let session = scylla_session.clone();
-                let cache_repo = redis_repo.clone();
+                let session = scylla_session_owned;
+                let cache_repo = fred_cache_owned;
+                let idempotency_repo = fred_idempotency_owned;
                 let custom_validator = self.mock_validator.clone();
-                let idempotency_repo = kernel_infra.redis().idempotency();
-                let keyspace_name = target_keyspace.clone(); // Move dans le thread gRPC
+                let keyspace_name = target_keyspace;
 
                 tokio::spawn(async move {
                     let validator = match custom_validator {
@@ -139,7 +143,12 @@ impl ProfileTestContextBuilder {
                     };
 
                     let interceptor = AuthInterceptor::new(validator);
-                    let mut command_bus = CommandBus::new(cache_repo, idempotency_repo.clone());
+
+                    // Utilisation des structures possédées locales au thread
+                    let mut command_bus = CommandBus::new(
+                        Some(Arc::new(idempotency_repo.clone())),
+                        Some(Arc::new(cache_repo)),
+                    );
 
                     let routing_store = Arc::new(
                         ScyllaProfileRoutingStore::new(session.clone())
@@ -156,7 +165,7 @@ impl ProfileTestContextBuilder {
                     let builder = ProfileServiceBuilder::new(
                         profile_store,
                         routing_store,
-                        idempotency_repo,
+                        Arc::new(idempotency_repo),
                         self.cluster_ctx,
                     );
 
@@ -192,11 +201,11 @@ impl ProfileTestContextBuilder {
                 });
             }
             Some(ServiceMode::KafkaWorker) => {
-                let session = scylla_session.clone();
-                let cache_repo = redis_repo.clone();
+                let session = scylla_session_owned;
+                let cache_repo = fred_cache_owned;
+                let idempotency_repo = fred_idempotency_owned;
                 let brokers = kafka_brokers.unwrap();
-                let idempotency_repo = kernel_infra.redis().idempotency();
-                let keyspace_name = target_keyspace; // Move dans le thread Worker
+                let keyspace_name = target_keyspace;
 
                 tokio::spawn(async move {
                     let routing_store = Arc::new(
@@ -214,12 +223,15 @@ impl ProfileTestContextBuilder {
                     let builder = ProfileServiceBuilder::new(
                         profile_store,
                         routing_store,
-                        idempotency_repo.clone(),
+                        Arc::new(idempotency_repo.clone()),
                         self.cluster_ctx,
                     );
 
                     let kernel_ctx = Arc::new(builder.build_kernel_ctx());
-                    let command_bus = CommandBus::new(cache_repo, idempotency_repo);
+                    let command_bus = CommandBus::new(
+                        Some(Arc::new(idempotency_repo)),
+                        Some(Arc::new(cache_repo)),
+                    );
 
                     let shared_bus = Arc::new(command_bus);
                     let account_consumer = Arc::new(AccountConsumer::new(
@@ -261,6 +273,7 @@ impl ProfileTestContextBuilder {
         }
 
         let addr = ready_rx.await.expect("Service failed to start");
+
         ProfileTestContext::new(kernel_infra, Some(addr), Some(shutdown_tx))
     }
 }

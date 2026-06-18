@@ -48,7 +48,7 @@ impl AccountTestFixture {
         let otp_repo = Arc::new(OtpRepositoryStub::new());
 
         let cluster_ctx = ClusterContext::default();
-        let mut command_bus = CommandBus::new(cache_repo.clone(), idempotency_repo.clone());
+        let mut command_bus = CommandBus::new(Some(idempotency_repo.clone()), Some(cache_repo));
 
         let service = AccountServiceBuilder::new(
             account_repo.clone() as Arc<dyn AccountRepository>,

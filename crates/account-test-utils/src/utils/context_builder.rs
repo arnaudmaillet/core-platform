@@ -69,8 +69,8 @@ impl AccountTestContextBuilder {
         tracing::info!("Building Account test infrastructure...");
         let kernel_infra = self.kernel_builder.build().await;
         let pg_pool = kernel_infra.postgres().pool().clone();
-        let fred_cache_repo = kernel_infra.redis().cache();
-        let fred_idempotency_repo = kernel_infra.redis().idempotency();
+        let fred_cache_owned = (*kernel_infra.redis().cache()).clone();
+        let fred_idempotency_owned = (*kernel_infra.redis().idempotency()).clone();
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -78,10 +78,12 @@ impl AccountTestContextBuilder {
         if self.with_grpc {
             tracing::info!("Starting gRPC server...");
             let pg = pg_pool.clone();
-            let fred_cache = fred_cache_repo.clone();
-            let fred_idempotency = fred_idempotency_repo.clone();
-            let custom_validator = self.mock_validator.clone();
 
+            let cache_for_bus = fred_cache_owned.clone();
+            let idempotency_for_bus = fred_idempotency_owned.clone();
+            let cache_for_otp = fred_cache_owned;
+
+            let custom_validator = self.mock_validator.clone();
             let cluster_ctx = self.cluster_ctx;
             let otp_ttl = Duration::from_secs(60 * 15);
 
@@ -100,7 +102,10 @@ impl AccountTestContextBuilder {
 
                 let auth_interceptor = AuthInterceptor::new(validator.clone());
                 let registration_interceptor = RegistrationInterceptor::new(validator);
-                let mut command_bus = CommandBus::new(fred_cache.clone(), fred_idempotency.clone());
+                let mut command_bus = CommandBus::new(
+                    Some(Arc::new(idempotency_for_bus)),
+                    Some(Arc::new(cache_for_bus)),
+                );
 
                 let account_repo = Arc::new(PostgresAccountRepository::new(pg.clone()));
                 let outbox_repo = Arc::new(PostgresOutboxRepository::new(pg.clone()));
@@ -109,7 +114,8 @@ impl AccountTestContextBuilder {
                     "account",
                 ));
                 let global_registry = Arc::new(PostgresGlobalIdentityRegistry::new(pg.clone()));
-                let otp_repo = Arc::new(FredOtpRepository::new(fred_cache, otp_ttl));
+
+                let otp_repo = Arc::new(FredOtpRepository::new(cache_for_otp, otp_ttl));
                 let tx_manager = Arc::new(PostgresTransactionManager::new(pg));
 
                 let builder = AccountServiceBuilder::new(

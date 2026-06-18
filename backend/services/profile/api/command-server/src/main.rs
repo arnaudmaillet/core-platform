@@ -61,13 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .expect("Failed to prepare ScyllaDB global routing statements"),
     );
 
-    // 🛠️ Calcul déterministe du nom du keyspace régional pour ce pod d'écriture
+    // Calcul déterministe du nom du keyspace régional pour ce pod d'écriture
     let keyspace_name = format!(
         "{}_profile_storage",
         local_region.to_string().to_lowercase()
     );
 
-    // 🛠️ Passage de la String du keyspace conformément au contrat découplé
+    // Passage de la String du keyspace conformément au contrat découplé
     let profile_store = Arc::new(
         ScyllaProfileStore::new(session, keyspace_name)
             .await
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kernel = service.build_kernel_ctx();
 
     // 5. Initialisation et configuration du CommandBus avec ses Gardes Idempotents
-    let mut command_bus = CommandBus::new(cache_repo, idempotency_repo);
+    let mut command_bus = CommandBus::new(Some(idempotency_repo), Some(cache_repo));
     service.register_handlers(&mut command_bus);
     let bus = Arc::new(command_bus);
 

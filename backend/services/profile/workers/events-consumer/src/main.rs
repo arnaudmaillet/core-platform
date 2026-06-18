@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kernel = builder.build_kernel_ctx();
 
     // 5. Initialisation et configuration du CommandBus pour l'exécution des cas d'usage
-    let mut command_bus = CommandBus::new(cache_repo, idempotency_repo);
+    let mut command_bus = CommandBus::new(Some(idempotency_repo), Some(cache_repo));
     builder.register_handlers(&mut command_bus);
     let bus = Arc::new(command_bus);
 

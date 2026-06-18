@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use infra_scylla::scylla::{client::session::Session, statement::prepared::PreparedStatement};
 use shared_kernel::core::{Error, Identifier, Result, Versioned};
-use shared_kernel::types::{AccountId, ProfileId, Region};
+use shared_kernel::types::{AccountId, ProfileId};
 use std::any::type_name_of_val;
 use std::sync::Arc;
 

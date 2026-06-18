@@ -5,16 +5,15 @@ use async_trait::async_trait;
 use shared_kernel::cache::CacheRepository;
 use shared_kernel::core::Result;
 use shared_kernel::types::AccountId;
-use std::sync::Arc;
 use std::time::Duration;
 
-pub struct FredOtpRepository {
-    cache: Arc<dyn CacheRepository>,
+pub struct FredOtpRepository<C: CacheRepository> {
+    cache: C,
     default_ttl: Duration,
 }
 
-impl FredOtpRepository {
-    pub fn new(cache: Arc<dyn CacheRepository>, default_ttl: Duration) -> Self {
+impl<C: CacheRepository> FredOtpRepository<C> {
+    pub fn new(cache: C, default_ttl: Duration) -> Self {
         Self { cache, default_ttl }
     }
 
@@ -24,7 +23,7 @@ impl FredOtpRepository {
 }
 
 #[async_trait]
-impl OtpRepository for FredOtpRepository {
+impl<C: CacheRepository> OtpRepository for FredOtpRepository<C> {
     async fn store_code(&self, account_id: &AccountId, purpose: &str, code: &str) -> Result<()> {
         let key = self.format_key(account_id, purpose);
         self.cache.set(&key, code, Some(self.default_ttl)).await

@@ -20,7 +20,7 @@ service PostService {
   rpc DeletePost(DeletePostRequest) returns (DeletePostResponse);
 
   // --- Queries ---
-  rpc GetPost(GetPostRequest) returns (Post);
+  rpc GetPost(GetPostRequest) returns (PostDetails);
   rpc GetPostsByAuthor(GetPostsByAuthorRequest) returns (GetPostsByAuthorResponse);
 }
 
@@ -72,7 +72,7 @@ message GetPostsByAuthorRequest {
 }
 
 message GetPostsByAuthorResponse {
-  repeated Post   items       = 1;
+  repeated PostDetails items   = 1;
   optional string next_cursor = 2;
 }
 message CreatePostResponse {

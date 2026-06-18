@@ -23,7 +23,12 @@ tonic = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
+pbjson = { workspace = true }
+serde = { workspace = true }
+pbjson-types = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true }
 tonic-prost-build = { workspace = true }
+pbjson-build = { workspace = true }
+prost-build = { workspace = true }

@@ -35,7 +35,7 @@ impl PostTestFixture {
     pub fn new() -> Self {
         let post_repo = Arc::new(PostStoreStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
-        let cache = Arc::new(CacheRepositoryStub::new());
+        let cache_repo = Arc::new(CacheRepositoryStub::new());
         let profile_resolver = Arc::new(ProfileResolverStub::new());
 
         let cluster_ctx = ClusterContext::default();
@@ -50,7 +50,7 @@ impl PostTestFixture {
         let command_ctx = PostCommandCtx::new(kernel_ctx.clone(), author_id, cluster_ctx.region());
         let query_ctx = PostQueryCtx::new(kernel_ctx.clone(), cluster_ctx.region());
 
-        let mut bus = CommandBus::new(cache, idempotency_repo.clone());
+        let mut bus = CommandBus::new(Some(idempotency_repo.clone()), Some(cache_repo));
 
         service.register_handlers(&mut bus);
 
@@ -116,7 +116,7 @@ impl PostTestFixture {
 
     pub async fn given_post(&self, post: &Post) {
         self.post_repo
-            .save(self.server_region(), post)
+            .save(post)
             .await
             .expect("Le setup de l'état initial via le stub Scylla a échoué");
     }
