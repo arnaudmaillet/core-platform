@@ -6,7 +6,7 @@ use auth::{TokenValidator, interceptors::AuthInterceptor};
 use auth_test_utils::KeycloakTestContext;
 use infra_test::TestContextBuilder;
 use post::PostServiceBuilder;
-use post::repositories_impl::ScyllaPostStore;
+use post::ScyllaPostRepository;
 use post::services::PostService;
 use shared_kernel::command::CommandBus;
 use shared_kernel::environment::ClusterContext;
@@ -61,11 +61,11 @@ impl PostTestContextBuilder {
         self.kernel_builder = self.kernel_builder.with_scylla(paths_refs);
 
         let kernel_infra = self.kernel_builder.build().await;
-
-        let scylla_session = kernel_infra.scylla().session();
+        let scylla_session_owned = kernel_infra.scylla().session().clone();
         let scylla_keyspace = kernel_infra.scylla().keyspace().to_string();
-        let cache_repo = kernel_infra.redis().cache();
-        let idempotency_repo = kernel_infra.redis().idempotency();
+
+        let fred_cache_owned = (*kernel_infra.redis().cache()).clone();
+        // Note : On n'extrait même pas idempotency_repo ici car le bus des posts n'en a pas besoin !
 
         let profile_resolver = Arc::new(ProfileResolverStub::default());
 
@@ -77,6 +77,10 @@ impl PostTestContextBuilder {
             let custom_validator = self.mock_validator.clone();
             let cluster_ctx = self.cluster_ctx;
             let resolver = profile_resolver.clone();
+
+            // Préparation des variables possédées pour le move
+            let cache_for_bus = fred_cache_owned;
+            let session_for_repo = scylla_session_owned;
 
             tokio::spawn(async move {
                 let validator = match custom_validator {
@@ -90,20 +94,14 @@ impl PostTestContextBuilder {
                 };
 
                 let interceptor = AuthInterceptor::new(validator);
-
-                let mut command_bus = CommandBus::new(cache_repo, idempotency_repo.clone());
-
+                let mut command_bus = CommandBus::new(None, Some(Arc::new(cache_for_bus)));
                 let real_post_repo = Arc::new(
-                    ScyllaPostStore::new(scylla_session, &scylla_keyspace)
+                    ScyllaPostRepository::new(session_for_repo, scylla_keyspace)
                         .await
                         .expect("Failed to initialize real ScyllaPostRepository during test boot"),
                 );
 
-                let builder = PostServiceBuilder::new(
-                    real_post_repo,
-                    resolver,
-                    cluster_ctx,
-                );
+                let builder = PostServiceBuilder::new(real_post_repo, resolver, cluster_ctx);
 
                 let kernel_ctx = builder.build_kernel_ctx();
                 builder.register_handlers(&mut command_bus);
@@ -136,7 +134,6 @@ impl PostTestContextBuilder {
         } else {
             None
         };
-
         PostTestContext::new(kernel_infra, addr, Some(shutdown_tx))
     }
 }

@@ -5,8 +5,8 @@ use shared_kernel::core::{Error, ErrorCode, Result};
 use std::sync::Arc;
 
 pub struct RedisContext {
-    cache_repository: Arc<RedisCacheRepository>,
-    idempotency_repository: Arc<RedisIdempotencyRepository>,
+    cache_repository: RedisCacheRepository,
+    idempotency_repository: RedisIdempotencyRepository,
     url: String,
     max_clients: usize,
 }
@@ -20,12 +20,12 @@ impl RedisContext {
         RedisContextBuilder::default()
     }
 
-    pub fn cache_repository(&self) -> Arc<RedisCacheRepository> {
-        self.cache_repository.clone()
+    pub fn cache_repository(&self) -> &RedisCacheRepository {
+        &self.cache_repository
     }
 
-    pub fn idempotency_repository(&self) -> Arc<RedisIdempotencyRepository> {
-        self.idempotency_repository.clone()
+    pub fn idempotency_repository(&self) -> &RedisIdempotencyRepository {
+        &self.idempotency_repository
     }
 
     pub fn url(&self) -> String {
@@ -52,8 +52,8 @@ impl RedisContext {
             RedisIdempotencyRepository::new(raw_pool, "core-platform-idempotency", 86400);
 
         Ok(Self {
-            cache_repository: Arc::new(repository),
-            idempotency_repository: Arc::new(idempotency),
+            cache_repository: repository,
+            idempotency_repository: idempotency,
             url: builder.url,
             max_clients: builder.max_clients,
         })

@@ -76,16 +76,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Instanciation des Adaptateurs (Repositories Concrets)
     let pool = pg_ctx.pool();
     let global_pool = global_pg_ctx.pool();
-    let cache_client = redis_ctx.cache_repository();
 
     let account_repo = Arc::new(PostgresAccountRepository::new(pool.clone()));
     let outbox_repo = Arc::new(PostgresOutboxRepository::new(pool.clone()));
+    let cache_repo = redis_ctx.cache_repository();
     let idempotency_repo = Arc::new(PostgresIdempotencyRepository::new_with_pool(
         pool.clone(),
         "account",
     ));
     let global_registry = Arc::new(PostgresGlobalIdentityRegistry::new(global_pool));
-    let otp_repo = Arc::new(FredOtpRepository::new(cache_client.clone(), otp_ttl));
+    let otp_repo = Arc::new(FredOtpRepository::new(cache_repo.clone(), otp_ttl));
     let tx_manager = Arc::new(PostgresTransactionManager::new(pool));
 
     // 4. Assemblage via le Builder de Service et configuration du Kernel
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kernel = service.build_kernel_ctx();
 
     // 5. Initialisation et configuration du CommandBus avec ses Gardes Idempotents
-    let mut command_bus = CommandBus::new(redis_ctx.cache_repository(), idempotency_repo);
+    let mut command_bus = CommandBus::new(Some(idempotency_repo), Some(cache_repo));
 
     service.register_handlers(&mut command_bus);
     let bus = Arc::new(command_bus);

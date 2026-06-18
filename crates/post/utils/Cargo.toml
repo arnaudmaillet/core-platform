@@ -1,0 +1,26 @@
+[package]
+name = "post-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+auth = { workspace = true }
+auth-test-utils = { workspace = true }
+shared-kernel = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
+infra-fred = { workspace = true }
+infra-scylla = { workspace = true }
+infra-test = { workspace = true }
+shared-proto = { workspace = true, features = ["post"] }
+async-trait = { workspace = true }
+post = { workspace = true, features = ["test-utils"] }
+post-assembly = { workspace = true }
+post-profile = { workspace = true, features = ["test-utils"] }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }

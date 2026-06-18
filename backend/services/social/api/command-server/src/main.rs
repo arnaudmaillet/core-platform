@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = SocialServiceBuilder::new(follow_relation_repo, profile_counters_index);
 
     let kernel_ctx = service.build_context().await;
-    let mut command_bus = CommandBus::new(redis_ctx.cache_repository(), idempotency_repo);
+    let mut command_bus = CommandBus::new(Some(idempotency_repo), Some(cache_repo));
     service.register_handlers(&mut command_bus);
 
     // 5. Configuration réseau & serveurs de transport

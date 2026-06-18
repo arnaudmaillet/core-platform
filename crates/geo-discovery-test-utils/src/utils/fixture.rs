@@ -31,13 +31,13 @@ impl GeoDiscoveryTestFixture {
         let map_cache_repo = Arc::new(MapCacheRepositoryStub::new());
         let idempotency_repo = Arc::new(IdempotencyRepositoryStub::new());
         let engagement_resolver = Arc::new(EngagementResolverStub);
-        let shared_bus_cache = Arc::new(CacheRepositoryStub::new());
+        let cache_repo = Arc::new(CacheRepositoryStub::new());
 
         let max_posts_per_tile = 50;
         let operator_id = ProfileId::generate();
         let cluster_ctx = ClusterContext::default();
 
-        let mut bus = CommandBus::new(shared_bus_cache.clone(), idempotency_repo.clone());
+        let mut bus = CommandBus::new(Some(idempotency_repo.clone()), Some(cache_repo));
 
         let service = GeoDiscoveryServiceBuilder::new(
             map_repo.clone(),

@@ -1,4 +1,4 @@
-use crate::cache::CacheRepository;
+use crate::cache::CacheInvalidator;
 use crate::command::{CacheKeyComponent, CommandHandler, IdentifiableCommand};
 use crate::core::{Error, Result, with_retry};
 use crate::idempotency::IdempotencyRepository;
@@ -19,19 +19,19 @@ pub trait AnyCommandHandler: Send + Sync {
 
 pub struct CommandBus {
     handlers: HashMap<TypeId, Arc<dyn AnyCommandHandler>>,
-    cache: Arc<dyn CacheRepository>,
-    idempotency: Arc<dyn IdempotencyRepository>,
+    idempotency: Option<Arc<dyn IdempotencyRepository>>,
+    cache_invalidator: Option<Arc<dyn CacheInvalidator>>,
 }
 
 impl CommandBus {
     pub fn new(
-        cache: Arc<dyn CacheRepository>,
-        idempotency: Arc<dyn IdempotencyRepository>,
+        idempotency: Option<Arc<dyn IdempotencyRepository>>,
+        cache_invalidator: Option<Arc<dyn CacheInvalidator>>,
     ) -> Self {
         Self {
             handlers: HashMap::new(),
-            cache,
             idempotency,
+            cache_invalidator,
         }
     }
 
@@ -66,14 +66,17 @@ impl CommandBus {
         let cmd_id = cmd.command_id();
         let cache_key = cmd.resolve_cache_key();
         let type_id = TypeId::of::<TCommand>();
+        let should_handle_idempotency = self.idempotency.is_some() && cmd.is_idempotency_enabled();
 
-        if self.idempotency.exists(None, &cmd_id).await? {
-            tracing::info!(
-                command_id = %cmd_id,
-                command_type = %std::any::type_name::<TCommand>(),
-                "CommandBus: Idempotence technique activée. Commande déjà traitée."
-            );
-            return Ok(TOutput::default());
+        if should_handle_idempotency {
+            if let Some(repo) = &self.idempotency {
+                if repo.exists(None, &cmd_id).await? {
+                    tracing::info!(%cmd_id, "CommandBus: Idempotence triggered. Already processed.");
+                    // ATTENTION ICI : Renvoyer Default() peut être dangereux selon le domaine métier.
+                    // Idéalement, ton repo d'idempotence devrait stocker et réhydrater le TOutput précédent.
+                    return Ok(TOutput::default());
+                }
+            }
         }
 
         let handler = self.handlers.get(&type_id).ok_or_else(|| {
@@ -83,15 +86,18 @@ impl CommandBus {
             ))
         })?;
 
-        let ctx_arc = Arc::new(ctx);
-        let cmd_arc = Arc::new(cmd);
-
-        let result = handler.execute_any(ctx_arc, cmd_arc).await?;
-        self.idempotency.save(None, &cmd_id).await?;
+        let result = handler.execute_any(Arc::new(ctx), Arc::new(cmd)).await?;
+        if should_handle_idempotency {
+            if let Some(repo) = &self.idempotency {
+                repo.save(None, &cmd_id).await?;
+            }
+        }
 
         if let Some(key) = cache_key {
-            let _ = self.cache.delete(&key).await;
-            tracing::info!(key = %key, "CommandBus: Cache invalidated");
+            if let Some(invalidator) = &self.cache_invalidator {
+                let _ = invalidator.invalidate(&key).await;
+                tracing::info!(%key, "CommandBus: Read-model cache context successfully evicted");
+            }
         }
 
         let output = result

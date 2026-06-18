@@ -27,66 +27,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "account-cache-invalidator"
-version = "0.1.0"
-dependencies = [
- "infra-fred",
- "infra-kafka",
- "shared-kernel",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "account-command-server"
-version = "0.1.0"
-dependencies = [
- "account",
- "account-test-utils",
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-sqlx",
- "infra-test",
- "jsonwebtoken",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "tokio",
- "tonic",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "account-janitor"
-version = "0.1.0"
-dependencies = [
- "account",
- "chrono",
- "infra-sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "account-outbox-producer"
-version = "0.1.0"
-dependencies = [
- "infra-kafka",
- "infra-sqlx",
- "shared-kernel",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "account-test-utils"
 version = "0.1.0"
 dependencies = [
@@ -226,6 +166,10 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "audio"
+version = "0.1.0"
 
 [[package]]
 name = "auth"
@@ -1317,6 +1261,7 @@ dependencies = [
  "infra-fred",
  "infra-scylla",
  "infra-test",
+ "pbjson-types",
  "prost",
  "prost-types",
  "serde",
@@ -1326,29 +1271,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
- "uuid",
-]
-
-[[package]]
-name = "geo-discovery-server"
-version = "0.1.0"
-dependencies = [
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "geo-discovery",
- "geo-discovery-test-utils",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "tokio",
- "tonic",
- "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -2470,6 +2392,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "pbjson"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8edd1efdd8ab23ba9cb9ace3d9987a72663d5d7c9f74fa00b51d6213645cf6c"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
+
+[[package]]
+name = "pbjson-build"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ed4d5c6ae95e08ac768883c8401cf0e8deb4e6e1d6a4e1fd3d2ec4f0ec63200"
+dependencies = [
+ "heck",
+ "itertools",
+ "prost",
+ "prost-types",
+]
+
+[[package]]
+name = "pbjson-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a14e2757d877c0f607a82ce1b8560e224370f159d66c5d52eb55ea187ef0350e"
+dependencies = [
+ "bytes",
+ "chrono",
+ "pbjson",
+ "pbjson-build",
+ "prost",
+ "prost-build",
+ "serde",
+]
+
+[[package]]
 name = "pem"
 version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2647,18 +2606,29 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "infra-fred",
  "infra-scylla",
  "infra-test",
- "post-test-utils",
- "prost-types",
+ "post-proto-bridge",
+ "post-utils",
  "serde",
  "serde_json",
  "shared-kernel",
- "shared-proto",
  "tokio",
- "tonic",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "post-assembly"
+version = "0.1.0"
+dependencies = [
+ "infra-fred",
+ "infra-scylla",
+ "post",
+ "post-profile",
+ "shared-kernel",
+ "tokio",
 ]
 
 [[package]]
@@ -2671,12 +2641,15 @@ dependencies = [
  "dotenvy",
  "infra-fred",
  "infra-scylla",
+ "infra-test",
  "post",
- "post-test-utils",
+ "post-assembly",
+ "post-proto-bridge",
+ "prost-types",
  "serde_json",
  "shared-kernel",
- "shared-proto",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tracing",
  "tracing-subscriber",
@@ -2684,15 +2657,70 @@ dependencies = [
 ]
 
 [[package]]
-name = "post-test-utils"
+name = "post-profile"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "infra-fred",
+ "infra-scylla",
+ "serde",
+ "serde_json",
+ "shared-kernel",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "post-proto-bridge"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-build",
+ "prost-types",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "post-query-server"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "auth-test-utils",
+ "chrono",
+ "dotenvy",
+ "infra-fred",
+ "infra-scylla",
+ "infra-test",
+ "post",
+ "post-assembly",
+ "post-proto-bridge",
+ "prost-types",
+ "serde_json",
+ "shared-kernel",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "post-utils"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "auth",
  "auth-test-utils",
  "infra-fred",
+ "infra-scylla",
  "infra-test",
  "post",
+ "post-assembly",
+ "post-profile",
  "shared-kernel",
  "shared-kernel-test-utils",
  "shared-proto",
@@ -2791,74 +2819,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "profile-cache-invalidator"
-version = "0.1.0"
-dependencies = [
- "infra-fred",
- "infra-kafka",
- "shared-kernel",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "profile-command-server"
-version = "0.1.0"
-dependencies = [
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "profile",
- "profile-test-utils",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "tokio",
- "tonic",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "profile-events-consumer"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-kafka",
- "infra-scylla",
- "infra-test",
- "profile",
- "profile-test-utils",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "profile-outbox-producer"
-version = "0.1.0"
-dependencies = [
- "infra-kafka",
- "infra-sqlx",
- "shared-kernel",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "profile-test-utils"
 version = "0.1.0"
 dependencies = [
@@ -2882,9 +2842,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2ea70524a2f82d518bce41317d0fae74151505651af45faf1ffbd6fd33f0568"
+checksum = "528ac67416ff8646872a3c02cad9cc4ee5dc9f9540c9b10771855c95cb2e5ae1"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -2892,9 +2852,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
+checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
  "heck",
  "itertools",
@@ -2913,9 +2873,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
+checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2926,9 +2886,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8991c4cbdb8bc5b11f0b074ffe286c30e523de90fee5ba8132f1399f23cb3dd7"
+checksum = "f94967dc7688f3054c7fac87473ffae4cc4c3904800e2d9f5b857246d8963b0a"
 dependencies = [
  "prost",
 ]
@@ -3716,8 +3676,13 @@ dependencies = [
 name = "shared-proto"
 version = "0.1.0"
 dependencies = [
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
  "prost",
+ "prost-build",
  "prost-types",
+ "serde",
  "tonic",
  "tonic-build",
  "tonic-prost",
@@ -3812,29 +3777,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
- "uuid",
-]
-
-[[package]]
-name = "social-command-server"
-version = "0.1.0"
-dependencies = [
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "social",
- "social-test-utils",
- "tokio",
- "tonic",
- "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -4347,7 +4289,6 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.6.2",

@@ -24,6 +24,7 @@ prost-types = { workspace = true }
 tonic = { workspace = true }
 dashmap = { workspace = true }
 prost = { workspace = true }
+pbjson-types = { workspace = true }
 h3o = { version = "0.10.0", default-features = false }
 
 [dev-dependencies]

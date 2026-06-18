@@ -2,17 +2,19 @@
 
 [workspace]
 members = [
-    "backend/services/account/api/command-server",
-    "backend/services/account/workers/outbox-producer",
-    "backend/services/account/workers/cache-invalidator",
-    "backend/services/account/workers/janitor",
-    "backend/services/profile/workers/outbox-producer",
-    "backend/services/profile/workers/cache-invalidator",
-    "backend/services/profile/workers/events-consumer",
-    "backend/services/profile/api/command-server",
-    "backend/services/social/api/command-server",
+    # "backend/services/account/api/command-server",
+    # "backend/services/account/workers/outbox-producer",
+    # "backend/services/account/workers/cache-invalidator",
+    # "backend/services/account/workers/janitor",
+    # "backend/services/profile/workers/outbox-producer",
+    # "backend/services/profile/workers/cache-invalidator",
+    # "backend/services/profile/workers/events-consumer",
+    # "backend/services/profile/api/command-server",
+    # "backend/services/social/api/command-server",
     "backend/services/post/api/command-server",
-    "backend/services/geo-discovery/api/server",
+    "backend/services/post/api/query-server",
+    # "backend/services/post/workers/profile-projection",
+    # "backend/services/geo-discovery/api/server",
     "common/rust/shared-proto",
     "crates/account",
     "crates/auth",
@@ -30,11 +32,17 @@ members = [
     "crates/profile-test-utils",
     "crates/social-test-utils",
     "crates/auth-test-utils",
-    "crates/post",
-    "crates/post-test-utils",
+    # "crates/post-old",
+    # "crates/post-test-utils",
     "crates/shared-kernel-test-utils",
     "crates/geo-discovery",
     "crates/geo-discovery-test-utils",
+    "crates/post/core",
+    "crates/post/profile",
+    "crates/post/proto-bridge",
+    "crates/post/assembly",
+    "crates/post/utils",
+    "crates/post/audio",
     # "crates/comment",
 ]
 resolver = "2"
@@ -57,8 +65,13 @@ social = { path = "crates/social" }
 social-test-utils = { path = "crates/social-test-utils" }
 profile = { path = "crates/profile" }
 profile-test-utils = { path = "crates/profile-test-utils" }
-post = { path = "crates/post" }
-post-test-utils = { path = "crates/post-test-utils" }
+post = { path = "crates/post/core" }
+post-utils = { path = "crates/post/utils" }
+post-assembly = { path = "crates/post/assembly" }
+post-profile = { path = "crates/post/profile" }
+post-proto-bridge = { path = "crates/post/proto-bridge" }
+# post = { path = "crates/post-old" }
+# post-test-utils = { path = "crates/post-test-utils" }
 geo-discovery = { path = "crates/geo-discovery" }
 geo-discovery-test-utils = { path = "crates/geo-discovery-test-utils" }
 auth = { path = "crates/auth" }
@@ -143,6 +156,11 @@ tonic-reflection = "0.14.3"
 tonic-prost-build = "0.14.2"
 prost = "0.14.3"
 prost-types = "0.14.3"
+prost-build = "0.14.3"
+pbjson = "0.9"
+pbjson-types = "0.9"
+pbjson-build = "0.9"
+
 
 # Graphql
 tower-http = { version = "=0.5.2", features = ["cors", "trace"] }

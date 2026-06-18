@@ -54,9 +54,9 @@ impl SocialTestContextBuilder {
     pub async fn build_e2e(self) -> SocialTestContext {
         tracing::info!("Building Social test infrastructure...");
         let kernel_infra = self.kernel_builder.build().await;
-        let scylla_session = kernel_infra.scylla().session();
-        let redis_repo = kernel_infra.redis().cache();
-        let redis_pool = redis_repo.pool().clone();
+        let scylla_session_owned = kernel_infra.scylla().session().clone();
+        let fred_cache_owned = (*kernel_infra.redis().cache()).clone();
+        let redis_pool = fred_cache_owned.pool().clone(); // Copie de handle de pool propre
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -64,6 +64,10 @@ impl SocialTestContextBuilder {
         if self.with_grpc {
             tracing::info!("Starting Social gRPC server...");
             let custom_validator = self.mock_validator.clone();
+
+            let session_for_spawn = scylla_session_owned;
+            let cache_for_bus = fred_cache_owned;
+            let pool_for_spawn = redis_pool;
 
             tokio::spawn(async move {
                 let validator = match custom_validator {
@@ -79,22 +83,19 @@ impl SocialTestContextBuilder {
                 };
 
                 let interceptor = AuthInterceptor::new(validator);
-
-                let idempotency_repo = Arc::new(RedisIdempotencyRepository::new(
-                    redis_pool.clone(),
-                    "social_e2e",
-                    300,
-                ));
+                let mut command_bus = CommandBus::new(None, Some(Arc::new(cache_for_bus)));
 
                 let follow_relation_repo = Arc::new(
-                    ScyllaFollowRelationStore::new(scylla_session.clone())
+                    ScyllaFollowRelationStore::new(session_for_spawn.clone())
                         .await
                         .unwrap(),
                 );
+
                 let profile_counters_index =
-                    Arc::new(RedisProfileCountersStore::new(redis_pool.clone()));
+                    Arc::new(RedisProfileCountersStore::new(pool_for_spawn.clone()));
+
                 let profile_counters_storage = Arc::new(
-                    ScyllaProfileCountersStore::new(scylla_session)
+                    ScyllaProfileCountersStore::new(session_for_spawn)
                         .await
                         .unwrap(),
                 );
@@ -103,7 +104,6 @@ impl SocialTestContextBuilder {
                     SocialServiceBuilder::new(follow_relation_repo, profile_counters_index);
 
                 let app_ctx = service.build_context().await;
-                let mut command_bus = CommandBus::new(redis_repo, idempotency_repo);
                 service.register_handlers(&mut command_bus);
 
                 let social_svc = SocialService::new(command_bus, app_ctx, profile_counters_storage);
@@ -129,7 +129,11 @@ impl SocialTestContextBuilder {
         }
 
         let addr = if self.with_grpc {
-            Some(ready_rx.await.expect("gRPC server failed to start"))
+            Some(
+                ready_rx
+                    .await
+                    .expect("Social gRPC test server failed to start"),
+            )
         } else {
             None
         };

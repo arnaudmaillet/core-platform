@@ -70,7 +70,7 @@ impl PostStoreStub {
 
 #[async_trait]
 impl PostRepository for PostStoreStub {
-    async fn save(&self, _region: Region, post: &Post) -> Result<()> {
+    async fn save(&self, post: &Post) -> Result<()> {
         let mut store = self.storage.write().await;
 
         if let Some(err) = store.error_to_return.clone() {
@@ -103,7 +103,7 @@ impl PostRepository for PostStoreStub {
         Ok(())
     }
 
-    async fn find_by_id(&self, _region: Region, post_id: &PostId) -> Result<Option<Post>> {
+    async fn find_by_id(&self, post_id: &PostId) -> Result<Option<Post>> {
         let store = self.storage.read().await;
 
         if let Some(err) = &store.error_to_return {
@@ -115,7 +115,6 @@ impl PostRepository for PostStoreStub {
 
     async fn find_by_author(
         &self,
-        _region: Region,
         author_id: &ProfileId,
         query: PageQuery,
     ) -> Result<PagedResult<Post>> {
@@ -155,7 +154,7 @@ impl PostRepository for PostStoreStub {
         }
     }
 
-    async fn delete(&self, _region: Region, post_id: &PostId, author_id: &ProfileId) -> Result<()> {
+    async fn delete(&self, post_id: &PostId, author_id: &ProfileId) -> Result<()> {
         let mut store = self.storage.write().await;
 
         if let Some(err) = &store.error_to_return {

@@ -50,7 +50,7 @@ impl ProfileTestFixture {
             ProfileCommandCtx::new(kernel_ctx.clone(), Some(profile_id), cluster_ctx.region());
         let query_ctx = ProfileQueryCtx::new(kernel_ctx.clone());
 
-        let mut bus = CommandBus::new(cache_repo, idempotency_repo.clone());
+        let mut bus = CommandBus::new(Some(idempotency_repo.clone()), Some(cache_repo));
         service.register_handlers(&mut bus);
 
         Self {

@@ -98,7 +98,7 @@ impl GeoDiscoveryQueryCtx {
         }
 
         let mut all_pins = Vec::new();
-        let now_proto = prost_types::Timestamp::from(std::time::SystemTime::now());
+        let now_proto = pbjson_types::Timestamp::from(chrono::Utc::now());
 
         while let Some(result) = workers.next().await {
             if let Ok((_tile, scored_posts)) = result {
