@@ -12,7 +12,7 @@
 -- =========================================================================
 CREATE TYPE IF NOT EXISTS cql_media_asset (
     media_id uuid,
-    url text,                  -- URL de stockage (CDN) de la vidéo ou de la image
+    url text,                  -- URL de stockage (CDN) de la vidéo ou de l'image
     thumbnail_url text,        -- URL de la miniature associée
     duration_seconds int,      -- Durée en secondes (0 pour une image, <= 10 pour vidéo carrousel)
     width int,                 -- Largeur en pixels
@@ -42,16 +42,15 @@ CREATE TABLE IF NOT EXISTS posts_by_author (
     hashtags set<text>,            -- Set natif pour indexer les tags du post (#rust, #devops)
     mentions set<uuid>,            -- Liste unique des profiles notifiés/mentionnés (@alex, @lucie)
     
-    -- VERSIONNEMENT & HISTORIQUE (Pour l'OCC et le tri des consommateurs du CDC Kafka)
-    version bigint,                
-    edited_at timestamp,           -- Date de la dernière modification (Métier)
+    -- MÉTADONNÉES DE TEMPS MÉTIER
+    -- Concurrence & Conflits réseau résolus via Client-Side Timestamps (USING TIMESTAMP applicatif)
+    edited_at timestamp,           -- Date de la dernière modification du contenu (Métier)
     created_at timestamp,          -- Date de création du post
-    updated_at timestamp,          -- Date de la dernière modification (Infrastructure)
     
     dynamic_metadata text,         -- Chaîne JSON (Serde) de secours pour les futures features clients
     PRIMARY KEY (author_id, post_id)
 ) WITH CLUSTERING ORDER BY (post_id DESC)
-AND comment = 'Flux de profil utilisateur optimisé pour l''hyperscale (UUIDv7 + Clustering Key DESC)';
+AND comment = 'Flux de profil utilisateur optimisé pour l''hyperscale (UUIDv7 + Clustering Key DESC - LWW Timestamp Engine)';
 
 -- =========================================================================
 -- 3. TABLE DE LOOKUP : Accès direct (Lien partagé, Router GraphQL, Modération)
@@ -73,14 +72,13 @@ CREATE TABLE IF NOT EXISTS posts_by_id (
     hashtags set<text>,
     mentions set<uuid>,
     
-    -- ALIGNEMENT OCC
-    version bigint,
+    -- MÉTADONNÉES DE TEMPS MÉTIER
     edited_at timestamp,
     created_at timestamp,
-    updated_at timestamp,
+    
     dynamic_metadata text,
     PRIMARY KEY (post_id)
-) WITH comment = 'Lookup direct par Post ID (Copie dénormalisée pour l''API Gateway)';
+) WITH comment = 'Lookup direct par Post ID (Copie dénormalisée pour l''API Gateway - LWW Timestamp Engine)';
 
 -- =========================================================================
 -- 4. ACTIVATION DU CDC (Change Data Capture) D'INFRASTRUCTURE

@@ -1,4 +1,4 @@
-// crates/post/src/domain/aggregates/post.rs
+// crates/post/core/src/post/domain/entity.rs
 
 use crate::{
     Media,
@@ -32,18 +32,16 @@ pub struct Post {
     created_at: DateTime<Utc>,
     edited_at: Option<DateTime<Utc>>,
     lifecycle: LifecycleTracker,
-    version: u64,
 }
 
 impl Versioned for Post {
     fn version(&self) -> u64 {
-        self.version
+        0
     }
     fn updated_at(&self) -> DateTime<Utc> {
         self.lifecycle.updated_at()
     }
     fn record_change(&mut self) {
-        self.version += 1;
         self.lifecycle.record_change();
     }
 }
@@ -115,7 +113,6 @@ impl Post {
         created_at: DateTime<Utc>,
         edited_at: Option<DateTime<Utc>>,
         lifecycle: LifecycleTracker,
-        version: u64,
     ) -> Self {
         Self {
             post_id,
@@ -133,7 +130,6 @@ impl Post {
             created_at,
             edited_at,
             lifecycle,
-            version,
         }
     }
 

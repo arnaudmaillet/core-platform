@@ -8,7 +8,7 @@ use crate::post::infrastructure::scylla::statements::{
 };
 use async_trait::async_trait;
 use infra_scylla::scylla::{client::session::Session, statement::prepared::PreparedStatement};
-use shared_kernel::core::{Error, Identifier, Result};
+use shared_kernel::core::{Error, Identifier, Result, Versioned};
 use shared_kernel::types::{PostId, ProfileId};
 use std::sync::Arc;
 
@@ -49,6 +49,9 @@ impl PostWriteRepository for ScyllaPostWriteRepository {
     async fn save(&self, post: &Post) -> Result<()> {
         let row = ScyllaPostModel::from(post);
 
+        // Race conditions guard, comparing exact timestamp
+        let client_timestamp_micros = post.updated_at().timestamp_micros();
+
         let params = (
             row.post_id,
             row.author_id,
@@ -61,11 +64,10 @@ impl PostWriteRepository for ScyllaPostWriteRepository {
             row.music_id,
             &row.hashtags,
             &row.mentions,
-            row.version,
             row.edited_at,
             row.created_at,
-            row.updated_at,
             &row.dynamic_metadata,
+            client_timestamp_micros,
         );
 
         let author_params = (
@@ -80,11 +82,10 @@ impl PostWriteRepository for ScyllaPostWriteRepository {
             row.music_id,
             &row.hashtags,
             &row.mentions,
-            row.version,
             row.edited_at,
             row.created_at,
-            row.updated_at,
             &row.dynamic_metadata,
+            client_timestamp_micros,
         );
 
         let fut_author = self
@@ -92,12 +93,8 @@ impl PostWriteRepository for ScyllaPostWriteRepository {
             .execute_unpaged(&self.insert_author_stmt, author_params);
         let fut_id = self.session.execute_unpaged(&self.insert_id_stmt, params);
 
-        tokio::try_join!(fut_author, fut_id).map_err(|e| {
-            Error::database(format!(
-                "Hyperscale dual-write post replication failed: {}",
-                e
-            ))
-        })?;
+        tokio::try_join!(fut_author, fut_id)
+            .map_err(|e| Error::database(format!("Dual-write post replication failed: {}", e)))?;
 
         Ok(())
     }

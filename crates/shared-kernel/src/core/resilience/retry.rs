@@ -3,6 +3,13 @@
 use crate::core::{Error, ErrorCode, Result};
 use rand::Rng;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetryCategory {
+    Standard,   // Conflits BDD classiques (3 retries)
+    Aggressive, // Réseau, webhooks, notifications (5 retries)
+    Critical,   // Paiements, actions non-idempotentes (0 retry)
+}
+
 pub struct RetryConfig {
     pub max_retries: u32,
     pub initial_backoff_ms: u64,

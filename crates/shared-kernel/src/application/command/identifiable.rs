@@ -10,17 +10,13 @@ pub trait IdentifiableCommand {
 
     fn command_id(&self) -> Uuid;
     fn target(&self) -> &CommandTarget<Self::Id>;
-
     fn routing(&self) -> Self::Routing;
-
     fn cache_scope(&self) -> &'static str {
         Self::Id::identifier_scope()
     }
-
     fn is_idempotency_enabled(&self) -> bool {
         true
     }
-
     fn resolve_cache_key(&self) -> Option<String> {
         let target = self.target();
         match self.routing().to_key_component() {
