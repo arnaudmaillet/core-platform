@@ -4,16 +4,16 @@ pub const INSERT_POST_BY_AUTHOR: &str = r#"
     INSERT INTO {ks}.posts_by_author (
         author_id, post_id, post_type, caption, media_list, total_duration_seconds, 
         allowed_comment_hands, visibility_level, music_id, hashtags, mentions, 
-        version, edited_at, created_at, updated_at, dynamic_metadata
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        edited_at, created_at, dynamic_metadata
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) USING TIMESTAMP ?
 "#;
 
 pub const INSERT_POST_BY_ID: &str = r#"
     INSERT INTO {ks}.posts_by_id (
         post_id, author_id, post_type, caption, media_list, total_duration_seconds, 
         allowed_comment_hands, visibility_level, music_id, hashtags, mentions, 
-        version, edited_at, created_at, updated_at, dynamic_metadata
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        edited_at, created_at, dynamic_metadata
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) USING TIMESTAMP ?
 "#;
 
 pub const FIND_POST_BY_ID: &str = r#"

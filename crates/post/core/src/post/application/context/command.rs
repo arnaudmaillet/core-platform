@@ -1,7 +1,7 @@
 use crate::{Post, post::context::PostKernelCtx};
 use shared_kernel::{
     command::CommandTarget,
-    core::{Error, Result, Versioned},
+    core::{Error, Result},
     types::{PostId, ProfileId, Region},
 };
 use uuid::Uuid;
@@ -64,21 +64,6 @@ impl PostCommandCtx {
             .ok_or_else(|| Error::not_found("Post", target.id.to_string()))?;
 
         self.verify_actors(post.author_id())?;
-
-        let expected_version = target.expected_version.ok_or_else(|| {
-            Error::validation(
-                "expected_version",
-                "Sharding strict: Expected version is missing for this transaction",
-            )
-        })?;
-
-        if post.version() != expected_version {
-            return Err(Error::concurrency_conflict(format!(
-                "OCC Mismatch: DB v{}, Expected v{}",
-                post.version(),
-                expected_version
-            )));
-        }
 
         Ok(post)
     }

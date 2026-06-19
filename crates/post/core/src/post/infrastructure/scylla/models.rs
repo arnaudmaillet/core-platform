@@ -19,9 +19,7 @@ pub struct ScyllaPostModel {
     pub music_id: Option<Uuid>,
     pub hashtags: HashSet<String>,
     pub mentions: HashSet<Uuid>,
-    pub version: i64,
     pub edited_at: Option<CqlTimestamp>,
     pub created_at: Option<CqlTimestamp>,
-    pub updated_at: CqlTimestamp,
     pub dynamic_metadata: String,
 }

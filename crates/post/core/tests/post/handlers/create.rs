@@ -13,10 +13,7 @@ async fn test_create_post_handler_success_with_mentions() -> Result<()> {
     let command_id = Uuid::new_v4();
     let slug = "arnaud".to_string();
 
-    // 1. Suppression du stub map de profile_resolver qui n'existe plus
     let caption = Caption::try_from(format!("Hello @{}", slug).as_str()).unwrap();
-
-    // Pour une création, la cible de la commande identifie l'auteur de manière stateless
     let target = CommandTarget::stateless(f.author_id());
 
     let cmd = CreatePostCommand {
@@ -51,36 +48,36 @@ async fn test_create_post_handler_success_with_mentions() -> Result<()> {
     Ok(())
 }
 
-// #[tokio::test]
-// async fn test_create_post_handler_idempotency_barrier() -> Result<()> {
-//     // Arrange
-//     let f = PostTestFixture::new();
-//     let command_id = Uuid::new_v4();
-//     f.idempotency_repo().save(None, &command_id).await?;
+#[tokio::test]
+async fn test_create_post_handler_idempotency_barrier() -> Result<()> {
+    // Arrange
+    let f = PostTestFixture::new();
+    let command_id = Uuid::new_v4();
+    f.idempotency_repo().save(None, &command_id).await?;
 
-//     let target = CommandTarget::stateless(f.author_id());
+    let target = CommandTarget::stateless(f.author_id());
 
-//     let cmd = CreatePostCommand {
-//         command_id,
-//         target,
-//         region: f.server_region(),
-//         post_id: f.post_id(),
-//         post_type: PostType::Text,
-//         caption: None,
-//         media_list: vec![],
-//         visibility_level: "Public".to_string(),
-//         allowed_comment_hands: true,
-//         dynamic_metadata: None,
-//         music_id: None,
-//     };
+    let cmd = CreatePostCommand {
+        command_id,
+        target,
+        region: f.server_region(),
+        post_id: f.post_id(),
+        post_type: PostType::Text,
+        caption: None,
+        media_list: vec![],
+        visibility_level: "Public".to_string(),
+        allowed_comment_hands: true,
+        dynamic_metadata: None,
+        music_id: None,
+    };
 
-//     // Act
-//     f.bus()
-//         .execute::<PostCommandCtx, CreatePostCommand, ()>(f.command_ctx().clone(), cmd)
-//         .await?;
+    // Act
+    f.bus()
+        .execute::<PostCommandCtx, CreatePostCommand, ()>(f.command_ctx().clone(), cmd)
+        .await?;
 
-//     // Assert : Bloqué par l'idempotence, le post ne doit jamais avoir été instancié ou persisté
-//     f.post_assertions().assert_not_found(f.post_id()).await;
+    // Assert : Bloqué par l'idempotence, le post ne doit jamais avoir été instancié ou persisté
+    f.post_assertions().assert_not_found(f.post_id()).await;
 
-//     Ok(())
-// }
+    Ok(())
+}

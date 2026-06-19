@@ -6,13 +6,12 @@ use crate::post::types::{Caption, DynamicMetadata, Hashtags, Mentions, Visibilit
 use crate::{Media, Post};
 use chrono::{DateTime, Utc};
 use infra_scylla::scylla::value::CqlTimestamp;
-use shared_kernel::core::{Error, Identifier, LifecycleTracker, Result, Versioned};
+use shared_kernel::core::{Error, Identifier, LifecycleTracker, Result};
 use shared_kernel::types::{MusicId, PostId, PostType, ProfileId};
 use std::collections::HashSet;
 use std::str::FromStr;
 use uuid::Uuid;
 
-/// Convertit le modèle Domaine en modèle de persistance ScyllaDB
 impl From<&Post> for ScyllaPostModel {
     fn from(p: &Post) -> Self {
         let hashtags_set: HashSet<String> = p.hashtags().iter().map(|h| h.to_string()).collect();
@@ -31,16 +30,13 @@ impl From<&Post> for ScyllaPostModel {
             music_id: p.music_id().map(|m| m.as_uuid()),
             hashtags: hashtags_set,
             mentions: mentions_set,
-            version: p.version() as i64,
             edited_at: p.edited_at().map(|dt| CqlTimestamp(dt.timestamp_millis())),
             created_at: Some(CqlTimestamp(p.created_at().timestamp_millis())),
-            updated_at: CqlTimestamp(p.updated_at().timestamp_millis()),
             dynamic_metadata: p.dynamic_metadata().to_string(),
         }
     }
 }
 
-/// Convertit le modèle de persistance ScyllaDB en modèle Domaine
 impl TryFrom<ScyllaPostModel> for Post {
     type Error = Error;
 
@@ -91,14 +87,7 @@ impl TryFrom<ScyllaPostModel> for Post {
 
         let domain_hashtags = Hashtags::try_from(row.hashtags.into_iter().collect::<Vec<_>>())?;
         let music_id = row.music_id.map(MusicId::from_uuid);
-
-        let version_u64: u64 = row
-            .version
-            .try_into()
-            .map_err(|_| Error::internal("Negative version detected in ScyllaDB for Post Shard"))?;
-
-        let system_updated_at = DateTime::<Utc>::from_timestamp_millis(row.updated_at.0)
-            .ok_or_else(|| Error::internal("Invalid updated_at timestamp"))?;
+        let system_updated_at = edited_at.unwrap_or(domain_created_at);
 
         Ok(Post::restore(
             post_id,
@@ -116,7 +105,6 @@ impl TryFrom<ScyllaPostModel> for Post {
             domain_created_at,
             edited_at,
             LifecycleTracker::restore(system_updated_at),
-            version_u64,
         ))
     }
 }

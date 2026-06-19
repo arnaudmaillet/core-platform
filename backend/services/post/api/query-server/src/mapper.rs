@@ -35,7 +35,6 @@ impl GrpcPostQueryMapper {
             hashtags: post.hashtags().iter().cloned().collect(),
             edited_at: proto_edited_at,
             dynamic_metadata: post.dynamic_metadata().to_string(),
-            version: post.version(),
             created_at: Some(prost_types::Timestamp {
                 seconds: post.created_at().timestamp(),
                 nanos: post.created_at().timestamp_subsec_nanos() as i32,

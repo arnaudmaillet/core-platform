@@ -129,7 +129,6 @@ impl PostBuilder {
             Utc::now(),
             self.edited_at,
             LifecycleTracker::default(),
-            1,
         ))
     }
 }

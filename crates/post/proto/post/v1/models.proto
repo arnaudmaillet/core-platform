@@ -32,9 +32,8 @@ message Post {
   string                      dynamic_metadata       = 12;
   
   // MÉTADONNÉES DE CYCLE DE VIE & PROTOCOLE DISTRIBUÉ
-  uint64                      version                = 13;
-  google.protobuf.Timestamp   created_at             = 14;
-  google.protobuf.Timestamp   updated_at             = 15;
+  google.protobuf.Timestamp   created_at             = 13;
+  google.protobuf.Timestamp   updated_at             = 14;
 }
 
 message PostDetails {
