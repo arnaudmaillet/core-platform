@@ -3762,6 +3762,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "scylla-storage"
+version = "0.1.0"
+dependencies = [
+ "dashmap 7.0.0-rc2",
+ "error",
+ "http",
+ "scylla",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "seahash"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
