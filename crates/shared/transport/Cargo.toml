@@ -1,0 +1,45 @@
+[package]
+name = "transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+# Internal crates
+error = { workspace = true }
+resilience = { workspace = true }
+
+# gRPC — Tonic + Tower
+tonic = { workspace = true }
+tower = { workspace = true }
+
+# Kafka
+rdkafka = { workspace = true }
+
+# HTTP primitives (used in Tower layer signatures)
+http = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+prost = { workspace = true }
+
+# Async runtime and utilities
+tokio = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
+
+# Observability
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+# OpenTelemetry — pinned to the same versions as the `telemetry` crate
+# so context propagation is wire-compatible across the platform.
+opentelemetry = { version = "0.27", features = ["trace"] }
+tracing-opentelemetry = "0.28"
+
+# Byte utilities (used in protobuf codec and tonic body handling)
+bytes = "1"
