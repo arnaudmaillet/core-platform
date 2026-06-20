@@ -43,6 +43,9 @@ members = [
     "crates/post/assembly",
     "crates/post/utils",
     "crates/post/audio",
+    "crates/shared/error",
+    "crates/shared/resilience",
+    "crates/shared/telemetry",
     # "crates/comment",
 ]
 resolver = "2"
@@ -81,6 +84,8 @@ infra-scylla = { path = "crates/infra-scylla" }
 infra-fred = { path = "crates/infra-fred" }
 infra-kafka = { path = "crates/infra-kafka" }
 infra-test = { path = "crates/infra-test" }
+error = { path = "crates/shared/error" }
+resilience = { path = "crates/shared/resilience" }
 
 
 # Communs
@@ -163,6 +168,7 @@ pbjson-build = "0.9"
 
 
 # Graphql
+tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "=0.5.2", features = ["cors", "trace"] }
 async-graphql = { version = "8.0.0-rc.1", features = [
     "dataloader",
@@ -175,6 +181,7 @@ async-graphql-axum = "8.0.0-rc.1"
 axum = "0.8.8"
 
 # Http
+http = "1"
 jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 reqwest = { version = "0.12.28", features = ["json", "rustls-tls"] }
 
