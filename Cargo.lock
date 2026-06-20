@@ -189,6 +189,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "auth-context"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "cqrs",
+ "jsonwebtoken",
+ "reqwest",
+ "rsa",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "auth-test-utils"
 version = "0.1.0"
 dependencies = [

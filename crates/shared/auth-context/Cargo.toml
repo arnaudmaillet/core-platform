@@ -1,0 +1,48 @@
+[package]
+name         = "auth-context"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+authors.workspace     = true
+repository.workspace  = true
+description           = "Provider-agnostic JWT validation and task-local identity propagation for the core-platform."
+
+[features]
+default           = []
+cqrs-integration  = ["dep:cqrs"]
+
+[dependencies]
+# Intra-workspace
+cqrs = { path = "../cqrs", optional = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# Serialisation
+serde      = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Observability
+tracing = { workspace = true }
+
+# JWT / JWKS
+jsonwebtoken = { workspace = true }
+
+# HTTP client for JWKS fetch
+reqwest = { workspace = true }
+
+# Identifiers
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio              = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+tracing-subscriber = { workspace = true }
+serde_json         = { workspace = true }
+base64             = { workspace = true }
+# RSA key-pair generation for offline test tokens (not used in production code).
+# rsa 0.9 depends on rand_core 0.6; we must use its re-exported OsRng to avoid
+# the version-split between the workspace rand (rand_core 0.9) and rsa.
+rsa = { version = "0.9", features = ["pem"] }
