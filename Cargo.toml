@@ -45,7 +45,7 @@ members = [
     "crates/post/audio",
     "crates/shared/error",
     "crates/shared/resilience",
-    "crates/shared/telemetry", "crates/shared/transport",
+    "crates/shared/telemetry", "crates/shared/transport", "crates/shared/cqrs", "crates/shared/storage/postgres",
     # "crates/comment",
 ]
 resolver = "2"

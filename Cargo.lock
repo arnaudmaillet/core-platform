@@ -597,6 +597,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cqrs"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dashmap 7.0.0-rc2",
+ "error",
+ "futures",
+ "http",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "crc"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2924,6 +2937,21 @@ dependencies = [
  "tokio-stream",
  "tonic 0.14.6",
  "tracing",
+]
+
+[[package]]
+name = "postgres"
+version = "0.1.0"
+dependencies = [
+ "error",
+ "futures",
+ "http",
+ "log",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
