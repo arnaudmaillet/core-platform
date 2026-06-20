@@ -1,0 +1,21 @@
+[package]
+name = "postgres"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production-grade PostgreSQL connection pool, transaction manager, and error mapping for the core-platform workspace."
+
+[dependencies]
+error     = { workspace = true }
+sqlx      = { workspace = true }
+tracing   = { workspace = true }
+thiserror = { workspace = true }
+futures   = { workspace = true }
+http      = { workspace = true }
+log       = "0.4"
+
+[dev-dependencies]
+tokio              = { workspace = true }
+tracing-subscriber = { workspace = true }
