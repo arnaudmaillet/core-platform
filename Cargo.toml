@@ -45,7 +45,12 @@ members = [
     "crates/post/audio",
     "crates/shared/error",
     "crates/shared/resilience",
-    "crates/shared/telemetry", "crates/shared/transport", "crates/shared/cqrs", "crates/shared/storage/postgres", "crates/shared/storage/scylla",
+    "crates/shared/telemetry",
+    "crates/shared/transport",
+    "crates/shared/cqrs",
+    "crates/shared/storage/postgres",
+    "crates/shared/storage/scylla",
+    "crates/shared/storage/redis",
     # "crates/comment",
 ]
 resolver = "2"
@@ -86,7 +91,9 @@ infra-kafka = { path = "crates/infra-kafka" }
 infra-test = { path = "crates/infra-test" }
 error = { path = "crates/shared/error" }
 resilience = { path = "crates/shared/resilience" }
-scylla-storage = { path = "crates/shared/storage/scylla" }
+postgres-storage = { path = "crates/shared/storage/postgres" }
+scylla-storage   = { path = "crates/shared/storage/scylla" }
+redis-storage    = { path = "crates/shared/storage/redis" }
 
 
 # Communs
