@@ -50,7 +50,7 @@ members = [
     "crates/shared/cqrs",
     "crates/shared/storage/postgres",
     "crates/shared/storage/scylla",
-    "crates/shared/storage/redis",
+    "crates/shared/storage/redis", "crates/shared/auth-context",
     # "crates/comment",
 ]
 resolver = "2"
