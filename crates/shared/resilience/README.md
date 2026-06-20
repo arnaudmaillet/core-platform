@@ -1,85 +1,168 @@
-# `resilience` — Interface Contract
+# `resilience` — Tower Middleware for Cascading Failure Protection
 
-## 🎯 Responsibility
+## 🎯 Overview & Service Role
 
-Provide reusable Tower middleware layers (Circuit Breaker, Retry, Timeout) that protect microservices against cascading failures, with zero business logic and no inbound consumers.
+`resilience` is a **pure library crate** that provides production-grade Tower middleware layers for protecting microservices against cascading failures at the transport boundary. It implements three composable fault-tolerance primitives:
+
+- **Circuit Breaker** — stops calling a failing downstream entirely, fails fast until the dependency recovers.
+- **Retry** — retries transient failures with exponential backoff and optional jitter, decoupled from the error classification logic.
+- **Timeout** — enforces an absolute per-request deadline, preventing slow dependencies from exhausting upstream goroutines/tasks.
+
+**Critical role in the ecosystem:** this crate sits between the `transport` crate (gRPC/Kafka clients) and the `cqrs` bus. Any outbound call to a downstream service wraps through these layers — enabling fleet-wide resilience policy without modifying business logic.
+
+> **Implementation status:** Core Tower wiring is complete and compiles clean. `StateMachine`, `RetryService`, and `TimeoutService` call bodies are `todo!()` stubs with full inline specifications. The architecture, interfaces, and configuration contracts are locked.
 
 ---
 
-## 🔌 Public Interfaces (Traits & API)
+## 📐 Architecture & Concepts
 
-### `BackoffStrategy` — injectable delay strategy for retry
+### Layer Stack (outermost → innermost)
 
-```rust
-// src/retry/backoff/strategy.rs
-pub trait BackoffStrategy: Send + Sync + Clone + 'static {
-    /// `attempt` is 1-indexed: the first retry receives `attempt = 1`.
-    fn next_delay(&self, attempt: u32) -> Duration;
-}
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Caller (CQRS Bus / gRPC Handler)                               │
+└────────────────────────┬────────────────────────────────────────┘
+                         │  tower::Service<Req>
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TimeoutLayer              [ResilienceError::Timeout]           │
+│  Enforces total request budget — wraps everything below.        │
+└────────────────────────┬────────────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  CircuitBreakerLayer       [ResilienceError::CircuitOpen]       │
+│  Counts all attempts (including retries). Trips on consecutive  │
+│  failures; admits probe calls after open_duration elapses.      │
+└────────────────────────┬────────────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  RetryLayer                [ResilienceError::MaxRetriesExhausted│
+│  Retries transient errors. Consults RetryPolicy per attempt.    │
+│  Waits BackoffStrategy::next_delay(attempt) between attempts.   │
+└────────────────────────┬────────────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Inner Service (S: tower::Service)                              │
+│  e.g. tonic gRPC client, Kafka producer, HTTP client           │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-Built-in implementation: `ExponentialBackoff { base_ms, max_ms, jitter: JitterKind }`.
-`JitterKind` variants: `None` | `Full` (default, thundering-herd safe) | `Equal`.
+### Circuit Breaker State Machine
 
----
-
-### `RetryPolicy<E>` — decides whether a failed attempt should be retried
-
-```rust
-// src/retry/policy.rs
-pub trait RetryPolicy<E>: Send + Sync + Clone + 'static {
-    fn should_retry(&self, error: &E, attempt: u32) -> bool;
-}
+```
+                  failures >= failure_threshold
+    ┌──────────┐ ──────────────────────────────► ┌──────────┐
+    │  Closed  │                                  │   Open   │
+    │(nominal) │ ◄────────────────────────────── │(fast-fail│
+    └──────────┘  successes >= success_threshold  └────┬─────┘
+                  (HalfOpen → Closed)                  │
+                                                       │ open_duration elapsed
+                                                       ▼
+                                                  ┌──────────┐
+                                                  │ HalfOpen │  ◄── probe fails → Open
+                                                  │ (probing)│
+                                                  └──────────┘
+                                  max concurrent probes: half_open_max_calls
 ```
 
-Built-in implementations:
+### Resilience Guarantees & High-Load Behavior
 
-| Type | Behaviour |
-|---|---|
-| `DefaultRetryPolicy` | Delegates to `AppError::is_retryable()` from the `error` crate |
-| `AlwaysRetryPolicy` | Retries unconditionally (useful for non-`AppError` third-party errors) |
-| `NeverRetryPolicy` | Never retries (no-op / test double) |
+| Primitive | Backpressure Mechanism | Memory Footprint | Thread Safety |
+|---|---|---|---|
+| **Circuit Breaker** | Rejects immediately when Open; no goroutine/task leak | Single `Arc<Mutex<Inner>>` per downstream dependency | All state transitions atomic under `tokio::sync::Mutex` |
+| **Retry** | Bounded by `max_attempts`; sleeps via `tokio::time::sleep` (no thread blocking) | No heap allocation between attempts beyond the boxed future | Stateless — `policy` and `config` are `Clone`d per `call` |
+| **Timeout** | Cancels the inner future via `tokio::time::timeout` — no resource leak if inner fut is cancel-safe | `TimeoutConfig` is `Copy` | Stack-local; no shared state |
+
+**Thundering-herd mitigation:** `JitterKind::Full` (the default) distributes retry delays uniformly over `[0, cap]`. Across a fleet of N services retrying the same dependency, aggregate call rate remains bounded instead of spiking in lockstep after an outage.
+
+**Half-Open concurrency control:** `half_open_max_calls` (default `1`) is a hard cap on in-flight probe calls. Excess probe attempts are rejected with `CircuitOpen` without touching the downstream, preventing the recovery window from being flooded.
 
 ---
+
+## 🔌 Public Interfaces & API Contract
 
 ### `ResilienceError<E>` — unified error envelope
 
 ```rust
 // src/error.rs
 pub enum ResilienceError<E> {
-    CircuitOpen,                    // request rejected — circuit is open
-    Timeout(Duration),              // inner service exceeded the deadline
-    MaxRetriesExhausted(u32),       // all retry attempts failed
-    Inner(E),                       // non-retryable error from the inner service
+    /// Circuit is Open — downstream is assumed unavailable; request was not forwarded.
+    CircuitOpen,
+    /// Inner service did not respond within the configured deadline.
+    Timeout(Duration),
+    /// All retry attempts exhausted; contains the configured max attempt count.
+    MaxRetriesExhausted(u32),
+    /// Non-retryable error propagated from the inner service.
+    Inner(E),
 }
 ```
 
+**Invariants:**
+- `Inner(E)` is the only variant that carries the downstream's error. The other variants are middleware-emitted and contain no downstream state.
+- `ResilienceError<E>` implements `std::error::Error` via `thiserror::Error`.
+
 ---
 
-### Tower Layers — the three middleware entry points
+### `BackoffStrategy` — injectable delay strategy
+
+```rust
+// src/retry/backoff/strategy.rs
+pub trait BackoffStrategy: Send + Sync + Clone + 'static {
+    /// `attempt` is 1-indexed: first retry receives `attempt = 1`.
+    fn next_delay(&self, attempt: u32) -> Duration;
+}
+```
+
+**Built-in implementation — `ExponentialBackoff`:**
+
+```rust
+pub struct ExponentialBackoff {
+    pub base_ms: u64,       // delay for attempt=1 before jitter (default: 50ms)
+    pub max_ms:  u64,       // hard cap on computed delay      (default: 10_000ms)
+    pub jitter:  JitterKind,
+}
+
+pub enum JitterKind {
+    None,   // deterministic: min(base * 2^(attempt-1), max)
+    Full,   // rand(0, cap)           — recommended; eliminates thundering herd
+    Equal,  // cap/2 + rand(0, cap/2) — guarantees ≥50% of cap as minimum wait
+}
+```
+
+Exponent is clamped to 30 before shifting to prevent `u64` overflow on pathological attempt counts.
+
+---
+
+### `RetryPolicy<E>` — error classification for retry
+
+```rust
+// src/retry/policy.rs
+pub trait RetryPolicy<E>: Send + Sync + Clone + 'static {
+    /// `attempt` is 1-indexed. Return `true` to schedule another attempt.
+    fn should_retry(&self, error: &E, attempt: u32) -> bool;
+}
+```
+
+| Implementation | Behaviour | Use-case |
+|---|---|---|
+| `DefaultRetryPolicy` | Delegates to `AppError::is_retryable()` from `error` crate | Any service error that implements `AppError` |
+| `AlwaysRetryPolicy` | Always returns `true` | Third-party errors that do not implement `AppError` |
+| `NeverRetryPolicy` | Always returns `false` | Tests, or disabling retry without removing the layer |
+
+---
+
+### Tower Layers — construction API
 
 ```rust
 // Circuit Breaker — src/circuit_breaker/layer.rs
-CircuitBreakerLayer::new(CircuitBreakerConfig::default())
+CircuitBreakerLayer::new(config: CircuitBreakerConfig) -> CircuitBreakerLayer
 
 // Retry — src/retry/layer.rs
-RetryLayer::new(RetryConfig::default_exponential(), DefaultRetryPolicy)
+RetryLayer::new(config: RetryConfig<B>, policy: P) -> RetryLayer<P, B>
 
 // Timeout — src/timeout/layer.rs
-TimeoutLayer::new(TimeoutConfig::from_secs(5))
+TimeoutLayer::new(config: TimeoutConfig) -> TimeoutLayer
 ```
-
-**Recommended composition order** (outermost → innermost):
-
-```rust
-ServiceBuilder::new()
-    .layer(TimeoutLayer::new(TimeoutConfig::from_secs(5)))
-    .layer(CircuitBreakerLayer::new(CircuitBreakerConfig::default()))
-    .layer(RetryLayer::new(RetryConfig::default_exponential(), DefaultRetryPolicy))
-    .service(inner_service)
-```
-
-> Timeout wraps everything so the total budget is enforced. The circuit breaker sits outside retry so it counts all attempts, not just the first call.
 
 ---
 
@@ -88,50 +171,236 @@ ServiceBuilder::new()
 ```rust
 // src/circuit_breaker/config.rs
 CircuitBreakerConfig {
-    failure_threshold: u32,      // default: 5  — consecutive failures to trip (Closed → Open)
-    success_threshold: u32,      // default: 2  — consecutive successes to reset (HalfOpen → Closed)
-    open_duration: Duration,     // default: 30s — how long the circuit stays open
-    half_open_max_calls: u32,    // default: 1  — concurrent probe calls in HalfOpen
+    failure_threshold:    u32,      // Closed → Open  (default: 5)
+    success_threshold:    u32,      // HalfOpen → Closed (default: 2)
+    open_duration:        Duration, // how long the circuit stays Open (default: 30s)
+    half_open_max_calls:  u32,      // concurrent probe slots in HalfOpen (default: 1)
 }
 
 // src/retry/config.rs
 RetryConfig<B: BackoffStrategy> {
-    max_attempts: u32,           // default: 3  — retries, not counting the initial call
-    backoff: B,
+    max_attempts: u32,  // retry count, excluding the initial attempt (default: 3)
+    backoff:      B,
 }
+// Shortcut: RetryConfig::default_exponential() → 3 retries, ExponentialBackoff::default()
 
 // src/timeout/config.rs
-TimeoutConfig {
-    duration: Duration,
-}
+TimeoutConfig { duration: Duration }
 // Constructors: TimeoutConfig::from_secs(u64) | TimeoutConfig::from_millis(u64)
 ```
 
 ---
 
-## 📦 Entry Points & Consumption
+## 📦 Integration & Usage
 
-**This crate consumes nothing** — no Kafka, no gRPC, no inbound HTTP. It is a pure library.
-
-**Runtime injection required:** none. All state is owned by the layer instances.
-
-**To add it to a service:**
+### Dependency declaration
 
 ```toml
-# service Cargo.toml
+# In your service's Cargo.toml
+[dependencies]
 resilience = { workspace = true }
 ```
 
-**`S: Clone` requirement:** `RetryService` and `CircuitBreakerService` clone the inner service once per `call` — the inner service must be cheaply cloneable (e.g. an `Arc`-backed gRPC client or a `tower::Buffer`-wrapped service).
+### Standard Bootstrap Pattern
 
-**`AppError` integration:** `DefaultRetryPolicy` requires `E: AppError` (from the `error` crate). If the inner service error does not implement `AppError`, use `AlwaysRetryPolicy` or provide a custom `RetryPolicy` impl.
+```rust
+use std::time::Duration;
+use tower::ServiceBuilder;
+use resilience::{
+    circuit_breaker::{CircuitBreakerLayer, CircuitBreakerConfig},
+    retry::{RetryLayer, RetryConfig, DefaultRetryPolicy},
+    timeout::{TimeoutLayer, TimeoutConfig},
+};
+
+// Wrap any tower::Service with the full resilience stack.
+// Order matters: Timeout (outermost) → CircuitBreaker → Retry → inner.
+let resilient_svc = ServiceBuilder::new()
+    .layer(TimeoutLayer::new(TimeoutConfig::from_secs(5)))
+    .layer(CircuitBreakerLayer::new(
+        CircuitBreakerConfig::new()
+            .failure_threshold(5)
+            .open_duration(Duration::from_secs(30))
+            .success_threshold(2)
+            .half_open_max_calls(1),
+    ))
+    .layer(RetryLayer::new(
+        RetryConfig::default_exponential(), // 3 retries, 50ms–10s, full jitter
+        DefaultRetryPolicy,                 // uses AppError::is_retryable()
+    ))
+    .service(inner_grpc_client);
+```
+
+**`S: Clone` requirement:** `RetryService` and `CircuitBreakerService` clone the inner service once per `call` invocation. The inner service must be cheaply cloneable — use an `Arc`-backed gRPC client or wrap with `tower::Buffer` for services that are not `Clone`.
+
+**`Req: Clone` requirement:** `RetryService` re-issues the request on each attempt. The request type must implement `Clone`.
+
+### Applying a single layer (lightweight use case)
+
+```rust
+// Timeout-only for a non-retryable one-shot call
+use tower::ServiceBuilder;
+use resilience::timeout::{TimeoutLayer, TimeoutConfig};
+
+let svc = ServiceBuilder::new()
+    .layer(TimeoutLayer::new(TimeoutConfig::from_millis(500)))
+    .service(inner);
+```
+
+### Custom retry policy
+
+```rust
+use resilience::retry::RetryPolicy;
+
+#[derive(Clone)]
+struct GrpcRetryPolicy;
+
+impl<E: std::fmt::Debug> RetryPolicy<E> for GrpcRetryPolicy {
+    fn should_retry(&self, _error: &E, attempt: u32) -> bool {
+        // Only retry the first two failures; give up after that.
+        attempt <= 2
+    }
+}
+```
 
 ---
 
-## 📝 Key Files
+## ⚙️ Configuration & Runtime Environment
 
-| File | What to read |
-|---|---|
-| `src/error.rs` | `ResilienceError<E>` — the only error type exposed to callers |
-| `src/circuit_breaker/layer.rs` + `src/circuit_breaker/state.rs` | Tower glue and the state machine contract (`state()`, `on_success()`, `on_failure()`) |
-| `src/retry/policy.rs` + `src/retry/backoff/strategy.rs` | The two injectable traits that control retry behaviour |
+This crate is a **pure library** — it consumes no environment variables and has no runtime process. All configuration is passed programmatically via the config structs at construction time.
+
+### Compile-time / Cargo features
+
+| Feature | Status | Description |
+|---|---|---|
+| _(none declared)_ | — | All primitives are unconditionally compiled. |
+
+### Default production values summary
+
+| Parameter | Default | Rationale |
+|---|---|---|
+| `CircuitBreakerConfig::failure_threshold` | `5` | Conservative; avoids tripping on isolated transient errors |
+| `CircuitBreakerConfig::open_duration` | `30s` | Gives downstream time to recover before probe |
+| `CircuitBreakerConfig::success_threshold` | `2` | Two consecutive successes confirm recovery |
+| `CircuitBreakerConfig::half_open_max_calls` | `1` | Prevents probe flood during recovery |
+| `RetryConfig::max_attempts` | `3` | 4 total attempts; balances latency vs. reliability |
+| `ExponentialBackoff::base_ms` | `50ms` | Low first-retry latency for fast transients |
+| `ExponentialBackoff::max_ms` | `10_000ms` | 10s cap; prevents indefinite back-pressure amplification |
+| `ExponentialBackoff::jitter` | `Full` | Maximally spreads retry load across the fleet |
+
+---
+
+## 📈 Telemetry, Performance & Metrics
+
+### Runtime prerequisites
+
+- **Tokio runtime** — all async operations (`tokio::sync::Mutex`, `tokio::time::sleep`, `tokio::time::timeout`) require a Tokio multi-thread or current-thread runtime. The crate does not spawn tasks.
+- **No CPU architecture constraints.** `rand` uses the platform CSPRNG.
+
+### Structured log events (via `tracing`)
+
+The following events are emitted at key state transitions (emitted once the `todo!()` implementations are filled in):
+
+| Event | Level | Fields | Trigger |
+|---|---|---|---|
+| Circuit state transition | `INFO` | `prev`, `next` | Closed → Open, HalfOpen → Closed |
+| Circuit tripped | `WARN` | `prev`, `next`, `failures` | Closed → Open on failure threshold |
+| Probe failed | `WARN` | `prev`, `next` | HalfOpen → Open on probe failure |
+| Retry scheduled | `WARN` | `attempt`, `max_attempts`, `delay_ms` | Each retry before sleeping |
+| Request timeout | `WARN` | `timeout_ms` | Inner future exceeds deadline |
+
+### Prometheus / OTel metrics
+
+<!-- TODO: [No OTel metric exports are defined in this crate yet. Add counters/histograms via the `telemetry` workspace crate once stub implementations are complete.] -->
+
+**Recommended alerts to implement at the service level:**
+
+| Alert | Condition | Severity |
+|---|---|---|
+| `circuit_open` | Circuit transitions to Open | Critical |
+| `retry_exhausted_rate` | `MaxRetriesExhausted` rate > threshold | Warning |
+| `timeout_rate` | `Timeout` error rate > 1% of requests | Warning |
+| `half_open_probe_failure` | Repeated HalfOpen → Open cycles with no recovery | Critical |
+
+---
+
+## 🛠️ Local Development & Contribution
+
+### Build & lint
+
+```bash
+# From the workspace root
+cargo build -p resilience
+
+# Clippy (workspace lint rules apply)
+cargo clippy -p resilience -- -D warnings
+
+# Format
+cargo fmt -p resilience
+```
+
+### Run tests
+
+```bash
+# Unit tests (no external dependencies required)
+cargo test -p resilience
+
+# With tokio test-util (already in dev-dependencies)
+cargo test -p resilience -- --nocapture
+```
+
+### No external service dependencies
+
+This crate is a pure in-process library. **No Docker Compose, no database, no broker** is required for local development or testing.
+
+### Implementing a `todo!()` stub
+
+Each unimplemented method has a detailed inline specification in a `// TODO: impl —` comment block. Follow it exactly to preserve the intended state-machine invariants. After implementing, ensure:
+
+1. `cargo test -p resilience` passes.
+2. `cargo clippy -p resilience -- -D warnings` is clean.
+3. The relevant `state()` / `on_success()` / `on_failure()` sequence is covered by a `#[tokio::test]` in the same file.
+
+---
+
+## 🚨 Troubleshooting & Runbook
+
+### 1. Circuit trips immediately on first call
+
+**Symptom:** `ResilienceError::CircuitOpen` on the very first request.
+
+**Root cause:** A previously-constructed `CircuitBreakerLayer` is being reused across application restarts without re-initializing. Because `CircuitBreakerLayer` owns the `Arc<StateMachine>`, its state persists for the lifetime of the instance.
+
+**Mitigation:** Always construct a fresh `CircuitBreakerLayer` during application startup. Do not store the layer in a global static with `once_cell` / `lazy_static` unless you explicitly want persistent cross-request state.
+
+---
+
+### 2. Retries amplify load instead of reducing it
+
+**Symptom:** A dependency outage causes a 3–4× spike in inbound call rate to that dependency.
+
+**Root cause:** `JitterKind::None` or `JitterKind::Equal` in use across a large fleet — all instances retry at near-identical intervals.
+
+**Mitigation:** Switch to `JitterKind::Full` (the default in `ExponentialBackoff::default()`). Confirm with:
+
+```rust
+let backoff = ExponentialBackoff::new(50, 10_000, JitterKind::Full);
+```
+
+Also verify that `CircuitBreakerLayer` sits **outside** (wrapping) `RetryLayer` in your `ServiceBuilder` chain — otherwise the circuit counts only the initial call, not the retries, and trips later than intended.
+
+---
+
+### 3. `Req: Clone` compile error on `RetryLayer`
+
+**Symptom:**
+
+```
+error[E0277]: the trait bound `MyRequest: Clone` is not satisfied
+  --> src/grpc/client.rs:42:10
+   |
+42 |     .layer(RetryLayer::new(...))
+```
+
+**Root cause:** `RetryService` must clone the request to re-issue it on each attempt. Request types generated by `prost` (tonic proto structs) derive `Clone` by default, but custom wrapper types may not.
+
+**Mitigation:** Derive or implement `Clone` on the request type, or wrap the retryable region so only the inner cloneable proto is passed to the retry layer.
