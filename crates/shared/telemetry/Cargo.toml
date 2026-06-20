@@ -1,0 +1,36 @@
+[package]
+name = "telemetry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+# Workspace
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging — non-blocking stdout + structured formatting
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }
+tracing-appender = "0.2"
+
+# Distributed tracing — OTel bridge
+tracing-opentelemetry = "0.28"
+opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio", "trace", "metrics"] }
+opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic", "http-proto", "metrics"] }
+opentelemetry-semantic-conventions = "0.27"
+
+# Metrics — Prometheus scrape endpoint (default) or OTLP push
+opentelemetry-prometheus = { version = "0.27", optional = true }
+prometheus = { version = "0.13", features = ["process"], optional = true }
+
+# HTTP route for GET /metrics
+axum = { workspace = true, optional = true }
+
+[features]
+default = ["prometheus-exporter"]
+prometheus-exporter = ["dep:opentelemetry-prometheus", "dep:prometheus", "dep:axum"]
