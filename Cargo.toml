@@ -45,7 +45,7 @@ members = [
     "crates/post/audio",
     "crates/shared/error",
     "crates/shared/resilience",
-    "crates/shared/telemetry",
+    "crates/shared/telemetry", "crates/shared/transport",
     # "crates/comment",
 ]
 resolver = "2"
