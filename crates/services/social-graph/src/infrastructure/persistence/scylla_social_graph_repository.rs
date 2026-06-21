@@ -1,0 +1,576 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use chrono::{TimeZone, Utc};
+use scylla::observability::history::HistoryListener;
+use scylla::statement::unprepared::Statement;
+use scylla::value::CqlTimestamp;
+use scylla::DeserializeRow;
+use uuid::Uuid;
+
+use scylla_storage::{ProfileKind as ScyllaProfileKind, ScyllaClient, ScyllaStorageError};
+
+use crate::application::port::SocialGraphRepository;
+use crate::domain::aggregate::{Relation, RelationContext};
+use crate::domain::entity::{BlockEdge, FollowEdge};
+use crate::domain::value_object::ProfileId;
+use crate::error::SocialGraphError;
+use crate::infrastructure::persistence::model::{BlockRow, FollowRow};
+
+// ── Page-token types ──────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct FollowPageToken {
+    followed_at_ms: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockPageToken {
+    last_blockee_id: String,
+}
+
+// ── Error helpers ─────────────────────────────────────────────────────────────
+
+fn scylla_err(e: scylla::errors::ExecutionError) -> SocialGraphError {
+    SocialGraphError::Storage(ScyllaStorageError::from(e))
+}
+
+fn row_err(ctx: &'static str, e: impl ToString) -> SocialGraphError {
+    SocialGraphError::DomainViolation {
+        field:   ctx.to_owned(),
+        message: e.to_string(),
+    }
+}
+
+fn token_err(field: &'static str, msg: &'static str) -> SocialGraphError {
+    SocialGraphError::DomainViolation {
+        field:   field.to_owned(),
+        message: msg.to_owned(),
+    }
+}
+
+// ── Repository ────────────────────────────────────────────────────────────────
+
+pub struct ScyllaSocialGraphRepository {
+    client: Arc<ScyllaClient>,
+}
+
+impl ScyllaSocialGraphRepository {
+    pub fn new(client: Arc<ScyllaClient>) -> Self {
+        Self { client }
+    }
+
+    fn fast_stmt(&self, cql: &str) -> Statement {
+        let mut s = Statement::new(cql);
+        s.set_execution_profile_handle(Some(
+            self.client
+                .profiles
+                .get(ScyllaProfileKind::Fast)
+                .clone()
+                .into_handle_with_label("fast".to_string()),
+        ));
+        s.set_history_listener(
+            Arc::clone(&self.client.history_listener) as Arc<dyn HistoryListener>,
+        );
+        s
+    }
+
+    fn strict_stmt(&self, cql: &str) -> Statement {
+        let mut s = Statement::new(cql);
+        s.set_execution_profile_handle(Some(
+            self.client
+                .profiles
+                .get(ScyllaProfileKind::Strict)
+                .clone()
+                .into_handle_with_label("strict".to_string()),
+        ));
+        s.set_history_listener(
+            Arc::clone(&self.client.history_listener) as Arc<dyn HistoryListener>,
+        );
+        s
+    }
+
+    fn dt_ms(dt: chrono::DateTime<Utc>) -> CqlTimestamp {
+        CqlTimestamp(dt.timestamp_millis())
+    }
+
+    fn ms_to_dt(ms: i64) -> Result<chrono::DateTime<Utc>, SocialGraphError> {
+        Utc.timestamp_millis_opt(ms).single().ok_or_else(|| SocialGraphError::DomainViolation {
+            field:   "timestamp".to_owned(),
+            message: format!("invalid millisecond timestamp: {ms}"),
+        })
+    }
+
+    // ── Point-lookup helpers used by load_relation ────────────────────────────
+
+    async fn get_follow_since(
+        &self,
+        follower_id: &ProfileId,
+        followee_id: &ProfileId,
+    ) -> Result<Option<chrono::DateTime<Utc>>, SocialGraphError> {
+        #[derive(DeserializeRow)]
+        struct Row { followed_at: CqlTimestamp }
+
+        let stmt = self.fast_stmt(
+            "SELECT followed_at FROM social_graph.follow_status \
+             WHERE follower_id = ? AND followee_id = ?",
+        );
+        let result = self
+            .client
+            .session
+            .execute_unpaged(stmt, (follower_id.as_uuid(), followee_id.as_uuid()))
+            .await
+            .map_err(scylla_err)?;
+
+        let row = result
+            .into_rows_result()
+            .map_err(|e| row_err("get_follow_since:rows", e))?
+            .maybe_first_row::<Row>()
+            .map_err(|e| row_err("get_follow_since:deser", e))?;
+
+        row.map(|r| Self::ms_to_dt(r.followed_at.0)).transpose()
+    }
+
+    async fn get_block_exists(
+        &self,
+        blocker_id: &ProfileId,
+        blockee_id: &ProfileId,
+    ) -> Result<bool, SocialGraphError> {
+        #[derive(DeserializeRow)]
+        #[allow(dead_code)]
+        struct Row { blocked_at: CqlTimestamp }
+
+        let stmt = self.fast_stmt(
+            "SELECT blocked_at FROM social_graph.blocks \
+             WHERE blocker_id = ? AND blockee_id = ?",
+        );
+        let result = self
+            .client
+            .session
+            .execute_unpaged(stmt, (blocker_id.as_uuid(), blockee_id.as_uuid()))
+            .await
+            .map_err(scylla_err)?;
+
+        let row = result
+            .into_rows_result()
+            .map_err(|e| row_err("get_block_exists:rows", e))?
+            .maybe_first_row::<Row>()
+            .map_err(|e| row_err("get_block_exists:deser", e))?;
+
+        Ok(row.is_some())
+    }
+}
+
+#[async_trait]
+impl SocialGraphRepository for ScyllaSocialGraphRepository {
+    // ── load_relation ─────────────────────────────────────────────────────────
+
+    async fn load_relation(
+        &self,
+        actor_id:  &ProfileId,
+        target_id: &ProfileId,
+    ) -> Result<Relation, SocialGraphError> {
+        // Fire four concurrent O(1) ScyllaDB point-lookups.
+        let (r1, r2, r3, r4) = tokio::join!(
+            self.get_follow_since(actor_id, target_id),
+            self.get_follow_since(target_id, actor_id),
+            self.get_block_exists(actor_id, target_id),
+            self.get_block_exists(target_id, actor_id),
+        );
+
+        Ok(Relation::from_context(
+            *actor_id,
+            *target_id,
+            RelationContext {
+                actor_follows_target_since: r1?,
+                target_follows_actor_since: r2?,
+                actor_blocks_target:        r3?,
+                target_blocks_actor:        r4?,
+            },
+        ))
+    }
+
+    // ── persist_follow ────────────────────────────────────────────────────────
+
+    async fn persist_follow(
+        &self,
+        actor_id:    &ProfileId,
+        target_id:   &ProfileId,
+        followed_at: chrono::DateTime<Utc>,
+    ) -> Result<(), SocialGraphError> {
+        let ts = Self::dt_ms(followed_at);
+
+        // Write follow_status first (it is the canonical deletion-key store).
+        let stmt_status = self.strict_stmt(
+            "INSERT INTO social_graph.follow_status \
+             (follower_id, followee_id, followed_at) VALUES (?, ?, ?)",
+        );
+        self.client
+            .session
+            .execute_unpaged(stmt_status, (actor_id.as_uuid(), target_id.as_uuid(), ts))
+            .await
+            .map_err(scylla_err)?;
+
+        // Write both adjacency tables concurrently.
+        let (r_following, r_followers) = tokio::join!(
+            async {
+                let stmt = self.strict_stmt(
+                    "INSERT INTO social_graph.following \
+                     (follower_id, followed_at, followee_id) VALUES (?, ?, ?)",
+                );
+                self.client
+                    .session
+                    .execute_unpaged(stmt, (actor_id.as_uuid(), ts, target_id.as_uuid()))
+                    .await
+                    .map_err(scylla_err)
+            },
+            async {
+                let stmt = self.strict_stmt(
+                    "INSERT INTO social_graph.followers \
+                     (followee_id, followed_at, follower_id) VALUES (?, ?, ?)",
+                );
+                self.client
+                    .session
+                    .execute_unpaged(stmt, (target_id.as_uuid(), ts, actor_id.as_uuid()))
+                    .await
+                    .map_err(scylla_err)
+            },
+        );
+        r_following?;
+        r_followers?;
+
+        Ok(())
+    }
+
+    // ── delete_follow ─────────────────────────────────────────────────────────
+
+    async fn delete_follow(
+        &self,
+        actor_id:    &ProfileId,
+        target_id:   &ProfileId,
+        followed_at: chrono::DateTime<Utc>,
+    ) -> Result<(), SocialGraphError> {
+        let ts = Self::dt_ms(followed_at);
+
+        // Delete follow_status first.
+        let stmt_status = self.strict_stmt(
+            "DELETE FROM social_graph.follow_status \
+             WHERE follower_id = ? AND followee_id = ?",
+        );
+        self.client
+            .session
+            .execute_unpaged(stmt_status, (actor_id.as_uuid(), target_id.as_uuid()))
+            .await
+            .map_err(scylla_err)?;
+
+        // Delete both adjacency rows concurrently.
+        let (r_following, r_followers) = tokio::join!(
+            async {
+                let stmt = self.strict_stmt(
+                    "DELETE FROM social_graph.following \
+                     WHERE follower_id = ? AND followed_at = ? AND followee_id = ?",
+                );
+                self.client
+                    .session
+                    .execute_unpaged(stmt, (actor_id.as_uuid(), ts, target_id.as_uuid()))
+                    .await
+                    .map_err(scylla_err)
+            },
+            async {
+                let stmt = self.strict_stmt(
+                    "DELETE FROM social_graph.followers \
+                     WHERE followee_id = ? AND followed_at = ? AND follower_id = ?",
+                );
+                self.client
+                    .session
+                    .execute_unpaged(stmt, (target_id.as_uuid(), ts, actor_id.as_uuid()))
+                    .await
+                    .map_err(scylla_err)
+            },
+        );
+        r_following?;
+        r_followers?;
+
+        Ok(())
+    }
+
+    // ── persist_block ─────────────────────────────────────────────────────────
+
+    async fn persist_block(
+        &self,
+        blocker_id: &ProfileId,
+        blockee_id: &ProfileId,
+        blocked_at: chrono::DateTime<Utc>,
+    ) -> Result<(), SocialGraphError> {
+        let stmt = self.strict_stmt(
+            "INSERT INTO social_graph.blocks \
+             (blocker_id, blockee_id, blocked_at) VALUES (?, ?, ?)",
+        );
+        self.client
+            .session
+            .execute_unpaged(
+                stmt,
+                (blocker_id.as_uuid(), blockee_id.as_uuid(), Self::dt_ms(blocked_at)),
+            )
+            .await
+            .map_err(scylla_err)?;
+        Ok(())
+    }
+
+    // ── delete_block ──────────────────────────────────────────────────────────
+
+    async fn delete_block(
+        &self,
+        blocker_id: &ProfileId,
+        blockee_id: &ProfileId,
+    ) -> Result<(), SocialGraphError> {
+        let stmt = self.strict_stmt(
+            "DELETE FROM social_graph.blocks \
+             WHERE blocker_id = ? AND blockee_id = ?",
+        );
+        self.client
+            .session
+            .execute_unpaged(stmt, (blocker_id.as_uuid(), blockee_id.as_uuid()))
+            .await
+            .map_err(scylla_err)?;
+        Ok(())
+    }
+
+    // ── list_followers ────────────────────────────────────────────────────────
+
+    async fn list_followers(
+        &self,
+        followee_id: &ProfileId,
+        limit:       i32,
+        page_token:  Option<&str>,
+    ) -> Result<(Vec<FollowEdge>, Option<String>), SocialGraphError> {
+        let limit = limit.clamp(1, 100) as i64;
+        let token = decode_follow_token(page_token)?;
+
+        let rows: Vec<FollowRow> = if let Some(ref tok) = token {
+            let stmt = self.fast_stmt(
+                "SELECT follower_id, followed_at FROM social_graph.followers \
+                 WHERE followee_id = ? AND followed_at < ? LIMIT ?",
+            );
+            self.client
+                .session
+                .execute_unpaged(
+                    stmt,
+                    (followee_id.as_uuid(), CqlTimestamp(tok.followed_at_ms), limit),
+                )
+                .await
+                .map_err(scylla_err)?
+                .into_rows_result()
+                .map_err(|e| row_err("list_followers:rows", e))?
+                .rows::<FollowRow>()
+                .map_err(|e| row_err("list_followers:iter", e))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| row_err("list_followers:deser", e))?
+        } else {
+            let stmt = self.fast_stmt(
+                "SELECT follower_id, followed_at FROM social_graph.followers \
+                 WHERE followee_id = ? LIMIT ?",
+            );
+            self.client
+                .session
+                .execute_unpaged(stmt, (followee_id.as_uuid(), limit))
+                .await
+                .map_err(scylla_err)?
+                .into_rows_result()
+                .map_err(|e| row_err("list_followers:rows", e))?
+                .rows::<FollowRow>()
+                .map_err(|e| row_err("list_followers:iter", e))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| row_err("list_followers:deser", e))?
+        };
+
+        build_follow_page(rows, limit)
+    }
+
+    // ── list_following ────────────────────────────────────────────────────────
+
+    async fn list_following(
+        &self,
+        follower_id: &ProfileId,
+        limit:       i32,
+        page_token:  Option<&str>,
+    ) -> Result<(Vec<FollowEdge>, Option<String>), SocialGraphError> {
+        let limit = limit.clamp(1, 100) as i64;
+        let token = decode_follow_token(page_token)?;
+
+        let rows: Vec<FollowRow> = if let Some(ref tok) = token {
+            let stmt = self.fast_stmt(
+                "SELECT followee_id, followed_at FROM social_graph.following \
+                 WHERE follower_id = ? AND followed_at < ? LIMIT ?",
+            );
+            self.client
+                .session
+                .execute_unpaged(
+                    stmt,
+                    (follower_id.as_uuid(), CqlTimestamp(tok.followed_at_ms), limit),
+                )
+                .await
+                .map_err(scylla_err)?
+                .into_rows_result()
+                .map_err(|e| row_err("list_following:rows", e))?
+                .rows::<FollowRow>()
+                .map_err(|e| row_err("list_following:iter", e))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| row_err("list_following:deser", e))?
+        } else {
+            let stmt = self.fast_stmt(
+                "SELECT followee_id, followed_at FROM social_graph.following \
+                 WHERE follower_id = ? LIMIT ?",
+            );
+            self.client
+                .session
+                .execute_unpaged(stmt, (follower_id.as_uuid(), limit))
+                .await
+                .map_err(scylla_err)?
+                .into_rows_result()
+                .map_err(|e| row_err("list_following:rows", e))?
+                .rows::<FollowRow>()
+                .map_err(|e| row_err("list_following:iter", e))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| row_err("list_following:deser", e))?
+        };
+
+        build_follow_page(rows, limit)
+    }
+
+    // ── list_blocks ───────────────────────────────────────────────────────────
+
+    async fn list_blocks(
+        &self,
+        blocker_id: &ProfileId,
+        limit:      i32,
+        page_token: Option<&str>,
+    ) -> Result<(Vec<BlockEdge>, Option<String>), SocialGraphError> {
+        let limit = limit.clamp(1, 100) as i64;
+
+        let token: Option<BlockPageToken> = page_token
+            .map(|t| {
+                let bytes = URL_SAFE_NO_PAD
+                    .decode(t)
+                    .map_err(|_| token_err("page_token", "invalid base64 encoding"))?;
+                serde_json::from_slice(&bytes)
+                    .map_err(|_| token_err("page_token", "invalid block page token format"))
+            })
+            .transpose()?;
+
+        let rows_result = if let Some(ref tok) = token {
+            let last_id = Uuid::parse_str(&tok.last_blockee_id).map_err(|_| {
+                token_err("page_token.last_blockee_id", "invalid UUID in block page token")
+            })?;
+            let stmt = self.fast_stmt(
+                "SELECT blockee_id, blocked_at FROM social_graph.blocks \
+                 WHERE blocker_id = ? AND blockee_id > ? LIMIT ?",
+            );
+            self.client
+                .session
+                .execute_unpaged(stmt, (blocker_id.as_uuid(), last_id, limit))
+                .await
+                .map_err(scylla_err)?
+                .into_rows_result()
+                .map_err(|e| row_err("list_blocks:rows", e))?
+        } else {
+            let stmt = self.fast_stmt(
+                "SELECT blockee_id, blocked_at FROM social_graph.blocks \
+                 WHERE blocker_id = ? LIMIT ?",
+            );
+            self.client
+                .session
+                .execute_unpaged(stmt, (blocker_id.as_uuid(), limit))
+                .await
+                .map_err(scylla_err)?
+                .into_rows_result()
+                .map_err(|e| row_err("list_blocks:rows", e))?
+        };
+
+        let rows: Vec<BlockRow> = rows_result
+            .rows::<BlockRow>()
+            .map_err(|e| row_err("list_blocks:iter", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| row_err("list_blocks:deser", e))?;
+
+        let total = rows.len();
+        let mut edges = Vec::with_capacity(total);
+        let mut last_blockee_id = String::new();
+
+        for row in &rows {
+            last_blockee_id = row.blockee_id.to_string();
+            let blocked_at = Utc
+                .timestamp_millis_opt(row.blocked_at.0)
+                .single()
+                .ok_or_else(|| SocialGraphError::DomainViolation {
+                    field:   "blocked_at".to_owned(),
+                    message: format!("invalid timestamp {}", row.blocked_at.0),
+                })?;
+            edges.push(BlockEdge {
+                blockee_id: ProfileId::from_uuid(row.blockee_id),
+                blocked_at,
+            });
+        }
+
+        let next_token = if total == limit as usize {
+            let tok  = BlockPageToken { last_blockee_id };
+            let json = serde_json::to_vec(&tok).unwrap_or_default();
+            Some(URL_SAFE_NO_PAD.encode(json))
+        } else {
+            None
+        };
+
+        Ok((edges, next_token))
+    }
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+fn decode_follow_token(
+    page_token: Option<&str>,
+) -> Result<Option<FollowPageToken>, SocialGraphError> {
+    page_token
+        .map(|t| {
+            let bytes = URL_SAFE_NO_PAD
+                .decode(t)
+                .map_err(|_| token_err("page_token", "invalid base64 encoding"))?;
+            serde_json::from_slice(&bytes)
+                .map_err(|_| token_err("page_token", "invalid follow page token format"))
+        })
+        .transpose()
+}
+
+fn build_follow_page(
+    rows:  Vec<FollowRow>,
+    limit: i64,
+) -> Result<(Vec<FollowEdge>, Option<String>), SocialGraphError> {
+    let total = rows.len();
+    let mut edges = Vec::with_capacity(total);
+    let mut last_followed_at_ms = 0i64;
+
+    for row in &rows {
+        last_followed_at_ms = row.followed_at.0;
+        let followed_at = Utc
+            .timestamp_millis_opt(row.followed_at.0)
+            .single()
+            .ok_or_else(|| SocialGraphError::DomainViolation {
+                field:   "followed_at".to_owned(),
+                message: format!("invalid timestamp {}", row.followed_at.0),
+            })?;
+        edges.push(FollowEdge {
+            profile_id:  ProfileId::from_uuid(row.profile_id),
+            followed_at,
+        });
+    }
+
+    let next_token = if total == limit as usize {
+        let tok  = FollowPageToken { followed_at_ms: last_followed_at_ms };
+        let json = serde_json::to_vec(&tok).unwrap_or_default();
+        Some(URL_SAFE_NO_PAD.encode(json))
+    } else {
+        None
+    };
+
+    Ok((edges, next_token))
+}

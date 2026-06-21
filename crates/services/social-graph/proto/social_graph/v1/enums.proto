@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package social_graph.v1;
+
+option java_package = "com.coreplatform.socialgraph.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/social-graph/v1;socialgraphv1";
+
+// The combined relationship status between an actor and a target profile,
+// as observed from the actor's point of view.
+//
+// Invariants enforced by the domain layer:
+//   - Block states and follow states are mutually exclusive: a block severs
+//     any existing follow in both directions and prevents future follows.
+//   - MUTUAL_FOLLOW is the implicit "friendship" state; no dedicated table exists.
+enum RelationStatus {
+    RELATION_STATUS_UNSPECIFIED = 0;
+    // No relationship exists between actor and target.
+    RELATION_STATUS_NONE        = 1;
+    // Actor follows target; target does not follow actor back.
+    RELATION_STATUS_FOLLOWING   = 2;
+    // Target follows actor; actor does not follow target back.
+    RELATION_STATUS_FOLLOWED_BY = 3;
+    // Both profiles follow each other (implicit friendship).
+    RELATION_STATUS_MUTUAL      = 4;
+    // Actor has blocked target. No follow is possible in either direction.
+    RELATION_STATUS_BLOCKING    = 5;
+    // Target has blocked actor. No follow is possible in either direction.
+    RELATION_STATUS_BLOCKED_BY  = 6;
+}
