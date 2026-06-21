@@ -8,7 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
-account = { workspace = true }
+account-old = { workspace = true }
 auth = { workspace = true }
 auth-test-utils = { workspace = true }
 infra-test = { workspace = true }

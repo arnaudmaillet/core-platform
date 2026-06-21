@@ -1,0 +1,38 @@
+# crates/account/Cargo.toml
+
+[package]
+name = "account-old"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+
+[features]
+test-utils = []
+
+[dependencies]
+infra-sqlx = { workspace = true }
+shared-kernel = { workspace = true }
+shared-proto = { workspace = true, features = ["account"] }
+auth = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+async-trait = { workspace = true }
+tonic = { workspace = true }
+sqlx = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+infra-test = { workspace = true }
+account-test-utils = { workspace = true }
+shared-kernel-test-utils = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }

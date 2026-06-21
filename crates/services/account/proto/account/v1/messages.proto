@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "account/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.account.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/account/v1;accountv1";
+
+// ── Read model views ──────────────────────────────────────────────────────────
+
+// Full account view returned by GetAccountById and GetAccountByIdentityId.
+message AccountView {
+    string                          id                   = 1;
+    string                          identity_id          = 2;
+    AccountStatus                   status               = 3;
+    string                          suspension_reason    = 4;
+    string                          email                = 5;
+    bool                            email_verified       = 6;
+    string                          phone                = 7;
+    bool                            phone_verified       = 8;
+    KycStatus                       kyc_status           = 9;
+    string                          country_of_residence = 10;
+    repeated string                 roles                = 11;
+    int64                           version              = 12;
+    google.protobuf.Timestamp       created_at           = 13;
+    google.protobuf.Timestamp       updated_at           = 14;
+}
+
+// GDPR compliance record — returned only to authorised compliance officers.
+message GdprRecordView {
+    string                          account_id                       = 1;
+    bool                            data_processing_consented        = 2;
+    bool                            marketing_consented              = 3;
+    google.protobuf.Timestamp       deletion_requested_at            = 4;
+    google.protobuf.Timestamp       anonymized_at                    = 5;
+    google.protobuf.Timestamp       data_export_requested_at         = 6;
+    google.protobuf.Timestamp       data_export_completed_at         = 7;
+}
+
+// Minimal status-only view used by auth and gateway services.
+message AccountStatusView {
+    string          account_id          = 1;
+    AccountStatus   status              = 2;
+    string          suspension_reason   = 3;
+}
+
+// Generic command acknowledgement.
+message CommandResponse {
+    bool    success     = 1;
+    string  account_id  = 2;
+}
+
+// ── Command request messages ──────────────────────────────────────────────────
+
+message CreateAccountRequest {
+    string  identity_id          = 1;
+    string  email                = 2;
+    string  phone                = 3;
+    // Pre-hashed credential. The service NEVER accepts plaintext passwords.
+    string  password_hash        = 4;
+    string  country_of_residence = 5;
+    // UUID of the admin account that created this account; empty for self-registration.
+    string  created_by           = 6;
+}
+
+message VerifyEmailRequest {
+    string account_id = 1;
+}
+
+message VerifyPhoneRequest {
+    string account_id = 1;
+}
+
+message ChangePasswordRequest {
+    string account_id       = 1;
+    // New Argon2id hash — plaintext must never cross the gRPC boundary.
+    string new_password_hash = 2;
+}
+
+message EnrollMfaRequest {
+    string  account_id   = 1;
+    // AES-256-GCM encrypted TOTP seed bytes.
+    bytes   totp_secret  = 2;
+}
+
+message RevokeMfaRequest {
+    string account_id = 1;
+}
+
+message UpdateKycStatusRequest {
+    string      account_id   = 1;
+    KycStatus   kyc_status   = 2;
+    // UUID of the admin account performing the review.
+    string      reviewer_id  = 3;
+}
+
+message SuspendAccountRequest {
+    string  account_id  = 1;
+    string  reason      = 2;
+}
+
+message ReactivateAccountRequest {
+    string account_id = 1;
+}
+
+message DeactivateAccountRequest {
+    string account_id = 1;
+}
+
+message RecordLoginRequest {
+    string account_id = 1;
+}
+
+message RecordFailedLoginRequest {
+    string account_id = 1;
+}
+
+message RequestGdprDeletionRequest {
+    string account_id = 1;
+}
+
+message AnonymizeAccountRequest {
+    string account_id = 1;
+}
+
+message RequestDataExportRequest {
+    string account_id = 1;
+}
+
+message AssignRoleRequest {
+    string       account_id = 1;
+    AccountRole  role       = 2;
+}
+
+message RevokeRoleRequest {
+    string       account_id = 1;
+    AccountRole  role       = 2;
+}
+
+// ── Query request messages ────────────────────────────────────────────────────
+
+message GetAccountByIdRequest {
+    string account_id = 1;
+}
+
+message GetAccountByIdentityIdRequest {
+    string identity_id = 1;
+}
+
+message GetAccountStatusRequest {
+    string account_id = 1;
+}
+
+message GetGdprRecordRequest {
+    string account_id = 1;
+}
+
+message ListAccountsByStatusRequest {
+    AccountStatus   status  = 1;
+    int32           limit   = 2;
+    int32           offset  = 3;
+}
+
+message ListAccountsByStatusResponse {
+    repeated AccountView    accounts    = 1;
+    int64                   total       = 2;
+}

@@ -1,3 +1,4 @@
+use crate::routing::ShardId;
 use error::{AppError, Severity};
 use http::StatusCode;
 use thiserror::Error;
@@ -72,6 +73,25 @@ pub enum StorageError {
     #[error("database configuration error: {message}")]
     Configuration { message: String },
 
+    /// The computed [`ShardId`] has no registered pool in the cluster registry.
+    ///
+    /// This indicates a misconfiguration at cluster construction time — a shard
+    /// that the router believes should exist has no pool backing it. This is not
+    /// a transient error and cannot be retried.  `DB-8001`
+    #[error("shard {shard_id} has no registered pool in the cluster")]
+    ShardNotFound { shard_id: ShardId },
+
+    /// [`TransactionManager::run`] was called against an `ApplicationSharded`
+    /// topology where no shard key was provided to determine routing.
+    ///
+    /// Callers must migrate to [`TransactionManager::run_on_shard`].
+    /// `DB-8002`
+    ///
+    /// [`TransactionManager::run`]: crate::transaction::manager::TransactionManager::run
+    /// [`TransactionManager::run_on_shard`]: crate::transaction::manager::TransactionManager::run_on_shard
+    #[error("shard routing failed: {reason}")]
+    ShardRoutingFailed { reason: String },
+
     /// Any database error not covered by a dedicated variant.
     /// `code` is the five-character PostgreSQL SQLSTATE code.
     #[error("database error [{code}]: {message}")]
@@ -93,6 +113,8 @@ impl AppError for StorageError {
             StorageError::Migration { .. }           => "DB-5001",
             StorageError::Connection { .. }          => "DB-6001",
             StorageError::Configuration { .. }       => "DB-7001",
+            StorageError::ShardNotFound { .. }       => "DB-8001",
+            StorageError::ShardRoutingFailed { .. }  => "DB-8002",
             StorageError::Database { .. }            => "DB-9000",
         }
     }
@@ -111,6 +133,8 @@ impl AppError for StorageError {
             StorageError::Migration { .. }           => StatusCode::INTERNAL_SERVER_ERROR,
             StorageError::Connection { .. }          => StatusCode::SERVICE_UNAVAILABLE,
             StorageError::Configuration { .. }       => StatusCode::INTERNAL_SERVER_ERROR,
+            StorageError::ShardNotFound { .. }       => StatusCode::SERVICE_UNAVAILABLE,
+            StorageError::ShardRoutingFailed { .. }  => StatusCode::INTERNAL_SERVER_ERROR,
             StorageError::Database { .. }            => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -129,6 +153,8 @@ impl AppError for StorageError {
             StorageError::Migration { .. }           => Severity::Critical,
             StorageError::Connection { .. }          => Severity::High,
             StorageError::Configuration { .. }       => Severity::Critical,
+            StorageError::ShardNotFound { .. }       => Severity::Critical,
+            StorageError::ShardRoutingFailed { .. }  => Severity::Critical,
             StorageError::Database { .. }            => Severity::Medium,
         }
     }

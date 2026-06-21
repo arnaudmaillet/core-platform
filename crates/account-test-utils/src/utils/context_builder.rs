@@ -1,7 +1,7 @@
 // crates/account-test-utils/src/test_context_builder.rs
 
 use crate::AccountTestContext;
-use account::{
+use account_old::{
     AccountServiceBuilder,
     db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry},
     fred::FredOtpRepository,

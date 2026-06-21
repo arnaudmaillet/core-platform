@@ -6,6 +6,40 @@ version = 4
 name = "account"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "auth-context",
+ "chrono",
+ "cqrs",
+ "error",
+ "futures",
+ "http",
+ "postgres",
+ "prost 0.14.4",
+ "prost-types",
+ "regex",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "telemetry",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic 0.14.6",
+ "tonic-build",
+ "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "uuid",
+ "validate-core",
+ "validation",
+]
+
+[[package]]
+name = "account-old"
+version = "0.1.0"
+dependencies = [
  "account-test-utils",
  "async-trait",
  "auth",
@@ -30,7 +64,7 @@ dependencies = [
 name = "account-test-utils"
 version = "0.1.0"
 dependencies = [
- "account",
+ "account-old",
  "async-trait",
  "auth",
  "auth-test-utils",
@@ -2968,11 +3002,13 @@ dependencies = [
  "futures",
  "http",
  "log",
+ "seahash",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -4758,6 +4794,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4878,6 +4915,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-health"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcfab99db777fba2802f0dfa861d1628d1ae916fb199d29819941f139ae85082"
+dependencies = [
+ "prost 0.14.4",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.14.6",
+ "tonic-prost",
+]
+
+[[package]]
 name = "tonic-prost"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4902,6 +4952,20 @@ dependencies = [
  "syn",
  "tempfile",
  "tonic-build",
+]
+
+[[package]]
+name = "tonic-reflection"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acccd136a4bf19810a1fde9c74edc6129b42a66b44d0c1c8aaa67aeb49a146a7"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.14.6",
+ "tonic-prost",
 ]
 
 [[package]]

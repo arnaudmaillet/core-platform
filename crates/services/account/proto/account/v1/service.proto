@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "account/v1/enums.proto";
+import "account/v1/messages.proto";
+
+option java_package = "com.coreplatform.account.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/account/v1;accountv1";
+
+// AccountService manages the full private lifecycle of a physical person:
+// registration, credential management, KYC, GDPR compliance, and role-based
+// access control. Financial state is owned by the dedicated ledger microservice.
+//
+// All mutating RPCs (commands) return CommandResponse.
+// All read RPCs (queries) return the typed view message.
+//
+// Callers must supply a valid JWT bearer token; the service validates the
+// token and populates the request principal from the auth-context crate.
+service AccountService {
+
+    // ── Registration & identity ───────────────────────────────────────────────
+
+    // Register a new account. Idempotent on (identity_id, email) uniqueness.
+    rpc CreateAccount(CreateAccountRequest) returns (CommandResponse);
+
+    // Mark the account's email address as verified.
+    rpc VerifyEmail(VerifyEmailRequest) returns (CommandResponse);
+
+    // Mark the account's phone number as verified.
+    rpc VerifyPhone(VerifyPhoneRequest) returns (CommandResponse);
+
+    // ── Credentials ───────────────────────────────────────────────────────────
+
+    // Replace the stored Argon2id password hash.
+    rpc ChangePassword(ChangePasswordRequest) returns (CommandResponse);
+
+    // ── MFA ───────────────────────────────────────────────────────────────────
+
+    // Store an encrypted TOTP seed and activate MFA for the account.
+    rpc EnrollMfa(EnrollMfaRequest) returns (CommandResponse);
+
+    // Remove all MFA credentials and deactivate MFA enforcement.
+    rpc RevokeMfa(RevokeMfaRequest) returns (CommandResponse);
+
+    // ── KYC ───────────────────────────────────────────────────────────────────
+
+    // Update the KYC verification outcome (admin / compliance officer only).
+    rpc UpdateKycStatus(UpdateKycStatusRequest) returns (CommandResponse);
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    // Suspend an account (admin action). Reversible via ReactivateAccount.
+    rpc SuspendAccount(SuspendAccountRequest) returns (CommandResponse);
+
+    // Lift a suspension and return the account to Active status.
+    rpc ReactivateAccount(ReactivateAccountRequest) returns (CommandResponse);
+
+    // User-initiated self-deactivation. Data is retained per retention policy.
+    rpc DeactivateAccount(DeactivateAccountRequest) returns (CommandResponse);
+
+    // ── Session tracking ──────────────────────────────────────────────────────
+
+    // Record a successful login; resets failed_login_attempts and updates last_login_at.
+    rpc RecordLogin(RecordLoginRequest) returns (CommandResponse);
+
+    // Increment failed_login_attempts; may set locked_until if threshold reached.
+    rpc RecordFailedLogin(RecordFailedLoginRequest) returns (CommandResponse);
+
+    // ── GDPR / compliance ─────────────────────────────────────────────────────
+
+    // Initiate an Art. 17 GDPR right-to-erasure request.
+    rpc RequestGdprDeletion(RequestGdprDeletionRequest) returns (CommandResponse);
+
+    // Anonymise all PII fields after the retention period has elapsed.
+    rpc AnonymizeAccount(AnonymizeAccountRequest) returns (CommandResponse);
+
+    // Initiate an Art. 20 GDPR data portability export.
+    rpc RequestDataExport(RequestDataExportRequest) returns (CommandResponse);
+
+    // ── Roles & permissions ───────────────────────────────────────────────────
+
+    // Grant an internal platform role to the account (admin only).
+    rpc AssignRole(AssignRoleRequest) returns (CommandResponse);
+
+    // Remove an internal platform role from the account (admin only).
+    rpc RevokeRole(RevokeRoleRequest) returns (CommandResponse);
+
+    // ── Queries ───────────────────────────────────────────────────────────────
+
+    // Fetch the full account aggregate view by primary key.
+    rpc GetAccountById(GetAccountByIdRequest) returns (AccountView);
+
+    // Fetch the full account aggregate view by IdP subject claim.
+    rpc GetAccountByIdentityId(GetAccountByIdentityIdRequest) returns (AccountView);
+
+    // Lightweight status check used by auth middleware and gateway.
+    rpc GetAccountStatus(GetAccountStatusRequest) returns (AccountStatusView);
+
+    // Full GDPR compliance record (restricted endpoint).
+    rpc GetGdprRecord(GetGdprRecordRequest) returns (GdprRecordView);
+
+    // Paginated list of accounts filtered by lifecycle status (admin / ops).
+    rpc ListAccountsByStatus(ListAccountsByStatusRequest) returns (ListAccountsByStatusResponse);
+}

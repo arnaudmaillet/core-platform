@@ -1,7 +1,7 @@
 // backend/services/account/workers/janitor/main.rs
 
-use account::db::PostgresGlobalIdentityRegistry;
-use account::workers::GlobalRegistryJanitor;
+use account_old::db::PostgresGlobalIdentityRegistry;
+use account_old::workers::GlobalRegistryJanitor;
 use infra_sqlx::sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use std::time::Duration;

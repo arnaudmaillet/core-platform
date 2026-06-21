@@ -1,7 +1,7 @@
 // crates/account/src/infrastructure/postgres/repositories/mock_global_registry.rs
 
-use account::repositories::{GlobalIdentityRegistration, GlobalIdentityRegistry};
-use account::types::{AccountState, RegistrationIdentifier};
+use account_old::repositories::{GlobalIdentityRegistration, GlobalIdentityRegistry};
+use account_old::types::{AccountState, RegistrationIdentifier};
 use async_trait::async_trait;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::AccountId;
@@ -152,7 +152,6 @@ impl GlobalIdentityRegistry for GlobalIdentityRegistryStub {
                     ));
                 }
             }
-
 
             if let (Some(new_phone), Some(exist_phone)) = (
                 new_identifiers.phone_hash(),

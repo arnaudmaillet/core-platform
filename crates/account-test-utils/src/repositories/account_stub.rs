@@ -7,8 +7,8 @@ use shared_kernel::{
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use account::entities::Account;
-use account::repositories::AccountRepository;
+use account_old::entities::Account;
+use account_old::repositories::AccountRepository;
 
 #[derive(Default)]
 pub struct AccountRepositoryStub {

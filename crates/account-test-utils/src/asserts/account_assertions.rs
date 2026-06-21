@@ -1,7 +1,7 @@
 // crates/account/src/application/assertions.rs
 
 use crate::repositories::AccountRepositoryStub;
-use account::entities::Account;
+use account_old::entities::Account;
 use async_trait::async_trait;
 use shared_kernel::messaging::Event;
 use shared_kernel::types::AccountId;
