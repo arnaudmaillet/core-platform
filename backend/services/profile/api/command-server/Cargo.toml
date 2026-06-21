@@ -12,7 +12,7 @@ description.workspace = true
 [dependencies]
 shared-kernel = { workspace = true }
 shared-proto = { workspace = true, features = ["profile"] }
-profile = { workspace = true }
+profile-old = { workspace = true }
 auth = { workspace = true }
 infra-scylla = { workspace = true }
 infra-fred = { workspace = true }

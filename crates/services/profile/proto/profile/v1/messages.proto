@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package profile.v1;
+
+import "profile/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.profile.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/profile/v1;profilev1";
+
+// ── Read models ───────────────────────────────────────────────────────────────
+
+message ProfileLinkProto {
+    string label = 1;
+    string url   = 2;
+}
+
+message ProfileView {
+    string                          profile_id        = 1;
+    string                          account_id        = 2;
+    string                          handle            = 3;
+    string                          display_name      = 4;
+    string                          bio               = 5;
+    string                          avatar_url        = 6;
+    string                          banner_url        = 7;
+    string                          website_url       = 8;
+    repeated ProfileLinkProto       custom_links      = 9;
+    ProfileKind                     profile_kind      = 10;
+    ProfileVisibility               visibility        = 11;
+    bool                            verified          = 12;
+    VerificationKind                verification_kind = 13;
+    string                          locale            = 14;
+    string                          timezone          = 15;
+    ProfileStatus                   status            = 16;
+    string                          masking_reason    = 17;
+    google.protobuf.Timestamp       masked_at         = 18;
+    google.protobuf.Timestamp       created_at        = 19;
+    google.protobuf.Timestamp       updated_at        = 20;
+    int64                           version           = 21;
+}
+
+message ProfileSummaryView {
+    string            profile_id   = 1;
+    string            handle       = 2;
+    string            display_name = 3;
+    string            avatar_url   = 4;
+    ProfileKind       profile_kind = 5;
+    ProfileVisibility visibility   = 6;
+    ProfileStatus     status       = 7;
+}
+
+message CommandResponse {
+    bool   success    = 1;
+    string profile_id = 2;
+}
+
+// ── Command request messages ──────────────────────────────────────────────────
+
+message CreateProfileRequest {
+    string      account_id   = 1;
+    string      handle       = 2;
+    string      display_name = 3;
+    string      bio          = 4;
+    string      avatar_url   = 5;
+    string      banner_url   = 6;
+    ProfileKind profile_kind = 7;
+    string      locale       = 8;
+}
+
+message UpdateProfileRequest {
+    string                    profile_id   = 1;
+    string                    display_name = 2;
+    string                    bio          = 3;
+    string                    website_url  = 4;
+    string                    locale       = 5;
+    repeated ProfileLinkProto custom_links = 6;
+}
+
+message ChangeHandleRequest {
+    string profile_id  = 1;
+    string new_handle  = 2;
+}
+
+message UpdateAvatarRequest {
+    string profile_id = 1;
+    string avatar_url = 2;
+}
+
+message UpdateBannerRequest {
+    string profile_id = 1;
+    string banner_url = 2;
+}
+
+message SetVisibilityRequest {
+    string            profile_id = 1;
+    ProfileVisibility visibility = 2;
+}
+
+message VerifyProfileRequest {
+    string           profile_id        = 1;
+    VerificationKind verification_kind = 2;
+}
+
+message HideProfileRequest {
+    string profile_id        = 1;
+    MaskingReason masking_reason = 2;
+    string suspension_reason = 3;
+}
+
+message RestoreProfileRequest {
+    string profile_id = 1;
+}
+
+message DeleteProfileRequest {
+    string profile_id = 1;
+}
+
+// ── Query request/response messages ──────────────────────────────────────────
+
+message GetProfileByIdRequest {
+    string profile_id = 1;
+}
+
+message GetProfileByHandleRequest {
+    string handle = 1;
+}
+
+message ListProfilesByAccountRequest {
+    string account_id  = 1;
+    int32  limit       = 2;
+    string page_token  = 3;
+}
+
+message ListProfilesByAccountResponse {
+    repeated ProfileSummaryView profiles        = 1;
+    string                      next_page_token = 2;
+}

@@ -65,3 +65,89 @@ impl TraceConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn otlp_protocol_default_is_grpc() {
+        assert!(matches!(OtlpProtocol::default(), OtlpProtocol::Grpc));
+    }
+
+    #[test]
+    fn sampling_default_is_trace_id_ratio_0_1() {
+        match SamplingStrategy::default() {
+            SamplingStrategy::TraceIdRatio(r) => assert!((r - 0.1).abs() < f64::EPSILON),
+            other => panic!("expected TraceIdRatio, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn defaults_when_no_env_vars() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe {
+            std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT");
+            std::env::remove_var("OTEL_EXPORTER_OTLP_HEADERS");
+            std::env::remove_var("OTEL_TRACES_SAMPLER_ARG");
+        }
+        let cfg = TraceConfig::from_env();
+        assert_eq!(cfg.otlp_endpoint, "http://localhost:4317");
+        assert!(cfg.auth_header.is_none());
+        assert!(matches!(cfg.protocol, OtlpProtocol::Grpc));
+    }
+
+    #[test]
+    fn custom_endpoint_from_env() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4317") };
+        let cfg = TraceConfig::from_env();
+        assert_eq!(cfg.otlp_endpoint, "http://collector:4317");
+        // SAFETY: cleanup.
+        unsafe { std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT") };
+    }
+
+    #[test]
+    fn sampler_arg_from_env() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe { std::env::set_var("OTEL_TRACES_SAMPLER_ARG", "0.25") };
+        let cfg = TraceConfig::from_env();
+        match cfg.sampling {
+            SamplingStrategy::TraceIdRatio(r) => assert!((r - 0.25).abs() < f64::EPSILON),
+            other => panic!("expected TraceIdRatio, got {other:?}"),
+        }
+        // SAFETY: cleanup.
+        unsafe { std::env::remove_var("OTEL_TRACES_SAMPLER_ARG") };
+    }
+
+    #[test]
+    fn invalid_sampler_arg_falls_back_to_default() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe { std::env::set_var("OTEL_TRACES_SAMPLER_ARG", "not-a-number") };
+        let cfg = TraceConfig::from_env();
+        match cfg.sampling {
+            SamplingStrategy::TraceIdRatio(r) => assert!((r - 0.1).abs() < f64::EPSILON),
+            other => panic!("expected default TraceIdRatio(0.1), got {other:?}"),
+        }
+        // SAFETY: cleanup.
+        unsafe { std::env::remove_var("OTEL_TRACES_SAMPLER_ARG") };
+    }
+
+    #[test]
+    fn auth_header_from_env() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_HEADERS", "x-honeycomb-team=abc123") };
+        let cfg = TraceConfig::from_env();
+        assert_eq!(cfg.auth_header.as_deref(), Some("x-honeycomb-team=abc123"));
+        // SAFETY: cleanup.
+        unsafe { std::env::remove_var("OTEL_EXPORTER_OTLP_HEADERS") };
+    }
+}

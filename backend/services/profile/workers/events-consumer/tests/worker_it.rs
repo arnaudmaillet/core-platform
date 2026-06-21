@@ -2,8 +2,8 @@
 
 use chrono::Utc;
 use infra_kafka::KafkaEventProducer;
-use profile::repositories::ProfileRepository;
-use profile::stores::ScyllaProfileStore;
+use profile_old::repositories::ProfileRepository;
+use profile_old::stores::ScyllaProfileStore;
 use profile_test_utils::ProfileTestContext;
 use serde_json::json;
 use shared_kernel::core::Result;

@@ -36,3 +36,29 @@ where
 
     Ok((layer, guard))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tracing_subscriber::Registry;
+
+    #[test]
+    fn json_layer_builds_without_error() {
+        let cfg = LogConfig {
+            default_filter: "info".into(),
+            format: LogFormat::Json,
+            ansi: false,
+        };
+        let (_layer, _guard) = build_log_layer::<Registry>(&cfg).unwrap();
+    }
+
+    #[test]
+    fn pretty_layer_builds_without_error() {
+        let cfg = LogConfig {
+            default_filter: "info".into(),
+            format: LogFormat::Pretty,
+            ansi: true,
+        };
+        let (_layer, _guard) = build_log_layer::<Registry>(&cfg).unwrap();
+    }
+}

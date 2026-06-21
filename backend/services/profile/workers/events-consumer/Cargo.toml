@@ -11,7 +11,7 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true }
-profile = { workspace = true }
+profile-old = { workspace = true }
 infra-fred = { workspace = true }
 infra-kafka = { workspace = true }
 infra-scylla = { workspace = true }

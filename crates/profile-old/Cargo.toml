@@ -1,0 +1,44 @@
+# crates/profile/Cargo.toml
+
+[package]
+name = "profile-old"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+
+[features]
+test-utils = []
+
+[dependencies]
+shared-kernel = { workspace = true, features = ["concurrency"] }
+infra-sqlx = { workspace = true }
+infra-scylla = { workspace = true, features = ["macros"] }
+infra-test = { workspace = true }
+
+shared-proto = { workspace = true, features = ["profile"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+elasticsearch = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+sha2 = { workspace = true }
+
+tonic = { workspace = true }
+sqlx = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+futures = { workspace = true }
+profile-test-utils = { workspace = true }
+shared-kernel-test-utils = { workspace = true }

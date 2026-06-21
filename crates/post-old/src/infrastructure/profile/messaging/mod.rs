@@ -1,3 +1,3 @@
 mod profile;
 
-pub use profile::ProfileEventHandler;
+pub use profile_old::ProfileEventHandler;

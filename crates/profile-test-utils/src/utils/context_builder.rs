@@ -7,10 +7,10 @@ use infra_kafka::KafkaEventConsumer;
 use infra_test::{
     InfrastructureOrchestrator, ScyllaOrchestrator, ScyllaTableTarget, TestContextBuilder,
 };
-use profile::ProfileServiceBuilder;
-use profile::kafka::AccountConsumer;
-use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
-use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use profile_old::ProfileServiceBuilder;
+use profile_old::kafka::AccountConsumer;
+use profile_old::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use profile_old::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
 use shared_kernel::command::CommandBus;
 use shared_kernel::environment::ClusterContext;
 use shared_kernel::messaging::{EventConsumer, EventEnvelope};

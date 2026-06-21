@@ -1,7 +1,7 @@
 // crates/profile/src/infrastructure/scylla/stores/routing_store_stub.rs (ou dans test_utils.rs)
 
 use async_trait::async_trait;
-use profile::repositories::ProfileRoutingRepository;
+use profile_old::repositories::ProfileRoutingRepository;
 use shared_kernel::core::{Error, Result};
 use shared_kernel::types::{ProfileId, Region};
 use std::collections::HashMap;

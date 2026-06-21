@@ -1,5 +1,5 @@
-use profile::ProfileServiceBuilder;
-use profile::repositories::ProfileRoutingRepository;
+use profile_old::ProfileServiceBuilder;
+use profile_old::repositories::ProfileRoutingRepository;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
 use shared_kernel::environment::ClusterContext;
@@ -8,9 +8,9 @@ use shared_kernel_test_utils::repositories::{CacheRepositoryStub, IdempotencyRep
 use std::sync::Arc;
 
 use crate::repositories::{ProfileRepositoryStub, ProfileRoutingRepositoryStub};
-use profile::context::{ProfileCommandCtx, ProfileKernelCtx, ProfileQueryCtx};
-use profile::entities::{Profile, ProfileBuilder};
-use profile::types::Handle;
+use profile_old::context::{ProfileCommandCtx, ProfileKernelCtx, ProfileQueryCtx};
+use profile_old::entities::{Profile, ProfileBuilder};
+use profile_old::types::Handle;
 
 pub struct ProfileTestFixture {
     bus: CommandBus,

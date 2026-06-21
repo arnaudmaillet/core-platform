@@ -1,3 +1,3 @@
 mod profile;
 
-pub use profile::ProfileCacheRepository;
+pub use profile_old::ProfileCacheRepository;

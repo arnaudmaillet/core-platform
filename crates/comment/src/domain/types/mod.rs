@@ -6,4 +6,4 @@ mod profile;
 pub use comment_id::CommentId;
 pub use content::CommentContent;
 pub use cursor::CommentCursor;
-pub use profile::CommentUserProfile;
+pub use profile_old::CommentUserProfile;
