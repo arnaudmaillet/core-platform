@@ -1,8 +1,9 @@
 # `account` — Core Account Microservice
 
 Manages the complete private lifecycle of a physical person on the platform:
-identity verification, credentials, KYC compliance, GDPR rights, financial
-credit ledger, and role-based access control.
+identity verification, credentials, KYC compliance, GDPR rights, and
+role-based access control. Financial state is owned by the dedicated
+`services/ledger` microservice (Single Responsibility at hyperscale).
 
 ---
 
@@ -18,13 +19,13 @@ crates/services/account/
 ├── src/
 │   ├── domain/
 │   │   ├── aggregate/         # Account — DDD aggregate root
-│   │   ├── entity/            # CreditLedger, MfaState, GdprRecord
+│   │   ├── entity/            # MfaState, GdprRecord
 │   │   ├── event/             # Domain events (AccountCreated, …)
 │   │   └── value_object/      # AccountId, EmailAddress, PasswordHash, …
 │   ├── application/
 │   │   ├── port/              # AccountRepository trait (hex port)
-│   │   ├── command/           # 18 command handlers (CQRS)
-│   │   └── query/             # 6 query handlers (CQRS)
+│   │   ├── command/           # 17 command handlers (CQRS)
+│   │   └── query/             # 5 query handlers (CQRS)
 │   ├── infrastructure/
 │   │   ├── persistence/       # Postgres adapter (CockroachDB-compatible SQL)
 │   │   └── grpc/              # Tonic gRPC server + handler
@@ -65,7 +66,6 @@ All commands return `CommandResponse { success: bool, account_id: string }`.
 | `RequestGdprDeletion` | `RequestGdprDeletionRequest` | Initiate Art. 17 right-to-erasure request. |
 | `AnonymizeAccount` | `AnonymizeAccountRequest` | Anonymise all PII after retention period has elapsed. |
 | `RequestDataExport` | `RequestDataExportRequest` | Initiate Art. 20 data portability export. |
-| `AdjustCreditBalance` | `AdjustCreditBalanceRequest` | Apply a signed credit delta (positive = top-up, negative = debit). |
 | `AssignRole` | `AssignRoleRequest` | Grant an internal platform role (admin only). |
 | `RevokeRole` | `RevokeRoleRequest` | Remove an internal platform role (admin only). |
 
@@ -76,7 +76,6 @@ All commands return `CommandResponse { success: bool, account_id: string }`.
 | `GetAccountById` | `GetAccountByIdRequest` | `AccountView` | Full aggregate view by primary key (UUIDv7). |
 | `GetAccountByIdentityId` | `GetAccountByIdentityIdRequest` | `AccountView` | Full aggregate view by IdP subject claim. |
 | `GetAccountStatus` | `GetAccountStatusRequest` | `AccountStatusView` | Lightweight status used by auth middleware and gateway. |
-| `GetCreditBalance` | `GetCreditBalanceRequest` | `CreditBalanceView` | Current credit balance and reserved amount. |
 | `GetGdprRecord` | `GetGdprRecordRequest` | `GdprRecordView` | Full GDPR compliance record (restricted endpoint). |
 | `ListAccountsByStatus` | `ListAccountsByStatusRequest` | `ListAccountsByStatusResponse` | Paginated account list filtered by lifecycle status. |
 
@@ -89,7 +88,7 @@ All commands return `CommandResponse { success: bool, account_id: string }`.
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | `AccountId` (UUIDv7) | Shard key for distributed routing |
-| `identity_id` | `IdentityId` (UUID) | External IdP subject claim |
+| `identity_id` | `IdentityId` | External IdP subject claim |
 | `email` | `EmailAddress` | Unique; RFC 5321-normalised |
 | `email_verified` | `bool` | Set via `VerifyEmail` |
 | `phone` | `Option<PhoneNumber>` | E.164 format |
@@ -98,7 +97,6 @@ All commands return `CommandResponse { success: bool, account_id: string }`.
 | `roles` | `Vec<AccountRole>` | Platform roles (additive) |
 | `status` | `AccountStatus` | Lifecycle state machine |
 | `kyc_status` | `KycStatus` | Verification state machine |
-| `credit` | `CreditLedger` | Embedded financial ledger |
 | `mfa` | `MfaState` | Embedded MFA state |
 | `gdpr` | `GdprRecord` | Embedded GDPR compliance record |
 | `version` | `i64` | Optimistic-lock version counter |
@@ -160,25 +158,6 @@ NotStarted ──▶ Submitted ──▶ InReview ──▶ Approved
 
 ---
 
-## Credit Ledger
-
-Credit amounts are stored as **i64 micro-units** (6 implied decimal places).  
-1 currency unit = 1 000 000 micro-units. No floating-point arithmetic is used.
-
-| Field | Description |
-|-------|-------------|
-| `balance_micros` | Total deposited funds |
-| `reserved_micros` | Funds locked for pending transactions |
-| `available_micros` | `balance - reserved` (always ≥ 0) |
-| `currency` | ISO 4217 code (e.g. `"USD"`) |
-| `ledger_version` | Independent optimistic-lock counter for financial operations |
-
-`AdjustCreditBalance`: positive `delta` = top-up; negative = debit. The
-currency must match the account's registered currency. Insufficient balance
-returns `FAILED_PRECONDITION`.
-
----
-
 ## Persistence
 
 ### Database
@@ -193,14 +172,11 @@ partitioning.
 All writes use a compare-and-swap pattern:
 
 ```sql
-UPDATE accounts SET ..., version = $N + 1
-WHERE id = $1 AND version = $N
+UPDATE accounts SET ..., version = version + 1
+WHERE id = $1 AND version = $37
 ```
 
 Zero rows affected → `AccountError::ConcurrentModification` (retryable).
-
-The `credit_ledger_version` column is an independent lock for financial
-operations, preventing cross-concern lock contention.
 
 ### Sharding
 
@@ -243,8 +219,6 @@ topology-agnostic transaction routing.
 | `AccountNotActive` | `FAILED_PRECONDITION` |
 | `InvalidStatusTransition` | `FAILED_PRECONDITION` |
 | `InvalidKycTransition` | `FAILED_PRECONDITION` |
-| `InsufficientBalance` | `FAILED_PRECONDITION` |
-| `CurrencyMismatch` | `FAILED_PRECONDITION` |
 | `MfaAlreadyEnrolled` | `ALREADY_EXISTS` |
 | `MfaNotEnrolled` | `FAILED_PRECONDITION` |
 | `GdprDeletionAlreadyRequested` | `ALREADY_EXISTS` |
@@ -283,7 +257,5 @@ command — the gRPC handler applies these hard-coded defaults:
 | `telemetry` | OpenTelemetry tracing integration |
 | `transport` | gRPC channel configuration |
 | `tonic` / `prost` | gRPC server and protobuf codegen |
-| `argon2` | Password hashing |
-| `aes-gcm` | TOTP seed encryption |
 | `uuid` (v7) | Time-sortable primary keys |
 | `chrono` | UTC timestamps |
