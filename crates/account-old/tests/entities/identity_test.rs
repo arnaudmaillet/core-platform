@@ -3,7 +3,7 @@ use shared_kernel::{
     types::{AccountId, AuditReason, Email},
 };
 
-use account::{
+use account_old::{
     entities::Account,
     types::{AccountState, RegistrationIdentifier, TrustAmount, TrustScore},
 };

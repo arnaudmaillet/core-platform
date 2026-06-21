@@ -1,9 +1,9 @@
 // crates/account/src/application/use_cases/moderation/ban/ban_use_case_test.rs
 
-use account::commands::moderation::BanCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::types::AccountState;
+use account_old::commands::moderation::BanCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::types::AccountState;
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

@@ -1,4 +1,4 @@
-use account::{
+use account_old::{
     entities::{AccountPreferences, AccountSettings},
     types::{AppearancePreferences, NotificationPreferences, PrivacyPreferences},
 };

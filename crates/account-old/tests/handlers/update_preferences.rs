@@ -1,10 +1,10 @@
 // crates/account/src/application/use_cases/settings/update_preferences/update_preferences_use_case_test.rs
 
-use account::commands::settings::UpdatePreferencesCommand;
-use account::context::AccountCommandCtx;
-use account::entities::AccountSettingsBuilder;
-use account::events::AccountEvent;
-use account::types::{AccountState, AppearancePreferences, ThemeMode};
+use account_old::commands::settings::UpdatePreferencesCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::entities::AccountSettingsBuilder;
+use account_old::events::AccountEvent;
+use account_old::types::{AccountState, AppearancePreferences, ThemeMode};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

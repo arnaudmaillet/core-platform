@@ -6,7 +6,7 @@ use shared_kernel::{
     types::{AccountId, AuditReason},
 };
 
-use account::{
+use account_old::{
     entities::AccountGovernance,
     types::{AccountRole, BetaTier, IpAddr, TrustAmount, TrustScore},
 };

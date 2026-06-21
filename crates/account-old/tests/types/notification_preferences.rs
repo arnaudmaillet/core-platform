@@ -1,5 +1,5 @@
 
-use account::types::NotificationPreferences;
+use account_old::types::NotificationPreferences;
 
 #[test]
 fn test_notifications_default_state() {

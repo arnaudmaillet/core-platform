@@ -1,5 +1,5 @@
 
-use account::types::PrivacyPreferences;
+use account_old::types::PrivacyPreferences;
 
 #[test]
 fn test_privacy_default_values() {

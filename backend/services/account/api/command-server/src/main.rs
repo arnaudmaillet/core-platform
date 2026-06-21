@@ -1,8 +1,8 @@
 // backend/services/account/api/command-server/src/main.rs
 
-use account::db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry};
-use account::fred::FredOtpRepository;
-use account::{
+use account_old::db::{PostgresAccountRepository, PostgresGlobalIdentityRegistry};
+use account_old::fred::FredOtpRepository;
+use account_old::{
     AccountServiceBuilder,
     services::{
         AccountAccessService, AccountModerationService, AccountPersonalService,

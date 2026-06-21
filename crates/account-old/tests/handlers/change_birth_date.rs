@@ -1,9 +1,9 @@
 // crates/account/src/application/use_cases/settings/change_birth_date/change_birth_date_use_case_test.rs
 
-use account::commands::settings::ChangeBirthDateCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::types::{AccountState, BirthDate};
+use account_old::commands::settings::ChangeBirthDateCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::types::{AccountState, BirthDate};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

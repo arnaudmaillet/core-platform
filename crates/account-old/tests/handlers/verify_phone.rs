@@ -1,10 +1,10 @@
 // crates/account/src/application/use_cases/access_management/verify_phone/verify_phone_test.rs
 
-use account::commands::access_management::VerifyPhoneCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::repositories::{GlobalIdentityRegistration, OtpRepository};
-use account::types::{AccountState, RegistrationIdentifier};
+use account_old::commands::access_management::VerifyPhoneCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::repositories::{GlobalIdentityRegistration, OtpRepository};
+use account_old::types::{AccountState, RegistrationIdentifier};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

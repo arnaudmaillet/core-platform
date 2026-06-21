@@ -1,9 +1,9 @@
 // crates/account/src/application/use_cases/lifecycle/change_beta_tier/change_beta_tier_use_case_test.rs
 
-use account::commands::lifecycle::ChangeBetaTierCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::types::BetaTier;
+use account_old::commands::lifecycle::ChangeBetaTierCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::types::BetaTier;
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

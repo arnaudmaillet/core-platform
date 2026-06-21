@@ -1,6 +1,6 @@
 
-use account::entities::Account;
-use account::types::{RegistrationIdentifier, TrustAmount, TrustScore};
+use account_old::entities::Account;
+use account_old::types::{RegistrationIdentifier, TrustAmount, TrustScore};
 use shared_kernel::core::{ManagedEntity, ErrorCode, Result, Versioned};
 use shared_kernel::geo::Timezone;
 use shared_kernel::messaging::EventEmitter;

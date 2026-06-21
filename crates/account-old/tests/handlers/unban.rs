@@ -1,8 +1,8 @@
 // crates/account/src/application/use_cases/moderation/unban/unban_use_case_test.rs
 
-use account::events::AccountEvent;
-use account::types::AccountState;
-use account::{commands::moderation::UnbanCommand, context::AccountCommandCtx};
+use account_old::events::AccountEvent;
+use account_old::types::AccountState;
+use account_old::{commands::moderation::UnbanCommand, context::AccountCommandCtx};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

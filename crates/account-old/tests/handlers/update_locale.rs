@@ -1,9 +1,9 @@
 // crates/account/src/application/use_cases/settings/update_locale/update_locale_use_case_test.rs
 
-use account::commands::settings::UpdateLocaleCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::types::{AccountState, Locale};
+use account_old::commands::settings::UpdateLocaleCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::types::{AccountState, Locale};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

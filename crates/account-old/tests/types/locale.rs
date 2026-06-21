@@ -1,5 +1,5 @@
 
-use account::types::Locale;
+use account_old::types::Locale;
 use shared_kernel::core::ValueObject;
 use std::str::FromStr;
 

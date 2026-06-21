@@ -1,7 +1,7 @@
 // crates/account/src/application/use_cases/access_management/test_utils/otp_repository_stub.rs
 // (ou dans ton crate partagé 'account_test_utils')
 
-use account::repositories::OtpRepository;
+use account_old::repositories::OtpRepository;
 use async_trait::async_trait;
 use shared_kernel::core::Result;
 use shared_kernel::types::AccountId;

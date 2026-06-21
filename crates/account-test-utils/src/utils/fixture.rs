@@ -1,11 +1,11 @@
 // crates/account/src/application/fixture.rs
 
 use crate::repositories::{AccountRepositoryStub, GlobalIdentityRegistryStub, OtpRepositoryStub};
-use account::AccountServiceBuilder;
-use account::context::{AccountCommandCtx, AccountKernelCtx, AccountQueryCtx};
-use account::entities::{Account, AccountBuilder};
-use account::repositories::{AccountRepository, GlobalIdentityRegistry, OtpRepository};
-use account::types::RegistrationIdentifier;
+use account_old::AccountServiceBuilder;
+use account_old::context::{AccountCommandCtx, AccountKernelCtx, AccountQueryCtx};
+use account_old::entities::{Account, AccountBuilder};
+use account_old::repositories::{AccountRepository, GlobalIdentityRegistry, OtpRepository};
+use account_old::types::RegistrationIdentifier;
 use shared_kernel::command::CommandBus;
 use shared_kernel::core::Result;
 use shared_kernel::environment::ClusterContext;

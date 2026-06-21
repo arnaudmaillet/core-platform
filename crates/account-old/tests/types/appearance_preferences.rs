@@ -1,5 +1,5 @@
 
-use account::types::{AppearancePreferences, ThemeMode};
+use account_old::types::{AppearancePreferences, ThemeMode};
 
 #[test]
 fn test_appearance_default_is_system() {

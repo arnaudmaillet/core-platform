@@ -1,9 +1,9 @@
 // crates/account/tests/handlers/change_email.rs
 
-use account::commands::settings::ChangeEmailCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::types::{AccountState, RegistrationIdentifier};
+use account_old::commands::settings::ChangeEmailCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::types::{AccountState, RegistrationIdentifier};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;
@@ -30,7 +30,7 @@ async fn test_change_email_success() -> Result<()> {
     f.account_repo().insert(account);
 
     f.global_registry()
-        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+        .insert_fixture(account_old::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
             region: f.server_region(),
             sub_id: None,
@@ -132,7 +132,7 @@ async fn test_change_email_business_idempotency() -> Result<()> {
     f.account_repo().insert(account);
 
     f.global_registry()
-        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+        .insert_fixture(account_old::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
             region: f.server_region(),
             sub_id: None,
@@ -189,7 +189,7 @@ async fn test_change_email_forbidden_when_restricted() -> Result<()> {
     f.account_repo().insert(account);
 
     f.global_registry()
-        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+        .insert_fixture(account_old::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
             region: f.server_region(),
             sub_id: None,
@@ -255,7 +255,7 @@ async fn test_change_email_succeeds_after_retry() -> Result<()> {
     f.account_repo().insert(account);
 
     f.global_registry()
-        .insert_fixture(account::repositories::GlobalIdentityRegistration {
+        .insert_fixture(account_old::repositories::GlobalIdentityRegistration {
             account_id: f.account_id(),
             region: f.server_region(),
             sub_id: None,

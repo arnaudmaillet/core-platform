@@ -1,10 +1,10 @@
 // crates/account/src/application/access_management/register/register_use_case_test.rs
 
-use account::commands::access_management::RegisterCommand;
-use account::context::AccountCommandCtx;
-use account::events::AccountEvent;
-use account::repositories::GlobalIdentityRegistration;
-use account::types::{AccountState, IpAddr, Locale, RegistrationIdentifier};
+use account_old::commands::access_management::RegisterCommand;
+use account_old::context::AccountCommandCtx;
+use account_old::events::AccountEvent;
+use account_old::repositories::GlobalIdentityRegistration;
+use account_old::types::{AccountState, IpAddr, Locale, RegistrationIdentifier};
 use account_test_utils::asserts::AccountRepositoryAsserts;
 
 use account_test_utils::AccountTestFixture;

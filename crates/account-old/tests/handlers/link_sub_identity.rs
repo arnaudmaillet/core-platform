@@ -1,6 +1,6 @@
-use account::commands::access_management::LinkSubIdentityCommand;
-use account::context::AccountCommandContext;
-use account::events::AccountEvent;
+use account_old::commands::access_management::LinkSubIdentityCommand;
+use account_old::context::AccountCommandContext;
+use account_old::events::AccountEvent;
 use account_test_utils::TestFixture;
 use shared_kernel::core::{Error, ErrorCode, Result};
 use shared_kernel::types::SubId;

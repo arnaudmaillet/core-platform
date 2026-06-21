@@ -1,7 +1,7 @@
-use account::db::PostgresAccountRepository;
-use account::entities::Account;
-use account::repositories::AccountRepository;
-use account::types::{AccountRole, AccountState, RegistrationIdentifier};
+use account_old::db::PostgresAccountRepository;
+use account_old::entities::Account;
+use account_old::repositories::AccountRepository;
+use account_old::types::{AccountRole, AccountState, RegistrationIdentifier};
 use infra_sqlx::PostgresTransaction;
 use infra_test::PostgresTestContext;
 use tokio;
