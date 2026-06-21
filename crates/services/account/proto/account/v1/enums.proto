@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package account.v1;
+
+option java_package = "com.coreplatform.account.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/account/v1;accountv1";
+
+// Lifecycle status of an account aggregate.
+enum AccountStatus {
+    ACCOUNT_STATUS_UNSPECIFIED = 0;
+    // Registered but email not yet confirmed.
+    PENDING_VERIFICATION       = 1;
+    // Fully active; can use all platform features.
+    ACTIVE                     = 2;
+    // Temporarily disabled by an admin (reason stored separately).
+    SUSPENDED                  = 3;
+    // Self-initiated deactivation; data retained per retention policy.
+    DEACTIVATED                = 4;
+    // Soft-deleted; PII may be anonymised. Terminal state.
+    DELETED                    = 5;
+}
+
+// Know-Your-Customer verification state.
+enum KycStatus {
+    KYC_STATUS_UNSPECIFIED = 0;
+    // No KYC process started.
+    NOT_STARTED            = 1;
+    // Documents submitted; awaiting review.
+    SUBMITTED              = 2;
+    // Under active review by compliance team.
+    IN_REVIEW              = 3;
+    // Identity confirmed; full access unlocked.
+    APPROVED               = 4;
+    // Identity check failed; access restricted.
+    REJECTED               = 5;
+}
+
+// Internal platform roles granting elevated capabilities.
+enum AccountRole {
+    ACCOUNT_ROLE_UNSPECIFIED = 0;
+    // Standard registered user.
+    USER                     = 1;
+    // Can review and moderate user-generated content.
+    CONTENT_MODERATOR        = 2;
+    // Customer support; can view but not mutate sensitive fields.
+    SUPPORT_AGENT            = 3;
+    // Can process refunds and credit adjustments.
+    FINANCE_OPERATOR         = 4;
+    // Full administrative access.
+    ADMIN                    = 5;
+    // Unrestricted access including destructive operations.
+    SUPER_ADMIN              = 6;
+}

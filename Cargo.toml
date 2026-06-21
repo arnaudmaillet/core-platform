@@ -53,7 +53,7 @@ members = [
     "crates/shared/storage/redis",
     "crates/shared/auth-context",
     "crates/shared/validate-core",
-    "crates/shared/validation",
+    "crates/shared/validation", "crates/services/account",
     # "crates/comment",
 ]
 resolver = "2"
