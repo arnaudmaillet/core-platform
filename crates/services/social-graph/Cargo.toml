@@ -1,0 +1,62 @@
+[package]
+name        = "social-graph"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Social-graph microservice — directional follow/block relationships between opaque ProfileId primitives."
+
+[dependencies]
+# ── Shared platform infrastructure ───────────────────────────────────────────
+error            = { workspace = true }
+validate-core    = { workspace = true }
+validation       = { workspace = true }
+scylla-storage   = { path = "../../shared/storage/scylla", package = "scylla-storage" }
+redis-storage    = { path = "../../shared/storage/redis", package = "redis-storage" }
+
+# ── Shared platform crates ────────────────────────────────────────────────────
+cqrs         = { path = "../../shared/cqrs" }
+auth-context = { path = "../../shared/auth-context" }
+telemetry    = { path = "../../shared/telemetry" }
+transport    = { path = "../../shared/transport" }
+
+# ── Async runtime & utilities ─────────────────────────────────────────────────
+tokio        = { workspace = true }
+futures      = { workspace = true }
+async-trait  = { workspace = true }
+
+# ── Serialisation ─────────────────────────────────────────────────────────────
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+base64       = { workspace = true }
+
+# ── Domain types ──────────────────────────────────────────────────────────────
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror    = { workspace = true }
+
+# ── Observability ─────────────────────────────────────────────────────────────
+tracing      = { workspace = true }
+
+# ── gRPC / Protobuf ───────────────────────────────────────────────────────────
+tonic             = { workspace = true }
+tonic-prost       = { workspace = true }
+prost             = { workspace = true }
+prost-types       = { workspace = true }
+tonic-health      = { workspace = true }
+tonic-reflection  = { workspace = true }
+http              = { workspace = true }
+
+# ── Storage drivers (direct access for advanced query patterns) ───────────────
+scylla = { workspace = true }
+fred   = { workspace = true }
+
+[build-dependencies]
+tonic-build       = { workspace = true }
+tonic-prost-build = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
