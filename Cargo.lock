@@ -3096,7 +3096,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "profile"
+name = "profile-old"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3133,7 +3133,7 @@ dependencies = [
  "infra-kafka",
  "infra-sqlx",
  "infra-test",
- "profile",
+ "profile-old",
  "serde_json",
  "shared-kernel",
  "shared-kernel-test-utils",

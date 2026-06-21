@@ -4,13 +4,13 @@ use auth::{KeycloakValidator, interceptors::AuthInterceptor};
 use dotenvy::dotenv;
 use infra_fred::RedisContext;
 use infra_scylla::ScyllaContext;
-use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use profile_old::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
 use std::sync::Arc;
 use tonic::transport::Server;
 use tracing_subscriber::{EnvFilter, fmt};
 
-use profile::ProfileServiceBuilder;
-use profile::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
+use profile_old::ProfileServiceBuilder;
+use profile_old::services::{ProfileIdentityService, ProfileMediaService, ProfileMetadataService};
 use shared_kernel::command::CommandBus;
 use shared_kernel::environment::ClusterContext;
 use shared_kernel::types::Region;

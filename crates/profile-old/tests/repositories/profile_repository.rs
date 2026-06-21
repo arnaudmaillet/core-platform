@@ -1,9 +1,9 @@
 // crates/profile/src/infrastructure/scylla/repositories/scylla_profile_tests.rs
 
-use profile::entities::Profile;
-use profile::repositories::ProfileRepository;
-use profile::stores::ScyllaProfileStore;
-use profile::types::{DisplayName, Handle};
+use profile_old::entities::Profile;
+use profile_old::repositories::ProfileRepository;
+use profile_old::stores::ScyllaProfileStore;
+use profile_old::types::{DisplayName, Handle};
 use tokio;
 
 use infra_test::ScyllaTestContext; // Ton environnement de test ScyllaDB

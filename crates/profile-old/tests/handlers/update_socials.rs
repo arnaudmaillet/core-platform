@@ -1,22 +1,22 @@
-use profile::commands::UpdateBannerCommand;
-use profile::context::ProfileCommandCtx;
-use profile::events::ProfileEvent;
-use profile::types::Handle;
+use profile_old::commands::UpdateSocialsCommand;
+use profile_old::context::ProfileCommandCtx;
+use profile_old::events::ProfileEvent;
+use profile_old::types::{Handle, Socials};
 use profile_test_utils::ProfileTestFixture;
-use profile_test_utils::assertions::ProfileRepositoryAsserts; // 💡 Trait d'assertions découplé
+use profile_test_utils::assertions::ProfileRepositoryAsserts;
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ErrorCode, Result, Versioned};
 use shared_kernel::types::Url;
 use uuid::Uuid;
 
 #[tokio::test]
-async fn test_update_banner_success() -> Result<()> {
+async fn test_update_socials_success() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
     let profile = f.builder("alice")?.build()?;
     let version_snapshot = profile.version();
     f.given_profile(profile).await;
-    // 💡 Index requis pour passer le validateur d'identité de production
+    // 💡 Index requis pour le validateur d'identité
     f.given_slug_routing(
         f.profile_id(),
         &Handle::try_new("alice")?.to_sha256_hash(),
@@ -24,40 +24,43 @@ async fn test_update_banner_success() -> Result<()> {
     )
     .await;
 
-    let new_url = Url::try_new("https://cdn.test.com/new_banner.png")?;
+    let socials = Socials::builder()
+        .with_x(Url::try_new("https://x.com/alice")?)
+        .with_website(Url::try_new("https://alice.dev")?)
+        .build();
 
-    let cmd = UpdateBannerCommand {
+    let cmd = UpdateSocialsCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        new_banner_url: new_url.clone(),
+        new_socials: Some(socials.clone()),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandCtx, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
     f.profile_repo()
         .assert_profile_state(f.profile_id(), |p| {
-            assert_eq!(p.banner(), Some(&new_url));
+            assert_eq!(p.socials(), Some(&socials));
             assert_eq!(p.version(), version_snapshot + 1);
         })
         .await;
 
     f.profile_repo()
         .assert_captured_event_for(f.profile_id(), |event| match event {
-            ProfileEvent::BannerUpdated {
+            ProfileEvent::SocialsUpdated {
                 profile_id,
                 account_id,
-                old_banner_url,
-                new_banner_url,
+                old_socials,
+                new_socials: captured_new_socials,
                 ..
             } => {
                 assert_eq!(profile_id, &f.profile_id());
                 assert_eq!(account_id, &f.account_id());
-                assert_eq!(old_banner_url, &None);
-                assert_eq!(new_banner_url, &new_url);
+                assert_eq!(old_socials, &None);
+                assert_eq!(captured_new_socials, &Some(socials));
             }
             _ => panic!("Type d'événement incorrect"),
         })
@@ -67,7 +70,7 @@ async fn test_update_banner_success() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_update_banner_technical_idempotency() -> Result<()> {
+async fn test_update_socials_technical_idempotency() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
     let cmd_id = Uuid::new_v4();
@@ -83,16 +86,20 @@ async fn test_update_banner_technical_idempotency() -> Result<()> {
     )
     .await;
 
-    let cmd = UpdateBannerCommand {
+    let new_socials = Socials::builder()
+        .with_x(Url::try_new("https://x.com/alice")?)
+        .build();
+
+    let cmd = UpdateSocialsCommand {
         command_id: cmd_id,
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        new_banner_url: Url::try_new("https://cdn.test.com/any.png")?,
+        new_socials: Some(new_socials),
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandCtx, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert
@@ -103,15 +110,14 @@ async fn test_update_banner_technical_idempotency() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_update_banner_business_idempotency() -> Result<()> {
+async fn test_update_socials_business_idempotency() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
-    let current_url = Url::try_new("https://cdn.test.com/banner.png")?;
+    let socials = Socials::builder()
+        .with_github(Url::try_new("https://github.com/alice")?)
+        .build();
 
-    let profile = f
-        .builder("alice")?
-        .with_banner(current_url.clone())
-        .build()?;
+    let profile = f.builder("alice")?.with_socials(socials.clone()).build()?;
     let version_snapshot = profile.version();
     f.given_profile(profile).await;
     f.given_slug_routing(
@@ -121,15 +127,15 @@ async fn test_update_banner_business_idempotency() -> Result<()> {
     )
     .await;
 
-    let cmd = UpdateBannerCommand {
+    let cmd = UpdateSocialsCommand {
         command_id: Uuid::new_v4(),
         target: CommandTarget::versioned(f.profile_id(), version_snapshot),
-        new_banner_url: current_url,
+        new_socials: Some(socials),
     };
 
     // Act
     f.bus()
-        .execute::<ProfileCommandCtx, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await?;
 
     // Assert
@@ -145,7 +151,7 @@ async fn test_update_banner_business_idempotency() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_update_banner_concurrency_conflict() -> Result<()> {
+async fn test_update_socials_concurrency_conflict() -> Result<()> {
     // Arrange
     let f = ProfileTestFixture::new();
     let profile = f.builder("alice")?.build()?;
@@ -157,16 +163,16 @@ async fn test_update_banner_concurrency_conflict() -> Result<()> {
     )
     .await;
 
-    let cmd = UpdateBannerCommand {
+    let cmd = UpdateSocialsCommand {
         command_id: Uuid::new_v4(),
-        target: CommandTarget::versioned(f.profile_id(), 10),
-        new_banner_url: Url::try_new("https://cdn.test.com/fail.png")?,
+        target: CommandTarget::versioned(f.profile_id(), 42),
+        new_socials: None,
     };
 
     // Act
     let result = f
         .bus()
-        .execute::<ProfileCommandCtx, UpdateBannerCommand, ()>(f.command_ctx().clone(), cmd)
+        .execute::<ProfileCommandCtx, UpdateSocialsCommand, ()>(f.command_ctx().clone(), cmd)
         .await;
 
     // Assert

@@ -18,7 +18,7 @@ members = [
     "common/rust/shared-proto",
     "crates/account-old",
     "crates/auth",
-    "crates/profile",
+    "crates/profile-old",
     "crates/shared-kernel",
     "crates/gamification",
     "crates/social",
@@ -53,7 +53,8 @@ members = [
     "crates/shared/storage/redis",
     "crates/shared/auth-context",
     "crates/shared/validate-core",
-    "crates/shared/validation", "crates/services/account",
+    "crates/shared/validation",
+    "crates/services/account",
     # "crates/comment",
 ]
 resolver = "2"
@@ -74,7 +75,7 @@ shared-kernel-test-utils = { path = "crates/shared-kernel-test-utils" }
 shared-proto = { path = "common/rust/shared-proto" }
 social = { path = "crates/social" }
 social-test-utils = { path = "crates/social-test-utils" }
-profile = { path = "crates/profile" }
+profile-old = { path = "crates/profile-old" }
 profile-test-utils = { path = "crates/profile-test-utils" }
 post = { path = "crates/post/core" }
 post-utils = { path = "crates/post/utils" }

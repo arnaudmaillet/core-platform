@@ -1,3 +1,3 @@
 mod profile;
 
-pub use profile::ProfileProjectionRepository;
+pub use profile_old::ProfileProjectionRepository;

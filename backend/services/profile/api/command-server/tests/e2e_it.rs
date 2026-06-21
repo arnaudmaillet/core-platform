@@ -2,10 +2,10 @@
 
 use auth::Claims;
 use auth_test_utils::TokenValidatorStub;
-use profile::entities::Profile;
-use profile::repositories::{ProfileRepository, ProfileRoutingRepository};
-use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
-use profile::types::{DisplayName, Handle};
+use profile_old::entities::Profile;
+use profile_old::repositories::{ProfileRepository, ProfileRoutingRepository};
+use profile_old::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use profile_old::types::{DisplayName, Handle};
 use profile_test_utils::ProfileTestContextBuilder;
 use shared_kernel::core::{Result, Versioned};
 use shared_kernel::types::{AccountId, ProfileId, Region};

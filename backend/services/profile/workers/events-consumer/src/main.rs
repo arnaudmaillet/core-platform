@@ -4,7 +4,7 @@ use dotenvy::dotenv;
 use infra_fred::RedisContext;
 use infra_kafka::KafkaEventConsumer;
 use infra_scylla::ScyllaContext;
-use profile::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
+use profile_old::stores::{ScyllaProfileRoutingStore, ScyllaProfileStore};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -16,7 +16,7 @@ use shared_kernel::{
     types::Region,
 };
 
-use profile::{ProfileServiceBuilder, kafka::AccountConsumer};
+use profile_old::{ProfileServiceBuilder, kafka::AccountConsumer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

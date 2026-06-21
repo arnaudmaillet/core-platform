@@ -1,6 +1,6 @@
 // crates/profile/src/infrastructure/kafka/account_consumer_tests.rs
 
-use profile::{kafka::AccountConsumer, repositories::ProfileRepository, types::Handle};
+use profile_old::{kafka::AccountConsumer, repositories::ProfileRepository, types::Handle};
 use profile_test_utils::ProfileTestFixture;
 use serde_json::json;
 use shared_kernel::types::{AccountId, Region};

@@ -1,3 +1,3 @@
 mod profile;
 
-pub use profile::ProfileResolverStub;
+pub use profile_old::ProfileResolverStub;

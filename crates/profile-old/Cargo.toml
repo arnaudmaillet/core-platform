@@ -1,7 +1,7 @@
 # crates/profile/Cargo.toml
 
 [package]
-name = "profile"
+name = "profile-old"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,7 +16,7 @@ test-utils = []
 [dependencies]
 shared-kernel = { workspace = true, features = ["concurrency"] }
 infra-sqlx = { workspace = true }
-infra-scylla = { workspace = true, features = ["macros"]}
+infra-scylla = { workspace = true, features = ["macros"] }
 infra-test = { workspace = true }
 
 shared-proto = { workspace = true, features = ["profile"] }

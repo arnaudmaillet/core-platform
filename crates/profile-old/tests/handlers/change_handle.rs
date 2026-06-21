@@ -1,8 +1,8 @@
-use profile::commands::ChangeHandleCommand;
-use profile::context::ProfileCommandCtx;
-use profile::entities::Profile;
-use profile::events::ProfileEvent;
-use profile::types::Handle;
+use profile_old::commands::ChangeHandleCommand;
+use profile_old::context::ProfileCommandCtx;
+use profile_old::entities::Profile;
+use profile_old::events::ProfileEvent;
+use profile_old::types::Handle;
 use profile_test_utils::ProfileTestFixture;
 use profile_test_utils::assertions::ProfileRepositoryAsserts;
 use shared_kernel::command::CommandTarget;

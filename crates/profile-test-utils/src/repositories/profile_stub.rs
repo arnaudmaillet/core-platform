@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use profile::entities::Profile;
-use profile::repositories::ProfileRepository;
+use profile_old::entities::Profile;
+use profile_old::repositories::ProfileRepository;
 use shared_kernel::core::{Error, Result, Versioned};
 use shared_kernel::messaging::{Event, EventEmitter};
 use shared_kernel::types::{AccountId, ProfileId};

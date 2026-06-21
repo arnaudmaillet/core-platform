@@ -10,7 +10,7 @@ description.workspace = true
 [dependencies]
 shared-kernel = { workspace = true }
 shared-kernel-test-utils = { workspace = true }
-profile = { workspace = true }
+profile-old = { workspace = true }
 auth = { workspace = true }
 auth-test-utils = { workspace = true }
 infra-test = { workspace = true }
