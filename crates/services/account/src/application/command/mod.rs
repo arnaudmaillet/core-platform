@@ -1,6 +1,5 @@
 pub(crate) mod helpers;
 
-pub mod adjust_credit_balance;
 pub mod anonymize_account;
 pub mod assign_role;
 pub mod change_password;
@@ -19,7 +18,6 @@ pub mod update_kyc_status;
 pub mod verify_email;
 pub mod verify_phone;
 
-pub use adjust_credit_balance::{AdjustCreditBalanceCommand, AdjustCreditBalanceHandler};
 pub use anonymize_account::{AnonymizeAccountCommand, AnonymizeAccountHandler};
 pub use assign_role::{AssignRoleCommand, AssignRoleHandler};
 pub use change_password::{ChangePasswordCommand, ChangePasswordHandler};

@@ -33,7 +33,6 @@ serde_json   = { workspace = true }
 uuid         = { workspace = true }
 chrono       = { workspace = true }
 regex        = { workspace = true }
-rust_decimal = { version = "1", features = ["serde"] }
 
 # ── Error handling ────────────────────────────────────────────────────────────
 thiserror    = { workspace = true }

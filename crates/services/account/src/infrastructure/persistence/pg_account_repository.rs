@@ -96,14 +96,6 @@ impl AccountRepository for PgAccountRepository {
         let p_gdpr_export_req     = gdpr.data_export_requested_at();
         let p_gdpr_export_done    = gdpr.data_export_completed_at();
 
-        let credit = account.credit();
-        let p_credit_balance      = credit.balance_micros();
-        let p_credit_reserved     = credit.reserved_micros();
-        let p_credit_currency     = credit.currency().map(|c| c.as_str().to_owned());
-        let p_credit_ledger_ver   = credit.ledger_version();
-        let p_credit_last_tx_id   = credit.last_transaction_id().map(|t| t.as_uuid());
-        let p_credit_last_tx_at   = credit.last_transaction_at();
-
         let p_roles: Vec<String> = account.roles().iter().map(|r| r.as_str().to_owned()).collect();
         let p_perms: Vec<String> = account.permission_overrides().to_vec();
 
@@ -130,64 +122,56 @@ impl AccountRepository for PgAccountRepository {
                                 gdpr_anonymized_at,
                                 gdpr_data_export_requested_at, gdpr_data_export_completed_at,
                                 roles, permission_overrides,
-                                credit_balance, credit_reserved, credit_currency,
-                                credit_ledger_version, credit_last_tx_id, credit_last_tx_at,
                                 version, created_at, updated_at, created_by
                             ) VALUES (
                                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
                                 $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-                                $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,
-                                $44,$45,$46,$47
+                                $31,$32,$33,$34,$35,$36,$37,
+                                $38,$39,$40,$41
                             )
                             "#,
                         )
-                        .bind(id.as_uuid())
-                        .bind(p_identity_id)
-                        .bind(p_status)
-                        .bind(p_suspension_reason)
-                        .bind(p_deactivated_at)
-                        .bind(p_email)
-                        .bind(p_email_verified)
-                        .bind(p_email_verified_at)
-                        .bind(p_phone)
-                        .bind(p_phone_verified)
-                        .bind(p_phone_verified_at)
-                        .bind(p_password_hash)
-                        .bind(p_password_changed)
-                        .bind(p_failed_logins)
-                        .bind(p_locked_until)
-                        .bind(p_last_login)
-                        .bind(p_mfa_enforced)
-                        .bind(p_mfa_totp_secret)
-                        .bind(p_mfa_enrolled_at)
-                        .bind(&p_recovery_codes)
-                        .bind(p_mfa_backup_at)
-                        .bind(p_kyc_status)
-                        .bind(p_kyc_reviewed_at)
-                        .bind(p_kyc_reviewer_id)
-                        .bind(p_date_of_birth)
-                        .bind(p_country)
-                        .bind(p_gdpr_processing_at)
-                        .bind(p_gdpr_marketing_at)
-                        .bind(p_gdpr_consent_ip)
-                        .bind(p_gdpr_consent_ver)
-                        .bind(p_gdpr_deletion_req)
-                        .bind(p_gdpr_deletion_sched)
-                        .bind(p_gdpr_anonymized)
-                        .bind(p_gdpr_export_req)
-                        .bind(p_gdpr_export_done)
-                        .bind(&p_roles)
-                        .bind(&p_perms)
-                        .bind(p_credit_balance)
-                        .bind(p_credit_reserved)
-                        .bind(p_credit_currency)
-                        .bind(p_credit_ledger_ver)
-                        .bind(p_credit_last_tx_id)
-                        .bind(p_credit_last_tx_at)
-                        .bind(1i64) // version starts at 1 after first save
-                        .bind(p_created_at)
-                        .bind(p_updated_at)
-                        .bind(p_created_by)
+                        .bind(id.as_uuid())         // $1
+                        .bind(p_identity_id)         // $2
+                        .bind(p_status)              // $3
+                        .bind(p_suspension_reason)   // $4
+                        .bind(p_deactivated_at)      // $5
+                        .bind(p_email)               // $6
+                        .bind(p_email_verified)      // $7
+                        .bind(p_email_verified_at)   // $8
+                        .bind(p_phone)               // $9
+                        .bind(p_phone_verified)      // $10
+                        .bind(p_phone_verified_at)   // $11
+                        .bind(p_password_hash)       // $12
+                        .bind(p_password_changed)    // $13
+                        .bind(p_failed_logins)       // $14
+                        .bind(p_locked_until)        // $15
+                        .bind(p_last_login)          // $16
+                        .bind(p_mfa_enforced)        // $17
+                        .bind(p_mfa_totp_secret)     // $18
+                        .bind(p_mfa_enrolled_at)     // $19
+                        .bind(&p_recovery_codes)     // $20
+                        .bind(p_mfa_backup_at)       // $21
+                        .bind(p_kyc_status)          // $22
+                        .bind(p_kyc_reviewed_at)     // $23
+                        .bind(p_kyc_reviewer_id)     // $24
+                        .bind(p_date_of_birth)       // $25
+                        .bind(p_country)             // $26
+                        .bind(p_gdpr_processing_at)  // $27
+                        .bind(p_gdpr_marketing_at)   // $28
+                        .bind(p_gdpr_consent_ip)     // $29
+                        .bind(p_gdpr_consent_ver)    // $30
+                        .bind(p_gdpr_deletion_req)   // $31
+                        .bind(p_gdpr_deletion_sched) // $32
+                        .bind(p_gdpr_anonymized)     // $33
+                        .bind(p_gdpr_export_req)     // $34
+                        .bind(p_gdpr_export_done)    // $35
+                        .bind(&p_roles)              // $36
+                        .bind(&p_perms)              // $37
+                        .bind(1i64)                  // $38  version starts at 1 after first save
+                        .bind(p_created_at)          // $39
+                        .bind(p_updated_at)          // $40
+                        .bind(p_created_by)          // $41
                         .execute(&mut **tx)
                         .await
                         .map(|_| ())
@@ -240,60 +224,48 @@ impl AccountRepository for PgAccountRepository {
                                 gdpr_data_export_completed_at = $34,
                                 roles = $35,
                                 permission_overrides = $36,
-                                credit_balance = $37,
-                                credit_reserved = $38,
-                                credit_currency = $39,
-                                credit_ledger_version = $40,
-                                credit_last_tx_id = $41,
-                                credit_last_tx_at = $42,
                                 version = version + 1,
                                 updated_at = NOW()
-                            WHERE id = $1 AND version = $43
+                            WHERE id = $1 AND version = $37
                             "#,
                         )
-                        .bind(id.as_uuid())
-                        .bind(p_status)
-                        .bind(p_suspension_reason)
-                        .bind(p_deactivated_at)
-                        .bind(p_email)
-                        .bind(p_email_verified)
-                        .bind(p_email_verified_at)
-                        .bind(p_phone)
-                        .bind(p_phone_verified)
-                        .bind(p_phone_verified_at)
-                        .bind(p_password_hash)
-                        .bind(p_password_changed)
-                        .bind(p_failed_logins)
-                        .bind(p_locked_until)
-                        .bind(p_last_login)
-                        .bind(p_mfa_enforced)
-                        .bind(p_mfa_totp_secret)
-                        .bind(p_mfa_enrolled_at)
-                        .bind(&p_recovery_codes)
-                        .bind(p_mfa_backup_at)
-                        .bind(p_kyc_status)
-                        .bind(p_kyc_reviewed_at)
-                        .bind(p_kyc_reviewer_id)
-                        .bind(p_date_of_birth)
-                        .bind(p_country)
-                        .bind(p_gdpr_processing_at)
-                        .bind(p_gdpr_marketing_at)
-                        .bind(p_gdpr_consent_ip)
-                        .bind(p_gdpr_consent_ver)
-                        .bind(p_gdpr_deletion_req)
-                        .bind(p_gdpr_deletion_sched)
-                        .bind(p_gdpr_anonymized)
-                        .bind(p_gdpr_export_req)
-                        .bind(p_gdpr_export_done)
-                        .bind(&p_roles)
-                        .bind(&p_perms)
-                        .bind(p_credit_balance)
-                        .bind(p_credit_reserved)
-                        .bind(p_credit_currency)
-                        .bind(p_credit_ledger_ver)
-                        .bind(p_credit_last_tx_id)
-                        .bind(p_credit_last_tx_at)
-                        .bind(expected_version)
+                        .bind(id.as_uuid())         // $1
+                        .bind(p_status)             // $2
+                        .bind(p_suspension_reason)  // $3
+                        .bind(p_deactivated_at)     // $4
+                        .bind(p_email)              // $5
+                        .bind(p_email_verified)     // $6
+                        .bind(p_email_verified_at)  // $7
+                        .bind(p_phone)              // $8
+                        .bind(p_phone_verified)     // $9
+                        .bind(p_phone_verified_at)  // $10
+                        .bind(p_password_hash)      // $11
+                        .bind(p_password_changed)   // $12
+                        .bind(p_failed_logins)      // $13
+                        .bind(p_locked_until)       // $14
+                        .bind(p_last_login)         // $15
+                        .bind(p_mfa_enforced)       // $16
+                        .bind(p_mfa_totp_secret)    // $17
+                        .bind(p_mfa_enrolled_at)    // $18
+                        .bind(&p_recovery_codes)    // $19
+                        .bind(p_mfa_backup_at)      // $20
+                        .bind(p_kyc_status)         // $21
+                        .bind(p_kyc_reviewed_at)    // $22
+                        .bind(p_kyc_reviewer_id)    // $23
+                        .bind(p_date_of_birth)      // $24
+                        .bind(p_country)            // $25
+                        .bind(p_gdpr_processing_at) // $26
+                        .bind(p_gdpr_marketing_at)  // $27
+                        .bind(p_gdpr_consent_ip)    // $28
+                        .bind(p_gdpr_consent_ver)   // $29
+                        .bind(p_gdpr_deletion_req)  // $30
+                        .bind(p_gdpr_deletion_sched)// $31
+                        .bind(p_gdpr_anonymized)    // $32
+                        .bind(p_gdpr_export_req)    // $33
+                        .bind(p_gdpr_export_done)   // $34
+                        .bind(&p_roles)             // $35
+                        .bind(&p_perms)             // $36
+                        .bind(expected_version)     // $37
                         .execute(&mut **tx)
                         .await
                         .map_err(|e| AccountError::Storage(StorageError::from(e)))?

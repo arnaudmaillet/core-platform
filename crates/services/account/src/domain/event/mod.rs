@@ -3,8 +3,6 @@ pub mod account_created;
 pub mod account_deactivated;
 pub mod account_deleted;
 pub mod account_suspended;
-pub mod credit_applied;
-pub mod debit_applied;
 pub mod email_changed;
 pub mod email_verified;
 pub mod gdpr_data_export_requested;
@@ -22,8 +20,6 @@ pub use account_created::AccountCreated;
 pub use account_deactivated::AccountDeactivated;
 pub use account_deleted::AccountDeleted;
 pub use account_suspended::AccountSuspended;
-pub use credit_applied::CreditApplied;
-pub use debit_applied::DebitApplied;
 pub use email_changed::EmailChanged;
 pub use email_verified::EmailVerified;
 pub use gdpr_data_export_requested::GdprDataExportRequested;
@@ -59,8 +55,6 @@ pub enum DomainEvent {
     AccountDeactivated(AccountDeactivated),
     AccountDeleted(AccountDeleted),
     KycStatusChanged(KycStatusChanged),
-    CreditApplied(CreditApplied),
-    DebitApplied(DebitApplied),
     GdprDeletionRequested(GdprDeletionRequested),
     GdprDataExportRequested(GdprDataExportRequested),
 }
@@ -82,8 +76,6 @@ impl DomainEvent {
             Self::AccountDeactivated(_)      => "account.deactivated",
             Self::AccountDeleted(_)          => "account.deleted",
             Self::KycStatusChanged(_)        => "account.kyc_status_changed",
-            Self::CreditApplied(_)           => "account.credit_applied",
-            Self::DebitApplied(_)            => "account.debit_applied",
             Self::GdprDeletionRequested(_)   => "account.gdpr_deletion_requested",
             Self::GdprDataExportRequested(_) => "account.gdpr_data_export_requested",
         }

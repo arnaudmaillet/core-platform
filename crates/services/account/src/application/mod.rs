@@ -4,5 +4,5 @@ pub mod query;
 
 pub use port::AccountRepository;
 pub use query::{
-    AccountListView, AccountStatusView, AccountView, CreditBalanceView, GdprRecordView,
+    AccountListView, AccountStatusView, AccountView, GdprRecordView,
 };

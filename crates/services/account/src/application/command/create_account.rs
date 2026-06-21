@@ -6,8 +6,7 @@ use validate_core::{FieldViolation, Validate};
 use crate::application::port::AccountRepository;
 use crate::domain::aggregate::{Account, AccountCreateParams};
 use crate::domain::value_object::{
-    AccountId, AccountRole, CountryCode, CurrencyCode, EmailAddress, IdentityId, PasswordHash,
-    PhoneNumber,
+    AccountId, AccountRole, CountryCode, EmailAddress, IdentityId, PasswordHash, PhoneNumber,
 };
 use crate::error::AccountError;
 
@@ -22,9 +21,7 @@ pub struct CreateAccountCommand {
     pub password_hash: Option<String>,
     /// ISO 3166-1 alpha-2 country code; optional at creation.
     pub country_of_residence: Option<String>,
-    /// ISO 4217 currency code for the ledger; defaults to "USD" if empty.
-    pub currency: Option<String>,
-    /// Role variant name (e.g. `"User"`); defaults to `User` if empty.
+    /// Role variant name (e.g. `"user"`); defaults to `User` if absent.
     pub role: Option<String>,
     /// UUID string of the admin account that provisioned this account; `None` for
     /// self-registration.
@@ -129,14 +126,6 @@ impl CommandHandler<CreateAccountCommand> for CreateAccountHandler {
             .transpose()?
             .unwrap_or(AccountRole::User);
 
-        let currency_code = cmd
-            .currency
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-            .map(CurrencyCode::new)
-            .transpose()?
-            .unwrap_or_else(|| CurrencyCode::new("USD").expect("USD is a valid currency code"));
-
         let created_by = cmd
             .created_by
             .as_deref()
@@ -157,7 +146,6 @@ impl CommandHandler<CreateAccountCommand> for CreateAccountHandler {
             password_hash,
             role,
             country_of_residence,
-            currency_code,
             created_by,
             correlation_id: envelope.correlation_id,
         };

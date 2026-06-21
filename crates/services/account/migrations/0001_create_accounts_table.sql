@@ -3,6 +3,7 @@
 --              Uses flat columns for all domain fields; arrays for multi-value
 --              attributes (roles, permissions, recovery codes). No stored
 --              procedures; pure ANSI SQL with standard TIMESTAMPTZ defaults.
+--              Financial state is managed by the dedicated ledger microservice.
 
 CREATE TABLE IF NOT EXISTS accounts (
     -- ── Identity ─────────────────────────────────────────────────────────────
@@ -58,17 +59,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     roles                               TEXT[]          NOT NULL DEFAULT '{}',
     permission_overrides                TEXT[]          NOT NULL DEFAULT '{}',
 
-    -- ── Financial ledger state ────────────────────────────────────────────────
-    -- Amounts stored as integer minor units (6 decimal places implied).
-    -- 1.000000 USD is stored as 1_000_000. This avoids floating-point rounding
-    -- and is compatible with BIGINT arithmetic on all target databases.
-    credit_balance                      BIGINT          NOT NULL DEFAULT 0,
-    credit_reserved                     BIGINT          NOT NULL DEFAULT 0,
-    credit_currency                     CHAR(3),
-    credit_ledger_version               BIGINT          NOT NULL DEFAULT 0,
-    credit_last_tx_id                   UUID,
-    credit_last_tx_at                   TIMESTAMPTZ,
-
     -- ── Optimistic concurrency & audit ───────────────────────────────────────
     version                             BIGINT          NOT NULL DEFAULT 0,
     created_at                          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
@@ -101,7 +91,3 @@ CREATE INDEX IF NOT EXISTS accounts_kyc_status_idx
 CREATE INDEX IF NOT EXISTS accounts_gdpr_deletion_scheduled_idx
     ON accounts (gdpr_deletion_scheduled_at)
     WHERE gdpr_deletion_scheduled_at IS NOT NULL;
-
--- Finance reporting: group accounts by currency.
-CREATE INDEX IF NOT EXISTS accounts_credit_currency_idx
-    ON accounts (credit_currency);

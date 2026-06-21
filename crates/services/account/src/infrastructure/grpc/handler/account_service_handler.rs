@@ -5,7 +5,6 @@ use uuid::Uuid;
 use cqrs::{CommandBus, Envelope, QueryBus};
 
 use crate::application::command::{
-    adjust_credit_balance::AdjustCreditBalanceCommand,
     anonymize_account::AnonymizeAccountCommand,
     assign_role::AssignRoleCommand,
     change_password::ChangePasswordCommand,
@@ -28,12 +27,9 @@ use crate::application::query::{
     get_account_by_id::{AccountView, GetAccountByIdQuery},
     get_account_by_identity_id::GetAccountByIdentityIdQuery,
     get_account_status::{AccountStatusView, GetAccountStatusQuery},
-    get_credit_balance::{CreditBalanceView, GetCreditBalanceQuery},
     get_gdpr_record::{GdprRecordView, GetGdprRecordQuery},
     list_accounts_by_status::{AccountListView, ListAccountsByStatusQuery},
 };
-use crate::error::AccountError;
-
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 pub mod proto {
     tonic::include_proto!("account.v1");
@@ -92,7 +88,6 @@ where
             phone: Some(req.phone).filter(|s| !s.is_empty()),
             password_hash: Some(req.password_hash).filter(|s| !s.is_empty()),
             country_of_residence: Some(req.country_of_residence).filter(|s| !s.is_empty()),
-            currency: None,
             role: None,
             created_by: Some(req.created_by).filter(|s| !s.is_empty()),
         };
@@ -257,8 +252,8 @@ where
         let req = request.into_inner();
         let cmd = RecordFailedLoginCommand {
             account_id: req.account_id.clone(),
-            max_attempts: 5,           // default; can be made configurable
-            lockout_duration_secs: 900,// default: 15 minutes
+            max_attempts: 5,            // default; can be made configurable
+            lockout_duration_secs: 900, // default: 15 minutes
         };
         self.command_bus
             .dispatch(Envelope::new(Uuid::now_v7(), cmd))
@@ -302,24 +297,6 @@ where
     ) -> Result<Response<proto::CommandResponse>, Status> {
         let req = request.into_inner();
         let cmd = RequestDataExportCommand { account_id: req.account_id.clone() };
-        self.command_bus
-            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
-            .await
-            .map(|_| Self::ok_command(&req.account_id))
-            .map_err(cqrs_error_to_status)
-    }
-
-    pub async fn adjust_credit_balance(
-        &self,
-        request: Request<proto::AdjustCreditBalanceRequest>,
-    ) -> Result<Response<proto::CommandResponse>, Status> {
-        let req = request.into_inner();
-        let cmd = AdjustCreditBalanceCommand {
-            account_id: req.account_id.clone(),
-            delta: req.delta,
-            currency: req.currency,
-            transaction_id: req.transaction_id,
-        };
         self.command_bus
             .dispatch(Envelope::new(Uuid::now_v7(), cmd))
             .await
@@ -417,26 +394,6 @@ where
         }))
     }
 
-    pub async fn get_credit_balance(
-        &self,
-        request: Request<proto::GetCreditBalanceRequest>,
-    ) -> Result<Response<proto::CreditBalanceView>, Status> {
-        let req = request.into_inner();
-        let query = GetCreditBalanceQuery { account_id: req.account_id };
-        let view: CreditBalanceView = self
-            .query_bus
-            .dispatch(Envelope::new(Uuid::now_v7(), query))
-            .await
-            .map_err(cqrs_error_to_status)?;
-        Ok(Response::new(proto::CreditBalanceView {
-            account_id: view.account_id,
-            balance: view.balance,
-            reserved: view.reserved,
-            currency: view.currency.unwrap_or_default(),
-            ledger_version: view.ledger_version,
-        }))
-    }
-
     pub async fn get_gdpr_record(
         &self,
         request: Request<proto::GetGdprRecordRequest>,
@@ -505,9 +462,6 @@ fn account_view_to_proto(v: AccountView) -> proto::AccountView {
         kyc_status: kyc_status_str_to_i32(&v.kyc_status),
         country_of_residence: v.country_of_residence.unwrap_or_default(),
         roles: v.roles,
-        credit_balance: v.credit_balance,
-        credit_reserved: v.credit_reserved,
-        credit_currency: v.credit_currency.unwrap_or_default(),
         version: v.version,
         created_at: Some(dt_to_ts(v.created_at)),
         updated_at: Some(dt_to_ts(v.updated_at)),
@@ -595,79 +549,5 @@ pub fn cqrs_error_to_status(err: cqrs::error::CqrsError) -> Status {
                 _ => Status::internal(msg),
             }
         }
-    }
-}
-
-pub fn account_error_to_status(err: &AccountError) -> Status {
-    match err {
-        AccountError::AccountNotFound { id } => {
-            Status::not_found(format!("account not found: {id}"))
-        }
-        AccountError::IdentityAlreadyRegistered { identity_id } => {
-            Status::already_exists(format!("identity '{identity_id}' is already registered"))
-        }
-        AccountError::EmailAlreadyRegistered { email } => {
-            Status::already_exists(format!("email '{email}' is already registered"))
-        }
-        AccountError::ConcurrentModification => {
-            Status::aborted("concurrent modification — please retry")
-        }
-        AccountError::AccountNotActive { current } => {
-            Status::failed_precondition(format!("account is not active (current: {current})"))
-        }
-        AccountError::InvalidStatusTransition { from, to } => {
-            Status::failed_precondition(format!("cannot transition from {from} to {to}"))
-        }
-        AccountError::InvalidKycTransition { from, to } => {
-            Status::failed_precondition(format!("KYC cannot transition from {from} to {to}"))
-        }
-        AccountError::InvalidKycStatus(s) => {
-            Status::invalid_argument(format!("invalid KYC status: {s}"))
-        }
-        AccountError::InvalidAccountRole(r) => {
-            Status::invalid_argument(format!("invalid account role: {r}"))
-        }
-        AccountError::GdprDeletionAlreadyRequested => {
-            Status::already_exists("GDPR deletion already requested")
-        }
-        AccountError::AccountAlreadyAnonymized => {
-            Status::failed_precondition("account has already been anonymized")
-        }
-        AccountError::InsufficientBalance => {
-            Status::failed_precondition("insufficient credit balance")
-        }
-        AccountError::CurrencyMismatch { account, requested } => {
-            Status::failed_precondition(format!(
-                "currency mismatch: account={account}, requested={requested}"
-            ))
-        }
-        AccountError::MfaAlreadyEnrolled => {
-            Status::already_exists("MFA is already enrolled")
-        }
-        AccountError::MfaNotEnrolled => {
-            Status::failed_precondition("MFA is not enrolled")
-        }
-        AccountError::RoleAlreadyAssigned(r) => {
-            Status::already_exists(format!("role {r} is already assigned"))
-        }
-        AccountError::RoleNotAssigned(r) => {
-            Status::not_found(format!("role {r} is not assigned"))
-        }
-        AccountError::EmailAlreadyVerified => {
-            Status::already_exists("email is already verified")
-        }
-        AccountError::LedgerCurrencyNotSet => {
-            Status::failed_precondition("ledger currency is not set")
-        }
-        AccountError::ArithmeticOverflow => {
-            Status::internal("arithmetic overflow in credit calculation")
-        }
-        AccountError::Validation(e) => {
-            Status::invalid_argument(e.to_string())
-        }
-        AccountError::Storage(_) => {
-            Status::unavailable("a database error occurred — please retry")
-        }
-        _ => Status::internal("an unexpected error occurred"),
     }
 }

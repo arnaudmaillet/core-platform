@@ -132,15 +132,6 @@ where
         self.request_data_export(request).await
     }
 
-    // ── Financial ledger ──────────────────────────────────────────────────────
-
-    async fn adjust_credit_balance(
-        &self,
-        request: Request<proto::AdjustCreditBalanceRequest>,
-    ) -> Result<Response<proto::CommandResponse>, Status> {
-        self.adjust_credit_balance(request).await
-    }
-
     // ── Roles & permissions ───────────────────────────────────────────────────
 
     async fn assign_role(
@@ -178,13 +169,6 @@ where
         request: Request<proto::GetAccountStatusRequest>,
     ) -> Result<Response<proto::AccountStatusView>, Status> {
         self.get_account_status(request).await
-    }
-
-    async fn get_credit_balance(
-        &self,
-        request: Request<proto::GetCreditBalanceRequest>,
-    ) -> Result<Response<proto::CreditBalanceView>, Status> {
-        self.get_credit_balance(request).await
     }
 
     async fn get_gdpr_record(

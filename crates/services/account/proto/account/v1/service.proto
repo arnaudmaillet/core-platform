@@ -10,8 +10,8 @@ option java_multiple_files = true;
 option go_package = "github.com/coreplatform/account/v1;accountv1";
 
 // AccountService manages the full private lifecycle of a physical person:
-// registration, credential management, KYC, GDPR compliance, financial
-// credit state, and role-based access control.
+// registration, credential management, KYC, GDPR compliance, and role-based
+// access control. Financial state is owned by the dedicated ledger microservice.
 //
 // All mutating RPCs (commands) return CommandResponse.
 // All read RPCs (queries) return the typed view message.
@@ -79,11 +79,6 @@ service AccountService {
     // Initiate an Art. 20 GDPR data portability export.
     rpc RequestDataExport(RequestDataExportRequest) returns (CommandResponse);
 
-    // ── Financial ledger ──────────────────────────────────────────────────────
-
-    // Apply a signed credit delta (positive = top-up, negative = debit).
-    rpc AdjustCreditBalance(AdjustCreditBalanceRequest) returns (CommandResponse);
-
     // ── Roles & permissions ───────────────────────────────────────────────────
 
     // Grant an internal platform role to the account (admin only).
@@ -102,9 +97,6 @@ service AccountService {
 
     // Lightweight status check used by auth middleware and gateway.
     rpc GetAccountStatus(GetAccountStatusRequest) returns (AccountStatusView);
-
-    // Current credit balance and reserved amount.
-    rpc GetCreditBalance(GetCreditBalanceRequest) returns (CreditBalanceView);
 
     // Full GDPR compliance record (restricted endpoint).
     rpc GetGdprRecord(GetGdprRecordRequest) returns (GdprRecordView);

@@ -14,11 +14,6 @@ use thiserror::Error;
 /// | ACC-2001 | AccountNotActive           | 422  | Medium   | No        |
 /// | ACC-2002 | InvalidStatusTransition    | 422  | Medium   | No        |
 /// | ACC-2003 | EmailAlreadyVerified       | 409  | Low      | No        |
-/// | ACC-3001 | InsufficientBalance        | 422  | Medium   | No        |
-/// | ACC-3002 | InvalidCreditAmount        | 422  | Low      | No        |
-/// | ACC-3003 | ArithmeticOverflow         | 500  | High     | No        |
-/// | ACC-3004 | LedgerCurrencyNotSet       | 422  | Medium   | No        |
-/// | ACC-3005 | CurrencyMismatch           | 422  | Medium   | No        |
 /// | ACC-4001 | ConcurrentModification     | 409  | High     | **Yes**   |
 /// | ACC-5001 | MfaAlreadyEnrolled         | 409  | Low      | No        |
 /// | ACC-5002 | MfaNotEnrolled             | 422  | Low      | No        |
@@ -33,10 +28,9 @@ use thiserror::Error;
 /// | ACC-9004 | InvalidEmail               | 422  | Low      | No        |
 /// | ACC-9005 | InvalidPhone               | 422  | Low      | No        |
 /// | ACC-9006 | InvalidCountryCode         | 422  | Low      | No        |
-/// | ACC-9007 | InvalidCurrencyCode        | 422  | Low      | No        |
-/// | ACC-9008 | InvalidAccountStatus       | 422  | Low      | No        |
-/// | ACC-9009 | InvalidKycStatus           | 422  | Low      | No        |
-/// | ACC-9010 | InvalidAccountRole         | 422  | Low      | No        |
+/// | ACC-9007 | InvalidAccountStatus       | 422  | Low      | No        |
+/// | ACC-9008 | InvalidKycStatus           | 422  | Low      | No        |
+/// | ACC-9009 | InvalidAccountRole         | 422  | Low      | No        |
 /// | DB-*     | Storage (delegated)        | var  | var      | var       |
 /// | VAL-*    | Validation (delegated)     | 422  | Low      | No        |
 #[derive(Debug, Error)]
@@ -71,23 +65,6 @@ pub enum AccountError {
 
     #[error("the email address for this account is already verified")]
     EmailAlreadyVerified,
-
-    // ── Financial ledger (ACC-3xxx) ───────────────────────────────────────────
-
-    #[error("insufficient balance for this operation")]
-    InsufficientBalance,
-
-    #[error("credit amount must be non-negative: {0}")]
-    InvalidCreditAmount(String),
-
-    #[error("arithmetic overflow in credit calculation")]
-    ArithmeticOverflow,
-
-    #[error("account ledger currency has not been set")]
-    LedgerCurrencyNotSet,
-
-    #[error("currency mismatch: account currency is '{account}', requested '{requested}'")]
-    CurrencyMismatch { account: String, requested: String },
 
     // ── Optimistic concurrency (ACC-4xxx) ─────────────────────────────────────
 
@@ -143,9 +120,6 @@ pub enum AccountError {
     #[error("invalid country code: {0}")]
     InvalidCountryCode(String),
 
-    #[error("invalid currency code: {0}")]
-    InvalidCurrencyCode(String),
-
     #[error("unknown account status: '{0}'")]
     InvalidAccountStatus(String),
 
@@ -170,12 +144,6 @@ impl AppError for AccountError {
             AccountError::InvalidStatusTransition { .. }   => "ACC-2002",
             AccountError::EmailAlreadyVerified             => "ACC-2003",
 
-            AccountError::InsufficientBalance              => "ACC-3001",
-            AccountError::InvalidCreditAmount(_)           => "ACC-3002",
-            AccountError::ArithmeticOverflow               => "ACC-3003",
-            AccountError::LedgerCurrencyNotSet             => "ACC-3004",
-            AccountError::CurrencyMismatch { .. }          => "ACC-3005",
-
             AccountError::ConcurrentModification           => "ACC-4001",
 
             AccountError::MfaAlreadyEnrolled               => "ACC-5001",
@@ -195,10 +163,9 @@ impl AppError for AccountError {
             AccountError::InvalidEmail(_)                  => "ACC-9004",
             AccountError::InvalidPhone(_)                  => "ACC-9005",
             AccountError::InvalidCountryCode(_)            => "ACC-9006",
-            AccountError::InvalidCurrencyCode(_)           => "ACC-9007",
-            AccountError::InvalidAccountStatus(_)          => "ACC-9008",
-            AccountError::InvalidKycStatus(_)              => "ACC-9009",
-            AccountError::InvalidAccountRole(_)            => "ACC-9010",
+            AccountError::InvalidAccountStatus(_)          => "ACC-9007",
+            AccountError::InvalidKycStatus(_)              => "ACC-9008",
+            AccountError::InvalidAccountRole(_)            => "ACC-9009",
         }
     }
 
@@ -217,8 +184,6 @@ impl AppError for AccountError {
             | AccountError::GdprDeletionAlreadyRequested
             | AccountError::RoleAlreadyAssigned(_) => StatusCode::CONFLICT,
 
-            AccountError::ArithmeticOverflow => StatusCode::INTERNAL_SERVER_ERROR,
-
             _ => StatusCode::UNPROCESSABLE_ENTITY,
         }
     }
@@ -228,14 +193,10 @@ impl AppError for AccountError {
             AccountError::Storage(e)    => e.severity(),
             AccountError::Validation(e) => e.severity(),
 
-            AccountError::ConcurrentModification
-            | AccountError::ArithmeticOverflow => Severity::High,
+            AccountError::ConcurrentModification => Severity::High,
 
             AccountError::AccountNotActive { .. }
             | AccountError::InvalidStatusTransition { .. }
-            | AccountError::InsufficientBalance
-            | AccountError::LedgerCurrencyNotSet
-            | AccountError::CurrencyMismatch { .. }
             | AccountError::InvalidKycTransition { .. }
             | AccountError::DomainViolation { .. } => Severity::Medium,
 
@@ -245,9 +206,9 @@ impl AppError for AccountError {
 
     fn is_retryable(&self) -> bool {
         match self {
-            AccountError::Storage(e)           => e.is_retryable(),
+            AccountError::Storage(e)             => e.is_retryable(),
             AccountError::ConcurrentModification => true,
-            _                                  => false,
+            _                                    => false,
         }
     }
 
@@ -270,11 +231,6 @@ impl AppError for AccountError {
             AccountError::AccountNotActive { .. }          => "This operation is not permitted for the account's current status.",
             AccountError::InvalidStatusTransition { .. }   => "This status transition is not permitted.",
             AccountError::EmailAlreadyVerified             => "The email address for this account is already verified.",
-            AccountError::InsufficientBalance              => "Insufficient credit balance for this operation.",
-            AccountError::InvalidCreditAmount(_)           => "The credit amount is invalid.",
-            AccountError::ArithmeticOverflow               => "An internal calculation error occurred.",
-            AccountError::LedgerCurrencyNotSet             => "The account currency has not been set.",
-            AccountError::CurrencyMismatch { .. }          => "The requested currency does not match the account currency.",
             AccountError::ConcurrentModification           => "The account was modified concurrently. Please retry.",
             AccountError::MfaAlreadyEnrolled               => "Multi-factor authentication is already set up.",
             AccountError::MfaNotEnrolled                   => "Multi-factor authentication is not configured.",

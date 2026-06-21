@@ -1,13 +1,10 @@
 use crate::domain::aggregate::account::Account;
-use crate::domain::entity::{
-    credit_ledger::CreditLedger, gdpr_record::GdprRecord, mfa_state::MfaState,
-};
+use crate::domain::entity::{gdpr_record::GdprRecord, mfa_state::MfaState};
 use crate::domain::value_object::{
     account_id::AccountId,
     account_role::AccountRole,
     account_status::AccountStatus,
     country_code::CountryCode,
-    currency_code::CurrencyCode,
     email_address::EmailAddress,
     encrypted_bytes::EncryptedBytes,
     identity_id::IdentityId,
@@ -15,7 +12,6 @@ use crate::domain::value_object::{
     password_hash::PasswordHash,
     phone_number::PhoneNumber,
     recovery_code_hash::RecoveryCodeHash,
-    transaction_id::TransactionId,
 };
 use crate::error::AccountError;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -73,13 +69,6 @@ pub struct AccountRow {
 
     pub roles: Vec<String>,
     pub permission_overrides: Vec<String>,
-
-    pub credit_balance: i64,
-    pub credit_reserved: i64,
-    pub credit_currency: Option<String>,
-    pub credit_ledger_version: i64,
-    pub credit_last_tx_id: Option<Uuid>,
-    pub credit_last_tx_at: Option<DateTime<Utc>>,
 
     pub version: i64,
     pub created_at: DateTime<Utc>,
@@ -147,17 +136,6 @@ impl TryFrom<AccountRow> for Account {
             })
             .collect::<Result<_, _>>()?;
 
-        let credit_currency = row.credit_currency.map(CurrencyCode::new).transpose()?;
-
-        let credit = CreditLedger::reconstitute(
-            row.credit_balance,
-            row.credit_reserved,
-            credit_currency,
-            row.credit_ledger_version,
-            row.credit_last_tx_id.map(TransactionId::from_uuid),
-            row.credit_last_tx_at,
-        )?;
-
         Ok(Account::reconstitute(
             id,
             identity_id,
@@ -184,7 +162,6 @@ impl TryFrom<AccountRow> for Account {
             gdpr,
             roles,
             row.permission_overrides,
-            credit,
             row.version,
             row.created_at,
             row.updated_at,

@@ -2,17 +2,16 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::entity::{CreditLedger, GdprRecord, MfaState};
+use crate::domain::entity::{GdprRecord, MfaState};
 use crate::domain::event::{
     AccountActivated, AccountCreated, AccountDeactivated, AccountDeleted, AccountSuspended,
-    CreditApplied, DebitApplied, DomainEvent, EmailChanged, EmailVerified, GdprDataExportRequested,
-    GdprDeletionRequested, KycStatusChanged, MfaEnrolled, MfaRevoked, PasswordChanged,
-    PhoneChanged, RoleAssigned, RoleRevoked,
+    DomainEvent, EmailChanged, EmailVerified, GdprDataExportRequested, GdprDeletionRequested,
+    KycStatusChanged, MfaEnrolled, MfaRevoked, PasswordChanged, PhoneChanged, RoleAssigned,
+    RoleRevoked,
 };
 use crate::domain::value_object::{
-    AccountId, AccountRole, AccountStatus, CountryCode, CreditAmount, CurrencyCode, EmailAddress,
-    EncryptedBytes, IdentityId, KycStatus, PasswordHash, PhoneNumber, RecoveryCodeHash,
-    TransactionId,
+    AccountId, AccountRole, AccountStatus, CountryCode, EmailAddress, EncryptedBytes, IdentityId,
+    KycStatus, PasswordHash, PhoneNumber, RecoveryCodeHash,
 };
 use crate::error::AccountError;
 
@@ -28,8 +27,6 @@ pub struct AccountCreateParams {
     pub role: AccountRole,
     /// ISO 3166-1 alpha-2; optional at creation for progressive-profile flows.
     pub country_of_residence: Option<CountryCode>,
-    /// ISO 4217 currency for the embedded credit ledger.
-    pub currency_code: CurrencyCode,
     /// UUID of the admin account that provisioned this account; `None` for self-registration.
     pub created_by: Option<AccountId>,
     pub correlation_id: Uuid,
@@ -37,18 +34,17 @@ pub struct AccountCreateParams {
 
 /// The Account aggregate root.
 ///
-/// Encapsulates the full lifecycle of a physical person on the platform:
-/// identity verification, credentials, MFA, KYC, financial ledger, GDPR state,
-/// and role-based access control. All state mutations go through domain methods
-/// that enforce invariants and emit [`DomainEvent`]s. The aggregate never
-/// interacts with I/O directly — the repository port reads and persists it.
+/// Manages identity verification, credentials, MFA, KYC, GDPR compliance, and
+/// role-based access control for a single physical person on the platform.
+/// Financial state is owned by the dedicated `ledger` microservice.
+///
+/// All state mutations go through domain methods that enforce invariants and
+/// emit [`DomainEvent`]s. The aggregate never interacts with I/O directly.
 ///
 /// # Invariants
 ///
 /// - Status transitions are gated by [`AccountStatus::can_transition_to`].
-/// - Financial operations require `status == Active`.
-/// - `version` is incremented on every non-financial write.
-/// - `credit.ledger_version` is incremented on every financial write.
+/// - `version` is incremented on every write.
 /// - `password_hash` is `None` for SSO-only accounts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
@@ -88,8 +84,6 @@ pub struct Account {
     roles: Vec<AccountRole>,
     permission_overrides: Vec<String>,
 
-    credit: CreditLedger,
-
     created_by: Option<AccountId>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -120,8 +114,6 @@ impl Account {
             correlation_id: params.correlation_id,
         });
 
-        let credit = CreditLedger::new(params.currency_code);
-
         let mut account = Self {
             id,
             version: 0,
@@ -149,7 +141,6 @@ impl Account {
             gdpr: GdprRecord::default(),
             roles: vec![params.role],
             permission_overrides: Vec::new(),
-            credit,
             created_by: params.created_by,
             created_at: now,
             updated_at: now,
@@ -187,7 +178,6 @@ impl Account {
         gdpr: GdprRecord,
         roles: Vec<AccountRole>,
         permission_overrides: Vec<String>,
-        credit: CreditLedger,
         version: i64,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
@@ -220,7 +210,6 @@ impl Account {
             gdpr,
             roles,
             permission_overrides,
-            credit,
             created_by,
             created_at,
             updated_at,
@@ -253,8 +242,6 @@ impl Account {
     }
 
     /// Marks the phone number as verified.
-    ///
-    /// The account must have a phone number set first (`phone` is `Some`).
     pub fn verify_phone(&mut self, correlation_id: Uuid) -> Result<(), AccountError> {
         self.require_active()?;
         if self.phone.is_none() {
@@ -384,9 +371,7 @@ impl Account {
         Ok(())
     }
 
-    /// Assigns a role to this account.
-    ///
-    /// Emits [`RoleAssigned`].
+    /// Assigns a role to this account. Emits [`RoleAssigned`].
     pub fn assign_role(
         &mut self,
         role: AccountRole,
@@ -408,8 +393,7 @@ impl Account {
 
     /// Revokes a role from this account.
     ///
-    /// The last remaining role cannot be revoked (an account must have at least one role).
-    /// Emits [`RoleRevoked`].
+    /// The last remaining role cannot be revoked. Emits [`RoleRevoked`].
     pub fn revoke_role(
         &mut self,
         role: AccountRole,
@@ -437,9 +421,7 @@ impl Account {
         Ok(())
     }
 
-    /// Suspends the account.
-    ///
-    /// Emits [`AccountSuspended`].
+    /// Suspends the account. Emits [`AccountSuspended`].
     pub fn suspend(
         &mut self,
         reason: String,
@@ -457,9 +439,7 @@ impl Account {
         Ok(())
     }
 
-    /// Re-activates a suspended account.
-    ///
-    /// Emits [`AccountActivated`].
+    /// Re-activates a suspended account. Emits [`AccountActivated`].
     pub fn activate(&mut self, correlation_id: Uuid) -> Result<(), AccountError> {
         self.transition_status(AccountStatus::Active)?;
         self.suspension_reason = None;
@@ -472,9 +452,7 @@ impl Account {
         Ok(())
     }
 
-    /// Deactivates the account (self-service closure).
-    ///
-    /// Emits [`AccountDeactivated`].
+    /// Deactivates the account (self-service closure). Emits [`AccountDeactivated`].
     pub fn deactivate(&mut self, correlation_id: Uuid) -> Result<(), AccountError> {
         self.transition_status(AccountStatus::Deactivated)?;
         let now = self.touch_now();
@@ -487,9 +465,7 @@ impl Account {
         Ok(())
     }
 
-    /// Hard-deletes the account (terminal state).
-    ///
-    /// Emits [`AccountDeleted`].
+    /// Hard-deletes the account (terminal state). Emits [`AccountDeleted`].
     pub fn delete(
         &mut self,
         deleted_by: Option<AccountId>,
@@ -506,9 +482,7 @@ impl Account {
         Ok(())
     }
 
-    /// Updates the KYC status and records the reviewer.
-    ///
-    /// Emits [`KycStatusChanged`].
+    /// Updates the KYC status and records the reviewer. Emits [`KycStatusChanged`].
     pub fn update_kyc_status(
         &mut self,
         new_status: KycStatus,
@@ -531,76 +505,6 @@ impl Account {
             account_id: self.id,
             old_status,
             new_status,
-            occurred_at: now,
-            correlation_id,
-        }));
-        Ok(())
-    }
-
-    /// Credits the account ledger.
-    ///
-    /// Requires `Active` status. Emits [`CreditApplied`].
-    pub fn apply_credit(
-        &mut self,
-        amount: CreditAmount,
-        currency: CurrencyCode,
-        transaction_id: TransactionId,
-        correlation_id: Uuid,
-    ) -> Result<(), AccountError> {
-        self.require_active()?;
-        let ledger_currency = self
-            .credit
-            .currency
-            .clone()
-            .ok_or(AccountError::LedgerCurrencyNotSet)?;
-        if ledger_currency != currency {
-            return Err(AccountError::CurrencyMismatch {
-                account: ledger_currency.as_str().to_owned(),
-                requested: currency.as_str().to_owned(),
-            });
-        }
-        self.credit.credit(amount.clone(), transaction_id)?;
-        let now = Utc::now();
-        self.pending_events.push(DomainEvent::CreditApplied(CreditApplied {
-            account_id: self.id,
-            amount,
-            currency: ledger_currency,
-            transaction_id,
-            occurred_at: now,
-            correlation_id,
-        }));
-        Ok(())
-    }
-
-    /// Debits the account ledger.
-    ///
-    /// Requires `Active` status. Emits [`DebitApplied`].
-    pub fn apply_debit(
-        &mut self,
-        amount: CreditAmount,
-        currency: CurrencyCode,
-        transaction_id: TransactionId,
-        correlation_id: Uuid,
-    ) -> Result<(), AccountError> {
-        self.require_active()?;
-        let ledger_currency = self
-            .credit
-            .currency
-            .clone()
-            .ok_or(AccountError::LedgerCurrencyNotSet)?;
-        if ledger_currency != currency {
-            return Err(AccountError::CurrencyMismatch {
-                account: ledger_currency.as_str().to_owned(),
-                requested: currency.as_str().to_owned(),
-            });
-        }
-        self.credit.debit(amount.clone(), transaction_id)?;
-        let now = Utc::now();
-        self.pending_events.push(DomainEvent::DebitApplied(DebitApplied {
-            account_id: self.id,
-            amount,
-            currency: ledger_currency,
-            transaction_id,
             occurred_at: now,
             correlation_id,
         }));
@@ -768,12 +672,6 @@ impl Account {
     pub fn has_role(&self, role: AccountRole) -> bool { self.roles.contains(&role) }
 
     pub fn permission_overrides(&self) -> &[String] { &self.permission_overrides }
-
-    pub fn credit(&self) -> &CreditLedger { &self.credit }
-
-    pub fn credit_mut(&mut self) -> &mut CreditLedger { &mut self.credit }
-
-    pub fn ledger_version(&self) -> i64 { self.credit.ledger_version }
 
     pub fn created_by(&self) -> Option<AccountId> { self.created_by }
 

@@ -5,19 +5,21 @@ use cqrs::{Envelope, Query, QueryHandler};
 
 use crate::application::port::AccountRepository;
 use crate::domain::aggregate::Account;
-use crate::error::AccountError;
 use crate::domain::value_object::AccountId;
+use crate::error::AccountError;
 use uuid::Uuid;
 
 /// Flat read-model of an Account, safe to send over the wire.
 ///
-/// All value objects are serialised to their string/numeric representations
+/// All value objects are serialised to their string/primitive representations
 /// so the caller (gRPC mapper, REST controller) needs no domain imports.
 #[derive(Debug, Clone)]
 pub struct AccountView {
     pub id: String,
     pub identity_id: String,
     pub status: String,
+    pub suspension_reason: Option<String>,
+    pub deactivated_at: Option<DateTime<Utc>>,
     pub email: String,
     pub email_verified: bool,
     pub email_verified_at: Option<DateTime<Utc>>,
@@ -26,30 +28,24 @@ pub struct AccountView {
     pub kyc_status: String,
     pub roles: Vec<String>,
     pub permission_overrides: Vec<String>,
-    pub credit_balance: i64,
-    pub credit_reserved: i64,
-    pub credit_available: i64,
-    pub credit_currency: Option<String>,
-    pub credit_ledger_version: i64,
-    pub version: i64,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub suspension_reason: Option<String>,
     pub country_of_residence: Option<String>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub is_locked: bool,
     pub mfa_enforced: bool,
-    pub deactivated_at: Option<DateTime<Utc>>,
+    pub version: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub created_by: Option<String>,
 }
 
 impl From<&Account> for AccountView {
     fn from(a: &Account) -> Self {
-        let credit = a.credit();
         Self {
             id: a.id().as_uuid().to_string(),
             identity_id: a.identity_id().as_str().to_owned(),
             status: a.status().to_string(),
+            suspension_reason: a.suspension_reason().map(str::to_owned),
+            deactivated_at: a.deactivated_at(),
             email: a.email().as_str().to_owned(),
             email_verified: a.email_verified(),
             email_verified_at: a.email_verified_at(),
@@ -62,22 +58,13 @@ impl From<&Account> for AccountView {
                 .iter()
                 .map(|p| p.as_str().to_owned())
                 .collect(),
-            credit_balance: credit.balance_micros(),
-            credit_reserved: credit.reserved_micros(),
-            credit_available: credit.available_micros(),
-            credit_currency: credit.currency().map(|c| c.as_str().to_owned()),
-            credit_ledger_version: credit.ledger_version(),
-            version: a.version(),
-            created_at: a.created_at(),
-            updated_at: a.updated_at(),
-            suspension_reason: a.suspension_reason().map(str::to_owned),
-            country_of_residence: a
-                .country_of_residence()
-                .map(|c| c.as_str().to_owned()),
+            country_of_residence: a.country_of_residence().map(|c| c.as_str().to_owned()),
             last_login_at: a.last_login_at(),
             is_locked: a.is_locked(),
             mfa_enforced: a.mfa().enforced(),
-            deactivated_at: a.deactivated_at(),
+            version: a.version(),
+            created_at: a.created_at(),
+            updated_at: a.updated_at(),
             created_by: a.created_by().map(|id| id.as_uuid().to_string()),
         }
     }
@@ -127,4 +114,5 @@ impl QueryHandler<GetAccountByIdQuery> for GetAccountByIdHandler {
         Ok(AccountView::from(&account))
     }
 }
+
 pub type GetAccountByIdResponse = AccountView;
