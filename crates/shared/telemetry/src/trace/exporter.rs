@@ -47,3 +47,54 @@ fn build_http_exporter(config: &TraceConfig) -> Result<SpanExporter, TelemetryEr
         .build()
         .map_err(|e| TelemetryError::OtlpExporter(e.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::trace::config::{OtlpProtocol, SamplingStrategy, TraceConfig};
+
+    fn grpc_config() -> TraceConfig {
+        TraceConfig {
+            otlp_endpoint: "http://localhost:4317".into(),
+            protocol: OtlpProtocol::Grpc,
+            sampling: SamplingStrategy::AlwaysOff,
+            auth_header: None,
+        }
+    }
+
+    fn http_config(auth: Option<&str>) -> TraceConfig {
+        TraceConfig {
+            otlp_endpoint: "http://localhost:4318".into(),
+            protocol: OtlpProtocol::HttpProtobuf,
+            sampling: SamplingStrategy::AlwaysOff,
+            auth_header: auth.map(Into::into),
+        }
+    }
+
+    // Tonic creates a lazy channel that requires the Tokio reactor at build time.
+    #[tokio::test]
+    async fn grpc_exporter_builds_without_connecting() {
+        build_otlp_exporter(&grpc_config()).unwrap();
+    }
+
+    // The `http-proto` feature enables the protocol but not an HTTP client backend
+    // (no `reqwest-client` / `hyper-client` feature in Cargo.toml).  The SDK
+    // returns an explicit error; verify we surface it as OtlpExporter.
+    #[test]
+    fn http_exporter_without_client_backend_returns_otlp_error() {
+        let err = build_otlp_exporter(&http_config(None)).unwrap_err();
+        assert!(
+            matches!(err, TelemetryError::OtlpExporter(_)),
+            "expected OtlpExporter error, got: {err}",
+        );
+    }
+
+    #[test]
+    fn http_exporter_with_auth_header_returns_otlp_error() {
+        let err = build_otlp_exporter(&http_config(Some("Bearer secret"))).unwrap_err();
+        assert!(
+            matches!(err, TelemetryError::OtlpExporter(_)),
+            "expected OtlpExporter error, got: {err}",
+        );
+    }
+}

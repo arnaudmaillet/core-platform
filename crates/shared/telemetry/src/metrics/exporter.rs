@@ -56,3 +56,46 @@ pub fn metrics_route(
         std::future::ready(([header], body))
     }
 }
+
+#[cfg(test)]
+#[cfg(feature = "prometheus-exporter")]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn empty_handle() -> PrometheusHandle {
+        PrometheusHandle { registry: prometheus::Registry::new() }
+    }
+
+    #[test]
+    fn render_empty_registry_returns_empty_string() {
+        let output = empty_handle().render();
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn render_with_registered_counter_includes_metric_name() {
+        use prometheus::{Counter, Opts};
+        let registry = prometheus::Registry::new();
+        let counter =
+            Counter::with_opts(Opts::new("test_requests_total", "Total test requests")).unwrap();
+        registry.register(Box::new(counter.clone())).unwrap();
+        counter.inc();
+
+        let handle = PrometheusHandle { registry };
+        let output = handle.render();
+        assert!(output.contains("test_requests_total"), "output: {output}");
+        assert!(output.contains('1'), "output: {output}");
+    }
+
+    #[tokio::test]
+    async fn metrics_route_sets_prometheus_content_type() {
+        let handle = Arc::new(empty_handle());
+        let route = metrics_route(Arc::clone(&handle));
+        let (headers, _body) = route().await;
+        assert_eq!(
+            headers[0].1,
+            axum::http::HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
+        );
+    }
+}

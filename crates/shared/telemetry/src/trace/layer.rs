@@ -72,3 +72,46 @@ fn sampler_from(strategy: &SamplingStrategy) -> Result<Sampler, TelemetryError> 
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::TelemetryError;
+
+    #[test]
+    fn always_on_sampler_succeeds() {
+        sampler_from(&SamplingStrategy::AlwaysOn).unwrap();
+    }
+
+    #[test]
+    fn always_off_sampler_succeeds() {
+        sampler_from(&SamplingStrategy::AlwaysOff).unwrap();
+    }
+
+    #[test]
+    fn mid_range_ratio_succeeds() {
+        sampler_from(&SamplingStrategy::TraceIdRatio(0.5)).unwrap();
+    }
+
+    #[test]
+    fn zero_ratio_is_valid_boundary() {
+        sampler_from(&SamplingStrategy::TraceIdRatio(0.0)).unwrap();
+    }
+
+    #[test]
+    fn one_ratio_is_valid_boundary() {
+        sampler_from(&SamplingStrategy::TraceIdRatio(1.0)).unwrap();
+    }
+
+    #[test]
+    fn negative_ratio_returns_invalid_sampling_error() {
+        let err = sampler_from(&SamplingStrategy::TraceIdRatio(-0.1)).unwrap_err();
+        assert!(matches!(err, TelemetryError::InvalidSamplingRatio(r) if (r - (-0.1)).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn ratio_above_one_returns_invalid_sampling_error() {
+        let err = sampler_from(&SamplingStrategy::TraceIdRatio(1.5)).unwrap_err();
+        assert!(matches!(err, TelemetryError::InvalidSamplingRatio(r) if (r - 1.5).abs() < f64::EPSILON));
+    }
+}

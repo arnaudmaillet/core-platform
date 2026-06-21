@@ -109,3 +109,35 @@ fn init_otlp_pipeline(endpoint: &str) -> Result<MetricsPipeline, TelemetryError>
         prometheus: None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::config::{MetricsConfig, MetricsExporterKind};
+
+    #[test]
+    #[cfg(feature = "prometheus-exporter")]
+    fn prometheus_pipeline_has_handle() {
+        let cfg = MetricsConfig { exporter: MetricsExporterKind::Prometheus };
+        let pipeline = init_metrics_pipeline(&cfg).unwrap();
+        assert!(pipeline.prometheus_handle().is_some());
+    }
+
+    #[test]
+    #[cfg(feature = "prometheus-exporter")]
+    fn prometheus_pipeline_handle_renders_without_panic() {
+        let cfg = MetricsConfig { exporter: MetricsExporterKind::Prometheus };
+        let pipeline = init_metrics_pipeline(&cfg).unwrap();
+        let handle = pipeline.prometheus_handle().unwrap();
+        let _ = handle.render();
+    }
+
+    #[test]
+    #[cfg(feature = "prometheus-exporter")]
+    fn prometheus_pipeline_shutdown_does_not_panic() {
+        let cfg = MetricsConfig { exporter: MetricsExporterKind::Prometheus };
+        let pipeline = init_metrics_pipeline(&cfg).unwrap();
+        pipeline.shutdown();
+    }
+
+}

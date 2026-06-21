@@ -35,3 +35,71 @@ impl LogConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn log_format_default_is_json() {
+        assert!(matches!(LogFormat::default(), LogFormat::Json));
+    }
+
+    #[test]
+    fn defaults_when_no_env_vars() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe {
+            std::env::remove_var("LOG_FORMAT");
+            std::env::remove_var("LOG_FILTER");
+        }
+        let cfg = LogConfig::from_env();
+        assert!(matches!(cfg.format, LogFormat::Json));
+        assert_eq!(cfg.default_filter, "info");
+        assert!(!cfg.ansi);
+    }
+
+    #[test]
+    fn pretty_format_from_env() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe {
+            std::env::set_var("LOG_FORMAT", "pretty");
+            std::env::remove_var("LOG_FILTER");
+        }
+        let cfg = LogConfig::from_env();
+        assert!(matches!(cfg.format, LogFormat::Pretty));
+        assert!(cfg.ansi);
+        // SAFETY: cleanup under the same lock.
+        unsafe { std::env::remove_var("LOG_FORMAT") };
+    }
+
+    #[test]
+    fn unknown_format_falls_back_to_json() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe { std::env::set_var("LOG_FORMAT", "unknown") };
+        let cfg = LogConfig::from_env();
+        assert!(matches!(cfg.format, LogFormat::Json));
+        assert!(!cfg.ansi);
+        // SAFETY: cleanup.
+        unsafe { std::env::remove_var("LOG_FORMAT") };
+    }
+
+    #[test]
+    fn custom_log_filter() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under the mutex lock above.
+        unsafe {
+            std::env::remove_var("LOG_FORMAT");
+            std::env::set_var("LOG_FILTER", "debug");
+        }
+        let cfg = LogConfig::from_env();
+        assert_eq!(cfg.default_filter, "debug");
+        // SAFETY: cleanup.
+        unsafe { std::env::remove_var("LOG_FILTER") };
+    }
+}
