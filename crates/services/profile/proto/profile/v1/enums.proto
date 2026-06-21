@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package profile.v1;
+
+option java_package = "com.coreplatform.profile.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/profile/v1;profilev1";
+
+enum ProfileStatus {
+    PROFILE_STATUS_UNSPECIFIED = 0;
+    PROFILE_STATUS_ACTIVE      = 1;
+    PROFILE_STATUS_SUSPENDED   = 2;
+    PROFILE_STATUS_HIDDEN      = 3;
+    PROFILE_STATUS_DELETED     = 4;
+}
+
+enum ProfileKind {
+    PROFILE_KIND_UNSPECIFIED   = 0;
+    PROFILE_KIND_PERSONAL      = 1;
+    PROFILE_KIND_PROFESSIONAL  = 2;
+    PROFILE_KIND_BRAND         = 3;
+    PROFILE_KIND_BOT           = 4;
+}
+
+enum ProfileVisibility {
+    PROFILE_VISIBILITY_UNSPECIFIED = 0;
+    PROFILE_VISIBILITY_PUBLIC      = 1;
+    PROFILE_VISIBILITY_PRIVATE     = 2;
+}
+
+enum VerificationKind {
+    VERIFICATION_KIND_UNSPECIFIED = 0;
+    VERIFICATION_KIND_OFFICIAL    = 1;
+    VERIFICATION_KIND_NOTABLE     = 2;
+    VERIFICATION_KIND_BUSINESS    = 3;
+}
+
+enum MaskingReason {
+    MASKING_REASON_UNSPECIFIED         = 0;
+    MASKING_REASON_ACCOUNT_SUSPENDED   = 1;
+    MASKING_REASON_ACCOUNT_DELETED     = 2;
+    MASKING_REASON_CONTENT_POLICY      = 3;
+}
