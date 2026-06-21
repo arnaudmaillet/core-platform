@@ -625,6 +625,7 @@ dependencies = [
  "http",
  "tracing",
  "uuid",
+ "validate-core",
 ]
 
 [[package]]
@@ -5248,6 +5249,24 @@ dependencies = [
  "serde_core",
  "sha1_smol",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "validate-core"
+version = "0.1.0"
+
+[[package]]
+name = "validation"
+version = "0.1.0"
+dependencies = [
+ "cqrs",
+ "error",
+ "http",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "validate-core",
 ]
 
 [[package]]
