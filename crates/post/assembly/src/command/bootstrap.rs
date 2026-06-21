@@ -3,7 +3,7 @@
 use crate::PostCommandContainer;
 use infra_fred::RedisCacheRepository;
 use infra_scylla::scylla::client;
-use post::{
+use post_older::{
     CachedPostReadRepository, ChangeVisibilityCommand, ChangeVisibilityHandler, CreatePostCommand,
     CreatePostHandler, DeletePostCommand, DeletePostHandler, PostCommandCtx, PostKernelCtx,
     ScyllaPostReadRepository, ScyllaPostWriteRepository, ToggleCommentsCommand,

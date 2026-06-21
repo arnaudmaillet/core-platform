@@ -2,7 +2,7 @@
 mod tests {
     use std::str::FromStr;
 
-    use post::VisibilityLevel;
+    use post_older::VisibilityLevel;
 
     #[test]
     fn test_visibility_level_from_str() {

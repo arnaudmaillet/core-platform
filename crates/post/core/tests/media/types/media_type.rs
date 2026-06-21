@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::MediaType;
+    use post_older::MediaType;
     use std::str::FromStr;
 
     #[test]

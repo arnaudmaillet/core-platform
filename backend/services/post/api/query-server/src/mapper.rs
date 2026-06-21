@@ -1,5 +1,5 @@
-use post::{Media, Post};
 use post_assembly::PostDetail;
+use post_older::{Media, Post};
 use post_proto_bridge::v1::{
     MediaAsset as ProtoMediaAsset, Post as ProtoPost, PostDetails as ProtoPostDetails,
 };

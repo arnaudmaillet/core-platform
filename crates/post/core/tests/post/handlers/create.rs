@@ -1,4 +1,4 @@
-use post::{Caption, CreatePostCommand, PostCommandCtx};
+use post_older::{Caption, CreatePostCommand, PostCommandCtx};
 use post_utils::{PostRepositoryAsserts, PostTestFixture};
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{Result, Versioned};

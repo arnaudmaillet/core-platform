@@ -17,7 +17,7 @@ infra-scylla = { workspace = true }
 infra-test = { workspace = true }
 shared-proto = { workspace = true, features = ["post"] }
 async-trait = { workspace = true }
-post = { workspace = true, features = ["test-utils"] }
+post-older = { workspace = true, features = ["test-utils"] }
 post-assembly = { workspace = true }
 post-profile = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true }

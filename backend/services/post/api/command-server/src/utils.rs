@@ -1,4 +1,4 @@
-use post::{PostCommandCtx, PostKernelCtx, PostQueryCtx};
+use post_older::{PostCommandCtx, PostKernelCtx, PostQueryCtx};
 use shared_kernel::command::{CommandBus, IdentifiableCommand};
 use shared_kernel::core::{Error, ErrorCode};
 use shared_kernel::types::{ProfileId, Region};

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::{AspectRatio, Height, MAX_RESOLUTION, MIN_RESOLUTION, Width};
+    use post_older::{AspectRatio, Height, MAX_RESOLUTION, MIN_RESOLUTION, Width};
 
     #[test]
     fn test_width_validation() {

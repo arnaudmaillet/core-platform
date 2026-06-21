@@ -2865,31 +2865,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
 
 [[package]]
-name = "post"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "post-proto-bridge",
- "post-utils",
- "serde",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "post-assembly"
 version = "0.1.0"
 dependencies = [
  "infra-fred",
  "infra-scylla",
- "post",
+ "post-older",
  "post-profile",
  "shared-kernel",
  "tokio",
@@ -2906,8 +2887,8 @@ dependencies = [
  "infra-fred",
  "infra-scylla",
  "infra-test",
- "post",
  "post-assembly",
+ "post-older",
  "post-proto-bridge",
  "prost-types",
  "serde_json",
@@ -2917,6 +2898,25 @@ dependencies = [
  "tonic 0.14.6",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "post-older"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "infra-fred",
+ "infra-scylla",
+ "infra-test",
+ "post-proto-bridge",
+ "post-utils",
+ "serde",
+ "serde_json",
+ "shared-kernel",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -2958,8 +2958,8 @@ dependencies = [
  "infra-fred",
  "infra-scylla",
  "infra-test",
- "post",
  "post-assembly",
+ "post-older",
  "post-proto-bridge",
  "prost-types",
  "serde_json",
@@ -2982,8 +2982,8 @@ dependencies = [
  "infra-fred",
  "infra-scylla",
  "infra-test",
- "post",
  "post-assembly",
+ "post-older",
  "post-profile",
  "shared-kernel",
  "shared-kernel-test-utils",

@@ -1,7 +1,7 @@
-use post::Media;
-use post::Post;
-use post::{Caption, DurationSeconds, Height, MediaType, MimeType, VisibilityLevel, Width};
-use post::{MediaId, Mentions};
+use post_older::Media;
+use post_older::Post;
+use post_older::{Caption, DurationSeconds, Height, MediaType, MimeType, VisibilityLevel, Width};
+use post_older::{MediaId, Mentions};
 use shared_kernel::messaging::EventEmitter;
 use shared_kernel::types::PostType;
 use shared_kernel::types::{PostId, ProfileId, Url};

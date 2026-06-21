@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use post::{Post, PostWriteRepositoryStub};
+use post_older::{Post, PostWriteRepositoryStub};
 use shared_kernel::types::PostId;
 
 #[async_trait]

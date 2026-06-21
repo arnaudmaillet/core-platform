@@ -1,7 +1,7 @@
 use crate::{PostAssemblyQueryService, PostQueryContainer};
 use infra_fred::RedisCacheRepository;
 use infra_scylla::scylla::client;
-use post::{CachedPostReadRepository, ScyllaPostReadRepository};
+use post_older::{CachedPostReadRepository, ScyllaPostReadRepository};
 use post_profile::{CachedProfileReadRepository, ScyllaProfileReadProjection};
 use std::sync::Arc;
 

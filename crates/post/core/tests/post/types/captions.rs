@@ -1,5 +1,5 @@
 mod tests {
-    use post::Caption;
+    use post_older::Caption;
     use std::str::FromStr;
 
     #[test]

@@ -1,6 +1,6 @@
 // crates/post/core/tests/post/handlers/toggle_comments.rs
 
-use post::{Caption, PostCommandCtx, UpdateCaptionCommand};
+use post_older::{Caption, PostCommandCtx, UpdateCaptionCommand};
 use post_utils::{PostRepositoryAsserts, PostTestFixture};
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ManagedEntity, Result};

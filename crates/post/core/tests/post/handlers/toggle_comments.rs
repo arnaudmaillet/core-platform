@@ -1,7 +1,7 @@
 // crates/post/core/tests/post/handlers/toggle_comments.rs
 
-use post::PostCommandCtx;
-use post::ToggleCommentsCommand;
+use post_older::PostCommandCtx;
+use post_older::ToggleCommentsCommand;
 use post_utils::{PostRepositoryAsserts, PostTestFixture};
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ManagedEntity, Result};

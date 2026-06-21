@@ -1,4 +1,4 @@
-use post::PostKernelCtx;
+use post_older::PostKernelCtx;
 use shared_kernel::command::CommandBus;
 
 pub struct PostCommandContainer {

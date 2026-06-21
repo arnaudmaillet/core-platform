@@ -77,7 +77,7 @@ social = { path = "crates/social" }
 social-test-utils = { path = "crates/social-test-utils" }
 profile-old = { path = "crates/profile-old" }
 profile-test-utils = { path = "crates/profile-test-utils" }
-post = { path = "crates/post/core" }
+post-older = { path = "crates/post/core" }
 post-utils = { path = "crates/post/utils" }
 post-assembly = { path = "crates/post/assembly" }
 post-profile = { path = "crates/post/profile" }

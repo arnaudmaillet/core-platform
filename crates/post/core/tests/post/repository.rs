@@ -1,9 +1,9 @@
 // crates/post/core/tests/post/repository.rs
 
 use infra_test::ScyllaTestContext;
-use post::Post;
-use post::{Caption, VisibilityLevel};
-use post::{
+use post_older::Post;
+use post_older::{Caption, VisibilityLevel};
+use post_older::{
     PostReadRepository, PostWriteRepository, ScyllaPostReadRepository, ScyllaPostWriteRepository,
 };
 use shared_kernel::core::{PageQuery, Result};

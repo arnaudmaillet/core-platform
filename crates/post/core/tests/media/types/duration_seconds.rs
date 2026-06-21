@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::DurationSeconds;
+    use post_older::DurationSeconds;
 
     #[test]
     fn test_duration_validation_success() {
