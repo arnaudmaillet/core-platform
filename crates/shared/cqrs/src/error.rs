@@ -90,9 +90,10 @@ pub enum CqrsError {
 impl CqrsError {
     /// Wraps any [`AppError`] implementation into `CqrsError::Handler`.
     ///
-    /// Called exclusively by the type-erased registry bridge so that handler
-    /// errors are promoted to the bus error type without losing metadata.
-    pub(crate) fn from_handler<E: AppError>(e: E) -> Self {
+    /// Used by the type-erased registry bridge and by external middleware (e.g.
+    /// `ValidationLayer`) that need to short-circuit dispatch with a typed error
+    /// without going through a registered handler.
+    pub fn from_handler<E: AppError>(e: E) -> Self {
         Self::Handler(BoxedDynAppError::new(e))
     }
 }

@@ -50,7 +50,10 @@ members = [
     "crates/shared/cqrs",
     "crates/shared/storage/postgres",
     "crates/shared/storage/scylla",
-    "crates/shared/storage/redis", "crates/shared/auth-context",
+    "crates/shared/storage/redis",
+    "crates/shared/auth-context",
+    "crates/shared/validate-core",
+    "crates/shared/validation",
     # "crates/comment",
 ]
 resolver = "2"
@@ -89,8 +92,10 @@ infra-scylla = { path = "crates/infra-scylla" }
 infra-fred = { path = "crates/infra-fred" }
 infra-kafka = { path = "crates/infra-kafka" }
 infra-test = { path = "crates/infra-test" }
-error = { path = "crates/shared/error" }
-resilience = { path = "crates/shared/resilience" }
+error         = { path = "crates/shared/error" }
+resilience    = { path = "crates/shared/resilience" }
+validate-core = { path = "crates/shared/validate-core" }
+validation    = { path = "crates/shared/validation" }
 postgres-storage = { path = "crates/shared/storage/postgres" }
 scylla-storage   = { path = "crates/shared/storage/scylla" }
 redis-storage    = { path = "crates/shared/storage/redis" }

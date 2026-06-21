@@ -1,0 +1,10 @@
+[package]
+name        = "validate-core"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+authors.workspace     = true
+repository.workspace  = true
+description           = "Zero-dependency validation abstraction: the Validate trait and FieldViolation type."
+
+[dependencies]

@@ -9,7 +9,11 @@
 ///
 /// ## Requirements
 ///
-/// `Send + Sync + 'static` are required so commands can be safely moved
-/// across thread and task boundaries inside a multi-threaded async runtime
-/// and stored in the type-erased registry without lifetime restrictions.
-pub trait Command: Send + Sync + 'static {}
+/// - `Validate` — every command must be self-validating. Commands that carry
+///   no user-supplied data rely on the default no-op impl provided by the
+///   trait. This supertrait is what lets the `ValidationLayer` in the
+///   `validation` crate call `validate()` generically on any `C: Command`
+///   with zero dynamic-dispatch overhead.
+/// - `Send + Sync + 'static` — required so commands can be moved across
+///   thread and task boundaries and stored in the type-erased registry.
+pub trait Command: validate_core::Validate + Send + Sync + 'static {}

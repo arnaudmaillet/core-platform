@@ -1,0 +1,27 @@
+[package]
+name        = "validation"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+authors.workspace     = true
+repository.workspace  = true
+description           = "Tower-inspired ValidationLayer middleware, field-level error mapping, and VAL-xxxx error codes for the core-platform CQRS command bus."
+
+[dependencies]
+# Intra-workspace
+validate-core = { workspace = true }
+cqrs          = { path = "../cqrs" }
+error         = { workspace = true }
+
+# Error ergonomics
+thiserror = { workspace = true }
+
+# HTTP status mapping
+http = { workspace = true }
+
+# Observability
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+uuid  = { workspace = true }
