@@ -12,7 +12,7 @@ description.workspace = true
 
 [dependencies]
 shared-kernel = { workspace = true }
-account = { workspace = true }
+account-old = { workspace = true }
 shared-proto = { workspace = true, features = ["account"] }
 auth = { workspace = true }
 infra-sqlx = { workspace = true }

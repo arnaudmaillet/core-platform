@@ -1,7 +1,7 @@
 # crates/account/Cargo.toml
 
 [package]
-name = "account"
+name = "account-old"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

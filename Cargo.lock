@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "account"
+name = "account-old"
 version = "0.1.0"
 dependencies = [
  "account-test-utils",
@@ -30,7 +30,7 @@ dependencies = [
 name = "account-test-utils"
 version = "0.1.0"
 dependencies = [
- "account",
+ "account-old",
  "async-trait",
  "auth",
  "auth-test-utils",

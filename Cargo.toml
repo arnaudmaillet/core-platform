@@ -16,7 +16,7 @@ members = [
     # "backend/services/post/workers/profile-projection",
     # "backend/services/geo-discovery/api/server",
     "common/rust/shared-proto",
-    "crates/account",
+    "crates/account-old",
     "crates/auth",
     "crates/profile",
     "crates/shared-kernel",
@@ -68,7 +68,7 @@ description = "core-platform repo"
 
 [workspace.dependencies]
 account-test-utils = { path = "crates/account-test-utils" }
-account = { path = "crates/account" }
+account-old = { path = "crates/account-old" }
 shared-kernel = { path = "crates/shared-kernel" }
 shared-kernel-test-utils = { path = "crates/shared-kernel-test-utils" }
 shared-proto = { path = "common/rust/shared-proto" }
@@ -92,13 +92,13 @@ infra-scylla = { path = "crates/infra-scylla" }
 infra-fred = { path = "crates/infra-fred" }
 infra-kafka = { path = "crates/infra-kafka" }
 infra-test = { path = "crates/infra-test" }
-error         = { path = "crates/shared/error" }
-resilience    = { path = "crates/shared/resilience" }
+error = { path = "crates/shared/error" }
+resilience = { path = "crates/shared/resilience" }
 validate-core = { path = "crates/shared/validate-core" }
-validation    = { path = "crates/shared/validation" }
+validation = { path = "crates/shared/validation" }
 postgres-storage = { path = "crates/shared/storage/postgres" }
-scylla-storage   = { path = "crates/shared/storage/scylla" }
-redis-storage    = { path = "crates/shared/storage/redis" }
+scylla-storage = { path = "crates/shared/storage/scylla" }
+redis-storage = { path = "crates/shared/storage/redis" }
 
 
 # Communs

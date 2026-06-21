@@ -11,7 +11,7 @@ description.workspace = true
 
 
 [dependencies]
-account = { workspace = true }
+account-old = { workspace = true }
 infra-sqlx = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
