@@ -48,8 +48,8 @@ impl ProducerConfig {
         let mut cfg = self.client.to_rdkafka();
         cfg.set("acks", &self.acks)
             .set("compression.type", &self.compression)
-            .set("linger.ms", &self.linger_ms.to_string())
-            .set("max.in.flight.requests.per.connection", &self.max_in_flight.to_string());
+            .set("linger.ms", self.linger_ms.to_string())
+            .set("max.in.flight.requests.per.connection", self.max_in_flight.to_string());
         cfg
     }
 }

@@ -44,6 +44,11 @@ pub struct ConsumedMessage<T> {
     pub headers: HashMap<String, String>,
     /// Broker/producer timestamp in milliseconds, when available.
     pub timestamp_ms: Option<i64>,
+    /// The original, undecoded record bytes (empty when the record had no payload).
+    ///
+    /// Retained so a poison record can be republished verbatim to a dead-letter
+    /// topic — including a *decode* failure, where no typed `payload` exists.
+    pub raw_payload: Vec<u8>,
     /// Decoded payload, or the decode error for a poison record.
     pub payload: Result<T, TransportError>,
 }
@@ -149,6 +154,10 @@ impl KafkaConsumerHandle {
             // ── Payload deserialization (deferred error) ─────────────────────────────
             // A decode failure is captured in `payload` rather than aborting the stream,
             // so the worker can still see the offset and commit past the poison record.
+            // The raw bytes are retained regardless, so the record can be forwarded to
+            // a dead-letter topic even when it fails to decode.
+            let raw_payload = msg.payload().map(<[u8]>::to_vec).unwrap_or_default();
+
             let payload = match msg.payload() {
                 None => Err(TransportError::Kafka(KafkaTransportError::EmptyPayload)),
                 Some(bytes) => serde_json::from_slice::<T>(bytes)
@@ -166,6 +175,7 @@ impl KafkaConsumerHandle {
                     .to_string(),
                 headers: user_headers,
                 timestamp_ms: msg.timestamp().to_millis(),
+                raw_payload,
                 payload,
             };
 

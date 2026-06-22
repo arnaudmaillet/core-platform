@@ -5466,6 +5466,7 @@ dependencies = [
  "http",
  "opentelemetry",
  "prost 0.14.4",
+ "rand 0.9.2",
  "rdkafka",
  "resilience",
  "serde",
