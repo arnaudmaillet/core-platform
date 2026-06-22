@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
-use futures_util::StreamExt;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 
 use crate::application::port::{ReactionLedger, ScoreStore};
 use crate::domain::value_object::PostId;
+use crate::infrastructure::worker::build_dlq_producer;
 
 const TOPIC_CREATED: &str = "comment.created";
 const TOPIC_DELETED: &str = "comment.deleted";
@@ -49,82 +51,63 @@ impl<S: ScoreStore, L: ReactionLedger> CommentEventConsumer<S, L> {
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to build DLQ producer — comment event consumer not started");
+                return;
+            }
+        };
+
+        // The per-message runner is handed only the decoded payload, not the topic,
+        // so created (+1) and deleted (-1) are consumed by two single-topic loops
+        // with a constant delta each. They share one group id, so committed offsets
+        // (and thus exactly-once-per-deploy continuity) are preserved.
+        let worker = Arc::new(self);
+        tokio::join!(
+            worker.clone().run_topic(TOPIC_CREATED, 1, &producer),
+            worker.clone().run_topic(TOPIC_DELETED, -1, &producer),
+        );
+    }
+
+    async fn run_topic(self: Arc<Self>, topic: &'static str, delta: i64, producer: &KafkaProducerHandle) {
         loop {
-            match self.run_once().await {
+            match self.clone().run_once(topic, delta, producer).await {
                 Ok(()) => {
-                    tracing::warn!("comment event consumer exited cleanly — restarting");
+                    tracing::warn!(topic, "comment event consumer exited cleanly — restarting");
                 }
                 Err(e) => {
-                    tracing::error!(error = %e, "comment event consumer error — restarting after 5 s");
+                    tracing::error!(topic, error = %e, "comment event consumer error — restarting after 5 s");
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                 }
             }
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(
+        self: Arc<Self>,
+        topic:    &'static str,
+        delta:    i64,
+        producer: &KafkaProducerHandle,
+    ) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        // At-least-once: never auto-commit. The offset is advanced only after the
-        // counter delta has been applied (see the commit calls below).
         config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
-            .subscribe(TOPIC_CREATED)
-            .subscribe(TOPIC_DELETED)
+            .subscribe(topic)
             .build()
             .map_err(|e| e.to_string())?;
 
-        tracing::info!(
-            topics = %format!("{}, {}", TOPIC_CREATED, TOPIC_DELETED),
-            group  = %self.group_id,
-            "comment event consumer started"
-        );
+        tracing::info!(topic, group = %self.group_id, "comment event consumer started");
 
-        let mut stream = handle.stream::<CommentEngagementPayload>();
-
-        while let Some(result) = stream.next().await {
-            let msg = match result {
-                Ok(m) => m,
-                Err(err) => {
-                    tracing::warn!(error = %err, "broker stream error — restarting consumer");
-                    return Err(err.to_string());
-                }
-            };
-
-            let payload = match &msg.payload {
-                Ok(p) => p,
-                Err(err) => {
-                    tracing::warn!(offset = msg.offset, error = %err, "comment event deserialization error — committing past poison message");
-                    handle.commit(&msg).map_err(|e| e.to_string())?;
-                    continue;
-                }
-            };
-
-            let delta: i64 = match msg.topic.as_str() {
-                TOPIC_CREATED =>  1,
-                TOPIC_DELETED => -1,
-                other => {
-                    tracing::warn!(topic = other, "unexpected topic — committing and skipping");
-                    handle.commit(&msg).map_err(|e| e.to_string())?;
-                    continue;
-                }
-            };
-
-            if let Err(err) = self.apply(delta, payload).await {
-                tracing::error!(
-                    error   = %err,
-                    post_id = %payload.post_id,
-                    delta,
-                    "comment counter apply failed — offset NOT committed; will redeliver"
-                );
-                return Err(format!("counter apply failed: {err}"));
-            }
-
-            handle.commit(&msg).map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
+        let policy = RetryPolicy::default();
+        run_consumer::<CommentEngagementPayload, _>(&handle, producer, &policy, move |payload| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { ProcessOutcome::from_result(worker.apply(delta, payload).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     async fn apply(

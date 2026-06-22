@@ -161,3 +161,11 @@ impl AppError for GeoDiscoveryError {
         }
     }
 }
+
+/// Classifies failures for the Kafka consumer runner: transient storage/cache
+/// faults are retried with backoff, data/invariant errors are dead-lettered.
+impl transport::kafka::consumer::ClassifyError for GeoDiscoveryError {
+    fn is_retryable(&self) -> bool {
+        <Self as AppError>::is_retryable(self)
+    }
+}

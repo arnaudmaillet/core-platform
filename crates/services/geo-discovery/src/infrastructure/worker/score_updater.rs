@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
-use futures_util::StreamExt;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 
 use crate::application::command::UpdateViralityWithTilesCommand;
 use crate::application::port::{SpatialIndex, TileRepository};
 use crate::domain::value_object::{H3Index, PostId};
 use crate::error::GeoDiscoveryError;
+use crate::infrastructure::worker::build_dlq_producer;
 use crate::infrastructure::cache::RedisGeoSpatialIndex;
 use crate::infrastructure::persistence::ScyllaTileRepository;
 
@@ -68,8 +70,17 @@ where
     TR: TileRepository + 'static,
 {
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(topic = TOPIC, error = %e, "failed to build DLQ producer — score updater consumer not started");
+                return;
+            }
+        };
+
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!(topic = TOPIC, "score updater consumer exited cleanly — restarting");
                 }
@@ -81,11 +92,9 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        // At-least-once: never auto-commit. The offset is advanced only after the
-        // event has been successfully processed (see the commit calls below).
         config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
@@ -95,40 +104,13 @@ where
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "score updater consumer started");
 
-        let mut stream = handle.stream::<ScoreUpdatedEvent>();
-
-        while let Some(result) = stream.next().await {
-            let msg = match result {
-                Ok(m)    => m,
-                Err(err) => {
-                    tracing::warn!(topic = TOPIC, error = %err, "broker stream error — restarting consumer");
-                    return Err(err.to_string());
-                }
-            };
-
-            let event = match &msg.payload {
-                Ok(e)    => e,
-                Err(err) => {
-                    tracing::warn!(topic = TOPIC, offset = msg.offset, error = %err, "deserialization error — committing past poison message");
-                    handle.commit(&msg).map_err(|e| e.to_string())?;
-                    continue;
-                }
-            };
-
-            if let Err(err) = self.process(event).await {
-                tracing::error!(
-                    topic   = TOPIC,
-                    post_id = msg.key,
-                    error   = %err,
-                    "score update failed — offset NOT committed; will redeliver"
-                );
-                return Err(format!("processing failed: {err}"));
-            }
-
-            handle.commit(&msg).map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
+        let policy = RetryPolicy::default();
+        run_consumer::<ScoreUpdatedEvent, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     async fn process(&self, event: &ScoreUpdatedEvent) -> Result<(), GeoDiscoveryError> {
