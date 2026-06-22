@@ -22,6 +22,12 @@ pub struct ProducerConfig {
     /// Maximum number of in-flight produce requests per broker before blocking.
     /// Setting this to `1` ensures strict ordering when `acks = "all"`.
     pub max_in_flight: u32,
+
+    /// Local produce deadline in milliseconds (librdkafka `message.timeout.ms`): the
+    /// total time a record may spend being (re)tried before its delivery report fails.
+    /// `None` (default) leaves librdkafka's own default in place. Bounding it lets a
+    /// caller fail fast when the brokers are unreachable instead of blocking for minutes.
+    pub message_timeout_ms: Option<u32>,
 }
 
 impl Default for ProducerConfig {
@@ -32,6 +38,7 @@ impl Default for ProducerConfig {
             compression: "snappy".to_string(),
             linger_ms: 5,
             max_in_flight: 5,
+            message_timeout_ms: None,
         }
     }
 }
@@ -50,6 +57,11 @@ impl ProducerConfig {
             .set("compression.type", &self.compression)
             .set("linger.ms", self.linger_ms.to_string())
             .set("max.in.flight.requests.per.connection", self.max_in_flight.to_string());
+
+        if let Some(ms) = self.message_timeout_ms {
+            cfg.set("message.timeout.ms", ms.to_string());
+        }
+
         cfg
     }
 }

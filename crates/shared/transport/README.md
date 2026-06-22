@@ -363,6 +363,44 @@ async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(),
 > **Idempotency is the consumer's responsibility.** At-least-once means real redelivery; handlers
 > must be idempotent (deterministic keys, claim-gated counters, etc.) so retries do not double-apply.
 
+#### Closure lifetime papercut (HRTB inference)
+
+`run_consumer`'s `process` bound is **higher-ranked**: `for<'a> Fn(&'a T) -> Pin<Box<dyn Future<… + 'a>>>`.
+When you pass the closure **inline** as the argument (as in the example above), the compiler reads that
+bound as the expected type and infers the closure correctly — this is the path to prefer.
+
+The trap appears only when you bind the closure to a `let` first **and its future does not borrow the
+event** (e.g. it ignores the payload, or clones everything it needs). The compiler then infers a single
+concrete lifetime and rejects it against the `for<'a>` bound:
+
+```text
+error[E0308]: mismatched types
+   = note: expected `Pin<Box<dyn Future<…> + Send>>`
+              found `Pin<Box<dyn Future<…> + Send + 'a>>`
+   = note: one type is more general than the other
+```
+
+Route the `let`-bound closure through an identity coercion whose signature *is* the higher-ranked bound,
+which forces the expected-typed inference:
+
+```rust
+fn classify<T, F>(process: F) -> F
+where
+    F: for<'a> Fn(&'a T) -> Pin<Box<dyn Future<Output = ProcessOutcome> + Send + 'a>> + Send + 'static,
+{
+    process
+}
+
+let process = classify::<MyEvent, _>(move |event| {
+    let worker = Arc::clone(&self);
+    Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+});
+run_consumer::<MyEvent, _>(&handle, producer, &RetryPolicy::default(), process).await
+```
+
+(The runtime's own integration suite under `tests/` uses exactly this helper; see
+`tests/consumer_runtime.rs`.)
+
 ### `propagation` module
 
 ```rust
@@ -582,7 +620,7 @@ gRPC client and server are configured via builder types, not environment variabl
 # Build the crate
 cargo build -p transport
 
-# Run all tests
+# Run the hermetic unit tests (no Docker)
 cargo test -p transport
 
 # Lint
@@ -592,12 +630,23 @@ cargo clippy -p transport -- -D warnings
 cargo fmt -p transport
 ```
 
-### Run a local Kafka broker (required for integration tests)
+### Live-broker integration suite (`run_consumer`)
+
+The consumer-runtime fault-tolerance tests live under `tests/` and are gated behind the
+`integration-kafka` feature so the default `cargo test` stays Docker-free. They are **self-contained**:
+an ephemeral single-node broker (`apache/kafka-native`, KRaft) is booted via `testcontainers` — no
+`docker compose`, no `localhost:9092`. A running Docker daemon is the only prerequisite.
 
 ```bash
-docker compose up -d kafka
-# Kafka available at localhost:9092
+# Boots one container, runs Scenarios A–K against it (~16 s)
+cargo test -p transport --features integration-kafka
 ```
+
+`tests/harness/mod.rs` owns the broker plumbing (one shared container per binary, UUIDv7-namespaced
+topics/groups per test, explicit topic pre-creation, an `await_until` poll primitive — never `sleep`);
+`tests/consumer_runtime.rs` holds the scenarios (happy path, poison/decode, reject, transient retry,
+retry-exhaustion, backoff+jitter envelope, ordering/no-stall, DLQ header completeness, key affinity,
+and the at-least-once "failed dead-letter ⇒ no commit + redelivery" proof).
 
 ### Key architectural invariants
 

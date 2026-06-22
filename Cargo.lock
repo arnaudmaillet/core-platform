@@ -5471,12 +5471,15 @@ dependencies = [
  "resilience",
  "serde",
  "serde_json",
+ "testcontainers",
+ "testcontainers-modules",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
  "tower 0.4.13",
  "tracing",
  "tracing-opentelemetry",
+ "uuid",
 ]
 
 [[package]]

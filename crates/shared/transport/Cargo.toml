@@ -44,3 +44,19 @@ tracing-opentelemetry = "0.28"
 
 # Byte utilities (used in protobuf codec and tonic body handling)
 bytes = "1"
+
+[features]
+# Gates the live-broker integration tests (single-node Kafka via testcontainers) so the
+# default `cargo test` stays hermetic and Docker-free. The suite is run explicitly with:
+#   cargo test -p transport --features integration-kafka
+integration-kafka = []
+
+[dev-dependencies]
+# Ephemeral single-node broker for the consumer-runtime integration tests.
+# testcontainers-modules 0.14 ships no Redpanda module, so we use its `kafka` module,
+# which defaults to the `apache/kafka-native` image: a GraalVM-native, KRaft single-node
+# broker that boots in ~1-2s with no ZooKeeper — the same fast-boot / isolation profile.
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["kafka"] }
+# Unique per-test topic / consumer-group namespacing (v7 = time-ordered, collision-free).
+uuid = { workspace = true }
