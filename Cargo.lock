@@ -1051,6 +1051,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "engagement"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "cqrs",
+ "dashmap 7.0.0-rc2",
+ "error",
+ "fred",
+ "futures",
+ "futures-util",
+ "http",
+ "prost 0.14.4",
+ "prost-types",
+ "redis-storage",
+ "scylla",
+ "scylla-storage",
+ "serde",
+ "serde_json",
+ "telemetry",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic 0.14.6",
+ "tonic-build",
+ "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "uuid",
+ "validate-core",
+ "validation",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
