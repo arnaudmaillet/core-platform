@@ -2865,6 +2865,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
 
 [[package]]
+name = "post"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth-context",
+ "base64 0.22.1",
+ "chrono",
+ "cqrs",
+ "error",
+ "futures",
+ "http",
+ "prost 0.14.4",
+ "prost-types",
+ "scylla",
+ "scylla-storage",
+ "serde",
+ "serde_json",
+ "telemetry",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic 0.14.6",
+ "tonic-build",
+ "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "uuid",
+ "validate-core",
+ "validation",
+]
+
+[[package]]
 name = "post-assembly"
 version = "0.1.0"
 dependencies = [
