@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package timeline.v1;
+
+// Fan-out routing mode determined by the author's tier at publish time.
+// Standard and Premium authors use Write mode (pre-materialized feeds).
+// Vip authors use Read mode (merged at query time from the VIP registry).
+// This enum is informational — it does not appear in client-facing RPCs.
+enum FanOutMode {
+    FAN_OUT_MODE_UNSPECIFIED = 0;
+    FAN_OUT_MODE_WRITE       = 1;
+    FAN_OUT_MODE_READ        = 2;
+}
