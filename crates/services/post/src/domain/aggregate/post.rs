@@ -3,7 +3,7 @@ use crate::{
     domain::{
         entity::MediaAttachment,
         event::{DomainEvent, PostDeletedEvent, PostPublishedEvent, PostUpdatedEvent},
-        value_object::{Caption, PostId, PostKind, PostStatus, ProfileId},
+        value_object::{AudioReference, Caption, PostId, PostKind, PostStatus, ProfileId},
     },
     error::PostError,
 };
@@ -20,6 +20,7 @@ pub struct Post {
     attachments:    Vec<MediaAttachment>,
     parent_id:      Option<PostId>,
     root_id:        Option<PostId>,
+    audio_ref:      Option<AudioReference>,
     created_at:     DateTime<Utc>,
     updated_at:     DateTime<Utc>,
     published_at:   Option<DateTime<Utc>>,
@@ -36,6 +37,7 @@ impl Post {
         attachments: Vec<MediaAttachment>,
         parent_id:   Option<PostId>,
         root_id:     Option<PostId>,
+        audio_ref:   Option<AudioReference>,
     ) -> Result<Self, PostError> {
         validate_threading(&parent_id, &root_id)?;
         validate_attachments(kind, &attachments)?;
@@ -50,6 +52,7 @@ impl Post {
             attachments,
             parent_id,
             root_id,
+            audio_ref,
             created_at: now,
             updated_at: now,
             published_at: None,
@@ -67,6 +70,7 @@ impl Post {
         attachments:  Vec<MediaAttachment>,
         parent_id:    Option<PostId>,
         root_id:      Option<PostId>,
+        audio_ref:    Option<AudioReference>,
         created_at:   DateTime<Utc>,
         updated_at:   DateTime<Utc>,
         published_at: Option<DateTime<Utc>>,
@@ -81,6 +85,7 @@ impl Post {
             attachments,
             parent_id,
             root_id,
+            audio_ref,
             created_at,
             updated_at,
             published_at,
@@ -110,6 +115,8 @@ impl Post {
             profile_id:      self.profile_id.as_str(),
             kind:            self.kind.to_string(),
             published_at_ms: now.timestamp_millis(),
+            audio_id:        self.audio_ref.as_ref().map(|a| a.audio_id.as_str()),
+            audio_kind:      self.audio_ref.as_ref().map(|a| a.audio_kind.as_tinyint() as u8),
         }));
 
         Ok(now)
@@ -171,6 +178,7 @@ impl Post {
     pub fn attachments(&self)  -> &[MediaAttachment] { &self.attachments }
     pub fn parent_id(&self)    -> Option<&PostId>    { self.parent_id.as_ref() }
     pub fn root_id(&self)      -> Option<&PostId>    { self.root_id.as_ref() }
+    pub fn audio_ref(&self)    -> Option<&AudioReference> { self.audio_ref.as_ref() }
     pub fn created_at(&self)   -> DateTime<Utc>      { self.created_at }
     pub fn updated_at(&self)   -> DateTime<Utc>      { self.updated_at }
     pub fn published_at(&self) -> Option<DateTime<Utc>> { self.published_at }

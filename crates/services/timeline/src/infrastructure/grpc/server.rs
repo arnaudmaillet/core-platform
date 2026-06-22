@@ -12,18 +12,22 @@ use transport::kafka::config::client::KafkaClientConfig;
 
 use crate::application::command::{
     backfill_follow::BackfillFollowHandler,
+    ingest_audio_index::IngestAudioIndexHandler,
     ingest_post_published::IngestPostPublishedHandler,
     prune_follow::PruneFollowHandler,
     remove_post::RemovePostHandler,
 };
+use crate::application::query::get_audio_feed::GetAudioFeedHandler;
 use crate::application::query::get_following_feed::GetFollowingFeedHandler;
 use crate::config::TimelineConfig;
 use crate::infrastructure::cache::{
-    RedisFeedStore, RedisFollowingStore, RedisTierCache, RedisVipRegistry,
+    RedisAudioFeedStore, RedisFeedStore, RedisFollowingStore, RedisTierCache, RedisVipRegistry,
 };
 use crate::infrastructure::client::SocialGraphGrpcClient;
 use crate::infrastructure::grpc::handler::{TimelineServiceHandler, TimelineServiceServer};
-use crate::infrastructure::persistence::{ScyllaAuthorPostRepository, ScyllaFeedRepository};
+use crate::infrastructure::persistence::{
+    ScyllaAudioFeedRepository, ScyllaAuthorPostRepository, ScyllaFeedRepository,
+};
 use crate::infrastructure::worker::{
     follow_created_worker::FollowCreatedWorker,
     follow_deleted_worker::FollowDeletedWorker,
@@ -38,9 +42,6 @@ pub const FILE_DESCRIPTOR_SET: &[u8] =
     tonic::include_file_descriptor_set!("timeline_descriptor");
 
 /// Bootstraps and runs the timeline gRPC server with all background workers.
-///
-/// Initialises ScyllaDB, Redis, and Kafka clients; wires all dependencies;
-/// spawns the four Kafka consumer workers; then blocks on the gRPC listener.
 pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(TimelineConfig::from_env());
 
@@ -54,13 +55,15 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Infrastructure objects ────────────────────────────────────────────────
 
-    let feed_store    = Arc::new(RedisFeedStore::new(redis_client.clone()));
-    let vip_registry  = Arc::new(RedisVipRegistry::new(redis_client.clone()));
-    let tier_cache    = Arc::new(RedisTierCache::new(redis_client.clone()));
-    let following_store = Arc::new(RedisFollowingStore::new(redis_client));
+    let feed_store      = Arc::new(RedisFeedStore::new(redis_client.clone()));
+    let vip_registry    = Arc::new(RedisVipRegistry::new(redis_client.clone()));
+    let tier_cache      = Arc::new(RedisTierCache::new(redis_client.clone()));
+    let following_store = Arc::new(RedisFollowingStore::new(redis_client.clone()));
+    let audio_feed_store = Arc::new(RedisAudioFeedStore::new(redis_client));
 
     let feed_repository   = Arc::new(ScyllaFeedRepository::new(Arc::clone(&scylla_client)));
     let author_post_repo  = Arc::new(ScyllaAuthorPostRepository::new(Arc::clone(&scylla_client)));
+    let audio_feed_repo   = Arc::new(ScyllaAudioFeedRepository::new(Arc::clone(&scylla_client)));
 
     // ── Social-graph gRPC client ──────────────────────────────────────────────
 
@@ -79,17 +82,20 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
         CommandBusBuilder::new()
             .register::<crate::application::command::ingest_post_published::IngestPostPublishedCommand, _>(
                 IngestPostPublishedHandler {
-                    feed_store:            Arc::clone(&feed_store),
-                    vip_registry:          Arc::clone(&vip_registry),
-                    feed_repository:       Arc::clone(&feed_repository),
-                    author_post_repo:      Arc::clone(&author_post_repo),
-                    tier_cache:            Arc::clone(&tier_cache),
-                    social_graph:          Arc::clone(&social_graph),
-                    feed_cap:              config.feed_cap,
-                    vip_registry_cap:      config.vip_registry_cap,
-                    vip_registry_ttl_secs: config.vip_registry_ttl_secs,
-                    tier_cache_ttl_secs:   config.tier_cache_ttl_secs,
+                    feed_store:             Arc::clone(&feed_store),
+                    vip_registry:           Arc::clone(&vip_registry),
+                    feed_repository:        Arc::clone(&feed_repository),
+                    author_post_repo:       Arc::clone(&author_post_repo),
+                    tier_cache:             Arc::clone(&tier_cache),
+                    social_graph:           Arc::clone(&social_graph),
+                    audio_feed_repo:        Arc::clone(&audio_feed_repo),
+                    audio_feed_store:       Arc::clone(&audio_feed_store),
+                    feed_cap:               config.feed_cap,
+                    vip_registry_cap:       config.vip_registry_cap,
+                    vip_registry_ttl_secs:  config.vip_registry_ttl_secs,
+                    tier_cache_ttl_secs:    config.tier_cache_ttl_secs,
                     social_graph_page_size: config.social_graph_page_size,
+                    audio_feed_cap:         config.audio_feed_cap,
                 },
             )?
             .register::<crate::application::command::remove_post::RemovePostCommand, _>(
@@ -120,6 +126,13 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
                     following_store:  Arc::clone(&following_store),
                 },
             )?
+            .register::<crate::application::command::ingest_audio_index::IngestAudioIndexCommand, _>(
+                IngestAudioIndexHandler {
+                    audio_feed_repo:  Arc::clone(&audio_feed_repo),
+                    audio_feed_store: Arc::clone(&audio_feed_store),
+                    audio_feed_cap:   config.audio_feed_cap,
+                },
+            )?
             .build(),
     );
 
@@ -140,6 +153,13 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
                 warm_ttl_secs:          config.warm_ttl_secs,
                 social_graph_page_size: config.social_graph_page_size,
                 max_vip_merge_sources:  config.max_vip_merge_sources,
+            },
+        )?
+        .register::<crate::application::query::get_audio_feed::GetAudioFeedQuery, _>(
+            GetAudioFeedHandler {
+                audio_feed_store: Arc::clone(&audio_feed_store),
+                audio_feed_repo:  Arc::clone(&audio_feed_repo),
+                max_page_size:    config.max_page_size,
             },
         )?
         .build();

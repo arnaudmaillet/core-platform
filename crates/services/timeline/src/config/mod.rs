@@ -10,6 +10,10 @@ pub struct TimelineConfig {
     /// Entries exceeding this cap are pruned oldest-first via Lua after each ZADD.
     pub feed_cap: u16,
 
+    /// Maximum number of posts stored in an audio track's Redis ZSET.
+    /// Entries exceeding this cap are pruned oldest-first after each ZADD.
+    pub audio_feed_cap: u16,
+
     /// Maximum number of posts stored in a VIP author's Redis registry ZSET.
     /// Capped separately from regular feeds because VIP content is merged at
     /// read-time and only the most recent window is relevant.
@@ -64,6 +68,7 @@ impl TimelineConfig {
     pub fn from_env() -> Self {
         Self {
             feed_cap:                   env_u16("TIMELINE_FEED_CAP",                   500),
+            audio_feed_cap:             env_u16("TIMELINE_AUDIO_FEED_CAP",             1_000),
             vip_registry_cap:           env_u16("TIMELINE_VIP_REGISTRY_CAP",           200),
             backfill_limit:             env_i32("TIMELINE_BACKFILL_LIMIT",             100),
             warm_ttl_secs:              env_u64("TIMELINE_WARM_TTL_SECS",             86_400),

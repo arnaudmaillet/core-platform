@@ -11,7 +11,7 @@ use scylla_storage::{ProfileKind as ScyllaProfileKind, ScyllaClient, ScyllaStora
 use crate::application::port::{PostRepository, PostSummary};
 use crate::domain::aggregate::Post;
 use crate::domain::entity::MediaAttachment;
-use crate::domain::value_object::{Caption, PostId, PostKind, PostStatus, ProfileId};
+use crate::domain::value_object::{AudioId, AudioKind, AudioReference, Caption, PostId, PostKind, PostStatus, ProfileId};
 use crate::error::PostError;
 use crate::infrastructure::persistence::model::{PostProfileRow, PostRow};
 
@@ -130,6 +130,16 @@ fn row_to_post(row: PostRow) -> Result<Post, PostError> {
     let parent_id = row.parent_id.map(PostId::from_uuid);
     let root_id   = row.root_id.map(PostId::from_uuid);
 
+    let audio_ref: Option<AudioReference> = match (row.audio_id, row.audio_kind) {
+        (Some(id), Some(kind_byte)) => {
+            Some(AudioReference {
+                audio_id:   AudioId::from_uuid(id),
+                audio_kind: AudioKind::try_from(kind_byte)?,
+            })
+        }
+        _ => None,
+    };
+
     let created_at   = ScyllaPostRepository::ms_to_dt(row.created_at.0, "created_at")?;
     let updated_at   = ScyllaPostRepository::ms_to_dt(row.updated_at.0, "updated_at")?;
     let published_at = row.published_at.map(|t| ScyllaPostRepository::ms_to_dt(t.0, "published_at")).transpose()?;
@@ -144,6 +154,7 @@ fn row_to_post(row: PostRow) -> Result<Post, PostError> {
         attachments,
         parent_id,
         root_id,
+        audio_ref,
         created_at,
         updated_at,
         published_at,
@@ -185,8 +196,9 @@ impl PostRepository for ScyllaPostRepository {
         let stmt_posts = self.strict_stmt(
             "INSERT INTO post.posts \
              (post_id, profile_id, kind, status, caption, attachments, \
-              parent_id, root_id, created_at, updated_at, published_at, deleted_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              parent_id, root_id, created_at, updated_at, published_at, deleted_at, \
+              audio_id, audio_kind) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         );
         self.client
             .session
@@ -205,6 +217,8 @@ impl PostRepository for ScyllaPostRepository {
                     Self::dt_ms(post.updated_at()),
                     post.published_at().map(Self::dt_ms),
                     post.deleted_at().map(Self::dt_ms),
+                    post.audio_ref().map(|a| a.audio_id.as_uuid()),
+                    post.audio_ref().map(|a| a.audio_kind.as_tinyint()),
                 ),
             )
             .await
@@ -308,7 +322,8 @@ impl PostRepository for ScyllaPostRepository {
     async fn find_by_id(&self, id: &PostId) -> Result<Option<Post>, PostError> {
         let stmt = self.fast_stmt(
             "SELECT post_id, profile_id, kind, status, caption, attachments, \
-             parent_id, root_id, created_at, updated_at, published_at, deleted_at \
+             parent_id, root_id, created_at, updated_at, published_at, deleted_at, \
+             audio_id, audio_kind \
              FROM post.posts WHERE post_id = ?",
         );
         let result = self

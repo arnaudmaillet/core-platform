@@ -4,35 +4,18 @@ use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
 use crate::application::port::{
-    AuthorPostRepository, FeedRepository, FeedStore, SocialGraphClient, TierCache, VipRegistry,
+    AudioFeedRepository, AudioFeedStore, AuthorPostRepository, FeedRepository, FeedStore,
+    SocialGraphClient, TierCache, VipRegistry,
 };
-use crate::domain::aggregate::FeedEntry;
-use crate::domain::value_object::{AuthorId, AuthorTier, FanOutMode, PostId};
+use crate::domain::value_object::{AudioId, AuthorId, AuthorTier, FanOutMode, PostId};
 use crate::error::TimelineError;
 
-/// Triggered by the `PostPublishedWorker` when a `post.published` Kafka event arrives.
-///
-/// Routes to either fan-out-on-write (Standard/Premium) or VIP registry
-/// (Vip) based on `author_tier`, which is denormalized into the event
-/// payload by services/post and never recalculated here.
-///
-/// Write protocol:
-///   Standard/Premium:
-///     1. Cache author tier in Redis.
-///     2. Write post to `posts_by_author` ScyllaDB (durable backfill source).
-///     3. Paginate follower list via SocialGraphClient.
-///     4. For each follower batch: ZADD to `timeline:feed:{id}` + ScyllaDB INSERT.
-///   Vip:
-///     1. Cache author tier in Redis.
-///     2. Write post to `posts_by_author` ScyllaDB (VIP cold-start source).
-///     3. ZADD to `timeline:vip:{author_id}` with cap + TTL refresh.
-///
-/// All operations are idempotent — safe for Kafka at-least-once redelivery.
 pub struct IngestPostPublishedCommand {
-    pub post_id:        String,
-    pub author_id:      String,
-    pub author_tier:    u8,
+    pub post_id:         String,
+    pub author_id:       String,
+    pub author_tier:     u8,
     pub published_at_ms: i64,
+    pub audio_id:        Option<String>,
 }
 
 impl Command for IngestPostPublishedCommand {}
@@ -57,29 +40,34 @@ impl Validate for IngestPostPublishedCommand {
     }
 }
 
-pub struct IngestPostPublishedHandler<FS, VR, FR, AR, TC, SG> {
-    pub feed_store:           Arc<FS>,
-    pub vip_registry:         Arc<VR>,
-    pub feed_repository:      Arc<FR>,
-    pub author_post_repo:     Arc<AR>,
-    pub tier_cache:           Arc<TC>,
-    pub social_graph:         Arc<SG>,
-    pub feed_cap:             u16,
-    pub vip_registry_cap:     u16,
+pub struct IngestPostPublishedHandler<FS, VR, FR, AR, TC, SG, AFR, AFS> {
+    pub feed_store:            Arc<FS>,
+    pub vip_registry:          Arc<VR>,
+    pub feed_repository:       Arc<FR>,
+    pub author_post_repo:      Arc<AR>,
+    pub tier_cache:            Arc<TC>,
+    pub social_graph:          Arc<SG>,
+    pub audio_feed_repo:       Arc<AFR>,
+    pub audio_feed_store:      Arc<AFS>,
+    pub feed_cap:              u16,
+    pub vip_registry_cap:      u16,
     pub vip_registry_ttl_secs: u64,
-    pub tier_cache_ttl_secs:  u64,
+    pub tier_cache_ttl_secs:   u64,
     pub social_graph_page_size: i32,
+    pub audio_feed_cap:        u16,
 }
 
-impl<FS, VR, FR, AR, TC, SG> CommandHandler<IngestPostPublishedCommand>
-    for IngestPostPublishedHandler<FS, VR, FR, AR, TC, SG>
+impl<FS, VR, FR, AR, TC, SG, AFR, AFS> CommandHandler<IngestPostPublishedCommand>
+    for IngestPostPublishedHandler<FS, VR, FR, AR, TC, SG, AFR, AFS>
 where
-    FS: FeedStore,
-    VR: VipRegistry,
-    FR: FeedRepository,
-    AR: AuthorPostRepository,
-    TC: TierCache,
-    SG: SocialGraphClient,
+    FS:  FeedStore,
+    VR:  VipRegistry,
+    FR:  FeedRepository,
+    AR:  AuthorPostRepository,
+    TC:  TierCache,
+    SG:  SocialGraphClient,
+    AFR: AudioFeedRepository,
+    AFS: AudioFeedStore,
 {
     type Error = TimelineError;
 
@@ -93,35 +81,80 @@ where
         let author_id = AuthorId::try_from(cmd.author_id.as_str())?;
         let tier      = AuthorTier::from_u8(cmd.author_tier);
 
-        let entry = FeedEntry::new(post_id, author_id, cmd.published_at_ms);
+        let entry = crate::domain::aggregate::FeedEntry::new(post_id, author_id, cmd.published_at_ms);
 
-        // Cache tier for read-path fan-out mode resolution.
         self.tier_cache
             .set_tier(&author_id, tier, self.tier_cache_ttl_secs)
             .await?;
 
-        // Always write to posts_by_author (backfill + VIP cold-start source).
         self.author_post_repo
             .insert(&author_id, &post_id, tier, cmd.published_at_ms)
             .await?;
 
         match tier.fan_out_mode() {
-            FanOutMode::Read => self.handle_vip_fanout(&entry).await,
-            FanOutMode::Write => self.handle_write_fanout(&entry).await,
+            FanOutMode::Read  => self.handle_vip_fanout(&entry).await?,
+            FanOutMode::Write => self.handle_write_fanout(&entry).await?,
         }
+
+        if let Some(ref aid_str) = cmd.audio_id {
+            match AudioId::try_from(aid_str.as_str()) {
+                Ok(audio_id) => {
+                    if let Err(e) = self
+                        .audio_feed_repo
+                        .insert(&audio_id, &post_id, &author_id, cmd.published_at_ms)
+                        .await
+                    {
+                        tracing::warn!(
+                            audio_id = %audio_id,
+                            post_id  = %post_id,
+                            error    = %e,
+                            "audio feed ScyllaDB insert failed"
+                        );
+                    }
+
+                    if let Err(e) = self
+                        .audio_feed_store
+                        .push(&audio_id, &post_id, &author_id, cmd.published_at_ms, self.audio_feed_cap)
+                        .await
+                    {
+                        tracing::warn!(
+                            audio_id = %audio_id,
+                            post_id  = %post_id,
+                            error    = %e,
+                            "audio feed Redis push failed"
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        audio_id = %aid_str,
+                        post_id  = %post_id,
+                        error    = %e,
+                        "invalid audio_id in post.published event — skipping audio index"
+                    );
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
-impl<FS, VR, FR, AR, TC, SG> IngestPostPublishedHandler<FS, VR, FR, AR, TC, SG>
+impl<FS, VR, FR, AR, TC, SG, AFR, AFS> IngestPostPublishedHandler<FS, VR, FR, AR, TC, SG, AFR, AFS>
 where
-    FS: FeedStore,
-    VR: VipRegistry,
-    FR: FeedRepository,
-    AR: AuthorPostRepository,
-    TC: TierCache,
-    SG: SocialGraphClient,
+    FS:  FeedStore,
+    VR:  VipRegistry,
+    FR:  FeedRepository,
+    AR:  AuthorPostRepository,
+    TC:  TierCache,
+    SG:  SocialGraphClient,
+    AFR: AudioFeedRepository,
+    AFS: AudioFeedStore,
 {
-    async fn handle_vip_fanout(&self, entry: &FeedEntry) -> Result<(), TimelineError> {
+    async fn handle_vip_fanout(
+        &self,
+        entry: &crate::domain::aggregate::FeedEntry,
+    ) -> Result<(), TimelineError> {
         self.vip_registry
             .register(entry, self.vip_registry_cap, self.vip_registry_ttl_secs)
             .await
@@ -138,7 +171,10 @@ where
         Ok(())
     }
 
-    async fn handle_write_fanout(&self, entry: &FeedEntry) -> Result<(), TimelineError> {
+    async fn handle_write_fanout(
+        &self,
+        entry: &crate::domain::aggregate::FeedEntry,
+    ) -> Result<(), TimelineError> {
         let author_id = &entry.author_id;
         let page_token = String::new();
         let mut total_followers: u64 = 0;
@@ -159,7 +195,6 @@ where
 
             total_followers += followers.len() as u64;
 
-            // Fan-out to Redis hot feeds in parallel batches.
             for profile_id in &followers {
                 if let Err(e) = self
                     .feed_store
@@ -175,7 +210,6 @@ where
                 }
             }
 
-            // Write-behind to ScyllaDB (best-effort, non-blocking).
             for profile_id in &followers {
                 if let Err(e) = self
                     .feed_repository
@@ -191,9 +225,6 @@ where
                 }
             }
 
-            // `list_all_followers` returns the full paginated list in one call.
-            // If the implementation paginates internally, this loop runs once.
-            // The break is here for future extension if pagination is exposed.
             let _ = page_token;
             break;
         }
@@ -208,7 +239,6 @@ where
     }
 }
 
-// Compiler check: handler + error types satisfy Send + Sync bounds.
 fn _assert_send_sync() {
     fn _check<T: Send + Sync>() {}
     _check::<TimelineError>();

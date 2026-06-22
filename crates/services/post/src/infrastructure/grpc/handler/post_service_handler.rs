@@ -17,7 +17,7 @@ use crate::application::query::{
 };
 use crate::domain::aggregate::Post;
 use crate::domain::entity::MediaAttachment;
-use crate::domain::value_object::PostId;
+use crate::domain::value_object::{AudioId, AudioKind, AudioReference, PostId};
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
@@ -62,6 +62,8 @@ where
         let post_id_str = post_id.as_str();
         let profile_id  = req.profile_id.clone();
 
+        let audio_ref = proto_audio_ref_to_domain(req.audio_ref)?;
+
         let cmd = CreatePostCommand {
             post_id:     post_id_str.clone(),
             profile_id:  req.profile_id,
@@ -70,6 +72,7 @@ where
             attachments: req.attachments.into_iter().map(attachment_input_from_proto).collect(),
             parent_id:   Some(req.parent_id).filter(|s| !s.is_empty()),
             root_id:     Some(req.root_id).filter(|s| !s.is_empty()),
+            audio_ref,
         };
 
         self.command_bus
@@ -216,6 +219,7 @@ fn post_to_proto(post: Post) -> proto::PostView {
         updated_at_ms:   post.updated_at().timestamp_millis(),
         published_at_ms: post.published_at().map(|d| d.timestamp_millis()).unwrap_or_default(),
         deleted_at_ms:   post.deleted_at().map(|d| d.timestamp_millis()).unwrap_or_default(),
+        audio_ref:       domain_audio_ref_to_proto(post.audio_ref()),
     }
 }
 
@@ -226,6 +230,31 @@ fn summary_to_proto(s: PostSummary) -> proto::PostSummary {
         status:       s.status.as_tinyint() as i32 + 1,
         created_at_ms: s.created_at.timestamp_millis(),
     }
+}
+
+// ── Audio conversion helpers ──────────────────────────────────────────────────
+
+fn proto_audio_ref_to_domain(
+    proto: Option<proto::AudioReference>,
+) -> Result<Option<AudioReference>, Status> {
+    let Some(r) = proto else { return Ok(None) };
+    if r.audio_id.is_empty() || r.audio_kind == 0 {
+        return Ok(None);
+    }
+    let audio_id = AudioId::try_from(r.audio_id.as_str())
+        .map_err(|e| Status::invalid_argument(e.to_string()))?;
+    // Proto AudioKind uses +1 offset: ORIGINAL_SOUND=1 → domain 0, REUSED=2 → domain 1.
+    let audio_kind = AudioKind::try_from((r.audio_kind - 1) as i8)
+        .map_err(|e| Status::invalid_argument(e.to_string()))?;
+    Ok(Some(AudioReference { audio_id, audio_kind }))
+}
+
+fn domain_audio_ref_to_proto(audio_ref: Option<&AudioReference>) -> Option<proto::AudioReference> {
+    audio_ref.map(|r| proto::AudioReference {
+        audio_id:   r.audio_id.as_str(),
+        // Domain 0=OriginalSound → proto 1, domain 1=Reused → proto 2.
+        audio_kind: r.audio_kind.as_tinyint() as i32 + 1,
+    })
 }
 
 // ── Error mapping ─────────────────────────────────────────────────────────────

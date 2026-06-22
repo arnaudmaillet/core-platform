@@ -1,3 +1,5 @@
+pub mod audio_feed_repository;
+pub mod audio_feed_store;
 pub mod author_post_repository;
 pub mod feed_repository;
 pub mod feed_store;
@@ -6,6 +8,8 @@ pub mod social_graph_client;
 pub mod tier_cache;
 pub mod vip_registry;
 
+pub use audio_feed_repository::{AudioFeedRepository, AudioFeedRow};
+pub use audio_feed_store::{AudioFeedMember, AudioFeedStore};
 pub use author_post_repository::AuthorPostRepository;
 pub use feed_repository::FeedRepository;
 pub use feed_store::FeedStore;

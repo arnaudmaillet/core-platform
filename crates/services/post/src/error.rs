@@ -53,6 +53,9 @@ pub enum PostError {
     #[error("invalid profile ID: {0}")]
     InvalidProfileId(String),
 
+    #[error("invalid audio ID: {0}")]
+    InvalidAudioId(String),
+
     #[error("attachments JSON corrupted for post {post_id}: {reason}")]
     AttachmentsCorrupted { post_id: String, reason: String },
 
@@ -81,6 +84,7 @@ impl AppError for PostError {
             Self::InvalidProfileId(_)         => "PST-9002",
             Self::AttachmentsCorrupted { .. } => "PST-9003",
             Self::DomainViolation { .. }      => "PST-9004",
+            Self::InvalidAudioId(_)           => "PST-9005",
         }
     }
 
@@ -102,6 +106,7 @@ impl AppError for PostError {
             | Self::InvalidDimensions { .. }
             | Self::InvalidPostId(_)
             | Self::InvalidProfileId(_)
+            | Self::InvalidAudioId(_)
             | Self::DomainViolation { .. }    => StatusCode::UNPROCESSABLE_ENTITY,
             Self::AttachmentsCorrupted { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -163,6 +168,7 @@ impl AppError for PostError {
             Self::InvalidDimensions { .. }      => "Attachment dimensions must be greater than zero.",
             Self::InvalidPostId(_)              => "The provided post ID is not valid.",
             Self::InvalidProfileId(_)           => "The provided profile ID is not valid.",
+            Self::InvalidAudioId(_)             => "The provided audio ID is not valid.",
             Self::DomainViolation { .. }        => "A domain constraint was violated.",
             Self::Validation(e)                 => e.user_facing_message(),
         }

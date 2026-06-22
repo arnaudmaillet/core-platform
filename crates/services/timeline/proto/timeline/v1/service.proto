@@ -23,4 +23,16 @@ service TimelineService {
     // published_at_ms of the last returned item. Pass next_page_token from
     // the previous response to retrieve the next page.
     rpc GetFollowingFeed (GetFollowingFeedRequest) returns (GetFollowingFeedResponse);
+
+    // Returns a chronological feed of all posts that use a specific audio track.
+    //
+    // Partition key: audio_id (UUID of the originating post for original sounds,
+    // or the original post's ID for reused sounds).
+    //
+    // Hot path: Redis ZSET audio:feed:{audio_id} served via ZREVRANGEBYSCORE.
+    // Cold path: ScyllaDB timeline.posts_by_audio partition scan (no ALLOW FILTERING).
+    //
+    // Pagination: cursor-based via page_token encoding published_at_ms of
+    // the last returned item.
+    rpc GetAudioFeed (GetAudioFeedRequest) returns (GetAudioFeedResponse);
 }

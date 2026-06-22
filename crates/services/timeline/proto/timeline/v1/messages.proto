@@ -44,3 +44,26 @@ message CommandResponse {
     bool   success = 1;
     string message = 2;
 }
+
+// A single slot in an audio-scoped feed.
+message AudioFeedItem {
+    string post_id         = 1;
+    string author_id       = 2;
+    int64  published_at_ms = 3;
+}
+
+// Request for a page of posts that use a given audio track.
+message GetAudioFeedRequest {
+    string audio_id   = 1;
+    int32  limit      = 2;
+    // Opaque cursor from the previous response's next_token.
+    // Omit or send empty string for the first page.
+    string page_token = 3;
+}
+
+// Response containing one page of the audio feed.
+message GetAudioFeedResponse {
+    repeated AudioFeedItem items      = 1;
+    // Opaque cursor for the next page. Empty when no more items exist.
+    string                 next_token = 2;
+}

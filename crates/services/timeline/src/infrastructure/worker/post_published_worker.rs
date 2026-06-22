@@ -29,6 +29,10 @@ struct PostPublishedEvent {
     #[serde(default)]
     pub author_tier: u8,
     pub published_at_ms: i64,
+    #[serde(default)]
+    pub audio_id:    Option<String>,
+    #[serde(default)]
+    pub _audio_kind: Option<u8>,
 }
 
 /// Long-lived Kafka consumer for `post.published`.
@@ -110,6 +114,7 @@ impl<CB: CommandBus> PostPublishedWorker<CB> {
                 author_id:       event.profile_id.clone(),
                 author_tier:     event.author_tier,
                 published_at_ms: event.published_at_ms,
+                audio_id:        event.audio_id.clone(),
             };
 
             if let Err(e) = self
