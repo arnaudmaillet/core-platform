@@ -47,6 +47,16 @@ pub enum TimelineError {
     #[error("invalid page token: '{token}'")]
     InvalidPageToken { token: String },
 
+    // ── TML-7xxx: Audio feed errors ───────────────────────────────────────────
+    #[error("audio feed insert failed for audio {audio_id}: {message}")]
+    AudioFeedInsertFailed { audio_id: String, message: String },
+
+    #[error("audio feed delete failed for audio {audio_id}: {message}")]
+    AudioFeedDeleteFailed { audio_id: String, message: String },
+
+    #[error("audio feed list failed for audio {audio_id}: {message}")]
+    AudioFeedListFailed { audio_id: String, message: String },
+
     // ── TML-9xxx: ID parsing / domain violations ──────────────────────────────
     #[error("invalid post ID: '{0}'")]
     InvalidPostId(String),
@@ -56,6 +66,9 @@ pub enum TimelineError {
 
     #[error("invalid author ID: '{0}'")]
     InvalidAuthorId(String),
+
+    #[error("invalid audio ID: '{0}'")]
+    InvalidAudioId(String),
 
     #[error("domain violation on field '{field}': {message}")]
     DomainViolation { field: String, message: String },
@@ -83,10 +96,15 @@ impl AppError for TimelineError {
 
             Self::InvalidPageToken { .. }       => "TML-6001",
 
+            Self::AudioFeedInsertFailed { .. }  => "TML-7001",
+            Self::AudioFeedDeleteFailed { .. }  => "TML-7002",
+            Self::AudioFeedListFailed { .. }    => "TML-7003",
+
             Self::InvalidPostId(_)              => "TML-9001",
             Self::InvalidProfileId(_)           => "TML-9002",
             Self::InvalidAuthorId(_)            => "TML-9003",
             Self::DomainViolation { .. }        => "TML-9004",
+            Self::InvalidAudioId(_)             => "TML-9005",
         }
     }
 
@@ -102,6 +120,7 @@ impl AppError for TimelineError {
             | Self::InvalidPostId(_)
             | Self::InvalidProfileId(_)
             | Self::InvalidAuthorId(_)
+            | Self::InvalidAudioId(_)
             | Self::DomainViolation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
 
             Self::FanOutFailed { .. }
@@ -110,7 +129,10 @@ impl AppError for TimelineError {
             | Self::SocialGraphInvalidId(_)
             | Self::ColdStartFailed { .. }
             | Self::ScriptReturnInvalid { .. }
-            | Self::BackfillFailed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            | Self::BackfillFailed { .. }
+            | Self::AudioFeedInsertFailed { .. }
+            | Self::AudioFeedDeleteFailed { .. }
+            | Self::AudioFeedListFailed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -123,7 +145,10 @@ impl AppError for TimelineError {
             | Self::VipRegistryWriteFailed { .. }
             | Self::ColdStartFailed { .. }
             | Self::ScriptReturnInvalid { .. }
-            | Self::BackfillFailed { .. } => Severity::High,
+            | Self::BackfillFailed { .. }
+            | Self::AudioFeedInsertFailed { .. }
+            | Self::AudioFeedDeleteFailed { .. }
+            | Self::AudioFeedListFailed { .. } => Severity::High,
 
             Self::SocialGraphClientError { .. } => Severity::High,
 
@@ -136,7 +161,8 @@ impl AppError for TimelineError {
             | Self::InvalidPageToken { .. }
             | Self::InvalidPostId(_)
             | Self::InvalidProfileId(_)
-            | Self::InvalidAuthorId(_) => Severity::Low,
+            | Self::InvalidAuthorId(_)
+            | Self::InvalidAudioId(_) => Severity::Low,
         }
     }
 
@@ -168,7 +194,10 @@ impl AppError for TimelineError {
             | Self::SocialGraphInvalidId(_)
             | Self::ColdStartFailed { .. }
             | Self::ScriptReturnInvalid { .. }
-            | Self::BackfillFailed { .. } =>
+            | Self::BackfillFailed { .. }
+            | Self::AudioFeedInsertFailed { .. }
+            | Self::AudioFeedDeleteFailed { .. }
+            | Self::AudioFeedListFailed { .. } =>
                 "An internal error occurred. Please try again later.",
 
             Self::FeedNotFound { .. } =>
@@ -180,6 +209,7 @@ impl AppError for TimelineError {
             Self::InvalidPostId(_)    => "The provided post ID is not valid.",
             Self::InvalidProfileId(_) => "The provided profile ID is not valid.",
             Self::InvalidAuthorId(_)  => "The provided author ID is not valid.",
+            Self::InvalidAudioId(_)   => "The provided audio ID is not valid.",
             Self::DomainViolation { .. } =>
                 "The request contains an invalid domain value.",
 

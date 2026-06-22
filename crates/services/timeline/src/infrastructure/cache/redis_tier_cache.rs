@@ -41,6 +41,31 @@ impl TierCache for RedisTierCache {
         Ok(raw.and_then(|s| s.parse::<u8>().ok()).map(AuthorTier::from_u8))
     }
 
+    async fn get_tiers(
+        &self,
+        author_ids: &[AuthorId],
+    ) -> Result<Vec<Option<AuthorTier>>, TimelineError> {
+        if author_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Per-author tier keys span cluster slots, so a single MGET would fail with
+        // CROSSSLOT. Issue one GET per key concurrently instead — the client routes
+        // each to the node owning its slot and pipelines them over the pool, turning
+        // N sequential round-trips into one batched fan-out. Order is preserved.
+        let gets = author_ids.iter().map(|author_id| {
+            let key = tier_key(author_id);
+            async move {
+                let raw: Option<String> = self.client.inner.get(&key).await.map_err(fred_err)?;
+                Ok::<Option<AuthorTier>, TimelineError>(
+                    raw.and_then(|s| s.parse::<u8>().ok()).map(AuthorTier::from_u8),
+                )
+            }
+        });
+
+        futures::future::try_join_all(gets).await
+    }
+
     async fn set_tier(
         &self,
         author_id: &AuthorId,

@@ -92,6 +92,8 @@ where
             });
         }
 
+        // Synchronous command path (not a Kafka redelivery), so wall-clock time and
+        // the caller-supplied id are appropriate; idempotency is the client's concern.
         let notification = Notification::create(
             ntf_id,
             target_id,
@@ -99,6 +101,7 @@ where
             kind,
             subj_kind,
             subj_id,
+            chrono::Utc::now(),
         );
 
         self.repository.insert(&notification).await?;

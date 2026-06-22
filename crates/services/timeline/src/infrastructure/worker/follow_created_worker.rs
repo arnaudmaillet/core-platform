@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
-use futures_util::StreamExt;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 use uuid::Uuid;
 
-use cqrs::{CommandBus, Envelope};
+use cqrs::{CommandBus, CqrsError, Envelope};
 
 use crate::application::command::backfill_follow::BackfillFollowCommand;
+use crate::infrastructure::worker::{build_dlq_producer, dispatch_outcome};
 
 const TOPIC: &str = "social-graph.followed";
 
@@ -37,7 +39,7 @@ pub struct FollowCreatedWorker<CB> {
     group_id:     String,
 }
 
-impl<CB: CommandBus> FollowCreatedWorker<CB> {
+impl<CB: CommandBus + 'static> FollowCreatedWorker<CB> {
     pub fn new(
         kafka_config: KafkaClientConfig,
         command_bus:  Arc<CB>,
@@ -51,27 +53,32 @@ impl<CB: CommandBus> FollowCreatedWorker<CB> {
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(topic = TOPIC, error = %e, "failed to build DLQ producer — consumer not started");
+                return;
+            }
+        };
+
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!(topic = TOPIC, "consumer exited cleanly — restarting");
                 }
                 Err(e) => {
-                    tracing::error!(
-                        topic = TOPIC,
-                        error = %e,
-                        "consumer error — restarting after 5 s"
-                    );
+                    tracing::error!(topic = TOPIC, error = %e, "consumer error — restarting after 5 s");
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                 }
             }
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -80,43 +87,20 @@ impl<CB: CommandBus> FollowCreatedWorker<CB> {
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "consumer started");
 
-        let mut stream = handle.stream::<ProfileFollowedEvent>();
+        let policy = RetryPolicy::default();
+        run_consumer::<ProfileFollowedEvent, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { dispatch_outcome(worker.process(event).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
+    }
 
-        while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e)    => e,
-                Err(err) => {
-                    tracing::warn!(
-                        topic = TOPIC,
-                        error = %err,
-                        "deserialization error — skipping message"
-                    );
-                    continue;
-                }
-            };
-
-            let event = &envelope.payload;
-
-            let cmd = BackfillFollowCommand {
-                follower_id: event.actor_id.clone(),
-                followee_id: event.target_id.clone(),
-            };
-
-            if let Err(e) = self
-                .command_bus
-                .dispatch(Envelope::new(Uuid::now_v7(), cmd))
-                .await
-            {
-                tracing::error!(
-                    topic       = TOPIC,
-                    follower_id = %event.actor_id,
-                    followee_id = %event.target_id,
-                    error       = %e,
-                    "BackfillFollowCommand failed"
-                );
-            }
-        }
-
-        Ok(())
+    async fn process(&self, event: &ProfileFollowedEvent) -> Result<(), CqrsError> {
+        let cmd = BackfillFollowCommand {
+            follower_id: event.actor_id.clone(),
+            followee_id: event.target_id.clone(),
+        };
+        self.command_bus.dispatch(Envelope::new(Uuid::now_v7(), cmd)).await
     }
 }

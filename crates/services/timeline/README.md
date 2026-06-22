@@ -154,7 +154,7 @@ Dual role:
 | `social-graph.followed` | `FollowCreatedWorker` | `actor_id` (follower), `target_id` (followee) | Backfill recent posts (Std/Prem), update following set |
 | `social-graph.unfollowed` | `FollowDeletedWorker` | `actor_id`, `target_id` | Prune posts from feed (Std/Prem), update following set |
 
-All workers use at-least-once delivery. All downstream writes are idempotent (ZADD is idempotent; ScyllaDB upserts via `INSERT`).
+All workers run on the shared `run_consumer` at-least-once standard: manual offset commit after success, transient failures retried with bounded backoff then dead-lettered to `{topic}.dlq`, poison records dead-lettered immediately. All downstream writes are idempotent (ZADD is idempotent; ScyllaDB upserts via `INSERT`). See the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard).
 
 ---
 

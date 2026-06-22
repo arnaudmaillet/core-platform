@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use fred::interfaces::{KeysInterface, LuaInterface};
-use futures_util::StreamExt;
+use fred::interfaces::{KeysInterface, LuaInterface, SortedSetsInterface};
 use redis_storage::RedisClient;
 use serde::{Deserialize, Serialize};
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 use uuid::Uuid;
 
 use crate::application::port::{BlockCache, NotificationRepository, StreamRegistry, UnreadCounter};
@@ -18,7 +19,8 @@ use crate::domain::value_object::{
     NotificationId, NotificationKind, ProfileId, SubjectId, SubjectKind,
 };
 use crate::error::NotificationError;
-use crate::infrastructure::worker::collapse::{CollapseBuffer, CollapseKey};
+use crate::infrastructure::worker::build_dlq_producer;
+use crate::infrastructure::worker::collapse::{CollapseBuffer, CollapseKey, SCHEDULE_KEY};
 
 const TOPIC: &str = "engagement.reactions";
 
@@ -41,28 +43,42 @@ return v
 
 /// Accumulates a sender into the cross-batch collapse window.
 ///
-/// KEYS[1] = notification:cw:{target}:{subject}:{kind}       (INCR counter)
-/// KEYS[2] = notification:cw:{target}:{subject}:{kind}_:senders  (RPUSH sample list)
+/// Both keys share a Redis Cluster hash tag (see [`CollapseKey::redis_window_key`]),
+/// so the script is slot-safe. The flush schedule ZSET is intentionally NOT touched
+/// here — it lives on a different slot and is updated by a separate `ZADD` in
+/// [`ReactionNotificationWorker::accumulate_in_window`].
+///
+/// All three keys share the window hash tag, so the script is slot-safe. The
+/// unique-sender SET makes accumulation idempotent: a sender that already reacted
+/// within this window is a no-op, so a redelivered reaction never double-counts.
+///
+/// KEYS[1] = notification:cw:{target:subject:kind}            (INCR counter)
+/// KEYS[2] = notification:cw:{target:subject:kind}_:senders   (RPUSH sample list)
+/// KEYS[3] = notification:cw:{target:subject:kind}_:sset      (unique-sender SET)
 /// ARGV[1] = sender_id (string)
 /// ARGV[2] = window_ttl_secs
 /// ARGV[3] = max_sample_senders
-/// ARGV[4] = schedule_member (for the ZSET)
-/// ARGV[5] = window_expiry_score (Unix ms when the window should be flushed)
-/// Returns: total count in window.
+/// Returns: count of unique senders in the window.
 const COLLAPSE_ACCUMULATE_SCRIPT: &str = r#"
-local window_key    = KEYS[1]
-local senders_key   = KEYS[2]
-local sender_id     = ARGV[1]
-local ttl           = tonumber(ARGV[2])
-local max_sample    = tonumber(ARGV[3])
-local sched_member  = ARGV[4]
-local expiry_score  = tonumber(ARGV[5])
+local window_key      = KEYS[1]
+local senders_key     = KEYS[2]
+local senders_set_key = KEYS[3]
+local sender_id       = ARGV[1]
+local ttl             = tonumber(ARGV[2])
+local max_sample      = tonumber(ARGV[3])
+
+-- Idempotency gate: skip senders already counted in this window.
+if redis.call('SADD', senders_set_key, sender_id) == 0 then
+    local existing = redis.call('GET', window_key)
+    if existing then return tonumber(existing) end
+    return 0
+end
 
 local count = redis.call('INCR', window_key)
 if count == 1 then
-    redis.call('EXPIRE', window_key,  ttl)
-    redis.call('EXPIRE', senders_key, ttl + 10)
-    redis.call('ZADD', 'notification:window_schedule', expiry_score, sched_member)
+    redis.call('EXPIRE', window_key,      ttl)
+    redis.call('EXPIRE', senders_key,     ttl + 10)
+    redis.call('EXPIRE', senders_set_key, ttl + 10)
 end
 
 local slen = redis.call('LLEN', senders_key)
@@ -172,8 +188,18 @@ where
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to build DLQ producer — reaction notification consumer not started");
+                return;
+            }
+        };
+
+        // `Arc<Self>` so the per-message closure can capture an owned handle.
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!("reaction notification consumer exited cleanly — restarting");
                 }
@@ -188,10 +214,10 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -200,119 +226,129 @@ where
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "reaction notification consumer started");
 
-        let mut stream = handle.stream::<ReactionKafkaEvent>();
-
-        // ── In-batch collapse accumulator ─────────────────────────────────────
-        // Populated during one poll cycle, flushed at the end of each batch.
-        let mut batch: HashMap<CollapseKey, CollapseBuffer> = HashMap::new();
-
-        while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e) => e,
-                Err(err) => {
-                    tracing::warn!(error = %err, "reaction event deserialization error — skipping");
-                    continue;
-                }
-            };
-
-            let (post_id, sender_str, event_at_ms) = match &envelope.payload {
-                ReactionKafkaEvent::Upserted(e) =>
-                    (e.post_id.as_str(), e.profile_id.as_str(), e.event_at_ms),
-                ReactionKafkaEvent::Removed(_) => {
-                    // Reaction removals do not generate notifications.
-                    continue;
-                }
-            };
-
-            let sender_uuid = match Uuid::parse_str(sender_str) {
-                Ok(u) => u,
-                Err(_) => {
-                    tracing::warn!(profile_id = sender_str, "invalid sender UUID — skipping");
-                    continue;
-                }
-            };
-
-            // Look up post author from Redis cache (populated by MentionWorker).
-            let author_key = post_author_key(post_id);
-            let author_str: Option<String> = match self.redis.inner.get(&author_key).await {
-                Ok(v)    => v,
-                Err(err) => {
-                    tracing::warn!(error = %err, post_id, "Redis get post_author failed");
-                    None
-                }
-            };
-
-            let target_str = match author_str {
-                Some(s) => s,
-                None => {
-                    tracing::debug!(
-                        post_id,
-                        "post author cache miss — reaction notification suppressed (post not yet indexed)"
-                    );
-                    continue;
-                }
-            };
-
-            let target_uuid = match Uuid::parse_str(&target_str) {
-                Ok(u) => u,
-                Err(_) => {
-                    tracing::warn!(post_id, target = target_str, "invalid target UUID — skipping");
-                    continue;
-                }
-            };
-
-            // Self-notification guard.
-            if sender_uuid == target_uuid {
-                continue;
-            }
-
-            let subject_uuid = match Uuid::parse_str(post_id) {
-                Ok(u) => u,
-                Err(_) => {
-                    tracing::warn!(post_id, "invalid post UUID — skipping");
-                    continue;
-                }
-            };
-
-            let key = CollapseKey::new(
-                target_uuid,
-                subject_uuid,
-                SubjectKind::Post,
-                NotificationKind::Reaction,
-            );
-
-            batch
-                .entry(key)
-                .and_modify(|buf| {
-                    buf.push(sender_uuid, event_at_ms, self.config.max_sample_senders)
-                })
-                .or_insert_with(|| {
-                    CollapseBuffer::new(
-                        sender_uuid,
-                        event_at_ms,
-                        self.config.max_sample_senders,
-                    )
-                });
-
-            // Flush the batch after accumulating (stream yields one message at a time
-            // in this loop; the batch is flushed here to respect the collapse window).
-            // In production, replace with a fixed-size batch poll for higher throughput.
-            if batch.len() >= 500 {
-                self.flush_batch(&mut batch).await;
-            }
-        }
-
-        // Flush any remaining accumulated events.
-        if !batch.is_empty() {
-            self.flush_batch(&mut batch).await;
-        }
-
-        Ok(())
+        let policy = RetryPolicy::default();
+        run_consumer::<ReactionKafkaEvent, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { worker.process_one(event).await })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
-    async fn flush_batch(&self, batch: &mut HashMap<CollapseKey, CollapseBuffer>) {
+    /// Processes one reaction event: accumulate it into a fresh single-event collapse
+    /// batch and flush it. Removals, malformed ids, self-reactions and suppressions are
+    /// no-ops that succeed; a transient write failure is retried then dead-lettered.
+    ///
+    /// The stream yields one message at a time, so cross-event collapse is handled by
+    /// the Redis-backed window in `accumulate_in_window`, not this in-memory batch.
+    async fn process_one(&self, event: &ReactionKafkaEvent) -> ProcessOutcome {
+        let mut batch: HashMap<CollapseKey, CollapseBuffer> = HashMap::new();
+        self.accumulate(event, &mut batch).await;
+
+        match self.flush_batch(&mut batch).await {
+            Ok(())  => ProcessOutcome::Done,
+            Err(()) => ProcessOutcome::Retry("reaction notification write failed".to_string()),
+        }
+    }
+
+    /// Decodes one reaction event and, when it should produce a notification,
+    /// accumulates it into the collapse `batch`. Intentional skips (removals,
+    /// malformed IDs, self-reactions, post-author cache misses) are no-ops — the
+    /// caller still commits the offset for them.
+    async fn accumulate(
+        &self,
+        event: &ReactionKafkaEvent,
+        batch: &mut HashMap<CollapseKey, CollapseBuffer>,
+    ) {
+        let (post_id, sender_str, event_at_ms) = match event {
+            ReactionKafkaEvent::Upserted(e) =>
+                (e.post_id.as_str(), e.profile_id.as_str(), e.event_at_ms),
+            // Reaction removals do not generate notifications.
+            ReactionKafkaEvent::Removed(_) => return,
+        };
+
+        let sender_uuid = match Uuid::parse_str(sender_str) {
+            Ok(u) => u,
+            Err(_) => {
+                tracing::warn!(profile_id = sender_str, "invalid sender UUID — skipping");
+                return;
+            }
+        };
+
+        // Look up post author from Redis cache (populated by MentionWorker).
+        let author_key = post_author_key(post_id);
+        let author_str: Option<String> = match self.redis.inner.get(&author_key).await {
+            Ok(v)    => v,
+            Err(err) => {
+                tracing::warn!(error = %err, post_id, "Redis get post_author failed");
+                None
+            }
+        };
+
+        let target_str = match author_str {
+            Some(s) => s,
+            None => {
+                tracing::debug!(
+                    post_id,
+                    "post author cache miss — reaction notification suppressed (post not yet indexed)"
+                );
+                return;
+            }
+        };
+
+        let target_uuid = match Uuid::parse_str(&target_str) {
+            Ok(u) => u,
+            Err(_) => {
+                tracing::warn!(post_id, target = target_str, "invalid target UUID — skipping");
+                return;
+            }
+        };
+
+        // Self-notification guard.
+        if sender_uuid == target_uuid {
+            return;
+        }
+
+        let subject_uuid = match Uuid::parse_str(post_id) {
+            Ok(u) => u,
+            Err(_) => {
+                tracing::warn!(post_id, "invalid post UUID — skipping");
+                return;
+            }
+        };
+
+        let key = CollapseKey::new(
+            target_uuid,
+            subject_uuid,
+            SubjectKind::Post,
+            NotificationKind::Reaction,
+        );
+
+        batch
+            .entry(key)
+            .and_modify(|buf| {
+                buf.push(sender_uuid, event_at_ms, self.config.max_sample_senders)
+            })
+            .or_insert_with(|| {
+                CollapseBuffer::new(
+                    sender_uuid,
+                    event_at_ms,
+                    self.config.max_sample_senders,
+                )
+            });
+    }
+
+    /// Writes every accumulated collapse entry. Returns `Err(())` if any entry
+    /// failed with an unexpected (transient) error, so the caller withholds the
+    /// commit and lets the event redeliver. Suppression-class errors are terminal
+    /// and treated as success.
+    async fn flush_batch(
+        &self,
+        batch: &mut HashMap<CollapseKey, CollapseBuffer>,
+    ) -> Result<(), ()> {
         let drained: Vec<(CollapseKey, CollapseBuffer)> = batch.drain().collect();
 
+        let mut had_hard_error = false;
         for (key, buf) in drained {
             if let Err(err) = self.process_collapsed(&key, &buf).await {
                 match err {
@@ -327,10 +363,13 @@ where
                             subject_id        = %key.subject_id,
                             "reaction notification write failed"
                         );
+                        had_hard_error = true;
                     }
                 }
             }
         }
+
+        if had_hard_error { Err(()) } else { Ok(()) }
     }
 
     async fn process_collapsed(
@@ -389,8 +428,14 @@ where
             return Ok(());
         }
 
-        // Write collapsed notification to ScyllaDB.
-        let ntf_id = NotificationId::new();
+        // Immediate (non-hot) path: one reaction → one notification. (subject, sender)
+        // is the stable business key, so the id is deterministic (idempotent INSERT)
+        // and the unread increment is claim-gated. created_at is the reaction's time.
+        let business_key = format!("reaction:{}:{}", subject_id, sender_id);
+        let ntf_id       = NotificationId::deterministic(&business_key);
+        let created_at   = chrono::DateTime::from_timestamp_millis(buf.first_at_ms)
+            .unwrap_or_default();
+
         let notification = Notification::create_collapsed(
             ntf_id,
             target_id,
@@ -400,11 +445,11 @@ where
             key.kind,
             key.subject_kind,
             subject_id,
-            chrono::Utc::now(),
+            created_at,
         );
 
         self.repository.insert(&notification).await?;
-        self.counter.increment(&target_id).await?;
+        self.counter.increment_once(&target_id, &business_key).await?;
 
         let payload = Arc::new(NotificationPayload {
             notification_id:   notification.id().as_uuid(),
@@ -428,25 +473,44 @@ where
         _buf:      &CollapseBuffer,
         sender_id: &ProfileId,
     ) -> Result<(), NotificationError> {
-        let window_key   = key.redis_window_key();
-        let senders_key  = key.redis_senders_key();
-        let ttl          = self.config.collapse_window_secs;
-        let max_sample   = self.config.max_sample_senders;
-        let sched_member = key.schedule_member();
-        let expiry_score = (chrono::Utc::now().timestamp_millis()
+        let window_key      = key.redis_window_key();
+        let senders_key     = key.redis_senders_key();
+        let senders_set_key = key.redis_senders_set_key();
+        let ttl             = self.config.collapse_window_secs;
+        let max_sample      = self.config.max_sample_senders;
+        let sched_member    = key.schedule_member();
+        let expiry_score    = (chrono::Utc::now().timestamp_millis()
             + (ttl as i64 * 1000)) as f64;
 
+        // Atomically bump the unique-sender count + sample list. All three keys share
+        // a hash tag, so this multi-key script is slot-safe in Redis Cluster.
         let _: i64 = self.redis.inner
             .eval(
                 COLLAPSE_ACCUMULATE_SCRIPT,
-                vec![window_key, senders_key],
+                vec![window_key, senders_key, senders_set_key],
                 vec![
                     sender_id.as_str(),
                     ttl.to_string(),
                     max_sample.to_string(),
-                    sched_member,
-                    (expiry_score as i64).to_string(),
                 ],
+            )
+            .await
+            .map_err(|e| NotificationError::Redis(redis_storage::RedisStorageError::from(e)))?;
+
+        // Register the window in the global flush schedule as a *separate* command —
+        // the schedule key lives on a different slot than the window and cannot be
+        // touched from inside the script above. `NX` keeps the original flush
+        // deadline (a fixed window from the first event) and makes this idempotent
+        // under at-least-once redelivery: a retry after a mid-accumulate crash still
+        // schedules the window even though the counter is no longer 1.
+        let _: i64 = self.redis.inner
+            .zadd(
+                SCHEDULE_KEY,
+                Some(fred::types::SetOptions::NX),
+                None,
+                false,
+                false,
+                (expiry_score, sched_member),
             )
             .await
             .map_err(|e| NotificationError::Redis(redis_storage::RedisStorageError::from(e)))?;

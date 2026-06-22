@@ -26,6 +26,11 @@ pub struct Notification {
 
 impl Notification {
     /// Creates a new individual (non-collapsed) notification.
+    ///
+    /// `created_at` is supplied by the caller (the source event's timestamp) rather
+    /// than read from the wall clock, so the value is deterministic across Kafka
+    /// redeliveries — a prerequisite for the idempotent, deterministically-keyed
+    /// `notifications_by_profile` INSERT.
     pub fn create(
         id:                NotificationId,
         target_profile_id: ProfileId,
@@ -33,6 +38,7 @@ impl Notification {
         kind:              NotificationKind,
         subject_kind:      SubjectKind,
         subject_id:        SubjectId,
+        created_at:        DateTime<Utc>,
     ) -> Self {
         Self {
             id,
@@ -43,7 +49,7 @@ impl Notification {
             kind,
             subject_kind,
             subject_id,
-            created_at: Utc::now(),
+            created_at,
             is_read: false,
         }
     }

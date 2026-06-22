@@ -74,7 +74,7 @@ The **Profile** microservice owns all public-facing identity metadata on the pla
 | **ScyllaDB write safety** | `Strict` execution profile: `LocalQuorum` consistency. Mutations are rejected if quorum is unavailable. |
 | **Handle race conditions** | `IF NOT EXISTS` LWT on `profile_handles` table. Only one writer can claim a handle even under concurrent create storms. |
 | **Optimistic write conflicts** | `IF version = ?` LWT on `profile.profiles`. Returns `PRF-4001` (retryable) to the caller. |
-| **Kafka consumer failures** | Per-message error handling: bad messages are logged and skipped; the consumer loop never panics. Stream exhaustion is logged as a warning. |
+| **Kafka consumer failures** | Runs on the shared `run_consumer` standard: transient dispatch failures retry with bounded backoff then dead-letter; poison records are dead-lettered to `account.v1.events.dlq`; unknown event kinds commit as no-ops. Offsets commit only after success (`enable_auto_commit = false`). See the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard). |
 | **Tombstone reservation** | Deleted handles are blocked for 30 days via `tombstoned_at` timestamp; `handle_is_available()` enforces this at the application layer. |
 | **Cache key versioning** | All keys prefixed with `v1:` — bumping the version suffix allows zero-downtime cache invalidation during schema migrations. |
 
@@ -239,7 +239,10 @@ async fn main() -> anyhow::Result<()> {
     let kafka_consumer = KafkaConsumerBuilder::new(KafkaConsumerConfig::from_env())
         .subscribe(&["account.v1.events"])
         .build()?;
-    tokio::spawn(run_account_event_consumer(kafka_consumer, cmd_bus));
+    // The consumer also needs a producer to forward poison / retry-exhausted
+    // records to the account.v1.events.dlq dead-letter topic.
+    let dlq_producer = KafkaProducerBuilder::new(KafkaProducerConfig::from_env()).build()?;
+    tokio::spawn(run_account_event_consumer(kafka_consumer, cmd_bus, dlq_producer));
 
     // ── Start server ──────────────────────────────────────────────────────────
     tonic::transport::Server::builder()

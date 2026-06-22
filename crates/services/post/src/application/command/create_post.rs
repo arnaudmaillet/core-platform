@@ -8,7 +8,7 @@ use crate::{
     domain::{
         aggregate::Post,
         entity::MediaAttachment,
-        value_object::{Caption, CdnUrl, MimeType, PostId, PostKind, ProfileId},
+        value_object::{AudioReference, Caption, CdnUrl, MimeType, PostId, PostKind, ProfileId},
     },
     error::PostError,
 };
@@ -30,6 +30,7 @@ pub struct CreatePostCommand {
     pub attachments: Vec<AttachmentInput>,
     pub parent_id:   Option<String>,
     pub root_id:     Option<String>,
+    pub audio_ref:   Option<AudioReference>,
 }
 
 impl Command for CreatePostCommand {}
@@ -115,7 +116,7 @@ where
             .map(PostId::try_from)
             .transpose()?;
 
-        let post = Post::create(post_id, profile_id, kind, caption, attachments, parent_id, root_id)?;
+        let post = Post::create(post_id, profile_id, kind, caption, attachments, parent_id, root_id, cmd.audio_ref.clone())?;
         self.repository.insert(&post).await?;
         Ok(())
     }

@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{TimeZone, Utc};
 use scylla::observability::history::HistoryListener;
+use scylla::statement::batch::{Batch, BatchType};
 use scylla::statement::unprepared::Statement;
 use scylla::value::CqlTimestamp;
 use scylla::DeserializeRow;
@@ -89,6 +90,27 @@ impl ScyllaSocialGraphRepository {
             Arc::clone(&self.client.history_listener) as Arc<dyn HistoryListener>,
         );
         s
+    }
+
+    /// Builds an empty **logged** batch carrying the Strict execution profile and
+    /// the OTel history listener. A logged batch guarantees that all appended
+    /// statements eventually apply atomically even if the coordinator dies
+    /// mid-write — the consistency primitive that keeps the three denormalized
+    /// follow tables from diverging into a split-brain graph. Callers append the
+    /// statements and supply positional `BatchValues`.
+    fn strict_batch(&self) -> Batch {
+        let mut batch = Batch::new(BatchType::Logged);
+        batch.set_execution_profile_handle(Some(
+            self.client
+                .profiles
+                .get(ScyllaProfileKind::Strict)
+                .clone()
+                .into_handle_with_label("strict-batch".to_string()),
+        ));
+        batch.set_history_listener(
+            Arc::clone(&self.client.history_listener) as Arc<dyn HistoryListener>,
+        );
+        batch
     }
 
     fn dt_ms(dt: chrono::DateTime<Utc>) -> CqlTimestamp {
@@ -201,44 +223,40 @@ impl SocialGraphRepository for ScyllaSocialGraphRepository {
     ) -> Result<(), SocialGraphError> {
         let ts = Self::dt_ms(followed_at);
 
-        // Write follow_status first (it is the canonical deletion-key store).
-        let stmt_status = self.strict_stmt(
+        // All three denormalized rows are written in a single logged batch so they
+        // can never diverge: either follow_status, following, AND followers all
+        // appear, or none do. The identical `ts` across all three is what makes the
+        // later clustering-key DELETE in `delete_follow` able to find the rows.
+        //
+        // The batch spans two partitions (follow_status + following key on
+        // follower_id; followers keys on followee_id), so it is a genuine
+        // multi-partition logged batch — heavier than three unlogged writes, but the
+        // atomicity is required to keep the follow graph consistent at scale.
+        let mut batch = self.strict_batch();
+        batch.append_statement(
             "INSERT INTO social_graph.follow_status \
              (follower_id, followee_id, followed_at) VALUES (?, ?, ?)",
         );
+        batch.append_statement(
+            "INSERT INTO social_graph.following \
+             (follower_id, followed_at, followee_id) VALUES (?, ?, ?)",
+        );
+        batch.append_statement(
+            "INSERT INTO social_graph.followers \
+             (followee_id, followed_at, follower_id) VALUES (?, ?, ?)",
+        );
+
+        let values = (
+            (actor_id.as_uuid(), target_id.as_uuid(), ts),
+            (actor_id.as_uuid(), ts, target_id.as_uuid()),
+            (target_id.as_uuid(), ts, actor_id.as_uuid()),
+        );
+
         self.client
             .session
-            .execute_unpaged(stmt_status, (actor_id.as_uuid(), target_id.as_uuid(), ts))
+            .batch(&batch, values)
             .await
             .map_err(scylla_err)?;
-
-        // Write both adjacency tables concurrently.
-        let (r_following, r_followers) = tokio::join!(
-            async {
-                let stmt = self.strict_stmt(
-                    "INSERT INTO social_graph.following \
-                     (follower_id, followed_at, followee_id) VALUES (?, ?, ?)",
-                );
-                self.client
-                    .session
-                    .execute_unpaged(stmt, (actor_id.as_uuid(), ts, target_id.as_uuid()))
-                    .await
-                    .map_err(scylla_err)
-            },
-            async {
-                let stmt = self.strict_stmt(
-                    "INSERT INTO social_graph.followers \
-                     (followee_id, followed_at, follower_id) VALUES (?, ?, ?)",
-                );
-                self.client
-                    .session
-                    .execute_unpaged(stmt, (target_id.as_uuid(), ts, actor_id.as_uuid()))
-                    .await
-                    .map_err(scylla_err)
-            },
-        );
-        r_following?;
-        r_followers?;
 
         Ok(())
     }
@@ -251,46 +269,39 @@ impl SocialGraphRepository for ScyllaSocialGraphRepository {
         target_id:   &ProfileId,
         followed_at: chrono::DateTime<Utc>,
     ) -> Result<(), SocialGraphError> {
+        // `followed_at` MUST be the exact timestamp stored at follow time — it is the
+        // clustering key for the following/followers rows, and a mismatched value
+        // makes the DELETE a silent no-op (leaving ghost adjacency rows). Callers
+        // source it from `follow_status` via `load_relation`, never re-derive it.
         let ts = Self::dt_ms(followed_at);
 
-        // Delete follow_status first.
-        let stmt_status = self.strict_stmt(
+        // Remove all three rows atomically in a logged batch (mirrors persist_follow)
+        // so an interrupted unfollow can never leave the graph half-deleted.
+        let mut batch = self.strict_batch();
+        batch.append_statement(
             "DELETE FROM social_graph.follow_status \
              WHERE follower_id = ? AND followee_id = ?",
         );
+        batch.append_statement(
+            "DELETE FROM social_graph.following \
+             WHERE follower_id = ? AND followed_at = ? AND followee_id = ?",
+        );
+        batch.append_statement(
+            "DELETE FROM social_graph.followers \
+             WHERE followee_id = ? AND followed_at = ? AND follower_id = ?",
+        );
+
+        let values = (
+            (actor_id.as_uuid(), target_id.as_uuid()),
+            (actor_id.as_uuid(), ts, target_id.as_uuid()),
+            (target_id.as_uuid(), ts, actor_id.as_uuid()),
+        );
+
         self.client
             .session
-            .execute_unpaged(stmt_status, (actor_id.as_uuid(), target_id.as_uuid()))
+            .batch(&batch, values)
             .await
             .map_err(scylla_err)?;
-
-        // Delete both adjacency rows concurrently.
-        let (r_following, r_followers) = tokio::join!(
-            async {
-                let stmt = self.strict_stmt(
-                    "DELETE FROM social_graph.following \
-                     WHERE follower_id = ? AND followed_at = ? AND followee_id = ?",
-                );
-                self.client
-                    .session
-                    .execute_unpaged(stmt, (actor_id.as_uuid(), ts, target_id.as_uuid()))
-                    .await
-                    .map_err(scylla_err)
-            },
-            async {
-                let stmt = self.strict_stmt(
-                    "DELETE FROM social_graph.followers \
-                     WHERE followee_id = ? AND followed_at = ? AND follower_id = ?",
-                );
-                self.client
-                    .session
-                    .execute_unpaged(stmt, (target_id.as_uuid(), ts, actor_id.as_uuid()))
-                    .await
-                    .map_err(scylla_err)
-            },
-        );
-        r_following?;
-        r_followers?;
 
         Ok(())
     }

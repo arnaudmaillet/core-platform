@@ -65,8 +65,8 @@ impl ConsumerConfig {
                 "enable.auto.commit",
                 if self.enable_auto_commit { "true" } else { "false" },
             )
-            .set("heartbeat.interval.ms", &self.heartbeat_interval_ms.to_string())
-            .set("session.timeout.ms", &self.session_timeout_ms.to_string());
+            .set("heartbeat.interval.ms", self.heartbeat_interval_ms.to_string())
+            .set("session.timeout.ms", self.session_timeout_ms.to_string());
         cfg
     }
 }

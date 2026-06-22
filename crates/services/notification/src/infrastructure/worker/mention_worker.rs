@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use fred::interfaces::KeysInterface;
-use futures_util::StreamExt;
 use once_cell::sync::Lazy;
 use redis_storage::RedisClient;
 use regex::Regex;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 use uuid::Uuid;
 
 use crate::application::port::{BlockCache, NotificationRepository, StreamRegistry, UnreadCounter};
@@ -19,6 +20,7 @@ use crate::domain::value_object::{
     NotificationId, NotificationKind, ProfileId, SubjectId, SubjectKind,
 };
 use crate::error::NotificationError;
+use crate::infrastructure::worker::build_dlq_producer;
 
 const TOPIC: &str = "post.published";
 
@@ -41,6 +43,10 @@ pub struct PostPublishedPayload {
     pub author_id: String,
     /// The raw post caption, used for mention token extraction.
     pub caption:   Option<String>,
+    /// Publication timestamp (Unix ms), used as the notification `created_at` so
+    /// the value is deterministic across redeliveries. Absent → 0.
+    #[serde(default)]
+    pub published_at_ms: i64,
 }
 
 // ── Key builders ──────────────────────────────────────────────────────────────
@@ -99,8 +105,18 @@ where
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to build DLQ producer — mention notification consumer not started");
+                return;
+            }
+        };
+
+        // `Arc<Self>` so the per-message closure can capture an owned handle.
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!("mention notification consumer exited cleanly — restarting");
                 }
@@ -115,10 +131,10 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -127,27 +143,16 @@ where
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "mention notification consumer started");
 
-        let mut stream = handle.stream::<PostPublishedPayload>();
-
-        while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e) => e,
-                Err(err) => {
-                    tracing::warn!(error = %err, "post.published deserialization error — skipping");
-                    continue;
-                }
-            };
-
-            if let Err(err) = self.process(&envelope.payload).await {
-                tracing::error!(
-                    error   = %err,
-                    post_id = %envelope.payload.post_id,
-                    "mention worker failed to process post"
-                );
-            }
-        }
-
-        Ok(())
+        // `process` returns Ok for intentional skips (self-mention, block, empty
+        // caption), so those commit cleanly; transient failures retry then
+        // dead-letter, and malformed ids are dead-lettered as poison.
+        let policy = RetryPolicy::default();
+        run_consumer::<PostPublishedPayload, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     async fn process(&self, event: &PostPublishedPayload) -> Result<(), NotificationError> {
@@ -204,7 +209,14 @@ where
                 }
             }
 
-            let ntf_id = NotificationId::new();
+            // A post mentions each profile at most once, so (post, mentioned) is a
+            // stable business key: deterministic id (idempotent INSERT) + claim-gated
+            // unread increment. created_at is the post's publication time.
+            let business_key = format!("mention:{}:{}", event.post_id, mentioned_uuid);
+            let ntf_id       = NotificationId::deterministic(&business_key);
+            let created_at   = chrono::DateTime::from_timestamp_millis(event.published_at_ms)
+                .unwrap_or_default();
+
             let notification = Notification::create(
                 ntf_id,
                 target_id,
@@ -212,10 +224,11 @@ where
                 NotificationKind::Mention,
                 SubjectKind::Post,
                 subject_id,
+                created_at,
             );
 
             self.repository.insert(&notification).await?;
-            self.counter.increment(&target_id).await?;
+            self.counter.increment_once(&target_id, &business_key).await?;
 
             let payload = Arc::new(NotificationPayload {
                 notification_id:   notification.id().as_uuid(),

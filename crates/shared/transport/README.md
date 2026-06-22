@@ -51,7 +51,8 @@ transport/
     │   └── handle.rs               KafkaProducerHandle.publish<T>() / publish_raw()
     └── consumer/
         ├── builder.rs              KafkaConsumerBuilder → KafkaConsumerHandle
-        └── handle.rs               KafkaConsumerHandle.stream<T>() / commit()
+        ├── handle.rs               KafkaConsumerHandle.stream<T>() / commit() · ConsumedMessage<T>
+        └── runner.rs               run_consumer · RetryPolicy · ProcessOutcome · ClassifyError
 ```
 
 ### Data flow — distributed trace propagation
@@ -117,7 +118,7 @@ tonic::Server
 |---|---|---|
 | **Circuit breaking** | `CircuitBreakerLayer` (from `resilience` crate) wraps the channel; open state → `TransportError::CircuitOpen` | N/A — broker failures surface as `KafkaTransportError::Producer/Consumer` |
 | **Timeout** | `TimeoutLayer` per-call deadline; exceeded → `TransportError::Timeout(Duration)` | rdkafka internal `Timeout::Never` on produce; caller controls consumer poll cadence |
-| **Retry** | **Intentionally absent at this layer.** HTTP/2 bodies are streams — replaying them requires buffering the full payload, which is cost-prohibitive. Apply `RetryLayer` at the **application layer** around the generated tonic client call, before serialization. | At-least-once via `acks = "all"` + manual offset commit after successful processing |
+| **Retry** | **Intentionally absent at this layer.** HTTP/2 bodies are streams — replaying them requires buffering the full payload, which is cost-prohibitive. Apply `RetryLayer` at the **application layer** around the generated tonic client call, before serialization. | At-least-once via `acks = "all"` + manual commit after success. `run_consumer` adds bounded in-place retry (exponential backoff + jitter) and dead-letters poison / retry-exhausted records to `{topic}.dlq` — see [Consumer runtime standard](#consumer-runtime-standard) |
 | **Backpressure** | Tower's `poll_ready` propagates upstream naturally | rdkafka's internal queue; `linger_ms` + `max_in_flight` tune batching vs. ordering |
 | **Memory** | No request body buffering at this layer | `EventEnvelope<T>` is deserialized per-message; consumer stream is lazy (pull-based) |
 | **TLS / mTLS** | `GrpcClientConfig::with_tls()` + `GrpcServerConfig::with_tls()` (optional client CA for mTLS) | SASL_SSL via `KafkaClientConfig` security settings |
@@ -256,21 +257,149 @@ impl KafkaProducerHandle {
 ### `KafkaConsumerHandle`
 
 ```rust
-pub struct KafkaConsumerHandle { /* private — wraps StreamConsumer */ }
+pub struct ConsumedMessage<T> {
+    pub topic: String,
+    pub partition: i32,
+    pub offset: i64,
+    pub key: String,
+    pub headers: HashMap<String, String>,
+    pub timestamp_ms: Option<i64>,
+    pub raw_payload: Vec<u8>,                 // original bytes — retained for dead-lettering
+    pub payload: Result<T, TransportError>,   // Err = poison/decode failure (offset still known)
+}
 
 impl KafkaConsumerHandle {
-    // Lazy async stream. Each item: trace context extracted + parent span set + payload deserialized.
+    // Lazy async stream. Each item: trace context extracted + parent span set + payload decoded.
+    // A decode failure is surfaced as `payload = Err(..)` (it does NOT abort the stream), so the
+    // worker can dead-letter the poison record and commit past it instead of stalling the partition.
     pub fn stream<T: ConsumablePayload>(
         &self,
-    ) -> impl Stream<Item = Result<EventEnvelope<T>, TransportError>> + '_;
+    ) -> impl Stream<Item = Result<ConsumedMessage<T>, TransportError>> + '_;
 
-    // Commit offset asynchronously. Required when enable_auto_commit = false (default).
-    pub fn commit<'a>(
-        &'a self,
-        msg: &BorrowedMessage<'a>,
-    ) -> Result<(), TransportError>;
+    // Commit the offset past `msg` (offset + 1). Required when enable_auto_commit = false (default).
+    pub fn commit<T>(&self, msg: &ConsumedMessage<T>) -> Result<(), TransportError>;
 }
 ```
+
+### Consumer runtime standard
+
+> **Every Kafka consumer in the platform runs on `run_consumer`.** Do not hand-roll the
+> stream/commit loop. The runner owns the per-message state machine, so retry, dead-lettering,
+> and offset management are defined once and behave identically across all services.
+
+```rust
+pub enum ProcessOutcome { Done, Retry(String), Reject(String) }
+
+pub trait ClassifyError { fn is_retryable(&self) -> bool; }
+impl ProcessOutcome {
+    pub fn from_result<E: ClassifyError + Display>(r: Result<(), E>) -> Self;
+}
+
+pub struct RetryPolicy { pub max_attempts: u32, pub base_backoff: Duration, pub max_backoff: Duration }
+// Default: 5 attempts · 100 ms base · 30 s cap · exponential backoff with equal jitter.
+
+pub async fn run_consumer<T: ConsumablePayload, F>(
+    handle:   &KafkaConsumerHandle,
+    producer: &KafkaProducerHandle,   // emits to the dead-letter topic
+    policy:   &RetryPolicy,
+    process:  F,                       // for<'a> Fn(&'a T) -> Pin<Box<dyn Future<Output=ProcessOutcome> + Send + 'a>>
+) -> Result<(), TransportError>;
+```
+
+**Delivery semantics (the standard):**
+
+| Outcome | Runner action |
+|---|---|
+| `Done` (success or intentional skip) | commit the offset |
+| `Retry` (transient fault) | in-place exponential backoff + jitter, up to `max_attempts`, **then** dead-letter + commit |
+| `Reject` (permanent / poison data) | dead-letter immediately + commit |
+| decode failure (`payload = Err`) | dead-letter immediately + commit |
+| broker/stream error, or **dead-letter publish failure** | return `Err` **without committing** → caller rebuilds the consumer and resumes from the last committed offset (no message loss) |
+
+Committing only after a terminal outcome (success *or* a successful dead-letter publish) is what
+evacuates a poison message from its partition **without ever losing it** — the record is durably
+parked on `{origin_topic}.dlq` before its offset advances. Dead-letter records carry diagnostic
+headers: `x-dlq-origin-topic`, `x-dlq-partition`, `x-dlq-offset`, `x-dlq-reason`
+(`decode` / `reject` / `retry-exhausted`), `x-dlq-error`, `x-dlq-attempts`, `x-dlq-failed-at-ms`,
+plus the propagated trace context.
+
+**Worker authoring rules:**
+
+1. **Configure for at-least-once:** `ConsumerConfig` with `enable_auto_commit = false` (the default).
+2. **Classify your errors:** `impl ClassifyError for YourError` — transient storage/cache faults
+   are retryable; validation / bad-data / invariant violations are not. Where a domain error
+   already implements `error::AppError`, delegate: `<Self as AppError>::is_retryable(self)`.
+3. **Fold intentional skips into `Ok`** (e.g. block-gated, self-targeted, cache-miss) so they
+   commit cleanly instead of flooding the DLQ.
+4. **Own the handle via `Arc<Self>`** so the per-message closure captures an owned handle (the
+   returned future then borrows only the event, which the runner's bound requires):
+
+```rust
+pub async fn run(self) {
+    let producer = build_dlq_producer(&self.kafka_config)?; // shared per-service helper
+    let worker = Arc::new(self);
+    loop {
+        match worker.clone().run_once(&producer).await {
+            Ok(())  => tracing::warn!("consumer exited cleanly — restarting"),
+            Err(e)  => { tracing::error!(%e, "consumer error — restarting after 5 s"); sleep(5s).await; }
+        }
+    }
+}
+
+async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
+    let handle = KafkaConsumerBuilder::new(config).subscribe(TOPIC).build()?;
+    run_consumer::<MyEvent, _>(&handle, producer, &RetryPolicy::default(), move |event| {
+        let worker = Arc::clone(&self);
+        Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+    }).await.map_err(|e| e.to_string())
+}
+```
+
+> **`process` is handed only the decoded event, not the topic.** A consumer whose logic depends on
+> *which* topic a record came from (e.g. a `created` / `deleted` pair) should run one
+> single-topic `run_consumer` loop per topic, sharing the same `group_id` to preserve committed-offset
+> continuity.
+>
+> **Idempotency is the consumer's responsibility.** At-least-once means real redelivery; handlers
+> must be idempotent (deterministic keys, claim-gated counters, etc.) so retries do not double-apply.
+
+#### Closure lifetime papercut (HRTB inference)
+
+`run_consumer`'s `process` bound is **higher-ranked**: `for<'a> Fn(&'a T) -> Pin<Box<dyn Future<… + 'a>>>`.
+When you pass the closure **inline** as the argument (as in the example above), the compiler reads that
+bound as the expected type and infers the closure correctly — this is the path to prefer.
+
+The trap appears only when you bind the closure to a `let` first **and its future does not borrow the
+event** (e.g. it ignores the payload, or clones everything it needs). The compiler then infers a single
+concrete lifetime and rejects it against the `for<'a>` bound:
+
+```text
+error[E0308]: mismatched types
+   = note: expected `Pin<Box<dyn Future<…> + Send>>`
+              found `Pin<Box<dyn Future<…> + Send + 'a>>`
+   = note: one type is more general than the other
+```
+
+Route the `let`-bound closure through an identity coercion whose signature *is* the higher-ranked bound,
+which forces the expected-typed inference:
+
+```rust
+fn classify<T, F>(process: F) -> F
+where
+    F: for<'a> Fn(&'a T) -> Pin<Box<dyn Future<Output = ProcessOutcome> + Send + 'a>> + Send + 'static,
+{
+    process
+}
+
+let process = classify::<MyEvent, _>(move |event| {
+    let worker = Arc::clone(&self);
+    Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+});
+run_consumer::<MyEvent, _>(&handle, producer, &RetryPolicy::default(), process).await
+```
+
+(The runtime's own integration suite under `tests/` uses exactly this helper; see
+`tests/consumer_runtime.rs`.)
 
 ### `propagation` module
 
@@ -491,7 +620,7 @@ gRPC client and server are configured via builder types, not environment variabl
 # Build the crate
 cargo build -p transport
 
-# Run all tests
+# Run the hermetic unit tests (no Docker)
 cargo test -p transport
 
 # Lint
@@ -501,12 +630,23 @@ cargo clippy -p transport -- -D warnings
 cargo fmt -p transport
 ```
 
-### Run a local Kafka broker (required for integration tests)
+### Live-broker integration suite (`run_consumer`)
+
+The consumer-runtime fault-tolerance tests live under `tests/` and are gated behind the
+`integration-kafka` feature so the default `cargo test` stays Docker-free. They are **self-contained**:
+an ephemeral single-node broker (`apache/kafka-native`, KRaft) is booted via `testcontainers` — no
+`docker compose`, no `localhost:9092`. A running Docker daemon is the only prerequisite.
 
 ```bash
-docker compose up -d kafka
-# Kafka available at localhost:9092
+# Boots one container, runs Scenarios A–K against it (~16 s)
+cargo test -p transport --features integration-kafka
 ```
+
+`tests/harness/mod.rs` owns the broker plumbing (one shared container per binary, UUIDv7-namespaced
+topics/groups per test, explicit topic pre-creation, an `await_until` poll primitive — never `sleep`);
+`tests/consumer_runtime.rs` holds the scenarios (happy path, poison/decode, reject, transient retry,
+retry-exhaustion, backoff+jitter envelope, ordering/no-stall, DLQ header completeness, key affinity,
+and the at-least-once "failed dead-letter ⇒ no commit + redelivery" proof).
 
 ### Key architectural invariants
 

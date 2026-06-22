@@ -19,6 +19,25 @@ pub trait TierCache: Send + Sync + 'static {
     /// source (e.g., a tier embedded in the Kafka event) and calling `set_tier`.
     async fn get_tier(&self, author_id: &AuthorId) -> Result<Option<AuthorTier>, TimelineError>;
 
+    /// Batch variant of [`get_tier`], returning tiers in the same order as
+    /// `author_ids` (`None` per cache miss).
+    ///
+    /// The default implementation issues sequential lookups — correct but one
+    /// round-trip per author. Production adapters must override it with a
+    /// pipelined/concurrent batch; the read path calls this once per feed request
+    /// over the caller's entire following list, so a serial default would be a
+    /// latency cliff for users following thousands of accounts.
+    async fn get_tiers(
+        &self,
+        author_ids: &[AuthorId],
+    ) -> Result<Vec<Option<AuthorTier>>, TimelineError> {
+        let mut tiers = Vec::with_capacity(author_ids.len());
+        for author_id in author_ids {
+            tiers.push(self.get_tier(author_id).await?);
+        }
+        Ok(tiers)
+    }
+
     /// Caches the author's tier with a TTL of `ttl_secs`.
     async fn set_tier(
         &self,

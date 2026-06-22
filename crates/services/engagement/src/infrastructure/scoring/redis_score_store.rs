@@ -15,8 +15,9 @@ use crate::error::EngagementError;
 
 /// Atomically swaps a profile's reaction on a post.
 ///
-/// KEYS[1] = engagement:r:{post_id}:{profile_id}  (per-profile reaction HASH)
-/// KEYS[2] = engagement:scores:{post_id}           (aggregate scores HASH)
+/// KEYS[1] = engagement:{post_id}:r:{profile_id}  (per-profile reaction HASH)
+/// KEYS[2] = engagement:{post_id}:scores           (aggregate scores HASH)
+/// (The `{post_id}` brace is a Redis Cluster hash tag — both keys share a slot.)
 /// ARGV[1] = new_kind  (string, e.g. "heart")
 /// ARGV[2] = new_weight (string, e.g. "2")
 ///
@@ -48,8 +49,8 @@ end
 
 /// Atomically removes a profile's reaction from a post.
 ///
-/// KEYS[1] = engagement:r:{post_id}:{profile_id}
-/// KEYS[2] = engagement:scores:{post_id}
+/// KEYS[1] = engagement:{post_id}:r:{profile_id}
+/// KEYS[2] = engagement:{post_id}:scores
 ///
 /// Returns: empty array if no reaction existed, or [old_kind, old_weight].
 const REMOVE_SCRIPT: &str = r#"
@@ -86,25 +87,34 @@ end
 "#;
 
 // ── Key builders ──────────────────────────────────────────────────────────────
+//
+// Every per-post key embeds `{post_id}` as a Redis Cluster hash tag so that all
+// keys for one post hash to the same slot. This is required for the multi-key
+// `UPSERT`/`REMOVE` Lua scripts (which touch both `profile_key` and `scores_key`)
+// to be cluster-safe — otherwise the server rejects the script with CROSSSLOT.
+// Different posts still distribute across slots, preserving sharding.
 
 fn profile_key(post_id: &PostId, profile_id: &ProfileId) -> String {
-    format!("engagement:r:{}:{}", post_id, profile_id)
+    format!("engagement:{{{post_id}}}:r:{profile_id}")
 }
 
 fn scores_key(post_id: &PostId) -> String {
-    format!("engagement:scores:{}", post_id)
+    format!("engagement:{{{post_id}}}:scores")
 }
 
-fn views_key(post_id: &PostId) -> String {
-    format!("engagement:views:{}", post_id)
+/// Per-post view counter. `pub(crate)` so `CounterFlushWorker` builds the exact
+/// same key instead of re-formatting it (which would silently drift).
+pub(crate) fn views_key(post_id: &PostId) -> String {
+    format!("engagement:{{{post_id}}}:views")
 }
 
-fn shares_key(post_id: &PostId) -> String {
-    format!("engagement:shares:{}", post_id)
+/// Per-post share counter. See [`views_key`] for the visibility rationale.
+pub(crate) fn shares_key(post_id: &PostId) -> String {
+    format!("engagement:{{{post_id}}}:shares")
 }
 
 fn comments_key(post_id: &PostId) -> String {
-    format!("engagement:comments:{}", post_id)
+    format!("engagement:{{{post_id}}}:comments")
 }
 
 // ── DirtyPostTracker ──────────────────────────────────────────────────────────

@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use fred::interfaces::KeysInterface;
-use futures_util::StreamExt;
 use redis_storage::RedisClient;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 
 use crate::application::port::{BlockCache, NotificationRepository, StreamRegistry, UnreadCounter};
 use crate::application::port::stream_registry::NotificationPayload;
@@ -16,9 +17,11 @@ use crate::domain::value_object::{
     NotificationId, NotificationKind, ProfileId, SubjectId, SubjectKind,
 };
 use crate::error::NotificationError;
+use crate::infrastructure::worker::build_dlq_producer;
 
+/// Only `comment.created` drives notifications; deletions are handled by other
+/// services, so this consumer does not subscribe to `comment.deleted`.
 const TOPIC_CREATED: &str = "comment.created";
-const TOPIC_DELETED: &str = "comment.deleted";
 
 // ── Minimal event projection ──────────────────────────────────────────────────
 
@@ -93,8 +96,19 @@ where
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to build DLQ producer — comment notification consumer not started");
+                return;
+            }
+        };
+
+        // `Arc<Self>` so the per-message closure can capture an owned handle (the
+        // returned futures then borrow only the event, satisfying the runner bound).
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!("comment notification consumer exited cleanly — restarting");
                 }
@@ -109,63 +123,32 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC_CREATED)
-            .subscribe(TOPIC_DELETED)
             .build()
             .map_err(|e| e.to_string())?;
 
         tracing::info!(
-            topics = %format!("{}, {}", TOPIC_CREATED, TOPIC_DELETED),
-            group  = %self.group_id,
+            topic = TOPIC_CREATED,
+            group = %self.group_id,
             "comment notification consumer started"
         );
 
-        let mut stream = handle.stream::<CommentEventPayload>();
-
-        while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e) => e,
-                Err(err) => {
-                    tracing::warn!(error = %err, "comment event deserialization error — skipping");
-                    continue;
-                }
-            };
-
-            // Only created events trigger notifications. Deletions do not.
-            if envelope.topic.as_str() != TOPIC_CREATED {
-                continue;
-            }
-
-            if let Err(err) = self.process(&envelope.payload).await {
-                match err {
-                    NotificationError::SenderBlocked { .. }
-                    | NotificationError::SelfNotification { .. }
-                    | NotificationError::PostAuthorCacheMiss { .. }
-                    | NotificationError::CommentAuthorCacheMiss { .. } => {
-                        tracing::debug!(
-                            error      = %err,
-                            comment_id = %envelope.payload.comment_id,
-                            "comment notification suppressed"
-                        );
-                    }
-                    other => {
-                        tracing::error!(
-                            error      = %other,
-                            comment_id = %envelope.payload.comment_id,
-                            "comment notification write failed"
-                        );
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        // The runner owns the decode → process → retry → dead-letter → commit loop.
+        // `process` already folds intentional suppressions into `Ok`, so they commit
+        // cleanly; transient failures retry then dead-letter; poison is dead-lettered.
+        let policy = RetryPolicy::default();
+        run_consumer::<CommentEventPayload, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     async fn process(&self, event: &CommentEventPayload) -> Result<(), NotificationError> {
@@ -181,9 +164,15 @@ where
             let author_str: Option<String> = self.redis.inner.get(&parent_author_key).await
                 .unwrap_or(None);
 
-            let target_str = author_str.ok_or_else(|| NotificationError::CommentAuthorCacheMiss {
-                comment_id: parent_id_str.clone(),
-            })?;
+            // Cache miss is an intentional suppression (parent author not yet cached),
+            // not a failure: succeed so the offset commits and we do not dead-letter.
+            let target_str = match author_str {
+                Some(s) => s,
+                None => {
+                    tracing::debug!(comment_id = %event.comment_id, "reply notification suppressed: comment-author cache miss");
+                    return Ok(());
+                }
+            };
 
             let target_id = ProfileId::try_from(target_str.as_str())?;
             (target_id, NotificationKind::Reply)
@@ -193,30 +182,39 @@ where
             let author_str: Option<String> = self.redis.inner.get(&post_author_key).await
                 .unwrap_or(None);
 
-            let target_str = author_str.ok_or_else(|| NotificationError::PostAuthorCacheMiss {
-                post_id: event.post_id.clone(),
-            })?;
+            let target_str = match author_str {
+                Some(s) => s,
+                None => {
+                    tracing::debug!(comment_id = %event.comment_id, "comment notification suppressed: post-author cache miss");
+                    return Ok(());
+                }
+            };
 
             let target_id = ProfileId::try_from(target_str.as_str())?;
             (target_id, NotificationKind::Comment)
         };
 
-        // Self-notification guard.
+        // Self-notification guard — an intentional suppression, not a failure.
         if sender_id == target_id {
-            return Err(NotificationError::SelfNotification {
-                profile_id: sender_id.as_str(),
-            });
+            tracing::debug!(comment_id = %event.comment_id, "comment notification suppressed: self-notification");
+            return Ok(());
         }
 
-        // Block gate.
+        // Block gate — an intentional suppression, not a failure.
         if self.block_cache.is_blocked(&sender_id, &target_id).await? {
-            return Err(NotificationError::SenderBlocked {
-                sender_id: sender_id.as_str(),
-                target_id: target_id.as_str(),
-            });
+            tracing::debug!(comment_id = %event.comment_id, "comment notification suppressed: sender blocked");
+            return Ok(());
         }
 
-        let ntf_id = NotificationId::new();
+        // One comment produces exactly one notification, so the comment id is a
+        // stable business key: the id is deterministic (idempotent INSERT) and the
+        // unread increment is claim-gated against redelivery. created_at is the
+        // comment's own timestamp.
+        let business_key = format!("comment:{}", event.comment_id);
+        let ntf_id       = NotificationId::deterministic(&business_key);
+        let created_at   = chrono::DateTime::from_timestamp_millis(event.created_at_ms)
+            .unwrap_or_default();
+
         let notification = Notification::create(
             ntf_id,
             target_id,
@@ -224,10 +222,11 @@ where
             kind,
             SubjectKind::Post,
             subject_id,
+            created_at,
         );
 
         self.repository.insert(&notification).await?;
-        self.counter.increment(&target_id).await?;
+        self.counter.increment_once(&target_id, &business_key).await?;
 
         let payload = Arc::new(NotificationPayload {
             notification_id:   notification.id().as_uuid(),

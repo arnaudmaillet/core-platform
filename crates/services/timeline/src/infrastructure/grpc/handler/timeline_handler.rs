@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use cqrs::{Envelope, QueryBus};
 
+use crate::application::query::get_audio_feed::GetAudioFeedQuery;
 use crate::application::query::get_following_feed::GetFollowingFeedQuery;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
@@ -69,6 +70,40 @@ where
             is_cold:         page.is_cold,
         }))
     }
+
+    pub async fn get_audio_feed(
+        &self,
+        request: Request<proto::GetAudioFeedRequest>,
+    ) -> Result<Response<proto::GetAudioFeedResponse>, Status> {
+        let req = request.into_inner();
+
+        let query = GetAudioFeedQuery {
+            audio_id:   req.audio_id,
+            limit:      req.limit,
+            page_token: req.page_token,
+        };
+
+        let result = self
+            .query_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), query))
+            .await
+            .map_err(cqrs_to_status)?;
+
+        let items = result
+            .items
+            .into_iter()
+            .map(|item| proto::AudioFeedItem {
+                post_id:         item.post_id,
+                author_id:       item.author_id,
+                published_at_ms: item.published_at_ms,
+            })
+            .collect();
+
+        Ok(Response::new(proto::GetAudioFeedResponse {
+            items,
+            next_token: result.next_token,
+        }))
+    }
 }
 
 // ── Proto trait implementation ────────────────────────────────────────────────
@@ -83,6 +118,13 @@ where
         request: Request<proto::GetFollowingFeedRequest>,
     ) -> Result<Response<proto::GetFollowingFeedResponse>, Status> {
         self.get_following_feed(request).await
+    }
+
+    async fn get_audio_feed(
+        &self,
+        request: Request<proto::GetAudioFeedRequest>,
+    ) -> Result<Response<proto::GetAudioFeedResponse>, Status> {
+        self.get_audio_feed(request).await
     }
 }
 

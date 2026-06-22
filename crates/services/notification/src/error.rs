@@ -221,3 +221,13 @@ impl AppError for NotificationError {
         }
     }
 }
+
+/// Classifies failures for the Kafka consumer runner: transient faults are retried
+/// with backoff, permanent ones are dead-lettered. Delegates to the existing
+/// [`AppError::is_retryable`] so storage timeouts stay retryable while data /
+/// invariant errors are treated as poison.
+impl transport::kafka::consumer::ClassifyError for NotificationError {
+    fn is_retryable(&self) -> bool {
+        <Self as AppError>::is_retryable(self)
+    }
+}

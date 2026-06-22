@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
-use futures_util::StreamExt;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 
 use crate::application::command::SyncAuthorTierCommand;
 use crate::application::port::{CardStore, TileRepository};
 use crate::infrastructure::cache::RedisCardStore;
 use crate::infrastructure::persistence::ScyllaTileRepository;
+use crate::infrastructure::worker::build_dlq_producer;
 
 const TOPIC: &str = "profile.tier_changed";
 
@@ -65,8 +67,17 @@ where
     TR: TileRepository + 'static,
 {
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(topic = TOPIC, error = %e, "failed to build DLQ producer — tier sync consumer not started");
+                return;
+            }
+        };
+
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!(topic = TOPIC, "tier sync consumer exited cleanly — restarting");
                 }
@@ -78,10 +89,10 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -90,28 +101,13 @@ where
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "tier sync consumer started");
 
-        let mut stream = handle.stream::<TierChangedEvent>();
-
-        while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e)    => e,
-                Err(err) => {
-                    tracing::warn!(topic = TOPIC, error = %err, "deserialization error — skipping message");
-                    continue;
-                }
-            };
-
-            if let Err(err) = self.process(&envelope.payload).await {
-                tracing::error!(
-                    topic     = TOPIC,
-                    post_id   = envelope.key,
-                    error     = %err,
-                    "tier sync failed — message will be redelivered on consumer restart"
-                );
-            }
-        }
-
-        Ok(())
+        let policy = RetryPolicy::default();
+        run_consumer::<TierChangedEvent, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     async fn process(&self, event: &TierChangedEvent) -> Result<(), crate::error::GeoDiscoveryError> {
