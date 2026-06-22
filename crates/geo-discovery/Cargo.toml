@@ -1,5 +1,5 @@
 [package]
-name = "geo-discovery"
+name = "geo-discovery-old"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

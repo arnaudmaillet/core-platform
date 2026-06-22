@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package geo_discovery.v1;
+
+import "geo_discovery/v1/enums.proto";
+
+// ── Shared geometry ───────────────────────────────────────────────────────────
+
+// Axis-aligned bounding box describing the client's current map viewport.
+// SW (south-west) is the bottom-left corner; NE (north-east) is the top-right.
+// Coordinates are WGS-84 decimal degrees.
+message Viewport {
+    double sw_lat = 1; // [-90, 90]
+    double sw_lng = 2; // [-180, 180]
+    double ne_lat = 3; // [-90, 90]
+    double ne_lng = 4; // [-180, 180]
+}
+
+// ── Map card ─────────────────────────────────────────────────────────────────
+
+// Fully hydrated map card. Contains all data required by the BFF to render a
+// map pin and its associated card preview — no secondary service calls needed.
+//
+// Badge rendering contract:
+//   - author_tier drives STATIC badge decoration (VIP gold border, Premium purple border).
+//     This is author-owned and viewer-independent — the same card is shared by all viewers.
+//   - is_friend / is_following are intentionally absent. Clients resolve these locally
+//     by intersecting author_id with their session-cached social graph sets, fetched
+//     once at login from services/social-graph. Zero extra server round-trips per pan.
+message MapPostCard {
+    string     post_id           = 1;
+    string     author_id         = 2;
+    string     author_handle     = 3;
+    string     author_avatar_url = 4;
+    string     thumbnail_url     = 5;
+    // Raw H3 cell index (uint64 cast to int64) at resolution 7.
+    // Clients use this for deep-link map centering.
+    int64      h3_index_r7       = 6;
+    float      virality_score    = 7;
+    // Unix epoch milliseconds.
+    int64      published_at_ms   = 8;
+    // Static author tier. Denormalized from services/profile at index time and
+    // kept current via the TierSyncWorker (profile.tier_changed Kafka topic).
+    // Defaults to AUTHOR_TIER_UNSPECIFIED (= Standard) for ungated legacy cards.
+    AuthorTier author_tier       = 9;
+}
+
+// ── QueryTile ─────────────────────────────────────────────────────────────────
+
+message QueryTileRequest {
+    Viewport viewport   = 1;
+    // Raw client zoom level (0–15). The server maps this to a ZoomBand and
+    // applies the corresponding H3 resolution and virality floor.
+    int32    zoom_level = 2;
+}
+
+message QueryTileResponse {
+    repeated MapPostCard cards      = 1;
+    // Number of H3 tile partitions queried. Useful for client-side telemetry
+    // (viewport too wide → cache expensive).
+    int32                tile_count = 2;
+}
+
+// ── GetCard ──────────────────────────────────────────────────────────────────
+
+message GetCardRequest {
+    string post_id = 1;
+}
+
+message GetCardResponse {
+    MapPostCard card  = 1;
+    bool        found = 2;
+}

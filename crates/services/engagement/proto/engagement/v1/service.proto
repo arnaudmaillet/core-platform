@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package engagement.v1;
+
+import "engagement/v1/messages.proto";
+
+service EngagementService {
+    // Adds or replaces the calling profile's reaction on a post.
+    // Atomic in Redis via Lua; asynchronously durable via Kafka → ScyllaDB.
+    rpc UpsertReaction    (UpsertReactionRequest)    returns (CommandResponse);
+
+    // Removes the calling profile's reaction from a post.
+    rpc RemoveReaction    (RemoveReactionRequest)    returns (CommandResponse);
+
+    // Increments the view counter for a post. Fire-and-forget on the hot path.
+    rpc RecordView        (RecordViewRequest)        returns (CommandResponse);
+
+    // Increments the share counter for a post. Fire-and-forget on the hot path.
+    rpc RecordShare       (RecordShareRequest)       returns (CommandResponse);
+
+    // Returns the full engagement snapshot (scores + counters) from Redis.
+    rpc GetPostEngagement (GetPostEngagementRequest) returns (PostEngagementView);
+}

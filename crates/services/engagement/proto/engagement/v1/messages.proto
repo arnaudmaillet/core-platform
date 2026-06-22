@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package engagement.v1;
+
+import "engagement/v1/enums.proto";
+
+// ── Commands ──────────────────────────────────────────────────────────────────
+
+message UpsertReactionRequest {
+    string       post_id    = 1;
+    string       profile_id = 2;
+    ReactionKind kind       = 3;
+}
+
+message RemoveReactionRequest {
+    string post_id    = 1;
+    string profile_id = 2;
+}
+
+message RecordViewRequest {
+    string post_id = 1;
+}
+
+message RecordShareRequest {
+    string post_id = 1;
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
+
+message GetPostEngagementRequest {
+    string post_id = 1;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message CommandResponse {
+    bool   success = 1;
+    string message = 2;
+}
+
+// Per-reaction-kind score entry.
+message ReactionScoreEntry {
+    ReactionKind kind  = 1;
+    int64        score = 2;
+}
+
+// Full engagement snapshot for a post. All counts are sourced from Redis.
+message PostEngagementView {
+    string                    post_id              = 1;
+    repeated ReactionScoreEntry reaction_scores    = 2;
+    int64                     total_weighted_score = 3;
+    int64                     view_count           = 4;
+    int64                     share_count          = 5;
+    int64                     comment_count        = 6;
+}

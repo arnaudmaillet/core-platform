@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package comment.v1;
+
+import "comment/v1/messages.proto";
+
+service CommentService {
+    // Creates a comment (top-level or 1-level reply). Emits CommentCreated to Kafka.
+    rpc CreateComment (CreateCommentRequest) returns (CreateCommentResponse);
+
+    // Soft-deletes or purges a comment depending on whether it has active replies.
+    // Emits CommentDeleted to Kafka in both cases.
+    rpc DeleteComment (DeleteCommentRequest) returns (CommandResponse);
+
+    // Point-reads a single comment by ID from the source-of-truth table.
+    rpc GetComment    (GetCommentRequest)    returns (CommentView);
+
+    // Paginates top-level comments for a post, newest-first.
+    rpc ListTopLevel  (ListTopLevelRequest)  returns (ListCommentsResponse);
+
+    // Paginates direct replies to a top-level comment, newest-first.
+    rpc ListReplies   (ListRepliesRequest)   returns (ListCommentsResponse);
+}

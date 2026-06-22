@@ -1,0 +1,235 @@
+use tonic::{Request, Response, Status};
+use uuid::Uuid;
+
+use cqrs::{CommandBus, Envelope, QueryBus};
+
+use crate::application::command::{
+    record_share::RecordShareCommand,
+    record_view::RecordViewCommand,
+    remove_reaction::RemoveReactionCommand,
+    upsert_reaction::UpsertReactionCommand,
+};
+use crate::application::port::PostEngagementSnapshot;
+use crate::application::query::get_post_engagement::GetPostEngagementQuery;
+use crate::domain::value_object::ReactionKind;
+
+// ── Proto inclusion ───────────────────────────────────────────────────────────
+
+pub mod proto {
+    tonic::include_proto!("engagement.v1");
+}
+
+pub use proto::engagement_service_server::EngagementServiceServer;
+
+pub struct EngagementServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    command_bus: CB,
+    query_bus:   QB,
+}
+
+impl<CB, QB> EngagementServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    pub fn new(command_bus: CB, query_bus: QB) -> Self {
+        Self { command_bus, query_bus }
+    }
+}
+
+// ── RPC implementations ───────────────────────────────────────────────────────
+
+impl<CB, QB> EngagementServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    pub async fn upsert_reaction(
+        &self,
+        request: Request<proto::UpsertReactionRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let req = request.into_inner();
+        let cmd = UpsertReactionCommand {
+            post_id:    req.post_id,
+            profile_id: req.profile_id,
+            kind:       req.kind,
+        };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| ok_response())
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn remove_reaction(
+        &self,
+        request: Request<proto::RemoveReactionRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let req = request.into_inner();
+        let cmd = RemoveReactionCommand {
+            post_id:    req.post_id,
+            profile_id: req.profile_id,
+        };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| ok_response())
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn record_view(
+        &self,
+        request: Request<proto::RecordViewRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let cmd = RecordViewCommand { post_id: request.into_inner().post_id };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| ok_response())
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn record_share(
+        &self,
+        request: Request<proto::RecordShareRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let cmd = RecordShareCommand { post_id: request.into_inner().post_id };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| ok_response())
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn get_post_engagement(
+        &self,
+        request: Request<proto::GetPostEngagementRequest>,
+    ) -> Result<Response<proto::PostEngagementView>, Status> {
+        let req   = request.into_inner();
+        let query = GetPostEngagementQuery { post_id: req.post_id.clone() };
+
+        let snapshot: PostEngagementSnapshot = self
+            .query_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), query))
+            .await
+            .map_err(cqrs_to_status)?;
+
+        Ok(Response::new(snapshot_to_proto(req.post_id, snapshot)))
+    }
+}
+
+// ── Proto trait implementation ────────────────────────────────────────────────
+
+#[tonic::async_trait]
+impl<CB, QB> proto::engagement_service_server::EngagementService for EngagementServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    async fn upsert_reaction(
+        &self,
+        request: Request<proto::UpsertReactionRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        self.upsert_reaction(request).await
+    }
+
+    async fn remove_reaction(
+        &self,
+        request: Request<proto::RemoveReactionRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        self.remove_reaction(request).await
+    }
+
+    async fn record_view(
+        &self,
+        request: Request<proto::RecordViewRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        self.record_view(request).await
+    }
+
+    async fn record_share(
+        &self,
+        request: Request<proto::RecordShareRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        self.record_share(request).await
+    }
+
+    async fn get_post_engagement(
+        &self,
+        request: Request<proto::GetPostEngagementRequest>,
+    ) -> Result<Response<proto::PostEngagementView>, Status> {
+        self.get_post_engagement(request).await
+    }
+}
+
+// ── Conversion helpers ────────────────────────────────────────────────────────
+
+fn ok_response() -> Response<proto::CommandResponse> {
+    Response::new(proto::CommandResponse { success: true, message: String::new() })
+}
+
+fn snapshot_to_proto(post_id: String, s: PostEngagementSnapshot) -> proto::PostEngagementView {
+    let total = s.total_weighted_score();
+
+    let reaction_scores = ReactionKind::all()
+        .iter()
+        .filter_map(|kind| {
+            let score = s.reaction_scores.get(kind.as_redis_key()).copied().unwrap_or(0);
+            if score == 0 { return None; }
+            Some(proto::ReactionScoreEntry {
+                kind:  kind_to_proto(*kind),
+                score,
+            })
+        })
+        .collect();
+
+    proto::PostEngagementView {
+        post_id,
+        reaction_scores,
+        total_weighted_score: total,
+        view_count:    s.view_count,
+        share_count:   s.share_count,
+        comment_count: s.comment_count,
+    }
+}
+
+fn kind_to_proto(kind: ReactionKind) -> i32 {
+    match kind {
+        ReactionKind::Heart  => 1,
+        ReactionKind::Fire   => 2,
+        ReactionKind::Rocket => 3,
+        ReactionKind::Clap   => 4,
+        ReactionKind::Sad    => 5,
+    }
+}
+
+// ── Error mapping ─────────────────────────────────────────────────────────────
+
+pub fn cqrs_to_status(err: cqrs::error::CqrsError) -> Status {
+    use cqrs::error::CqrsError;
+    match err {
+        CqrsError::HandlerNotFound { type_name } => {
+            Status::unimplemented(format!("no handler registered for {type_name}"))
+        }
+        CqrsError::DuplicateRegistration { type_name } => {
+            Status::internal(format!("duplicate handler for {type_name}"))
+        }
+        CqrsError::Handler(boxed) => {
+            use error::AppError as _;
+            let msg       = boxed.to_string();
+            let retryable = boxed.is_retryable();
+            match boxed.http_status().as_u16() {
+                403       => Status::permission_denied(msg),
+                404       => Status::not_found(msg),
+                409 if retryable => Status::aborted(msg),
+                409       => Status::already_exists(msg),
+                400 | 422 => Status::failed_precondition(msg),
+                503 | 502 => Status::unavailable(msg),
+                _         => Status::internal(msg),
+            }
+        }
+    }
+}

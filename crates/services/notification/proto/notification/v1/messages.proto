@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package notification.v1;
+
+import "notification/v1/enums.proto";
+
+// ── Commands ──────────────────────────────────────────────────────────────────
+
+// Marks a single notification as read.
+// The client must supply both notification_id and created_at_ms because
+// notifications_by_profile uses (created_at, notification_id) as its
+// compound clustering key — we cannot UPDATE without the full primary key.
+message MarkReadRequest {
+    string profile_id       = 1;
+    string notification_id  = 2;
+    int64  created_at_ms    = 3;
+}
+
+// Marks every notification for the profile as read in a single operation.
+// Implementation: resets the Redis unread counter + sets a read_horizon
+// timestamp. Individual is_read flags are NOT batch-updated in ScyllaDB.
+// The client applies the read_horizon locally when rendering the feed.
+message MarkAllReadRequest {
+    string profile_id = 1;
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
+
+// Fetches the paginated notification feed for a profile.
+// Pagination is cursor-based: supply page_token from a previous response.
+// Max page size is capped server-side at NOTIFICATION_MAX_PAGE_SIZE (default 50).
+message ListNotificationsRequest {
+    string profile_id  = 1;
+    int32  limit       = 2;
+    string page_token  = 3;
+}
+
+// Returns the fast unread badge count for the profile's bell icon.
+// Served from the Redis cache; ScyllaDB counter is the durable fallback.
+message GetUnreadCountRequest {
+    string profile_id = 1;
+}
+
+// Opens a long-lived server-streaming channel for real-time notification push.
+// The BFF/API Gateway opens this stream on behalf of an authenticated client.
+// The stream delivers new notifications as they arrive; on lag the client
+// must re-poll ListNotifications to close any gap.
+message StreamNotificationsRequest {
+    string profile_id = 1;
+}
+
+// ── Shared view type ──────────────────────────────────────────────────────────
+
+// Projection of a single notification record.
+// Deliberately stores only IDs — no profile handles, avatars, or post text.
+// The client hydrates display-layer data from profile and content services.
+message NotificationView {
+    string           notification_id   = 1;
+    string           target_profile_id = 2;
+    // Primary actor. For collapsed rows this is the most-recent sender.
+    string           sender_profile_id = 3;
+    // Up to 5 sample senders for "X, Y and N others" display.
+    repeated string  sample_sender_ids = 4;
+    // Total number of distinct senders collapsed into this row (>= 1).
+    int32            sender_count      = 5;
+    NotificationKind kind              = 6;
+    SubjectKind      subject_kind      = 7;
+    string           subject_id        = 8;
+    int64            created_at_ms     = 9;
+    bool             is_read           = 10;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message CommandResponse {
+    bool   success = 1;
+    string message = 2;
+}
+
+message ListNotificationsResponse {
+    repeated NotificationView notifications  = 1;
+    string                    next_page_token = 2;
+    // Unix-ms timestamp of the last "mark all as read" operation.
+    // Notifications with created_at_ms <= read_horizon_ms should be rendered
+    // as read by the client, regardless of the individual is_read flag.
+    int64                     read_horizon_ms = 3;
+}
+
+message GetUnreadCountResponse {
+    int64 unread_count = 1;
+}
+
+// Emitted on the gRPC stream when a new notification arrives for the profile.
+message StreamNotificationsResponse {
+    NotificationView notification = 1;
+}
