@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package chat.v1;
+
+import "chat/v1/messages.proto";
+
+service ChatService {
+    // ── Lifecycle / membership ──────────────────────────────────────────────
+    rpc CreateConversation (CreateConversationRequest) returns (CreateConversationResponse);
+    rpc ToggleVisibility   (ToggleVisibilityRequest)   returns (CommandResponse);
+    rpc JoinAsMember       (JoinAsMemberRequest)       returns (CommandResponse);
+    rpc Subscribe          (SubscribeRequest)          returns (CommandResponse);
+    rpc Unsubscribe        (UnsubscribeRequest)        returns (CommandResponse);
+
+    // ── Messaging ───────────────────────────────────────────────────────────
+    rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+    rpc MarkRead    (MarkReadRequest)    returns (CommandResponse);
+
+    // ── Member-Plane signals (presence/typing) ──────────────────────────────
+    rpc SendTyping (SendTypingRequest) returns (CommandResponse);
+    rpc Heartbeat  (HeartbeatRequest)  returns (CommandResponse);
+
+    // ── Queries ─────────────────────────────────────────────────────────────
+    rpc GetHistory        (GetHistoryRequest)        returns (GetHistoryResponse);
+    rpc ListMembers       (ListMembersRequest)       returns (ListMembersResponse);
+    rpc ListSubscriptions (ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+
+    // ── Real-time streams ───────────────────────────────────────────────────
+    // Member Plane: full duplex context — messages + presence + typing + receipts.
+    // Authorization: caller must be a roster member.
+    rpc StreamConversation (StreamConversationRequest) returns (stream StreamConversationResponse);
+
+    // Audience Plane: read-only shadow — messages only, no presence overhead.
+    // Authorization: conversation must be public.
+    rpc StreamPublic (StreamPublicRequest) returns (stream StreamPublicResponse);
+}
