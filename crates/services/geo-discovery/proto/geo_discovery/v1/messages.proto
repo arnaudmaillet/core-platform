@@ -20,18 +20,29 @@ message Viewport {
 
 // Fully hydrated map card. Contains all data required by the BFF to render a
 // map pin and its associated card preview — no secondary service calls needed.
+//
+// Badge rendering contract:
+//   - author_tier drives STATIC badge decoration (VIP gold border, Premium purple border).
+//     This is author-owned and viewer-independent — the same card is shared by all viewers.
+//   - is_friend / is_following are intentionally absent. Clients resolve these locally
+//     by intersecting author_id with their session-cached social graph sets, fetched
+//     once at login from services/social-graph. Zero extra server round-trips per pan.
 message MapPostCard {
-    string post_id           = 1;
-    string author_id         = 2;
-    string author_handle     = 3;
-    string author_avatar_url = 4;
-    string thumbnail_url     = 5;
+    string     post_id           = 1;
+    string     author_id         = 2;
+    string     author_handle     = 3;
+    string     author_avatar_url = 4;
+    string     thumbnail_url     = 5;
     // Raw H3 cell index (uint64 cast to int64) at resolution 7.
     // Clients use this for deep-link map centering.
-    int64  h3_index_r7       = 6;
-    float  virality_score    = 7;
+    int64      h3_index_r7       = 6;
+    float      virality_score    = 7;
     // Unix epoch milliseconds.
-    int64  published_at_ms   = 8;
+    int64      published_at_ms   = 8;
+    // Static author tier. Denormalized from services/profile at index time and
+    // kept current via the TierSyncWorker (profile.tier_changed Kafka topic).
+    // Defaults to AUTHOR_TIER_UNSPECIFIED (= Standard) for ungated legacy cards.
+    AuthorTier author_tier       = 9;
 }
 
 // ── QueryTile ─────────────────────────────────────────────────────────────────

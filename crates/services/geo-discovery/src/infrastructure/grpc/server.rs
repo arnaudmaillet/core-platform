@@ -15,7 +15,7 @@ use crate::config::GeoDiscoveryConfig;
 use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex};
 use crate::infrastructure::grpc::handler::{GeoDiscoveryHandler, GeoDiscoveryServiceServer};
 use crate::infrastructure::persistence::ScyllaTileRepository;
-use crate::infrastructure::worker::{PostIndexerWorker, ScoreUpdaterWorker, TilePrunerWorker};
+use crate::infrastructure::worker::{PostIndexerWorker, ScoreUpdaterWorker, TierSyncWorker, TilePrunerWorker};
 
 /// Proto file descriptor set embedded at build time for server reflection.
 pub const FILE_DESCRIPTOR_SET: &[u8] =
@@ -69,12 +69,20 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(post_indexer.run());
 
     let score_updater = ScoreUpdaterWorker::new(
-        kafka_config,
+        kafka_config.clone(),
         Arc::clone(&spatial_index),
         Arc::clone(&tile_repository),
         cfg.score_updater_group_id.clone(),
     );
     tokio::spawn(score_updater.run());
+
+    let tier_sync = TierSyncWorker::new(
+        kafka_config.clone(),
+        Arc::clone(&card_store),
+        Arc::clone(&tile_repository),
+        cfg.tier_sync_group_id.clone(),
+    );
+    tokio::spawn(tier_sync.run());
 
     let tile_pruner = TilePrunerWorker::new(
         redis_client,

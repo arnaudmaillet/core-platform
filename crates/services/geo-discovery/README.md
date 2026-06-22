@@ -9,8 +9,9 @@
 **Business impact:**
 - **Sub-50 ms P99 tile query** at continental scale via Redis pipeline + MGET.
 - **~9 GB Redis steady-state** at 100 M active posts (Top-K capping + cold eviction + power-law filtering).
-- **Zero post-query fan-out**: `author_handle`, `thumbnail_url`, `author_avatar_url` are projected here, never fetched at query time.
+- **Zero post-query fan-out**: `author_handle`, `thumbnail_url`, `author_avatar_url`, and `author_tier` are projected here, never fetched at query time.
 - **48 h default TTL**, extensible to 30 days for premium creators, enforced natively via ScyllaDB `USING TTL` and Redis `EX`.
+- **Author tier badge rendering with zero cross-service calls**: static `author_tier` (Standard / Premium / VIP) is denormalized into the shared card projection; dynamic relational state (friend / following) is resolved client-side from the session social graph, preserving the shared-card cache model and eliminating O(users × posts) cache variants.
 
 ---
 
@@ -39,6 +40,14 @@
                                                   │ 2. ScyllaDB UPDATE   │
                                                   │    virality_score    │
                                                   │ 3. ZADD XX ×3 (Redis)│
+                                                  └──────────────────────┘
+
+  services/profile       Kafka topic             TierSyncWorker
+  ┌────────────┐         profile.tier_changed      ┌──────────────────────┐
+  │ tier change│──────►  { author_id, post_id, ───►│ 1. ScyllaDB UPDATE   │
+  └────────────┘         new_tier }                │    author_tier       │
+                         (1 event per post_id)     │ 2. Redis DEL card    │
+                                                  │    (cache invalidate) │
                                                   └──────────────────────┘
 
   TilePrunerWorker (60 s tick)
@@ -81,10 +90,17 @@
 
 ### ScyllaDB Schema Summary
 
-| Table             | Compaction | Partition Key             | Clustering Key                         | Role                            |
-|-------------------|------------|---------------------------|----------------------------------------|---------------------------------|
-| `posts_by_tile`   | TWCS 1 d   | `(h3_index, resolution)`  | `(published_at DESC, post_id ASC)`     | Cold-start ZSET reconstruction  |
-| `map_post_cards`  | LCS        | `post_id`                 | —                                      | Card point-reads & score updates |
+| Table             | Compaction | Partition Key             | Clustering Key                         | Role                                         |
+|-------------------|------------|---------------------------|----------------------------------------|----------------------------------------------|
+| `posts_by_tile`   | TWCS 1 d   | `(h3_index, resolution)`  | `(published_at DESC, post_id ASC)`     | Cold-start ZSET reconstruction               |
+| `map_post_cards`  | LCS        | `post_id`                 | —                                      | Card point-reads, score updates, tier updates |
+
+**Mutable columns in `map_post_cards`:**
+
+| Column          | Updated by           | Trigger                              |
+|-----------------|----------------------|--------------------------------------|
+| `virality_score`| `ScoreUpdaterWorker` | `engagement.score_updated` Kafka topic |
+| `author_tier`   | `TierSyncWorker`     | `profile.tier_changed` Kafka topic   |
 
 **Why `(h3_index, resolution)` as composite partition key?**
 A viral urban tile at resolution 9 (street level, ~0.1 km²) can accumulate millions of posts. Collapsing all resolutions into one partition creates a prohibitively hot shard. The composite key distributes each `(tile × resolution)` pair across the ring independently.
@@ -165,6 +181,14 @@ return #cold
 ### Protobuf Contract
 
 ```protobuf
+// enums.proto
+enum AuthorTier {
+    AUTHOR_TIER_UNSPECIFIED = 0;  // Safe zero-value default (= Standard)
+    AUTHOR_TIER_STANDARD    = 1;
+    AUTHOR_TIER_PREMIUM     = 2;
+    AUTHOR_TIER_VIP         = 3;
+}
+
 // service.proto
 service GeoDiscoveryService {
     rpc QueryTile (QueryTileRequest) returns (QueryTileResponse);
@@ -189,15 +213,20 @@ message QueryTileResponse {
     int32                tile_count = 2;  // H3 tiles queried (for client telemetry)
 }
 
+// Badge rendering contract:
+//   author_tier  → static badge (VIP gold border / Premium purple border)
+//   is_friend    → NOT present: resolved client-side from session social graph
+//   is_following → NOT present: resolved client-side from session social graph
 message MapPostCard {
-    string post_id           = 1;
-    string author_id         = 2;
-    string author_handle     = 3;
-    string author_avatar_url = 4;
-    string thumbnail_url     = 5;
-    int64  h3_index_r7       = 6;  // raw H3 cell index for deep-link map centering
-    float  virality_score    = 7;
-    int64  published_at_ms   = 8;  // Unix epoch milliseconds
+    string     post_id           = 1;
+    string     author_id         = 2;
+    string     author_handle     = 3;
+    string     author_avatar_url = 4;
+    string     thumbnail_url     = 5;
+    int64      h3_index_r7       = 6;   // raw H3 cell index for deep-link map centering
+    float      virality_score    = 7;
+    int64      published_at_ms   = 8;   // Unix epoch milliseconds
+    AuthorTier author_tier       = 9;   // static; kept current via TierSyncWorker
 }
 
 message GetCardRequest  { string post_id = 1; }
@@ -218,6 +247,8 @@ pub struct MapPostCard {
     pub h3_index_r7:       i64,    // raw H3 u64 cast to i64 (bit 63 always 0)
     pub virality_score:    f32,
     pub published_at_ms:   i64,    // Unix epoch ms
+    #[serde(default)]              // missing in legacy msgpack → decoded as 0 (Standard)
+    pub author_tier:       u8,     // 0=Standard, 1=Premium, 2=VIP
 }
 ```
 
@@ -237,6 +268,8 @@ pub struct PostPublishedEvent {
     pub virality_score:    f64,    // typically 0.0 for new posts
     pub published_at_ms:   i64,
     pub retention_secs:    Option<u64>,  // None → 172 800 s (48 h)
+    #[serde(default)]
+    pub author_tier:       u8,     // 0=Standard, 1=Premium, 2=VIP. Absent → 0.
 }
 
 // Topic: engagement.score_updated  →  triggers ScoreUpdaterWorker
@@ -244,6 +277,16 @@ pub struct PostPublishedEvent {
 pub struct ScoreUpdatedEvent {
     pub post_id:   String,
     pub new_score: f64,
+}
+
+// Topic: profile.tier_changed  →  triggers TierSyncWorker
+// services/profile emits ONE event per affected post_id (not one per author)
+// so this consumer requires no author→posts index and stays stateless.
+#[derive(Deserialize)]
+pub struct TierChangedEvent {
+    pub author_id: String,  // informational; used for tracing only
+    pub post_id:   String,  // post whose card projection must be updated
+    pub new_tier:  u8,      // 0=Standard, 1=Premium, 2=VIP
 }
 ```
 
@@ -283,6 +326,7 @@ pub trait TileRepository: Send + Sync {
                                ttl: RetentionTtl) -> Result<(), GeoDiscoveryError>;
     async fn upsert_card(&self, card: &MapPostCard, ttl: RetentionTtl) -> Result<(), GeoDiscoveryError>;
     async fn update_card_score(&self, post_id: &PostId, score: f32) -> Result<(), GeoDiscoveryError>;
+    async fn update_card_tier(&self, post_id: &PostId, tier: i8) -> Result<(), GeoDiscoveryError>;
     async fn get_card(&self, post_id: &PostId) -> Result<Option<MapPostCard>, GeoDiscoveryError>;
     async fn list_tile_post_ids(&self, h3_index: H3Index, resolution: H3Resolution,
                                 limit: i32) -> Result<Vec<Uuid>, GeoDiscoveryError>;
@@ -374,6 +418,7 @@ cargo run -p geo-discovery
 | `GEO_TILE_COLD_THRESHOLD_SECS`  | `1800`                         | `1800`                  | Inactivity window before a tile ZSET is evicted (30 min)           |
 | `GEO_POST_INDEXER_GROUP_ID`     | `geo-discovery-post-indexer`   | service-specific        | Kafka consumer group for `post.published`                           |
 | `GEO_SCORE_UPDATER_GROUP_ID`    | `geo-discovery-score-updater`  | service-specific        | Kafka consumer group for `engagement.score_updated`                 |
+| `GEO_TIER_SYNC_GROUP_ID`        | `geo-discovery-tier-sync`      | service-specific        | Kafka consumer group for `profile.tier_changed`                     |
 
 **Compile-time feature flags:** None. All tuning is runtime via environment variables.
 
@@ -406,6 +451,7 @@ cargo run -p geo-discovery
 | `geo_discovery_tile_cells_per_query`     | Histogram | **p95 > 30**                  | H3 cells queried per request — high = viewport too wide         |
 | `geo_discovery_scylla_write_errors`      | Counter   | **> 5 / min**                 | ScyllaDB write failures in indexer workers                      |
 | `geo_discovery_redis_write_errors`       | Counter   | **> 10 / min**                | Redis write failures (indexer degrades gracefully; still alert) |
+| `geo_discovery_tier_sync_lag_seconds`    | Gauge     | **> 60 s**                    | Kafka consumer lag on `profile.tier_changed`                    |
 
 ### Memory Budget Reference
 
@@ -506,6 +552,7 @@ crates/services/geo-discovery/
         └── worker/
             ├── post_indexer.rs         # Kafka: post.published
             ├── score_updater.rs        # Kafka: engagement.score_updated
+            ├── tier_sync.rs            # Kafka: profile.tier_changed
             └── tile_pruner.rs          # Background: PRUNE_COLD_TILES Lua
 ```
 

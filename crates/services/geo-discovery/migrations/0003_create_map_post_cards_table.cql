@@ -32,8 +32,9 @@ CREATE TABLE IF NOT EXISTS geo_discovery.map_post_cards (
     virality_score    float,     -- Mutable; updated by score_updater worker
     published_at      timestamp,
     expires_at        timestamp, -- Explicit expiry for cold-start TTL computation
+    author_tier       tinyint,   -- 0=Standard, 1=Premium, 2=VIP; mutable via TierSyncWorker
     PRIMARY KEY (post_id)
 ) WITH compaction      = {'class': 'LeveledCompactionStrategy'}
   AND compression      = {'sstable_compression': 'LZ4Compressor'}
   AND gc_grace_seconds = 86400
-  AND comment = 'Durable denormalized card projection. LCS for point-read workload. Per-row USING TTL supports premium extended retention. virality_score is mutable via UPDATE.';
+  AND comment = 'Durable denormalized card projection. LCS for point-read workload. Per-row USING TTL supports premium extended retention. virality_score and author_tier are mutable via UPDATE.';

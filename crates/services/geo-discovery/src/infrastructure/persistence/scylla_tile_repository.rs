@@ -107,8 +107,8 @@ impl TileRepository for ScyllaTileRepository {
         let stmt = self.strict_stmt(
             "INSERT INTO geo_discovery.map_post_cards \
              (post_id, author_id, author_handle, author_avatar_url, thumbnail_url, \
-              h3_index_r7, virality_score, published_at, expires_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
+              h3_index_r7, virality_score, published_at, expires_at, author_tier) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
              USING TTL ?",
         );
         self.client
@@ -125,6 +125,7 @@ impl TileRepository for ScyllaTileRepository {
                     card.virality_score,
                     CqlTimestamp(card.published_at_ms),
                     CqlTimestamp(expires_at_ms),
+                    card.author_tier as i8,
                     ttl.as_scylla_ttl(),
                 ),
             )
@@ -157,7 +158,7 @@ impl TileRepository for ScyllaTileRepository {
     ) -> Result<Option<MapPostCard>, GeoDiscoveryError> {
         let stmt = self.fast_stmt(
             "SELECT post_id, author_id, author_handle, author_avatar_url, thumbnail_url, \
-             h3_index_r7, virality_score, published_at, expires_at \
+             h3_index_r7, virality_score, published_at, expires_at, author_tier \
              FROM geo_discovery.map_post_cards \
              WHERE post_id = ?",
         );
@@ -178,6 +179,24 @@ impl TileRepository for ScyllaTileRepository {
             Some(Err(e))  => Err(row_err("get_card:deser", e)),
             None          => Ok(None),
         }
+    }
+
+    async fn update_card_tier(
+        &self,
+        post_id: &PostId,
+        tier:    i8,
+    ) -> Result<(), GeoDiscoveryError> {
+        let stmt = self.strict_stmt(
+            "UPDATE geo_discovery.map_post_cards \
+             SET author_tier = ? \
+             WHERE post_id = ?",
+        );
+        self.client
+            .session
+            .execute_unpaged(stmt, (tier, post_id.as_uuid()))
+            .await
+            .map_err(scylla_err)?;
+        Ok(())
     }
 
     async fn list_tile_post_ids(

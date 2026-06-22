@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 /// ScyllaDB row type for `geo_discovery.map_post_cards`.
 ///
-/// Column order must match the SELECT projection exactly:
-///   post_id, author_id, author_handle, author_avatar_url, thumbnail_url,
-///   h3_index_r7, virality_score, published_at, expires_at
+/// Field names must match CQL column names exactly; scylla 1.5 `DeserializeRow`
+/// is name-based (not positional). `author_tier` is a `tinyint` (i8); the From
+/// impl casts it to u8 before storing in `MapPostCard`.
 #[derive(Debug, DeserializeRow)]
 pub struct MapCardRow {
     pub post_id:           Uuid,
@@ -18,6 +18,10 @@ pub struct MapCardRow {
     pub virality_score:    f32,
     pub published_at:      CqlTimestamp,
     pub expires_at:        CqlTimestamp,
+    /// tinyint in ScyllaDB; 0=Standard, 1=Premium, 2=VIP.
+    /// Option<i8> because rows written before migration 0004 have NULL here.
+    /// NULL maps to Standard (0) — correct for any legacy post.
+    pub author_tier:       Option<i8>,
 }
 
 impl From<MapCardRow> for crate::domain::entity::MapPostCard {
@@ -31,6 +35,7 @@ impl From<MapCardRow> for crate::domain::entity::MapPostCard {
             h3_index_r7:       row.h3_index_r7,
             virality_score:    row.virality_score,
             published_at_ms:   row.published_at.0,
+            author_tier:       row.author_tier.unwrap_or(0) as u8,
         }
     }
 }

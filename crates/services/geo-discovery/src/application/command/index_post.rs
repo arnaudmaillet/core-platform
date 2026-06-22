@@ -30,6 +30,9 @@ pub struct IndexPostCommand {
     pub published_at_ms:   i64,
     /// Seconds. None → service default (172 800 s).
     pub retention_secs:    Option<u64>,
+    /// Author tier at publish time. 0=Standard, 1=Premium, 2=VIP.
+    /// Sourced from the post.published Kafka event (denormalized by services/post).
+    pub author_tier:       u8,
 }
 
 impl Command for IndexPostCommand {}
@@ -95,6 +98,7 @@ where
             h3_index_r7:       idx_r7.as_i64(),
             virality_score:    score.as_f32(),
             published_at_ms:   cmd.published_at_ms,
+            author_tier:       cmd.author_tier,
         };
 
         // ── 1. ScyllaDB (durable, always first) ───────────────────────────────

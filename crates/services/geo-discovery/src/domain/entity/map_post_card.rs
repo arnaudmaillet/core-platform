@@ -11,6 +11,10 @@ use crate::domain::value_object::{AuthorId, H3Index, PostId, ViralityScore};
 ///
 /// Serde derives are required for both the Redis msgpack encoding and the
 /// ScyllaDB cold-start recovery path (where rows are mapped into this struct).
+///
+/// `author_tier` carries a `#[serde(default)]` annotation so that cards cached
+/// before this field was introduced (u8 absent from the msgpack payload) decode
+/// as `0` (Standard) rather than failing — enabling zero-downtime rolling deploys.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapPostCard {
     pub post_id:           Uuid,
@@ -23,6 +27,10 @@ pub struct MapPostCard {
     pub virality_score:    f32,
     /// Unix epoch milliseconds.
     pub published_at_ms:   i64,
+    /// Static author tier badge. 0=Standard, 1=Premium, 2=VIP.
+    /// Resolved client-side against the session's social graph for friend/following badges.
+    #[serde(default)]
+    pub author_tier:       u8,
 }
 
 impl MapPostCard {

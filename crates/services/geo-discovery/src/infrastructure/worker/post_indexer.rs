@@ -32,6 +32,10 @@ pub struct PostPublishedEvent {
     pub published_at_ms:   i64,
     /// Optional retention override in seconds. Absent → 172 800 s (48 h).
     pub retention_secs:    Option<u64>,
+    /// Author tier at publish time. 0=Standard, 1=Premium, 2=VIP.
+    /// Denormalized by services/post from services/profile. Absent → 0 (Standard).
+    #[serde(default)]
+    pub author_tier:       u8,
 }
 
 /// Long-lived background worker that consumes `post.published` events and
@@ -147,6 +151,7 @@ where
             virality_score:    event.virality_score,
             published_at_ms:   event.published_at_ms,
             retention_secs:    event.retention_secs,
+            author_tier:       event.author_tier,
         };
 
         handler.handle(Envelope::new(Uuid::now_v7(), cmd)).await

@@ -104,6 +104,15 @@ where
 // ── Conversion helpers ────────────────────────────────────────────────────────
 
 fn card_to_proto(card: crate::domain::entity::MapPostCard) -> proto::MapPostCard {
+    // Map u8 tier (0=Standard, 1=Premium, 2=VIP) to proto AuthorTier enum.
+    // Proto uses +1 offset: UNSPECIFIED=0, STANDARD=1, PREMIUM=2, VIP=3.
+    // We treat u8=0 as STANDARD (not UNSPECIFIED) for deterministic client rendering.
+    let author_tier = match card.author_tier {
+        1 => proto::AuthorTier::Premium as i32,
+        2 => proto::AuthorTier::Vip as i32,
+        _ => proto::AuthorTier::Standard as i32,
+    };
+
     proto::MapPostCard {
         post_id:           card.post_id.to_string(),
         author_id:         card.author_id.to_string(),
@@ -113,6 +122,7 @@ fn card_to_proto(card: crate::domain::entity::MapPostCard) -> proto::MapPostCard
         h3_index_r7:       card.h3_index_r7,
         virality_score:    card.virality_score,
         published_at_ms:   card.published_at_ms,
+        author_tier,
     }
 }
 

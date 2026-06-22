@@ -19,3 +19,21 @@ enum ZoomBand {
     ZOOM_BAND_HIGH        = 3; // Zoom 9–12: neighborhood
     ZOOM_BAND_MICRO       = 4; // Zoom 13–15: street level
 }
+
+// Tier classification for a post's author.
+//
+// Denormalized from services/profile into the MapPostCard projection so that
+// the BFF can render static badge decorations (border colour, badge icon) on
+// map pins without a secondary service call.
+//
+// Design note: dynamic viewer-relational state (is_friend, is_following) is
+// intentionally ABSENT from this enum and from MapPostCard. Those signals are
+// resolved client-side by comparing author_id against the user's session-cached
+// social graph (fetched once at login from services/social-graph). This avoids
+// O(users × posts) Redis variants and preserves the shared-card cache model.
+enum AuthorTier {
+    AUTHOR_TIER_UNSPECIFIED = 0; // Alias for Standard; safe zero-value default
+    AUTHOR_TIER_STANDARD    = 1;
+    AUTHOR_TIER_PREMIUM     = 2;
+    AUTHOR_TIER_VIP         = 3;
+}
