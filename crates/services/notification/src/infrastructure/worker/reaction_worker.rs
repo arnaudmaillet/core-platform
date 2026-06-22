@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use fred::interfaces::{KeysInterface, LuaInterface, SortedSetsInterface};
-use futures_util::StreamExt;
 use redis_storage::RedisClient;
 use serde::{Deserialize, Serialize};
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 use uuid::Uuid;
 
 use crate::application::port::{BlockCache, NotificationRepository, StreamRegistry, UnreadCounter};
@@ -18,6 +19,7 @@ use crate::domain::value_object::{
     NotificationId, NotificationKind, ProfileId, SubjectId, SubjectKind,
 };
 use crate::error::NotificationError;
+use crate::infrastructure::worker::build_dlq_producer;
 use crate::infrastructure::worker::collapse::{CollapseBuffer, CollapseKey, SCHEDULE_KEY};
 
 const TOPIC: &str = "engagement.reactions";
@@ -186,8 +188,18 @@ where
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to build DLQ producer — reaction notification consumer not started");
+                return;
+            }
+        };
+
+        // `Arc<Self>` so the per-message closure can capture an owned handle.
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!("reaction notification consumer exited cleanly — restarting");
                 }
@@ -202,11 +214,9 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        // At-least-once: never auto-commit. Each event is flushed to its collapse
-        // sink and the offset is committed only after a clean flush (see below).
         config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
@@ -216,49 +226,29 @@ where
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "reaction notification consumer started");
 
-        let mut stream = handle.stream::<ReactionKafkaEvent>();
+        let policy = RetryPolicy::default();
+        run_consumer::<ReactionKafkaEvent, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { worker.process_one(event).await })
+        })
+        .await
+        .map_err(|e| e.to_string())
+    }
 
-        // ── Collapse accumulator ──────────────────────────────────────────────
-        // The stream yields one message per poll, so each event is accumulated and
-        // flushed individually; cross-event collapse is handled by the Redis-backed
-        // window in `accumulate_in_window`, not this in-memory map.
+    /// Processes one reaction event: accumulate it into a fresh single-event collapse
+    /// batch and flush it. Removals, malformed ids, self-reactions and suppressions are
+    /// no-ops that succeed; a transient write failure is retried then dead-lettered.
+    ///
+    /// The stream yields one message at a time, so cross-event collapse is handled by
+    /// the Redis-backed window in `accumulate_in_window`, not this in-memory batch.
+    async fn process_one(&self, event: &ReactionKafkaEvent) -> ProcessOutcome {
         let mut batch: HashMap<CollapseKey, CollapseBuffer> = HashMap::new();
+        self.accumulate(event, &mut batch).await;
 
-        while let Some(result) = stream.next().await {
-            let msg = match result {
-                Ok(m) => m,
-                Err(err) => {
-                    tracing::warn!(error = %err, "broker stream error — restarting consumer");
-                    return Err(err.to_string());
-                }
-            };
-
-            let event = match &msg.payload {
-                Ok(e) => e,
-                Err(err) => {
-                    tracing::warn!(offset = msg.offset, error = %err, "reaction event deserialization error — committing past poison message");
-                    handle.commit(&msg).map_err(|e| e.to_string())?;
-                    continue;
-                }
-            };
-
-            // Decode + (maybe) accumulate this event. Intentional skips are no-ops.
-            self.accumulate(event, &mut batch).await;
-
-            // Flush, then commit. A hard (non-suppression) write failure leaves the
-            // offset uncommitted so the event is redelivered on the next restart.
-            if self.flush_batch(&mut batch).await.is_err() {
-                tracing::error!(
-                    offset = msg.offset,
-                    "reaction notification write failed — offset NOT committed; will redeliver"
-                );
-                return Err("reaction notification write failed".to_string());
-            }
-
-            handle.commit(&msg).map_err(|e| e.to_string())?;
+        match self.flush_batch(&mut batch).await {
+            Ok(())  => ProcessOutcome::Done,
+            Err(()) => ProcessOutcome::Retry("reaction notification write failed".to_string()),
         }
-
-        Ok(())
     }
 
     /// Decodes one reaction event and, when it should produce a notification,

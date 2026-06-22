@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use fred::interfaces::KeysInterface;
-use futures_util::StreamExt;
 use once_cell::sync::Lazy;
 use redis_storage::RedisClient;
 use regex::Regex;
 use serde::Deserialize;
 use transport::kafka::consumer::builder::KafkaConsumerBuilder;
+use transport::kafka::consumer::{run_consumer, ProcessOutcome, RetryPolicy};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
+use transport::kafka::producer::KafkaProducerHandle;
 use uuid::Uuid;
 
 use crate::application::port::{BlockCache, NotificationRepository, StreamRegistry, UnreadCounter};
@@ -19,6 +20,7 @@ use crate::domain::value_object::{
     NotificationId, NotificationKind, ProfileId, SubjectId, SubjectKind,
 };
 use crate::error::NotificationError;
+use crate::infrastructure::worker::build_dlq_producer;
 
 const TOPIC: &str = "post.published";
 
@@ -103,8 +105,18 @@ where
     }
 
     pub async fn run(self) {
+        let producer = match build_dlq_producer(&self.kafka_config) {
+            Ok(producer) => producer,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to build DLQ producer — mention notification consumer not started");
+                return;
+            }
+        };
+
+        // `Arc<Self>` so the per-message closure can capture an owned handle.
+        let worker = Arc::new(self);
         loop {
-            match self.run_once().await {
+            match worker.clone().run_once(&producer).await {
                 Ok(()) => {
                     tracing::warn!("mention notification consumer exited cleanly — restarting");
                 }
@@ -119,11 +131,9 @@ where
         }
     }
 
-    async fn run_once(&self) -> Result<(), String> {
+    async fn run_once(self: Arc<Self>, producer: &KafkaProducerHandle) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        // At-least-once: never auto-commit. The offset is advanced only after the
-        // post has been fully processed (see the commit calls below).
         config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
@@ -133,39 +143,16 @@ where
 
         tracing::info!(topic = TOPIC, group = %self.group_id, "mention notification consumer started");
 
-        let mut stream = handle.stream::<PostPublishedPayload>();
-
-        while let Some(result) = stream.next().await {
-            let msg = match result {
-                Ok(m) => m,
-                Err(err) => {
-                    tracing::warn!(error = %err, "broker stream error — restarting consumer");
-                    return Err(err.to_string());
-                }
-            };
-
-            let payload = match &msg.payload {
-                Ok(p) => p,
-                Err(err) => {
-                    tracing::warn!(offset = msg.offset, error = %err, "post.published deserialization error — committing past poison message");
-                    handle.commit(&msg).map_err(|e| e.to_string())?;
-                    continue;
-                }
-            };
-
-            if let Err(err) = self.process(payload).await {
-                tracing::error!(
-                    error   = %err,
-                    post_id = %payload.post_id,
-                    "mention worker failed to process post — offset NOT committed; will redeliver"
-                );
-                return Err(format!("mention processing failed: {err}"));
-            }
-
-            handle.commit(&msg).map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
+        // `process` returns Ok for intentional skips (self-mention, block, empty
+        // caption), so those commit cleanly; transient failures retry then
+        // dead-letter, and malformed ids are dead-lettered as poison.
+        let policy = RetryPolicy::default();
+        run_consumer::<PostPublishedPayload, _>(&handle, producer, &policy, move |event| {
+            let worker = Arc::clone(&self);
+            Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     async fn process(&self, event: &PostPublishedPayload) -> Result<(), NotificationError> {
