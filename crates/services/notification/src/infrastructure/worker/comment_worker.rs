@@ -234,7 +234,15 @@ where
             });
         }
 
-        let ntf_id = NotificationId::new();
+        // One comment produces exactly one notification, so the comment id is a
+        // stable business key: the id is deterministic (idempotent INSERT) and the
+        // unread increment is claim-gated against redelivery. created_at is the
+        // comment's own timestamp.
+        let business_key = format!("comment:{}", event.comment_id);
+        let ntf_id       = NotificationId::deterministic(&business_key);
+        let created_at   = chrono::DateTime::from_timestamp_millis(event.created_at_ms)
+            .unwrap_or_default();
+
         let notification = Notification::create(
             ntf_id,
             target_id,
@@ -242,10 +250,11 @@ where
             kind,
             SubjectKind::Post,
             subject_id,
+            created_at,
         );
 
         self.repository.insert(&notification).await?;
-        self.counter.increment(&target_id).await?;
+        self.counter.increment_once(&target_id, &business_key).await?;
 
         let payload = Arc::new(NotificationPayload {
             notification_id:   notification.id().as_uuid(),

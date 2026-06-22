@@ -24,11 +24,13 @@ use crate::infrastructure::worker::collapse::{CollapseKey, SCHEDULE_KEY};
 ///
 /// KEYS[1] = notification:cw:{target:subject:kind}
 /// KEYS[2] = notification:cw:{target:subject:kind}_:senders
+/// KEYS[3] = notification:cw:{target:subject:kind}_:sset
 /// Returns: [count_string, sender1, sender2, ...]
 ///          where count_string is "0" if the window is empty or already flushed.
 const DRAIN_WINDOW_SCRIPT: &str = r#"
-local window_key  = KEYS[1]
-local senders_key = KEYS[2]
+local window_key      = KEYS[1]
+local senders_key     = KEYS[2]
+local senders_set_key = KEYS[3]
 
 local count = redis.call('GET', window_key)
 if not count or count == '0' then
@@ -38,6 +40,7 @@ end
 local senders = redis.call('LRANGE', senders_key, 0, -1)
 redis.call('DEL', window_key)
 redis.call('DEL', senders_key)
+redis.call('DEL', senders_set_key)
 
 local result = {count}
 for _, s in ipairs(senders) do
@@ -99,13 +102,15 @@ where
     async fn flush_cycle(&self) {
         let now_score = chrono::Utc::now().timestamp_millis() as f64;
 
-        // Fetch all schedule members whose expiry score <= now.
-        let members: Vec<String> = match self.redis.inner
+        // Fetch all due schedule members WITH their scores (the window deadline,
+        // Unix ms). The deadline is the window's stable epoch — it makes the flushed
+        // notification id deterministic, so a retried flush overwrites the same row.
+        let members: Vec<(String, f64)> = match self.redis.inner
             .zrangebyscore(
                 SCHEDULE_KEY,
                 "-inf",
                 now_score.to_string().as_str(),
-                false,
+                true,
                 Some((0i64, SCAN_BATCH as i64)),
             )
             .await
@@ -123,8 +128,9 @@ where
 
         tracing::debug!(count = members.len(), "collapse flush cycle: windows ready");
 
-        for member in &members {
-            if let Err(err) = self.flush_window(member).await {
+        for (member, score) in &members {
+            let deadline_ms = *score as i64;
+            if let Err(err) = self.flush_window(member, deadline_ms).await {
                 tracing::error!(
                     error  = %err,
                     window = member,
@@ -135,11 +141,11 @@ where
             // Remove from schedule regardless of flush outcome — a failed flush
             // leaves no window data in Redis (DRAIN_WINDOW deletes it), so the
             // notification is silently dropped rather than double-written.
-            let _: Result<i64, _> = self.redis.inner.zrem(SCHEDULE_KEY, member).await;
+            let _: Result<i64, _> = self.redis.inner.zrem(SCHEDULE_KEY, member.as_str()).await;
         }
     }
 
-    async fn flush_window(&self, member: &str) -> Result<(), NotificationError> {
+    async fn flush_window(&self, member: &str, deadline_ms: i64) -> Result<(), NotificationError> {
         // `member` format: `{target_uuid}:{subject_uuid}:{kind_str}`
         let parts: Vec<&str> = member.splitn(3, ':').collect();
         if parts.len() != 3 {
@@ -164,14 +170,15 @@ where
 
         // Rebuild the keys through CollapseKey so they always match what the
         // accumulator wrote — including the cluster hash tag.
-        let collapse_key = CollapseKey::new(target_uuid, subject_uuid, SubjectKind::Post, kind);
-        let window_key   = collapse_key.redis_window_key();
-        let senders_key  = collapse_key.redis_senders_key();
+        let collapse_key    = CollapseKey::new(target_uuid, subject_uuid, SubjectKind::Post, kind);
+        let window_key      = collapse_key.redis_window_key();
+        let senders_key     = collapse_key.redis_senders_key();
+        let senders_set_key = collapse_key.redis_senders_set_key();
 
         let result: Vec<String> = self.redis.inner
             .eval(
                 DRAIN_WINDOW_SCRIPT,
-                vec![window_key.clone(), senders_key],
+                vec![window_key.clone(), senders_key, senders_set_key],
                 Vec::<String>::new(),
             )
             .await
@@ -194,11 +201,18 @@ where
             return Ok(());
         }
 
-        let target_id     = ProfileId::from_uuid(target_uuid);
-        let subject_id    = SubjectId::from_uuid(subject_uuid);
+        let target_id      = ProfileId::from_uuid(target_uuid);
+        let subject_id     = SubjectId::from_uuid(subject_uuid);
         let primary_sender = ProfileId::from_uuid(sender_uuids[0]);
-        let ntf_id        = NotificationId::new();
-        let now           = chrono::Utc::now();
+
+        // The (window member, deadline) pair identifies this specific window
+        // instance: the id is deterministic so a retried flush overwrites the same
+        // row, and created_at is the window deadline. A later window for the same
+        // target/subject/kind gets a new deadline and therefore a distinct row.
+        let business_key = format!("reaction-window:{}:{}", member, deadline_ms);
+        let ntf_id       = NotificationId::deterministic(&business_key);
+        let created_at   = chrono::DateTime::from_timestamp_millis(deadline_ms)
+            .unwrap_or_default();
 
         let notification = Notification::create_collapsed(
             ntf_id,
@@ -209,11 +223,11 @@ where
             kind,
             SubjectKind::Post,
             subject_id,
-            now,
+            created_at,
         );
 
         self.repository.insert(&notification).await?;
-        self.counter.increment(&target_id).await?;
+        self.counter.increment_once(&target_id, &business_key).await?;
 
         let payload = Arc::new(NotificationPayload {
             notification_id:   notification.id().as_uuid(),

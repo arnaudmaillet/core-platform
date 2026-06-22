@@ -46,23 +46,37 @@ return v
 /// here — it lives on a different slot and is updated by a separate `ZADD` in
 /// [`ReactionNotificationWorker::accumulate_in_window`].
 ///
+/// All three keys share the window hash tag, so the script is slot-safe. The
+/// unique-sender SET makes accumulation idempotent: a sender that already reacted
+/// within this window is a no-op, so a redelivered reaction never double-counts.
+///
 /// KEYS[1] = notification:cw:{target:subject:kind}            (INCR counter)
 /// KEYS[2] = notification:cw:{target:subject:kind}_:senders   (RPUSH sample list)
+/// KEYS[3] = notification:cw:{target:subject:kind}_:sset      (unique-sender SET)
 /// ARGV[1] = sender_id (string)
 /// ARGV[2] = window_ttl_secs
 /// ARGV[3] = max_sample_senders
-/// Returns: total count in window.
+/// Returns: count of unique senders in the window.
 const COLLAPSE_ACCUMULATE_SCRIPT: &str = r#"
-local window_key    = KEYS[1]
-local senders_key   = KEYS[2]
-local sender_id     = ARGV[1]
-local ttl           = tonumber(ARGV[2])
-local max_sample    = tonumber(ARGV[3])
+local window_key      = KEYS[1]
+local senders_key     = KEYS[2]
+local senders_set_key = KEYS[3]
+local sender_id       = ARGV[1]
+local ttl             = tonumber(ARGV[2])
+local max_sample      = tonumber(ARGV[3])
+
+-- Idempotency gate: skip senders already counted in this window.
+if redis.call('SADD', senders_set_key, sender_id) == 0 then
+    local existing = redis.call('GET', window_key)
+    if existing then return tonumber(existing) end
+    return 0
+end
 
 local count = redis.call('INCR', window_key)
 if count == 1 then
-    redis.call('EXPIRE', window_key,  ttl)
-    redis.call('EXPIRE', senders_key, ttl + 10)
+    redis.call('EXPIRE', window_key,      ttl)
+    redis.call('EXPIRE', senders_key,     ttl + 10)
+    redis.call('EXPIRE', senders_set_key, ttl + 10)
 end
 
 local slen = redis.call('LLEN', senders_key)
@@ -424,8 +438,14 @@ where
             return Ok(());
         }
 
-        // Write collapsed notification to ScyllaDB.
-        let ntf_id = NotificationId::new();
+        // Immediate (non-hot) path: one reaction → one notification. (subject, sender)
+        // is the stable business key, so the id is deterministic (idempotent INSERT)
+        // and the unread increment is claim-gated. created_at is the reaction's time.
+        let business_key = format!("reaction:{}:{}", subject_id, sender_id);
+        let ntf_id       = NotificationId::deterministic(&business_key);
+        let created_at   = chrono::DateTime::from_timestamp_millis(buf.first_at_ms)
+            .unwrap_or_default();
+
         let notification = Notification::create_collapsed(
             ntf_id,
             target_id,
@@ -435,11 +455,11 @@ where
             key.kind,
             key.subject_kind,
             subject_id,
-            chrono::Utc::now(),
+            created_at,
         );
 
         self.repository.insert(&notification).await?;
-        self.counter.increment(&target_id).await?;
+        self.counter.increment_once(&target_id, &business_key).await?;
 
         let payload = Arc::new(NotificationPayload {
             notification_id:   notification.id().as_uuid(),
@@ -463,20 +483,21 @@ where
         _buf:      &CollapseBuffer,
         sender_id: &ProfileId,
     ) -> Result<(), NotificationError> {
-        let window_key   = key.redis_window_key();
-        let senders_key  = key.redis_senders_key();
-        let ttl          = self.config.collapse_window_secs;
-        let max_sample   = self.config.max_sample_senders;
-        let sched_member = key.schedule_member();
-        let expiry_score = (chrono::Utc::now().timestamp_millis()
+        let window_key      = key.redis_window_key();
+        let senders_key     = key.redis_senders_key();
+        let senders_set_key = key.redis_senders_set_key();
+        let ttl             = self.config.collapse_window_secs;
+        let max_sample      = self.config.max_sample_senders;
+        let sched_member    = key.schedule_member();
+        let expiry_score    = (chrono::Utc::now().timestamp_millis()
             + (ttl as i64 * 1000)) as f64;
 
-        // Atomically bump the window counter + sample list. Both keys share a hash
-        // tag, so this multi-key script is slot-safe in Redis Cluster.
+        // Atomically bump the unique-sender count + sample list. All three keys share
+        // a hash tag, so this multi-key script is slot-safe in Redis Cluster.
         let _: i64 = self.redis.inner
             .eval(
                 COLLAPSE_ACCUMULATE_SCRIPT,
-                vec![window_key, senders_key],
+                vec![window_key, senders_key, senders_set_key],
                 vec![
                     sender_id.as_str(),
                     ttl.to_string(),

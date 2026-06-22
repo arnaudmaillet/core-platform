@@ -41,6 +41,10 @@ pub struct PostPublishedPayload {
     pub author_id: String,
     /// The raw post caption, used for mention token extraction.
     pub caption:   Option<String>,
+    /// Publication timestamp (Unix ms), used as the notification `created_at` so
+    /// the value is deterministic across redeliveries. Absent → 0.
+    #[serde(default)]
+    pub published_at_ms: i64,
 }
 
 // ── Key builders ──────────────────────────────────────────────────────────────
@@ -218,7 +222,14 @@ where
                 }
             }
 
-            let ntf_id = NotificationId::new();
+            // A post mentions each profile at most once, so (post, mentioned) is a
+            // stable business key: deterministic id (idempotent INSERT) + claim-gated
+            // unread increment. created_at is the post's publication time.
+            let business_key = format!("mention:{}:{}", event.post_id, mentioned_uuid);
+            let ntf_id       = NotificationId::deterministic(&business_key);
+            let created_at   = chrono::DateTime::from_timestamp_millis(event.published_at_ms)
+                .unwrap_or_default();
+
             let notification = Notification::create(
                 ntf_id,
                 target_id,
@@ -226,10 +237,11 @@ where
                 NotificationKind::Mention,
                 SubjectKind::Post,
                 subject_id,
+                created_at,
             );
 
             self.repository.insert(&notification).await?;
-            self.counter.increment(&target_id).await?;
+            self.counter.increment_once(&target_id, &business_key).await?;
 
             let payload = Arc::new(NotificationPayload {
                 notification_id:   notification.id().as_uuid(),

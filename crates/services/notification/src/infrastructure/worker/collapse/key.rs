@@ -40,9 +40,17 @@ impl CollapseKey {
         )
     }
 
-    /// Redis key for the LPUSH sender sample list (parallel to `redis_window_key`).
+    /// Redis key for the RPUSH sender sample list (parallel to `redis_window_key`).
+    /// Inherits the window's hash tag, so it shares the same cluster slot.
     pub fn redis_senders_key(&self) -> String {
         format!("{}_:senders", self.redis_window_key())
+    }
+
+    /// Redis key for the SET of unique senders in this window. Used to make
+    /// accumulation idempotent — a sender that has already reacted within the
+    /// window does not increment the count again. Inherits the window's hash tag.
+    pub fn redis_senders_set_key(&self) -> String {
+        format!("{}_:sset", self.redis_window_key())
     }
 
     /// Member string used in the `notification:window_schedule` ZSET.

@@ -42,6 +42,11 @@ pub struct NotificationConfig {
 
     /// Maximum number of sample sender UUIDs stored per collapse bucket.
     pub max_sample_senders: usize,
+
+    /// TTL (seconds) for idempotency claim keys (`notification:dedupe:...`).
+    /// Must exceed the worst-case Kafka redelivery window so a retried event is
+    /// recognised as a duplicate and does not double-increment the unread counter.
+    pub dedupe_ttl_secs: u64,
 }
 
 impl NotificationConfig {
@@ -67,6 +72,7 @@ impl NotificationConfig {
             max_page_size: env_i32("NOTIFICATION_MAX_PAGE_SIZE", 50),
             stream_buffer_size: env_usize("NOTIFICATION_STREAM_BUFFER_SIZE", 256),
             max_sample_senders: env_usize("NOTIFICATION_MAX_SAMPLE_SENDERS", 5),
+            dedupe_ttl_secs: env_u64("NOTIFICATION_DEDUPE_TTL_SECS", 86_400),
         }
     }
 }

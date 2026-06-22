@@ -27,6 +27,33 @@ end
 return v
 "#;
 
+/// Idempotent capped increment: claims `dedupe_key` and only increments when the
+/// claim is newly set. Both keys carry the `{profile_id}` hash tag (see
+/// `unread_key` / `claim_key`) so they share a Redis Cluster slot and this
+/// multi-key script is slot-safe.
+///
+/// KEYS[1] = notification:unread:{profile_id}             (counter)
+/// KEYS[2] = notification:dedupe:{profile_id}:business    (one-shot claim)
+/// ARGV[1] = cap (e.g. 99)
+/// ARGV[2] = dedupe_ttl_secs
+/// Returns: 1 if the counter was incremented, 0 if the event was a duplicate.
+const INCR_CAPPED_CLAIMED_SCRIPT: &str = r#"
+local unread_key = KEYS[1]
+local claim_key  = KEYS[2]
+local cap        = tonumber(ARGV[1])
+local ttl        = tonumber(ARGV[2])
+
+if redis.call('SET', claim_key, '1', 'NX', 'EX', ttl) == false then
+    return 0
+end
+
+local v = redis.call('INCR', unread_key)
+if v > cap then
+    redis.call('SET', unread_key, tostring(cap))
+end
+return 1
+"#;
+
 /// Atomically decrements the unread counter, floored at 0.
 ///
 /// KEYS[1] = notification:unread:{profile_id}
@@ -48,8 +75,17 @@ return nv
 
 // ── Key builders ──────────────────────────────────────────────────────────────
 
+/// Per-profile unread counter. The `{profile_id}` Redis Cluster hash tag pins it
+/// to the same slot as the profile's `claim_key`, so the claim-gated increment
+/// script can touch both atomically without CROSSSLOT.
 fn unread_key(profile_id: &ProfileId) -> String {
-    format!("notification:unread:{}", profile_id)
+    format!("notification:unread:{{{profile_id}}}")
+}
+
+/// One-shot idempotency claim for a `(profile, business_key)` pair. Shares the
+/// `{profile_id}` hash tag with `unread_key`.
+fn claim_key(profile_id: &ProfileId, business_key: &str) -> String {
+    format!("notification:dedupe:{{{profile_id}}}:{business_key}")
 }
 
 fn horizon_key(profile_id: &ProfileId) -> String {
@@ -92,6 +128,34 @@ impl<R: NotificationRepository> UnreadCounter for RedisUnreadCounter<R> {
 
         self.repository.increment_counter(profile_id).await?;
         Ok(())
+    }
+
+    async fn increment_once(
+        &self,
+        profile_id: &ProfileId,
+        dedupe_key: &str,
+    ) -> Result<bool, NotificationError> {
+        // Atomic claim + Redis increment (both keys share the {profile_id} slot).
+        let incremented: i64 = self.client
+            .inner
+            .eval(
+                INCR_CAPPED_CLAIMED_SCRIPT,
+                vec![unread_key(profile_id), claim_key(profile_id, dedupe_key)],
+                vec![self.config.unread_cap.to_string(), self.config.dedupe_ttl_secs.to_string()],
+            )
+            .await
+            .map_err(Self::redis_err)?;
+
+        if incremented == 0 {
+            // Duplicate event — the claim already existed. Nothing to do.
+            return Ok(false);
+        }
+
+        // Mirror the increment into the durable ScyllaDB counter. A crash between
+        // the Redis increment and this write leaves Redis (the L1 source of truth)
+        // ahead by one — a bounded, accepted divergence.
+        self.repository.increment_counter(profile_id).await?;
+        Ok(true)
     }
 
     async fn decrement(&self, profile_id: &ProfileId) -> Result<(), NotificationError> {

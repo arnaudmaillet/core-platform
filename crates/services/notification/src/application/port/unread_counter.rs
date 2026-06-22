@@ -13,6 +13,19 @@ pub trait UnreadCounter: Send + Sync + 'static {
     /// Increments the counter, capped at the configured `unread_cap`.
     async fn increment(&self, profile_id: &ProfileId) -> Result<(), NotificationError>;
 
+    /// Idempotent increment, guarded by a one-shot claim on `dedupe_key`.
+    ///
+    /// The first call for a given `dedupe_key` claims it and increments both the
+    /// Redis L1 counter and the ScyllaDB counter; subsequent calls (e.g. a Kafka
+    /// redelivery of the same event) observe the existing claim and do nothing.
+    /// Returns `true` when the counter was actually incremented, `false` when the
+    /// event was a duplicate. Used by the at-least-once Kafka workers.
+    async fn increment_once(
+        &self,
+        profile_id: &ProfileId,
+        dedupe_key: &str,
+    ) -> Result<bool, NotificationError>;
+
     /// Decrements the counter. No-op if the counter is already 0.
     async fn decrement(&self, profile_id: &ProfileId) -> Result<(), NotificationError>;
 
