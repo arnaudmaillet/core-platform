@@ -1,7 +1,7 @@
-use post::{Caption, Post, PostBuilder, VisibilityLevel};
-use post::{PostCommandCtx, PostKernelCtx};
-use post::{PostReadRepositoryStub, PostWriteRepository, PostWriteRepositoryStub};
 use post_assembly::PostCommandAssembly;
+use post_older::{Caption, Post, PostBuilder, VisibilityLevel};
+use post_older::{PostCommandCtx, PostKernelCtx};
+use post_older::{PostReadRepositoryStub, PostWriteRepository, PostWriteRepositoryStub};
 use post_profile::ProfileProjectionStub;
 use shared_kernel::command::CommandBus;
 use shared_kernel::environment::ClusterContext;

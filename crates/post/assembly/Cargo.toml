@@ -11,6 +11,6 @@ description.workspace = true
 shared-kernel = { workspace = true }
 infra-fred = { workspace = true }
 infra-scylla = { workspace = true }
-post = { workspace = true }
+post-older = { workspace = true }
 post-profile = { workspace = true }
 tokio = { workspace = true }

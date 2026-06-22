@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::MimeType;
+    use post_older::MimeType;
 
     #[test]
     fn test_mime_type_validation_success() {

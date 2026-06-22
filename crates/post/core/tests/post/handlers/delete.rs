@@ -1,6 +1,6 @@
 // crates/post/core/tests/post/handlers/delete_post.rs
 
-use post::{DeletePostCommand, PostCommandCtx};
+use post_older::{DeletePostCommand, PostCommandCtx};
 use post_utils::{PostRepositoryAsserts, PostTestFixture};
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ErrorCode, Result, Versioned};

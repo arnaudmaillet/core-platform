@@ -1,7 +1,7 @@
 // crates/post/assembly/src/read_service.rs
 
 use crate::PostDetail;
-use post::PostReadRepository;
+use post_older::PostReadRepository;
 use post_profile::ProfileReadProjection;
 use shared_kernel::core::{Error, PageQuery, PagedResult, Result};
 use shared_kernel::types::{PostId, ProfileId};

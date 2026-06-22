@@ -1,4 +1,4 @@
-use post::{DurationSeconds, Height, MediaBuilder, MediaId, MediaType, MimeType, Width};
+use post_older::{DurationSeconds, Height, MediaBuilder, MediaId, MediaType, MimeType, Width};
 use shared_kernel::{core::ValueObject, types::Url};
 
 fn valid_params() -> (

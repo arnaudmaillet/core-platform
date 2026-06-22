@@ -1,0 +1,257 @@
+use tonic::{Request, Response, Status};
+use uuid::Uuid;
+
+use cqrs::{CommandBus, Envelope, QueryBus};
+
+use crate::application::command::{
+    create_post::CreatePostCommand,
+    delete_post::DeletePostCommand,
+    publish_post::PublishPostCommand,
+    update_post::UpdatePostCommand,
+};
+use crate::application::command::create_post::AttachmentInput;
+use crate::application::port::PostSummary;
+use crate::application::query::{
+    get_post::GetPostQuery,
+    list_posts_by_profile::ListPostsByProfileQuery,
+};
+use crate::domain::aggregate::Post;
+use crate::domain::entity::MediaAttachment;
+use crate::domain::value_object::PostId;
+
+// ── Proto inclusion ───────────────────────────────────────────────────────────
+
+pub mod proto {
+    tonic::include_proto!("post.v1");
+}
+
+pub use proto::post_service_server::PostServiceServer;
+
+pub struct PostServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    command_bus: CB,
+    query_bus:   QB,
+}
+
+impl<CB, QB> PostServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    pub fn new(command_bus: CB, query_bus: QB) -> Self {
+        Self { command_bus, query_bus }
+    }
+}
+
+// ── Command RPC helpers ───────────────────────────────────────────────────────
+
+impl<CB, QB> PostServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    pub async fn create_post(
+        &self,
+        request: Request<proto::CreatePostRequest>,
+    ) -> Result<Response<proto::CreatePostResponse>, Status> {
+        let req         = request.into_inner();
+        let post_id     = PostId::new_v7();
+        let post_id_str = post_id.as_str();
+        let profile_id  = req.profile_id.clone();
+
+        let cmd = CreatePostCommand {
+            post_id:     post_id_str.clone(),
+            profile_id:  req.profile_id,
+            kind:        req.kind,
+            caption:     req.caption,
+            attachments: req.attachments.into_iter().map(attachment_input_from_proto).collect(),
+            parent_id:   Some(req.parent_id).filter(|s| !s.is_empty()),
+            root_id:     Some(req.root_id).filter(|s| !s.is_empty()),
+        };
+
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| Response::new(proto::CreatePostResponse {
+                post_id:    post_id_str,
+                profile_id,
+            }))
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn publish_post(
+        &self,
+        request: Request<proto::PublishPostRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let req = request.into_inner();
+        let cmd = PublishPostCommand {
+            post_id:    req.post_id,
+            profile_id: req.profile_id,
+        };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| Response::new(proto::CommandResponse { success: true, message: String::new() }))
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn update_post(
+        &self,
+        request: Request<proto::UpdatePostRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let req = request.into_inner();
+        let cmd = UpdatePostCommand {
+            post_id:     req.post_id,
+            profile_id:  req.profile_id,
+            caption:     req.caption,
+            attachments: req.attachments.into_iter().map(attachment_input_from_proto).collect(),
+        };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| Response::new(proto::CommandResponse { success: true, message: String::new() }))
+            .map_err(cqrs_to_status)
+    }
+
+    pub async fn delete_post(
+        &self,
+        request: Request<proto::DeletePostRequest>,
+    ) -> Result<Response<proto::CommandResponse>, Status> {
+        let req = request.into_inner();
+        let cmd = DeletePostCommand {
+            post_id:    req.post_id,
+            profile_id: req.profile_id,
+        };
+        self.command_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), cmd))
+            .await
+            .map(|_| Response::new(proto::CommandResponse { success: true, message: String::new() }))
+            .map_err(cqrs_to_status)
+    }
+}
+
+// ── Query RPC helpers ─────────────────────────────────────────────────────────
+
+impl<CB, QB> PostServiceHandler<CB, QB>
+where
+    CB: CommandBus + Send + Sync + 'static,
+    QB: QueryBus + Send + Sync + 'static,
+{
+    pub async fn get_post(
+        &self,
+        request: Request<proto::GetPostRequest>,
+    ) -> Result<Response<proto::PostView>, Status> {
+        let req   = request.into_inner();
+        let query = GetPostQuery { post_id: req.post_id };
+        let post: Post = self
+            .query_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), query))
+            .await
+            .map_err(cqrs_to_status)?;
+
+        Ok(Response::new(post_to_proto(post)))
+    }
+
+    pub async fn list_posts_by_profile(
+        &self,
+        request: Request<proto::ListPostsByProfileRequest>,
+    ) -> Result<Response<proto::ListPostsByProfileResponse>, Status> {
+        let req   = request.into_inner();
+        let query = ListPostsByProfileQuery {
+            profile_id: req.profile_id,
+            limit:      req.limit,
+            page_token: Some(req.page_token).filter(|s| !s.is_empty()),
+        };
+        let (summaries, next): (Vec<PostSummary>, Option<String>) = self
+            .query_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), query))
+            .await
+            .map_err(cqrs_to_status)?;
+
+        Ok(Response::new(proto::ListPostsByProfileResponse {
+            posts:      summaries.into_iter().map(summary_to_proto).collect(),
+            next_token: next.unwrap_or_default(),
+        }))
+    }
+}
+
+// ── Proto conversion helpers ──────────────────────────────────────────────────
+
+fn attachment_input_from_proto(a: proto::MediaAttachmentInput) -> AttachmentInput {
+    AttachmentInput {
+        cdn_url:          a.cdn_url,
+        mime_type:        a.mime_type,
+        width:            a.width,
+        height:           a.height,
+        thumbnail_url:    Some(a.thumbnail_url).filter(|s| !s.is_empty()),
+        duration_seconds: if a.duration_seconds == 0.0 { None } else { Some(a.duration_seconds) },
+    }
+}
+
+fn attachment_to_proto(a: &MediaAttachment) -> proto::MediaAttachmentView {
+    proto::MediaAttachmentView {
+        cdn_url:          a.cdn_url.as_str().to_owned(),
+        mime_type:        a.mime_type.as_str().to_owned(),
+        width:            a.width,
+        height:           a.height,
+        thumbnail_url:    a.thumbnail_url.as_ref().map(|u| u.as_str().to_owned()).unwrap_or_default(),
+        duration_seconds: a.duration_seconds.unwrap_or(0.0),
+    }
+}
+
+fn post_to_proto(post: Post) -> proto::PostView {
+    proto::PostView {
+        post_id:       post.id().as_str(),
+        profile_id:    post.profile_id().as_str(),
+        kind:          post.kind().as_tinyint() as i32 + 1,
+        status:        post.status().as_tinyint() as i32 + 1,
+        caption:       post.caption().as_str().to_owned(),
+        attachments:   post.attachments().iter().map(attachment_to_proto).collect(),
+        parent_id:     post.parent_id().map(PostId::as_str).unwrap_or_default(),
+        root_id:       post.root_id().map(PostId::as_str).unwrap_or_default(),
+        created_at_ms:   post.created_at().timestamp_millis(),
+        updated_at_ms:   post.updated_at().timestamp_millis(),
+        published_at_ms: post.published_at().map(|d| d.timestamp_millis()).unwrap_or_default(),
+        deleted_at_ms:   post.deleted_at().map(|d| d.timestamp_millis()).unwrap_or_default(),
+    }
+}
+
+fn summary_to_proto(s: PostSummary) -> proto::PostSummary {
+    proto::PostSummary {
+        post_id:      s.post_id.as_str(),
+        kind:         s.kind.as_tinyint() as i32 + 1,
+        status:       s.status.as_tinyint() as i32 + 1,
+        created_at_ms: s.created_at.timestamp_millis(),
+    }
+}
+
+// ── Error mapping ─────────────────────────────────────────────────────────────
+
+pub fn cqrs_to_status(err: cqrs::error::CqrsError) -> Status {
+    use cqrs::error::CqrsError;
+    match err {
+        CqrsError::HandlerNotFound { type_name } => {
+            Status::unimplemented(format!("no handler registered for {type_name}"))
+        }
+        CqrsError::DuplicateRegistration { type_name } => {
+            Status::internal(format!("duplicate handler for {type_name}"))
+        }
+        CqrsError::Handler(boxed) => {
+            use error::AppError as _;
+            let msg       = boxed.to_string();
+            let retryable = boxed.is_retryable();
+            match boxed.http_status().as_u16() {
+                403       => Status::permission_denied(msg),
+                404       => Status::not_found(msg),
+                409 if retryable => Status::aborted(msg),
+                409       => Status::already_exists(msg),
+                400 | 422 => Status::failed_precondition(msg),
+                503 | 502 => Status::unavailable(msg),
+                _         => Status::internal(msg),
+            }
+        }
+    }
+}

@@ -2,7 +2,7 @@
 mod tests {
     use std::str::FromStr;
 
-    use post::MediaId;
+    use post_older::MediaId;
     use shared_kernel::core::{Identifier, ValueObject};
     use uuid::Uuid;
 

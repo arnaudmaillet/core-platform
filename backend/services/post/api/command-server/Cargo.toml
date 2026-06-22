@@ -9,7 +9,7 @@ description.workspace = true
 
 [dependencies]
 auth = { workspace = true }
-post = { workspace = true }
+post-older = { workspace = true }
 post-assembly = { workspace = true }
 shared-kernel = { workspace = true }
 infra-fred = { workspace = true }

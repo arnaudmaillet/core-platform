@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package post.v1;
+
+enum PostKind {
+    POST_KIND_UNSPECIFIED = 0;
+    POST_KIND_TEXT_ONLY   = 1;
+    POST_KIND_CAROUSEL    = 2;
+    POST_KIND_MAIN_VIDEO  = 3;
+}
+
+enum PostStatus {
+    POST_STATUS_UNSPECIFIED = 0;
+    POST_STATUS_DRAFT       = 1;
+    POST_STATUS_PUBLISHED   = 2;
+    POST_STATUS_DELETED     = 3;
+}

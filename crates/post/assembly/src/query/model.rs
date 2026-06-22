@@ -1,6 +1,6 @@
 // crates/post/assembly/src/read_model.rs
 
-use post::Post;
+use post_older::Post;
 use post_profile::ProjectedProfile;
 
 pub struct PostDetail {

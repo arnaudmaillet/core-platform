@@ -1,6 +1,6 @@
 // crates/post/core/tests/post/handlers/change_visibility.rs
 
-use post::{ChangeVisibilityCommand, PostCommandCtx, VisibilityLevel};
+use post_older::{ChangeVisibilityCommand, PostCommandCtx, VisibilityLevel};
 use post_utils::{PostRepositoryAsserts, PostTestFixture};
 use shared_kernel::command::CommandTarget;
 use shared_kernel::core::{ManagedEntity, Result};

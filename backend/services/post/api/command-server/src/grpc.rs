@@ -1,5 +1,5 @@
 use crate::utils::GrpcServiceUtils;
-use post::{
+use post_older::{
     ChangeVisibilityCommand, CreatePostCommand, DeletePostCommand, PostKernelCtx,
     ToggleCommentsCommand, UpdateCaptionCommand,
 };

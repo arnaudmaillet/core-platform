@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::DynamicMetadata;
+    use post_older::DynamicMetadata;
     use serde::Serialize;
     use serde_json::json;
 

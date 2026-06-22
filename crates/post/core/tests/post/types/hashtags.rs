@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use post::Hashtags;
+    use post_older::Hashtags;
 
     #[test]
     fn test_hashtags_validation_success() {
