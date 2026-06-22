@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package geo_discovery.v1;
+
+import "geo_discovery/v1/messages.proto";
+
+service GeoDiscoveryService {
+    // Returns all post cards visible within the given viewport at the given
+    // zoom level. Hot path: served from Redis ZSETs + MGET in two pipelined
+    // round-trips. Falls back to ScyllaDB on cache miss.
+    rpc QueryTile (QueryTileRequest) returns (QueryTileResponse);
+
+    // Returns a single card by post ID. Used for deep-link map centering and
+    // share-sheet previews. Tries Redis first, falls back to ScyllaDB.
+    rpc GetCard   (GetCardRequest)   returns (GetCardResponse);
+}

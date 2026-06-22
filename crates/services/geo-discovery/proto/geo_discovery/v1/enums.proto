@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package geo_discovery.v1;
+
+// Map zoom level bands that control which H3 resolution and virality threshold
+// the server applies. The client sends a raw zoom integer (0–15); the server
+// maps it to one of these bands internally and applies the corresponding
+// score floor.
+//
+// Band  → H3 resolution  → Tile area  → Virality floor
+// LOW   → R5             → ~87 km²    → 500  (continental, viral only)
+// MID   → R7             → ~5 km²     → 50   (metro, high-traffic)
+// HIGH  → R7             → ~5 km²     → 5    (neighborhood, broad)
+// MICRO → R9             → ~0.1 km²   → 0    (street level, all posts)
+enum ZoomBand {
+    ZOOM_BAND_UNSPECIFIED = 0;
+    ZOOM_BAND_LOW         = 1; // Zoom 1–4:  continental
+    ZOOM_BAND_MID         = 2; // Zoom 5–8:  metro
+    ZOOM_BAND_HIGH        = 3; // Zoom 9–12: neighborhood
+    ZOOM_BAND_MICRO       = 4; // Zoom 13–15: street level
+}
