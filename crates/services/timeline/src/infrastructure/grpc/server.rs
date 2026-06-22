@@ -153,6 +153,12 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
                 warm_ttl_secs:          config.warm_ttl_secs,
                 social_graph_page_size: config.social_graph_page_size,
                 max_vip_merge_sources:  config.max_vip_merge_sources,
+                warm_semaphore:         Arc::new(tokio::sync::Semaphore::new(
+                    config.warm_max_concurrency,
+                )),
+                warming:                Arc::new(std::sync::Mutex::new(
+                    std::collections::HashSet::new(),
+                )),
             },
         )?
         .register::<crate::application::query::get_audio_feed::GetAudioFeedQuery, _>(

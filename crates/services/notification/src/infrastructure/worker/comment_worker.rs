@@ -112,7 +112,9 @@ where
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // notification has been written or intentionally suppressed (see below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC_CREATED)
@@ -129,40 +131,56 @@ where
         let mut stream = handle.stream::<CommentEventPayload>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e) => e,
+            let msg = match result {
+                Ok(m) => m,
                 Err(err) => {
-                    tracing::warn!(error = %err, "comment event deserialization error — skipping");
+                    tracing::warn!(error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
+                }
+            };
+
+            let payload = match &msg.payload {
+                Ok(p) => p,
+                Err(err) => {
+                    tracing::warn!(offset = msg.offset, error = %err, "comment event deserialization error — committing past poison message");
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
                     continue;
                 }
             };
 
-            // Only created events trigger notifications. Deletions do not.
-            if envelope.topic.as_str() != TOPIC_CREATED {
+            // Only created events trigger notifications. Deletions do not, but their
+            // offset must still advance.
+            if msg.topic.as_str() != TOPIC_CREATED {
+                handle.commit(&msg).map_err(|e| e.to_string())?;
                 continue;
             }
 
-            if let Err(err) = self.process(&envelope.payload).await {
+            if let Err(err) = self.process(payload).await {
                 match err {
+                    // Intentional suppressions: terminal for this event — commit past it.
                     NotificationError::SenderBlocked { .. }
                     | NotificationError::SelfNotification { .. }
                     | NotificationError::PostAuthorCacheMiss { .. }
                     | NotificationError::CommentAuthorCacheMiss { .. } => {
                         tracing::debug!(
                             error      = %err,
-                            comment_id = %envelope.payload.comment_id,
+                            comment_id = %payload.comment_id,
                             "comment notification suppressed"
                         );
                     }
+                    // Unexpected (transient) failure: do NOT commit — redeliver.
                     other => {
                         tracing::error!(
                             error      = %other,
-                            comment_id = %envelope.payload.comment_id,
-                            "comment notification write failed"
+                            comment_id = %payload.comment_id,
+                            "comment notification write failed — offset NOT committed; will redeliver"
                         );
+                        return Err(format!("notification write failed: {other}"));
                     }
                 }
             }
+
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

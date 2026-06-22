@@ -15,7 +15,8 @@ const TOPIC: &str = "engagement.reactions";
 ///
 /// This worker runs as a long-lived background task spawned at service startup.
 /// It enforces at-least-once delivery semantics: Kafka offsets are committed
-/// automatically after each batch interval (`enable_auto_commit = true`).
+/// explicitly only after the ledger write succeeds (`enable_auto_commit = false`).
+/// A failed write leaves the offset uncommitted so the message is redelivered.
 ///
 /// The ledger UPSERT is idempotent (last-write-wins), making redelivery safe.
 /// Removal operations are also safe to retry — deleting a non-existent row is
@@ -54,7 +55,9 @@ impl<L: ReactionLedger> ReactionWriteBehindWorker<L> {
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // ledger write has succeeded (see the commit calls below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -66,21 +69,36 @@ impl<L: ReactionLedger> ReactionWriteBehindWorker<L> {
         let mut stream = handle.stream::<ReactionKafkaEvent>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
+            let msg = match result {
+                Ok(m) => m,
+                Err(err) => {
+                    tracing::warn!(error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
+                }
+            };
+
+            let event = match &msg.payload {
                 Ok(e) => e,
                 Err(err) => {
-                    tracing::warn!(error = %err, "deserialization error — skipping message");
+                    tracing::warn!(offset = msg.offset, error = %err, "deserialization error — committing past poison message");
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
                     continue;
                 }
             };
 
-            if let Err(err) = self.process(&envelope.payload).await {
+            if let Err(err) = self.process(event).await {
+                // Transient ledger failure: do NOT commit. `run` restarts the consumer
+                // and redelivers from the last committed offset. The ledger UPSERT is
+                // idempotent (last-write-wins) and removals are no-ops, so retry is safe.
                 tracing::error!(
-                    error     = %err,
-                    post_id   = envelope.key,
-                    "ledger write failed — message will be redelivered on consumer restart"
+                    error   = %err,
+                    post_id = msg.key,
+                    "ledger write failed — offset NOT committed; will redeliver"
                 );
+                return Err(format!("ledger write failed: {err}"));
             }
+
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

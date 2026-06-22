@@ -3,7 +3,9 @@ use std::time::Duration;
 
 use crate::application::port::ReactionLedger;
 use crate::domain::value_object::PostId;
-use crate::infrastructure::scoring::redis_score_store::{DirtyPostTracker, RedisScoreStore};
+use crate::infrastructure::scoring::redis_score_store::{
+    shares_key, views_key, DirtyPostTracker, RedisScoreStore,
+};
 
 /// Periodic write-behind worker for high-volume view and share counters.
 ///
@@ -70,8 +72,10 @@ impl<L: ReactionLedger> CounterFlushWorker<L> {
     }
 
     async fn flush_post(&self, post_id: &PostId) -> Result<(), crate::error::EngagementError> {
-        let views_key  = format!("engagement:views:{}",  post_id);
-        let shares_key = format!("engagement:shares:{}", post_id);
+        // Reuse the score store's key builders so the flush path can never drift
+        // from the hot path (both must produce the same hash-tagged keys).
+        let views_key  = views_key(post_id);
+        let shares_key = shares_key(post_id);
 
         let (view_delta, share_delta) = tokio::try_join!(
             self.store.getset_zero(&views_key),

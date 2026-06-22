@@ -83,7 +83,9 @@ impl<CB: CommandBus> PostPublishedWorker<CB> {
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // command has been successfully applied (see the commit calls below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -95,19 +97,31 @@ impl<CB: CommandBus> PostPublishedWorker<CB> {
         let mut stream = handle.stream::<PostPublishedEvent>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e)    => e,
+            let msg = match result {
+                Ok(m)    => m,
                 Err(err) => {
-                    tracing::warn!(
-                        topic = TOPIC,
-                        error = %err,
-                        "deserialization error — skipping message"
-                    );
-                    continue;
+                    // Broker/stream-level error carries no offset; tear down and let
+                    // `run` rebuild the consumer from the last committed offset.
+                    tracing::warn!(topic = TOPIC, error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
                 }
             };
 
-            let event = &envelope.payload;
+            let event = match &msg.payload {
+                Ok(e)    => e,
+                Err(err) => {
+                    // Poison record: it will never deserialize. Commit past it so it
+                    // does not block the partition forever.
+                    tracing::warn!(
+                        topic  = TOPIC,
+                        offset = msg.offset,
+                        error  = %err,
+                        "deserialization error — committing past poison message"
+                    );
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
+                    continue;
+                }
+            };
 
             let cmd = IngestPostPublishedCommand {
                 post_id:         event.post_id.clone(),
@@ -122,13 +136,20 @@ impl<CB: CommandBus> PostPublishedWorker<CB> {
                 .dispatch(Envelope::new(Uuid::now_v7(), cmd))
                 .await
             {
+                // Transient failure (ScyllaDB/Redis): do NOT commit. Returning here
+                // makes `run` restart the consumer, redelivering this message from the
+                // last committed offset. The ingest command is idempotent.
                 tracing::error!(
-                    topic     = TOPIC,
-                    post_id   = %event.post_id,
-                    error     = %e,
-                    "IngestPostPublishedCommand failed — message will be redelivered"
+                    topic   = TOPIC,
+                    post_id = %event.post_id,
+                    error   = %e,
+                    "IngestPostPublishedCommand failed — offset NOT committed; will redeliver"
                 );
+                return Err(format!("dispatch failed: {e}"));
             }
+
+            // Success — advance the consumer-group offset past this message.
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

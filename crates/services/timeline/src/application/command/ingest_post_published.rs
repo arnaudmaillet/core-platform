@@ -176,63 +176,56 @@ where
         entry: &crate::domain::aggregate::FeedEntry,
     ) -> Result<(), TimelineError> {
         let author_id = &entry.author_id;
-        let page_token = String::new();
-        let mut total_followers: u64 = 0;
 
-        loop {
-            let followers = self
-                .social_graph
-                .list_all_followers(author_id, self.social_graph_page_size)
+        // `list_all_followers` paginates the social-graph RPC internally and returns
+        // the complete follower set, so one call covers every follower — no outer
+        // pagination loop is needed. This path runs only for Standard/Premium authors
+        // (VIP authors fan out at read time via the registry), so the follower count
+        // is bounded and safe to materialize.
+        let followers = self
+            .social_graph
+            .list_all_followers(author_id, self.social_graph_page_size)
+            .await
+            .map_err(|e| TimelineError::FanOutFailed {
+                author_id: author_id.to_string(),
+                message:   e.to_string(),
+            })?;
+
+        // Redis first (user-visible feed), then ScyllaDB (durable write-behind).
+        for profile_id in &followers {
+            if let Err(e) = self
+                .feed_store
+                .push(profile_id, entry, self.feed_cap)
                 .await
-                .map_err(|e| TimelineError::FanOutFailed {
-                    author_id: author_id.to_string(),
-                    message:   e.to_string(),
-                })?;
-
-            if followers.is_empty() {
-                break;
+            {
+                tracing::warn!(
+                    profile_id = %profile_id,
+                    post_id    = %entry.post_id,
+                    error      = %e,
+                    "Redis feed push failed — continuing fan-out"
+                );
             }
+        }
 
-            total_followers += followers.len() as u64;
-
-            for profile_id in &followers {
-                if let Err(e) = self
-                    .feed_store
-                    .push(profile_id, entry, self.feed_cap)
-                    .await
-                {
-                    tracing::warn!(
-                        profile_id = %profile_id,
-                        post_id    = %entry.post_id,
-                        error      = %e,
-                        "Redis feed push failed — continuing fan-out"
-                    );
-                }
+        for profile_id in &followers {
+            if let Err(e) = self
+                .feed_repository
+                .insert(profile_id, entry)
+                .await
+            {
+                tracing::warn!(
+                    profile_id = %profile_id,
+                    post_id    = %entry.post_id,
+                    error      = %e,
+                    "ScyllaDB feed insert failed — Redis is authoritative"
+                );
             }
-
-            for profile_id in &followers {
-                if let Err(e) = self
-                    .feed_repository
-                    .insert(profile_id, entry)
-                    .await
-                {
-                    tracing::warn!(
-                        profile_id = %profile_id,
-                        post_id    = %entry.post_id,
-                        error      = %e,
-                        "ScyllaDB feed insert failed — Redis is authoritative"
-                    );
-                }
-            }
-
-            let _ = page_token;
-            break;
         }
 
         tracing::debug!(
             author_id       = %author_id,
             post_id         = %entry.post_id,
-            total_followers = total_followers,
+            total_followers = followers.len(),
             "fan-out-on-write completed"
         );
         Ok(())

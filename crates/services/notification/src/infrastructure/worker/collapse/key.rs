@@ -24,11 +24,16 @@ impl CollapseKey {
         Self { target_profile_id, subject_id, subject_kind, kind }
     }
 
-    /// Redis key used by the cross-batch collapse window and the schedule ZSET.
-    /// Format: `notification:cw:{target}:{subject}:{kind}`
+    /// Redis key for the cross-batch collapse window counter.
+    ///
+    /// The `(target, subject, kind)` identity is wrapped in a Redis Cluster hash
+    /// tag `{...}` so this key and [`Self::redis_senders_key`] always hash to the
+    /// same slot. The collapse/drain Lua scripts touch both keys atomically, so
+    /// they must co-locate — otherwise the server rejects them with CROSSSLOT.
+    /// Format: `notification:cw:{<target>:<subject>:<kind>}`
     pub fn redis_window_key(&self) -> String {
         format!(
-            "notification:cw:{}:{}:{}",
+            "notification:cw:{{{}:{}:{}}}",
             self.target_profile_id,
             self.subject_id,
             self.kind.as_str(),

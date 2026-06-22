@@ -71,7 +71,9 @@ impl<CB: CommandBus> FollowCreatedWorker<CB> {
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // command has been successfully applied (see the commit calls below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -83,19 +85,27 @@ impl<CB: CommandBus> FollowCreatedWorker<CB> {
         let mut stream = handle.stream::<ProfileFollowedEvent>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e)    => e,
+            let msg = match result {
+                Ok(m)    => m,
                 Err(err) => {
-                    tracing::warn!(
-                        topic = TOPIC,
-                        error = %err,
-                        "deserialization error — skipping message"
-                    );
-                    continue;
+                    tracing::warn!(topic = TOPIC, error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
                 }
             };
 
-            let event = &envelope.payload;
+            let event = match &msg.payload {
+                Ok(e)    => e,
+                Err(err) => {
+                    tracing::warn!(
+                        topic  = TOPIC,
+                        offset = msg.offset,
+                        error  = %err,
+                        "deserialization error — committing past poison message"
+                    );
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
+                    continue;
+                }
+            };
 
             let cmd = BackfillFollowCommand {
                 follower_id: event.actor_id.clone(),
@@ -112,9 +122,12 @@ impl<CB: CommandBus> FollowCreatedWorker<CB> {
                     follower_id = %event.actor_id,
                     followee_id = %event.target_id,
                     error       = %e,
-                    "BackfillFollowCommand failed"
+                    "BackfillFollowCommand failed — offset NOT committed; will redeliver"
                 );
+                return Err(format!("dispatch failed: {e}"));
             }
+
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

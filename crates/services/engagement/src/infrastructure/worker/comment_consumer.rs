@@ -65,7 +65,9 @@ impl<S: ScoreStore, L: ReactionLedger> CommentEventConsumer<S, L> {
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // counter delta has been applied (see the commit calls below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC_CREATED)
@@ -82,31 +84,44 @@ impl<S: ScoreStore, L: ReactionLedger> CommentEventConsumer<S, L> {
         let mut stream = handle.stream::<CommentEngagementPayload>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e) => e,
+            let msg = match result {
+                Ok(m) => m,
                 Err(err) => {
-                    tracing::warn!(error = %err, "comment event deserialization error — skipping");
+                    tracing::warn!(error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
+                }
+            };
+
+            let payload = match &msg.payload {
+                Ok(p) => p,
+                Err(err) => {
+                    tracing::warn!(offset = msg.offset, error = %err, "comment event deserialization error — committing past poison message");
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
                     continue;
                 }
             };
 
-            let delta: i64 = match envelope.topic.as_str() {
+            let delta: i64 = match msg.topic.as_str() {
                 TOPIC_CREATED =>  1,
                 TOPIC_DELETED => -1,
                 other => {
-                    tracing::warn!(topic = other, "unexpected topic — skipping");
+                    tracing::warn!(topic = other, "unexpected topic — committing and skipping");
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
                     continue;
                 }
             };
 
-            if let Err(err) = self.apply(delta, &envelope.payload).await {
+            if let Err(err) = self.apply(delta, payload).await {
                 tracing::error!(
                     error   = %err,
-                    post_id = %envelope.payload.post_id,
+                    post_id = %payload.post_id,
                     delta,
-                    "comment counter apply failed"
+                    "comment counter apply failed — offset NOT committed; will redeliver"
                 );
+                return Err(format!("counter apply failed: {err}"));
             }
+
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

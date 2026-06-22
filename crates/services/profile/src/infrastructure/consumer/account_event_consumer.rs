@@ -29,7 +29,14 @@ struct AccountEvent {
 /// The function is generic over `CB` because `CommandBus` is not object-safe
 /// (its `dispatch` method is generic over `C: Command`).
 ///
-/// The task runs indefinitely; it is expected to be spawned as a background task.
+/// # Offset management
+///
+/// This is the equivalent of one `run_once` cycle and assumes the supplied
+/// handle was built with `enable_auto_commit = false`. It commits each offset
+/// only after the corresponding command has been applied (or the event was
+/// intentionally ignored). On a transient dispatch failure it stops *without*
+/// committing so the message is redelivered — the supervising task is expected
+/// to respawn the consumer, which resumes from the last committed offset.
 pub async fn run_account_event_consumer<CB: CommandBus>(
     consumer: KafkaConsumerHandle,
     command_bus: CB,
@@ -38,18 +45,30 @@ pub async fn run_account_event_consumer<CB: CommandBus>(
     let mut stream = consumer.stream::<AccountEvent>();
 
     while let Some(result) = stream.next().await {
-        let envelope = match result {
+        let msg = match result {
+            Ok(m) => m,
+            Err(err) => {
+                error!(error = ?err, "broker stream error — stopping consumer for respawn");
+                return;
+            }
+        };
+
+        let event = match &msg.payload {
             Ok(e) => e,
             Err(err) => {
-                error!(error = ?err, "failed to receive Kafka message; skipping");
+                // Poison record — commit past it so it does not block the partition.
+                warn!(offset = msg.offset, error = ?err, "deserialization error — committing past poison message");
+                if let Err(e) = consumer.commit(&msg) {
+                    error!(error = ?e, "commit failed — stopping consumer for respawn");
+                    return;
+                }
                 continue;
             }
         };
 
-        let event = &envelope.payload;
         let correlation_id = Uuid::now_v7();
 
-        match event.kind.as_str() {
+        let dispatch_result = match event.kind.as_str() {
             "AccountSuspended" | "AccountDeleted" => {
                 let masking_reason = if event.kind == "AccountDeleted" {
                     "account_deleted"
@@ -65,39 +84,36 @@ pub async fn run_account_event_consumer<CB: CommandBus>(
                     masking_reason:    masking_reason.to_owned(),
                     suspension_reason: event.reason.clone(),
                 };
-                if let Err(err) = command_bus
-                    .dispatch(Envelope::new(correlation_id, cmd))
-                    .await
-                {
-                    warn!(
-                        account_id = %event.account_id,
-                        event_kind = %event.kind,
-                        error = ?err,
-                        "hide profile command failed"
-                    );
-                }
+                command_bus.dispatch(Envelope::new(correlation_id, cmd)).await.err()
             }
 
             "AccountActivated" | "AccountReactivated" => {
                 let cmd = RestoreProfileCommand {
                     profile_id: event.account_id.clone(),
                 };
-                if let Err(err) = command_bus
-                    .dispatch(Envelope::new(correlation_id, cmd))
-                    .await
-                {
-                    warn!(
-                        account_id = %event.account_id,
-                        event_kind = %event.kind,
-                        error = ?err,
-                        "restore profile command failed"
-                    );
-                }
+                command_bus.dispatch(Envelope::new(correlation_id, cmd)).await.err()
             }
 
             other => {
                 tracing::trace!(event_kind = other, "ignoring unknown account event kind");
+                None
             }
+        };
+
+        if let Some(err) = dispatch_result {
+            // Transient failure: do NOT commit, so the event is redelivered.
+            warn!(
+                account_id = %event.account_id,
+                event_kind = %event.kind,
+                error = ?err,
+                "command dispatch failed — offset NOT committed; stopping consumer for respawn"
+            );
+            return;
+        }
+
+        if let Err(e) = consumer.commit(&msg) {
+            error!(error = ?e, "commit failed — stopping consumer for respawn");
+            return;
         }
     }
 

@@ -155,6 +155,10 @@ pub async fn serve(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
     );
     tokio::spawn(flush_worker.run());
 
+    // Periodic reaper for the broadcast registry — without it the per-profile
+    // sender map grows unbounded (one entry per profile that ever connected).
+    tokio::spawn(Arc::clone(&stream_registry).run_reaper());
+
     // ── gRPC server ───────────────────────────────────────────────────────────
 
     let (health_reporter, health_service) = health_reporter();

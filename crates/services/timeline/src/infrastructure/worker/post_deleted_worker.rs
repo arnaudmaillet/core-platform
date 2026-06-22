@@ -72,7 +72,9 @@ impl<CB: CommandBus> PostDeletedWorker<CB> {
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // command has been successfully applied (see the commit calls below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -84,19 +86,27 @@ impl<CB: CommandBus> PostDeletedWorker<CB> {
         let mut stream = handle.stream::<PostDeletedEvent>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
-                Ok(e)    => e,
+            let msg = match result {
+                Ok(m)    => m,
                 Err(err) => {
-                    tracing::warn!(
-                        topic = TOPIC,
-                        error = %err,
-                        "deserialization error — skipping message"
-                    );
-                    continue;
+                    tracing::warn!(topic = TOPIC, error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
                 }
             };
 
-            let event = &envelope.payload;
+            let event = match &msg.payload {
+                Ok(e)    => e,
+                Err(err) => {
+                    tracing::warn!(
+                        topic  = TOPIC,
+                        offset = msg.offset,
+                        error  = %err,
+                        "deserialization error — committing past poison message"
+                    );
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
+                    continue;
+                }
+            };
 
             let cmd = RemovePostCommand {
                 post_id:         event.post_id.clone(),
@@ -114,9 +124,12 @@ impl<CB: CommandBus> PostDeletedWorker<CB> {
                     topic   = TOPIC,
                     post_id = %event.post_id,
                     error   = %e,
-                    "RemovePostCommand failed"
+                    "RemovePostCommand failed — offset NOT committed; will redeliver"
                 );
+                return Err(format!("dispatch failed: {e}"));
             }
+
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

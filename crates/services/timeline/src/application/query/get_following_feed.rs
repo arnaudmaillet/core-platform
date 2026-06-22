@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use cqrs::{Envelope, Query, QueryHandler};
+use tokio::sync::Semaphore;
 
 use crate::application::port::{
     AuthorPostRepository, FeedRepository, FeedStore, FollowingStore, SocialGraphClient,
@@ -44,6 +46,11 @@ pub struct GetFollowingFeedHandler<FS, VR, FR, AR, TC, FO, SG> {
     pub warm_ttl_secs:      u64,
     pub social_graph_page_size: i32,
     pub max_vip_merge_sources: usize,
+    /// Caps concurrent background warm-ups (cold-start ScyllaDB rebuilds).
+    pub warm_semaphore:     Arc<Semaphore>,
+    /// Singleflight set: profiles with an in-flight warm-up, so a stampede on one
+    /// cold profile spawns at most one rebuild task.
+    pub warming:            Arc<Mutex<HashSet<ProfileId>>>,
 }
 
 impl<FS, VR, FR, AR, TC, FO, SG> QueryHandler<GetFollowingFeedQuery>
@@ -101,32 +108,8 @@ where
                 .serve_cold(&profile_id, &vip_ids, max_score, limit)
                 .await?;
 
-            // Trigger async warm-up of the regular feed (non-blocking).
-            let feed_store       = Arc::clone(&self.feed_store);
-            let feed_repository  = Arc::clone(&self.feed_repository);
-            let tier_cache_clone = Arc::clone(&self.tier_cache);
-            let profile_clone    = profile_id;
-            let warm_ttl         = self.warm_ttl_secs;
-            let cap              = self.feed_cap;
-
-            tokio::spawn(async move {
-                if let Err(e) = warm_feed(
-                    &profile_clone,
-                    &feed_store,
-                    &feed_repository,
-                    &tier_cache_clone,
-                    cap,
-                    warm_ttl,
-                )
-                .await
-                {
-                    tracing::warn!(
-                        profile_id = %profile_clone,
-                        error      = %e,
-                        "background feed warm-up failed"
-                    );
-                }
-            });
+            // Trigger a bounded, de-duplicated async warm-up of the regular feed.
+            self.try_spawn_warm(profile_id);
 
             return Ok(page);
         }
@@ -186,16 +169,23 @@ where
         &self,
         following_ids: &[AuthorId],
     ) -> (Vec<AuthorId>, Vec<AuthorId>) {
+        // One batched (pipelined) tier lookup for the whole following list instead
+        // of a serial Redis round-trip per followee — the latter is a p99 cliff for
+        // users following thousands of accounts. On a lookup error, fall back to all
+        // misses (→ Standard), matching the previous per-author error handling.
+        let tiers = self
+            .tier_cache
+            .get_tiers(following_ids)
+            .await
+            .unwrap_or_else(|_| vec![None; following_ids.len()]);
+
         let mut regular = Vec::new();
         let mut vip     = Vec::new();
 
-        for author_id in following_ids {
-            let tier = self
-                .tier_cache
-                .get_tier(author_id)
-                .await
-                .unwrap_or(None)
-                .unwrap_or(AuthorTier::Standard);
+        for (author_id, tier) in following_ids.iter().zip(tiers) {
+            // Cache miss → conservatively route to regular (avoids blocking; the
+            // tier cache is populated on the author's next post.published).
+            let tier = tier.unwrap_or(AuthorTier::Standard);
 
             if tier.is_vip() {
                 if vip.len() < self.max_vip_merge_sources {
@@ -207,6 +197,53 @@ where
         }
 
         (regular, vip)
+    }
+
+    /// Spawns a background feed warm-up, bounded two ways so a cold-cache stampede
+    /// cannot overwhelm ScyllaDB:
+    ///   1. **Singleflight** — at most one in-flight warm-up per profile.
+    ///   2. **Concurrency cap** — a global semaphore bounds total concurrent
+    ///      warm-ups; when exhausted the warm-up is skipped (cold reads still return
+    ///      correct data, and a later request retries once a permit frees).
+    fn try_spawn_warm(&self, profile_id: ProfileId) {
+        // Singleflight guard: bail if a warm-up for this profile is already running.
+        if !self.warming.lock().unwrap().insert(profile_id) {
+            return;
+        }
+
+        // Concurrency cap. On exhaustion, release the singleflight slot and bail.
+        let permit = match Arc::clone(&self.warm_semaphore).try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                self.warming.lock().unwrap().remove(&profile_id);
+                return;
+            }
+        };
+
+        let feed_store      = Arc::clone(&self.feed_store);
+        let feed_repository = Arc::clone(&self.feed_repository);
+        let tier_cache      = Arc::clone(&self.tier_cache);
+        let warming         = Arc::clone(&self.warming);
+        let warm_ttl        = self.warm_ttl_secs;
+        let cap             = self.feed_cap;
+
+        tokio::spawn(async move {
+            // Held for the duration of the warm-up; released (permit + slot) on exit.
+            let _permit = permit;
+
+            if let Err(e) =
+                warm_feed(&profile_id, &feed_store, &feed_repository, &tier_cache, cap, warm_ttl)
+                    .await
+            {
+                tracing::warn!(
+                    profile_id = %profile_id,
+                    error      = %e,
+                    "background feed warm-up failed"
+                );
+            }
+
+            warming.lock().unwrap().remove(&profile_id);
+        });
     }
 
     /// Hot path: pipeline Redis reads and merge in-process.
@@ -308,10 +345,16 @@ fn build_page(
 
     // Apply cursor exclusion: skip any entry that is at or after the cursor.
     if let Some(c) = cursor {
-        entries.retain(|e| {
-            e.published_at_ms < c.published_at_ms
-                || (e.published_at_ms == c.published_at_ms
-                    && e.post_id.as_uuid() < uuid::Uuid::parse_str(c.post_id_str()).unwrap_or_default())
+        // Parse the cursor's post_id once. An unparseable cursor falls back to a
+        // pure-timestamp exclusion instead of silently substituting the nil UUID
+        // (which would corrupt the tie-break at equal timestamps).
+        let cursor_post_id = uuid::Uuid::parse_str(c.post_id_str()).ok();
+        entries.retain(|e| match cursor_post_id {
+            Some(cid) => {
+                e.published_at_ms < c.published_at_ms
+                    || (e.published_at_ms == c.published_at_ms && e.post_id.as_uuid() < cid)
+            }
+            None => e.published_at_ms < c.published_at_ms,
         });
     }
 

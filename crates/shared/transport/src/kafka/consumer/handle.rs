@@ -2,22 +2,54 @@ use std::collections::HashMap;
 
 use futures_util::StreamExt;
 use rdkafka::{
-    consumer::StreamConsumer,
+    consumer::{Consumer, StreamConsumer},
     message::{Headers, Message},
+    Offset, TopicPartitionList,
 };
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     error::{CodecError, TransportError},
-    kafka::{
-        envelope::{ConsumablePayload, EventEnvelope},
-        error::KafkaTransportError,
-    },
+    kafka::{envelope::ConsumablePayload, error::KafkaTransportError},
     propagation::{carrier::extract_context, kafka::KafkaHeaderExtractor},
 };
 
+/// A single record consumed from Kafka, carrying both the typed payload (or the
+/// decode error) **and** the offset coordinates required to commit it.
+///
+/// Unlike the producer-side [`crate::kafka::envelope::EventEnvelope`], a
+/// `ConsumedMessage` always knows its `topic` / `partition` / `offset`, so the
+/// worker can advance the consumer-group offset *past* it via
+/// [`KafkaConsumerHandle::commit`] **after** processing has succeeded — the
+/// foundation of at-least-once delivery.
+///
+/// # Why `payload` is a `Result`
+///
+/// A malformed (poison) record still yields a `ConsumedMessage` with
+/// `payload = Err(..)`. This is deliberate: it lets the worker log the bad
+/// record and commit past it, instead of being unable to skip it and blocking
+/// the partition forever (head-of-line blocking). A broker/stream-level failure
+/// — which has no offset to commit — is surfaced as the stream item's outer
+/// `Err` instead.
+pub struct ConsumedMessage<T> {
+    /// Source topic.
+    pub topic: String,
+    /// Source partition.
+    pub partition: i32,
+    /// Record offset within the partition.
+    pub offset: i64,
+    /// Record key (empty string when absent or non-UTF-8).
+    pub key: String,
+    /// User headers, excluding the W3C trace-context headers.
+    pub headers: HashMap<String, String>,
+    /// Broker/producer timestamp in milliseconds, when available.
+    pub timestamp_ms: Option<i64>,
+    /// Decoded payload, or the decode error for a poison record.
+    pub payload: Result<T, TransportError>,
+}
+
 /// A handle to a Kafka consumer that automatically extracts distributed trace context
-/// from every incoming message and exposes a typed async stream of [`EventEnvelope<T>`].
+/// from every incoming message and exposes a typed async stream of [`ConsumedMessage<T>`].
 ///
 /// # Trace context propagation
 ///
@@ -35,7 +67,7 @@ impl KafkaConsumerHandle {
         Self { consumer }
     }
 
-    /// Returns an infinite async stream of deserialized [`EventEnvelope<T>`].
+    /// Returns an infinite async stream of [`ConsumedMessage<T>`].
     ///
     /// Each poll extracts trace headers and sets the parent span before deserializing the
     /// payload, so all downstream `tracing` spans created while processing the message
@@ -43,23 +75,43 @@ impl KafkaConsumerHandle {
     ///
     /// # Offset management
     ///
-    /// With `enable_auto_commit = false` (recommended), callers must commit offsets
-    /// explicitly after successful processing. Use [`KafkaConsumerHandle::commit`] or
-    /// [`rdkafka::consumer::Consumer::commit_message`] directly.
+    /// The stream never commits on the caller's behalf. After a message has been
+    /// fully and successfully processed, call [`KafkaConsumerHandle::commit`] to
+    /// advance the consumer-group offset past it. Until then the message remains
+    /// uncommitted and will be redelivered if the consumer restarts — this is what
+    /// makes delivery at-least-once. Configure the consumer with
+    /// `enable_auto_commit = false` so nothing else advances the offset behind your
+    /// back.
+    ///
+    /// A decode failure does **not** terminate the stream: the item is yielded with
+    /// `payload = Err(..)` so the worker can commit past the poison record. Only a
+    /// broker/stream-level error (which carries no offset) is surfaced as the item's
+    /// outer `Err`.
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// let mut stream = handle.stream::<PostCreatedEvent>();
-    /// while let Some(result) = stream.next().await {
-    ///     let envelope = result?;
-    ///     process(envelope.payload).await?;
+    /// while let Some(item) = stream.next().await {
+    ///     let msg = item?; // broker error → propagate and restart the loop
+    ///     match &msg.payload {
+    ///         Ok(event) => {
+    ///             process(event).await?;            // on failure: return WITHOUT committing
+    ///             handle.commit(&msg)?;             // success → advance the offset
+    ///         }
+    ///         Err(err) => {
+    ///             tracing::warn!(%err, "poison record — skipping");
+    ///             handle.commit(&msg)?;             // skip past unparseable records
+    ///         }
+    ///     }
     /// }
     /// ```
     pub fn stream<T: ConsumablePayload>(
         &self,
-    ) -> impl futures::Stream<Item = Result<EventEnvelope<T>, TransportError>> + '_ {
+    ) -> impl futures::Stream<Item = Result<ConsumedMessage<T>, TransportError>> + '_ {
         self.consumer.stream().map(|msg_result| {
+            // A broker/stream-level error (rebalance, transport failure, …) has no
+            // offset to commit. Surface it so the worker can restart its loop.
             let msg = msg_result
                 .map_err(|e| TransportError::Kafka(KafkaTransportError::Consumer(e)))?;
 
@@ -71,14 +123,6 @@ impl KafkaConsumerHandle {
                 let parent_cx = extract_context(&KafkaHeaderExtractor(headers));
                 tracing::Span::current().set_parent(parent_cx);
             }
-
-            // ── Payload deserialization ──────────────────────────────────────────────
-            let payload_bytes = msg
-                .payload()
-                .ok_or(TransportError::Kafka(KafkaTransportError::EmptyPayload))?;
-
-            let payload: T = serde_json::from_slice(payload_bytes)
-                .map_err(|e| TransportError::Codec(CodecError::Json(e)))?;
 
             // ── Reconstruct user headers (excluding trace headers) ───────────────────
             let user_headers: HashMap<String, String> = msg
@@ -102,40 +146,56 @@ impl KafkaConsumerHandle {
                 })
                 .unwrap_or_default();
 
-            let envelope = EventEnvelope {
+            // ── Payload deserialization (deferred error) ─────────────────────────────
+            // A decode failure is captured in `payload` rather than aborting the stream,
+            // so the worker can still see the offset and commit past the poison record.
+            let payload = match msg.payload() {
+                None => Err(TransportError::Kafka(KafkaTransportError::EmptyPayload)),
+                Some(bytes) => serde_json::from_slice::<T>(bytes)
+                    .map_err(|e| TransportError::Codec(CodecError::Json(e))),
+            };
+
+            let consumed = ConsumedMessage {
                 topic: msg.topic().to_string(),
+                partition: msg.partition(),
+                offset: msg.offset(),
                 key: msg
                     .key()
                     .and_then(|k| std::str::from_utf8(k).ok())
                     .unwrap_or("")
                     .to_string(),
-                payload,
                 headers: user_headers,
                 timestamp_ms: msg.timestamp().to_millis(),
+                payload,
             };
 
             tracing::debug!(
-                topic = %envelope.topic,
-                key = %envelope.key,
-                "Kafka message received and deserialized"
+                topic = %consumed.topic,
+                partition = consumed.partition,
+                offset = consumed.offset,
+                key = %consumed.key,
+                "Kafka message received"
             );
 
-            Ok(envelope)
+            Ok(consumed)
         })
     }
 
-    /// Commits the offset for `msg` asynchronously.
+    /// Commits the offset *past* `msg`, marking it (and everything before it on the
+    /// same partition) as processed.
     ///
-    /// Pass the original `BorrowedMessage` from the rdkafka stream. Use this when
-    /// `enable_auto_commit = false` (the default) to advance the consumer group offset
-    /// after successful processing.
-    pub fn commit<'a>(
-        &'a self,
-        msg: &rdkafka::message::BorrowedMessage<'a>,
-    ) -> Result<(), TransportError> {
-        use rdkafka::consumer::Consumer;
+    /// Call this only after the message has been fully and successfully handled — or
+    /// to deliberately skip past a poison record. Committing `offset + 1` follows
+    /// Kafka's "next offset to consume" convention, identical to `commit_message`.
+    /// Uses async commit mode, so the call returns as soon as the request is queued;
+    /// the offset is durably committed by the next group commit.
+    pub fn commit<T>(&self, msg: &ConsumedMessage<T>) -> Result<(), TransportError> {
+        let mut tpl = TopicPartitionList::new();
+        tpl.add_partition_offset(&msg.topic, msg.partition, Offset::Offset(msg.offset + 1))
+            .map_err(|e| TransportError::Kafka(KafkaTransportError::Config(e.to_string())))?;
+
         self.consumer
-            .commit_message(msg, rdkafka::consumer::CommitMode::Async)
+            .commit(&tpl, rdkafka::consumer::CommitMode::Async)
             .map_err(|e| TransportError::Kafka(KafkaTransportError::Consumer(e)))
     }
 }

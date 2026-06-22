@@ -81,7 +81,9 @@ where
     async fn run_once(&self) -> Result<(), String> {
         let mut config = ConsumerConfig::new(self.kafka_config.clone(), &self.group_id);
         config.auto_offset_reset  = AutoOffsetReset::Earliest;
-        config.enable_auto_commit = true;
+        // At-least-once: never auto-commit. The offset is advanced only after the
+        // event has been successfully processed (see the commit calls below).
+        config.enable_auto_commit = false;
 
         let handle = KafkaConsumerBuilder::new(config)
             .subscribe(TOPIC)
@@ -93,22 +95,34 @@ where
         let mut stream = handle.stream::<TierChangedEvent>();
 
         while let Some(result) = stream.next().await {
-            let envelope = match result {
+            let msg = match result {
+                Ok(m)    => m,
+                Err(err) => {
+                    tracing::warn!(topic = TOPIC, error = %err, "broker stream error — restarting consumer");
+                    return Err(err.to_string());
+                }
+            };
+
+            let event = match &msg.payload {
                 Ok(e)    => e,
                 Err(err) => {
-                    tracing::warn!(topic = TOPIC, error = %err, "deserialization error — skipping message");
+                    tracing::warn!(topic = TOPIC, offset = msg.offset, error = %err, "deserialization error — committing past poison message");
+                    handle.commit(&msg).map_err(|e| e.to_string())?;
                     continue;
                 }
             };
 
-            if let Err(err) = self.process(&envelope.payload).await {
+            if let Err(err) = self.process(event).await {
                 tracing::error!(
-                    topic     = TOPIC,
-                    post_id   = envelope.key,
-                    error     = %err,
-                    "tier sync failed — message will be redelivered on consumer restart"
+                    topic   = TOPIC,
+                    post_id = msg.key,
+                    error   = %err,
+                    "tier sync failed — offset NOT committed; will redeliver"
                 );
+                return Err(format!("processing failed: {err}"));
             }
+
+            handle.commit(&msg).map_err(|e| e.to_string())?;
         }
 
         Ok(())

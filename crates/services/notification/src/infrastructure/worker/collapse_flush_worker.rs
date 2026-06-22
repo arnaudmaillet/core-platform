@@ -13,13 +13,17 @@ use crate::domain::value_object::{
     NotificationId, NotificationKind, ProfileId, SubjectId, SubjectKind,
 };
 use crate::error::NotificationError;
+use crate::infrastructure::worker::collapse::{CollapseKey, SCHEDULE_KEY};
 
 // ── Lua scripts ───────────────────────────────────────────────────────────────
 
 /// Atomically reads and deletes a collapse window.
 ///
-/// KEYS[1] = notification:cw:{window_key}
-/// KEYS[2] = notification:cw:{window_key}_:senders
+/// Both keys share a Redis Cluster hash tag (see `CollapseKey::redis_window_key`),
+/// so this multi-key script is slot-safe.
+///
+/// KEYS[1] = notification:cw:{target:subject:kind}
+/// KEYS[2] = notification:cw:{target:subject:kind}_:senders
 /// Returns: [count_string, sender1, sender2, ...]
 ///          where count_string is "0" if the window is empty or already flushed.
 const DRAIN_WINDOW_SCRIPT: &str = r#"
@@ -44,8 +48,7 @@ return result
 
 // ── Worker ────────────────────────────────────────────────────────────────────
 
-const SCHEDULE_KEY: &str = "notification:window_schedule";
-const SCAN_BATCH:   usize = 100;
+const SCAN_BATCH: usize = 100;
 
 /// Periodic worker that settles cross-batch Redis collapse windows into ScyllaDB.
 ///
@@ -159,8 +162,11 @@ where
             }
         };
 
-        let window_key  = format!("notification:cw:{}:{}:{}", target_uuid, subject_uuid, parts[2]);
-        let senders_key = format!("{}_:senders", window_key);
+        // Rebuild the keys through CollapseKey so they always match what the
+        // accumulator wrote — including the cluster hash tag.
+        let collapse_key = CollapseKey::new(target_uuid, subject_uuid, SubjectKind::Post, kind);
+        let window_key   = collapse_key.redis_window_key();
+        let senders_key  = collapse_key.redis_senders_key();
 
         let result: Vec<String> = self.redis.inner
             .eval(

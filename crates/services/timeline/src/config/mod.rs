@@ -43,6 +43,12 @@ pub struct TimelineConfig {
     /// Prevents excessive Redis pipeline size for power users following many VIPs.
     pub max_vip_merge_sources: usize,
 
+    /// Maximum number of concurrent background feed warm-ups (cold-start rebuilds
+    /// from ScyllaDB). Caps the load a cold-cache stampede can place on ScyllaDB:
+    /// requests beyond this bound return cold data and skip warming, which a later
+    /// request retries once a permit frees.
+    pub warm_max_concurrency: usize,
+
     /// Page size used when paginating the social-graph gRPC ListFollowers /
     /// ListFollowing RPCs during fan-out and cold-start rebuilds.
     pub social_graph_page_size: i32,
@@ -76,6 +82,7 @@ impl TimelineConfig {
             vip_registry_ttl_secs:      env_u64("TIMELINE_VIP_REGISTRY_TTL_SECS",    604_800),
             max_page_size:              env_i32("TIMELINE_MAX_PAGE_SIZE",              50),
             max_vip_merge_sources:      env_usize("TIMELINE_MAX_VIP_MERGE_SOURCES",   50),
+            warm_max_concurrency:       env_usize("TIMELINE_WARM_MAX_CONCURRENCY",   64),
             social_graph_page_size:     env_i32("TIMELINE_SOCIAL_GRAPH_PAGE_SIZE",    500),
             social_graph_endpoint:      env_str(
                 "TIMELINE_SOCIAL_GRAPH_ENDPOINT",

@@ -12,6 +12,11 @@ use crate::error::GeoDiscoveryError;
 // ── Key builder ───────────────────────────────────────────────────────────────
 
 /// `sg:geo:card:{post_id}`
+///
+/// Cards are deliberately NOT hash-tagged: each post's card should distribute
+/// across the cluster for even sharding. Bulk reads therefore fan out as
+/// independent single-key GETs (see [`RedisCardStore::mget`]) rather than a
+/// cross-slot `MGET`, which Redis Cluster rejects with CROSSSLOT.
 fn card_key(post_id: &Uuid) -> String {
     format!("sg:geo:card:{}", post_id)
 }
@@ -64,39 +69,41 @@ impl CardStore for RedisCardStore {
             return Ok(vec![]);
         }
 
-        let keys: Vec<String> = post_ids.iter().map(card_key).collect();
+        // Card keys span cluster slots, so a single MGET would fail with CROSSSLOT.
+        // Issue one GET per key concurrently instead — the client routes each to the
+        // node owning its slot, and the pool pipelines them. Order is preserved by
+        // `try_join_all`.
+        let gets = post_ids.iter().map(|id| {
+            let key = card_key(id);
+            async move {
+                let value: FredValue = self.client.inner
+                    .get(&key)
+                    .await
+                    .map_err(fred_err)?;
 
-        // MGET returns one Value per key in the same order.
-        let values: Vec<FredValue> = self.client.inner
-            .mget(keys)
-            .await
-            .map_err(fred_err)?;
-
-        let mut result = Vec::with_capacity(post_ids.len());
-
-        for (id, value) in post_ids.iter().zip(values) {
-            match value {
-                FredValue::Bytes(bytes) => {
-                    let card = rmp_serde::from_slice::<MapPostCard>(&bytes)
-                        .map_err(|e| GeoDiscoveryError::CardDeserializationFailed {
-                            post_id: id.to_string(),
-                            message: e.to_string(),
-                        })?;
-                    result.push(Some(card));
-                }
-                FredValue::Null => result.push(None),
-                other => {
-                    tracing::warn!(
-                        post_id = %id,
-                        kind    = ?other,
-                        "unexpected Redis value type for card key — treating as cache miss"
-                    );
-                    result.push(None);
+                match value {
+                    FredValue::Bytes(bytes) => {
+                        let card = rmp_serde::from_slice::<MapPostCard>(&bytes)
+                            .map_err(|e| GeoDiscoveryError::CardDeserializationFailed {
+                                post_id: id.to_string(),
+                                message: e.to_string(),
+                            })?;
+                        Ok(Some(card))
+                    }
+                    FredValue::Null => Ok(None),
+                    other => {
+                        tracing::warn!(
+                            post_id = %id,
+                            kind    = ?other,
+                            "unexpected Redis value type for card key — treating as cache miss"
+                        );
+                        Ok(None)
+                    }
                 }
             }
-        }
+        });
 
-        Ok(result)
+        futures::future::try_join_all(gets).await
     }
 
     async fn del(
