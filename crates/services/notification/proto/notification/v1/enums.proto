@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package notification.v1;
+
+// Semantic type of the action that generated the notification.
+// Drives the icon, copy template selection, and deep-link routing on the client.
+enum NotificationKind {
+    NOTIFICATION_KIND_UNSPECIFIED = 0;
+    // A profile reacted to a post authored by the recipient.
+    NOTIFICATION_KIND_REACTION    = 1;
+    // A profile commented on a post authored by the recipient.
+    NOTIFICATION_KIND_COMMENT     = 2;
+    // A profile replied to a comment authored by the recipient.
+    NOTIFICATION_KIND_REPLY       = 3;
+    // A profile mentioned the recipient in a post or comment caption.
+    NOTIFICATION_KIND_MENTION     = 4;
+}
+
+// Discriminates the entity that was interacted with.
+// Used by the client to resolve the correct deep-link URL.
+enum SubjectKind {
+    SUBJECT_KIND_UNSPECIFIED = 0;
+    // The subject is a post (post_id stored in subject_id).
+    SUBJECT_KIND_POST        = 1;
+    // The subject is a comment (comment_id stored in subject_id).
+    SUBJECT_KIND_COMMENT     = 2;
+}
