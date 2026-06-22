@@ -168,7 +168,7 @@ return #cold
 | Failure Scenario | Behaviour | Recovery |
 |---|---|---|
 | **Redis unavailable** | ScyllaDB write succeeds; Redis write logs a warning and is skipped. Query path degrades to full ScyllaDB reads (higher latency, not an outage). | Automatic on reconnect. |
-| **ScyllaDB unavailable** | Kafka consumer fails with error; restarts with 5 s exponential backoff. Message is redelivered (at-least-once). | Automatic; all writes are idempotent. |
+| **ScyllaDB unavailable** | `run_consumer` retries the message in place (exponential backoff + jitter, up to 5 attempts); on exhaustion it dead-letters to `{topic}.dlq` and commits past it so the partition is never stalled. At-least-once; all writes are idempotent. | Automatic; drain the DLQ once Scylla recovers. |
 | **Kafka consumer lag** | gRPC query path is unaffected (reads only Redis/ScyllaDB). Map data is temporarily stale — acceptable within the 48 h retention window. | Scale consumer replicas. |
 | **Score event storm** | `ZADD_XX_SCRIPT` skips absent members; no ZSET inflation. ScyllaDB UPDATE is last-write-wins. | Inherently self-limiting. |
 | **Redis memory pressure** | `TilePrunerWorker` evicts cold tiles every 60 s. Top-K cap on every ZADD prevents per-tile bloat. | Lower `GEO_TILE_COLD_THRESHOLD_SECS`; check alert `hot_tile_count > 50 000`. |

@@ -59,8 +59,8 @@ The notification service closes the user feedback loop for the location-first su
 |---|---|
 | **Celebrity fan-out (10k reactions/s)** | Layer 1 in-batch HashMap collapse (free, always on). Layer 2 Redis cross-batch 30-second window for subjects with heat > 100. Layer 3 hourly cap of 3 notifications per subject. |
 | **Redis unavailable** | Workers log a warning and proceed without the block/heat checks. ScyllaDB writes continue. The unread counter accumulates inconsistency until Redis recovers (ScyllaDB counter is the durability anchor). |
-| **ScyllaDB unavailable** | Worker goroutines log errors and continue consuming (Kafka offsets NOT committed until writes succeed in a future refactor — see Runbook). Stream pushes are best-effort. |
-| **Kafka consumer lag** | Auto-offset-commit with earliest reset. Workers restart with 5s back-off on error. Horizontal scaling: add consumer replicas up to the partition count of each topic. |
+| **ScyllaDB unavailable** | Manual-commit at-least-once: the offset is NOT committed until the write succeeds, so the message is retried (bounded backoff via `run_consumer`) and then dead-lettered. Stream pushes are best-effort. |
+| **Kafka consumer lag** | Manual offset commit after successful processing (`enable_auto_commit = false`), earliest reset. Transient failures retry with exponential backoff + jitter then dead-letter to `{topic}.dlq` — see the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard). Horizontal scaling: add consumer replicas up to the partition count of each topic. |
 | **gRPC stream slow client** | `tokio::sync::broadcast` drops old messages (capacity = `NOTIFICATION_STREAM_BUFFER_SIZE`). Client receives `RecvError::Lagged` → service terminates stream with `Status::DataLoss`. Client reconnects and re-polls `ListNotifications`. |
 | **CollapseFlushWorker crash** | Redis TTL (window TTL + 10s grace) naturally expires the key. At worst one collapse window of notifications is lost. The schedule ZSET member is NOT removed on crash, so the next worker startup will attempt a re-flush (DRAIN returns 0, no-op). |
 
@@ -173,6 +173,7 @@ cqlsh -f migrations/003_notification_unread_counters.cql
 | `NOTIFICATION_COLLAPSE_FLUSH_INTERVAL_SECS` | No | `30` | How often `CollapseFlushWorker` polls for settled windows. |
 | `NOTIFICATION_MAX_PER_SUBJECT_PER_HOUR` | No | `3` | Maximum notifications delivered per `(target, subject, kind)` tuple per hour. |
 | `NOTIFICATION_UNREAD_CAP` | No | `99` | Maximum unread badge value stored in Redis (displays as "99+"). |
+| `NOTIFICATION_DEDUPE_TTL_SECS` | No | `86400` | TTL of the idempotency claim keys (`notification:dedupe:{profile}:…`) that prevent a redelivered event from double-incrementing the unread counter. Must exceed the worst-case redelivery window (24 h default). |
 | `NOTIFICATION_POST_AUTHOR_CACHE_TTL_SECS` | No | `604800` | TTL for `notification:pa:{post_id}` Redis entries (7 days). |
 | `NOTIFICATION_COMMENT_AUTHOR_CACHE_TTL_SECS` | No | `259200` | TTL for `notification:ca:{comment_id}` Redis entries (3 days). |
 | `NOTIFICATION_BLOCK_CACHE_TTL_SECS` | No | `300` | TTL for point-cache block-check entries (5 minutes). |

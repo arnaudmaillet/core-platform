@@ -89,7 +89,7 @@ engagement.post_interaction_counters — Approximate counter table (views/shares
 |---|---|
 | Redis unavailable | gRPC commands return `503 Unavailable`. Backpressure propagates to callers. |
 | ScyllaDB unavailable | Write-behind workers back off and retry. Redis state remains consistent. |
-| Worker process crash | Kafka consumer group re-assigns partitions; messages re-delivered (at-least-once). Ledger UPSERT is idempotent. |
+| Worker process crash | Kafka consumer group re-assigns partitions; messages re-delivered (at-least-once via `run_consumer`). Ledger UPSERT is idempotent; transient failures retry with backoff then dead-letter to `{topic}.dlq`. See the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard). |
 | Redis restart / flush | Counter data lost for the current flush window. Reaction state lost until cold-start recovery runs against ScyllaDB ledger. |
 | Rapid reaction toggle | Redis Lua serializes all swap operations for the same `(post, profile)` — no race condition possible. |
 | Counter table double-count | ScyllaDB counters are approximate analytics only; Redis is authoritative. |
