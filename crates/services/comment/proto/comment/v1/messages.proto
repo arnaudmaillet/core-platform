@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package comment.v1;
+
+import "comment/v1/enums.proto";
+
+// ── Commands ──────────────────────────────────────────────────────────────────
+
+// At least one of body or (gif_id + gif_url) must be non-empty.
+// parent_id is empty for top-level comments; non-empty for replies.
+// Depth is limited to 1 — replying to a reply is rejected at the domain layer.
+message CreateCommentRequest {
+    string comment_id = 1;
+    string post_id    = 2;
+    string author_id  = 3;
+    string parent_id  = 4;
+    string body       = 5;
+    string gif_id     = 6;
+    string gif_url    = 7;
+    uint32 gif_width  = 8;
+    uint32 gif_height = 9;
+}
+
+message DeleteCommentRequest {
+    string comment_id = 1;
+    string author_id  = 2;
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
+
+message GetCommentRequest {
+    string comment_id = 1;
+}
+
+// Lists top-level (non-reply) comments for a post, newest-first.
+message ListTopLevelRequest {
+    string post_id    = 1;
+    int32  limit      = 2;
+    string page_token = 3;
+}
+
+// Lists direct replies to a single top-level comment, newest-first.
+message ListRepliesRequest {
+    string post_id    = 1;
+    string comment_id = 2;
+    int32  limit      = 3;
+    string page_token = 4;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message CommandResponse {
+    bool   success = 1;
+    string message = 2;
+}
+
+message CreateCommentResponse {
+    string comment_id = 1;
+    string post_id    = 2;
+}
+
+message GifMetadata {
+    string gif_id     = 1;
+    string gif_url    = 2;
+    uint32 gif_width  = 3;
+    uint32 gif_height = 4;
+}
+
+// Full comment projection returned by GetComment.
+// body and gif are absent on tombstoned (deleted-with-replies) comments.
+message CommentView {
+    string        comment_id    = 1;
+    string        post_id       = 2;
+    string        author_id     = 3;
+    string        parent_id     = 4;
+    CommentStatus status        = 5;
+    string        body          = 6;
+    GifMetadata   gif           = 7;
+    int64         created_at_ms = 8;
+    int64         updated_at_ms = 9;
+}
+
+message ListCommentsResponse {
+    repeated CommentView comments   = 1;
+    string               next_token = 2;
+}

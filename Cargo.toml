@@ -35,8 +35,6 @@ members = [
     # "crates/post-old",
     # "crates/post-test-utils",
     "crates/shared-kernel-test-utils",
-    "crates/geo-discovery",
-    "crates/geo-discovery-test-utils",
     "crates/post/core",
     "crates/post/profile",
     "crates/post/proto-bridge",
@@ -54,8 +52,7 @@ members = [
     "crates/shared/auth-context",
     "crates/shared/validate-core",
     "crates/shared/validation",
-    "crates/services/account", "crates/services/profile", "crates/services/social-graph", "crates/services/post", "crates/services/engagement",
-    # "crates/comment",
+    "crates/services/account", "crates/services/profile", "crates/services/social-graph", "crates/services/post", "crates/services/engagement", "crates/services/comment",
 ]
 resolver = "2"
 
@@ -84,8 +81,6 @@ post-profile = { path = "crates/post/profile" }
 post-proto-bridge = { path = "crates/post/proto-bridge" }
 # post = { path = "crates/post-old" }
 # post-test-utils = { path = "crates/post-test-utils" }
-geo-discovery = { path = "crates/geo-discovery" }
-geo-discovery-test-utils = { path = "crates/geo-discovery-test-utils" }
 auth = { path = "crates/auth" }
 auth-test-utils = { path = "crates/auth-test-utils" }
 infra-sqlx = { path = "crates/infra-sqlx" }
