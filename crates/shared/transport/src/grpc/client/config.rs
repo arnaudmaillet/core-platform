@@ -11,6 +11,11 @@ pub struct GrpcClientConfig {
     /// Remote endpoint URI, e.g. `https://post-command-server:50051`.
     pub endpoint: String,
 
+    /// Logical dependency name used to resolve a resilience profile from the registry
+    /// (the binding key in `[resilience.bindings]`, e.g. `"post-command"`). Defaults to
+    /// the endpoint string; override with [`with_dependency`](GrpcClientConfig::with_dependency).
+    pub dependency: String,
+
     /// Optional TLS settings. When `None` the connection is plaintext (suitable for
     /// in-cluster service-mesh scenarios where mTLS is handled at the sidecar level).
     pub tls: Option<GrpcTlsConfig>,
@@ -24,12 +29,20 @@ pub struct GrpcClientConfig {
 
 impl GrpcClientConfig {
     pub fn new(endpoint: impl Into<String>) -> Self {
+        let endpoint = endpoint.into();
         Self {
-            endpoint: endpoint.into(),
+            dependency: endpoint.clone(),
+            endpoint,
             tls: None,
             connect_timeout: Duration::from_secs(5),
             resilience: Some(GrpcResilienceConfig::default()),
         }
+    }
+
+    /// Sets the logical dependency name used to resolve a resilience profile binding.
+    pub fn with_dependency(mut self, dependency: impl Into<String>) -> Self {
+        self.dependency = dependency.into();
+        self
     }
 
     pub fn with_tls(mut self, tls: GrpcTlsConfig) -> Self {

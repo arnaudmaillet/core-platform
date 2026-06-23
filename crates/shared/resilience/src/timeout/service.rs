@@ -17,6 +17,10 @@ use crate::error::ResilienceError;
 /// runtime: a lock-free `store()` replaces the config, and the *next* `call()` picks it
 /// up. The handle is shared (via [`Arc`]) across every service clone this was layered
 /// onto, so one swap reconfigures the whole stack for that downstream dependency.
+///
+/// `Clone` is required by stacks driving generated clients (e.g. tonic clones the service
+/// per RPC); clones share the same config handle via [`Arc`].
+#[derive(Clone)]
 pub struct TimeoutService<S> {
     inner: S,
     config: Arc<ArcSwap<TimeoutConfig>>,

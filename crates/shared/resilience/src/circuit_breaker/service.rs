@@ -14,6 +14,9 @@ use crate::error::ResilienceError;
 ///
 /// The [`StateMachine`] is shared via [`Arc`] — all clones of this service operate
 /// on the same circuit state, which is the intended behaviour for a per-dependency breaker.
+/// (Generated clients such as tonic clone the service per RPC, which is exactly why the
+/// state lives behind an `Arc`.)
+#[derive(Clone)]
 pub struct CircuitBreakerService<S> {
     inner: S,
     state_machine: Arc<StateMachine>,
