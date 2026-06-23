@@ -10,7 +10,7 @@ description           = "Tower-inspired ValidationLayer middleware, field-level 
 [dependencies]
 # Intra-workspace
 validate-core = { workspace = true }
-cqrs          = { path = "../cqrs" }
+cqrs          = { workspace = true }
 error         = { workspace = true }
 
 # Error ergonomics

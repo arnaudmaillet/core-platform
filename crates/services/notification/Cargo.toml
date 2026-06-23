@@ -11,11 +11,11 @@ description = "Notification microservice — semantic event ingestion, ScyllaDB 
 error          = { workspace = true }
 validate-core  = { workspace = true }
 validation     = { workspace = true }
-scylla-storage = { path = "../../shared/storage/scylla", package = "scylla-storage" }
-redis-storage  = { path = "../../shared/storage/redis",  package = "redis-storage" }
-cqrs           = { path = "../../shared/cqrs" }
-telemetry      = { path = "../../shared/telemetry" }
-transport      = { path = "../../shared/transport" }
+scylla-storage = { workspace = true }
+redis-storage  = { workspace = true }
+cqrs           = { workspace = true }
+telemetry      = { workspace = true }
+transport      = { workspace = true }
 
 tokio        = { workspace = true }
 tokio-stream = { workspace = true }
