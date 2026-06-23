@@ -1,20 +1,21 @@
-//! Integration harness: boots the infra, wires a real service graph against it,
-//! and exposes the handler plus assertion back-doors.
+//! Integration harness: boots the shared infra, wires a real service graph
+//! against it through the production composition root, and exposes the handler
+//! plus assertion back-doors.
 //!
-//! The graph is assembled exactly like [`chat::infrastructure::grpc::server`] but
-//! with container-backed configs and per-scenario knobs ([`HarnessOptions`]),
-//! and it holds the *same* `Arc`s the handler holds — so a test reads the live
-//! state the handler mutates (presence sets, the shard registry, the in-process
-//! broadcast registries), never a parallel copy.
+//! The graph is assembled by [`chat::app::App::build`] — the *same* entrypoint
+//! production uses — with container-backed configs and per-scenario knobs
+//! ([`HarnessOptions`]). The harness holds the same `Arc`s the handler holds, so
+//! a test reads the live state the handler mutates (presence sets, the shard
+//! registry, the in-process broadcast registries), never a parallel copy.
+//!
+//! Infra orchestration (the `OnceCell` containers, the RF=1 migration runner, and
+//! the `await_until` anti-flake primitive) lives in the shared [`test_support`]
+//! crate; only the chat-specific graph wiring and assertion helpers live here.
 //!
 //! Tests drive the service through the generated [`ChatService`] gRPC trait
-//! in-process (the crate builds no client; `build_client(false)`), which also
-//! gives deterministic control over a stream's lifetime — essential for the RAII
-//! and backpressure scenarios.
+//! in-process, which gives deterministic control over a stream's lifetime —
+//! essential for the RAII and backpressure scenarios.
 #![allow(dead_code)]
-
-mod infra;
-mod migrate;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,42 +24,17 @@ use chrono::Utc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
-use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig, RedisSubscriberBuilder};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use redis_storage::RedisConfig;
+use scylla_storage::ScyllaConfig;
 use transport::kafka::config::client::KafkaClientConfig;
-use transport::kafka::config::producer::ProducerConfig;
-use transport::kafka::producer::KafkaProducerBuilder;
 
-use chat::application::command::{
-    CreateConversationCommand, CreateConversationHandler, JoinAsMemberCommand, JoinAsMemberHandler,
-    MarkReadCommand, MarkReadHandler, SendMessageCommand, SendMessageHandler, SubscribeCommand,
-    SubscribeHandler, ToggleVisibilityCommand, ToggleVisibilityHandler, UnsubscribeCommand,
-    UnsubscribeHandler,
-};
-use chat::application::port::{
-    ConversationRepository, EventPublisher, HotTailCache, MemberRepository, PresenceStore,
-    ReceiptStore, RoutingRegistry,
-};
-use chat::application::query::{
-    GetHistoryHandler, GetHistoryQuery, ListMembersHandler, ListMembersQuery,
-    ListSubscriptionsHandler, ListSubscriptionsQuery,
-};
-use chat::infrastructure::cache::{
-    RedisHotTailCache, RedisPresenceStore, RedisReceiptStore, RedisRoutingRegistry,
-};
-use chat::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
+use chat::app::{App, AppConfig, Backends};
+use chat::application::port::{HotTailCache, PresenceStore, RoutingRegistry};
 use chat::infrastructure::grpc::handler::ChatServiceHandler;
-use chat::infrastructure::persistence::{
-    ScyllaConversationRepository, ScyllaMemberRepository, ScyllaMessageRepository,
-    ScyllaSubscriptionRepository,
-};
-use chat::infrastructure::routing::{
-    Fanout, MessageFanout, PlaneAttach, PlaneSubscriber, RedisPlaneBroadcaster,
-};
-use chat::infrastructure::streaming::{ConversationBroadcastRegistry, PlaneFanoutSink};
-use chat::infrastructure::worker::VisibilityWorker;
+use chat::infrastructure::streaming::ConversationBroadcastRegistry;
+
+use cqrs::command::InMemoryCommandBus;
+use cqrs::query::InMemoryQueryBus;
 
 // ── Re-exports the scenarios drive the service through ───────────────────────
 
@@ -67,6 +43,7 @@ pub use chat::infrastructure::grpc::handler::chat_handler::proto;
 pub use chat::infrastructure::grpc::handler::chat_handler::proto::chat_service_server::ChatService;
 pub use chat::infrastructure::grpc::handler::chat_handler::StreamingParams;
 pub use chat::infrastructure::routing::PlaneEvent;
+pub use test_support::await_until;
 pub use tonic::{Request, Status};
 
 /// Generous default patience for a cross-component assertion (Redis pub/sub fan-out
@@ -75,8 +52,12 @@ pub const DEADLINE: Duration = Duration::from_secs(10);
 /// Patience for assertions that span a Kafka consumer-group join + consume.
 pub const KAFKA_DEADLINE: Duration = Duration::from_secs(30);
 
+/// ScyllaDB keyspace the migrations provision; passed to the RF=1 runner.
+const KEYSPACE: &str = "chat";
 /// ScyllaDB message-log bucket size (hours). Mirrors the production default.
 const BUCKET_HOURS: u32 = 24;
+/// On-disk migration assets, resolved against *this* crate's manifest.
+const MIGRATIONS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
 
 /// Per-scenario knobs. Defaults mirror production; scenarios shrink buffers/TTLs
 /// to make overflow and liveness assertions complete in seconds.
@@ -90,8 +71,9 @@ pub struct HarnessOptions {
     pub audience_ttl_secs:    u64,
     pub hot_tail_cap:         u16,
     pub max_page_size:        i32,
-    /// Boot Kafka, publish via [`KafkaEventPublisher`], and run the
-    /// [`VisibilityWorker`]. Off by default so scenarios 1–3 never boot Kafka.
+    /// Boot Kafka, publish via the durable publisher, and run the
+    /// [`VisibilityWorker`](chat::infrastructure::worker::VisibilityWorker). Off
+    /// by default so scenarios 1–3 never boot Kafka.
     pub with_kafka:           bool,
 }
 
@@ -126,36 +108,15 @@ pub struct TestHarness {
 
 impl TestHarness {
     /// Boots/reuses the shared containers, applies migrations, and assembles the
-    /// service graph for these options.
+    /// service graph for these options through the production composition root.
     pub async fn start(opts: HarnessOptions) -> Self {
-        // ── Storage clients (fresh per harness; the containers are shared) ──────
-        let scylla_cp = infra::scylla_contact_point().await;
-        let scylla = Arc::new(
-            ScyllaSessionBuilder::new(ScyllaConfig {
-                contact_points: vec![scylla_cp],
-                keyspace:       None,
-                ..ScyllaConfig::default()
-            })
-            .build()
-            .await
-            .expect("integration: ScyllaDB session"),
-        );
+        // ── Shared containers (booted once per binary by `test_support`) ────────
+        let scylla_cp = test_support::containers::scylla_ready(KEYSPACE, MIGRATIONS_DIR).await;
+        let redis_endpoint = test_support::containers::redis_endpoint().await;
 
-        let redis_endpoint = infra::redis_endpoint().await;
-        let redis_config = RedisConfig { hosts: vec![redis_endpoint], ..RedisConfig::default() };
-        let redis_client = RedisClientBuilder::new(redis_config.clone())
-            .build()
-            .await
-            .expect("integration: Redis client");
-        let redis_subscriber = RedisSubscriberBuilder::new(redis_config)
-            .build()
-            .await
-            .expect("integration: Redis subscriber");
-
-        // ── Kafka (only when the scenario asks) ─────────────────────────────────
-        let kafka_config = if opts.with_kafka {
-            let brokers = infra::kafka_brokers().await;
-            infra::ensure_topics(
+        let kafka = if opts.with_kafka {
+            let brokers = test_support::containers::kafka_brokers().await;
+            test_support::containers::ensure_topics(
                 &brokers,
                 &[
                     "chat.conversation.created",
@@ -173,122 +134,46 @@ impl TestHarness {
             None
         };
 
-        // ── Repositories ────────────────────────────────────────────────────────
-        let conversation_repo = Arc::new(ScyllaConversationRepository::new(Arc::clone(&scylla)));
-        let message_repo = Arc::new(ScyllaMessageRepository::new(Arc::clone(&scylla), BUCKET_HOURS));
-        let member_repo = Arc::new(ScyllaMemberRepository::new(Arc::clone(&scylla)));
-        let subscription_repo = Arc::new(ScyllaSubscriptionRepository::new(Arc::clone(&scylla)));
-
-        // ── Cache / routing adapters ────────────────────────────────────────────
-        let hot_tail = Arc::new(RedisHotTailCache::new(redis_client.clone()));
-        let presence = Arc::new(RedisPresenceStore::new(redis_client.clone()));
-        let receipt = Arc::new(RedisReceiptStore::new(redis_client.clone()));
-        let routing = Arc::new(RedisRoutingRegistry::new(redis_client.clone()));
-        let broadcaster = Arc::new(RedisPlaneBroadcaster::new(redis_client.clone()));
-
-        // ── In-process fan-out registries + per-pod subscriber ──────────────────
-        let member_registry = Arc::new(ConversationBroadcastRegistry::new(opts.member_buffer));
-        let audience_registry = Arc::new(ConversationBroadcastRegistry::new(opts.audience_buffer));
-        let sink = Arc::new(PlaneFanoutSink::new(
-            Arc::clone(&member_registry),
-            Arc::clone(&audience_registry),
-        ));
-        let plane_subscriber = Arc::new(PlaneSubscriber::new(redis_subscriber, sink));
-        Arc::clone(&plane_subscriber).spawn();
-
-        // ── Message-fork orchestrator ───────────────────────────────────────────
-        let fanout = Arc::new(MessageFanout::new(
-            Arc::clone(&broadcaster),
-            Arc::clone(&routing),
-            Arc::clone(&hot_tail),
-            opts.hot_tail_cap,
-            opts.audience_ttl_secs,
-        ));
-
-        // ── CQRS buses (publisher chosen per scenario) ──────────────────────────
-        let command_bus = match &kafka_config {
-            Some(cfg) => {
-                let producer = KafkaProducerBuilder::new(ProducerConfig::new(cfg.clone()))
-                    .build()
-                    .expect("integration: Kafka producer");
-                build_command_bus(
-                    Arc::new(KafkaEventPublisher::new(producer)),
-                    &conversation_repo,
-                    &message_repo,
-                    &member_repo,
-                    &subscription_repo,
-                )
-            }
-            None => build_command_bus(
-                Arc::new(LogEventPublisher),
-                &conversation_repo,
-                &message_repo,
-                &member_repo,
-                &subscription_repo,
-            ),
+        // ── Backends + per-scenario config ──────────────────────────────────────
+        let backends = Backends {
+            scylla: ScyllaConfig {
+                contact_points: vec![scylla_cp],
+                keyspace:       None,
+                ..ScyllaConfig::default()
+            },
+            redis: RedisConfig { hosts: vec![redis_endpoint], ..RedisConfig::default() },
+            kafka,
         };
 
-        let query_bus = QueryBusBuilder::new()
-            .register::<GetHistoryQuery, _>(GetHistoryHandler {
-                conversation_repo: Arc::clone(&conversation_repo),
-                member_repo:       Arc::clone(&member_repo),
-                message_repo:      Arc::clone(&message_repo),
-                max_page_size:     opts.max_page_size,
-            })
-            .expect("register GetHistory")
-            .register::<ListMembersQuery, _>(ListMembersHandler {
-                member_repo: Arc::clone(&member_repo),
-            })
-            .expect("register ListMembers")
-            .register::<ListSubscriptionsQuery, _>(ListSubscriptionsHandler {
-                subscription_repo: Arc::clone(&subscription_repo),
-                max_page_size:     opts.max_page_size,
-            })
-            .expect("register ListSubscriptions")
-            .build();
-
-        // ── VisibilityWorker (Kafka path): cluster-wide Audience-Plane teardown ──
-        if let Some(cfg) = &kafka_config {
-            let worker = VisibilityWorker::new(
-                cfg.clone(),
-                Arc::clone(&audience_registry),
-                Arc::clone(&routing) as Arc<dyn RoutingRegistry>,
-                format!("chat-it-visibility-{}", Uuid::now_v7()),
-            );
-            tokio::spawn(worker.run());
-        }
-
-        // ── Registry reapers (production parity; 60 s cadence — tests reap by hand)
-        tokio::spawn(Arc::clone(&member_registry).run_reaper());
-        tokio::spawn(Arc::clone(&audience_registry).run_reaper());
-
-        let params = StreamingParams {
-            presence_ttl_secs:    opts.presence_ttl_secs,
-            typing_ttl_secs:      opts.typing_ttl_secs,
-            audience_shard_count: opts.audience_shard_count,
-            audience_ttl_secs:    opts.audience_ttl_secs,
+        let config = AppConfig {
+            max_page_size:               opts.max_page_size,
+            hot_tail_cache_size:         opts.hot_tail_cap,
+            message_bucket_hours:        BUCKET_HOURS,
+            member_stream_buffer_size:   opts.member_buffer,
+            audience_stream_buffer_size: opts.audience_buffer,
+            audience_shard_count:        opts.audience_shard_count,
+            presence_ttl_secs:           opts.presence_ttl_secs,
+            typing_ttl_secs:             opts.typing_ttl_secs,
+            audience_ttl_secs:           opts.audience_ttl_secs,
+            // UUID-suffixed so parallel scenarios never share a consumer group.
+            visibility_consumer_group:   format!("chat-it-visibility-{}", Uuid::now_v7()),
         };
 
-        let handler = ChatServiceHandler::new(
-            command_bus,
-            query_bus,
-            Arc::clone(&fanout) as Arc<dyn Fanout>,
-            Arc::clone(&plane_subscriber) as Arc<dyn PlaneAttach>,
-            Arc::clone(&member_registry),
-            Arc::clone(&audience_registry),
-            Arc::clone(&presence) as Arc<dyn PresenceStore>,
-            Arc::clone(&receipt) as Arc<dyn ReceiptStore>,
-            Arc::clone(&routing) as Arc<dyn RoutingRegistry>,
-            Arc::clone(&conversation_repo) as Arc<dyn ConversationRepository>,
-            Arc::clone(&member_repo) as Arc<dyn MemberRepository>,
+        let App {
+            handler,
+            presence,
+            routing,
+            hot_tail,
+            member_registry,
+            audience_registry,
             params,
-        );
+        } = App::build(&config, backends).await.expect("integration: build chat app");
 
         Self {
             handler,
-            presence: presence as Arc<dyn PresenceStore>,
-            routing: routing as Arc<dyn RoutingRegistry>,
-            hot_tail: hot_tail as Arc<dyn HotTailCache>,
+            presence,
+            routing,
+            hot_tail,
             member_registry,
             audience_registry,
             params,
@@ -368,54 +253,6 @@ impl TestHarness {
 pub type ResponseStream<T> =
     std::pin::Pin<Box<dyn futures::Stream<Item = Result<T, Status>> + Send + 'static>>;
 
-/// Builds the command bus generically over the event publisher so the same wiring
-/// serves both the log-backed (scenarios 1–3) and Kafka-backed (scenario 4) runs.
-fn build_command_bus<EP: EventPublisher>(
-    publisher:         Arc<EP>,
-    conversation_repo: &Arc<ScyllaConversationRepository>,
-    message_repo:      &Arc<ScyllaMessageRepository>,
-    member_repo:       &Arc<ScyllaMemberRepository>,
-    subscription_repo: &Arc<ScyllaSubscriptionRepository>,
-) -> InMemoryCommandBus {
-    CommandBusBuilder::new()
-        .register::<CreateConversationCommand, _>(CreateConversationHandler {
-            conversation_repo: Arc::clone(conversation_repo),
-            member_repo:       Arc::clone(member_repo),
-            publisher:         Arc::clone(&publisher),
-        })
-        .expect("register CreateConversation")
-        .register::<SendMessageCommand, _>(SendMessageHandler {
-            member_repo:  Arc::clone(member_repo),
-            message_repo: Arc::clone(message_repo),
-            publisher:    Arc::clone(&publisher),
-        })
-        .expect("register SendMessage")
-        .register::<ToggleVisibilityCommand, _>(ToggleVisibilityHandler {
-            conversation_repo: Arc::clone(conversation_repo),
-            member_repo:       Arc::clone(member_repo),
-            publisher:         Arc::clone(&publisher),
-        })
-        .expect("register ToggleVisibility")
-        .register::<JoinAsMemberCommand, _>(JoinAsMemberHandler {
-            conversation_repo: Arc::clone(conversation_repo),
-            member_repo:       Arc::clone(member_repo),
-            publisher:         Arc::clone(&publisher),
-        })
-        .expect("register JoinAsMember")
-        .register::<SubscribeCommand, _>(SubscribeHandler {
-            conversation_repo: Arc::clone(conversation_repo),
-            subscription_repo: Arc::clone(subscription_repo),
-        })
-        .expect("register Subscribe")
-        .register::<UnsubscribeCommand, _>(UnsubscribeHandler {
-            subscription_repo: Arc::clone(subscription_repo),
-        })
-        .expect("register Unsubscribe")
-        .register::<MarkReadCommand, _>(MarkReadHandler { member_repo: Arc::clone(member_repo) })
-        .expect("register MarkRead")
-        .build()
-}
-
 // ── Test utilities ───────────────────────────────────────────────────────────
 
 /// A fresh random profile id.
@@ -431,26 +268,6 @@ pub fn random_message_id() -> String {
 /// Current epoch-ms, as the service stamps liveness scores.
 pub fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
-}
-
-/// Polls `probe` every 50 ms until it returns `true`, or panics at `deadline`.
-/// The single anti-flake primitive: assertions wait on observable state, never on
-/// a fixed sleep.
-pub async fn await_until<F, Fut>(label: &str, deadline: Duration, mut probe: F)
-where
-    F:   FnMut() -> Fut,
-    Fut: std::future::Future<Output = bool>,
-{
-    let start = std::time::Instant::now();
-    loop {
-        if probe().await {
-            return;
-        }
-        if start.elapsed() > deadline {
-            panic!("await_until timed out after {deadline:?}: {label}");
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
 }
 
 /// Receives the next item from a response stream within `deadline`, or `None` on

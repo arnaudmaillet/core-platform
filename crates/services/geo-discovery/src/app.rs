@@ -1,0 +1,144 @@
+//! The geo-discovery service's composition root.
+//!
+//! [`App::build`] is *pure composition*: storage configs and the service config
+//! in, a fully-wired CQRS graph out. It binds no socket and reads no environment,
+//! so the production entrypoint ([`crate::infrastructure::grpc::server::serve`])
+//! and the live integration harness assemble the exact same graph.
+//!
+//! In production, indexing is driven by the Kafka workers (which invoke the
+//! [`IndexPostHandler`] et al. directly). The composition root *also* registers
+//! those handlers on a command bus so the integration harness can drive indexing
+//! deterministically without a broker; the workers — and the broker — are derived
+//! from [`Backends::kafka`].
+
+use std::sync::Arc;
+
+use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
+use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
+use redis_storage::{RedisClientBuilder, RedisConfig};
+use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use transport::kafka::config::client::KafkaClientConfig;
+
+use crate::application::command::{
+    IndexPostCommand, IndexPostHandler, SyncAuthorTierCommand, SyncAuthorTierHandler,
+    UpdateViralityWithTilesCommand, UpdateViralityWithTilesHandler,
+};
+use crate::application::query::query_tile::{QueryTileHandler, QueryTileQuery};
+use crate::config::GeoDiscoveryConfig;
+use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex};
+use crate::infrastructure::persistence::ScyllaTileRepository;
+use crate::infrastructure::worker::{
+    PostIndexerWorker, ScoreUpdaterWorker, TierSyncWorker, TilePrunerWorker,
+};
+
+/// Storage/transport endpoints the graph is wired against.
+///
+/// `kafka` is optional: `Some` spawns the indexer/score/tier/pruner workers;
+/// `None` leaves the index command handlers driveable directly via the command
+/// bus.
+pub struct Backends {
+    pub scylla: ScyllaConfig,
+    pub redis:  RedisConfig,
+    pub kafka:  Option<KafkaClientConfig>,
+}
+
+/// A fully-wired geo-discovery service bound to its backends. The buses exposed
+/// here are the *same* instances the handlers are registered into; the
+/// `QueryTile` query reads the spatial index, card cache, and tile repository, so
+/// the query bus proves the end-to-end index→query round-trip.
+pub struct App {
+    pub command_bus: Arc<InMemoryCommandBus>,
+    pub query_bus:   Arc<InMemoryQueryBus>,
+}
+
+impl App {
+    /// Builds storage clients from `backends`, assembles the spatial index, card
+    /// store, and tile repository, registers the index commands and the tile
+    /// query, and — when Kafka is configured — spawns the background workers.
+    pub async fn build(
+        cfg:      GeoDiscoveryConfig,
+        backends: Backends,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let Backends { scylla, redis, kafka } = backends;
+
+        let scylla_client = Arc::new(ScyllaSessionBuilder::new(scylla).build().await?);
+        let redis_client = RedisClientBuilder::new(redis).build().await?;
+
+        let spatial_index = Arc::new(RedisGeoSpatialIndex::new(redis_client.clone()));
+        let card_store = Arc::new(RedisCardStore::new(redis_client.clone()));
+        let tile_repository = Arc::new(ScyllaTileRepository::new(Arc::clone(&scylla_client)));
+
+        let command_bus = Arc::new(
+            CommandBusBuilder::new()
+                .register::<IndexPostCommand, _>(IndexPostHandler {
+                    spatial_index:        Arc::clone(&spatial_index),
+                    card_store:           Arc::clone(&card_store),
+                    tile_repository:      Arc::clone(&tile_repository),
+                    card_cache_threshold: cfg.card_cache_threshold,
+                })?
+                .register::<SyncAuthorTierCommand, _>(SyncAuthorTierHandler {
+                    card_store:      Arc::clone(&card_store),
+                    tile_repository: Arc::clone(&tile_repository),
+                })?
+                .register::<UpdateViralityWithTilesCommand, _>(UpdateViralityWithTilesHandler {
+                    spatial_index:   Arc::clone(&spatial_index),
+                    tile_repository: Arc::clone(&tile_repository),
+                })?
+                .build(),
+        );
+
+        let query_bus = Arc::new(
+            QueryBusBuilder::new()
+                .register::<QueryTileQuery, _>(QueryTileHandler {
+                    spatial_index:   Arc::clone(&spatial_index),
+                    card_store:      Arc::clone(&card_store),
+                    tile_repository: Arc::clone(&tile_repository),
+                })?
+                .build(),
+        );
+
+        // ── Background workers (Kafka path) ──────────────────────────────────
+        if let Some(kafka_config) = kafka {
+            tokio::spawn(
+                PostIndexerWorker::new(
+                    kafka_config.clone(),
+                    Arc::clone(&spatial_index),
+                    Arc::clone(&card_store),
+                    Arc::clone(&tile_repository),
+                    cfg.post_indexer_group_id.clone(),
+                    cfg.card_cache_threshold,
+                )
+                .run(),
+            );
+            tokio::spawn(
+                ScoreUpdaterWorker::new(
+                    kafka_config.clone(),
+                    Arc::clone(&spatial_index),
+                    Arc::clone(&tile_repository),
+                    cfg.score_updater_group_id.clone(),
+                )
+                .run(),
+            );
+            tokio::spawn(
+                TierSyncWorker::new(
+                    kafka_config,
+                    Arc::clone(&card_store),
+                    Arc::clone(&tile_repository),
+                    cfg.tier_sync_group_id.clone(),
+                )
+                .run(),
+            );
+            tokio::spawn(
+                TilePrunerWorker::new(
+                    redis_client,
+                    cfg.tile_pruner_interval,
+                    cfg.tile_cold_threshold,
+                    500,
+                )
+                .run(),
+            );
+        }
+
+        Ok(Self { command_bus, query_bus })
+    }
+}

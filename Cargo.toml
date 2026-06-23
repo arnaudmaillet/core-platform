@@ -52,6 +52,7 @@ members = [
     "crates/shared/auth-context",
     "crates/shared/validate-core",
     "crates/shared/validation",
+    "crates/shared/test-support",
     "crates/services/account", "crates/services/profile", "crates/services/social-graph", "crates/services/post", "crates/services/engagement", "crates/services/comment", "crates/services/geo-discovery", "crates/services/notification", "crates/services/timeline", "crates/services/chat",
 ]
 resolver = "2"
@@ -95,6 +96,7 @@ validation = { path = "crates/shared/validation" }
 postgres-storage = { path = "crates/shared/storage/postgres" }
 scylla-storage = { path = "crates/shared/storage/scylla" }
 redis-storage = { path = "crates/shared/storage/redis" }
+test-support = { path = "crates/shared/test-support" }
 
 
 # Communs

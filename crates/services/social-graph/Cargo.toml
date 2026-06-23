@@ -58,5 +58,20 @@ fred   = { workspace = true }
 tonic-build       = { workspace = true }
 tonic-prost-build = { workspace = true }
 
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p social-graph` stays a fast, infra-free unit
+# run; the live suite is opt-in via
+# `cargo test -p social-graph --features integration-social-graph`.
+integration-social-graph = []
+
 [dev-dependencies]
 tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-social-graph") ─────────────────
+# Container orchestration, the RF=1 migration runner, and `await_until` come from
+# the shared `test-support` crate; the suite code is wholly behind
+# `#[cfg(feature = "integration-social-graph")]`.
+test-support = { workspace = true }
+async-trait  = { workspace = true }
+uuid         = { workspace = true }

@@ -1,24 +1,15 @@
-//! Multi-infra orchestration: ephemeral ScyllaDB, Redis, and Kafka containers.
+//! Lazy, shared ephemeral backends for a test binary.
 //!
-//! # Design pillars (mirrors the workspace `transport` live-broker harness)
-//!
-//! - **One container set per test binary.** Each backend is booted lazily through
-//!   a [`OnceCell`] and shared by every scenario in the binary. Kafka boots only
-//!   when a scenario that needs it first asks — scenarios 1–3 never pay for it.
-//! - **Zero port conflicts.** Every endpoint is resolved from the OS-assigned
-//!   mapped host port via `get_host_port_ipv4`; nothing is statically bound.
-//! - **Isolation by namespacing, not teardown.** Scenarios mint fresh
-//!   `conversation_id`/`profile_id` UUIDs; ScyllaDB partitions and all Redis keys
-//!   are keyed by `conversation_id`, so concurrent scenarios never collide and the
-//!   suite runs in parallel. Kafka topics/groups are UUID-suffixed.
-//! - **Migrations applied exactly once**, behind a [`OnceCell`], so parallel
-//!   scenarios never race a concurrent `CREATE`.
+//! Every backend is booted through a process-wide [`OnceCell`] and shared by all
+//! scenarios linked into the same test binary. Because each service compiles its
+//! own test binary, "process-wide" is effectively "per service" — exactly the
+//! one-container-set-per-service property the standard requires.
 //!
 //! ## Redis image override
 //!
 //! The `testcontainers-modules` redis module defaults to `redis:5.0`, which
 //! predates sharded pub/sub (`SSUBSCRIBE`/`SPUBLISH`/`SUNSUBSCRIBE`, Redis 7.0).
-//! The chat routing layer depends on those, so we pin a 7.x image explicitly.
+//! Several services depend on those, so we pin a 7.x image explicitly for all.
 
 use std::time::Duration;
 
@@ -29,24 +20,33 @@ use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use testcontainers_modules::kafka::apache::{Kafka, KAFKA_PORT};
+use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::scylladb::ScyllaDB;
 use tokio::sync::OnceCell;
 
-use super::migrate;
+use crate::migrate;
 
 /// Internal Redis port; the 7.x image exposes it and testcontainers maps it.
 const REDIS_PORT: u16 = 6379;
 /// Internal ScyllaDB CQL port.
 const SCYLLA_CQL_PORT: u16 = 9042;
+/// Internal PostgreSQL port.
+const POSTGRES_PORT: u16 = 5432;
 
 static SCYLLA: OnceCell<ContainerAsync<ScyllaDB>> = OnceCell::const_new();
 static REDIS: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
 static KAFKA: OnceCell<ContainerAsync<Kafka>> = OnceCell::const_new();
-static MIGRATED: OnceCell<()> = OnceCell::const_new();
+static POSTGRES: OnceCell<ContainerAsync<Postgres>> = OnceCell::const_new();
 
-/// Boots ScyllaDB (once), applies the six `.cql` migrations (once), and returns
-/// the contact point. `--developer-mode 1 --smp 1` makes a single-node boot fast
-/// and reliable on untuned hosts (CI / macOS).
+static SCYLLA_MIGRATED: OnceCell<()> = OnceCell::const_new();
+static POSTGRES_MIGRATED: OnceCell<()> = OnceCell::const_new();
+
+// ── ScyllaDB ─────────────────────────────────────────────────────────────────
+
+/// Boots ScyllaDB (once) and returns its `host:port` contact point.
+///
+/// `--developer-mode 1 --smp 1` makes a single-node boot fast and reliable on
+/// untuned hosts (CI / macOS).
 pub async fn scylla_contact_point() -> String {
     let container = SCYLLA
         .get_or_init(|| async {
@@ -62,14 +62,32 @@ pub async fn scylla_contact_point() -> String {
         .get_host_port_ipv4(SCYLLA_CQL_PORT)
         .await
         .expect("failed to resolve the mapped ScyllaDB port");
-    let contact_point = format!("127.0.0.1:{port}");
+    format!("127.0.0.1:{port}")
+}
 
-    MIGRATED
-        .get_or_init(|| migrate::apply_all(&contact_point))
+/// Boots ScyllaDB (once), applies the service's `.cql` migrations from
+/// `migrations_dir` (once, with the single-node `SimpleStrategy RF=1` rewrite of
+/// the `keyspace`), and returns the contact point.
+///
+/// `keyspace` is the name the service's `0001_create_keyspace.cql` provisions;
+/// `migrations_dir` is typically `concat!(env!("CARGO_MANIFEST_DIR"), "/migrations")`
+/// so the suite exercises exactly the DDL that ships.
+pub async fn scylla_ready(keyspace: &str, migrations_dir: &str) -> String {
+    let contact_point = scylla_contact_point().await;
+
+    SCYLLA_MIGRATED
+        .get_or_init(|| {
+            let cp = contact_point.clone();
+            let keyspace = keyspace.to_owned();
+            let dir = migrations_dir.to_owned();
+            async move { migrate::scylla_apply(&cp, &keyspace, &dir).await }
+        })
         .await;
 
     contact_point
 }
+
+// ── Redis ────────────────────────────────────────────────────────────────────
 
 /// Boots a Redis 7.x node (once) and returns its `host:port`.
 pub async fn redis_endpoint() -> String {
@@ -89,6 +107,8 @@ pub async fn redis_endpoint() -> String {
         .expect("failed to resolve the mapped Redis port");
     format!("127.0.0.1:{port}")
 }
+
+// ── Kafka ────────────────────────────────────────────────────────────────────
 
 /// Boots the Kafka broker (once) and returns its bootstrap `host:port`.
 ///
@@ -113,6 +133,7 @@ pub async fn kafka_brokers() -> String {
 
 /// Synchronously creates each topic (partitions=1, RF=1) and waits for the broker
 /// to confirm, so a freshly built consumer/producer never races auto-creation.
+/// A topic left over from an earlier scenario is treated as success.
 pub async fn ensure_topics(brokers: &str, topics: &[&str]) {
     let admin: AdminClient<DefaultClientContext> = ClientConfig::new()
         .set("bootstrap.servers", brokers)
@@ -131,11 +152,45 @@ pub async fn ensure_topics(brokers: &str, topics: &[&str]) {
         .expect("the create_topics request failed");
 
     for result in results {
-        // A topic that already exists from a previous scenario is fine.
         if let Err((topic, code)) = result
             && code != rdkafka::types::RDKafkaErrorCode::TopicAlreadyExists
         {
             panic!("failed to create topic '{topic}': {code}");
         }
     }
+}
+
+// ── Postgres ─────────────────────────────────────────────────────────────────
+
+/// Boots PostgreSQL (once), applies the service's `.sql` migrations from
+/// `migrations_dir` (once), and returns a connection URL.
+///
+/// Unlike ScyllaDB there is no replication rewrite — a single Postgres node is a
+/// faithful production analogue. The default image credentials are
+/// `postgres:postgres` / database `postgres`.
+pub async fn postgres_ready(migrations_dir: &str) -> String {
+    let container = POSTGRES
+        .get_or_init(|| async {
+            Postgres::default()
+                .start()
+                .await
+                .expect("failed to start the Postgres test container")
+        })
+        .await;
+
+    let port = container
+        .get_host_port_ipv4(POSTGRES_PORT)
+        .await
+        .expect("failed to resolve the mapped Postgres port");
+    let url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
+
+    POSTGRES_MIGRATED
+        .get_or_init(|| {
+            let url = url.clone();
+            let dir = migrations_dir.to_owned();
+            async move { migrate::postgres_apply(&url, &dir).await }
+        })
+        .await;
+
+    url
 }

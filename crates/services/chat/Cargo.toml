@@ -58,14 +58,13 @@ tokio = { workspace = true }
 # ── Integration suite (feature = "integration-chat") ─────────────────────────
 # These are compiled for any `cargo test -p chat`, but the test code that uses
 # them is wholly behind `#[cfg(feature = "integration-chat")]`, so without the
-# feature the suite is an empty binary.
-testcontainers         = { workspace = true }
-testcontainers-modules = { workspace = true, features = ["scylladb", "redis", "kafka"] }
-rdkafka                = { workspace = true }
-futures                = { workspace = true }
-uuid                   = { workspace = true }
-chrono                 = { workspace = true }
-tonic                  = { workspace = true }
+# feature the suite is an empty binary. Container orchestration, the RF=1
+# migration runner, and `await_until` come from the shared `test-support` crate.
+test-support = { workspace = true }
+futures      = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+tonic        = { workspace = true }
 
 scylla-storage = { path = "../../shared/storage/scylla", package = "scylla-storage" }
 redis-storage  = { path = "../../shared/storage/redis",  package = "redis-storage" }

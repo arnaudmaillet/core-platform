@@ -16,6 +16,7 @@
 //! - [`config`]: environment-driven runtime configuration.
 //! - [`error`]: the service-wide [`error::ChatError`] contract.
 
+pub mod app;
 pub mod application;
 pub mod config;
 pub mod domain;
