@@ -79,8 +79,9 @@ burst = 200
 scope = "per_method"
 
 # ── Write-tight: expensive mutations. Piloting in SHADOW first (enforce=false). ─
-# `per_caller` keys on the edge-mesh-propagated identity once that's wired; until
-# then it degrades to per-method keying.
+# `per_caller` keys on the edge-mesh-injected identity header (transport's
+# `identity_header`, default `x-edge-user`); requests without it fall back to
+# per-method keying.
 [traffic.profiles.write-tight]
 rps     = 50
 burst   = 10

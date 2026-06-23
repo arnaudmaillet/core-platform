@@ -13,7 +13,6 @@ error = { workspace = true }
 resilience = { workspace = true }
 infra-config      = { workspace = true }
 traffic           = { workspace = true }
-auth-context      = { workspace = true }
 
 # gRPC — Tonic + Tower
 tonic = { workspace = true }

@@ -60,7 +60,7 @@ impl GrpcServerBuilder {
     /// accepting connections.
     pub fn build(self) -> Result<TracedGrpcServer, TransportError> {
         let traffic_layer = match self.traffic {
-            Some(registry) => TrafficLayer::new(registry),
+            Some(registry) => TrafficLayer::new(registry, self.config.identity_header.clone()),
             None => TrafficLayer::disabled(),
         };
         // `.layer(InboundTraceLayer)` first makes trace the outer layer; `.layer(traffic)`

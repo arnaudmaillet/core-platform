@@ -22,22 +22,27 @@
 //!
 //! # `per_caller` and identity
 //!
-//! `per_caller` keys on the authenticated principal from [`auth_context::current_principal`],
-//! which an upstream auth layer must have established *in this task*. When no principal is
-//! present (e.g. auth not yet wired, or an unauthenticated call), the layer **degrades to
-//! method-level keying** rather than collapsing all callers into one bucket — it still
-//! limits, just not per-identity. This is logged at debug.
+//! `per_caller` keys on the caller identity carried in an inbound header injected by the
+//! edge/service mesh (configurable, default [`DEFAULT_IDENTITY_HEADER`]). We trust it
+//! because the mesh sets/overwrites it and strips client-supplied values at the trust
+//! boundary — so the layer needs no in-process token verification. When the header is
+//! absent (an unauthenticated method, or — wrongly — a request that bypassed the mesh) the
+//! layer **degrades to method-level keying** rather than collapsing all callers into one
+//! bucket: it still limits, just not per-identity. This is logged at debug.
 
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use auth_context::current_principal;
 use futures::future::BoxFuture;
+use http::header::HeaderName;
+use http::HeaderMap;
 use infra_config::TrafficRegistry;
 use opentelemetry::{global, metrics::Counter, KeyValue};
 use tonic::{body::Body, Status};
 use tower::{Layer, Service};
 use traffic::{Scope, TrafficDecision};
+
+use crate::grpc::server::config::DEFAULT_IDENTITY_HEADER;
 
 /// Instrument name. The Prometheus exporter appends `_total` for monotonic sums, so this
 /// surfaces as `infra_traffic_throttled_total`; OTLP/collector backends see it as-is.
@@ -68,17 +73,23 @@ fn throttle_counter() -> Counter<u64> {
 pub struct TrafficLayer {
     registry: Option<Arc<TrafficRegistry>>,
     counter: Counter<u64>,
+    identity_header: HeaderName,
 }
 
 impl TrafficLayer {
     /// A pass-through layer (no limiting). Used when no `[traffic]` section is configured.
     pub fn disabled() -> Self {
-        Self { registry: None, counter: throttle_counter() }
+        Self {
+            registry: None,
+            counter: throttle_counter(),
+            identity_header: HeaderName::from_static(DEFAULT_IDENTITY_HEADER),
+        }
     }
 
-    /// A layer that enforces the profiles in `registry`.
-    pub fn new(registry: Arc<TrafficRegistry>) -> Self {
-        Self { registry: Some(registry), counter: throttle_counter() }
+    /// A layer that enforces the profiles in `registry`, reading `per_caller` identity from
+    /// `identity_header` (the edge-mesh-injected header).
+    pub fn new(registry: Arc<TrafficRegistry>, identity_header: HeaderName) -> Self {
+        Self { registry: Some(registry), counter: throttle_counter(), identity_header }
     }
 }
 
@@ -86,7 +97,12 @@ impl<S> Layer<S> for TrafficLayer {
     type Service = TrafficService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        TrafficService { inner, registry: self.registry.clone(), counter: self.counter.clone() }
+        TrafficService {
+            inner,
+            registry: self.registry.clone(),
+            counter: self.counter.clone(),
+            identity_header: self.identity_header.clone(),
+        }
     }
 }
 
@@ -96,6 +112,7 @@ pub struct TrafficService<S> {
     inner: S,
     registry: Option<Arc<TrafficRegistry>>,
     counter: Counter<u64>,
+    identity_header: HeaderName,
 }
 
 impl<S> Service<http::Request<Body>> for TrafficService<S>
@@ -120,7 +137,7 @@ where
 
         let method = req.uri().path();
         let (profile_name, bound, profile) = registry.resolve(method);
-        let key = extract_key(profile.scope(), method);
+        let key = extract_key(profile.scope(), method, req.headers(), &self.identity_header);
 
         if let TrafficDecision::Throttle { retry_after } = profile.check(&key) {
             let retry_ms = u64::try_from(retry_after.as_millis()).unwrap_or(u64::MAX);
@@ -166,20 +183,33 @@ fn throttle_attrs(profile: &str, route: &str, enforce: bool) -> [KeyValue; 3] {
 
 /// Builds the rate-limit key for `method` under `scope`.
 ///
-/// `per_caller` degrades to method-level keying when no principal is bound (see module docs).
-fn extract_key(scope: Scope, method: &str) -> String {
+/// `per_caller` reads the edge-mesh identity header; absent/non-ASCII/empty values degrade
+/// to method-level keying (see module docs).
+fn extract_key(
+    scope: Scope,
+    method: &str,
+    headers: &HeaderMap,
+    identity_header: &HeaderName,
+) -> String {
     match scope {
         Scope::PerMethod => method.to_owned(),
-        Scope::PerCaller => match current_principal() {
-            Some(principal) => format!("{method}|{}", principal.user_id().as_str()),
-            None => {
-                tracing::debug!(
-                    rpc.method = %method,
-                    "traffic: per_caller profile but no principal — keying per-method"
-                );
-                method.to_owned()
+        Scope::PerCaller => {
+            match headers
+                .get(identity_header)
+                .and_then(|value| value.to_str().ok())
+                .filter(|id| !id.is_empty())
+            {
+                Some(id) => format!("{method}|{id}"),
+                None => {
+                    tracing::debug!(
+                        rpc.method = %method,
+                        identity_header = %identity_header,
+                        "traffic: per_caller profile but no edge identity header — keying per-method"
+                    );
+                    method.to_owned()
+                }
             }
-        },
+        }
     }
 }
 

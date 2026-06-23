@@ -1,5 +1,14 @@
 use std::net::SocketAddr;
 
+use http::header::HeaderName;
+
+/// Default inbound header carrying the caller identity, injected by the edge/service mesh.
+///
+/// **Trust contract:** this header is only safe to key on if the mesh *sets or overwrites*
+/// it on every request and *strips* any client-supplied value at the trust boundary. Inside
+/// the cluster it is authoritative; never accept it from untrusted ingress.
+pub const DEFAULT_IDENTITY_HEADER: &str = "x-edge-user";
+
 /// Configuration for a Tonic gRPC server.
 #[derive(Debug, Clone)]
 pub struct GrpcServerConfig {
@@ -11,6 +20,10 @@ pub struct GrpcServerConfig {
 
     /// Enables gRPC server reflection (useful for `grpcurl` and Postman during development).
     pub enable_reflection: bool,
+
+    /// Inbound header the edge mesh injects with the caller identity. Read by the traffic
+    /// layer for `per_caller` rate-limit keying. Defaults to [`DEFAULT_IDENTITY_HEADER`].
+    pub identity_header: HeaderName,
 }
 
 impl Default for GrpcServerConfig {
@@ -19,6 +32,7 @@ impl Default for GrpcServerConfig {
             addr: "0.0.0.0:50051".parse().expect("static address is valid"),
             tls: None,
             enable_reflection: false,
+            identity_header: HeaderName::from_static(DEFAULT_IDENTITY_HEADER),
         }
     }
 }
@@ -36,6 +50,12 @@ impl GrpcServerConfig {
 
     pub fn with_reflection(mut self) -> Self {
         self.enable_reflection = true;
+        self
+    }
+
+    /// Overrides the edge-mesh identity header used for `per_caller` keying.
+    pub fn with_identity_header(mut self, header: HeaderName) -> Self {
+        self.identity_header = header;
         self
     }
 }

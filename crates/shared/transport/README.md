@@ -130,7 +130,9 @@ let infra = Arc::new(InfraRegistry::from_config(load_from_path("/etc/infra/infra
 //    section, so traffic quotas / enforce flags flip with no redeploy.
 let _watcher = spawn_watcher("/etc/infra/infrastructure.toml".into(), Arc::clone(&infra));
 
-// 3. Install the layer (only when a [traffic] section is configured).
+// 3. Install the layer (only when a [traffic] section is configured). `per_caller`
+//    keying reads GrpcServerConfig::identity_header (default `x-edge-user`); override
+//    with .with_identity_header(...) to match what your mesh injects.
 let mut builder = GrpcServerBuilder::new(GrpcServerConfig::default());
 if let Some(traffic) = infra.traffic() {
     builder = builder.with_traffic(Arc::clone(&traffic));
@@ -152,6 +154,13 @@ be rejected. When the rate looks right, edit `enforce = true` in the ConfigMap: 
 hot-reloads to enforcement (`status` flips to `enforced`) with no redeploy, and
 reverts just as fast. Route cardinality is bounded — unbound methods collapse to a
 single `route="<unbound>"` label.
+
+**`per_caller` identity (edge-mesh).** `per_caller` profiles key on the identity the
+mesh injects in `identity_header`. **Trust contract:** the mesh must set/overwrite
+that header and strip any client-supplied value at the trust boundary — the layer
+treats it as authoritative and does no in-process token verification. A request that
+arrives without it (unauthenticated method, or one that bypassed the mesh) degrades
+to per-method keying: still limited, just not per-identity (logged at debug).
 
 ### Resilience Guarantees & High-Load Behavior
 
