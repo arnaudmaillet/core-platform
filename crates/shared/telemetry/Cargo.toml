@@ -31,6 +31,12 @@ prometheus = { version = "0.13", features = ["process"], optional = true }
 # HTTP route for GET /metrics
 axum = { workspace = true, optional = true }
 
+# Optional bridge to the externalized config layer for hot-reloadable log filtering.
+# Off by default so log-only consumers never pull `infra-config`.
+infra-config = { workspace = true, optional = true }
+
 [features]
 default = ["prometheus-exporter"]
 prometheus-exporter = ["dep:opentelemetry-prometheus", "dep:prometheus", "dep:axum"]
+# Implements `infra_config::LogFilterControl` for the log reload handle.
+infra-config = ["dep:infra-config"]

@@ -1,6 +1,8 @@
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 
-use crate::{config::TelemetryConfig, error::TelemetryError, guard::TelemetryGuard};
+use crate::{
+    config::TelemetryConfig, error::TelemetryError, guard::TelemetryGuard, log::LogReloadHandle,
+};
 
 /// Initialises the full observability pipeline and returns a [`TelemetryGuard`].
 ///
@@ -31,15 +33,26 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
 
     let metrics_pipeline = crate::metrics::layer::init_metrics_pipeline(&config.metrics)?;
 
+    // Bootstrap filter from RUST_LOG / default. When an `infrastructure.toml` `[telemetry]`
+    // section is wired in, the binary overrides this immediately after init (ConfigMap is the
+    // source of truth); absent that, this remains the live filter.
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&config.log.default_filter));
 
+    // Wrap the (base) filter in a reload layer so its directive can be hot-swapped at runtime.
+    let (filter_layer, reload_handle) = reload::Layer::new(env_filter);
+
     tracing_subscriber::registry()
-        .with(env_filter)
+        .with(filter_layer)
         .with(log_layer)
         .with(trace_layer)
         .try_init()
         .map_err(|e| TelemetryError::SubscriberInit(e.to_string()))?;
 
-    Ok(TelemetryGuard::new(log_guard, tracer_provider, metrics_pipeline))
+    Ok(TelemetryGuard::new(
+        log_guard,
+        tracer_provider,
+        metrics_pipeline,
+        LogReloadHandle::new(reload_handle),
+    ))
 }

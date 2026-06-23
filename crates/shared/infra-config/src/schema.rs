@@ -20,7 +20,8 @@ use resilience::{retry::backoff::spec::BackoffSpec, ResilienceProfileSpec};
 use serde::Deserialize;
 
 use crate::{
-    cache::CacheSection, catalog::validate_bindings, error::ConfigError, traffic::TrafficSection,
+    cache::CacheSection, catalog::validate_bindings, error::ConfigError,
+    telemetry::TelemetrySection, traffic::TrafficSection,
 };
 
 /// Top-level `infrastructure.toml` document.
@@ -39,6 +40,10 @@ pub struct InfrastructureConfig {
     /// Externalized ingress rate-limit profiles. Absent in deployments that don't use them.
     #[serde(default)]
     pub traffic: Option<TrafficSection>,
+
+    /// Externalized log/observability control. Absent → boot logging behaviour is unchanged.
+    #[serde(default)]
+    pub telemetry: Option<TelemetrySection>,
 }
 
 impl InfrastructureConfig {
@@ -51,6 +56,9 @@ impl InfrastructureConfig {
         }
         if let Some(traffic) = &self.traffic {
             traffic.validate()?;
+        }
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.validate()?;
         }
         Ok(())
     }

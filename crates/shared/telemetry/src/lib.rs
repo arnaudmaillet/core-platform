@@ -17,3 +17,4 @@ pub use config::TelemetryConfig;
 pub use error::TelemetryError;
 pub use guard::TelemetryGuard;
 pub use init::init;
+pub use log::LogReloadHandle;
