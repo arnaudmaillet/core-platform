@@ -11,11 +11,11 @@ description = "Engagement microservice — weighted reaction scoring engine with
 error          = { workspace = true }
 validate-core  = { workspace = true }
 validation     = { workspace = true }
-scylla-storage = { path = "../../shared/storage/scylla", package = "scylla-storage" }
-redis-storage  = { path = "../../shared/storage/redis",  package = "redis-storage" }
-cqrs           = { path = "../../shared/cqrs" }
-telemetry      = { path = "../../shared/telemetry" }
-transport      = { path = "../../shared/transport" }
+scylla-storage = { workspace = true }
+redis-storage  = { workspace = true }
+cqrs           = { workspace = true }
+telemetry      = { workspace = true }
+transport      = { workspace = true }
 
 tokio        = { workspace = true }
 futures      = { workspace = true }

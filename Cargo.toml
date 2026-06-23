@@ -36,14 +36,24 @@ repository = "https://github.com/ton-repo/projet"
 description = "core-platform repo"
 
 [workspace.dependencies]
-error = { path = "crates/shared/error" }
-resilience = { path = "crates/shared/resilience" }
-validate-core = { path = "crates/shared/validate-core" }
-validation = { path = "crates/shared/validation" }
-postgres-storage = { path = "crates/shared/storage/postgres" }
-scylla-storage = { path = "crates/shared/storage/scylla" }
-redis-storage = { path = "crates/shared/storage/redis" }
-test-support = { path = "crates/shared/test-support" }
+# ── Internal shared crates ────────────────────────────────────────────────────
+# Single source of truth for every intra-workspace path. Member crates reference
+# these with `{ workspace = true }` so paths live in exactly one place.
+# NB: the `postgres` crate is exposed under the `postgres-storage` key (via
+# `package`) to avoid colliding with the crates.io `postgres` crate and to keep
+# the naming symmetric with `scylla-storage` / `redis-storage`.
+error            = { path = "crates/shared/error" }
+resilience       = { path = "crates/shared/resilience" }
+telemetry        = { path = "crates/shared/telemetry" }
+transport        = { path = "crates/shared/transport" }
+cqrs             = { path = "crates/shared/cqrs" }
+auth-context     = { path = "crates/shared/auth-context" }
+validate-core    = { path = "crates/shared/validate-core" }
+validation       = { path = "crates/shared/validation" }
+postgres-storage = { path = "crates/shared/storage/postgres", package = "postgres" }
+scylla-storage   = { path = "crates/shared/storage/scylla" }
+redis-storage    = { path = "crates/shared/storage/redis" }
+test-support     = { path = "crates/shared/test-support" }
 
 
 # Communs

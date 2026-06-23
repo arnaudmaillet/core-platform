@@ -8,17 +8,17 @@ repository.workspace = true
 description = "Account microservice — complete lifecycle management for physical persons on the platform."
 
 [dependencies]
-# ── Shared platform infrastructure (workspace keys) ───────────────────────────
+# ── Shared platform infrastructure ────────────────────────────────────────────
 error            = { workspace = true }
 validate-core    = { workspace = true }
 validation       = { workspace = true }
-postgres-storage = { path = "../../shared/storage/postgres", package = "postgres" }
+postgres-storage = { workspace = true }
 
-# ── Shared platform crates (path — not yet registered as workspace keys) ──────
-cqrs         = { path = "../../shared/cqrs" }
-auth-context = { path = "../../shared/auth-context" }
-telemetry    = { path = "../../shared/telemetry" }
-transport    = { path = "../../shared/transport" }
+# ── Shared platform crates ────────────────────────────────────────────────────
+cqrs         = { workspace = true }
+auth-context = { workspace = true }
+telemetry    = { workspace = true }
+transport    = { workspace = true }
 
 # ── Async runtime & utilities ─────────────────────────────────────────────────
 tokio        = { workspace = true }
