@@ -46,5 +46,28 @@ tonic-reflection = { workspace = true }
 tonic-build       = { workspace = true }
 tonic-prost-build = { workspace = true }
 
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p chat` stays a fast, infra-free unit run; the
+# live suite is opt-in via `cargo test -p chat --features integration-chat`.
+integration-chat = []
+
 [dev-dependencies]
 tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-chat") ─────────────────────────
+# These are compiled for any `cargo test -p chat`, but the test code that uses
+# them is wholly behind `#[cfg(feature = "integration-chat")]`, so without the
+# feature the suite is an empty binary.
+testcontainers         = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["scylladb", "redis", "kafka"] }
+rdkafka                = { workspace = true }
+futures                = { workspace = true }
+uuid                   = { workspace = true }
+chrono                 = { workspace = true }
+tonic                  = { workspace = true }
+
+scylla-storage = { path = "../../shared/storage/scylla", package = "scylla-storage" }
+redis-storage  = { path = "../../shared/storage/redis",  package = "redis-storage" }
+transport      = { path = "../../shared/transport" }
+cqrs           = { path = "../../shared/cqrs" }
