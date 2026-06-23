@@ -1,0 +1,32 @@
+# Fleet-wide resilience configuration.
+#
+# Catalog (`[resilience.profiles.*]`) encodes class-of-service *intent*; bindings
+# (`[resilience.bindings]`) map each downstream dependency to a profile by name.
+# Change a profile once and every dependency bound to it moves together.
+
+[resilience]
+default_profile = "standard"
+
+# ── Standard: general internal RPC ────────────────────────────────────────────
+[resilience.profiles.standard]
+timeout = { duration_ms = 10_000 }
+circuit_breaker = { failure_threshold = 5, success_threshold = 2, open_duration_ms = 30_000, half_open_max_calls = 1 }
+retry = { max_attempts = 3, backoff = { kind = "exponential", base_ms = 50, max_ms = 10_000, jitter = "full" } }
+
+# ── Critical: tight deadlines, fail fast, don't amplify load ──────────────────
+[resilience.profiles.critical]
+timeout = { duration_ms = 2_000 }
+circuit_breaker = { failure_threshold = 5, success_threshold = 2, open_duration_ms = 30_000, half_open_max_calls = 1 }
+retry = { max_attempts = 1, backoff = { kind = "exponential", base_ms = 20, max_ms = 500, jitter = "full" } }
+
+# ── Aggressive: background / batch work, retry hard ───────────────────────────
+[resilience.profiles.aggressive]
+timeout = { duration_ms = 30_000 }
+circuit_breaker = { failure_threshold = 10, success_threshold = 3, open_duration_ms = 15_000, half_open_max_calls = 2 }
+retry = { max_attempts = 6, backoff = { kind = "exponential", base_ms = 100, max_ms = 20_000, jitter = "full" } }
+
+# ── Bindings: dependency name -> profile ──────────────────────────────────────
+[resilience.bindings]
+"post-command"  = "critical"
+"timeline-read" = "standard"
+"notification"  = "aggressive"

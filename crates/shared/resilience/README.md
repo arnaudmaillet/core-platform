@@ -8,9 +8,11 @@
 - **Retry** — retries transient failures with exponential backoff and optional jitter, decoupled from the error classification logic.
 - **Timeout** — enforces an absolute per-request deadline, preventing slow dependencies from exhausting upstream goroutines/tasks.
 
+In addition to the runtime mechanism, the crate exposes an **externalized-config boundary**: optional `serde`-derived wire types and named **profiles** whose live values sit behind `Arc<ArcSwap<_>>` handles for **lock-free hot-reload**. The crate itself stays pure (no file IO, no `notify`); the [`resilience-config`](../resilience-config) companion crate owns parsing, validation, fleet bindings, and the file watcher.
+
 **Critical role in the ecosystem:** this crate sits between the `transport` crate (gRPC/Kafka clients) and the `cqrs` bus. Any outbound call to a downstream service wraps through these layers — enabling fleet-wide resilience policy without modifying business logic.
 
-> **Implementation status:** Core Tower wiring is complete and compiles clean. `StateMachine`, `RetryService`, and `TimeoutService` call bodies are `todo!()` stubs with full inline specifications. The architecture, interfaces, and configuration contracts are locked.
+> **Implementation status:** Production-ready. The full runtime engine — `StateMachine` transitions, `CircuitBreakerService`, `RetryService`, and `TimeoutService` — is implemented and covered by unit tests, alongside the `serde` boundary, the `ArcSwap` hot-reload plumbing, and the `ResilienceProfile` resolution layer. No `todo!()` stubs remain.
 
 ---
 
@@ -69,9 +71,9 @@
 
 | Primitive | Backpressure Mechanism | Memory Footprint | Thread Safety |
 |---|---|---|---|
-| **Circuit Breaker** | Rejects immediately when Open; no goroutine/task leak | Single `Arc<Mutex<Inner>>` per downstream dependency | All state transitions atomic under `tokio::sync::Mutex` |
+| **Circuit Breaker** | Rejects immediately when Open; no goroutine/task leak | `Arc<Mutex<Inner>>` (runtime state) + `Arc<ArcSwap<CircuitBreakerConfig>>` (hot-swappable config) per dependency | State transitions atomic under `tokio::sync::Mutex`; config swaps are lock-free and never disturb live state |
 | **Retry** | Bounded by `max_attempts`; sleeps via `tokio::time::sleep` (no thread blocking) | No heap allocation between attempts beyond the boxed future | Stateless — `policy` and `config` are `Clone`d per `call` |
-| **Timeout** | Cancels the inner future via `tokio::time::timeout` — no resource leak if inner fut is cancel-safe | `TimeoutConfig` is `Copy` | Stack-local; no shared state |
+| **Timeout** | Cancels the inner future via `tokio::time::timeout` — no resource leak if inner fut is cancel-safe | `Arc<ArcSwap<TimeoutConfig>>` — one snapshot loaded per `call` | Lock-free reads; deadline captured once at the start of `call()` for request-scoped consistency |
 
 **Thundering-herd mitigation:** `JitterKind::Full` (the default) distributes retry delays uniformly over `[0, cap]`. Across a fleet of N services retrying the same dependency, aggregate call rate remains bounded instead of spiking in lockstep after an outage.
 
@@ -156,13 +158,21 @@ pub trait RetryPolicy<E>: Send + Sync + Clone + 'static {
 ```rust
 // Circuit Breaker — src/circuit_breaker/layer.rs
 CircuitBreakerLayer::new(config: CircuitBreakerConfig) -> CircuitBreakerLayer
+CircuitBreakerLayer::from_handle(Arc<ArcSwap<CircuitBreakerConfig>>) -> CircuitBreakerLayer
+CircuitBreakerLayer::handle(&self) -> Arc<ArcSwap<CircuitBreakerConfig>>  // for control-plane store()
 
 // Retry — src/retry/layer.rs
 RetryLayer::new(config: RetryConfig<B>, policy: P) -> RetryLayer<P, B>
 
 // Timeout — src/timeout/layer.rs
 TimeoutLayer::new(config: TimeoutConfig) -> TimeoutLayer
+TimeoutLayer::from_handle(Arc<ArcSwap<TimeoutConfig>>) -> TimeoutLayer
+TimeoutLayer::handle(&self) -> Arc<ArcSwap<TimeoutConfig>>               // for control-plane store()
 ```
+
+`new(config)` allocates a fresh `ArcSwap` seeded with `config` (static use). `from_handle(...)` shares an externally-owned handle — this is how [`ResilienceProfile`](#hot-reload--profiles) binds the same hot-swappable config into multiple layers. `handle()` hands the shared `ArcSwap` back out so a watcher can `store()` new values at runtime.
+
+`CircuitBreakerService` and `TimeoutService` are `Clone` (clones share the same `Arc` state/config handle) — required by generated clients such as tonic that clone the service per RPC.
 
 ---
 
@@ -188,6 +198,62 @@ RetryConfig<B: BackoffStrategy> {
 TimeoutConfig { duration: Duration }
 // Constructors: TimeoutConfig::from_secs(u64) | TimeoutConfig::from_millis(u64)
 ```
+
+With the `serde` feature on, `CircuitBreakerConfig`, `TimeoutConfig`, and `JitterKind` derive `Serialize`/`Deserialize`. `Duration` fields serialize as flat millisecond integers (`open_duration` ⇄ `open_duration_ms`, `duration` ⇄ `duration_ms`) so they read cleanly from TOML.
+
+---
+
+### Wire types — `serde` boundary (feature `serde`)
+
+`RetryConfig<B>` is generic over `BackoffStrategy` for zero-cost dispatch, so it can't be deserialized directly. Non-generic **spec** types bridge the gap: they deserialize from config, then `resolve()` into the concrete, monomorphized runtime types. Serialization never touches the trait boundary.
+
+```rust
+// src/retry/backoff/spec.rs
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum BackoffSpec {
+    Exponential { base_ms: u64, max_ms: u64, jitter: JitterKind },
+}
+impl BackoffSpec { pub fn resolve(self) -> ExponentialBackoff; }
+
+// src/retry/config.rs
+pub struct RetrySpec { pub max_attempts: u32, pub backoff: BackoffSpec }
+impl RetrySpec { pub fn resolve(self) -> RetryConfig<ExponentialBackoff>; }
+```
+
+```toml
+backoff = { kind = "exponential", base_ms = 50, max_ms = 10_000, jitter = "full" }
+```
+
+---
+
+### Hot-Reload & Profiles
+
+A **`ResilienceProfile`** bundles one timeout + circuit breaker + retry policy into a named class-of-service (`"standard"`, `"critical"`, `"aggressive"`, …). Its timeout and circuit-breaker values live behind shared `Arc<ArcSwap<_>>` handles, so a control plane can swap them at runtime — lock-free, with in-flight requests keeping the snapshot they captured at `call()`.
+
+```rust
+// src/profile.rs
+pub struct ResilienceProfileSpec {            // wire form (serde): deserialized from config
+    pub timeout: TimeoutConfig,
+    pub circuit_breaker: CircuitBreakerConfig,
+    pub retry: RetrySpec,
+}
+impl ResilienceProfileSpec { pub fn resolve(self) -> ResilienceProfile; }
+
+pub struct ResilienceProfile {                // runtime form: shared hot-reload handles
+    pub timeout: Arc<ArcSwap<TimeoutConfig>>,
+    pub circuit_breaker: Arc<ArcSwap<CircuitBreakerConfig>>,
+    pub retry: RetryConfig<ExponentialBackoff>,
+}
+impl ResilienceProfile {
+    pub fn timeout_layer(&self) -> TimeoutLayer;                 // bound to the shared handle
+    pub fn circuit_breaker_layer(&self) -> CircuitBreakerLayer;  // bound to the shared handle
+    pub fn apply(&self, spec: ResilienceProfileSpec) -> RetryConfig<ExponentialBackoff>;  // hot-swap
+}
+```
+
+**Scope note:** timeout + circuit-breaker hot-reload (the incident-critical levers) is wired; retry is resolved into the profile but not behind `ArcSwap` (the retry layer is generic over the backoff strategy). `apply()` returns the new retry config for callers that rebuild the retry layer.
+
+Loading profiles from `infrastructure.toml`, validating them, resolving fleet bindings (`"post-command" → "critical"`), and watching the file for changes all live in the [`resilience-config`](../resilience-config) crate.
 
 ---
 
@@ -266,13 +332,13 @@ impl<E: std::fmt::Debug> RetryPolicy<E> for GrpcRetryPolicy {
 
 ## ⚙️ Configuration & Runtime Environment
 
-This crate is a **pure library** — it consumes no environment variables and has no runtime process. All configuration is passed programmatically via the config structs at construction time.
+This crate is a **pure library** — it consumes no environment variables and has no runtime process. Configuration is passed programmatically via the config structs (static use), or sourced externally and applied through `ResilienceProfile` handles when paired with [`resilience-config`](../resilience-config) (hot-reload). No file IO or `notify` dependency lives here.
 
 ### Compile-time / Cargo features
 
 | Feature | Status | Description |
 |---|---|---|
-| _(none declared)_ | — | All primitives are unconditionally compiled. |
+| `serde` | optional, off by default | Adds `Serialize`/`Deserialize` to the config + wire types (`CircuitBreakerConfig`, `TimeoutConfig`, `JitterKind`, `BackoffSpec`, `RetrySpec`, `ResilienceProfileSpec`). With it off, the crate links no serde code. Enable via `resilience = { workspace = true, features = ["serde"] }`. |
 
 ### Default production values summary
 
@@ -298,7 +364,7 @@ This crate is a **pure library** — it consumes no environment variables and ha
 
 ### Structured log events (via `tracing`)
 
-The following events are emitted at key state transitions (emitted once the `todo!()` implementations are filled in):
+The following events are emitted at key state transitions:
 
 | Event | Level | Fields | Trigger |
 |---|---|---|---|
@@ -310,7 +376,7 @@ The following events are emitted at key state transitions (emitted once the `tod
 
 ### Prometheus / OTel metrics
 
-<!-- TODO: [No OTel metric exports are defined in this crate yet. Add counters/histograms via the `telemetry` workspace crate once stub implementations are complete.] -->
+<!-- TODO: [No OTel metric exports are defined in this crate yet. Add counters/histograms via the `telemetry` workspace crate.] -->
 
 **Recommended alerts to implement at the service level:**
 
@@ -352,13 +418,18 @@ cargo test -p resilience -- --nocapture
 
 This crate is a pure in-process library. **No Docker Compose, no database, no broker** is required for local development or testing.
 
-### Implementing a `todo!()` stub
+### Modifying the runtime engine
 
-Each unimplemented method has a detailed inline specification in a `// TODO: impl —` comment block. Follow it exactly to preserve the intended state-machine invariants. After implementing, ensure:
+The `StateMachine` transitions and the three service `call` bodies are fully implemented and unit-tested. When changing state-machine invariants or a `call` path, preserve these rules:
 
-1. `cargo test -p resilience` passes.
-2. `cargo clippy -p resilience -- -D warnings` is clean.
-3. The relevant `state()` / `on_success()` / `on_failure()` sequence is covered by a `#[tokio::test]` in the same file.
+- **Config is sampled once per operation** (`ArcSwap::load_full` / `load`) so a single call reasons against a consistent snapshot — never re-load mid-decision.
+- **Config swaps must never reset live state** (counters, timers, circuit state).
+- **Boxed `Send` futures** must not hold a non-`Send` response/error across an `.await` (see `RetryService`, which resolves each attempt to a `Send` delay before sleeping).
+
+After changing anything, ensure:
+
+1. `cargo test -p resilience --features serde` passes (add a `#[tokio::test]` in the same file for any new transition).
+2. `cargo clippy -p resilience --all-targets -- -D warnings` is clean.
 
 ---
 

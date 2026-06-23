@@ -1,4 +1,4 @@
-use super::backoff::exponential::ExponentialBackoff;
+use super::backoff::{exponential::ExponentialBackoff, spec::BackoffSpec};
 
 /// Configuration for the retry middleware.
 ///
@@ -26,5 +26,24 @@ impl RetryConfig<ExponentialBackoff> {
 impl<B> RetryConfig<B> {
     pub fn new(max_attempts: u32, backoff: B) -> Self {
         Self { max_attempts, backoff }
+    }
+}
+
+/// Deserializable, non-generic counterpart to [`RetryConfig`].
+///
+/// `RetryConfig<B>` is generic for zero-cost backoff dispatch and therefore can't be
+/// `Deserialize`d. `RetrySpec` is what the config layer reads; [`resolve`](RetrySpec::resolve)
+/// lowers it into the concrete `RetryConfig<ExponentialBackoff>` used by the layer.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RetrySpec {
+    pub max_attempts: u32,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub backoff: BackoffSpec,
+}
+
+impl RetrySpec {
+    pub fn resolve(self) -> RetryConfig<ExponentialBackoff> {
+        RetryConfig::new(self.max_attempts, self.backoff.resolve())
     }
 }

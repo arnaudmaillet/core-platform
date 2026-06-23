@@ -35,7 +35,7 @@ transport/
 │   │   └── inbound.rs              InboundTraceLayer  — BoxFuture, extracts trace from every inbound call
 │   ├── client/
 │   │   ├── config.rs               GrpcClientConfig · GrpcTlsConfig · GrpcResilienceConfig
-│   │   └── builder.rs              GrpcClientBuilder → Channel | OutboundTraceService<Channel>
+│   │   └── builder.rs              GrpcClientBuilder → Channel | OutboundTraceService<Channel> | ResilientChannel
 │   └── server/
 │       ├── config.rs               GrpcServerConfig · GrpcServerTlsConfig
 │       └── builder.rs              GrpcServerBuilder → TracedGrpcServer
@@ -90,6 +90,8 @@ transport/
 ```
 
 ### gRPC client Tower stack (outermost → innermost)
+
+This is exactly what `build_resilient` / `build_from_registry` compose (then type-erase to `ResilientChannel`):
 
 ```
 TimeoutLayer              (from resilience crate)
@@ -186,18 +188,40 @@ impl GrpcClientBuilder {
     // generated tonic clients. Add resilience layers on top via ServiceBuilder.
     pub async fn build_traced(self)
         -> Result<OutboundTraceService<tonic::transport::Channel>, TransportError>;
+
+    // Full stack: trace + circuit breaker + timeout from a ResilienceProfile,
+    // flattened to TransportError and type-erased. Hot-reloadable via the profile's
+    // ArcSwap handles. Drops straight into a generated tonic client.
+    pub async fn build_resilient(self, profile: &ResilienceProfile)
+        -> Result<ResilientChannel, TransportError>;
+
+    // Same, but resolves the profile from the registry using GrpcClientConfig::dependency
+    // (its [resilience.bindings] key). The registry-driven entry point.
+    pub async fn build_from_registry(self, registry: &ResilienceRegistry)
+        -> Result<ResilientChannel, TransportError>;
 }
+
+// Type-erased, cloneable, hot-reloadable client stack:
+pub type ResilientChannel = BoxCloneService<
+    http::Request<tonic::body::Body>,
+    http::Response<tonic::body::Body>,
+    TransportError,
+>;
 ```
+
+`ResilientChannel` is `Clone` (tonic clones the service per RPC) and reads its circuit-breaker / timeout config from the originating `ResilienceProfile`'s shared `ArcSwap` handles — so a control-plane hot-swap (via `resilience-config`) reconfigures the live channel with no rebuild. `RetryLayer` remains absent at this layer (HTTP/2 body replay); apply retry at the application layer.
 
 ### `GrpcClientConfig`
 
 ```rust
 pub struct GrpcClientConfig {
     pub endpoint: String,                       // e.g. "https://svc:50051"
+    pub dependency: String,                     // [resilience.bindings] key; defaults to endpoint
     pub tls: Option<GrpcTlsConfig>,             // None = plaintext (service-mesh mTLS at sidecar)
     pub connect_timeout: Duration,              // default: 5s
-    pub resilience: Option<GrpcResilienceConfig>, // default: CircuitBreaker + 10s timeout
+    pub resilience: Option<GrpcResilienceConfig>, // static fallback; superseded by build_from_registry
 }
+// Set the binding key: GrpcClientConfig::new(uri).with_dependency("post-command")
 ```
 
 ### `GrpcServerBuilder` / `TracedGrpcServer`
@@ -478,27 +502,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(MyServiceServer::new(MyServiceImpl))
         .serve("0.0.0.0:50051".parse()?);
 
-    // 2b. gRPC client — traced channel, add resilience layers on top
-    use tower::ServiceBuilder;
-    use resilience::{
-        circuit_breaker::layer::CircuitBreakerLayer,
-        timeout::layer::TimeoutLayer,
-    };
+    // 2b. gRPC client — resilient channel resolved from the profile registry.
+    // The registry is loaded from infrastructure.toml and hot-reloaded by a watcher;
+    // see the `resilience-config` crate.
+    use std::sync::Arc;
+    use resilience_config::{InfrastructureConfig, ResilienceRegistry, spawn_watcher};
+
+    let registry = Arc::new(ResilienceRegistry::from_config(
+        InfrastructureConfig::from_toml(&std::fs::read_to_string("infrastructure.toml")?)?,
+    )?);
+    let _watcher = spawn_watcher("infrastructure.toml".into(), Arc::clone(&registry))?;
 
     let channel = GrpcClientBuilder::new(
-        GrpcClientConfig::new("https://dependency-svc:50051")
+        GrpcClientConfig::new("https://dependency-svc:50051").with_dependency("post-command")
     )
-    .build_traced()
+    .build_from_registry(&registry)   // resolves "post-command" → bound profile; hot-reloads
     .await?;
 
-    let svc = ServiceBuilder::new()
-        .map_err(transport::TransportError::from_resilience)
-        .layer(TimeoutLayer::new(resilience_cfg.timeout))
-        .map_err(transport::TransportError::from_resilience_connect)
-        .layer(CircuitBreakerLayer::new(resilience_cfg.circuit_breaker))
-        .service(channel);
-
-    let mut client = DependencyServiceClient::new(svc);
+    let mut client = DependencyServiceClient::new(channel);
 
     // 2c. Kafka producer
     let producer = KafkaProducerBuilder::new(

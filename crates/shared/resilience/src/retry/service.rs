@@ -48,25 +48,107 @@ where
         let policy = self.policy.clone();
 
         Box::pin(async move {
-            // TODO: impl retry loop —
-            //   let mut attempt = 0u32;
-            //   loop:
-            //     attempt += 1;
-            //     match svc.clone().call(req.clone()).await:
-            //       Ok(response) → return Ok(response)
-            //       Err(e) if attempt <= config.max_attempts && policy.should_retry(&e, attempt):
-            //         let delay = config.backoff.next_delay(attempt);
-            //         warn!(
-            //           attempt,
-            //           max_attempts = config.max_attempts,
-            //           delay_ms = delay.as_millis(),
-            //           "transient failure — retrying"
-            //         );
-            //         tokio::time::sleep(delay).await;
-            //       Err(e) if attempt > config.max_attempts → return Err(ResilienceError::MaxRetriesExhausted(config.max_attempts))
-            //       Err(e) → return Err(ResilienceError::Inner(e))
-            drop((svc, config, policy, req));
-            todo!()
+            let mut attempt = 0u32;
+            loop {
+                attempt += 1;
+
+                // Resolve each attempt fully to either a return or a backoff `delay`, so the
+                // (non-`Send`) response/error never crosses the `sleep` await below — keeping
+                // the boxed future `Send` without an `S::Response: Send` / `S::Error: Send` bound.
+                let delay = match svc.clone().call(req.clone()).await {
+                    Ok(response) => return Ok(response),
+                    Err(e) => {
+                        let retryable = attempt <= config.max_attempts
+                            && policy.should_retry(&e, attempt);
+
+                        if !retryable {
+                            // Budget exhausted, or the policy declined to retry.
+                            return if attempt > config.max_attempts {
+                                Err(ResilienceError::MaxRetriesExhausted(config.max_attempts))
+                            } else {
+                                Err(ResilienceError::Inner(e))
+                            };
+                        }
+
+                        config.backoff.next_delay(attempt)
+                    }
+                };
+
+                tracing::warn!(
+                    attempt,
+                    max_attempts = config.max_attempts,
+                    delay_ms = delay.as_millis(),
+                    "transient failure — retrying"
+                );
+                tokio::time::sleep(delay).await;
+            }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    };
+
+    use tower::{service_fn, ServiceExt};
+
+    use super::*;
+    use crate::retry::{
+        backoff::exponential::{ExponentialBackoff, JitterKind},
+        policy::{AlwaysRetryPolicy, NeverRetryPolicy},
+    };
+
+    /// Negligible backoff so tests don't actually sleep.
+    fn fast_config(max_attempts: u32) -> RetryConfig<ExponentialBackoff> {
+        RetryConfig::new(max_attempts, ExponentialBackoff::new(1, 1, JitterKind::None))
+    }
+
+    #[tokio::test]
+    async fn succeeds_after_transient_failures() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let counter = Arc::clone(&calls);
+        let inner = service_fn(move |_: ()| {
+            let counter = Arc::clone(&counter);
+            async move {
+                // Fail the first two attempts, then succeed.
+                if counter.fetch_add(1, Ordering::SeqCst) < 2 {
+                    Err("transient")
+                } else {
+                    Ok::<_, &str>("ok")
+                }
+            }
+        });
+        let mut svc = RetryService::new(inner, fast_config(5), AlwaysRetryPolicy);
+
+        let out = svc.ready().await.unwrap().call(()).await.unwrap();
+        assert_eq!(out, "ok");
+        assert_eq!(calls.load(Ordering::SeqCst), 3, "2 failures + 1 success");
+    }
+
+    #[tokio::test]
+    async fn exhausts_budget() {
+        let inner = service_fn(|_: ()| async { Err::<(), &str>("always") });
+        let mut svc = RetryService::new(inner, fast_config(2), AlwaysRetryPolicy);
+
+        let err = svc.ready().await.unwrap().call(()).await.unwrap_err();
+        assert!(matches!(err, ResilienceError::MaxRetriesExhausted(2)));
+    }
+
+    #[tokio::test]
+    async fn surfaces_non_retryable_immediately() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let counter = Arc::clone(&calls);
+        let inner = service_fn(move |_: ()| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            async { Err::<(), &str>("fatal") }
+        });
+        let mut svc = RetryService::new(inner, fast_config(5), NeverRetryPolicy);
+
+        let err = svc.ready().await.unwrap().call(()).await.unwrap_err();
+        assert!(matches!(err, ResilienceError::Inner("fatal")));
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "no retries for a non-retryable error");
     }
 }

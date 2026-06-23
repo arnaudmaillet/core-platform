@@ -5,12 +5,18 @@ use std::time::Duration;
 /// All thresholds and durations are tunable per-service; the defaults represent
 /// conservative production values suitable for internal RPC calls.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CircuitBreakerConfig {
     /// Consecutive failures in Closed state required to trip the circuit (→ Open).
     pub failure_threshold: u32,
     /// Consecutive successes in Half-Open state required to reset the circuit (→ Closed).
     pub success_threshold: u32,
     /// How long the circuit stays Open before admitting a probe request (→ Half-Open).
+    /// Serialized as a flat `open_duration_ms` integer.
+    #[cfg_attr(
+        feature = "serde",
+        serde(rename = "open_duration_ms", with = "crate::serde_util::duration_millis")
+    )]
     pub open_duration: Duration,
     /// Maximum concurrent calls allowed while in Half-Open state.
     pub half_open_max_calls: u32,

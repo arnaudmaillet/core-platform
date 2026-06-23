@@ -1,22 +1,33 @@
 use std::{
     future::Future,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
+use arc_swap::ArcSwap;
 use tower::Service;
 
 use super::config::TimeoutConfig;
 use crate::error::ResilienceError;
 
 /// Tower [`Service`] that enforces a maximum response duration on the inner service.
+///
+/// The deadline is held behind an [`ArcSwap`] so the control plane can hot-swap it at
+/// runtime: a lock-free `store()` replaces the config, and the *next* `call()` picks it
+/// up. The handle is shared (via [`Arc`]) across every service clone this was layered
+/// onto, so one swap reconfigures the whole stack for that downstream dependency.
+///
+/// `Clone` is required by stacks driving generated clients (e.g. tonic clones the service
+/// per RPC); clones share the same config handle via [`Arc`].
+#[derive(Clone)]
 pub struct TimeoutService<S> {
     inner: S,
-    config: TimeoutConfig,
+    config: Arc<ArcSwap<TimeoutConfig>>,
 }
 
 impl<S> TimeoutService<S> {
-    pub(crate) fn new(inner: S, config: TimeoutConfig) -> Self {
+    pub(crate) fn new(inner: S, config: Arc<ArcSwap<TimeoutConfig>>) -> Self {
         Self { inner, config }
     }
 }
@@ -36,20 +47,58 @@ where
     }
 
     fn call(&mut self, req: Req) -> Self::Future {
+        // Capture the deadline snapshot once, at the very start of the invocation, so the
+        // request runs against a single consistent value even if the config is swapped
+        // mid-flight. `duration` is `Copy`, so the `ArcSwap` guard is dropped immediately
+        // — nothing is held across the await point.
+        let duration = self.config.load().duration;
         let fut = self.inner.call(req);
-        let duration = self.config.duration;
 
         Box::pin(async move {
-            // TODO: impl —
-            //   match tokio::time::timeout(duration, fut).await:
-            //     Ok(Ok(response))  → Ok(response)
-            //     Ok(Err(e))        → Err(ResilienceError::Inner(e))
-            //     Err(_elapsed)     → {
-            //       warn!(timeout_ms = duration.as_millis(), "request exceeded deadline");
-            //       Err(ResilienceError::Timeout(duration))
-            //     }
-            drop((fut, duration));
-            todo!()
+            match tokio::time::timeout(duration, fut).await {
+                Ok(Ok(response)) => Ok(response),
+                Ok(Err(e)) => Err(ResilienceError::Inner(e)),
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        timeout_ms = duration.as_millis(),
+                        "request exceeded deadline"
+                    );
+                    Err(ResilienceError::Timeout(duration))
+                }
+            }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use arc_swap::ArcSwap;
+    use tower::{service_fn, ServiceExt};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn passes_through_when_within_deadline() {
+        let cfg = Arc::new(ArcSwap::from_pointee(TimeoutConfig::from_secs(5)));
+        let inner = service_fn(|_: ()| async { Ok::<_, &str>(42) });
+        let mut svc = TimeoutService::new(inner, cfg);
+
+        let out = svc.ready().await.unwrap().call(()).await.unwrap();
+        assert_eq!(out, 42);
+    }
+
+    #[tokio::test]
+    async fn fails_when_inner_exceeds_deadline() {
+        let cfg = Arc::new(ArcSwap::from_pointee(TimeoutConfig::from_millis(20)));
+        let inner = service_fn(|_: ()| async {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            Ok::<_, &str>(())
+        });
+        let mut svc = TimeoutService::new(inner, cfg);
+
+        let err = svc.ready().await.unwrap().call(()).await.unwrap_err();
+        assert!(matches!(err, ResilienceError::Timeout(d) if d == Duration::from_millis(20)));
     }
 }
