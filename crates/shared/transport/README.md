@@ -209,7 +209,7 @@ pub type ResilientChannel = BoxCloneService<
 >;
 ```
 
-`ResilientChannel` is `Clone` (tonic clones the service per RPC) and reads its circuit-breaker / timeout config from the originating `ResilienceProfile`'s shared `ArcSwap` handles — so a control-plane hot-swap (via `resilience-config`) reconfigures the live channel with no rebuild. `RetryLayer` remains absent at this layer (HTTP/2 body replay); apply retry at the application layer.
+`ResilientChannel` is `Clone` (tonic clones the service per RPC) and reads its circuit-breaker / timeout config from the originating `ResilienceProfile`'s shared `ArcSwap` handles — so a control-plane hot-swap (via `infra-config`) reconfigures the live channel with no rebuild. `RetryLayer` remains absent at this layer (HTTP/2 body replay); apply retry at the application layer.
 
 ### `GrpcClientConfig`
 
@@ -504,9 +504,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2b. gRPC client — resilient channel resolved from the profile registry.
     // The registry is loaded from infrastructure.toml and hot-reloaded by a watcher;
-    // see the `resilience-config` crate.
+    // see the `infra-config` crate.
     use std::sync::Arc;
-    use resilience_config::{InfrastructureConfig, ResilienceRegistry, spawn_watcher};
+    use infra_config::{InfrastructureConfig, ResilienceRegistry, spawn_watcher};
 
     let registry = Arc::new(ResilienceRegistry::from_config(
         InfrastructureConfig::from_toml(&std::fs::read_to_string("infrastructure.toml")?)?,

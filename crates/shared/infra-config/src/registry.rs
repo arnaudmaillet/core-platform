@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use resilience::ResilienceProfile;
 use tracing::warn;
 
-use crate::{error::ConfigError, schema::InfrastructureConfig};
+use crate::{
+    error::ConfigError,
+    reload::Reloadable,
+    schema::{InfrastructureConfig, ResilienceSection},
+};
 
 /// The boot-time-resolved set of live profiles plus the binding table.
 ///
@@ -25,8 +29,15 @@ pub struct ResilienceRegistry {
 
 impl ResilienceRegistry {
     /// Validates and resolves a parsed config into live profiles.
+    ///
+    /// Convenience wrapper over [`from_section`](Self::from_section) for callers holding a
+    /// whole document (the standalone, resilience-only deployment path used by `transport`).
     pub fn from_config(config: InfrastructureConfig) -> Result<Self, ConfigError> {
-        let section = config.resilience;
+        Self::from_section(config.resilience)
+    }
+
+    /// Validates and resolves just the `[resilience]` section into live profiles.
+    pub fn from_section(section: ResilienceSection) -> Result<Self, ConfigError> {
         section.validate()?;
 
         let profiles = section
@@ -64,7 +75,12 @@ impl ResilienceRegistry {
     /// running fleet untouched. Each matching profile's contents are lock-free-swapped; only
     /// profiles already known at boot are updated (see [topology](Self#topology-vs-contents)).
     pub fn apply(&self, config: InfrastructureConfig) -> Result<(), ConfigError> {
-        let section = config.resilience;
+        self.apply_section(config.resilience)
+    }
+
+    /// Hot-applies just the `[resilience]` section to the live handles. Used by
+    /// [`InfraRegistry`](crate::InfraRegistry), which owns cross-section validation.
+    pub fn apply_section(&self, section: ResilienceSection) -> Result<(), ConfigError> {
         section.validate()?;
 
         for (name, profile) in &self.profiles {
@@ -82,5 +98,13 @@ impl ResilienceRegistry {
         }
 
         Ok(())
+    }
+}
+
+impl Reloadable for ResilienceRegistry {
+    /// Resilience-only reload target: parses the document and applies just `[resilience]`.
+    /// Lets the standalone `transport` deployment drive the generalized watcher unchanged.
+    fn reload(&self, raw: &str) -> Result<(), ConfigError> {
+        self.apply(InfrastructureConfig::from_toml(raw)?)
     }
 }

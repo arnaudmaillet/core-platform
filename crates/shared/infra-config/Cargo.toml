@@ -1,5 +1,5 @@
 [package]
-name = "resilience-config"
+name = "infra-config"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,6 +9,8 @@ description.workspace = true
 
 [dependencies]
 resilience = { workspace = true, features = ["serde"] }
+traffic = { workspace = true, features = ["serde"] }
+arc-swap = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }
 notify = { workspace = true }

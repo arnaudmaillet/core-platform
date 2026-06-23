@@ -11,7 +11,9 @@ description.workspace = true
 # Internal crates
 error = { workspace = true }
 resilience = { workspace = true }
-resilience-config = { workspace = true }
+infra-config      = { workspace = true }
+traffic           = { workspace = true }
+auth-context      = { workspace = true }
 
 # gRPC — Tonic + Tower
 tonic = { workspace = true }

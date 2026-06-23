@@ -4,7 +4,8 @@
 members = [
     "crates/shared/error",
     "crates/shared/resilience",
-    "crates/shared/resilience-config",
+    "crates/shared/infra-config",
+    "crates/shared/traffic",
     "crates/shared/telemetry",
     "crates/shared/transport",
     "crates/shared/cqrs",
@@ -45,7 +46,8 @@ description = "core-platform repo"
 # the naming symmetric with `scylla-storage` / `redis-storage`.
 error             = { path = "crates/shared/error" }
 resilience        = { path = "crates/shared/resilience" }
-resilience-config = { path = "crates/shared/resilience-config" }
+infra-config      = { path = "crates/shared/infra-config" }
+traffic           = { path = "crates/shared/traffic" }
 telemetry        = { path = "crates/shared/telemetry" }
 transport        = { path = "crates/shared/transport" }
 cqrs             = { path = "crates/shared/cqrs" }
@@ -81,6 +83,7 @@ futures = "0.3.31"
 futures-util = "0.3"
 rand = "0.9.2"
 arc-swap = "1.7"
+governor = "0.10"
 notify = "6.1"
 toml = "0.8"
 url = "2.5.7"
