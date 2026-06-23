@@ -81,6 +81,33 @@ impl<L: Clone> Catalog<L> {
         self.profiles.get(name).cloned()
     }
 
+    /// Like [`profile_for`](Self::profile_for) but also returns the *effective* profile name
+    /// and whether `dependency` was explicitly bound (vs. falling back to the default).
+    ///
+    /// The name is borrowed (no allocation on the hot path); callers that need an owned
+    /// label only pay for it on the rare branch that uses it. Bound-ness lets callers bound
+    /// metric-label cardinality (e.g. bucket unbound routes under one sentinel).
+    pub(crate) fn resolve(&self, dependency: &str) -> (&str, bool, L) {
+        match self.bindings.get(dependency) {
+            Some(name) => (
+                name.as_str(),
+                true,
+                self.profiles
+                    .get(name)
+                    .cloned()
+                    .expect("binding target guaranteed present by validate_bindings()"),
+            ),
+            None => (
+                self.default.as_str(),
+                false,
+                self.profiles
+                    .get(&self.default)
+                    .cloned()
+                    .expect("default profile guaranteed present by validate_bindings()"),
+            ),
+        }
+    }
+
     /// Iterates resolved `(name, live)` pairs — used by `apply` to swap contents in place
     /// for profiles that survived a reload.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&String, &L)> {

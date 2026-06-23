@@ -42,7 +42,7 @@ thiserror = { workspace = true }
 
 # OpenTelemetry — pinned to the same versions as the `telemetry` crate
 # so context propagation is wire-compatible across the platform.
-opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry = { version = "0.27", features = ["trace", "metrics"] }
 tracing-opentelemetry = "0.28"
 
 # Byte utilities (used in protobuf codec and tonic body handling)

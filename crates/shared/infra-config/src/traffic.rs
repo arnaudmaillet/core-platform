@@ -114,6 +114,14 @@ impl TrafficRegistry {
         self.catalog.profile_for(method)
     }
 
+    /// Resolves `method` to `(effective profile name, was explicitly bound, profile)`.
+    ///
+    /// The layer uses this so it can label metrics by profile name and bound-ness — the
+    /// name is borrowed, so the hot path allocates nothing until a label is actually built.
+    pub fn resolve(&self, method: &str) -> (&str, bool, TrafficProfile) {
+        self.catalog.resolve(method)
+    }
+
     /// Looks up a profile by catalog name.
     pub fn profile(&self, name: &str) -> Option<TrafficProfile> {
         self.catalog.profile(name)

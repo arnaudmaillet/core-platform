@@ -145,9 +145,13 @@ let server = builder.build()?.add_service(/* … */);
 ```
 
 **Safe rollout (pilot = post-command writes).** Ship the tight profile with
-`enforce = false` (shadow): the limiter charges cells and logs would-throttles
-without rejecting anything. Watch the signal, then edit `enforce = true` in the
-ConfigMap — it hot-reloads to enforcement with no redeploy, and reverts as fast.
+`enforce = false` (shadow): the limiter charges cells without rejecting anything.
+Watch the **`infra_traffic_throttled_total`** counter (labels: `profile`, `route`,
+`status`) — specifically the `status="shadow"` series, which is exactly what *would*
+be rejected. When the rate looks right, edit `enforce = true` in the ConfigMap: it
+hot-reloads to enforcement (`status` flips to `enforced`) with no redeploy, and
+reverts just as fast. Route cardinality is bounded — unbound methods collapse to a
+single `route="<unbound>"` label.
 
 ### Resilience Guarantees & High-Load Behavior
 
