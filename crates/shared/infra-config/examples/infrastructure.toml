@@ -63,7 +63,11 @@ ttl_secs = 86_400
 # Ingress rate-limit profiles — the server-side mirror of [resilience]. Bindings
 # map an inbound gRPC method to a profile. Installing the layer means EVERY method
 # is limited (unbound -> default_profile; unbound is not unlimited).
-# Step 1 enforces mode = "local" (per-replica); "distributed" is rejected for now.
+#
+# mode = "local" (default): per-replica governor — fleet limit ≈ rps × replicas.
+# mode = "distributed": fleet-global budget via the traffic-redis lease backend; the
+#   serving binary must wire it (GrpcServerBuilder::with_traffic_backend), else the
+#   profile degrades to local per-replica limiting.
 #
 # Rollout: ship a pilot with `enforce = false` (shadow — would-throttles are
 # observed, requests admitted), watch the signal, then flip `enforce = true` here.
@@ -72,7 +76,7 @@ ttl_secs = 86_400
 [traffic]
 default_profile = "standard"
 
-# ── Standard: general read traffic, fleet-coarse ──────────────────────────────
+# ── Standard: general read traffic, fleet-coarse, per-replica ─────────────────
 [traffic.profiles.standard]
 rps   = 1_000
 burst = 200
@@ -87,6 +91,19 @@ rps     = 50
 burst   = 10
 scope   = "per_caller"
 enforce = false
+
+# ── Tenant-quota: a precise fleet-global per-caller budget (distributed) ───────
+# `lease_ms` is the global budget window; `burst` doubles as the per-replica lease
+# chunk (larger = fewer Redis claims, coarser cross-replica fairness). If Redis is
+# unreachable, `on_backend_error` decides: fail_open degrades to the local governor,
+# fail_closed rejects.
+[traffic.profiles.tenant-quota]
+rps              = 100
+burst            = 10
+scope            = "per_caller"
+mode             = "distributed"
+lease_ms         = 1_000
+on_backend_error = "fail_open"
 
 # ── Bindings: gRPC method path -> profile ─────────────────────────────────────
 [traffic.bindings]

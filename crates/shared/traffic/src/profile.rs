@@ -172,4 +172,15 @@ impl TrafficProfile {
     pub fn on_backend_error(&self) -> Option<BackendError> {
         self.config.load().on_backend_error
     }
+
+    /// The fleet-global [`Quota`](crate::Quota) to enforce when this profile is distributed.
+    /// `lease_ms` falls back to [`DEFAULT_LEASE_MS`](crate::DEFAULT_LEASE_MS) if unset.
+    pub fn quota(&self) -> crate::backend::Quota {
+        let config = self.config.load();
+        crate::backend::Quota {
+            rps: config.rps,
+            burst: config.burst,
+            lease_ms: config.lease_ms.unwrap_or(crate::backend::DEFAULT_LEASE_MS),
+        }
+    }
 }

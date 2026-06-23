@@ -111,7 +111,9 @@ tonic::Server
       └─ TrafficLayer             (inner: ingress rate limiting; pass-through if unconfigured)
           ├─ resolves the method's [traffic] profile from the registry
           ├─ extracts a key by scope (per_method, or per_caller via edge-mesh identity)
-          ├─ charges one cell against the governor limiter
+          ├─ local mode       → charge the in-process governor (per-replica)
+          ├─ distributed mode → consult the QuotaBackend lease (fleet-global); on backend
+          │                     error apply on_backend_error (fail_open→local, fail_closed→reject)
           ├─ enforce=true  + over quota → short-circuit RESOURCE_EXHAUSTED (+ retry-after-ms)
           ├─ enforce=false (shadow)     → log would-throttle, admit
           └─ otherwise → handler future inside the span
@@ -161,6 +163,28 @@ that header and strip any client-supplied value at the trust boundary — the la
 treats it as authoritative and does no in-process token verification. A request that
 arrives without it (unauthenticated method, or one that bypassed the mesh) degrades
 to per-method keying: still limited, just not per-identity (logged at debug).
+
+**Distributed mode (fleet-global budgets).** A `mode = "distributed"` profile enforces
+a global rate across replicas via a `QuotaBackend` (the `traffic-redis` lease backend).
+Wire it once at boot and run its own prune loop:
+
+```rust,ignore
+let backend = Arc::new(traffic_redis::RedisLeaseBackend::new(redis_client));
+builder = builder
+    .with_traffic(Arc::clone(&traffic))
+    .with_traffic_backend(Arc::clone(&backend) as Arc<dyn traffic::QuotaBackend>);
+
+let lease_ms = 1_000; // match the profiles' lease window
+tokio::spawn(async move {
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+    loop { tick.tick().await; backend.prune(lease_ms); }
+});
+```
+
+The backend amortizes Redis I/O (each replica leases a `burst`-sized chunk of the
+per-window budget and serves locally), so the hot path rarely crosses the network.
+If no backend is wired, distributed profiles degrade to the local governor. `local`
+profiles never touch the backend.
 
 ### Resilience Guarantees & High-Load Behavior
 

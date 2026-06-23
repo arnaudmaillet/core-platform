@@ -80,14 +80,23 @@ fn rejects_zero_rps() {
 }
 
 #[test]
-fn rejects_distributed_mode_in_step_1() {
-    let bad = SAMPLE.replace(
+fn distributed_requires_lease_ms() {
+    // distributed without lease_ms → rejected.
+    let no_lease = SAMPLE.replace(
         "scope = \"per_method\"",
         "scope = \"per_method\"\nmode = \"distributed\"",
     );
-    let cfg = InfrastructureConfig::from_toml(&bad).unwrap();
+    let cfg = InfrastructureConfig::from_toml(&no_lease).unwrap();
     let err = TrafficRegistry::from_section(cfg.traffic.unwrap()).err().expect("expected error");
-    assert!(err.to_string().contains("not yet supported"), "got: {err}");
+    assert!(err.to_string().contains("requires lease_ms > 0"), "got: {err}");
+
+    // distributed with lease_ms → accepted.
+    let with_lease = SAMPLE.replace(
+        "scope = \"per_method\"",
+        "scope = \"per_method\"\nmode = \"distributed\"\nlease_ms = 200",
+    );
+    let cfg = InfrastructureConfig::from_toml(&with_lease).unwrap();
+    assert!(TrafficRegistry::from_section(cfg.traffic.unwrap()).is_ok());
 }
 
 #[test]

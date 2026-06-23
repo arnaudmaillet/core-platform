@@ -6,6 +6,7 @@ members = [
     "crates/shared/resilience",
     "crates/shared/infra-config",
     "crates/shared/traffic",
+    "crates/shared/traffic-redis",
     "crates/shared/telemetry",
     "crates/shared/transport",
     "crates/shared/cqrs",
@@ -48,6 +49,7 @@ error             = { path = "crates/shared/error" }
 resilience        = { path = "crates/shared/resilience" }
 infra-config      = { path = "crates/shared/infra-config" }
 traffic           = { path = "crates/shared/traffic" }
+traffic-redis     = { path = "crates/shared/traffic-redis" }
 telemetry        = { path = "crates/shared/telemetry" }
 transport        = { path = "crates/shared/transport" }
 cqrs             = { path = "crates/shared/cqrs" }

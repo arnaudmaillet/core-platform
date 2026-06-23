@@ -32,6 +32,7 @@
 
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use futures::future::BoxFuture;
 use http::header::HeaderName;
@@ -40,7 +41,7 @@ use infra_config::TrafficRegistry;
 use opentelemetry::{global, metrics::Counter, KeyValue};
 use tonic::{body::Body, Status};
 use tower::{Layer, Service};
-use traffic::{Scope, TrafficDecision};
+use traffic::{BackendError, QuotaBackend, Scope, TrafficDecision, TrafficProfile};
 
 use crate::grpc::server::config::DEFAULT_IDENTITY_HEADER;
 
@@ -74,6 +75,9 @@ pub struct TrafficLayer {
     registry: Option<Arc<TrafficRegistry>>,
     counter: Counter<u64>,
     identity_header: HeaderName,
+    /// Distributed-mode coordination backend (`traffic-redis`). `None` → `distributed`
+    /// profiles degrade to the local limiter (logged); `local` profiles never use it.
+    backend: Option<Arc<dyn QuotaBackend>>,
 }
 
 impl TrafficLayer {
@@ -83,13 +87,27 @@ impl TrafficLayer {
             registry: None,
             counter: throttle_counter(),
             identity_header: HeaderName::from_static(DEFAULT_IDENTITY_HEADER),
+            backend: None,
         }
     }
 
     /// A layer that enforces the profiles in `registry`, reading `per_caller` identity from
     /// `identity_header` (the edge-mesh-injected header).
     pub fn new(registry: Arc<TrafficRegistry>, identity_header: HeaderName) -> Self {
-        Self { registry: Some(registry), counter: throttle_counter(), identity_header }
+        Self {
+            registry: Some(registry),
+            counter: throttle_counter(),
+            identity_header,
+            backend: None,
+        }
+    }
+
+    /// Attaches the distributed-mode coordination backend (e.g. `traffic-redis`). Required
+    /// for `distributed` profiles to enforce a fleet-global budget; without it they degrade
+    /// to local per-replica limiting.
+    pub fn with_backend(mut self, backend: Arc<dyn QuotaBackend>) -> Self {
+        self.backend = Some(backend);
+        self
     }
 }
 
@@ -102,6 +120,7 @@ impl<S> Layer<S> for TrafficLayer {
             registry: self.registry.clone(),
             counter: self.counter.clone(),
             identity_header: self.identity_header.clone(),
+            backend: self.backend.clone(),
         }
     }
 }
@@ -113,11 +132,12 @@ pub struct TrafficService<S> {
     registry: Option<Arc<TrafficRegistry>>,
     counter: Counter<u64>,
     identity_header: HeaderName,
+    backend: Option<Arc<dyn QuotaBackend>>,
 }
 
 impl<S> Service<http::Request<Body>> for TrafficService<S>
 where
-    S: Service<http::Request<Body>, Response = http::Response<Body>> + Send + 'static,
+    S: Service<http::Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
 {
@@ -138,36 +158,95 @@ where
         let method = req.uri().path();
         let (profile_name, bound, profile) = registry.resolve(method);
         let key = extract_key(profile.scope(), method, req.headers(), &self.identity_header);
+        let route = if bound { method } else { UNBOUND_ROUTE };
 
-        if let TrafficDecision::Throttle { retry_after } = profile.check(&key) {
-            let retry_ms = u64::try_from(retry_after.as_millis()).unwrap_or(u64::MAX);
-            let enforce = profile.enforce();
+        // Distributed profiles consult the (async) backend, so their decision is made inside
+        // the returned future; local profiles decide synchronously here on the hot path.
+        if profile.is_distributed() {
+            let backend = self.backend.clone();
+            let counter = self.counter.clone();
+            let profile_name = profile_name.to_owned();
+            let route = route.to_owned();
+            let method = method.to_owned();
+            // Move a ready clone of the inner service into the future (tower readiness idiom).
+            let clone = self.inner.clone();
+            let mut inner = std::mem::replace(&mut self.inner, clone);
 
-            // Record the decision before acting on it, so shadow and enforced are both
-            // observable. Unbound routes collapse to one label to bound cardinality.
-            let route = if bound { method } else { UNBOUND_ROUTE };
-            self.counter.add(1, &throttle_attrs(profile_name, route, enforce));
-
-            if enforce {
-                tracing::debug!(
-                    rpc.method = %method,
-                    retry_after_ms = retry_ms,
-                    "traffic: request throttled"
-                );
-                let response = throttle_response(retry_ms);
-                return Box::pin(async move { Ok(response) });
-            }
-
-            // Shadow mode: the cell was charged (so the metric is real), but we admit the
-            // request instead of rejecting it. This is the observe-before-enforce rail.
-            tracing::debug!(
-                rpc.method = %method,
-                retry_after_ms = retry_ms,
-                "traffic: would throttle (shadow mode — admitted)"
-            );
+            return Box::pin(async move {
+                let decision = distributed_check(&profile, &key, backend.as_ref()).await;
+                let enforce = profile.enforce();
+                if let Some(response) =
+                    handle_decision(decision, &counter, &profile_name, &route, enforce, &method)
+                {
+                    return Ok(response);
+                }
+                inner.call(req).await
+            });
         }
 
+        let enforce = profile.enforce();
+        if let Some(response) =
+            handle_decision(profile.check(&key), &self.counter, profile_name, route, enforce, method)
+        {
+            return Box::pin(async move { Ok(response) });
+        }
         Box::pin(self.inner.call(req))
+    }
+}
+
+/// Applies a throttle decision: records the metric, then short-circuits with a
+/// `RESOURCE_EXHAUSTED` response when enforcing, or returns `None` to admit (shadow mode, or
+/// the decision was `Allow`). Shared by the local and distributed paths.
+fn handle_decision(
+    decision: TrafficDecision,
+    counter: &Counter<u64>,
+    profile_name: &str,
+    route: &str,
+    enforce: bool,
+    method: &str,
+) -> Option<http::Response<Body>> {
+    let TrafficDecision::Throttle { retry_after } = decision else {
+        return None;
+    };
+    let retry_ms = u64::try_from(retry_after.as_millis()).unwrap_or(u64::MAX);
+    counter.add(1, &throttle_attrs(profile_name, route, enforce));
+
+    if enforce {
+        tracing::debug!(rpc.method = %method, retry_after_ms = retry_ms, "traffic: request throttled");
+        Some(throttle_response(retry_ms))
+    } else {
+        // Shadow mode: the cell was charged (so the metric is real), but admit the request.
+        tracing::debug!(
+            rpc.method = %method,
+            retry_after_ms = retry_ms,
+            "traffic: would throttle (shadow mode — admitted)"
+        );
+        None
+    }
+}
+
+/// Resolves a `distributed` profile's decision via the global backend, applying the
+/// `on_backend_error` policy when the backend is unreachable.
+async fn distributed_check(
+    profile: &TrafficProfile,
+    key: &str,
+    backend: Option<&Arc<dyn QuotaBackend>>,
+) -> TrafficDecision {
+    let Some(backend) = backend else {
+        tracing::debug!("traffic: distributed profile but no backend wired — using local limiter");
+        return profile.check(key);
+    };
+
+    match backend.check(key, profile.quota()).await {
+        Ok(decision) => decision,
+        Err(_unavailable) => match profile.on_backend_error() {
+            // Reject: precision/safety over availability (hard abuse/billing quotas).
+            Some(BackendError::FailClosed) => TrafficDecision::Throttle {
+                retry_after: Duration::from_millis(profile.quota().lease_ms),
+            },
+            // Degrade to the local per-replica limiter (availability over precision).
+            _ => profile.check(key),
+        },
     }
 }
 

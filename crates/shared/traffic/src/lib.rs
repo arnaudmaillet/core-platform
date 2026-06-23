@@ -16,8 +16,10 @@
 //! [`Mode::Distributed`] is parsed for forward-compatibility but rejected by `infra-config`
 //! validation until the Redis-lease backend ships (Step 2).
 
+pub mod backend;
 pub mod config;
 pub mod profile;
 
+pub use backend::{Quota, QuotaBackend, QuotaError, DEFAULT_LEASE_MS};
 pub use config::{BackendError, Mode, Scope, TrafficConfig, TrafficDecision};
 pub use profile::{TrafficProfile, TrafficProfileSpec};

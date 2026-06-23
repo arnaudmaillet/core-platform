@@ -73,12 +73,12 @@ impl TrafficSection {
                     "[traffic] profile '{name}': burst must be >= 1"
                 )));
             }
-            // Step 1 enforces local-only. Reject distributed loudly so a global quota is
-            // never assumed-enforced while the lease backend is still missing.
-            if matches!(spec.mode, Mode::Distributed) {
+            // Distributed mode requires a lease window; without it the backend can't size
+            // its per-window global budget. (The backend itself lives in `traffic-redis`
+            // and is wired into the transport layer by the serving binary.)
+            if matches!(spec.mode, Mode::Distributed) && !matches!(spec.lease_ms, Some(ms) if ms > 0) {
                 return Err(ConfigError::validation(format!(
-                    "[traffic] profile '{name}': mode = \"distributed\" is not yet supported \
-                     (Step 2); use \"local\""
+                    "[traffic] profile '{name}': mode = \"distributed\" requires lease_ms > 0"
                 )));
             }
         }

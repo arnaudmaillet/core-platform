@@ -62,3 +62,5 @@ testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true, features = ["kafka"] }
 # Unique per-test topic / consumer-group namespacing (v7 = time-ordered, collision-free).
 uuid = { workspace = true }
+# Implementing a fake QuotaBackend in the traffic-layer tests.
+async-trait = { workspace = true }

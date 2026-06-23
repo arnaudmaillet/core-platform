@@ -4,6 +4,7 @@ use tower::layer::util::{Identity, Stack};
 use tonic::transport::{Identity as TlsIdentity, Server, ServerTlsConfig};
 
 use infra_config::TrafficRegistry;
+use traffic::QuotaBackend;
 
 use crate::{
     error::TransportError,
@@ -40,11 +41,12 @@ pub type TracedGrpcServer = Server<Stack<TrafficLayer, Stack<InboundTraceLayer, 
 pub struct GrpcServerBuilder {
     config: GrpcServerConfig,
     traffic: Option<Arc<TrafficRegistry>>,
+    traffic_backend: Option<Arc<dyn QuotaBackend>>,
 }
 
 impl GrpcServerBuilder {
     pub fn new(config: GrpcServerConfig) -> Self {
-        Self { config, traffic: None }
+        Self { config, traffic: None, traffic_backend: None }
     }
 
     /// Enables ingress rate limiting from the given registry. Without this call the server
@@ -54,13 +56,27 @@ impl GrpcServerBuilder {
         self
     }
 
+    /// Attaches the distributed-mode coordination backend (e.g. `traffic-redis`). Only
+    /// `distributed` profiles use it; without it they degrade to local per-replica limiting.
+    /// No effect unless [`with_traffic`](Self::with_traffic) is also set.
+    pub fn with_traffic_backend(mut self, backend: Arc<dyn QuotaBackend>) -> Self {
+        self.traffic_backend = Some(backend);
+        self
+    }
+
     /// Returns a [`TracedGrpcServer`] with the trace and traffic layers applied.
     ///
     /// Call `.add_service(...)` and `.serve(addr)` on the returned server to start
     /// accepting connections.
     pub fn build(self) -> Result<TracedGrpcServer, TransportError> {
         let traffic_layer = match self.traffic {
-            Some(registry) => TrafficLayer::new(registry, self.config.identity_header.clone()),
+            Some(registry) => {
+                let layer = TrafficLayer::new(registry, self.config.identity_header.clone());
+                match self.traffic_backend {
+                    Some(backend) => layer.with_backend(backend),
+                    None => layer,
+                }
+            }
             None => TrafficLayer::disabled(),
         };
         // `.layer(InboundTraceLayer)` first makes trace the outer layer; `.layer(traffic)`

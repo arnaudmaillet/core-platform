@@ -9,6 +9,7 @@ description.workspace = true
 
 [dependencies]
 arc-swap = { workspace = true }
+async-trait = { workspace = true }
 governor = { workspace = true }
 serde = { workspace = true, optional = true }
 

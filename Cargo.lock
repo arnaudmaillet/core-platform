@@ -5063,15 +5063,31 @@ name = "traffic"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
+ "async-trait",
  "governor",
  "serde",
  "tokio",
 ]
 
 [[package]]
+name = "traffic-redis"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "dashmap 7.0.0-rc2",
+ "fred",
+ "redis-storage",
+ "test-support",
+ "tokio",
+ "tracing",
+ "traffic",
+]
+
+[[package]]
 name = "transport"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bytes",
  "error",
  "futures",

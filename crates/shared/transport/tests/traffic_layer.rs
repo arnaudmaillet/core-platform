@@ -170,3 +170,117 @@ async fn per_caller_without_identity_falls_back_to_method_bucket() {
         Some("8"),
     );
 }
+
+// ── distributed mode (Step 2 backend) ─────────────────────────────────────────
+
+use std::time::Duration;
+
+use async_trait::async_trait;
+use traffic::{Quota, QuotaBackend, QuotaError, TrafficDecision};
+
+/// Fake distributed backend: returns a fixed outcome (or simulates being unreachable),
+/// standing in for `traffic-redis` so the layer's decision path + fail policy are testable
+/// without Redis.
+enum Fake {
+    Allow,
+    Throttle,
+    Down,
+}
+
+struct FakeBackend(Fake);
+
+#[async_trait]
+impl QuotaBackend for FakeBackend {
+    async fn check(&self, _key: &str, _quota: Quota) -> Result<TrafficDecision, QuotaError> {
+        match self.0 {
+            Fake::Allow => Ok(TrafficDecision::Allow),
+            Fake::Throttle => Ok(TrafficDecision::Throttle { retry_after: Duration::from_millis(100) }),
+            Fake::Down => Err(QuotaError("backend down".into())),
+        }
+    }
+}
+
+/// Distributed `[traffic]` registry with rps=1/burst=1 (so the *local* fallback governor
+/// throttles after one request), optionally setting `on_backend_error`.
+fn dist_registry(on_backend_error: Option<&str>) -> Arc<TrafficRegistry> {
+    let policy = on_backend_error
+        .map(|p| format!("\non_backend_error = \"{p}\""))
+        .unwrap_or_default();
+    let toml = format!(
+        r#"
+[resilience]
+default_profile = "standard"
+[resilience.profiles.standard]
+timeout = {{ duration_ms = 10000 }}
+circuit_breaker = {{ failure_threshold = 5, success_threshold = 2, open_duration_ms = 30000, half_open_max_calls = 1 }}
+retry = {{ max_attempts = 3, backoff = {{ kind = "exponential", base_ms = 50, max_ms = 10000, jitter = "full" }} }}
+
+[traffic]
+default_profile = "dist"
+[traffic.profiles.dist]
+rps = 1
+burst = 1
+scope = "per_method"
+mode = "distributed"
+lease_ms = 1000{policy}
+"#
+    );
+    let cfg = InfrastructureConfig::from_toml(&toml).unwrap();
+    Arc::new(TrafficRegistry::from_section(cfg.traffic.unwrap()).unwrap())
+}
+
+fn backend(fake: Fake) -> Arc<dyn QuotaBackend> {
+    Arc::new(FakeBackend(fake))
+}
+
+#[tokio::test]
+async fn distributed_backend_throttle_short_circuits() {
+    let svc = layer(dist_registry(None)).with_backend(backend(Fake::Throttle)).layer(ok_service!());
+    let resp = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+    assert_eq!(resp.headers().get("grpc-status").and_then(|v| v.to_str().ok()), Some("8"));
+}
+
+#[tokio::test]
+async fn distributed_backend_allow_passes_through() {
+    let svc = layer(dist_registry(None)).with_backend(backend(Fake::Allow)).layer(ok_service!());
+    // The local governor would throttle after 1; the global backend authorises every request.
+    for _ in 0..5 {
+        let resp = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+        assert!(resp.headers().get("grpc-status").is_none());
+    }
+}
+
+#[tokio::test]
+async fn distributed_fail_closed_rejects_when_backend_down() {
+    let svc = layer(dist_registry(Some("fail_closed")))
+        .with_backend(backend(Fake::Down))
+        .layer(ok_service!());
+    let resp = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+    assert_eq!(resp.headers().get("grpc-status").and_then(|v| v.to_str().ok()), Some("8"));
+}
+
+#[tokio::test]
+async fn distributed_fail_open_degrades_to_local_governor() {
+    // fail_open + backend down → fall back to the local governor (rps=1, burst=1).
+    let svc = layer(dist_registry(Some("fail_open")))
+        .with_backend(backend(Fake::Down))
+        .layer(ok_service!());
+    let first = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+    assert!(first.headers().get("grpc-status").is_none(), "local governor admits the first");
+    let second = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+    assert_eq!(
+        second.headers().get("grpc-status").and_then(|v| v.to_str().ok()),
+        Some("8"),
+        "local governor throttles the second",
+    );
+}
+
+#[tokio::test]
+async fn distributed_without_backend_degrades_to_local() {
+    // distributed profile but no backend wired → local governor is the (degraded) limiter.
+    let svc = layer(dist_registry(None)).layer(ok_service!());
+    let first = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+    assert!(first.headers().get("grpc-status").is_none());
+    let second = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+    assert_eq!(second.headers().get("grpc-status").and_then(|v| v.to_str().ok()), Some("8"));
+}
