@@ -8,6 +8,7 @@ fn spec(rps: u32, burst: u32) -> TrafficProfileSpec {
         burst,
         scope: Scope::PerMethod,
         mode: traffic::Mode::Local,
+        enforce: true,
         lease_ms: None,
         on_backend_error: None,
     }

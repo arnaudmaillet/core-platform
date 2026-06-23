@@ -91,13 +91,24 @@ where
 
         if let TrafficDecision::Throttle { retry_after } = profile.check(&key) {
             let retry_ms = u64::try_from(retry_after.as_millis()).unwrap_or(u64::MAX);
+
+            if profile.enforce() {
+                tracing::debug!(
+                    rpc.method = %method,
+                    retry_after_ms = retry_ms,
+                    "traffic: request throttled"
+                );
+                let response = throttle_response(retry_ms);
+                return Box::pin(async move { Ok(response) });
+            }
+
+            // Shadow mode: the cell was charged (so this signal is real), but we admit the
+            // request instead of rejecting it. This is the observe-before-enforce rail.
             tracing::debug!(
                 rpc.method = %method,
                 retry_after_ms = retry_ms,
-                "traffic: request throttled"
+                "traffic: would throttle (shadow mode — admitted)"
             );
-            let response = throttle_response(retry_ms);
-            return Box::pin(async move { Ok(response) });
         }
 
         Box::pin(self.inner.call(req))

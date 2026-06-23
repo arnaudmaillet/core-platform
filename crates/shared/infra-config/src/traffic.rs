@@ -119,6 +119,20 @@ impl TrafficRegistry {
         self.catalog.profile(name)
     }
 
+    /// Drops idle keys across every profile. The serving binary should call this on an
+    /// interval (e.g. once a minute) to bound memory for unbounded keyspaces (`per_caller`);
+    /// it is cheap for bounded ones (`per_method`).
+    pub fn prune_all(&self) {
+        for (_, profile) in self.catalog.iter() {
+            profile.prune();
+        }
+    }
+
+    /// Total number of keys currently tracked across all profiles — for a cardinality gauge.
+    pub fn tracked_keys(&self) -> usize {
+        self.catalog.iter().map(|(_, profile)| profile.key_count()).sum()
+    }
+
     /// Hot-applies a freshly-parsed `[traffic]` section to the live handles.
     ///
     /// Validates first and bails before any mutation on failure. Only profiles known at

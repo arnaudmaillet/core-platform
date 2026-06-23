@@ -73,6 +73,27 @@ async fn distinct_methods_have_separate_buckets() {
 }
 
 #[tokio::test]
+async fn shadow_mode_admits_despite_exceeding_quota() {
+    // Same tight quota, but enforce = false: would-throttle is observed, not acted on.
+    let shadow_toml = TOML.replace(
+        "scope = \"per_method\"",
+        "scope = \"per_method\"\nenforce = false",
+    );
+    let cfg = InfrastructureConfig::from_toml(&shadow_toml).unwrap();
+    let registry = Arc::new(TrafficRegistry::from_section(cfg.traffic.unwrap()).unwrap());
+    let svc = TrafficLayer::new(registry).layer(ok_service!());
+
+    // Both calls are admitted even though the second exceeds burst = 1.
+    for _ in 0..3 {
+        let resp = svc.clone().oneshot(req("/svc/M")).await.unwrap();
+        assert!(
+            resp.headers().get("grpc-status").is_none(),
+            "shadow mode must admit, never short-circuit"
+        );
+    }
+}
+
+#[tokio::test]
 async fn disabled_layer_is_passthrough() {
     let svc = TrafficLayer::disabled().layer(ok_service!());
     for _ in 0..5 {

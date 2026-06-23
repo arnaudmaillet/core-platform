@@ -52,6 +52,11 @@ pub struct TrafficConfig {
     pub scope: Scope,
     /// State-locality mode.
     pub mode: Mode,
+    /// Whether throttle decisions are *acted on*. `true` (default) rejects; `false` is
+    /// **shadow mode** — the cell is still charged and a would-throttle is observable, but
+    /// the request is admitted. Hot-reloadable, so a pilot promotes shadow → enforce (or
+    /// rolls back) by editing the ConfigMap, with no redeploy.
+    pub enforce: bool,
     /// Distributed-only (Step 2): replica↔backend lease sync cadence, milliseconds.
     pub lease_ms: Option<u64>,
     /// Distributed-only (Step 2): backend-failure policy.

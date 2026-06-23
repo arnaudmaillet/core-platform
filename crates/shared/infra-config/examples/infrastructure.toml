@@ -64,6 +64,10 @@ ttl_secs = 86_400
 # map an inbound gRPC method to a profile. Installing the layer means EVERY method
 # is limited (unbound -> default_profile; unbound is not unlimited).
 # Step 1 enforces mode = "local" (per-replica); "distributed" is rejected for now.
+#
+# Rollout: ship a pilot with `enforce = false` (shadow — would-throttles are
+# observed, requests admitted), watch the signal, then flip `enforce = true` here.
+# The change hot-reloads; no redeploy, and reverting is just as fast.
 # ══════════════════════════════════════════════════════════════════════════════
 [traffic]
 default_profile = "standard"
@@ -74,11 +78,14 @@ rps   = 1_000
 burst = 200
 scope = "per_method"
 
-# ── Write-tight: expensive mutations, limited per authenticated caller ─────────
+# ── Write-tight: expensive mutations. Piloting in SHADOW first (enforce=false). ─
+# `per_caller` keys on the edge-mesh-propagated identity once that's wired; until
+# then it degrades to per-method keying.
 [traffic.profiles.write-tight]
-rps   = 50
-burst = 10
-scope = "per_caller"
+rps     = 50
+burst   = 10
+scope   = "per_caller"
+enforce = false
 
 # ── Bindings: gRPC method path -> profile ─────────────────────────────────────
 [traffic.bindings]

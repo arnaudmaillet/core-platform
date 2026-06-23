@@ -32,7 +32,8 @@ transport/
 │   ├── error.rs                    GrpcTransportError + grpc_severity()
 │   ├── layer/
 │   │   ├── outbound.rs             OutboundTraceLayer — zero-cost, injects trace on every outbound call
-│   │   └── inbound.rs              InboundTraceLayer  — BoxFuture, extracts trace from every inbound call
+│   │   ├── inbound.rs              InboundTraceLayer  — BoxFuture, extracts trace from every inbound call
+│   │   └── traffic.rs              TrafficLayer       — ingress rate limiting → RESOURCE_EXHAUSTED
 │   ├── client/
 │   │   ├── config.rs               GrpcClientConfig · GrpcTlsConfig · GrpcResilienceConfig
 │   │   └── builder.rs              GrpcClientBuilder → Channel | OutboundTraceService<Channel> | ResilientChannel
@@ -106,13 +107,47 @@ TimeoutLayer              (from resilience crate)
 
 ```
 tonic::Server
-  └─ InboundTraceLayer
-      ├─ extracts traceparent / tracestate from request headers
-      ├─ reconstructs remote OpenTelemetry Context
-      ├─ opens a `grpc.server` span (rpc.system, rpc.method attributes)
-      ├─ sets remote context as parent span
-      └─ instruments the entire handler future inside that span
+  └─ InboundTraceLayer            (outer: every request, incl. throttled, is traced)
+      └─ TrafficLayer             (inner: ingress rate limiting; pass-through if unconfigured)
+          ├─ resolves the method's [traffic] profile from the registry
+          ├─ extracts a key by scope (per_method, or per_caller via edge-mesh identity)
+          ├─ charges one cell against the governor limiter
+          ├─ enforce=true  + over quota → short-circuit RESOURCE_EXHAUSTED (+ retry-after-ms)
+          ├─ enforce=false (shadow)     → log would-throttle, admit
+          └─ otherwise → handler future inside the span
 ```
+
+### Activating ingress rate limiting (server)
+
+`TrafficLayer` is always present in the server type but is a no-op until a
+`TrafficRegistry` is supplied. The serving binary wires it once at boot:
+
+```rust,ignore
+// 1. Load + resolve the whole infrastructure.toml, validating every section.
+let infra = Arc::new(InfraRegistry::from_config(load_from_path("/etc/infra/infrastructure.toml".as_ref())?)?);
+
+// 2. Hot-reload on ConfigMap change (keep the guard alive). One watcher drives every
+//    section, so traffic quotas / enforce flags flip with no redeploy.
+let _watcher = spawn_watcher("/etc/infra/infrastructure.toml".into(), Arc::clone(&infra));
+
+// 3. Install the layer (only when a [traffic] section is configured).
+let mut builder = GrpcServerBuilder::new(GrpcServerConfig::default());
+if let Some(traffic) = infra.traffic() {
+    builder = builder.with_traffic(Arc::clone(&traffic));
+
+    // 4. Bound memory for unbounded keyspaces (per_caller): sweep idle keys on an interval.
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop { tick.tick().await; traffic.prune_all(); }
+    });
+}
+let server = builder.build()?.add_service(/* … */);
+```
+
+**Safe rollout (pilot = post-command writes).** Ship the tight profile with
+`enforce = false` (shadow): the limiter charges cells and logs would-throttles
+without rejecting anything. Watch the signal, then edit `enforce = true` in the
+ConfigMap — it hot-reloads to enforcement with no redeploy, and reverts as fast.
 
 ### Resilience Guarantees & High-Load Behavior
 
@@ -227,13 +262,15 @@ pub struct GrpcClientConfig {
 ### `GrpcServerBuilder` / `TracedGrpcServer`
 
 ```rust
-pub type TracedGrpcServer = Server<Stack<InboundTraceLayer, Identity>>;
+pub type TracedGrpcServer = Server<Stack<TrafficLayer, Stack<InboundTraceLayer, Identity>>>;
 
 pub struct GrpcServerBuilder { /* private */ }
 
 impl GrpcServerBuilder {
     pub fn new(config: GrpcServerConfig) -> Self;
-    // Returns a server with InboundTraceLayer pre-installed.
+    // Enable ingress rate limiting (optional; without it the traffic layer is a no-op).
+    pub fn with_traffic(self, registry: Arc<infra_config::TrafficRegistry>) -> Self;
+    // Returns a server with InboundTraceLayer + TrafficLayer pre-installed.
     pub fn build(self) -> Result<TracedGrpcServer, TransportError>;
 }
 ```

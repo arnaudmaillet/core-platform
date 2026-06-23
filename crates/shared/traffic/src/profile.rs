@@ -45,10 +45,20 @@ pub struct TrafficProfileSpec {
     pub scope: Scope,
     #[cfg_attr(feature = "serde", serde(default))]
     pub mode: Mode,
+    /// Whether throttle decisions are enforced; `false` is shadow mode. Defaults to `true`
+    /// (a profile is enforced unless explicitly shadowed — fail-closed default).
+    #[cfg_attr(feature = "serde", serde(default = "default_enforce"))]
+    pub enforce: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     pub lease_ms: Option<u64>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub on_backend_error: Option<BackendError>,
+}
+
+/// Default for the `enforce` field when absent from config: enforce (not shadow).
+#[cfg(feature = "serde")]
+fn default_enforce() -> bool {
+    true
 }
 
 impl TrafficProfileSpec {
@@ -58,6 +68,7 @@ impl TrafficProfileSpec {
             burst: self.burst,
             scope: self.scope,
             mode: self.mode,
+            enforce: self.enforce,
             lease_ms: self.lease_ms,
             on_backend_error: self.on_backend_error,
         }
@@ -102,6 +113,12 @@ impl TrafficProfile {
     /// The state-locality mode.
     pub fn mode(&self) -> Mode {
         self.config.load().mode
+    }
+
+    /// Whether throttle decisions should be acted on (`false` = shadow mode). Read by the
+    /// layer per request, so a hot-reload promotes shadow → enforce with no restart.
+    pub fn enforce(&self) -> bool {
+        self.config.load().enforce
     }
 
     /// A snapshot of the current runtime config.
