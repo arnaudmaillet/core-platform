@@ -21,6 +21,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -550,6 +551,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "chat"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "cqrs",
+ "dashmap 7.0.0-rc2",
+ "error",
+ "fred",
+ "futures",
+ "futures-util",
+ "http",
+ "once_cell",
+ "prost 0.14.4",
+ "prost-types",
+ "redis-storage",
+ "scylla",
+ "scylla-storage",
+ "serde",
+ "serde_json",
+ "telemetry",
+ "test-support",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.14.6",
+ "tonic-build",
+ "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "uuid",
+ "validate-core",
+ "validation",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,6 +630,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -1142,6 +1183,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -1524,6 +1566,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -2412,6 +2455,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -3009,6 +3053,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -3277,6 +3322,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -4430,6 +4476,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
@@ -4847,6 +4894,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-support"
+version = "0.1.0"
+dependencies = [
+ "rdkafka",
+ "scylla",
+ "scylla-storage",
+ "sqlx",
+ "testcontainers",
+ "testcontainers-modules",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "testcontainers"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4986,6 +5047,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telemetry",
+ "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",

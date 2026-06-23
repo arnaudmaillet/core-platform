@@ -13,7 +13,7 @@ thiserror = { workspace = true }
 tracing   = { workspace = true }
 http      = { workspace = true }
 tokio     = { workspace = true }
-fred      = { workspace = true, features = ["partial-tracing"] }
+fred      = { workspace = true, features = ["partial-tracing", "subscriber-client"] }
 
 [dev-dependencies]
 tokio              = { workspace = true, features = ["rt-multi-thread", "macros"] }

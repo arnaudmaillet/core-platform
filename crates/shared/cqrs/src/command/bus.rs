@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::sync::Arc;
 
 use crate::envelope::Envelope;
 use crate::error::CqrsError;
@@ -27,4 +28,15 @@ pub trait CommandBus: Send + Sync {
         &self,
         envelope: Envelope<C>,
     ) -> impl Future<Output = Result<(), CqrsError>> + Send + '_;
+}
+
+/// Forwarding impl so a single registered bus can be shared by reference-counted
+/// pointer (see the symmetric impl on [`QueryBus`](super::super::query::QueryBus)).
+impl<B: CommandBus> CommandBus for Arc<B> {
+    fn dispatch<C: Command>(
+        &self,
+        envelope: Envelope<C>,
+    ) -> impl Future<Output = Result<(), CqrsError>> + Send + '_ {
+        (**self).dispatch(envelope)
+    }
 }

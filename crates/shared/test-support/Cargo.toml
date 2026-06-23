@@ -1,0 +1,30 @@
+[package]
+name        = "test-support"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Shared integration-test scaffolding: container orchestration, migration runners, and the anti-flake await primitive. Dev-only — never linked into a service binary."
+
+# Never published, and not depended on by any production target — services pull it
+# in under `[dev-dependencies]` only.
+publish = false
+
+[dependencies]
+# ── Container orchestration ──────────────────────────────────────────────────
+testcontainers         = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["scylladb", "redis", "kafka", "postgres"] }
+rdkafka                = { workspace = true }
+
+# ── Async runtime ────────────────────────────────────────────────────────────
+tokio = { workspace = true }
+
+# ── ScyllaDB migration runner ────────────────────────────────────────────────
+scylla-storage = { workspace = true }
+scylla         = { workspace = true }
+
+# ── Postgres migration runner ────────────────────────────────────────────────
+sqlx = { workspace = true }
+
+tracing = { workspace = true }

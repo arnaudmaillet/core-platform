@@ -1,0 +1,72 @@
+[package]
+name        = "chat"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Chat microservice — unified Conversation layer (Group mesh + Channel broadcast), the Shadowing Pattern separating the bounded Member Plane from the sharded Audience Plane, ScyllaDB time-bucketed message logs, and Redis Cluster real-time routing."
+
+[dependencies]
+error          = { workspace = true }
+validate-core  = { workspace = true }
+validation     = { workspace = true }
+scylla-storage = { path = "../../shared/storage/scylla", package = "scylla-storage" }
+redis-storage  = { path = "../../shared/storage/redis",  package = "redis-storage" }
+cqrs           = { path = "../../shared/cqrs" }
+telemetry      = { path = "../../shared/telemetry" }
+transport      = { path = "../../shared/transport" }
+
+tokio        = { workspace = true }
+tokio-stream = { workspace = true }
+futures      = { workspace = true }
+futures-util = { workspace = true }
+async-trait  = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+thiserror    = { workspace = true }
+tracing      = { workspace = true }
+dashmap      = { workspace = true }
+once_cell    = { workspace = true }
+
+http   = { workspace = true }
+scylla = { workspace = true }
+fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
+
+tonic            = { workspace = true }
+tonic-prost      = { workspace = true }
+prost            = { workspace = true }
+prost-types      = { workspace = true }
+tonic-health     = { workspace = true }
+tonic-reflection = { workspace = true }
+
+[build-dependencies]
+tonic-build       = { workspace = true }
+tonic-prost-build = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p chat` stays a fast, infra-free unit run; the
+# live suite is opt-in via `cargo test -p chat --features integration-chat`.
+integration-chat = []
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-chat") ─────────────────────────
+# These are compiled for any `cargo test -p chat`, but the test code that uses
+# them is wholly behind `#[cfg(feature = "integration-chat")]`, so without the
+# feature the suite is an empty binary. Container orchestration, the RF=1
+# migration runner, and `await_until` come from the shared `test-support` crate.
+test-support = { workspace = true }
+futures      = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+tonic        = { workspace = true }
+
+scylla-storage = { path = "../../shared/storage/scylla", package = "scylla-storage" }
+redis-storage  = { path = "../../shared/storage/redis",  package = "redis-storage" }
+transport      = { path = "../../shared/transport" }
+cqrs           = { path = "../../shared/cqrs" }

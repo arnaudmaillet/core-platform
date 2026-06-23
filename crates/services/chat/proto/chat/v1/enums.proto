@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package chat.v1;
+
+// NOTE: enum values mirror the domain `tinyint` discriminants exactly
+// (proto value == domain value), so the gRPC layer converts with a direct cast
+// and never an off-by-one mapping. The zero value is a real variant, not an
+// UNSPECIFIED sentinel, because every field that carries these enums is required.
+
+// Immutable topology of a conversation.
+enum ConversationKind {
+    CONVERSATION_KIND_GROUP   = 0; // symmetric N<->N mesh, bounded, with presence
+    CONVERSATION_KIND_CHANNEL = 1; // asymmetric 1->N broadcast, no presence
+}
+
+// Mutable visibility — the Private/Public toggle.
+enum Visibility {
+    VISIBILITY_PRIVATE = 0;
+    VISIBILITY_PUBLIC  = 1;
+}
+
+// Role of a profile relative to a conversation.
+enum Role {
+    ROLE_OWNER      = 0; // member plane
+    ROLE_ADMIN      = 1; // member plane
+    ROLE_MEMBER     = 2; // member plane
+    ROLE_SUBSCRIBER = 3; // audience plane
+    ROLE_GUEST      = 4; // audience plane
+}
+
+// Payload type of a message.
+enum ContentType {
+    CONTENT_TYPE_TEXT   = 0;
+    CONTENT_TYPE_MEDIA  = 1;
+    CONTENT_TYPE_SYSTEM = 2;
+}

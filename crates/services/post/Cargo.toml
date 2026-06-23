@@ -39,5 +39,19 @@ scylla = { workspace = true }
 tonic-build       = { workspace = true }
 tonic-prost-build = { workspace = true }
 
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p post` stays a fast, infra-free unit run; the
+# live suite is opt-in via `cargo test -p post --features integration-post`.
+integration-post = []
+
 [dev-dependencies]
 tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-post") ─────────────────────────
+# Container orchestration, the RF=1 migration runner, and `await_until` come from
+# the shared `test-support` crate; the suite code is wholly behind
+# `#[cfg(feature = "integration-post")]`.
+test-support = { workspace = true }
+async-trait  = { workspace = true }
+uuid         = { workspace = true }

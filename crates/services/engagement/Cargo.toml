@@ -44,5 +44,20 @@ fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
 tonic-build       = { workspace = true }
 tonic-prost-build = { workspace = true }
 
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p engagement` stays a fast, infra-free unit run;
+# the live suite is opt-in via
+# `cargo test -p engagement --features integration-engagement`.
+integration-engagement = []
+
 [dev-dependencies]
 tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-engagement") ───────────────────
+# Container orchestration and `await_until` come from the shared `test-support`
+# crate; the Redis-primary hot path needs only Redis (no ScyllaDB/Kafka). The
+# suite code is wholly behind `#[cfg(feature = "integration-engagement")]`.
+test-support = { workspace = true }
+async-trait  = { workspace = true }
+uuid         = { workspace = true }

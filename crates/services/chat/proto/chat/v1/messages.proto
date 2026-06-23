@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package chat.v1;
+
+import "chat/v1/enums.proto";
+
+// ── Shared view types ───────────────────────────────────────────────────────
+
+// Projection of a single message. IDs only for actors; the client hydrates
+// display data from the profile service.
+message MessageView {
+    string      message_id    = 1;
+    string      sender_id     = 2;
+    ContentType content_type  = 3;
+    string      body          = 4;
+    string      media_ref     = 5; // empty unless content_type == MEDIA
+    string      reply_to      = 6; // empty unless this is a threaded reply
+    int64       created_at_ms = 7;
+}
+
+// Projection of a member-roster entry.
+message MemberView {
+    string profile_id   = 1;
+    Role   role         = 2;
+    int64  joined_at_ms = 3;
+    string last_read    = 4; // empty until the member has read anything
+}
+
+// ── Real-time stream payloads ───────────────────────────────────────────────
+
+message PresenceEvent {
+    string member_id = 1;
+    bool   online    = 2;
+}
+
+message TypingEvent {
+    string member_id = 1;
+}
+
+message ReceiptEvent {
+    string member_id = 1;
+    string last_read = 2;
+}
+
+// A Member-Plane event: a message OR a presence/typing/receipt signal.
+message ChatEvent {
+    oneof event {
+        MessageView   message  = 1;
+        PresenceEvent presence = 2;
+        TypingEvent   typing   = 3;
+        ReceiptEvent  receipt  = 4;
+    }
+}
+
+// ── Commands ────────────────────────────────────────────────────────────────
+
+message CreateConversationRequest {
+    ConversationKind kind     = 1;
+    string           owner_id = 2;
+}
+message CreateConversationResponse {
+    string conversation_id = 1;
+}
+
+message SendMessageRequest {
+    string      conversation_id = 1;
+    string      sender_id       = 2;
+    ContentType content_type    = 3;
+    string      body            = 4;
+    string      media_ref       = 5;
+    string      reply_to        = 6;
+}
+message SendMessageResponse {
+    string message_id = 1;
+}
+
+message ToggleVisibilityRequest {
+    string conversation_id = 1;
+    string actor_id        = 2;
+    bool   make_public     = 3;
+}
+
+message JoinAsMemberRequest {
+    string conversation_id = 1;
+    string profile_id      = 2;
+}
+
+message SubscribeRequest {
+    string conversation_id = 1;
+    string subscriber_id   = 2;
+}
+
+message UnsubscribeRequest {
+    string conversation_id = 1;
+    string subscriber_id   = 2;
+}
+
+message MarkReadRequest {
+    string conversation_id = 1;
+    string member_id       = 2;
+    string message_id      = 3;
+}
+
+message SendTypingRequest {
+    string conversation_id = 1;
+    string member_id       = 2;
+}
+
+message HeartbeatRequest {
+    string conversation_id = 1;
+    string member_id       = 2;
+}
+
+message CommandResponse {
+    bool   success = 1;
+    string message = 2;
+}
+
+// ── Queries ─────────────────────────────────────────────────────────────────
+
+message GetHistoryRequest {
+    string conversation_id = 1;
+    string requester_id    = 2;
+    int32  limit           = 3;
+    string page_token      = 4;
+}
+message GetHistoryResponse {
+    repeated MessageView messages        = 1;
+    string               next_page_token = 2;
+}
+
+message ListMembersRequest {
+    string conversation_id = 1;
+    string requester_id    = 2;
+}
+message ListMembersResponse {
+    repeated MemberView members = 1;
+}
+
+message ListSubscriptionsRequest {
+    string subscriber_id = 1;
+    int32  limit         = 2;
+    string page_token    = 3;
+}
+message ListSubscriptionsResponse {
+    repeated string conversation_ids = 1;
+    string          next_page_token  = 2;
+}
+
+// ── Streaming ───────────────────────────────────────────────────────────────
+
+message StreamConversationRequest {
+    string conversation_id = 1;
+    string member_id       = 2;
+}
+message StreamConversationResponse {
+    ChatEvent event = 1;
+}
+
+message StreamPublicRequest {
+    string conversation_id = 1;
+    string subscriber_id   = 2; // ephemeral guest id; used for shard assignment
+}
+message StreamPublicResponse {
+    MessageView message = 1;
+}
