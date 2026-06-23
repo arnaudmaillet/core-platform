@@ -8,11 +8,15 @@ use super::strategy::BackoffStrategy;
 ///
 /// Full jitter is recommended for large fleets — it spreads retries uniformly
 /// across the window, eliminating thundering-herd spikes after an outage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum JitterKind {
     /// Pure exponential: `base_ms * 2^(attempt-1)`, capped at `max_ms`. No randomness.
     None,
     /// `rand(0, cap)` — maximum spread; preferred for thundering-herd mitigation.
+    /// Default for large fleets.
+    #[default]
     Full,
     /// `cap/2 + rand(0, cap/2)` — guarantees at least half the cap as minimum wait.
     Equal,

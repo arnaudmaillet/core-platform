@@ -14,6 +14,14 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
 tower = { workspace = true }
+arc-swap = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[features]
+# Opt-in (de)serialization for the config/wire types. The core middleware stays
+# pure: with this flag off, `resilience` pulls in no serde and no derive code.
+serde = ["dep:serde"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+serde_json = { workspace = true }

@@ -1,22 +1,29 @@
 use std::{
     future::Future,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
+use arc_swap::ArcSwap;
 use tower::Service;
 
 use super::config::TimeoutConfig;
 use crate::error::ResilienceError;
 
 /// Tower [`Service`] that enforces a maximum response duration on the inner service.
+///
+/// The deadline is held behind an [`ArcSwap`] so the control plane can hot-swap it at
+/// runtime: a lock-free `store()` replaces the config, and the *next* `call()` picks it
+/// up. The handle is shared (via [`Arc`]) across every service clone this was layered
+/// onto, so one swap reconfigures the whole stack for that downstream dependency.
 pub struct TimeoutService<S> {
     inner: S,
-    config: TimeoutConfig,
+    config: Arc<ArcSwap<TimeoutConfig>>,
 }
 
 impl<S> TimeoutService<S> {
-    pub(crate) fn new(inner: S, config: TimeoutConfig) -> Self {
+    pub(crate) fn new(inner: S, config: Arc<ArcSwap<TimeoutConfig>>) -> Self {
         Self { inner, config }
     }
 }
@@ -36,8 +43,12 @@ where
     }
 
     fn call(&mut self, req: Req) -> Self::Future {
+        // Capture the deadline snapshot once, at the very start of the invocation, so the
+        // request runs against a single consistent value even if the config is swapped
+        // mid-flight. `duration` is `Copy`, so the `ArcSwap` guard is dropped immediately
+        // — nothing is held across the await point.
+        let duration = self.config.load().duration;
         let fut = self.inner.call(req);
-        let duration = self.config.duration;
 
         Box::pin(async move {
             // TODO: impl —

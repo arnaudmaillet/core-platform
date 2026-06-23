@@ -1,5 +1,6 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
+use arc_swap::ArcSwap;
 use tokio::sync::Mutex;
 
 use super::config::CircuitBreakerConfig;
@@ -27,15 +28,20 @@ struct Inner {
 
 /// Thread-safe circuit breaker state machine.
 ///
-/// All mutable state is co-located behind a single `Mutex` to guarantee that
-/// state transitions are atomic (no split-brain between counters and the state enum).
+/// All mutable *runtime* state (counters, current state, timers) lives behind a single
+/// `Mutex` so transitions are atomic (no split-brain between counters and the state enum).
+///
+/// The *config* is kept separately, behind an [`ArcSwap`], because it has a different
+/// lifecycle: it is read-only input to transitions and can be hot-swapped by the control
+/// plane without ever resetting live circuit state. Each operation samples one config
+/// snapshot up-front (`load_full`) so a single call reasons against consistent thresholds.
 pub struct StateMachine {
-    config: CircuitBreakerConfig,
+    config: Arc<ArcSwap<CircuitBreakerConfig>>,
     inner: Mutex<Inner>,
 }
 
 impl StateMachine {
-    pub fn new(config: CircuitBreakerConfig) -> Self {
+    pub fn new(config: Arc<ArcSwap<CircuitBreakerConfig>>) -> Self {
         Self {
             config,
             inner: Mutex::new(Inner {
@@ -48,10 +54,17 @@ impl StateMachine {
         }
     }
 
+    /// Returns the shared config handle so the control plane can `store()` new thresholds
+    /// at runtime. Swapping the config never disturbs the live circuit state.
+    pub fn config_handle(&self) -> Arc<ArcSwap<CircuitBreakerConfig>> {
+        Arc::clone(&self.config)
+    }
+
     /// Returns the current logical state, automatically driving the Open → HalfOpen
     /// transition when `open_duration` has elapsed.
     pub async fn state(&self) -> CircuitState {
         // TODO: impl —
+        //   let config = self.config.load_full(); // request-scoped snapshot
         //   lock inner;
         //   if inner.state == Open && inner.open_since.unwrap().elapsed() >= config.open_duration:
         //     inner.state = HalfOpen; inner.consecutive_failures = 0; inner.consecutive_successes = 0;
@@ -63,6 +76,7 @@ impl StateMachine {
     /// Records a successful call; drives HalfOpen → Closed when the success threshold is met.
     pub async fn on_success(&self) {
         // TODO: impl —
+        //   let config = self.config.load_full(); // request-scoped snapshot
         //   lock inner; inner.consecutive_failures = 0; inner.consecutive_successes += 1;
         //   if inner.state == HalfOpen && inner.consecutive_successes >= config.success_threshold:
         //     inner.state = Closed; inner.half_open_inflight = 0;
@@ -73,6 +87,7 @@ impl StateMachine {
     /// Records a failed call; drives Closed → Open on threshold, or HalfOpen → Open immediately.
     pub async fn on_failure(&self) {
         // TODO: impl —
+        //   let config = self.config.load_full(); // request-scoped snapshot
         //   lock inner; inner.consecutive_successes = 0; inner.consecutive_failures += 1;
         //   match inner.state:
         //     Closed if consecutive_failures >= config.failure_threshold:
@@ -88,6 +103,7 @@ impl StateMachine {
     /// Tries to reserve a Half-Open probe slot. Returns `false` if the cap is already reached.
     pub async fn try_acquire_half_open_slot(&self) -> bool {
         // TODO: impl —
+        //   let config = self.config.load_full(); // request-scoped snapshot
         //   lock inner;
         //   if inner.half_open_inflight < config.half_open_max_calls:
         //     inner.half_open_inflight += 1; return true

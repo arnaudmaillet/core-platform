@@ -3235,8 +3235,11 @@ dependencies = [
 name = "resilience"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "error",
  "rand 0.9.2",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.4.13",

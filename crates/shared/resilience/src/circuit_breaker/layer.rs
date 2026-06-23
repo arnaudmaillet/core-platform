@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use tower::Layer;
 
 use super::{config::CircuitBreakerConfig, service::CircuitBreakerService, state::StateMachine};
@@ -26,10 +27,23 @@ pub struct CircuitBreakerLayer {
 }
 
 impl CircuitBreakerLayer {
+    /// Builds a layer owning a fresh circuit, seeded with a static `config`.
     pub fn new(config: CircuitBreakerConfig) -> Self {
+        Self::from_handle(Arc::new(ArcSwap::from_pointee(config)))
+    }
+
+    /// Builds a layer whose thresholds are driven by an externally-owned handle (e.g. one
+    /// held by [`crate::ResilienceProfile`]), so the control plane can hot-swap them.
+    pub fn from_handle(config: Arc<ArcSwap<CircuitBreakerConfig>>) -> Self {
         Self {
             state_machine: Arc::new(StateMachine::new(config)),
         }
+    }
+
+    /// Returns the shared config handle so a control plane can `store()` new thresholds
+    /// at runtime without resetting the live circuit state.
+    pub fn handle(&self) -> Arc<ArcSwap<CircuitBreakerConfig>> {
+        self.state_machine.config_handle()
     }
 }
 
