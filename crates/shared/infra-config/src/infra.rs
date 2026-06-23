@@ -7,7 +7,7 @@ use tracing::warn;
 
 use crate::{
     cache::CacheRegistry, error::ConfigError, reload::Reloadable, registry::ResilienceRegistry,
-    schema::InfrastructureConfig, telemetry::{LogFilterControl, TelemetrySection},
+    schema::InfrastructureConfig, telemetry::{TelemetryControl, TelemetrySection},
     traffic::TrafficRegistry,
 };
 
@@ -29,11 +29,12 @@ pub struct InfraRegistry {
     resilience: Arc<ResilienceRegistry>,
     cache: Option<Arc<CacheRegistry>>,
     traffic: Option<Arc<TrafficRegistry>>,
-    /// The `[telemetry]` section from boot config (the filter to apply once a control is
-    /// attached). The live filter lives inside the tracing subscriber, swapped via the control.
+    /// The `[telemetry]` section from boot config (the dials to apply once a control is
+    /// attached). The live state lives inside the tracing subscriber / sampler, swapped via
+    /// the control.
     telemetry: Option<TelemetrySection>,
-    /// Drives the process-global log filter; attached by the binary after `telemetry::init`.
-    log_control: Option<Arc<dyn LogFilterControl>>,
+    /// Drives the process-global telemetry dials; attached by the binary after `telemetry::init`.
+    telemetry_control: Option<Arc<dyn TelemetryControl>>,
 }
 
 impl InfraRegistry {
@@ -52,25 +53,37 @@ impl InfraRegistry {
             None => None,
         };
 
-        Ok(Self { resilience, cache, traffic, telemetry: config.telemetry, log_control: None })
+        Ok(Self {
+            resilience,
+            cache,
+            traffic,
+            telemetry: config.telemetry,
+            telemetry_control: None,
+        })
     }
 
-    /// Attaches the log-filter control (from `telemetry::init`) and **applies the boot
-    /// `[telemetry]` filter immediately** — making the ConfigMap the source of truth over the
-    /// env/default bootstrap. A bad boot filter fails loud here (caught at deploy).
+    /// Attaches the telemetry control (from `telemetry::init`) and **applies the boot
+    /// `[telemetry]` dials immediately** — making the ConfigMap the source of truth over the
+    /// env/default bootstrap. A bad boot filter fails loud here (caught at deploy); the
+    /// sampling range was already validated by `from_config`.
     ///
     /// Call once, after `from_config` and before sharing the registry / starting the watcher.
-    pub fn with_log_control(
+    pub fn with_telemetry_control(
         mut self,
-        control: Arc<dyn LogFilterControl>,
+        control: Arc<dyn TelemetryControl>,
     ) -> Result<Self, ConfigError> {
         if let Some(section) = &self.telemetry {
-            control
-                .validate_filter(&section.log_filter)
-                .and_then(|()| control.set_filter(&section.log_filter))
-                .map_err(ConfigError::validation)?;
+            if let Some(filter) = &section.log_filter {
+                control
+                    .validate_filter(filter)
+                    .and_then(|()| control.set_filter(filter))
+                    .map_err(ConfigError::validation)?;
+            }
+            if let Some(ratio) = section.sampling_ratio {
+                control.set_sampling_ratio(ratio);
+            }
         }
-        self.log_control = Some(control);
+        self.telemetry_control = Some(control);
         Ok(self)
     }
 
@@ -95,11 +108,13 @@ impl InfraRegistry {
     pub fn apply(&self, config: InfrastructureConfig) -> Result<(), ConfigError> {
         config.validate()?;
 
-        // Fail-closed pre-check: the log filter is the one section whose *syntax* lives
+        // Fail-closed pre-check: the log filter is the one telemetry dial whose *syntax* lives
         // behind the control, so validate it here (before any swap) to keep the reload
-        // all-or-nothing — a bad directive rejects the whole document.
-        if let (Some(control), Some(section)) = (&self.log_control, &config.telemetry) {
-            control.validate_filter(&section.log_filter).map_err(ConfigError::validation)?;
+        // all-or-nothing. (The sampling range was already checked by `config.validate()`.)
+        if let (Some(control), Some(TelemetrySection { log_filter: Some(filter), .. })) =
+            (&self.telemetry_control, &config.telemetry)
+        {
+            control.validate_filter(filter).map_err(ConfigError::validation)?;
         }
 
         self.resilience.apply_section(config.resilience)?;
@@ -126,17 +141,23 @@ impl InfraRegistry {
             (None, None) => {}
         }
 
-        // Telemetry: swap the live log filter (already validated above, so this won't fail
-        // on syntax). A configured section with no control attached is a wiring gap — warn.
-        match (&self.log_control, config.telemetry) {
+        // Telemetry: swap the live dials. The filter was syntax-checked above and the
+        // sampling range by `config.validate()`, so neither fails here. A configured section
+        // with no control attached is a wiring gap — warn.
+        match (&self.telemetry_control, config.telemetry) {
             (Some(control), Some(section)) => {
-                control.set_filter(&section.log_filter).map_err(ConfigError::validation)?;
+                if let Some(filter) = &section.log_filter {
+                    control.set_filter(filter).map_err(ConfigError::validation)?;
+                }
+                if let Some(ratio) = section.sampling_ratio {
+                    control.set_sampling_ratio(ratio);
+                }
             }
             (Some(_), None) => {
-                warn!("[telemetry] section removed from reloaded config — keeping current filter")
+                warn!("[telemetry] section removed from reloaded config — keeping current dials")
             }
             (None, Some(_)) => {
-                warn!("[telemetry] section present but no log control attached — ignored")
+                warn!("[telemetry] section present but no telemetry control attached — ignored")
             }
             (None, None) => {}
         }

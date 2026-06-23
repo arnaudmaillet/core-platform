@@ -38,6 +38,6 @@ pub use infra::InfraRegistry;
 pub use registry::ResilienceRegistry;
 pub use reload::Reloadable;
 pub use schema::{InfrastructureConfig, ResilienceSection};
-pub use telemetry::{LogFilterControl, TelemetrySection};
+pub use telemetry::{TelemetryControl, TelemetrySection};
 pub use traffic::{TrafficRegistry, TrafficSection};
 pub use watcher::{load_from_path, spawn_watcher};
