@@ -12,7 +12,7 @@ In addition to the runtime mechanism, the crate exposes an **externalized-config
 
 **Critical role in the ecosystem:** this crate sits between the `transport` crate (gRPC/Kafka clients) and the `cqrs` bus. Any outbound call to a downstream service wraps through these layers — enabling fleet-wide resilience policy without modifying business logic.
 
-> **Implementation status:** Core Tower wiring, the `serde` boundary, the `ArcSwap` hot-reload plumbing, and the `ResilienceProfile` resolution layer are complete and compile clean (tested). The `StateMachine`, `RetryService`, and `TimeoutService` *call bodies* remain `todo!()` stubs with full inline specifications. The architecture, interfaces, and configuration contracts are locked.
+> **Implementation status:** Production-ready. The full runtime engine — `StateMachine` transitions, `CircuitBreakerService`, `RetryService`, and `TimeoutService` — is implemented and covered by unit tests, alongside the `serde` boundary, the `ArcSwap` hot-reload plumbing, and the `ResilienceProfile` resolution layer. No `todo!()` stubs remain.
 
 ---
 
@@ -364,7 +364,7 @@ This crate is a **pure library** — it consumes no environment variables and ha
 
 ### Structured log events (via `tracing`)
 
-The following events are emitted at key state transitions (emitted once the `todo!()` implementations are filled in):
+The following events are emitted at key state transitions:
 
 | Event | Level | Fields | Trigger |
 |---|---|---|---|
@@ -376,7 +376,7 @@ The following events are emitted at key state transitions (emitted once the `tod
 
 ### Prometheus / OTel metrics
 
-<!-- TODO: [No OTel metric exports are defined in this crate yet. Add counters/histograms via the `telemetry` workspace crate once stub implementations are complete.] -->
+<!-- TODO: [No OTel metric exports are defined in this crate yet. Add counters/histograms via the `telemetry` workspace crate.] -->
 
 **Recommended alerts to implement at the service level:**
 
@@ -418,13 +418,18 @@ cargo test -p resilience -- --nocapture
 
 This crate is a pure in-process library. **No Docker Compose, no database, no broker** is required for local development or testing.
 
-### Implementing a `todo!()` stub
+### Modifying the runtime engine
 
-Each unimplemented method has a detailed inline specification in a `// TODO: impl —` comment block. Follow it exactly to preserve the intended state-machine invariants. After implementing, ensure:
+The `StateMachine` transitions and the three service `call` bodies are fully implemented and unit-tested. When changing state-machine invariants or a `call` path, preserve these rules:
 
-1. `cargo test -p resilience` passes.
-2. `cargo clippy -p resilience -- -D warnings` is clean.
-3. The relevant `state()` / `on_success()` / `on_failure()` sequence is covered by a `#[tokio::test]` in the same file.
+- **Config is sampled once per operation** (`ArcSwap::load_full` / `load`) so a single call reasons against a consistent snapshot — never re-load mid-decision.
+- **Config swaps must never reset live state** (counters, timers, circuit state).
+- **Boxed `Send` futures** must not hold a non-`Send` response/error across an `.await` (see `RetryService`, which resolves each attempt to a `Send` delay before sleeping).
+
+After changing anything, ensure:
+
+1. `cargo test -p resilience --features serde` passes (add a `#[tokio::test]` in the same file for any new transition).
+2. `cargo clippy -p resilience --all-targets -- -D warnings` is clean.
 
 ---
 
