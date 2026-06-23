@@ -2,45 +2,6 @@
 
 [workspace]
 members = [
-    # "backend/services/account/api/command-server",
-    # "backend/services/account/workers/outbox-producer",
-    # "backend/services/account/workers/cache-invalidator",
-    # "backend/services/account/workers/janitor",
-    # "backend/services/profile/workers/outbox-producer",
-    # "backend/services/profile/workers/cache-invalidator",
-    # "backend/services/profile/workers/events-consumer",
-    # "backend/services/profile/api/command-server",
-    # "backend/services/social/api/command-server",
-    "backend/services/post/api/command-server",
-    "backend/services/post/api/query-server",
-    # "backend/services/post/workers/profile-projection",
-    # "backend/services/geo-discovery/api/server",
-    "common/rust/shared-proto",
-    "crates/account-old",
-    "crates/auth",
-    "crates/profile-old",
-    "crates/shared-kernel",
-    "crates/gamification",
-    "crates/social",
-    # "backend/gateway/graphql-bff",
-    "crates/infra-sqlx",
-    "crates/infra-fred",
-    "crates/infra-scylla",
-    "crates/infra-kafka",
-    "crates/infra-test",
-    "crates/account-test-utils",
-    "crates/profile-test-utils",
-    "crates/social-test-utils",
-    "crates/auth-test-utils",
-    # "crates/post-old",
-    # "crates/post-test-utils",
-    "crates/shared-kernel-test-utils",
-    "crates/post/core",
-    "crates/post/profile",
-    "crates/post/proto-bridge",
-    "crates/post/assembly",
-    "crates/post/utils",
-    "crates/post/audio",
     "crates/shared/error",
     "crates/shared/resilience",
     "crates/shared/telemetry",
@@ -53,7 +14,16 @@ members = [
     "crates/shared/validate-core",
     "crates/shared/validation",
     "crates/shared/test-support",
-    "crates/services/account", "crates/services/profile", "crates/services/social-graph", "crates/services/post", "crates/services/engagement", "crates/services/comment", "crates/services/geo-discovery", "crates/services/notification", "crates/services/timeline", "crates/services/chat",
+    "crates/services/account",
+    "crates/services/profile",
+    "crates/services/social-graph",
+    "crates/services/post",
+    "crates/services/engagement",
+    "crates/services/comment",
+    "crates/services/geo-discovery",
+    "crates/services/notification",
+    "crates/services/timeline",
+    "crates/services/chat",
 ]
 resolver = "2"
 
@@ -66,29 +36,6 @@ repository = "https://github.com/ton-repo/projet"
 description = "core-platform repo"
 
 [workspace.dependencies]
-account-test-utils = { path = "crates/account-test-utils" }
-account-old = { path = "crates/account-old" }
-shared-kernel = { path = "crates/shared-kernel" }
-shared-kernel-test-utils = { path = "crates/shared-kernel-test-utils" }
-shared-proto = { path = "common/rust/shared-proto" }
-social = { path = "crates/social" }
-social-test-utils = { path = "crates/social-test-utils" }
-profile-old = { path = "crates/profile-old" }
-profile-test-utils = { path = "crates/profile-test-utils" }
-post-older = { path = "crates/post/core" }
-post-utils = { path = "crates/post/utils" }
-post-assembly = { path = "crates/post/assembly" }
-post-profile = { path = "crates/post/profile" }
-post-proto-bridge = { path = "crates/post/proto-bridge" }
-# post = { path = "crates/post-old" }
-# post-test-utils = { path = "crates/post-test-utils" }
-auth = { path = "crates/auth" }
-auth-test-utils = { path = "crates/auth-test-utils" }
-infra-sqlx = { path = "crates/infra-sqlx" }
-infra-scylla = { path = "crates/infra-scylla" }
-infra-fred = { path = "crates/infra-fred" }
-infra-kafka = { path = "crates/infra-kafka" }
-infra-test = { path = "crates/infra-test" }
 error = { path = "crates/shared/error" }
 resilience = { path = "crates/shared/resilience" }
 validate-core = { path = "crates/shared/validate-core" }

@@ -38,56 +38,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "account-old"
-version = "0.1.0"
-dependencies = [
- "account-test-utils",
- "async-trait",
- "auth",
- "chrono",
- "infra-sqlx",
- "infra-test",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "sqlx",
- "tokio",
- "tonic 0.14.6",
- "tonic-prost-build",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "account-test-utils"
-version = "0.1.0"
-dependencies = [
- "account-old",
- "async-trait",
- "auth",
- "auth-test-utils",
- "chrono",
- "infra-sqlx",
- "infra-test",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "tokio",
- "tokio-stream",
- "tonic 0.14.6",
- "tracing",
-]
-
-[[package]]
-name = "adler2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -156,18 +106,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compression"
-version = "0.4.42"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79b3f8a79cccc2898f31920fc69f304859b3bd567490f75ebf51ae1c792a9ac"
-dependencies = [
- "compression-codecs",
- "compression-core",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -216,27 +154,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
-name = "audio"
-version = "0.1.0"
-
-[[package]]
-name = "auth"
-version = "0.1.0"
-dependencies = [
- "auth-test-utils",
- "base64 0.22.1",
- "jsonwebtoken",
- "openssl",
- "reqwest",
- "serde",
- "serde_json",
- "shared-kernel",
- "thiserror 2.0.18",
- "tokio",
- "tonic 0.14.6",
-]
-
-[[package]]
 name = "auth-context"
 version = "0.1.0"
 dependencies = [
@@ -252,19 +169,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
-]
-
-[[package]]
-name = "auth-test-utils"
-version = "0.1.0"
-dependencies = [
- "auth",
- "jsonwebtoken",
- "reqwest",
- "serde_json",
- "shared-kernel",
- "testcontainers",
- "tokio",
 ]
 
 [[package]]
@@ -415,15 +319,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "block-buffer"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdd35008169921d80bc60d3d0ab416eecb028c4cd653352907921d95084790be"
-dependencies = [
- "hybrid-array",
-]
-
-[[package]]
 name = "bollard"
 version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -566,13 +461,15 @@ dependencies = [
  "once_cell",
  "prost 0.14.4",
  "prost-types",
+ "rdkafka",
  "redis-storage",
  "scylla",
  "scylla-storage",
  "serde",
  "serde_json",
  "telemetry",
- "test-support",
+ "testcontainers",
+ "testcontainers-modules",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -601,16 +498,6 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "windows-link",
-]
-
-[[package]]
-name = "chrono-tz"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
-dependencies = [
- "chrono",
- "phf 0.12.1",
 ]
 
 [[package]]
@@ -647,23 +534,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compression-codecs"
-version = "0.4.38"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce2548391e9c1929c21bf6aa2680af86fe4c1b33e6cea9ac1cfeec0bd11218cf"
-dependencies = [
- "compression-core",
- "flate2",
- "memchr",
-]
-
-[[package]]
-name = "compression-core"
-version = "0.4.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -677,12 +547,6 @@ name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
-
-[[package]]
-name = "const-oid"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "const-random"
@@ -746,15 +610,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpufeatures"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "cqrs"
 version = "0.1.0"
 dependencies = [
@@ -788,15 +643,6 @@ name = "crc16"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
-
-[[package]]
-name = "crc32fast"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "crossbeam-channel"
@@ -851,24 +697,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto-common"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
-dependencies = [
- "hybrid-array",
-]
-
-[[package]]
 name = "curve25519-dalek"
 version = "4.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fb8b7c4503de7d6ae7b42ab72a5a59857b4c937ec27a3d4539dba95b5ab2be"
 dependencies = [
  "cfg-if",
- "cpufeatures 0.2.17",
+ "cpufeatures",
  "curve25519-dalek-derive",
- "digest 0.10.7",
+ "digest",
  "fiat-crypto",
  "rustc_version",
  "subtle",
@@ -990,7 +827,7 @@ version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
- "const-oid 0.9.6",
+ "const-oid",
  "pem-rfc7468",
  "zeroize",
 ]
@@ -1011,21 +848,10 @@ version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
- "block-buffer 0.10.4",
- "const-oid 0.9.6",
- "crypto-common 0.1.7",
+ "block-buffer",
+ "const-oid",
+ "crypto-common",
  "subtle",
-]
-
-[[package]]
-name = "digest"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
-dependencies = [
- "block-buffer 0.12.0",
- "const-oid 0.10.2",
- "crypto-common 0.2.2",
 ]
 
 [[package]]
@@ -1069,7 +895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee27f32b5c5292967d2d4a9d7f1e0b0aed2c15daded5a60300e4abb9d8020bca"
 dependencies = [
  "der",
- "digest 0.10.7",
+ "digest",
  "elliptic-curve",
  "rfc6979",
  "signature",
@@ -1095,7 +921,7 @@ dependencies = [
  "curve25519-dalek",
  "ed25519",
  "serde",
- "sha2 0.10.9",
+ "sha2",
  "subtle",
  "zeroize",
 ]
@@ -1110,29 +936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "elasticsearch"
-version = "9.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bb303aa6e1d28c0c86b6fbfe484fd0fd3f512629aeed1ac4f6b85f81d9834a"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "dyn-clone",
- "flate2",
- "lazy_static",
- "parking_lot",
- "percent-encoding",
- "reqwest",
- "rustc_version",
- "serde",
- "serde_json",
- "serde_with",
- "tokio",
- "url",
- "void",
-]
-
-[[package]]
 name = "elliptic-curve"
 version = "0.13.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1140,7 +943,7 @@ checksum = "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47"
 dependencies = [
  "base16ct",
  "crypto-bigint",
- "digest 0.10.7",
+ "digest",
  "ff",
  "generic-array",
  "group",
@@ -1316,16 +1119,6 @@ name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
-
-[[package]]
-name = "flate2"
-version = "1.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
-dependencies = [
- "crc32fast",
- "miniz_oxide",
-]
 
 [[package]]
 name = "float-cmp"
@@ -1528,10 +1321,6 @@ dependencies = [
  "pin-utils",
  "slab",
 ]
-
-[[package]]
-name = "gamification"
-version = "0.1.0"
 
 [[package]]
 name = "generic-array"
@@ -1742,7 +1531,7 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
- "digest 0.10.7",
+ "digest",
 ]
 
 [[package]]
@@ -1798,15 +1587,6 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
-
-[[package]]
-name = "hybrid-array"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9155a582abd142abc056962c29e3ce5ff2ad5469f4246b537ed42c5deba857da"
-dependencies = [
- "typenum",
-]
 
 [[package]]
 name = "hyper"
@@ -2094,70 +1874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "infra-fred"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "fred",
- "shared-kernel",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "infra-kafka"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "rdkafka",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
-name = "infra-scylla"
-version = "0.1.0"
-dependencies = [
- "scylla",
- "scylla-macros",
- "shared-kernel",
-]
-
-[[package]]
-name = "infra-sqlx"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "serde_json",
- "shared-kernel",
- "sqlx",
- "uuid",
-]
-
-[[package]]
-name = "infra-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "infra-fred",
- "infra-kafka",
- "infra-scylla",
- "infra-sqlx",
- "once_cell",
- "serde_json",
- "testcontainers",
- "testcontainers-modules",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2215,7 +1931,7 @@ dependencies = [
  "rsa",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2",
  "signature",
  "simple_asn1",
  "zeroize",
@@ -2357,7 +2073,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
- "digest 0.10.7",
+ "digest",
 ]
 
 [[package]]
@@ -2377,16 +2093,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "miniz_oxide"
-version = "0.8.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
-dependencies = [
- "adler2",
- "simd-adler32",
-]
 
 [[package]]
 name = "mio"
@@ -2756,7 +2462,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "primeorder",
- "sha2 0.10.9",
+ "sha2",
 ]
 
 [[package]]
@@ -2768,7 +2474,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "primeorder",
- "sha2 0.10.9",
+ "sha2",
 ]
 
 [[package]]
@@ -2826,43 +2532,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pbjson"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8edd1efdd8ab23ba9cb9ace3d9987a72663d5d7c9f74fa00b51d6213645cf6c"
-dependencies = [
- "base64 0.22.1",
- "serde",
-]
-
-[[package]]
-name = "pbjson-build"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ed4d5c6ae95e08ac768883c8401cf0e8deb4e6e1d6a4e1fd3d2ec4f0ec63200"
-dependencies = [
- "heck",
- "itertools",
- "prost 0.14.4",
- "prost-types",
-]
-
-[[package]]
-name = "pbjson-types"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14e2757d877c0f607a82ce1b8560e224370f159d66c5d52eb55ea187ef0350e"
-dependencies = [
- "bytes",
- "chrono",
- "pbjson",
- "pbjson-build",
- "prost 0.14.4",
- "prost-build",
- "serde",
-]
-
-[[package]]
 name = "pem"
 version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2896,77 +2565,6 @@ dependencies = [
  "fixedbitset",
  "hashbrown 0.15.5",
  "indexmap 2.13.0",
-]
-
-[[package]]
-name = "phf"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "913273894cec178f401a31ec4b656318d95473527be05c0752cc41cdc32be8b7"
-dependencies = [
- "phf_shared 0.12.1",
-]
-
-[[package]]
-name = "phf"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
-dependencies = [
- "phf_macros",
- "phf_shared 0.13.1",
- "serde",
-]
-
-[[package]]
-name = "phf_codegen"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49aa7f9d80421bca176ca8dbfebe668cc7a2684708594ec9f3c0db0805d5d6e1"
-dependencies = [
- "phf_generator",
- "phf_shared 0.13.1",
-]
-
-[[package]]
-name = "phf_generator"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
-dependencies = [
- "fastrand",
- "phf_shared 0.13.1",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "812f032b54b1e759ccd5f8b6677695d5268c588701effba24601f6932f8269ef"
-dependencies = [
- "phf_generator",
- "phf_shared 0.13.1",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "phf_shared"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06005508882fb681fd97892ecff4b7fd0fee13ef1aa569f8695dae7ab9099981"
-dependencies = [
- "siphasher",
-]
-
-[[package]]
-name = "phf_shared"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
-dependencies = [
- "siphasher",
 ]
 
 [[package]]
@@ -3067,136 +2665,6 @@ dependencies = [
  "uuid",
  "validate-core",
  "validation",
-]
-
-[[package]]
-name = "post-assembly"
-version = "0.1.0"
-dependencies = [
- "infra-fred",
- "infra-scylla",
- "post-older",
- "post-profile",
- "shared-kernel",
- "tokio",
-]
-
-[[package]]
-name = "post-command-server"
-version = "0.1.0"
-dependencies = [
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "post-assembly",
- "post-older",
- "post-proto-bridge",
- "prost-types",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tokio-stream",
- "tonic 0.14.6",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "post-older"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "post-proto-bridge",
- "post-utils",
- "serde",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "post-profile"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "infra-fred",
- "infra-scylla",
- "serde",
- "serde_json",
- "shared-kernel",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "post-proto-bridge"
-version = "0.1.0"
-dependencies = [
- "prost 0.14.4",
- "prost-build",
- "prost-types",
- "tonic 0.14.6",
- "tonic-prost",
- "tonic-prost-build",
-]
-
-[[package]]
-name = "post-query-server"
-version = "0.1.0"
-dependencies = [
- "auth",
- "auth-test-utils",
- "chrono",
- "dotenvy",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "post-assembly",
- "post-older",
- "post-proto-bridge",
- "prost-types",
- "serde_json",
- "shared-kernel",
- "tokio",
- "tokio-stream",
- "tonic 0.14.6",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "post-utils"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "auth",
- "auth-test-utils",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "post-assembly",
- "post-older",
- "post-profile",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "tokio",
- "tokio-stream",
- "tonic 0.14.6",
- "tracing",
 ]
 
 [[package]]
@@ -3336,55 +2804,6 @@ dependencies = [
  "uuid",
  "validate-core",
  "validation",
-]
-
-[[package]]
-name = "profile-old"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "elasticsearch",
- "futures",
- "infra-scylla",
- "infra-sqlx",
- "infra-test",
- "profile-test-utils",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "sqlx",
- "tokio",
- "tonic 0.14.6",
- "tonic-prost-build",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "profile-test-utils"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "auth",
- "auth-test-utils",
- "infra-fred",
- "infra-kafka",
- "infra-sqlx",
- "infra-test",
- "profile-old",
- "serde_json",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "tokio",
- "tokio-stream",
- "tonic 0.14.6",
- "tracing",
 ]
 
 [[package]]
@@ -3873,8 +3292,8 @@ version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8573f03f5883dcaebdfcf4725caa1ecb9c15b2ef50c43a07b816e06799bb12d"
 dependencies = [
- "const-oid 0.9.6",
- "digest 0.10.7",
+ "const-oid",
+ "digest",
  "num-bigint-dig",
  "num-integer",
  "num-traits",
@@ -4271,8 +3690,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
 dependencies = [
  "cfg-if",
- "cpufeatures 0.2.17",
- "digest 0.10.7",
+ "cpufeatures",
+ "digest",
 ]
 
 [[package]]
@@ -4288,19 +3707,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
- "cpufeatures 0.2.17",
- "digest 0.10.7",
-]
-
-[[package]]
-name = "sha2"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "446ba717509524cb3f22f17ecc096f10f4822d76ab5c0b9822c5f9c284e825f4"
-dependencies = [
- "cfg-if",
- "cpufeatures 0.3.0",
- "digest 0.11.3",
+ "cpufeatures",
+ "digest",
 ]
 
 [[package]]
@@ -4310,58 +3718,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shared-kernel"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "chrono-tz",
- "dashmap 7.0.0-rc2",
- "dyn-clone",
- "futures",
- "futures-util",
- "idna",
- "phf 0.13.1",
- "phf_codegen",
- "rand 0.9.2",
- "regex",
- "seahash",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "unicode-normalization",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "shared-kernel-test-utils"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "shared-kernel",
- "uuid",
-]
-
-[[package]]
-name = "shared-proto"
-version = "0.1.0"
-dependencies = [
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost 0.14.4",
- "prost-build",
- "prost-types",
- "serde",
- "tonic 0.14.6",
- "tonic-build",
- "tonic-prost",
- "tonic-prost-build",
 ]
 
 [[package]]
@@ -4386,15 +3742,9 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
- "digest 0.10.7",
+ "digest",
  "rand_core 0.6.4",
 ]
-
-[[package]]
-name = "simd-adler32"
-version = "0.3.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
 
 [[package]]
 name = "simple_asn1"
@@ -4407,12 +3757,6 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
 ]
-
-[[package]]
-name = "siphasher"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
 
 [[package]]
 name = "slab"
@@ -4434,26 +3778,6 @@ name = "snap"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
-
-[[package]]
-name = "social"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "infra-fred",
- "infra-scylla",
- "infra-test",
- "serde",
- "serde_json",
- "shared-kernel",
- "shared-proto",
- "social-test-utils",
- "tokio",
- "tonic 0.14.6",
- "tracing",
- "uuid",
-]
 
 [[package]]
 name = "social-graph"
@@ -4490,26 +3814,6 @@ dependencies = [
  "uuid",
  "validate-core",
  "validation",
-]
-
-[[package]]
-name = "social-test-utils"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "auth",
- "auth-test-utils",
- "chrono",
- "infra-fred",
- "infra-test",
- "shared-kernel",
- "shared-kernel-test-utils",
- "shared-proto",
- "social",
- "tokio",
- "tokio-stream",
- "tonic 0.14.6",
- "tracing",
 ]
 
 [[package]]
@@ -4592,7 +3896,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2",
  "smallvec",
  "thiserror 2.0.18",
  "tokio",
@@ -4631,7 +3935,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2",
  "sqlx-core",
  "sqlx-mysql",
  "sqlx-postgres",
@@ -4654,7 +3958,7 @@ dependencies = [
  "bytes",
  "chrono",
  "crc",
- "digest 0.10.7",
+ "digest",
  "dotenvy",
  "either",
  "futures-channel",
@@ -4675,7 +3979,7 @@ dependencies = [
  "rsa",
  "serde",
  "sha1",
- "sha2 0.10.9",
+ "sha2",
  "smallvec",
  "sqlx-core",
  "stringprep",
@@ -4715,7 +4019,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2",
  "smallvec",
  "sqlx-core",
  "stringprep",
@@ -5165,7 +4469,6 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
- "futures-util",
  "pin-project-lite",
  "tokio",
 ]
@@ -5372,17 +4675,12 @@ version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
 dependencies = [
- "async-compression",
  "bitflags",
  "bytes",
- "futures-core",
  "futures-util",
  "http",
  "http-body",
- "http-body-util",
  "pin-project-lite",
- "tokio",
- "tokio-util",
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
@@ -5713,12 +5011,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "want"
