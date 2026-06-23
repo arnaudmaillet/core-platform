@@ -127,7 +127,96 @@ let channel = GrpcClientBuilder::new(
 let app = profile::app::App::build(backends, registry.cache().expect("[cache] configured")).await?;
 ```
 
-A resilience-only deployment can drive the same watcher with `Arc<ResilienceRegistry>` directly — both implement `Reloadable`. See [`examples/infrastructure.toml`](examples/infrastructure.toml) for the full `[resilience]` + `[cache]` catalogs and bindings.
+A resilience-only deployment can drive the same watcher with `Arc<ResilienceRegistry>` directly — both implement `Reloadable`. See [`examples/infrastructure.toml`](examples/infrastructure.toml) for the full catalogs and bindings.
+
+---
+
+## 🚀 Binary bootstrap — rollout checklist
+
+`infra-config` is pure composition; the **serving binary** owns activation. Wire it once at
+boot, in this order:
+
+1. **`telemetry::init` first** — before any `tracing` macro. Keep the `TelemetryGuard` alive
+   for the whole process. Enable telemetry's `infra-config` feature so its control handle
+   implements [`TelemetryControl`].
+2. **Load + resolve** the document (`load_from_path` → `InfraRegistry::from_config`).
+3. **Attach the telemetry control** (`with_telemetry_control`) — applies the `[telemetry]`
+   dials at boot (ConfigMap is the source of truth over `RUST_LOG`/env); a bad boot value
+   fails loud here.
+4. **`spawn_watcher`** — one watcher drives every section; **keep the returned guard alive**.
+5. **Hand each section to its consumer**: `resilience()` → gRPC client builder; `cache()` →
+   each service's `App::build`; `traffic()` → the gRPC server.
+6. **Server-side rate limiting**: `GrpcServerBuilder::with_traffic(traffic)`, plus
+   `with_traffic_backend(...)` **only if** a profile uses `mode = "distributed"`.
+7. **Prune loops**: spawn periodic `traffic.prune_all()` and (distributed) `backend.prune(lease_ms)`
+   to bound memory for unbounded `per_caller` keyspaces.
+8. **Keep `_telemetry` and `_watcher` bound** for the process lifetime.
+
+```toml
+# serving binary Cargo.toml
+infra-config  = { workspace = true }
+telemetry     = { workspace = true, features = ["infra-config"] } # enables the control bridge
+traffic-redis = { workspace = true }                              # only for mode = "distributed"
+```
+
+```rust,ignore
+use std::sync::Arc;
+use std::time::Duration;
+use infra_config::{load_from_path, spawn_watcher, InfraRegistry, TelemetryControl};
+
+const CONFIG: &str = "/etc/infra/infrastructure.toml"; // mounted ConfigMap
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 1. Telemetry first; keep the guard alive. (binary deps telemetry w/ `infra-config`.)
+    let cfg = telemetry::TelemetryConfig::from_env("post-command", env!("CARGO_PKG_VERSION"));
+    let _telemetry = telemetry::init(cfg)?;
+
+    // 2-3. Load, resolve, attach the telemetry control (applies [telemetry] dials at boot).
+    let control: Arc<dyn TelemetryControl> = Arc::new(_telemetry.telemetry_control());
+    let infra = Arc::new(
+        InfraRegistry::from_config(load_from_path(CONFIG.as_ref())?)?
+            .with_telemetry_control(control)?,
+    );
+
+    // 4. One watcher for every section. KEEP IT ALIVE.
+    let _watcher = spawn_watcher(CONFIG.into(), Arc::clone(&infra))?;
+
+    // 5. Cache → service composition root.
+    let app = post::app::App::build(backends, infra.cache().expect("[cache] configured")).await?;
+
+    // 6. gRPC server with ingress rate limiting.
+    let mut server = transport::grpc::server::GrpcServerBuilder::new(Default::default());
+    if let Some(traffic) = infra.traffic() {
+        server = server.with_traffic(Arc::clone(&traffic));
+
+        // Distributed budgets: wire the Redis-lease backend (only if a profile uses it).
+        let backend = Arc::new(traffic_redis::RedisLeaseBackend::new(redis.clone()));
+        server = server.with_traffic_backend(Arc::clone(&backend) as Arc<dyn traffic::QuotaBackend>);
+
+        // 7. Prune loops — bound memory for per_caller keyspaces.
+        let lease_ms = 1_000;
+        tokio::spawn({ let t = Arc::clone(&traffic); async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(60));
+            loop { tick.tick().await; t.prune_all(); }
+        }});
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(60));
+            loop { tick.tick().await; backend.prune(lease_ms); }
+        });
+    }
+
+    server.build()?
+        .add_service(/* PostServiceServer::new(handler) */)
+        .serve("0.0.0.0:50051".parse()?)
+        .await?;
+    Ok(()) // 8. _telemetry + _watcher drop here, at process exit.
+}
+```
+
+> **Incremental adoption:** every section is optional. A binary that only wants resilience +
+> cache skips steps 1/3/6/7; one without distributed profiles skips `with_traffic_backend`
+> and its prune loop. Absent sections leave today's behaviour untouched.
 
 ---
 
