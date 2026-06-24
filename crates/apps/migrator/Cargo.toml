@@ -1,0 +1,18 @@
+[package]
+name                 = "migrator"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Schema-migration runner for the fleet — applies each service's embedded ScyllaDB/PostgreSQL migrations, tracked and idempotent."
+
+[dependencies]
+scylla-storage   = { workspace = true }
+postgres-storage = { workspace = true }
+
+scylla      = { workspace = true }
+sqlx        = { workspace = true }
+tokio       = { workspace = true }
+anyhow      = { workspace = true }
+include_dir = { workspace = true }
