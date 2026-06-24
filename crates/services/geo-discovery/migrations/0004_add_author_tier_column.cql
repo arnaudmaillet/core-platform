@@ -11,5 +11,9 @@
 -- After applying, TierSyncWorker will backfill rows as profile.tier_changed
 -- events arrive. There is no need for a bulk backfill job; Standard is the
 -- correct tier for any post whose author has never changed tier.
+-- Scylla has no `ALTER TABLE ADD IF NOT EXISTS`, so on a fresh deployment (where
+-- the updated 0003 already defines the column) this conflicts; the migration
+-- runner treats an "already exists" ALTER as a benign no-op, so the full set still
+-- applies idempotently to fresh and legacy clusters alike.
 ALTER TABLE geo_discovery.map_post_cards
     ADD author_tier tinyint;

@@ -7,7 +7,9 @@
 # dev/smoke stack — single-node, developer-mode, no persistence guarantees.
 services:
   scylla:
-    image: scylladb/scylla:6.0
+    # 5.4 (pre-tablets): vnode keyspaces tolerate the migrations' RF=3 on a
+    # single node (under-replicated — fine for a dev/smoke stack; prod has 3).
+    image: scylladb/scylla:5.4
     command: --smp 1 --developer-mode 1 --overprovisioned 1
     ports:
       - "9042:9042"

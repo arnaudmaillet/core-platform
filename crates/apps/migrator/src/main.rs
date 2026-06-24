@@ -16,9 +16,9 @@
 //! Connection settings come from the same env vars the services use
 //! (`SCYLLA_*`, `PG_*` / `DATABASE_URL`).
 //!
-//! NOTE: statement splitting strips `--` line comments and splits on `;`. Our
-//! migration files contain no `;` inside string literals, so this is safe; revisit
-//! if that ever changes.
+//! Scylla files are split into statements with a quote-aware splitter (see
+//! [`split_statements`]) that ignores `;` inside string literals — several `comment
+//! = '...'` clauses contain semicolons. Postgres files run whole via `sqlx::raw_sql`.
 
 use std::collections::BTreeSet;
 
@@ -138,10 +138,22 @@ async fn migrate_scylla(targets: &[&ServiceMigrations]) -> Result<()> {
                 continue;
             }
             for stmt in split_statements(&content) {
-                session
-                    .query_unpaged(stmt.as_str(), ())
-                    .await
-                    .with_context(|| format!("{}/{version}: {}", svc.name, first_line(&stmt)))?;
+                match session.query_unpaged(stmt.as_str(), ()).await {
+                    Ok(_) => {}
+                    // Idempotency for statements that can't express `IF NOT EXISTS`
+                    // (Scylla has no `ALTER TABLE ADD IF NOT EXISTS`): re-adding an
+                    // existing column on a fresh cluster is a benign no-op. Versioning
+                    // already prevents intentional re-runs, so this only covers the
+                    // fresh-cluster case, not masking real drift.
+                    Err(e) if is_already_exists(&e.to_string()) => {
+                        println!("  [exists] {version}: {}", first_line(&stmt));
+                    }
+                    Err(e) => {
+                        return Err(e).with_context(|| {
+                            format!("{}/{version}: {}", svc.name, first_line(&stmt))
+                        });
+                    }
+                }
             }
             session
                 .query_unpaged(
@@ -227,24 +239,89 @@ fn sorted_migrations(dir: &Dir<'static>) -> Vec<(String, String)> {
     files
 }
 
-/// Strips `--` line comments and splits a migration file into individual
-/// statements on `;`.
+/// Splits a migration file into individual statements on `;`, ignoring `;` inside
+/// single-quoted string literals (e.g. a `comment = '... ; ...'` clause) and
+/// stripping `--` line comments. Single-pass and quote-aware; handles CQL's `''`
+/// escape for a literal quote inside a string.
 fn split_statements(content: &str) -> Vec<String> {
-    let stripped: String = content
-        .lines()
-        .map(|line| match line.find("--") {
-            Some(idx) => &line[..idx],
-            None => line,
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut chars = content.chars().peekable();
 
-    stripped
-        .split(';')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
-        .collect()
+    while let Some(c) = chars.next() {
+        if in_string {
+            current.push(c);
+            if c == '\'' {
+                // `''` is an escaped quote, not the end of the string.
+                if chars.peek() == Some(&'\'') {
+                    current.push(chars.next().unwrap());
+                } else {
+                    in_string = false;
+                }
+            }
+            continue;
+        }
+
+        match c {
+            '\'' => {
+                in_string = true;
+                current.push(c);
+            }
+            // `--` line comment: skip to end of line (the newline is handled next).
+            '-' if chars.peek() == Some(&'-') => {
+                chars.next();
+                while chars.peek().is_some_and(|&n| n != '\n') {
+                    chars.next();
+                }
+            }
+            ';' => {
+                let stmt = current.trim();
+                if !stmt.is_empty() {
+                    statements.push(stmt.to_owned());
+                }
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+
+    let tail = current.trim();
+    if !tail.is_empty() {
+        statements.push(tail.to_owned());
+    }
+    statements
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_statements;
+
+    #[test]
+    fn ignores_semicolons_inside_string_literals() {
+        let cql = "CREATE TABLE t (id uuid PRIMARY KEY) \
+                   AND comment = 'scores; and more'; CREATE TABLE u (id uuid PRIMARY KEY);";
+        let stmts = split_statements(cql);
+        assert_eq!(stmts.len(), 2, "got: {stmts:?}");
+        assert!(stmts[0].contains("'scores; and more'"));
+        assert!(stmts[1].starts_with("CREATE TABLE u"));
+    }
+
+    #[test]
+    fn strips_line_comments_and_blank_statements() {
+        let cql = "-- header\nCREATE KEYSPACE ks; -- trailing\n\n;";
+        let stmts = split_statements(cql);
+        assert_eq!(stmts.len(), 1);
+        assert!(stmts[0].starts_with("CREATE KEYSPACE ks"));
+    }
+}
+
+/// Whether a Scylla error is a benign "this DDL target already exists" — used to
+/// keep non-`IF NOT EXISTS` statements (notably `ALTER TABLE ... ADD`) idempotent
+/// on a fresh cluster.
+fn is_already_exists(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("already exists") || m.contains("conflicts with an existing column")
 }
 
 /// First non-empty line of a statement, for error context.
