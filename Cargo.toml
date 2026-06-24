@@ -40,6 +40,15 @@ members = [
     "crates/apps/timeline-server",
     "crates/apps/migrator",
     "crates/contracts/social-graph-api",
+    "crates/contracts/account-api",
+    "crates/contracts/chat-api",
+    "crates/contracts/comment-api",
+    "crates/contracts/engagement-api",
+    "crates/contracts/geo-discovery-api",
+    "crates/contracts/notification-api",
+    "crates/contracts/post-api",
+    "crates/contracts/profile-api",
+    "crates/contracts/timeline-api",
 ]
 resolver = "2"
 
@@ -77,6 +86,15 @@ service-runtime  = { path = "crates/platform/service-runtime" }
 
 # Contracts tier — generated gRPC stub crates (server + client + descriptor)
 social-graph-api = { path = "crates/contracts/social-graph-api" }
+account-api = { path = "crates/contracts/account-api" }
+chat-api = { path = "crates/contracts/chat-api" }
+comment-api = { path = "crates/contracts/comment-api" }
+engagement-api = { path = "crates/contracts/engagement-api" }
+geo-discovery-api = { path = "crates/contracts/geo-discovery-api" }
+notification-api = { path = "crates/contracts/notification-api" }
+post-api = { path = "crates/contracts/post-api" }
+profile-api = { path = "crates/contracts/profile-api" }
+timeline-api = { path = "crates/contracts/timeline-api" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
 profile          = { path = "crates/services/profile" }

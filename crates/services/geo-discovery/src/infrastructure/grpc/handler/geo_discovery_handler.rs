@@ -7,9 +7,7 @@ use crate::application::query::query_tile::QueryTileQuery;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("geo_discovery.v1");
-}
+pub use geo_discovery_api as proto;
 
 pub use proto::geo_discovery_service_server::GeoDiscoveryServiceServer;
 

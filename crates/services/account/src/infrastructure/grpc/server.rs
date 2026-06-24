@@ -9,7 +9,7 @@ use proto::account_service_server::AccountService;
 
 /// Encoded protobuf descriptor set for gRPC server reflection, emitted by
 /// `build.rs`. Registered by the service's runtime adapter ([`crate::service`]).
-pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("account_descriptor");
+pub const FILE_DESCRIPTOR_SET: &[u8] = account_api::FILE_DESCRIPTOR_SET;
 
 #[tonic::async_trait]
 impl<CB, QB> AccountService for AccountServiceHandler<CB, QB>

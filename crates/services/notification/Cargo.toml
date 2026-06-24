@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Notification microservice — semantic event ingestion, ScyllaDB activity feed, gRPC server-streaming, and layered write-collapse fan-out mitigation."
 
 [dependencies]
+notification-api = { workspace = true }
 error          = { workspace = true }
 validate-core  = { workspace = true }
 validation     = { workspace = true }
@@ -44,10 +45,6 @@ http             = { workspace = true }
 
 scylla = { workspace = true }
 fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

@@ -18,7 +18,7 @@ use crate::infrastructure::grpc::handler::comment_service_handler::{
 use crate::infrastructure::publisher::KafkaCommentEventPublisher;
 
 pub const FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("comment_descriptor");
+    comment_api::FILE_DESCRIPTOR_SET;
 
 /// The gRPC handler type the server serves: the buses are shared by `Arc` (the
 /// same instances the composition root retains).

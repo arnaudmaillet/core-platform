@@ -18,9 +18,7 @@ use crate::domain::value_object::CommentStatus;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("comment.v1");
-}
+pub use comment_api as proto;
 
 pub use proto::comment_service_server::CommentServiceServer;
 

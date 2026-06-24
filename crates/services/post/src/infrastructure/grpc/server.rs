@@ -7,7 +7,7 @@ use proto::post_service_server::PostService;
 
 /// Encoded protobuf descriptor set for gRPC server reflection, emitted by
 /// `build.rs`. Registered by the service's runtime adapter ([`crate::service`]).
-pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("post_descriptor");
+pub const FILE_DESCRIPTOR_SET: &[u8] = post_api::FILE_DESCRIPTOR_SET;
 
 #[tonic::async_trait]
 impl<CB, QB> PostService for PostServiceHandler<CB, QB>

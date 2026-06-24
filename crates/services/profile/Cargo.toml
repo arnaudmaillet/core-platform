@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Profile microservice — public identity metadata layer for hyperscale read traffic."
 
 [dependencies]
+profile-api = { workspace = true }
 # ── Shared platform infrastructure ───────────────────────────────────────────
 error            = { workspace = true }
 validate-core    = { workspace = true }
@@ -57,10 +58,6 @@ http              = { workspace = true }
 # ── Storage drivers (direct access for advanced query patterns) ───────────────
 scylla = { workspace = true }
 fred   = { workspace = true }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

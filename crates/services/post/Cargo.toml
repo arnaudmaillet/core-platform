@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Post microservice — multi-format media content production pillar (Carousel / MainVideo / TextOnly)."
 
 [dependencies]
+post-api = { workspace = true }
 error            = { workspace = true }
 validate-core    = { workspace = true }
 validation       = { workspace = true }
@@ -36,10 +37,6 @@ tonic-health      = { workspace = true }
 tonic-reflection  = { workspace = true }
 http              = { workspace = true }
 scylla = { workspace = true }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

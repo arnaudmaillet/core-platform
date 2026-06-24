@@ -16,9 +16,7 @@ use crate::application::query::{
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("profile.v1");
-}
+pub use profile_api as proto;
 
 pub use proto::profile_service_server::ProfileServiceServer;
 
