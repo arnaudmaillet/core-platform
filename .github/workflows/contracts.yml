@@ -19,6 +19,8 @@ on:
 
 permissions:
   contents: read
+  # buf-action posts a lint/breaking summary comment on the PR.
+  pull-requests: write
 
 jobs:
   buf:
