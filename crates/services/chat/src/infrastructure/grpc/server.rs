@@ -13,7 +13,7 @@ use crate::app::{App, AppConfig, Backends};
 use crate::config::ChatConfig;
 use crate::infrastructure::grpc::handler::{ChatServiceHandler, ChatServiceServer};
 
-pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("chat_descriptor");
+pub const FILE_DESCRIPTOR_SET: &[u8] = chat_api::FILE_DESCRIPTOR_SET;
 
 /// Bootstraps and runs the chat gRPC server.
 ///

@@ -21,9 +21,7 @@ use crate::domain::value_object::{AudioId, AudioKind, AudioReference, PostId};
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("post.v1");
-}
+pub use post_api as proto;
 
 pub use proto::post_service_server::PostServiceServer;
 

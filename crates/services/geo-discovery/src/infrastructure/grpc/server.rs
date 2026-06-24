@@ -16,7 +16,7 @@ use crate::infrastructure::grpc::handler::{GeoDiscoveryHandler, GeoDiscoveryServ
 
 /// Proto file descriptor set embedded at build time for server reflection.
 pub const FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("geo_discovery_descriptor");
+    geo_discovery_api::FILE_DESCRIPTOR_SET;
 
 /// The gRPC handler type the server serves: the query bus is shared by `Arc`
 /// (the same instance the composition root retains).

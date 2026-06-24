@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Geo-discovery microservice — H3 spatial indexing engine with Redis-primary ZSET scoring, msgpack card caching, and ScyllaDB TWCS durability for a real-time global map feed."
 
 [dependencies]
+geo-discovery-api = { workspace = true }
 error          = { workspace = true }
 validate-core  = { workspace = true }
 validation     = { workspace = true }
@@ -46,10 +47,6 @@ h3o = "0.6"
 
 # MessagePack serialization for compact Redis card payloads (~45% smaller than JSON).
 rmp-serde = "1.3"
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

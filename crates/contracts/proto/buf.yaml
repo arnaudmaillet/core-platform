@@ -1,0 +1,17 @@
+# Single source of truth for all fleet gRPC contracts.
+#
+# Each service's package lives under <package>/v1/. The per-service `*-api` crates
+# in crates/contracts/ compile from this root (so cross-package/cross-service
+# resolution shares one --proto_path).
+#
+# Lint runs now; breaking-change checks against a baseline ref are a follow-up
+# (wired in CI once the contracts tier has landed).
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

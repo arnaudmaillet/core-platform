@@ -8,9 +8,7 @@ use crate::application::query::get_following_feed::GetFollowingFeedQuery;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("timeline.v1");
-}
+pub use timeline_api as proto;
 
 pub use proto::timeline_service_server::TimelineServiceServer;
 

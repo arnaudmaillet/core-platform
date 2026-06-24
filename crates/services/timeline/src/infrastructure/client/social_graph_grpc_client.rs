@@ -6,10 +6,10 @@ use crate::domain::value_object::{AuthorId, ProfileId};
 use crate::error::TimelineError;
 
 // ── Generated social-graph client stubs ──────────────────────────────────────
+// Stubs come from the contracts tier (`social-graph-api`) — no cross-service
+// proto recompilation. Aliased as `sg_proto` to keep the references below stable.
 
-mod sg_proto {
-    tonic::include_proto!("social_graph.v1");
-}
+use social_graph_api as sg_proto;
 
 use sg_proto::{
     social_graph_service_client::SocialGraphServiceClient,

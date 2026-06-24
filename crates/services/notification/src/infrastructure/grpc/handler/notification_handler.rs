@@ -19,9 +19,7 @@ use crate::domain::value_object::ProfileId;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("notification.v1");
-}
+pub use notification_api as proto;
 
 pub use proto::notification_service_server::NotificationServiceServer;
 

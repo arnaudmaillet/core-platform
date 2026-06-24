@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Account microservice — complete lifecycle management for physical persons on the platform."
 
 [dependencies]
+account-api = { workspace = true }
 # ── Shared platform infrastructure ────────────────────────────────────────────
 error            = { workspace = true }
 validate-core    = { workspace = true }
@@ -51,10 +52,6 @@ tonic-health      = { workspace = true }
 tonic-reflection  = { workspace = true }
 http              = { workspace = true }
 sqlx              = { workspace = true }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

@@ -22,7 +22,7 @@ use crate::infrastructure::publisher::KafkaEngagementEventPublisher;
 
 /// Proto file descriptor blob embedded at build time for server reflection.
 pub const FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("engagement_descriptor");
+    engagement_api::FILE_DESCRIPTOR_SET;
 
 /// The gRPC handler type the server serves: the buses are shared by `Arc` (the
 /// same instances the composition root retains).

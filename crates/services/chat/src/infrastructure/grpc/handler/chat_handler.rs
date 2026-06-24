@@ -32,9 +32,7 @@ use crate::infrastructure::streaming::ConversationBroadcastRegistry;
 
 // ── Proto inclusion ─────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("chat.v1");
-}
+pub use chat_api as proto;
 
 pub use proto::chat_service_server::ChatServiceServer;
 

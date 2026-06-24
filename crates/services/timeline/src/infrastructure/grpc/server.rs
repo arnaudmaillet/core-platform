@@ -8,4 +8,4 @@
 
 /// Proto file descriptor blob embedded at build time for server reflection.
 pub const FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("timeline_descriptor");
+    timeline_api::FILE_DESCRIPTOR_SET;

@@ -31,9 +31,7 @@ use crate::application::query::{
     list_accounts_by_status::{AccountListView, ListAccountsByStatusQuery},
 };
 // ── Proto inclusion ───────────────────────────────────────────────────────────
-pub mod proto {
-    tonic::include_proto!("account.v1");
-}
+pub use account_api as proto;
 
 pub use proto::account_service_server::AccountServiceServer;
 

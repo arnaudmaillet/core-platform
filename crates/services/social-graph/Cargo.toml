@@ -44,6 +44,7 @@ thiserror    = { workspace = true }
 tracing      = { workspace = true }
 
 # ── gRPC / Protobuf ───────────────────────────────────────────────────────────
+social-graph-api  = { workspace = true }   # generated stubs (contracts tier)
 tonic             = { workspace = true }
 tonic-prost       = { workspace = true }
 prost             = { workspace = true }
@@ -55,10 +56,6 @@ http              = { workspace = true }
 # ── Storage drivers (direct access for advanced query patterns) ───────────────
 scylla = { workspace = true }
 fred   = { workspace = true }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

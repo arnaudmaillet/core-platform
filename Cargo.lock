@@ -6,6 +6,7 @@ version = 4
 name = "account"
 version = "0.1.0"
 dependencies = [
+ "account-api",
  "anyhow",
  "async-trait",
  "auth-context",
@@ -27,16 +28,25 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "account-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -469,6 +479,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chat-api",
  "chrono",
  "cqrs",
  "dashmap 7.0.0-rc2",
@@ -496,16 +507,25 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "chat-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -540,6 +560,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "comment-api",
  "cqrs",
  "error",
  "http",
@@ -555,16 +576,25 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "comment-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -1018,6 +1048,7 @@ dependencies = [
  "chrono",
  "cqrs",
  "dashmap 7.0.0-rc2",
+ "engagement-api",
  "error",
  "fred",
  "futures",
@@ -1036,16 +1067,25 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "engagement-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -1422,6 +1462,7 @@ dependencies = [
  "fred",
  "futures",
  "futures-util",
+ "geo-discovery-api",
  "h3o",
  "http",
  "prost 0.14.4",
@@ -1438,16 +1479,25 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "geo-discovery-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -2374,6 +2424,7 @@ dependencies = [
  "futures",
  "futures-util",
  "http",
+ "notification-api",
  "once_cell",
  "prost 0.14.4",
  "prost-types",
@@ -2390,16 +2441,25 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "notification-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -2898,6 +2958,7 @@ dependencies = [
  "error",
  "futures",
  "http",
+ "post-api",
  "prost 0.14.4",
  "prost-types",
  "scylla",
@@ -2910,16 +2971,25 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "post-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -3048,6 +3118,7 @@ dependencies = [
  "futures",
  "http",
  "infra-config",
+ "profile-api",
  "prost 0.14.4",
  "prost-types",
  "redis-storage",
@@ -3062,16 +3133,25 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "profile-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -4139,21 +4219,31 @@ dependencies = [
  "serde",
  "serde_json",
  "service-runtime",
+ "social-graph-api",
  "telemetry",
  "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "social-graph-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -4712,21 +4802,32 @@ dependencies = [
  "serde",
  "serde_json",
  "service-runtime",
+ "social-graph-api",
  "telemetry",
  "test-support",
  "thiserror 2.0.18",
+ "timeline-api",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "timeline-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]

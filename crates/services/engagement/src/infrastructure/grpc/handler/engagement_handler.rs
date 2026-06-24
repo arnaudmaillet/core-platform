@@ -15,9 +15,7 @@ use crate::domain::value_object::ReactionKind;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
 
-pub mod proto {
-    tonic::include_proto!("engagement.v1");
-}
+pub use engagement_api as proto;
 
 pub use proto::engagement_service_server::EngagementServiceServer;
 

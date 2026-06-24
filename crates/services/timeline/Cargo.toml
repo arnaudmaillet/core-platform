@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Timeline microservice — hybrid fan-out-on-write / fan-out-on-read home feed engine with Redis-backed hot caches and ScyllaDB cold-start recovery."
 
 [dependencies]
+timeline-api = { workspace = true }
 # ── Shared platform infrastructure ────────────────────────────────────────────
 error          = { workspace = true }
 validate-core  = { workspace = true }
@@ -40,6 +41,7 @@ thiserror = { workspace = true }
 tracing   = { workspace = true }
 
 # ── gRPC / proto ─────────────────────────────────────────────────────────────
+social-graph-api = { workspace = true }   # cross-service client stubs (contracts tier)
 tonic            = { workspace = true }
 tonic-prost      = { workspace = true }
 prost            = { workspace = true }
@@ -51,10 +53,6 @@ http             = { workspace = true }
 # ── Storage drivers ───────────────────────────────────────────────────────────
 scylla = { workspace = true }
 fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

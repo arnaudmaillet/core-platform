@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Engagement microservice — weighted reaction scoring engine with Redis-primary Lua atomicity and Kafka-backed ScyllaDB durability."
 
 [dependencies]
+engagement-api = { workspace = true }
 error          = { workspace = true }
 validate-core  = { workspace = true }
 validation     = { workspace = true }
@@ -41,10 +42,6 @@ http             = { workspace = true }
 
 scylla = { workspace = true }
 fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
-
-[build-dependencies]
-tonic-build       = { workspace = true }
-tonic-prost-build = { workspace = true }
 
 [features]
 # Gates the live, container-backed integration suite (tests/integration.rs).

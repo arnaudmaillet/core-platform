@@ -2,21 +2,21 @@
 
 [workspace]
 members = [
-    "crates/shared/error",
-    "crates/shared/resilience",
-    "crates/shared/infra-config",
-    "crates/shared/traffic",
-    "crates/shared/traffic-redis",
-    "crates/shared/telemetry",
-    "crates/shared/transport",
-    "crates/shared/cqrs",
-    "crates/shared/storage/postgres",
-    "crates/shared/storage/scylla",
-    "crates/shared/storage/redis",
-    "crates/shared/auth-context",
-    "crates/shared/validate-core",
-    "crates/shared/validation",
-    "crates/shared/test-support",
+    "crates/foundation/error",
+    "crates/foundation/resilience",
+    "crates/foundation/infra-config",
+    "crates/foundation/traffic",
+    "crates/platform/traffic-redis",
+    "crates/platform/telemetry",
+    "crates/platform/transport",
+    "crates/platform/cqrs",
+    "crates/storage/postgres",
+    "crates/storage/scylla",
+    "crates/storage/redis",
+    "crates/platform/auth-context",
+    "crates/foundation/validate-core",
+    "crates/platform/validation",
+    "crates/platform/test-support",
     "crates/platform/service-runtime",
     "crates/services/account",
     "crates/services/profile",
@@ -39,6 +39,16 @@ members = [
     "crates/apps/account-server",
     "crates/apps/timeline-server",
     "crates/apps/migrator",
+    "crates/contracts/social-graph-api",
+    "crates/contracts/account-api",
+    "crates/contracts/chat-api",
+    "crates/contracts/comment-api",
+    "crates/contracts/engagement-api",
+    "crates/contracts/geo-discovery-api",
+    "crates/contracts/notification-api",
+    "crates/contracts/post-api",
+    "crates/contracts/profile-api",
+    "crates/contracts/timeline-api",
 ]
 resolver = "2"
 
@@ -57,22 +67,34 @@ description = "core-platform repo"
 # NB: the `postgres` crate is exposed under the `postgres-storage` key (via
 # `package`) to avoid colliding with the crates.io `postgres` crate and to keep
 # the naming symmetric with `scylla-storage` / `redis-storage`.
-error             = { path = "crates/shared/error" }
-resilience        = { path = "crates/shared/resilience" }
-infra-config      = { path = "crates/shared/infra-config" }
-traffic           = { path = "crates/shared/traffic" }
-traffic-redis     = { path = "crates/shared/traffic-redis" }
-telemetry        = { path = "crates/shared/telemetry" }
-transport        = { path = "crates/shared/transport" }
-cqrs             = { path = "crates/shared/cqrs" }
-auth-context     = { path = "crates/shared/auth-context" }
-validate-core    = { path = "crates/shared/validate-core" }
-validation       = { path = "crates/shared/validation" }
-postgres-storage = { path = "crates/shared/storage/postgres", package = "postgres" }
-scylla-storage   = { path = "crates/shared/storage/scylla" }
-redis-storage    = { path = "crates/shared/storage/redis" }
-test-support     = { path = "crates/shared/test-support" }
+error             = { path = "crates/foundation/error" }
+resilience        = { path = "crates/foundation/resilience" }
+infra-config      = { path = "crates/foundation/infra-config" }
+traffic           = { path = "crates/foundation/traffic" }
+traffic-redis     = { path = "crates/platform/traffic-redis" }
+telemetry        = { path = "crates/platform/telemetry" }
+transport        = { path = "crates/platform/transport" }
+cqrs             = { path = "crates/platform/cqrs" }
+auth-context     = { path = "crates/platform/auth-context" }
+validate-core    = { path = "crates/foundation/validate-core" }
+validation       = { path = "crates/platform/validation" }
+postgres-storage = { path = "crates/storage/postgres", package = "postgres" }
+scylla-storage   = { path = "crates/storage/scylla" }
+redis-storage    = { path = "crates/storage/redis" }
+test-support     = { path = "crates/platform/test-support" }
 service-runtime  = { path = "crates/platform/service-runtime" }
+
+# Contracts tier — generated gRPC stub crates (server + client + descriptor)
+social-graph-api = { path = "crates/contracts/social-graph-api" }
+account-api = { path = "crates/contracts/account-api" }
+chat-api = { path = "crates/contracts/chat-api" }
+comment-api = { path = "crates/contracts/comment-api" }
+engagement-api = { path = "crates/contracts/engagement-api" }
+geo-discovery-api = { path = "crates/contracts/geo-discovery-api" }
+notification-api = { path = "crates/contracts/notification-api" }
+post-api = { path = "crates/contracts/post-api" }
+profile-api = { path = "crates/contracts/profile-api" }
+timeline-api = { path = "crates/contracts/timeline-api" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
 profile          = { path = "crates/services/profile" }
