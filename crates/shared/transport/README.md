@@ -121,6 +121,10 @@ tonic::Server
 
 ### Activating ingress rate limiting (server)
 
+> For the **full binary bootstrap** (telemetry + resilience + cache + traffic together),
+> see [`infra-config`'s rollout checklist](../infra-config/README.md#-binary-bootstrap--rollout-checklist).
+> The snippet below is the traffic-specific slice.
+
 `TrafficLayer` is always present in the server type but is a no-op until a
 `TrafficRegistry` is supplied. The serving binary wires it once at boot:
 

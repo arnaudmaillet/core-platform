@@ -112,10 +112,13 @@ on_backend_error = "fail_open"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Telemetry — a *singleton* section (no profiles/bindings). When present, log_filter
-# is the source of truth at boot (overriding RUST_LOG/default) and hot-reloads: an
-# SRE can raise verbosity mid-incident by editing this, with no redeploy. Requires
-# the binary to wire telemetry's reload handle (InfraRegistry::with_log_control).
+# Telemetry — a *singleton* section (no profiles/bindings). Both dials are optional
+# and, when present, are the source of truth at boot (overriding env) and hot-reload:
+# an SRE can raise log verbosity or trace sampling mid-incident by editing this, with
+# no redeploy. Requires the binary to wire telemetry's control handle
+# (InfraRegistry::with_telemetry_control). sampling_ratio uses ParentBased sampling,
+# so a sampled trace stays whole across service hops.
 # ══════════════════════════════════════════════════════════════════════════════
 [telemetry]
-log_filter = "info,post=debug,tower=warn"
+log_filter     = "info,post=debug,tower=warn"
+sampling_ratio = 0.1

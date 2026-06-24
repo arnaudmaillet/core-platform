@@ -12,6 +12,7 @@ description.workspace = true
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+arc-swap = { workspace = true }
 
 # Logging — non-blocking stdout + structured formatting
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }

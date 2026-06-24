@@ -33,21 +33,6 @@ impl LogReloadHandle {
     }
 }
 
-/// Bridges the reload handle to the externalized-config layer's control trait, so an
-/// `infrastructure.toml` `[telemetry]` change drives the live filter. Gated so a service
-/// that only wants logging never pulls `infra-config` (mirrors `auth-context`'s
-/// `cqrs-integration` feature).
-#[cfg(feature = "infra-config")]
-impl infra_config::LogFilterControl for LogReloadHandle {
-    fn validate_filter(&self, directives: &str) -> Result<(), String> {
-        self.validate(directives)
-    }
-
-    fn set_filter(&self, directives: &str) -> Result<(), String> {
-        self.reload(directives)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

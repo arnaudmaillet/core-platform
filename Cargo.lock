@@ -4371,6 +4371,7 @@ dependencies = [
 name = "telemetry"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "axum 0.8.8",
  "infra-config",
  "opentelemetry",

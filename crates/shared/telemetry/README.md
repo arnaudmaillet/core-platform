@@ -166,9 +166,32 @@ impl TelemetryGuard {
     /// Returns the Prometheus registry handle for mounting GET /metrics.
     /// None when using OTLP metrics or when the `prometheus-exporter` feature is disabled.
     pub fn prometheus_handle(&self) -> Option<Arc<PrometheusHandle>>
+
+    /// Returns the unified, cloneable control handle for hot-swapping the live log filter
+    /// and trace-sampling ratio at runtime. Hand it to `InfraRegistry::with_telemetry_control`
+    /// (requires the `infra-config` feature) so an `infrastructure.toml` `[telemetry]` change
+    /// drives both dials with no redeploy.
+    pub fn telemetry_control(&self) -> TelemetryControlHandle
 }
 
 impl Drop for TelemetryGuard { /* flushes spans → metrics → logs in order */ }
+```
+
+### `TelemetryControlHandle` — the live dials
+
+```rust
+// src/control.rs
+pub struct TelemetryControlHandle { /* opaque, cheap to clone */ }
+
+impl TelemetryControlHandle {
+    pub fn set_log_filter(&self, directives: &str) -> Result<(), String>; // parse-checked
+    pub fn set_sampling_ratio(&self, ratio: f64);                          // clamped to [0,1]
+}
+
+// With `features = ["infra-config"]`, it also implements `infra_config::TelemetryControl`,
+// so the externalized-config watcher drives it. The log filter is wrapped in a
+// `tracing_subscriber::reload` layer; the trace sampler is a `DynamicSampler`
+// (ParentBased(TraceIdRatioBased(ratio)) behind an `ArcSwap`) — neither needs a restart.
 ```
 
 ---
@@ -215,11 +238,34 @@ pub enum TelemetryError {
 ```toml
 [dependencies]
 # Default features enable Prometheus scrape endpoint + Axum route helper.
-telemetry = { path = "crates/shared/telemetry" }
+telemetry = { workspace = true }
 
 # To disable Prometheus (pure OTLP push, removes axum + prometheus deps):
-# telemetry = { path = "crates/shared/telemetry", default-features = false }
+# telemetry = { workspace = true, default-features = false }
+
+# To drive the live log-filter + trace-sampling dials from infrastructure.toml,
+# enable the externalized-config bridge (the serving binary does this):
+# telemetry = { workspace = true, features = ["infra-config"] }
 ```
+
+### Live dials via externalized config
+
+With the `infra-config` feature on, hand the control handle to the registry so an
+`infrastructure.toml` `[telemetry]` change hot-reloads the log filter and trace-sampling
+ratio — the SRE incident lever (raise verbosity / sampling with no redeploy, which would
+lose the repro):
+
+```rust,ignore
+let _telemetry = telemetry::init(cfg)?;                    // keep alive; before any tracing
+
+let control: Arc<dyn infra_config::TelemetryControl> = Arc::new(_telemetry.telemetry_control());
+let infra = infra_config::InfraRegistry::from_config(config)?
+    .with_telemetry_control(control)?;                    // applies [telemetry] dials at boot
+// … spawn_watcher(path, Arc::new(infra)) drives them thereafter.
+```
+
+> See [`infra-config`](../infra-config/README.md#-binary-bootstrap--rollout-checklist) for
+> the full binary bootstrap (telemetry + resilience + cache + traffic) rollout checklist.
 
 ### Standard Bootstrap Pattern
 
@@ -304,8 +350,9 @@ let _guard = telemetry::init(cfg).expect("telemetry init failed");
 | Feature | Default | Adds |
 |---|---|---|
 | `prometheus-exporter` | ✅ enabled | `opentelemetry-prometheus`, `prometheus` (with process metrics), `axum`; exposes `PrometheusHandle` and `metrics_route`. |
+| `infra-config` | ⬜ off | Implements `infra_config::TelemetryControl` for `TelemetryControlHandle`, so an `infrastructure.toml` `[telemetry]` change hot-reloads the log filter and trace-sampling ratio. Pulls `infra-config` — off by default so log/trace-only consumers don't. |
 
-Disable with `default-features = false` to produce a binary with no Prometheus or Axum transitive dependencies.
+Disable `prometheus-exporter` with `default-features = false` to produce a binary with no Prometheus or Axum transitive dependencies.
 
 ### Runtime Requirements
 

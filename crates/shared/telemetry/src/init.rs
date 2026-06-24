@@ -25,7 +25,7 @@ use crate::{
 pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
     let (log_layer, log_guard) = crate::log::layer::build_log_layer(&config.log)?;
 
-    let (trace_layer, tracer_provider) = crate::trace::layer::build_trace_layer(
+    let (trace_layer, tracer_provider, sampling_handle) = crate::trace::layer::build_trace_layer(
         &config.trace,
         &config.service_name,
         &config.service_version,
@@ -54,5 +54,6 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryGuard, TelemetryError> {
         tracer_provider,
         metrics_pipeline,
         LogReloadHandle::new(reload_handle),
+        sampling_handle,
     ))
 }

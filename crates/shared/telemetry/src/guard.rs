@@ -3,8 +3,10 @@ use std::sync::Arc;
 use opentelemetry_sdk::trace::TracerProvider;
 use tracing_appender::non_blocking::WorkerGuard;
 
+use crate::control::TelemetryControlHandle;
 use crate::log::LogReloadHandle;
 use crate::metrics::{exporter::PrometheusHandle, layer::MetricsPipeline};
+use crate::trace::SamplingHandle;
 
 /// Lifetime anchor for the entire telemetry pipeline.
 ///
@@ -41,8 +43,10 @@ pub struct TelemetryGuard {
     tracer_provider: TracerProvider,
     /// Holds the metrics pipeline; shutdown flushes the meter provider.
     metrics_pipeline: MetricsPipeline,
-    /// Hot-swaps the live log filter; handed to the config layer for runtime control.
+    /// Hot-swaps the live log filter.
     log_reloader: LogReloadHandle,
+    /// Hot-swaps the live trace-sampling ratio.
+    sampling_handle: SamplingHandle,
 }
 
 impl TelemetryGuard {
@@ -51,20 +55,24 @@ impl TelemetryGuard {
         tracer_provider: TracerProvider,
         metrics_pipeline: MetricsPipeline,
         log_reloader: LogReloadHandle,
+        sampling_handle: SamplingHandle,
     ) -> Self {
         Self {
             _log_guard: log_guard,
             tracer_provider,
             metrics_pipeline,
             log_reloader,
+            sampling_handle,
         }
     }
 
-    /// Returns a cloneable handle for hot-swapping the log filter at runtime. Hand it to
-    /// `InfraRegistry::with_log_control` (with telemetry's `infra-config` feature enabled) so
-    /// an `infrastructure.toml` `[telemetry]` change drives the live filter with no redeploy.
-    pub fn log_reloader(&self) -> LogReloadHandle {
-        self.log_reloader.clone()
+    /// Returns the unified, cloneable [`TelemetryControlHandle`] for hot-swapping the log
+    /// filter and trace-sampling ratio at runtime. Hand it to
+    /// `InfraRegistry::with_telemetry_control` (with telemetry's `infra-config` feature
+    /// enabled) so an `infrastructure.toml` `[telemetry]` change drives both dials with no
+    /// redeploy.
+    pub fn telemetry_control(&self) -> TelemetryControlHandle {
+        TelemetryControlHandle::new(self.log_reloader.clone(), self.sampling_handle.clone())
     }
 
     /// Returns a cheaply cloneable handle to the Prometheus registry.
