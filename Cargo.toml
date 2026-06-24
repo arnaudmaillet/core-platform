@@ -2,10 +2,10 @@
 
 [workspace]
 members = [
-    "crates/shared/error",
-    "crates/shared/resilience",
-    "crates/shared/infra-config",
-    "crates/shared/traffic",
+    "crates/foundation/error",
+    "crates/foundation/resilience",
+    "crates/foundation/infra-config",
+    "crates/foundation/traffic",
     "crates/shared/traffic-redis",
     "crates/shared/telemetry",
     "crates/shared/transport",
@@ -14,7 +14,7 @@ members = [
     "crates/shared/storage/scylla",
     "crates/shared/storage/redis",
     "crates/shared/auth-context",
-    "crates/shared/validate-core",
+    "crates/foundation/validate-core",
     "crates/shared/validation",
     "crates/shared/test-support",
     "crates/platform/service-runtime",
@@ -57,16 +57,16 @@ description = "core-platform repo"
 # NB: the `postgres` crate is exposed under the `postgres-storage` key (via
 # `package`) to avoid colliding with the crates.io `postgres` crate and to keep
 # the naming symmetric with `scylla-storage` / `redis-storage`.
-error             = { path = "crates/shared/error" }
-resilience        = { path = "crates/shared/resilience" }
-infra-config      = { path = "crates/shared/infra-config" }
-traffic           = { path = "crates/shared/traffic" }
+error             = { path = "crates/foundation/error" }
+resilience        = { path = "crates/foundation/resilience" }
+infra-config      = { path = "crates/foundation/infra-config" }
+traffic           = { path = "crates/foundation/traffic" }
 traffic-redis     = { path = "crates/shared/traffic-redis" }
 telemetry        = { path = "crates/shared/telemetry" }
 transport        = { path = "crates/shared/transport" }
 cqrs             = { path = "crates/shared/cqrs" }
 auth-context     = { path = "crates/shared/auth-context" }
-validate-core    = { path = "crates/shared/validate-core" }
+validate-core    = { path = "crates/foundation/validate-core" }
 validation       = { path = "crates/shared/validation" }
 postgres-storage = { path = "crates/shared/storage/postgres", package = "postgres" }
 scylla-storage   = { path = "crates/shared/storage/scylla" }
