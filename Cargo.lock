@@ -1672,6 +1672,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "health"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3006,8 +3014,11 @@ dependencies = [
 name = "postgres"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "error",
  "futures",
+ "health",
  "http",
  "log",
  "seahash",
@@ -3493,8 +3504,11 @@ dependencies = [
 name = "redis-storage"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "error",
  "fred",
+ "health",
  "http",
  "thiserror 2.0.18",
  "tokio",
@@ -3910,8 +3924,11 @@ dependencies = [
 name = "scylla-storage"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "dashmap 7.0.0-rc2",
  "error",
+ "health",
  "http",
  "scylla",
  "thiserror 2.0.18",
@@ -4092,6 +4109,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "health",
  "infra-config",
  "telemetry",
  "tokio",

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use cqrs::command::InMemoryCommandBus;
 use cqrs::query::InMemoryQueryBus;
 use scylla_storage::ScyllaConfig;
-use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::{HealthProbe, InfraRegistry, Service};
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{KafkaClientConfig, ProducerConfig};
@@ -52,15 +52,7 @@ impl Service for CommentService {
     }
 
     fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
-        let scylla = Arc::clone(&self.app.scylla);
-        vec![Arc::new(FnProbe::new("scylla", move || {
-            let scylla = Arc::clone(&scylla);
-            async move {
-                scylla_storage::health::health_check(&scylla.session)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("scylla: {e}"))
-            }
-        }))]
+        vec![scylla_storage::health::probe(Arc::clone(&self.app.scylla))]
     }
 
     fn register(self, routes: &mut RoutesBuilder) -> anyhow::Result<()> {

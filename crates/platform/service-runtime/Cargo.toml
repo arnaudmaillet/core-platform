@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Unified fleet bootstrap: the one boot sequence (telemetry → infra-config + hot-reload → compose → gRPC serve → graceful shutdown) every service runs by implementing the `Service` trait."
 
 [dependencies]
+health       = { workspace = true }
 telemetry    = { workspace = true }
 infra-config = { workspace = true }
 transport    = { workspace = true }

@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use cqrs::query::InMemoryQueryBus;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
-use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::{HealthProbe, InfraRegistry, Service};
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::grpc::client::{GrpcClientBuilder, GrpcClientConfig};
@@ -93,25 +93,9 @@ impl Service for TimelineService {
     }
 
     fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
-        let scylla = Arc::clone(&self.app.scylla);
-        let redis = self.app.redis.clone();
         vec![
-            Arc::new(FnProbe::new("scylla", move || {
-                let scylla = Arc::clone(&scylla);
-                async move {
-                    scylla_storage::health::health_check(&scylla.session)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("scylla: {e}"))
-                }
-            })),
-            Arc::new(FnProbe::new("redis", move || {
-                let redis = redis.clone();
-                async move {
-                    redis_storage::health::health_check(&*redis)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("redis: {e}"))
-                }
-            })),
+            scylla_storage::health::probe(Arc::clone(&self.app.scylla)),
+            redis_storage::health::probe(self.app.redis.clone()),
         ]
     }
 

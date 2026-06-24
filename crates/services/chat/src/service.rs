@@ -3,14 +3,15 @@
 //!
 //! All domain wiring stays in [`crate::app`]; this module only maps env → config,
 //! defers to [`App::build`], registers the concrete tonic services, and reports
-//! backend liveness via [`FnProbe`] closures over the storage clients `App`
-//! retains. It is the seam that lets `chat-server` be a one-liner over the shared
-//! runtime while the integration harness keeps driving [`App::build`] directly.
+//! backend liveness via the storage crates' own probe constructors
+//! ([`scylla_storage::health::probe`] / [`redis_storage::health::probe`]) over the
+//! clients `App` retains. It is the seam that lets `chat-server` be a one-liner
+//! over the shared runtime while the integration harness keeps driving
+//! [`App::build`] directly.
 //!
-//! The probes are wired here (not in the storage crates) because the
-//! `HealthProbe`/`FnProbe` machinery is a platform concern a storage crate must
-//! not depend on; once the role-tiering lands, the storage crates can expose
-//! their own probe constructors, shared across services.
+//! The probe abstraction ([`HealthProbe`]) lives in the `health` foundation crate,
+//! so each storage crate exposes a ready-made probe for its client — no per-service
+//! closures.
 
 use std::sync::Arc;
 
@@ -20,7 +21,7 @@ use cqrs::query::InMemoryQueryBus;
 use infra_config::InfraRegistry;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
-use service_runtime::{FnProbe, HealthProbe, Service};
+use service_runtime::{HealthProbe, Service};
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::client::KafkaClientConfig;
@@ -82,25 +83,9 @@ impl Service for ChatService {
     }
 
     fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
-        let scylla = Arc::clone(&self.app.scylla);
-        let redis = self.app.redis.clone();
         vec![
-            Arc::new(FnProbe::new("scylla", move || {
-                let scylla = Arc::clone(&scylla);
-                async move {
-                    scylla_storage::health::health_check(&scylla.session)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("scylla: {e}"))
-                }
-            })),
-            Arc::new(FnProbe::new("redis", move || {
-                let redis = redis.clone();
-                async move {
-                    redis_storage::health::health_check(&*redis)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("redis: {e}"))
-                }
-            })),
+            scylla_storage::health::probe(Arc::clone(&self.app.scylla)),
+            redis_storage::health::probe(self.app.redis.clone()),
         ]
     }
 
