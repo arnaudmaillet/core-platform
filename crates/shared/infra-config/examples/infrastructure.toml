@@ -109,3 +109,13 @@ on_backend_error = "fail_open"
 [traffic.bindings]
 "/post.PostService/CreatePost"      = "write-tight"
 "/timeline.TimelineService/GetFeed" = "standard"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Telemetry — a *singleton* section (no profiles/bindings). When present, log_filter
+# is the source of truth at boot (overriding RUST_LOG/default) and hot-reloads: an
+# SRE can raise verbosity mid-incident by editing this, with no redeploy. Requires
+# the binary to wire telemetry's reload handle (InfraRegistry::with_log_control).
+# ══════════════════════════════════════════════════════════════════════════════
+[telemetry]
+log_filter = "info,post=debug,tower=warn"
