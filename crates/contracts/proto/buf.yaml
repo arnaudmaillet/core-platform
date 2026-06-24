@@ -4,14 +4,21 @@
 # in crates/contracts/ compile from this root (so cross-package/cross-service
 # resolution shares one --proto_path).
 #
-# Lint runs now; breaking-change checks against a baseline ref are a follow-up
-# (wired in CI once the contracts tier has landed).
+# Enforced in CI by .github/workflows/contracts.yml: `buf lint` on every change +
+# `buf breaking` against the base branch (develop) on PRs.
+#
+# - lint = BASIC: structural checks (package/dir match, no unused imports, etc.).
+#   STANDARD is intentionally NOT used — the existing contracts use shared response
+#   types and terse enum names by design; tightening to STANDARD is a separate
+#   proto-cleanup initiative, not a CI gate.
+# - breaking = WIRE_JSON: blocks wire- and JSON-incompatible changes (field
+#   renames/renumbering, type changes) while still allowing source reorganization.
 version: v2
 modules:
   - path: .
 lint:
   use:
-    - STANDARD
+    - BASIC
 breaking:
   use:
-    - FILE
+    - WIRE_JSON
