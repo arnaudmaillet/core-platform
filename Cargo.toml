@@ -39,6 +39,7 @@ members = [
     "crates/apps/account-server",
     "crates/apps/timeline-server",
     "crates/apps/migrator",
+    "crates/contracts/social-graph-api",
 ]
 resolver = "2"
 
@@ -73,6 +74,9 @@ scylla-storage   = { path = "crates/storage/scylla" }
 redis-storage    = { path = "crates/storage/redis" }
 test-support     = { path = "crates/platform/test-support" }
 service-runtime  = { path = "crates/platform/service-runtime" }
+
+# Contracts tier — generated gRPC stub crates (server + client + descriptor)
+social-graph-api = { path = "crates/contracts/social-graph-api" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
 profile          = { path = "crates/services/profile" }

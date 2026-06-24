@@ -5,10 +5,10 @@ use cqrs::{CommandBus, QueryBus};
 use super::handler::social_graph_service_handler::{proto, SocialGraphServiceHandler};
 use proto::social_graph_service_server::SocialGraphService;
 
-/// Encoded protobuf descriptor set for gRPC server reflection, emitted by
-/// `build.rs`. Registered by the service's runtime adapter ([`crate::service`]).
-pub const FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("social_graph_descriptor");
+/// Encoded protobuf descriptor set for gRPC server reflection, re-exported from
+/// the contracts tier (`social-graph-api`). Registered by the service's runtime
+/// adapter ([`crate::service`]).
+pub const FILE_DESCRIPTOR_SET: &[u8] = social_graph_api::FILE_DESCRIPTOR_SET;
 
 #[tonic::async_trait]
 impl<CB, QB> SocialGraphService for SocialGraphServiceHandler<CB, QB>

@@ -40,6 +40,7 @@ thiserror = { workspace = true }
 tracing   = { workspace = true }
 
 # ── gRPC / proto ─────────────────────────────────────────────────────────────
+social-graph-api = { workspace = true }   # cross-service client stubs (contracts tier)
 tonic            = { workspace = true }
 tonic-prost      = { workspace = true }
 prost            = { workspace = true }

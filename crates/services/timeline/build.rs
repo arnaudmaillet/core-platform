@@ -17,21 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &["proto/"],
         )?;
 
-    // ── Social-graph service protos (client stubs only) ───────────────────────
-    // Required for:
-    //   - PostPublishedWorker: ListFollowers(author_id) to fan-out writes
-    //   - GetFollowingFeedQuery: ListFollowing(profile_id) to rebuild cold cache
-    tonic_prost_build::configure()
-        .build_server(false)
-        .build_client(true)
-        .compile_protos(
-            &[
-                "../social-graph/proto/social_graph/v1/enums.proto",
-                "../social-graph/proto/social_graph/v1/messages.proto",
-                "../social-graph/proto/social_graph/v1/service.proto",
-            ],
-            &["../social-graph/proto/"],
-        )?;
+    // Social-graph client stubs now come from the `social-graph-api` crate
+    // (contracts tier) — no cross-service proto recompilation here.
 
     Ok(())
 }

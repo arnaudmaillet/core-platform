@@ -15,10 +15,11 @@ use crate::domain::entity::{BlockEdge, FollowEdge};
 use crate::domain::value_object::RelationStatus;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
+// Generated stubs now come from the contracts tier (`social-graph-api`) instead
+// of a local `build.rs`. Aliasing it as `proto` keeps every `proto::…` reference
+// site below unchanged.
 
-pub mod proto {
-    tonic::include_proto!("social_graph.v1");
-}
+pub use social_graph_api as proto;
 
 pub use proto::social_graph_service_server::SocialGraphServiceServer;
 

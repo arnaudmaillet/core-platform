@@ -4139,21 +4139,31 @@ dependencies = [
  "serde",
  "serde_json",
  "service-runtime",
+ "social-graph-api",
  "telemetry",
  "test-support",
  "thiserror 2.0.18",
  "tokio",
  "tonic 0.14.6",
- "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tracing",
  "transport",
  "uuid",
  "validate-core",
  "validation",
+]
+
+[[package]]
+name = "social-graph-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
@@ -4712,6 +4722,7 @@ dependencies = [
  "serde",
  "serde_json",
  "service-runtime",
+ "social-graph-api",
  "telemetry",
  "test-support",
  "thiserror 2.0.18",
