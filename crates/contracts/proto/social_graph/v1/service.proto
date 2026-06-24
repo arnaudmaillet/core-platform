@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package social_graph.v1;
 
-import "social_graph/v1/enums.proto";
 import "social_graph/v1/messages.proto";
 
 option java_package = "com.coreplatform.socialgraph.v1";

@@ -1,0 +1,42 @@
+name: contracts
+
+# Guards the centralized gRPC IDL (crates/contracts/proto):
+#   - `buf lint`     on every change (BASIC rules — see buf.yaml)
+#   - `buf breaking` against the base branch on PRs (WIRE_JSON — blocks wire/JSON
+#     incompatible changes to already-deployed contracts)
+#
+# Only runs when proto (or this workflow) changes, so it stays cheap.
+
+on:
+  pull_request:
+    paths:
+      - "crates/contracts/proto/**"
+      - ".github/workflows/contracts.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "crates/contracts/proto/**"
+
+permissions:
+  contents: read
+
+jobs:
+  buf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so `buf breaking` can resolve the base branch ref.
+          fetch-depth: 0
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.61.0
+          # The buf module lives in a subdir, not the repo root.
+          input: crates/contracts/proto
+          lint: true
+          breaking: true
+          # `buf format` style rules aren't enforced here; lint (BASIC) is.
+          format: false
+          # No Buf Schema Registry in use — don't attempt to push.
+          push: false
+          github_token: ${{ github.token }}

@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package account.v1;
 
-import "account/v1/enums.proto";
 import "account/v1/messages.proto";
 
 option java_package = "com.coreplatform.account.v1";
