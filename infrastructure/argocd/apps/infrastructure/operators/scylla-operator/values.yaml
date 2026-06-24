@@ -1,0 +1,5 @@
+# infrastructure/argocd/apps/infrastructure/operators/scylla-operator/values.yaml
+scylla-operator:
+  # cert-manager (installed via the security ArgoCD app) issues the webhook certs.
+  webhook:
+    createSelfSignedCertificate: false
