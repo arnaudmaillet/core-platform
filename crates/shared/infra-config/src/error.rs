@@ -19,7 +19,10 @@ pub enum ConfigError {
 }
 
 impl ConfigError {
-    pub(crate) fn validation(msg: impl Into<String>) -> Self {
+    /// Constructs a [`ConfigError::Validation`]. Public so external
+    /// [`TelemetrySink`](crate::TelemetrySink) implementors (which live outside
+    /// this crate) can surface an apply failure as a config rejection.
+    pub fn validation(msg: impl Into<String>) -> Self {
         ConfigError::Validation(msg.into())
     }
 }

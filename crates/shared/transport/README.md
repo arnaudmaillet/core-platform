@@ -122,7 +122,10 @@ tonic::Server
 ### Activating ingress rate limiting (server)
 
 `TrafficLayer` is always present in the server type but is a no-op until a
-`TrafficRegistry` is supplied. The serving binary wires it once at boot:
+`TrafficRegistry` is supplied. In this workspace the fleet runtime
+([`service-runtime`](../../platform/service-runtime/README.md)) already performs
+the wiring below for every service — the example shows what it does and how to
+reproduce it standalone:
 
 ```rust,ignore
 // 1. Load + resolve the whole infrastructure.toml, validating every section.

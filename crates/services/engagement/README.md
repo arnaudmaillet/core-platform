@@ -162,14 +162,25 @@ engagement = { path = "crates/services/engagement" }
 
 ### Bootstrap pattern
 
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `engagement::service::EngagementService` (`build` wires the Redis score store,
+reaction-weights config, the Kafka publisher, and the write-behind workers;
+`register` adds the gRPC + reflection services; `health_probes` checks Redis —
+the always-on hot path). The deployable binary is `crates/apps/engagement-server`:
+
 ```rust
-use engagement::infrastructure::grpc::server::serve;
+use std::net::SocketAddr;
+
+use engagement::service::EngagementService;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load ENGAGEMENT_* and SCYLLA_* and REDIS_* and KAFKA_* env vars
-    let addr = "0.0.0.0:50054".parse()?;
-    serve(addr).await
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("ENGAGEMENT_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50058".to_owned())
+        .parse()?;
+
+    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
+    service_runtime::serve::<EngagementService>(addr).await
 }
 ```
 

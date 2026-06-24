@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use transport::kafka::config::client::KafkaClientConfig;
 
 use crate::application::command::{
@@ -49,6 +49,10 @@ pub struct Backends {
 pub struct App {
     pub command_bus: Arc<InMemoryCommandBus>,
     pub query_bus:   Arc<InMemoryQueryBus>,
+    /// Live storage clients, retained so the runtime's readiness loop can probe
+    /// their liveness (see [`crate::service`]).
+    pub scylla:      Arc<ScyllaClient>,
+    pub redis:       RedisClient,
 }
 
 impl App {
@@ -130,7 +134,7 @@ impl App {
             );
             tokio::spawn(
                 TilePrunerWorker::new(
-                    redis_client,
+                    redis_client.clone(),
                     cfg.tile_pruner_interval,
                     cfg.tile_cold_threshold,
                     500,
@@ -139,6 +143,6 @@ impl App {
             );
         }
 
-        Ok(Self { command_bus, query_bus })
+        Ok(Self { command_bus, query_bus, scylla: scylla_client, redis: redis_client })
     }
 }

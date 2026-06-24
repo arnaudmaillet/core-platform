@@ -192,3 +192,26 @@ cqlsh -f migrations/0003_create_following_table.cql
 cqlsh -f migrations/0004_create_follow_status_table.cql
 cqlsh -f migrations/0005_create_blocks_table.cql
 ```
+
+---
+
+## 🚀 Deployment
+
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `social_graph::service::SocialGraphService` (`build` wires the ScyllaDB
+repository, Redis cache, and the durable Kafka event publisher; `register` adds
+the gRPC + reflection services; `health_probes` checks Scylla/Redis). The
+deployable binary is `crates/apps/social-graph-server`:
+
+```rust
+use std::net::SocketAddr;
+use social_graph::service::SocialGraphService;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("SOCIAL_GRAPH_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50053".to_owned())
+        .parse()?;
+    service_runtime::serve::<SocialGraphService>(addr).await
+}
+```

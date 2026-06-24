@@ -14,6 +14,12 @@ pub enum TelemetryError {
 
     #[error("invalid sampling ratio {0}: must be in [0.0, 1.0]")]
     InvalidSamplingRatio(f64),
+
+    #[error("invalid log filter directive: {0}")]
+    InvalidFilter(String),
+
+    #[error("failed to apply log filter reload: {0}")]
+    FilterReload(String),
 }
 
 #[cfg(test)]

@@ -39,6 +39,10 @@ impl<S> Layer<S> for InboundTraceLayer {
 }
 
 /// The concrete service produced by [`InboundTraceLayer`].
+///
+/// `Clone` is required: tonic clones the composed server service per connection,
+/// so every layer in the stack must be cloneable for `Router::serve*` to apply it.
+#[derive(Clone)]
 pub struct InboundTraceService<S> {
     inner: S,
 }

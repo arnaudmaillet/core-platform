@@ -13,9 +13,9 @@ use std::sync::Arc;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
 use infra_config::CacheRegistry;
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 
 use crate::application::command::{
     ChangeHandleCommand, ChangeHandleHandler, CreateProfileCommand, CreateProfileHandler,
@@ -48,6 +48,10 @@ pub struct App {
     pub query_bus:   Arc<InMemoryQueryBus>,
     pub repository:  Arc<dyn ProfileRepository>,
     pub cache:       Arc<dyn ProfileCache>,
+    /// Live storage clients, retained so the runtime's readiness loop can probe
+    /// their liveness (see [`crate::service`]).
+    pub scylla:      Arc<ScyllaClient>,
+    pub redis:       Arc<RedisClient>,
 }
 
 impl App {
@@ -68,10 +72,12 @@ impl App {
         let redis_client = Arc::new(RedisClientBuilder::new(redis).build().await?);
 
         // ── Adapters (exposed behind their ports) ────────────────────────────
+        // `Arc::clone` rather than move: the readiness loop probes the same live
+        // clients the repository and cache use.
         let repository: Arc<dyn ProfileRepository> =
-            Arc::new(ScyllaProfileRepository::new(scylla_client));
+            Arc::new(ScyllaProfileRepository::new(Arc::clone(&scylla_client)));
         let cache: Arc<dyn ProfileCache> = Arc::new(RedisProfileCache::new(
-            redis_client,
+            Arc::clone(&redis_client),
             cache_registry.profile_for(PROFILE_CACHE_NAMESPACE),
             cache_registry.profile_for(HANDLE_CACHE_NAMESPACE),
         ));
@@ -139,6 +145,13 @@ impl App {
                 .build(),
         );
 
-        Ok(Self { command_bus, query_bus, repository, cache })
+        Ok(Self {
+            command_bus,
+            query_bus,
+            repository,
+            cache,
+            scylla: scylla_client,
+            redis: redis_client,
+        })
     }
 }

@@ -16,6 +16,9 @@ redis-storage  = { workspace = true }
 cqrs           = { workspace = true }
 telemetry      = { workspace = true }
 transport      = { workspace = true }
+service-runtime = { workspace = true }
+infra-config   = { workspace = true }
+anyhow         = { workspace = true }
 
 tokio        = { workspace = true }
 tokio-stream = { workspace = true }
@@ -67,6 +70,7 @@ uuid                   = { workspace = true }
 chrono                 = { workspace = true }
 tonic                  = { workspace = true }
 
+test-support   = { workspace = true }
 scylla-storage = { workspace = true }
 redis-storage  = { workspace = true }
 transport      = { workspace = true }

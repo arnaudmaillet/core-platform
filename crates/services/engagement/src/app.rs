@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
 use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
 use transport::kafka::config::client::KafkaClientConfig;
 
@@ -55,6 +55,10 @@ pub struct App {
     pub command_bus: Arc<InMemoryCommandBus>,
     pub query_bus:   Arc<InMemoryQueryBus>,
     pub score_store: Arc<dyn ScoreStore>,
+    /// Live Redis client (the always-on hot path), retained so the runtime's
+    /// readiness loop can probe it (see [`crate::service`]). ScyllaDB is only the
+    /// async write-behind ledger and is not part of the serving readiness gate.
+    pub redis:       RedisClient,
 }
 
 impl App {
@@ -70,7 +74,8 @@ impl App {
         // ── Redis hot path (always) ──────────────────────────────────────────
         let redis_client = RedisClientBuilder::new(redis).build().await?;
         let dirty_tracker = DirtyPostTracker::new();
-        let score_store = Arc::new(RedisScoreStore::new(redis_client, dirty_tracker.clone()));
+        let score_store =
+            Arc::new(RedisScoreStore::new(redis_client.clone(), dirty_tracker.clone()));
 
         // ── CQRS buses ───────────────────────────────────────────────────────
         let command_bus = Arc::new(
@@ -138,6 +143,7 @@ impl App {
             command_bus,
             query_bus,
             score_store: score_store as Arc<dyn ScoreStore>,
+            redis: redis_client,
         })
     }
 }

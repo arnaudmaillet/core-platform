@@ -19,6 +19,8 @@ cqrs         = { workspace = true }
 auth-context = { workspace = true }
 telemetry    = { workspace = true }
 transport    = { workspace = true }
+service-runtime = { workspace = true }
+anyhow       = { workspace = true }
 
 # ── Async runtime & utilities ─────────────────────────────────────────────────
 tokio        = { workspace = true }

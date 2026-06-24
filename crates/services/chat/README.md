@@ -130,27 +130,34 @@ service ChatService {
 chat = { path = "crates/services/chat" }
 ```
 
-The crate is **library‑only**; it exposes `serve(addr)` and is embedded by a thin binary or the platform's service launcher.
+The crate is **library‑only**. It plugs into the shared fleet runtime by
+implementing [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `chat::service::ChatService` — `build` wires every adapter (and spawns the
+per-pod plane subscriber, registry reapers, and VisibilityWorker), `register`
+adds the gRPC services, and `health_probes` exposes the Scylla/Redis liveness
+checks. Telemetry, config + hot-reload, ingress rate-limiting, health, and
+graceful shutdown are all owned by the runtime.
 
 ### Standard Bootstrap Pattern
+
+The deployable binary is `crates/apps/chat-server`, and it is the entire
+entrypoint:
 
 ```rust
 use std::net::SocketAddr;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Installs the global tracing/OTel subscriber (Scylla/Redis/Kafka clients hook into
-    // it). Keep `_guard` alive for the process lifetime to flush telemetry on shutdown.
-    let _guard = telemetry::init(telemetry::TelemetryConfig::from_env("chat", env!("CARGO_PKG_VERSION")))?;
+use chat::service::ChatService;
 
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("CHAT_GRPC_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:50061".into())
+        .unwrap_or_else(|_| "0.0.0.0:50051".to_owned())
         .parse()?;
 
-    // Reads ChatConfig + Scylla/Redis/Kafka config from the environment, wires every
-    // adapter, starts the per-pod plane subscriber, the registry reapers, and the
-    // VisibilityWorker, then blocks serving gRPC until shutdown.
-    chat::infrastructure::grpc::server::serve(addr).await
+    // Owns telemetry, infrastructure.toml load + hot-reload, the inbound-trace
+    // and traffic layers, dynamic gRPC health, and SIGINT-drained shutdown — then
+    // builds `ChatService` and serves until shutdown.
+    service_runtime::serve::<ChatService>(addr).await
 }
 ```
 

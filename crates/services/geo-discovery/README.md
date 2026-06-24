@@ -362,28 +362,28 @@ tokio         = { workspace = true }
 
 ### Standard Bootstrap Pattern
 
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `geo_discovery::service::GeoDiscoveryService`. `build` constructs the
+ScyllaDB/Redis clients, instantiates `RedisGeoSpatialIndex` / `RedisCardStore` /
+`ScyllaTileRepository`, registers `QueryTileHandler` (the gRPC surface is
+query-only — writes arrive via Kafka), and spawns `PostIndexerWorker` /
+`ScoreUpdaterWorker` / `TilePrunerWorker`; `register` adds the gRPC + reflection
+services; `health_probes` checks Scylla/Redis. The deployable binary is
+`crates/apps/geo-discovery-server`:
+
 ```rust
-// src/main.rs
 use std::net::SocketAddr;
-use geo_discovery::infrastructure::grpc::server;
+
+use geo_discovery::service::GeoDiscoveryService;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialise OTel tracing + metrics from env.
-    telemetry::init_from_env("geo-discovery")?;
-
+async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("GEO_GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50054".to_owned())
         .parse()?;
 
-    // serve() is blocking: it:
-    //   1. Builds ScyllaDB CachingSession (ScyllaSessionBuilder).
-    //   2. Builds RedisClient (RedisClientBuilder).
-    //   3. Instantiates RedisGeoSpatialIndex, RedisCardStore, ScyllaTileRepository.
-    //   4. Registers QueryTileHandler in the CQRS QueryBus.
-    //   5. Spawns PostIndexerWorker, ScoreUpdaterWorker, TilePrunerWorker.
-    //   6. Starts Tonic gRPC server with health + reflection.
-    server::serve(addr).await
+    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
+    service_runtime::serve::<GeoDiscoveryService>(addr).await
 }
 ```
 

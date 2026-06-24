@@ -15,6 +15,8 @@ scylla-storage = { workspace = true }
 cqrs           = { workspace = true }
 telemetry      = { workspace = true }
 transport      = { workspace = true }
+service-runtime = { workspace = true }
+anyhow         = { workspace = true }
 
 tokio        = { workspace = true }
 async-trait  = { workspace = true }

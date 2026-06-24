@@ -282,6 +282,37 @@ let cfg = TelemetryConfig {
 let _guard = telemetry::init(cfg).expect("telemetry init failed");
 ```
 
+### Runtime control (live dials)
+
+`init` returns a guard whose `control()` yields a cloneable [`TelemetryControl`].
+It exposes the two operability dials that otherwise need a redeploy:
+
+```rust
+let control = _guard.control();
+
+// Turn up a noisy module mid-incident — reloads the global `EnvFilter` live.
+control.set_log_filter("info,chat=debug").unwrap();
+
+// Drop trace volume under load (parent-based, so distributed traces stay whole).
+control.set_sampling(telemetry::SamplingStrategy::TraceIdRatio(0.01)).unwrap();
+```
+
+Sampling is backed by a `DynamicSampler` (a `ShouldSample` over an `ArcSwap`),
+and the log filter by a `tracing_subscriber::reload` handle — both swap
+lock-free, with no restart.
+
+In the fleet you don't call these directly: `service-runtime` registers the
+control as the sink for the `[telemetry]` section of `infrastructure.toml`, so a
+config push retunes log level and sampling across every pod. See
+[`service-runtime`](../../platform/service-runtime/README.md) and
+[`infra-config`](../infra-config/README.md).
+
+```toml
+[telemetry]
+log_filter = "info,chat=debug"
+sampling   = { kind = "trace_id_ratio", ratio = 0.05 }
+```
+
 ---
 
 ## ⚙️ Configuration & Runtime Environment

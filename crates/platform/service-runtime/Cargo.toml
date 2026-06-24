@@ -1,0 +1,21 @@
+[package]
+name                 = "service-runtime"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Unified fleet bootstrap: the one boot sequence (telemetry → infra-config + hot-reload → compose → gRPC serve → graceful shutdown) every service runs by implementing the `Service` trait."
+
+[dependencies]
+telemetry    = { workspace = true }
+infra-config = { workspace = true }
+transport    = { workspace = true }
+
+tokio       = { workspace = true }
+async-trait = { workspace = true }
+anyhow      = { workspace = true }
+tracing     = { workspace = true }
+
+tonic        = { workspace = true }
+tonic-health = { workspace = true }

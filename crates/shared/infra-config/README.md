@@ -9,11 +9,11 @@
 - **Fleet bindings** — resolves a dependency/namespace name (`"post-command"`, `"profile-view"`) to a named class-of-service profile (`"critical"`, `"hot"`).
 - **Hot-reload** — a `notify`-based watcher that re-applies the file on change via lock-free `ArcSwap` swaps, with no restart and no torn in-flight futures.
 
-It is **multi-tenant**: each infrastructure category is a `[section]` sharing one catalog shape, one watcher, and one fail-closed reload path. Today it ships `[resilience]` (timeouts, circuit breakers, retries) and `[cache]` (TTL profiles); `[traffic]` (rate limiting) and `[telemetry]` (log level, sampling) are planned tenants.
+It is **multi-tenant**: each infrastructure category is a `[section]` sharing one watcher and one fail-closed reload path. It ships four sections: `[resilience]` (timeouts, circuit breakers, retries), `[cache]` (TTL profiles), `[traffic]` (ingress rate limiting), and `[telemetry]` (log filter + trace sampling). The first three are catalog-shaped (profiles + bindings); `[telemetry]` carries two global dials pushed to the live observability pipeline through a [`TelemetrySink`] the serving binary registers (so this crate stays free of any tracing dependency).
 
 Keeping this separate is deliberate: the middleware crates link no `notify`, no `toml`, no filesystem. Services depend on **both** — the middleware for the layers/adapters, `infra-config` for where the numbers come from.
 
-> **Status:** complete and tested — `[resilience]` + `[cache]` sections, the generic catalog, the aggregate `InfraRegistry`, fail-closed cross-section validation, and a real-filesystem end-to-end hot-reload test.
+> **Status:** complete and tested — `[resilience]` + `[cache]` + `[traffic]` + `[telemetry]` sections, the generic catalog, the aggregate `InfraRegistry`, fail-closed cross-section validation, and a real-filesystem end-to-end hot-reload test. The serving binary (`service-runtime`) loads the document, spawns the watcher, and registers the traffic layer and telemetry sink — see [`service-runtime`](../../platform/service-runtime/README.md).
 
 ---
 
@@ -22,8 +22,9 @@ Keeping this separate is deliberate: the middleware crates link no `notify`, no 
 ```text
 infrastructure.toml ──load──▶ InfrastructureConfig ──resolve──▶ InfraRegistry
                                      ▲                          ├─ ResilienceRegistry ─▶ Tower layers
-                                notify event                    └─ CacheRegistry ──────▶ cache adapters
-                              spawn_watcher ──reload──▶ InfraRegistry::apply()
+                                notify event                    ├─ CacheRegistry ──────▶ cache adapters
+                              spawn_watcher                     ├─ TrafficRegistry ────▶ ingress limiter
+                              ──reload──▶ InfraRegistry::apply() └─ TelemetryRegistry ──▶ TelemetrySink (live)
                               (single writer, fail-closed, all-sections-or-nothing)
 ```
 

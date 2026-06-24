@@ -5,6 +5,10 @@ use cqrs::{CommandBus, QueryBus};
 use super::handler::profile_service_handler::{proto, ProfileServiceHandler};
 use proto::profile_service_server::ProfileService;
 
+/// Encoded protobuf descriptor set for gRPC server reflection, emitted by
+/// `build.rs`. Registered by the service's runtime adapter ([`crate::service`]).
+pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("profile_descriptor");
+
 #[tonic::async_trait]
 impl<CB, QB> ProfileService for ProfileServiceHandler<CB, QB>
 where

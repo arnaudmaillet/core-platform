@@ -176,83 +176,40 @@ profile = { path = "crates/services/profile" }
 
 ### Bootstrap Pattern
 
-```rust
-use std::sync::Arc;
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
-use transport::kafka::{KafkaConsumerConfig, KafkaConsumerBuilder};
-use cqrs::{InMemoryCommandBus, InMemoryQueryBus};
+Library-only: all of the wiring shown previously here now lives in
+`profile::app::App::build` and `profile::service::ProfileService`, which
+implements [`service_runtime::Service`](../../platform/service-runtime/README.md).
+Profile is the canonical *infra-consuming* service:
 
-use profile::application::command::*;
-use profile::application::query::*;
-use profile::application::port::{ProfileRepository, ProfileCache};
-use profile::infrastructure::persistence::ScyllaProfileRepository;
-use profile::infrastructure::cache::RedisProfileCache;
-use profile::infrastructure::consumer::run_account_event_consumer;
-use profile::infrastructure::grpc::handler::ProfileServiceHandler;
+- `build(infra)` reads its cache-TTL profiles from `infra.cache()` (the `[cache]`
+  section of `infrastructure.toml`), assembles the repository, cache, and CQRS
+  buses, and **self-spawns the supervised account-event Kafka consumer** (poison
+  records dead-lettered to `account.v1.events.dlq`).
+- `register` adds the gRPC + reflection services (the handler is built from the
+  `Arc<InMemoryCommandBus>` / `Arc<InMemoryQueryBus>` the buses expose).
+- `health_probes` checks Scylla/Redis.
+
+The deployable binary is `crates/apps/profile-server`:
+
+```rust
+use std::net::SocketAddr;
+
+use profile::service::ProfileService;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // ── Storage ───────────────────────────────────────────────────────────────
-    let scylla_client = Arc::new(
-        ScyllaSessionBuilder::new(ScyllaConfig::from_env())
-            .build()
-            .await?,
-    );
-    let redis_client = Arc::new(
-        RedisClientBuilder::new(RedisConfig::from_env())
-            .build()
-            .await?,
-    );
-
-    // ── Adapters ──────────────────────────────────────────────────────────────
-    let repo: Arc<dyn ProfileRepository> =
-        Arc::new(ScyllaProfileRepository::new(Arc::clone(&scylla_client)));
-    let cache: Arc<dyn ProfileCache> =
-        Arc::new(RedisProfileCache::new(Arc::clone(&redis_client)));
-
-    // ── CQRS buses ────────────────────────────────────────────────────────────
-    let mut cmd_bus = InMemoryCommandBus::new();
-    cmd_bus.register(CreateProfileHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(UpdateProfileHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(ChangeHandleHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(UpdateAvatarHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(UpdateBannerHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(SetVisibilityHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(VerifyProfileHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(HideProfileHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(RestoreProfileHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    cmd_bus.register(DeleteProfileHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-
-    let mut qry_bus = InMemoryQueryBus::new();
-    qry_bus.register(GetProfileByIdHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    qry_bus.register(GetProfileByHandleHandler::new(Arc::clone(&repo), Arc::clone(&cache)));
-    qry_bus.register(ListProfilesByAccountHandler::new(Arc::clone(&repo)));
-
-    // ── gRPC server ───────────────────────────────────────────────────────────
-    let handler = ProfileServiceHandler::new(cmd_bus.clone(), qry_bus);
-    let grpc_addr = std::env::var("PROFILE_GRPC_HOST")
-        .unwrap_or_else(|_| "0.0.0.0:50052".into())
+    let addr: SocketAddr = std::env::var("PROFILE_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50052".to_owned())
         .parse()?;
 
-    // ── Kafka account event consumer ──────────────────────────────────────────
-    let kafka_consumer = KafkaConsumerBuilder::new(KafkaConsumerConfig::from_env())
-        .subscribe(&["account.v1.events"])
-        .build()?;
-    // The consumer also needs a producer to forward poison / retry-exhausted
-    // records to the account.v1.events.dlq dead-letter topic.
-    let dlq_producer = KafkaProducerBuilder::new(KafkaProducerConfig::from_env()).build()?;
-    tokio::spawn(run_account_event_consumer(kafka_consumer, cmd_bus, dlq_producer));
-
-    // ── Start server ──────────────────────────────────────────────────────────
-    tonic::transport::Server::builder()
-        .add_service(profile::infrastructure::grpc::handler::ProfileServiceServer::new(handler))
-        .serve(grpc_addr)
-        .await?;
-
-    Ok(())
+    // Runtime owns telemetry, infrastructure.toml load + hot-reload (incl. the
+    // [cache] TTLs profile consumes), traffic, health, and shutdown.
+    service_runtime::serve::<ProfileService>(addr).await
 }
 ```
+
+The integration harness still drives `App::build` directly, so the wired graph
+under test is the one that ships.
 
 ---
 
@@ -275,7 +232,7 @@ async fn main() -> anyhow::Result<()> {
 | `KAFKA_BROKERS` | Yes | `127.0.0.1:9092` | Comma-separated Kafka broker addresses. |
 | `KAFKA_CONSUMER_GROUP` | No | `profile-service` | Kafka consumer group ID. |
 | `KAFKA_AUTO_OFFSET_RESET` | No | `earliest` | Offset reset policy for new consumer groups. |
-| `PROFILE_GRPC_HOST` | No | `0.0.0.0:50052` | Bind address for the gRPC server. |
+| `PROFILE_GRPC_ADDR` | No | `0.0.0.0:50052` | Bind address for the gRPC server (read by `profile-server`). |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | _(none)_ | OpenTelemetry collector endpoint (traces + metrics). |
 | `OTEL_SERVICE_NAME` | No | `profile` | Service name reported in OTel spans and metrics. |
 | `RUST_LOG` | No | `info` | Tracing log filter (e.g. `profile=debug,scylla=warn`). |

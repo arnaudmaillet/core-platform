@@ -1,0 +1,15 @@
+[package]
+name                 = "post-server"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the post service — a thin entrypoint over the shared fleet runtime."
+
+[dependencies]
+post            = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

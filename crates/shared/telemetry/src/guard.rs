@@ -3,6 +3,7 @@ use std::sync::Arc;
 use opentelemetry_sdk::trace::TracerProvider;
 use tracing_appender::non_blocking::WorkerGuard;
 
+use crate::control::TelemetryControl;
 use crate::metrics::{exporter::PrometheusHandle, layer::MetricsPipeline};
 
 /// Lifetime anchor for the entire telemetry pipeline.
@@ -40,6 +41,8 @@ pub struct TelemetryGuard {
     tracer_provider: TracerProvider,
     /// Holds the metrics pipeline; shutdown flushes the meter provider.
     metrics_pipeline: MetricsPipeline,
+    /// Runtime dials (log filter, sampling) for the live pipeline.
+    control: TelemetryControl,
 }
 
 impl TelemetryGuard {
@@ -47,12 +50,21 @@ impl TelemetryGuard {
         log_guard: WorkerGuard,
         tracer_provider: TracerProvider,
         metrics_pipeline: MetricsPipeline,
+        control: TelemetryControl,
     ) -> Self {
         Self {
             _log_guard: log_guard,
             tracer_provider,
             metrics_pipeline,
+            control,
         }
+    }
+
+    /// Returns a cloneable [`TelemetryControl`] for retuning the log filter and
+    /// trace sampling at runtime (e.g. driven by the `infrastructure.toml`
+    /// reload watcher).
+    pub fn control(&self) -> TelemetryControl {
+        self.control.clone()
     }
 
     /// Returns a cheaply cloneable handle to the Prometheus registry.

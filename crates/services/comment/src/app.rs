@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 
 use crate::application::command::create_comment::{CreateCommentCommand, CreateCommentHandler};
 use crate::application::command::delete_comment::{DeleteCommentCommand, DeleteCommentHandler};
@@ -37,6 +37,9 @@ pub struct Backends {
 pub struct App {
     pub command_bus: Arc<InMemoryCommandBus>,
     pub query_bus:   Arc<InMemoryQueryBus>,
+    /// Live storage client, retained so the runtime's readiness loop can probe
+    /// its liveness (see [`crate::service`]).
+    pub scylla:      Arc<ScyllaClient>,
 }
 
 impl App {
@@ -47,7 +50,7 @@ impl App {
         publisher: Arc<P>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let scylla_client = Arc::new(ScyllaSessionBuilder::new(backends.scylla).build().await?);
-        let repository = Arc::new(ScyllaCommentRepository::new(scylla_client));
+        let repository = Arc::new(ScyllaCommentRepository::new(Arc::clone(&scylla_client)));
 
         let command_bus = Arc::new(
             CommandBusBuilder::new()
@@ -76,6 +79,6 @@ impl App {
                 .build(),
         );
 
-        Ok(Self { command_bus, query_bus })
+        Ok(Self { command_bus, query_bus, scylla: scylla_client })
     }
 }
