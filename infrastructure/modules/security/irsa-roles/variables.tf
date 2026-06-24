@@ -31,3 +31,8 @@ variable "iam_policy_json_content" {
   description = "Document JSON définissant les permissions pour l'AWS Load Balancer Controller"
   type        = string
 }
+variable "enable_external_secrets" {
+  description = "Create an IRSA role for External Secrets Operator (staging/prod; reads managed-backend creds from Secrets Manager)."
+  type        = bool
+  default     = false
+}

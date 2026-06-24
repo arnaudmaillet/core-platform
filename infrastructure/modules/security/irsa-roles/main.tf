@@ -220,3 +220,54 @@ resource "aws_iam_service_linked_role" "spot" {
     ignore_changes = all
   }
 }
+# --- 7. EXTERNAL SECRETS OPERATOR (staging/prod only) ---
+# Lets the ESO controller read the managed-backend credentials (MSK SCRAM, Redis
+# AUTH) that the data-store modules write to Secrets Manager, and sync them into
+# the app namespace as k8s Secrets.
+module "external_secrets_irsa_role" {
+  count = var.enable_external_secrets ? 1 : 0
+
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "${var.cluster_name}-external-secrets-role"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = var.oidc_provider_arn
+      namespace_service_accounts = ["external-secrets:external-secrets"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "external_secrets_read" {
+  count = var.enable_external_secrets ? 1 : 0
+
+  name = "ExternalSecretsManagerRead"
+  role = module.external_secrets_irsa_role[0].iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadProjectSecrets"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+        Resource = [
+          "arn:aws:secretsmanager:*:*:secret:AmazonMSK_${var.cluster_name}_*",
+          "arn:aws:secretsmanager:*:*:secret:${var.cluster_name}-*"
+        ]
+      },
+      {
+        # The MSK SCRAM secret is encrypted with a customer KMS key.
+        Sid      = "DecryptSecretCMKs"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = "*"
+        Condition = {
+          StringLike = { "kms:ViaService" = "secretsmanager.*.amazonaws.com" }
+        }
+      }
+    ]
+  })
+}
