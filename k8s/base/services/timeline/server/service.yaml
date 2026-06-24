@@ -1,0 +1,17 @@
+# k8s/base/services/timeline/server/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: timeline-server
+  labels:
+    app: timeline-server
+spec:
+  selector:
+    app: timeline-server
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 50060
+      targetPort: grpc
+      appProtocol: grpc
+  type: ClusterIP
