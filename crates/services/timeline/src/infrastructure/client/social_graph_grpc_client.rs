@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use tonic::transport::Channel;
+use transport::grpc::client::ResilientChannel;
 
 use crate::application::port::SocialGraphClient;
 use crate::domain::value_object::{AuthorId, ProfileId};
@@ -20,6 +20,10 @@ use sg_proto::{
 
 /// tonic gRPC client adapter for services/social-graph.
 ///
+/// The channel is a [`ResilientChannel`]: trace injection + circuit breaker + timeout,
+/// configured from the `social-graph` resilience binding and hot-reloaded with it (see
+/// [`crate::service`]). The breaker/timeout therefore wrap every paginated call below.
+///
 /// Both `list_all_followers` and `list_all_following` paginate internally
 /// until `next_page_token` is empty, returning the complete flattened list.
 /// This is safe because:
@@ -27,15 +31,15 @@ use sg_proto::{
 ///   - Following list: called at most once per cold-start rebuild — amortized over
 ///     the `TIMELINE_WARM_TTL_SECS` (default 24h) window.
 pub struct SocialGraphGrpcClient {
-    channel: Channel,
+    channel: ResilientChannel,
 }
 
 impl SocialGraphGrpcClient {
-    pub fn new(channel: Channel) -> Self {
+    pub fn new(channel: ResilientChannel) -> Self {
         Self { channel }
     }
 
-    fn client(&self) -> SocialGraphServiceClient<Channel> {
+    fn client(&self) -> SocialGraphServiceClient<ResilientChannel> {
         SocialGraphServiceClient::new(self.channel.clone())
     }
 }
