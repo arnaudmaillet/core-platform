@@ -8,6 +8,7 @@ resources:
   - ../../base/services/profile/scylla
   - ../../base/services/profile/apps/command-server
   - ../../base/services/chat/server
+  - ../../base/services/social-graph/server
   - ingress.yaml
   - karpenter-config.yaml
   - hpa.yaml
@@ -21,6 +22,9 @@ configMapGenerator:
   - name: chat-config
     envs:
       - chat.env
+  - name: social-graph-config
+    envs:
+      - social-graph.env
   # Mounted at /etc/infra; the runtime loads + hot-reloads it fleet-wide.
   - name: infra-config
     files:
@@ -30,6 +34,9 @@ images:
     newTag: latest
   - name: core-platform-chat-server
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-chat-server
+    newTag: latest
+  - name: core-platform-social-graph-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-social-graph-server
     newTag: latest
   - name: core-platform-migrator
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
