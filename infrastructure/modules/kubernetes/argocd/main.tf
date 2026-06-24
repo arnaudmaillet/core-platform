@@ -27,6 +27,8 @@ module "bootstrap" {
   vpc_id              = var.vpc_id
   ssl_certificate_arn = var.ssl_certificate_arn
   addons_iam_roles    = var.addons_iam_roles
+  bootstrap_path      = var.bootstrap_path
+  global_params_file  = var.global_params_file
   server_dependency   = module.server.argocd_id
 }
 

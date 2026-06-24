@@ -16,3 +16,13 @@ variable "addons_iam_roles" { type = map(string) }
 variable "ssl_certificate_arn" { type = string }
 variable "addons" { type = any }
 variable "tags" { type = map(string) }
+
+# Per-env bootstrap wiring (defaults preserve the original dev behavior).
+variable "bootstrap_path" {
+  type    = string
+  default = "infrastructure/argocd/bootstrap"
+}
+variable "global_params_file" {
+  type    = string
+  default = "global-params.json"
+}
