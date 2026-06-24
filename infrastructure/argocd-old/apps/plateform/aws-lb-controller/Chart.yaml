@@ -1,6 +1,0 @@
-# infrastructure/argocd/apps/plateform/aws-lb-controller/Chart.yaml
-
-apiVersion: v2
-name: aws-lb-controller
-description: Helm chart pour l'AWS Load Balancer Controller
-version: 1.0.0
