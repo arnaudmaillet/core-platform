@@ -31,6 +31,10 @@ retry = { max_attempts = 6, backoff = { kind = "exponential", base_ms = 100, max
 "post-command"  = "critical"
 "timeline-read" = "standard"
 "notification"  = "aggressive"
+# timeline -> social-graph (fan-out + cold-rebuild reads): tolerant of latency,
+# so it rides the standard profile. An unbound dependency falls back to
+# `default_profile`, so this line is documentation as much as configuration.
+"social-graph"  = "standard"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
