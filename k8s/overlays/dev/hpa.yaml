@@ -3,13 +3,13 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: profile-command-hpa
+  name: profile-hpa
   namespace: default
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: dev-profile-command-server
+    name: dev-profile-server
   minReplicas: 2 # On commence à 2 pour tester le balancing
   maxReplicas: 10 # Limite haute pour forcer Karpenter à créer des Nodes
   metrics:
