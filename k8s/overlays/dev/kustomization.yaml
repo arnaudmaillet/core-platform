@@ -7,6 +7,7 @@ resources:
   - ../../base/services/profile/redis
   - ../../base/services/profile/scylla
   - ../../base/services/profile/apps/command-server
+  - ../../base/services/chat/server
   - ingress.yaml
   - karpenter-config.yaml
   - hpa.yaml
@@ -17,8 +18,21 @@ configMapGenerator:
   - name: profile-api-config
     envs:
       - profile-api.env
+  - name: chat-config
+    envs:
+      - chat.env
+  # Mounted at /etc/infra; the runtime loads + hot-reloads it fleet-wide.
+  - name: infra-config
+    files:
+      - infrastructure.toml
 images:
   - name: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server
+    newTag: latest
+  - name: core-platform-chat-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-chat-server
+    newTag: latest
+  - name: core-platform-migrator
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
     newTag: latest
 patches:
   - path: patch-init.yaml
