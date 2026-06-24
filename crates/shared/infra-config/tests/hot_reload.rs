@@ -2,7 +2,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use resilience_config::{spawn_watcher, InfrastructureConfig, ResilienceRegistry};
+use infra_config::{spawn_watcher, InfrastructureConfig, ResilienceRegistry};
 
 fn config(timeout_ms: u64) -> String {
     format!(

@@ -11,7 +11,8 @@ description.workspace = true
 # Internal crates
 error = { workspace = true }
 resilience = { workspace = true }
-resilience-config = { workspace = true }
+infra-config      = { workspace = true }
+traffic           = { workspace = true }
 
 # gRPC — Tonic + Tower
 tonic = { workspace = true }
@@ -40,7 +41,7 @@ thiserror = { workspace = true }
 
 # OpenTelemetry — pinned to the same versions as the `telemetry` crate
 # so context propagation is wire-compatible across the platform.
-opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry = { version = "0.27", features = ["trace", "metrics"] }
 tracing-opentelemetry = "0.28"
 
 # Byte utilities (used in protobuf codec and tonic body handling)
@@ -61,3 +62,5 @@ testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true, features = ["kafka"] }
 # Unique per-test topic / consumer-group namespacing (v7 = time-ordered, collision-free).
 uuid = { workspace = true }
+# Implementing a fake QuotaBackend in the traffic-layer tests.
+async-trait = { workspace = true }

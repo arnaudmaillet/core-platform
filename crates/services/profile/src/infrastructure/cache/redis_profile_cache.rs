@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fred::interfaces::KeysInterface as _;
 use fred::types::Expiration;
+use infra_config::CacheProfile;
 
 use redis_storage::{RedisClient, RedisStorageError};
 
@@ -10,8 +11,10 @@ use crate::application::port::{ProfileCache, ProfileView};
 use crate::domain::value_object::{AccountId, ProfileId};
 use crate::error::ProfileError;
 
-const PROFILE_TTL_SECS: i64 = 300;
-const HANDLE_TTL_SECS:  i64 = 600;
+/// Cache namespaces this service binds under `[cache.bindings]`. The TTLs they
+/// resolve to live in `infrastructure.toml` and hot-reload — no redeploy needed.
+pub const PROFILE_CACHE_NAMESPACE: &str = "profile-view";
+pub const HANDLE_CACHE_NAMESPACE: &str = "handle-lookup";
 
 fn redis_err(e: fred::error::Error) -> ProfileError {
     ProfileError::Cache(RedisStorageError::from(e))
@@ -31,12 +34,22 @@ fn account_profiles_key(account_id: &AccountId) -> String {
 
 pub struct RedisProfileCache {
     client: Arc<RedisClient>,
+    /// Hot-reloadable TTL for the `profile:v1:{id}` namespace.
+    profile_ttl: CacheProfile,
+    /// Hot-reloadable TTL for the `handle:v1:{handle}` namespace.
+    handle_ttl: CacheProfile,
 }
 
 impl RedisProfileCache {
-    pub fn new(client: Arc<RedisClient>) -> Self {
-        Self { client }
+    pub fn new(client: Arc<RedisClient>, profile_ttl: CacheProfile, handle_ttl: CacheProfile) -> Self {
+        Self { client, profile_ttl, handle_ttl }
     }
+}
+
+/// Current TTL of a cache profile as the `i64` seconds `Expiration::EX` expects.
+/// Read per write so a config swap takes effect on the very next entry.
+fn ex_secs(profile: &CacheProfile) -> i64 {
+    profile.ttl().as_secs() as i64
 }
 
 #[async_trait]
@@ -64,7 +77,7 @@ impl ProfileCache for RedisProfileCache {
             message: e.to_string(),
         })?;
         self.client
-            .set::<(), _, _>(&key, json, Some(Expiration::EX(PROFILE_TTL_SECS)), None, false)
+            .set::<(), _, _>(&key, json, Some(Expiration::EX(ex_secs(&self.profile_ttl))), None, false)
             .await
             .map_err(redis_err)
     }
@@ -91,7 +104,7 @@ impl ProfileCache for RedisProfileCache {
     ) -> Result<(), ProfileError> {
         let key = handle_key(handle);
         self.client
-            .set::<(), _, _>(&key, id.as_str(), Some(Expiration::EX(HANDLE_TTL_SECS)), None, false)
+            .set::<(), _, _>(&key, id.as_str(), Some(Expiration::EX(ex_secs(&self.handle_ttl))), None, false)
             .await
             .map_err(redis_err)
     }

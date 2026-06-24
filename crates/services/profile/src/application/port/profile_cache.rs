@@ -82,9 +82,10 @@ impl From<&Profile> for ProfileView {
 
 /// Cache port for the profile read path.
 ///
-/// Three independent Redis key namespaces with separate TTLs:
-/// - `profile:v1:{id}` — full ProfileView, TTL 300 s.
-/// - `handle:v1:{handle}` — profile_id string, TTL 600 s.
+/// Three independent Redis key namespaces; TTLs are externalized to the `[cache]`
+/// section of `infrastructure.toml` and hot-reload (no redeploy):
+/// - `profile:v1:{id}` — full ProfileView, TTL from the `profile-view` binding.
+/// - `handle:v1:{handle}` — profile_id string, TTL from the `handle-lookup` binding.
 /// - `account:profiles:v1:{account_id}` — evicted on writes; no SET, only DEL.
 #[async_trait]
 pub trait ProfileCache: Send + Sync + 'static {

@@ -1,5 +1,5 @@
 use resilience::{error::ResilienceError, ResilienceProfile};
-use resilience_config::ResilienceRegistry;
+use infra_config::ResilienceRegistry;
 use tonic::transport::Channel;
 use tower::{util::BoxCloneService, Layer, ServiceBuilder};
 
@@ -73,7 +73,7 @@ fn compose_resilient(channel: Channel, profile: &ResilienceProfile) -> Resilient
 ///
 /// ```rust,ignore
 /// let registry = std::sync::Arc::new(ResilienceRegistry::from_config(infra_cfg)?);
-/// let _watcher = resilience_config::spawn_watcher(path, std::sync::Arc::clone(&registry))?;
+/// let _watcher = infra_config::spawn_watcher(path, std::sync::Arc::clone(&registry))?;
 ///
 /// let cfg = GrpcClientConfig::new("https://post:50051").with_dependency("post-command");
 /// let channel = GrpcClientBuilder::new(cfg).build_from_registry(&registry).await?;
@@ -140,7 +140,7 @@ impl GrpcClientBuilder {
     ///
     /// ```rust,ignore
     /// let registry = Arc::new(ResilienceRegistry::from_config(cfg)?);
-    /// let _watcher = resilience_config::spawn_watcher(path, Arc::clone(&registry))?;
+    /// let _watcher = infra_config::spawn_watcher(path, Arc::clone(&registry))?;
     ///
     /// let channel = GrpcClientBuilder::new(GrpcClientConfig::new(uri).with_dependency("post-command"))
     ///     .build_from_registry(&registry)
@@ -184,7 +184,7 @@ async fn build_channel(cfg: &GrpcClientConfig) -> Result<tonic::transport::Chann
 
 #[cfg(test)]
 mod tests {
-    use resilience_config::{InfrastructureConfig, ResilienceRegistry};
+    use infra_config::{InfrastructureConfig, ResilienceRegistry};
 
     use super::*;
 

@@ -32,7 +32,8 @@ transport/
 │   ├── error.rs                    GrpcTransportError + grpc_severity()
 │   ├── layer/
 │   │   ├── outbound.rs             OutboundTraceLayer — zero-cost, injects trace on every outbound call
-│   │   └── inbound.rs              InboundTraceLayer  — BoxFuture, extracts trace from every inbound call
+│   │   ├── inbound.rs              InboundTraceLayer  — BoxFuture, extracts trace from every inbound call
+│   │   └── traffic.rs              TrafficLayer       — ingress rate limiting → RESOURCE_EXHAUSTED
 │   ├── client/
 │   │   ├── config.rs               GrpcClientConfig · GrpcTlsConfig · GrpcResilienceConfig
 │   │   └── builder.rs              GrpcClientBuilder → Channel | OutboundTraceService<Channel> | ResilientChannel
@@ -106,13 +107,84 @@ TimeoutLayer              (from resilience crate)
 
 ```
 tonic::Server
-  └─ InboundTraceLayer
-      ├─ extracts traceparent / tracestate from request headers
-      ├─ reconstructs remote OpenTelemetry Context
-      ├─ opens a `grpc.server` span (rpc.system, rpc.method attributes)
-      ├─ sets remote context as parent span
-      └─ instruments the entire handler future inside that span
+  └─ InboundTraceLayer            (outer: every request, incl. throttled, is traced)
+      └─ TrafficLayer             (inner: ingress rate limiting; pass-through if unconfigured)
+          ├─ resolves the method's [traffic] profile from the registry
+          ├─ extracts a key by scope (per_method, or per_caller via edge-mesh identity)
+          ├─ local mode       → charge the in-process governor (per-replica)
+          ├─ distributed mode → consult the QuotaBackend lease (fleet-global); on backend
+          │                     error apply on_backend_error (fail_open→local, fail_closed→reject)
+          ├─ enforce=true  + over quota → short-circuit RESOURCE_EXHAUSTED (+ retry-after-ms)
+          ├─ enforce=false (shadow)     → log would-throttle, admit
+          └─ otherwise → handler future inside the span
 ```
+
+### Activating ingress rate limiting (server)
+
+`TrafficLayer` is always present in the server type but is a no-op until a
+`TrafficRegistry` is supplied. The serving binary wires it once at boot:
+
+```rust,ignore
+// 1. Load + resolve the whole infrastructure.toml, validating every section.
+let infra = Arc::new(InfraRegistry::from_config(load_from_path("/etc/infra/infrastructure.toml".as_ref())?)?);
+
+// 2. Hot-reload on ConfigMap change (keep the guard alive). One watcher drives every
+//    section, so traffic quotas / enforce flags flip with no redeploy.
+let _watcher = spawn_watcher("/etc/infra/infrastructure.toml".into(), Arc::clone(&infra));
+
+// 3. Install the layer (only when a [traffic] section is configured). `per_caller`
+//    keying reads GrpcServerConfig::identity_header (default `x-edge-user`); override
+//    with .with_identity_header(...) to match what your mesh injects.
+let mut builder = GrpcServerBuilder::new(GrpcServerConfig::default());
+if let Some(traffic) = infra.traffic() {
+    builder = builder.with_traffic(Arc::clone(&traffic));
+
+    // 4. Bound memory for unbounded keyspaces (per_caller): sweep idle keys on an interval.
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop { tick.tick().await; traffic.prune_all(); }
+    });
+}
+let server = builder.build()?.add_service(/* … */);
+```
+
+**Safe rollout (pilot = post-command writes).** Ship the tight profile with
+`enforce = false` (shadow): the limiter charges cells without rejecting anything.
+Watch the **`infra_traffic_throttled_total`** counter (labels: `profile`, `route`,
+`status`) — specifically the `status="shadow"` series, which is exactly what *would*
+be rejected. When the rate looks right, edit `enforce = true` in the ConfigMap: it
+hot-reloads to enforcement (`status` flips to `enforced`) with no redeploy, and
+reverts just as fast. Route cardinality is bounded — unbound methods collapse to a
+single `route="<unbound>"` label.
+
+**`per_caller` identity (edge-mesh).** `per_caller` profiles key on the identity the
+mesh injects in `identity_header`. **Trust contract:** the mesh must set/overwrite
+that header and strip any client-supplied value at the trust boundary — the layer
+treats it as authoritative and does no in-process token verification. A request that
+arrives without it (unauthenticated method, or one that bypassed the mesh) degrades
+to per-method keying: still limited, just not per-identity (logged at debug).
+
+**Distributed mode (fleet-global budgets).** A `mode = "distributed"` profile enforces
+a global rate across replicas via a `QuotaBackend` (the `traffic-redis` lease backend).
+Wire it once at boot and run its own prune loop:
+
+```rust,ignore
+let backend = Arc::new(traffic_redis::RedisLeaseBackend::new(redis_client));
+builder = builder
+    .with_traffic(Arc::clone(&traffic))
+    .with_traffic_backend(Arc::clone(&backend) as Arc<dyn traffic::QuotaBackend>);
+
+let lease_ms = 1_000; // match the profiles' lease window
+tokio::spawn(async move {
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+    loop { tick.tick().await; backend.prune(lease_ms); }
+});
+```
+
+The backend amortizes Redis I/O (each replica leases a `burst`-sized chunk of the
+per-window budget and serves locally), so the hot path rarely crosses the network.
+If no backend is wired, distributed profiles degrade to the local governor. `local`
+profiles never touch the backend.
 
 ### Resilience Guarantees & High-Load Behavior
 
@@ -209,7 +281,7 @@ pub type ResilientChannel = BoxCloneService<
 >;
 ```
 
-`ResilientChannel` is `Clone` (tonic clones the service per RPC) and reads its circuit-breaker / timeout config from the originating `ResilienceProfile`'s shared `ArcSwap` handles — so a control-plane hot-swap (via `resilience-config`) reconfigures the live channel with no rebuild. `RetryLayer` remains absent at this layer (HTTP/2 body replay); apply retry at the application layer.
+`ResilientChannel` is `Clone` (tonic clones the service per RPC) and reads its circuit-breaker / timeout config from the originating `ResilienceProfile`'s shared `ArcSwap` handles — so a control-plane hot-swap (via `infra-config`) reconfigures the live channel with no rebuild. `RetryLayer` remains absent at this layer (HTTP/2 body replay); apply retry at the application layer.
 
 ### `GrpcClientConfig`
 
@@ -227,13 +299,15 @@ pub struct GrpcClientConfig {
 ### `GrpcServerBuilder` / `TracedGrpcServer`
 
 ```rust
-pub type TracedGrpcServer = Server<Stack<InboundTraceLayer, Identity>>;
+pub type TracedGrpcServer = Server<Stack<TrafficLayer, Stack<InboundTraceLayer, Identity>>>;
 
 pub struct GrpcServerBuilder { /* private */ }
 
 impl GrpcServerBuilder {
     pub fn new(config: GrpcServerConfig) -> Self;
-    // Returns a server with InboundTraceLayer pre-installed.
+    // Enable ingress rate limiting (optional; without it the traffic layer is a no-op).
+    pub fn with_traffic(self, registry: Arc<infra_config::TrafficRegistry>) -> Self;
+    // Returns a server with InboundTraceLayer + TrafficLayer pre-installed.
     pub fn build(self) -> Result<TracedGrpcServer, TransportError>;
 }
 ```
@@ -504,9 +578,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2b. gRPC client — resilient channel resolved from the profile registry.
     // The registry is loaded from infrastructure.toml and hot-reloaded by a watcher;
-    // see the `resilience-config` crate.
+    // see the `infra-config` crate.
     use std::sync::Arc;
-    use resilience_config::{InfrastructureConfig, ResilienceRegistry, spawn_watcher};
+    use infra_config::{InfrastructureConfig, ResilienceRegistry, spawn_watcher};
 
     let registry = Arc::new(ResilienceRegistry::from_config(
         InfrastructureConfig::from_toml(&std::fs::read_to_string("infrastructure.toml")?)?,

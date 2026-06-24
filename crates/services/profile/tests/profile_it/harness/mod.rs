@@ -12,6 +12,7 @@ use cqrs::command::InMemoryCommandBus;
 use cqrs::query::InMemoryQueryBus;
 use cqrs::{CommandBus, CqrsError, Envelope, QueryBus};
 use redis_storage::RedisConfig;
+use infra_config::{CacheRegistry, InfrastructureConfig};
 use scylla_storage::ScyllaConfig;
 
 use profile::app::{App, Backends};
@@ -31,6 +32,27 @@ pub const DEADLINE: Duration = Duration::from_secs(10);
 const KEYSPACE: &str = "profile";
 /// On-disk migration assets, resolved against *this* crate's manifest.
 const MIGRATIONS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+
+/// Minimal externalized cache config the harness feeds the composition root —
+/// the same `[cache]` shape production ships, exercising the real resolution path.
+const CACHE_TOML: &str = r#"
+[resilience]
+default_profile = "standard"
+[resilience.profiles.standard]
+timeout = { duration_ms = 10000 }
+circuit_breaker = { failure_threshold = 5, success_threshold = 2, open_duration_ms = 30000, half_open_max_calls = 1 }
+retry = { max_attempts = 3, backoff = { kind = "exponential", base_ms = 50, max_ms = 10000, jitter = "full" } }
+
+[cache]
+default_profile = "standard"
+[cache.profiles.standard]
+ttl_secs = 300
+[cache.profiles.handles]
+ttl_secs = 600
+[cache.bindings]
+"profile-view" = "standard"
+"handle-lookup" = "handles"
+"#;
 
 /// A fully-wired profile service bound to ephemeral infra, plus assertion handles.
 pub struct TestHarness {
@@ -56,7 +78,17 @@ impl TestHarness {
             redis: RedisConfig { hosts: vec![redis_endpoint], ..RedisConfig::default() },
         };
 
-        let app = App::build(backends).await.expect("integration: build profile app");
+        let cache_section = InfrastructureConfig::from_toml(CACHE_TOML)
+            .expect("integration: parse cache config")
+            .cache
+            .expect("integration: [cache] section present");
+        let cache_registry = Arc::new(
+            CacheRegistry::from_section(cache_section).expect("integration: resolve cache registry"),
+        );
+
+        let app = App::build(backends, cache_registry)
+            .await
+            .expect("integration: build profile app");
 
         Self {
             command_bus: app.command_bus,

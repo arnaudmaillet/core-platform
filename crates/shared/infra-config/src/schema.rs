@@ -19,12 +19,41 @@ use std::collections::HashMap;
 use resilience::{retry::backoff::spec::BackoffSpec, ResilienceProfileSpec};
 use serde::Deserialize;
 
-use crate::error::ConfigError;
+use crate::{
+    cache::CacheSection, catalog::validate_bindings, error::ConfigError, traffic::TrafficSection,
+};
 
-/// Top-level `infrastructure.toml` document (only the `[resilience]` section is read here).
+/// Top-level `infrastructure.toml` document.
+///
+/// Each section is an independently-validated catalog. New sections are added here as
+/// `Option<…Section>` so an existing deployment that only ships `[resilience]` keeps
+/// parsing unchanged (backward-compatible).
 #[derive(Debug, Clone, Deserialize)]
 pub struct InfrastructureConfig {
     pub resilience: ResilienceSection,
+
+    /// Externalized cache-TTL profiles. Absent in deployments that don't use them.
+    #[serde(default)]
+    pub cache: Option<CacheSection>,
+
+    /// Externalized ingress rate-limit profiles. Absent in deployments that don't use them.
+    #[serde(default)]
+    pub traffic: Option<TrafficSection>,
+}
+
+impl InfrastructureConfig {
+    /// Validates every present section. Run before resolving and before every hot-swap so a
+    /// malformed document never reaches a data path (fail-closed, all sections at once).
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        self.resilience.validate()?;
+        if let Some(cache) = &self.cache {
+            cache.validate()?;
+        }
+        if let Some(traffic) = &self.traffic {
+            traffic.validate()?;
+        }
+        Ok(())
+    }
 }
 
 /// The `[resilience]` section: a profile *catalog* plus dependency *bindings*.
@@ -60,20 +89,7 @@ impl ResilienceSection {
     /// Run this before resolving *and* before every hot-swap so a malformed config can
     /// never reach the data path (fail-closed).
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if !self.profiles.contains_key(&self.default_profile) {
-            return Err(ConfigError::validation(format!(
-                "default_profile '{}' is not defined under [resilience.profiles]",
-                self.default_profile
-            )));
-        }
-
-        for (dependency, profile) in &self.bindings {
-            if !self.profiles.contains_key(profile) {
-                return Err(ConfigError::validation(format!(
-                    "binding '{dependency}' references unknown profile '{profile}'"
-                )));
-            }
-        }
+        validate_bindings("resilience", &self.profiles, &self.bindings, &self.default_profile)?;
 
         for (name, spec) in &self.profiles {
             validate_profile(name, spec)?;

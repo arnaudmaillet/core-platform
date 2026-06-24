@@ -16,10 +16,11 @@ scylla-storage   = { workspace = true }
 redis-storage    = { workspace = true }
 
 # ── Shared platform crates ────────────────────────────────────────────────────
-cqrs         = { workspace = true }
-auth-context = { workspace = true }
-telemetry    = { workspace = true }
-transport    = { workspace = true }
+cqrs              = { workspace = true }
+auth-context      = { workspace = true }
+telemetry         = { workspace = true }
+transport         = { workspace = true }
+infra-config      = { workspace = true }
 
 # ── Async runtime & utilities ─────────────────────────────────────────────────
 tokio        = { workspace = true }

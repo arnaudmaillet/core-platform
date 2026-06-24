@@ -1,12 +1,12 @@
 use thiserror::Error;
 
-/// Errors raised while loading, parsing, validating, or watching the resilience config.
+/// Errors raised while loading, parsing, validating, or watching the infrastructure config.
 #[derive(Debug, Error)]
 pub enum ConfigError {
-    #[error("failed to read resilience config file: {0}")]
+    #[error("failed to read infrastructure config file: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("failed to parse resilience config TOML: {0}")]
+    #[error("failed to parse infrastructure config TOML: {0}")]
     Toml(#[from] toml::de::Error),
 
     #[error("filesystem watch error: {0}")]
@@ -14,7 +14,7 @@ pub enum ConfigError {
 
     /// A structurally-valid config that violates a semantic invariant. Reported
     /// *before* any live swap, so the running fleet keeps its previous values.
-    #[error("invalid resilience config: {0}")]
+    #[error("invalid infrastructure config: {0}")]
     Validation(String),
 }
 

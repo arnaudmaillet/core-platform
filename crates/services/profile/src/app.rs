@@ -14,6 +14,7 @@ use std::sync::Arc;
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
 use redis_storage::{RedisClientBuilder, RedisConfig};
+use infra_config::CacheRegistry;
 use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
 
 use crate::application::command::{
@@ -28,7 +29,9 @@ use crate::application::query::{
     GetProfileByHandleHandler, GetProfileByHandleQuery, GetProfileByIdHandler, GetProfileByIdQuery,
     ListProfilesByAccountHandler, ListProfilesByAccountQuery,
 };
-use crate::infrastructure::cache::RedisProfileCache;
+use crate::infrastructure::cache::{
+    RedisProfileCache, HANDLE_CACHE_NAMESPACE, PROFILE_CACHE_NAMESPACE,
+};
 use crate::infrastructure::persistence::ScyllaProfileRepository;
 
 /// Storage endpoints the graph is wired against.
@@ -50,7 +53,14 @@ pub struct App {
 impl App {
     /// Builds storage clients from `backends`, assembles the repository, cache,
     /// and CQRS buses with every profile command and query registered.
-    pub async fn build(backends: Backends) -> Result<Self, Box<dyn std::error::Error>> {
+    ///
+    /// `cache_registry` carries this service's externalized cache-TTL profiles
+    /// (resolved from `infrastructure.toml`); the caller owns the registry and its
+    /// hot-reload watcher, so a TTL change reaches the live cache with no rebuild.
+    pub async fn build(
+        backends: Backends,
+        cache_registry: Arc<CacheRegistry>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let Backends { scylla, redis } = backends;
 
         // ── Storage clients ──────────────────────────────────────────────────
@@ -60,7 +70,11 @@ impl App {
         // ── Adapters (exposed behind their ports) ────────────────────────────
         let repository: Arc<dyn ProfileRepository> =
             Arc::new(ScyllaProfileRepository::new(scylla_client));
-        let cache: Arc<dyn ProfileCache> = Arc::new(RedisProfileCache::new(redis_client));
+        let cache: Arc<dyn ProfileCache> = Arc::new(RedisProfileCache::new(
+            redis_client,
+            cache_registry.profile_for(PROFILE_CACHE_NAMESPACE),
+            cache_registry.profile_for(HANDLE_CACHE_NAMESPACE),
+        ));
 
         // ── Command bus ──────────────────────────────────────────────────────
         let command_bus = Arc::new(

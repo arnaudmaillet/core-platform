@@ -9,17 +9,21 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use crate::{error::ConfigError, registry::ResilienceRegistry, schema::InfrastructureConfig};
+use crate::{error::ConfigError, reload::Reloadable, schema::InfrastructureConfig};
 
-/// Reads, parses, and validates a config file in one shot.
+/// Reads, parses, and validates (all sections) a config file in one shot.
 pub fn load_from_path(path: &Path) -> Result<InfrastructureConfig, ConfigError> {
     let raw = std::fs::read_to_string(path)?;
     let config = InfrastructureConfig::from_toml(&raw)?;
-    config.resilience.validate()?;
+    config.validate()?;
     Ok(config)
 }
 
-/// Starts watching `path` and re-applies the config to `registry` on every change.
+/// Starts watching `path` and re-applies the config to `target` on every change.
+///
+/// Generic over any [`Reloadable`]: pass an [`InfraRegistry`](crate::InfraRegistry) to drive
+/// every section, or a [`ResilienceRegistry`](crate::ResilienceRegistry) for the standalone
+/// resilience-only deployment — the watcher never sees a section's shape.
 ///
 /// Returns the [`RecommendedWatcher`] guard — **keep it alive**; dropping it stops the watch.
 ///
@@ -31,9 +35,9 @@ pub fn load_from_path(path: &Path) -> Result<InfrastructureConfig, ConfigError> 
 ///   replaces the file's inode rather than editing it. We therefore watch the *parent
 ///   directory*, not the file path, or we'd stop receiving events after the first swap.
 /// * **Coalesced.** Editors and atomic swaps emit bursts; we drain the channel and reload once.
-pub fn spawn_watcher(
+pub fn spawn_watcher<R: Reloadable>(
     path: PathBuf,
-    registry: Arc<ResilienceRegistry>,
+    target: Arc<R>,
 ) -> Result<RecommendedWatcher, ConfigError> {
     // Bridge notify's synchronous callback into the async world via an unbounded channel
     // (the payload is just a "something changed" tick; we re-read the file on the other side).
@@ -55,14 +59,17 @@ pub fn spawn_watcher(
             // Drain any events that piled up behind this one so a burst triggers one reload.
             while rx.try_recv().is_ok() {}
 
-            match load_from_path(&path) {
-                Ok(config) => match registry.apply(config) {
-                    Ok(()) => info!(path = %path.display(), "resilience config hot-reloaded"),
+            match std::fs::read_to_string(&path) {
+                // `reload` parses + validates + swaps, fail-closed, behind the single writer.
+                Ok(raw) => match target.reload(&raw) {
+                    Ok(()) => info!(path = %path.display(), "infrastructure config hot-reloaded"),
                     Err(e) => {
-                        warn!(error = %e, "rejected reloaded resilience config — keeping previous")
+                        warn!(error = %e, "rejected reloaded infrastructure config — keeping previous")
                     }
                 },
-                Err(e) => warn!(error = %e, "failed to reload resilience config — keeping previous"),
+                Err(e) => {
+                    warn!(error = %e, "failed to read infrastructure config — keeping previous")
+                }
             }
         }
     });

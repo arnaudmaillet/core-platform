@@ -8,7 +8,7 @@
 - **Retry** — retries transient failures with exponential backoff and optional jitter, decoupled from the error classification logic.
 - **Timeout** — enforces an absolute per-request deadline, preventing slow dependencies from exhausting upstream goroutines/tasks.
 
-In addition to the runtime mechanism, the crate exposes an **externalized-config boundary**: optional `serde`-derived wire types and named **profiles** whose live values sit behind `Arc<ArcSwap<_>>` handles for **lock-free hot-reload**. The crate itself stays pure (no file IO, no `notify`); the [`resilience-config`](../resilience-config) companion crate owns parsing, validation, fleet bindings, and the file watcher.
+In addition to the runtime mechanism, the crate exposes an **externalized-config boundary**: optional `serde`-derived wire types and named **profiles** whose live values sit behind `Arc<ArcSwap<_>>` handles for **lock-free hot-reload**. The crate itself stays pure (no file IO, no `notify`); the [`infra-config`](../infra-config) companion crate owns parsing, validation, fleet bindings, and the file watcher.
 
 **Critical role in the ecosystem:** this crate sits between the `transport` crate (gRPC/Kafka clients) and the `cqrs` bus. Any outbound call to a downstream service wraps through these layers — enabling fleet-wide resilience policy without modifying business logic.
 
@@ -253,7 +253,7 @@ impl ResilienceProfile {
 
 **Scope note:** timeout + circuit-breaker hot-reload (the incident-critical levers) is wired; retry is resolved into the profile but not behind `ArcSwap` (the retry layer is generic over the backoff strategy). `apply()` returns the new retry config for callers that rebuild the retry layer.
 
-Loading profiles from `infrastructure.toml`, validating them, resolving fleet bindings (`"post-command" → "critical"`), and watching the file for changes all live in the [`resilience-config`](../resilience-config) crate.
+Loading profiles from `infrastructure.toml`, validating them, resolving fleet bindings (`"post-command" → "critical"`), and watching the file for changes all live in the [`infra-config`](../infra-config) crate.
 
 ---
 
@@ -332,7 +332,7 @@ impl<E: std::fmt::Debug> RetryPolicy<E> for GrpcRetryPolicy {
 
 ## ⚙️ Configuration & Runtime Environment
 
-This crate is a **pure library** — it consumes no environment variables and has no runtime process. Configuration is passed programmatically via the config structs (static use), or sourced externally and applied through `ResilienceProfile` handles when paired with [`resilience-config`](../resilience-config) (hot-reload). No file IO or `notify` dependency lives here.
+This crate is a **pure library** — it consumes no environment variables and has no runtime process. Configuration is passed programmatically via the config structs (static use), or sourced externally and applied through `ResilienceProfile` handles when paired with [`infra-config`](../infra-config) (hot-reload). No file IO or `notify` dependency lives here.
 
 ### Compile-time / Cargo features
 

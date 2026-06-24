@@ -1,4 +1,4 @@
-use resilience_config::{InfrastructureConfig, ResilienceRegistry};
+use infra_config::{InfrastructureConfig, ResilienceRegistry};
 
 const SAMPLE: &str = r#"
 [resilience]
