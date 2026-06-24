@@ -16,7 +16,7 @@ members = [
     "crates/platform/auth-context",
     "crates/foundation/validate-core",
     "crates/platform/validation",
-    "crates/shared/test-support",
+    "crates/platform/test-support",
     "crates/platform/service-runtime",
     "crates/services/account",
     "crates/services/profile",
@@ -71,7 +71,7 @@ validation       = { path = "crates/platform/validation" }
 postgres-storage = { path = "crates/storage/postgres", package = "postgres" }
 scylla-storage   = { path = "crates/storage/scylla" }
 redis-storage    = { path = "crates/storage/redis" }
-test-support     = { path = "crates/shared/test-support" }
+test-support     = { path = "crates/platform/test-support" }
 service-runtime  = { path = "crates/platform/service-runtime" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
