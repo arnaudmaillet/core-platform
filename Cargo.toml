@@ -6,16 +6,16 @@ members = [
     "crates/foundation/resilience",
     "crates/foundation/infra-config",
     "crates/foundation/traffic",
-    "crates/shared/traffic-redis",
-    "crates/shared/telemetry",
-    "crates/shared/transport",
-    "crates/shared/cqrs",
+    "crates/platform/traffic-redis",
+    "crates/platform/telemetry",
+    "crates/platform/transport",
+    "crates/platform/cqrs",
     "crates/shared/storage/postgres",
     "crates/shared/storage/scylla",
     "crates/shared/storage/redis",
-    "crates/shared/auth-context",
+    "crates/platform/auth-context",
     "crates/foundation/validate-core",
-    "crates/shared/validation",
+    "crates/platform/validation",
     "crates/shared/test-support",
     "crates/platform/service-runtime",
     "crates/services/account",
@@ -61,13 +61,13 @@ error             = { path = "crates/foundation/error" }
 resilience        = { path = "crates/foundation/resilience" }
 infra-config      = { path = "crates/foundation/infra-config" }
 traffic           = { path = "crates/foundation/traffic" }
-traffic-redis     = { path = "crates/shared/traffic-redis" }
-telemetry        = { path = "crates/shared/telemetry" }
-transport        = { path = "crates/shared/transport" }
-cqrs             = { path = "crates/shared/cqrs" }
-auth-context     = { path = "crates/shared/auth-context" }
+traffic-redis     = { path = "crates/platform/traffic-redis" }
+telemetry        = { path = "crates/platform/telemetry" }
+transport        = { path = "crates/platform/transport" }
+cqrs             = { path = "crates/platform/cqrs" }
+auth-context     = { path = "crates/platform/auth-context" }
 validate-core    = { path = "crates/foundation/validate-core" }
-validation       = { path = "crates/shared/validation" }
+validation       = { path = "crates/platform/validation" }
 postgres-storage = { path = "crates/shared/storage/postgres", package = "postgres" }
 scylla-storage   = { path = "crates/shared/storage/scylla" }
 redis-storage    = { path = "crates/shared/storage/redis" }
