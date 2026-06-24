@@ -9,6 +9,14 @@ resources:
   - ../../base/services/profile/apps/command-server
   - ../../base/services/chat/server
   - ../../base/services/social-graph/server
+  - ../../base/services/profile/server
+  - ../../base/services/geo-discovery/server
+  - ../../base/services/notification/server
+  - ../../base/services/post/server
+  - ../../base/services/comment/server
+  - ../../base/services/engagement/server
+  - ../../base/services/account/server
+  - ../../base/services/timeline/server
   - ingress.yaml
   - karpenter-config.yaml
   - hpa.yaml
@@ -25,6 +33,30 @@ configMapGenerator:
   - name: social-graph-config
     envs:
       - social-graph.env
+  - name: profile-config
+    envs:
+      - profile.env
+  - name: geo-discovery-config
+    envs:
+      - geo-discovery.env
+  - name: notification-config
+    envs:
+      - notification.env
+  - name: post-config
+    envs:
+      - post.env
+  - name: comment-config
+    envs:
+      - comment.env
+  - name: engagement-config
+    envs:
+      - engagement.env
+  - name: account-config
+    envs:
+      - account.env
+  - name: timeline-config
+    envs:
+      - timeline.env
   # Mounted at /etc/infra; the runtime loads + hot-reloads it fleet-wide.
   - name: infra-config
     files:
@@ -37,6 +69,30 @@ images:
     newTag: latest
   - name: core-platform-social-graph-server
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-social-graph-server
+    newTag: latest
+  - name: core-platform-profile-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-server
+    newTag: latest
+  - name: core-platform-geo-discovery-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-geo-discovery-server
+    newTag: latest
+  - name: core-platform-notification-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-notification-server
+    newTag: latest
+  - name: core-platform-post-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-post-server
+    newTag: latest
+  - name: core-platform-comment-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-comment-server
+    newTag: latest
+  - name: core-platform-engagement-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-engagement-server
+    newTag: latest
+  - name: core-platform-account-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-account-server
+    newTag: latest
+  - name: core-platform-timeline-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-timeline-server
     newTag: latest
   - name: core-platform-migrator
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
