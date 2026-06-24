@@ -3,9 +3,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../base/services/profile/postgres
-  - ../../base/services/profile/redis
-  - ../../base/services/profile/scylla
+  # ── Shared dev backends (default ns, dev- prefixed to match the *.env hosts) ──
+  # NB: ScyllaDB is NOT here — it lives un-prefixed in namespace `scylla`
+  # (k8s/base/infra/scylla), applied separately.
+  - ../../base/infra/redis
+  - ../../base/infra/kafka
+  - ../../base/infra/postgres
+  # ── Service deployments ──────────────────────────────────────────────────────
   - ../../base/services/chat/server
   - ../../base/services/social-graph/server
   - ../../base/services/profile/server
@@ -91,11 +95,3 @@ images:
   - name: core-platform-migrator
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
     newTag: latest
-patches:
-  - target:
-      kind: Cluster
-      name: profile-db
-    patch: |-
-      - op: replace
-        path: /spec/instances
-        value: 1
