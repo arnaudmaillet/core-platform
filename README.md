@@ -60,34 +60,29 @@ cargo build
 
 # Run tests (unit and integration via testcontainers)
 cargo test
-Local Infrastructure
+```
+
+### Local Infrastructure
+
 To start the necessary dependencies (Postgres, Redis, ScyllaDB, Kafka) for local development:
 
-Bash
+```bash
 docker-compose up -d
-Repository Structure
-backend/gateway/: GraphQL Gateway (BFF).
-
-backend/services/: Entry points for microservices (API Command Servers and Workers).
-
-crates/: Core business logic and infrastructure abstractions.
-
-shared-kernel: Common DDD building blocks.
-
-infra-*: Drivers and technical implementations.
-
-*-test-utils: Specialized testing tools.
-
-common/rust/shared-proto: Generated gRPC contracts.
-
-infrastructure/: Terraform modules, EKS configurations, and ArgoCD manifests.
-
-Roadmap
-[ ] Stabilization of the Bazel build chain.
-
-[ ] Implementation of Sharding at the SQLx layer.
-
-[ ] Extension of the Gamification module.
-
-[ ] Distributed monitoring with OpenTelemetry.
 ```
+
+## Repository Structure
+
+The workspace lives under `crates/`, organised by role:
+
+- **`crates/services/<svc>/`** — domain microservices (DDD + CQRS), **library-only**. Each exposes a composition root (`App::build`) and implements `service_runtime::Service` (`crate::service::<Svc>Service`).
+- **`crates/apps/<svc>-server/`** — thin deployable binaries (one per service). Each `main` is a `service_runtime::serve::<…>(addr)` one-liner.
+- **`crates/platform/service-runtime/`** — the unified fleet bootstrap: telemetry, `infrastructure.toml` load + hot-reload, ingress trace + rate-limit layers, dynamic gRPC health, and graceful shutdown. See its [README](crates/platform/service-runtime/README.md).
+- **`crates/shared/`** — reusable building blocks: `error`, `cqrs`, `auth-context`, `validation`/`validate-core`, the externalized-config stack (`infra-config`, `resilience`, `traffic`, `telemetry`), `transport` (gRPC + Kafka), and storage clients under `crates/shared/storage/{postgres,scylla,redis}`.
+- **`infrastructure/`** — Terraform/Terragrunt modules, EKS configuration, and ArgoCD manifests.
+
+## Roadmap
+
+- [ ] Stabilization of the Bazel build chain (role-tiered crate layout + a shared `contracts/` tier).
+- [ ] Schema-migration runner (`apps/migrator`).
+- [ ] Implementation of Sharding at the SQLx layer.
+- [x] Distributed monitoring with OpenTelemetry — live log-filter and trace-sampling dials via the `[telemetry]` config section.

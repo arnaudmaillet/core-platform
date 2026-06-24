@@ -136,14 +136,25 @@ comment = { path = "crates/services/comment" }
 
 ### Bootstrap pattern
 
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `comment::service::CommentService` (`build` wires the ScyllaDB repository and
+the durable Kafka publisher; `register` adds the gRPC + reflection services;
+`health_probes` checks Scylla). The deployable binary is
+`crates/apps/comment-server`:
+
 ```rust
-use comment::infrastructure::grpc::server::serve;
+use std::net::SocketAddr;
+
+use comment::service::CommentService;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    telemetry::init();
-    let addr = "[::1]:50054".parse()?;
-    serve(addr).await
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("COMMENT_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50057".to_owned())
+        .parse()?;
+
+    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
+    service_runtime::serve::<CommentService>(addr).await
 }
 ```
 

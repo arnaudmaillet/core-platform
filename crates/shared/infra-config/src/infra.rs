@@ -7,7 +7,7 @@ use tracing::warn;
 
 use crate::{
     cache::CacheRegistry, error::ConfigError, reload::Reloadable, registry::ResilienceRegistry,
-    schema::InfrastructureConfig, traffic::TrafficRegistry,
+    schema::InfrastructureConfig, telemetry::TelemetryRegistry, traffic::TrafficRegistry,
 };
 
 /// Owns one resolved registry per `infrastructure.toml` section and presents them as a
@@ -28,6 +28,7 @@ pub struct InfraRegistry {
     resilience: Arc<ResilienceRegistry>,
     cache: Option<Arc<CacheRegistry>>,
     traffic: Option<Arc<TrafficRegistry>>,
+    telemetry: Option<Arc<TelemetryRegistry>>,
 }
 
 impl InfraRegistry {
@@ -45,8 +46,12 @@ impl InfraRegistry {
             Some(section) => Some(Arc::new(TrafficRegistry::from_section(section)?)),
             None => None,
         };
+        let telemetry = match config.telemetry {
+            Some(section) => Some(Arc::new(TelemetryRegistry::from_section(section)?)),
+            None => None,
+        };
 
-        Ok(Self { resilience, cache, traffic })
+        Ok(Self { resilience, cache, traffic, telemetry })
     }
 
     /// Shared resilience registry (always present).
@@ -62,6 +67,13 @@ impl InfraRegistry {
     /// Shared traffic (rate-limit) registry, if the deployment configured a `[traffic]` section.
     pub fn traffic(&self) -> Option<Arc<TrafficRegistry>> {
         self.traffic.clone()
+    }
+
+    /// Shared telemetry registry, if the deployment configured a `[telemetry]` section.
+    /// The serving binary registers a sink on it (see [`TelemetryRegistry::set_sink`])
+    /// so a config push retunes the live log filter and trace sampling.
+    pub fn telemetry(&self) -> Option<Arc<TelemetryRegistry>> {
+        self.telemetry.clone()
     }
 
     /// Hot-applies a freshly-parsed document to every live section (the reload entry point).
@@ -90,6 +102,20 @@ impl InfraRegistry {
             ),
             (None, Some(_)) => warn!(
                 "[traffic] section added at runtime — ignored (adding a section requires a restart)"
+            ),
+            (None, None) => {}
+        }
+
+        // Applied last: a bad log-filter directive can only surface here (it can't
+        // be validated up front without a tracing dependency), and telemetry is
+        // the one section whose apply has an external side effect (the live pipeline).
+        match (&self.telemetry, config.telemetry) {
+            (Some(registry), Some(section)) => registry.apply(section)?,
+            (Some(_), None) => warn!(
+                "[telemetry] section removed from reloaded config — keeping previous values"
+            ),
+            (None, Some(_)) => warn!(
+                "[telemetry] section added at runtime — ignored (adding a section requires a restart)"
             ),
             (None, None) => {}
         }

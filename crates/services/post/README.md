@@ -122,3 +122,25 @@ cqlsh -f migrations/0003_create_posts_by_profile_table.cql
 ```
 
 Dependencies: ScyllaDB cluster (`datacenter1`), Kafka broker.
+
+---
+
+## 🚀 Deployment
+
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `post::service::PostService` (`build` wires the ScyllaDB repository and the
+durable Kafka event publisher; `register` adds the gRPC + reflection services;
+`health_probes` checks Scylla). The deployable binary is `crates/apps/post-server`:
+
+```rust
+use std::net::SocketAddr;
+use post::service::PostService;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("POST_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50056".to_owned())
+        .parse()?;
+    service_runtime::serve::<PostService>(addr).await
+}
+```

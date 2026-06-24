@@ -259,3 +259,26 @@ command — the gRPC handler applies these hard-coded defaults:
 | `tonic` / `prost` | gRPC server and protobuf codegen |
 | `uuid` (v7) | Time-sortable primary keys |
 | `chrono` | UTC timestamps |
+
+---
+
+## 🚀 Deployment
+
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `account::service::AccountService` (`build` constructs the PostgreSQL pool via
+`PgPoolBuilder` and wires the CQRS buses; `register` adds the gRPC + reflection
+services; `health_probes` checks Postgres — the pool is `Arc`-backed, so the probe
+shares it). The deployable binary is `crates/apps/account-server`:
+
+```rust
+use std::net::SocketAddr;
+use account::service::AccountService;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("ACCOUNT_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50059".to_owned())
+        .parse()?;
+    service_runtime::serve::<AccountService>(addr).await
+}
+```

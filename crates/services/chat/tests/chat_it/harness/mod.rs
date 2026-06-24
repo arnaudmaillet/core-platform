@@ -167,6 +167,9 @@ impl TestHarness {
             member_registry,
             audience_registry,
             params,
+            // Storage clients are retained on `App` for the runtime's readiness
+            // probes; the harness drives the graph directly and doesn't need them.
+            ..
         } = App::build(&config, backends).await.expect("integration: build chat app");
 
         Self {

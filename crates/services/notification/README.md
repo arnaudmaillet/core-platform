@@ -134,18 +134,25 @@ notification = { path = "crates/services/notification" }
 
 ### Bootstrap
 
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `notification::service::NotificationService` (`build` wires the repository,
+cache, broadcast registry, CQRS buses, and the Kafka workers; `register` adds the
+gRPC + reflection services; `health_probes` checks Scylla/Redis). The deployable
+binary is `crates/apps/notification-server`:
+
 ```rust
 use std::net::SocketAddr;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    telemetry::init_from_env()?;
+use notification::service::NotificationService;
 
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("NOTIFICATION_GRPC_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:50056".to_owned())
+        .unwrap_or_else(|_| "0.0.0.0:50055".to_owned())
         .parse()?;
 
-    notification::infrastructure::grpc::server::serve(addr).await
+    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
+    service_runtime::serve::<NotificationService>(addr).await
 }
 ```
 

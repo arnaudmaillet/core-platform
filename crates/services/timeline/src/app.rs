@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex};
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use tokio::sync::Semaphore;
 use transport::kafka::config::client::KafkaClientConfig;
 
@@ -104,6 +104,10 @@ pub struct App {
     // dyn-compatible; exposed as their concrete adapters.
     pub audio_feed_store: Arc<RedisAudioFeedStore>,
     pub audio_feed_repo:  Arc<ScyllaAudioFeedRepository>,
+    /// Live storage clients, retained so the runtime's readiness loop can probe
+    /// their liveness (see [`crate::service`]).
+    pub scylla:           Arc<ScyllaClient>,
+    pub redis:            RedisClient,
 }
 
 impl App {
@@ -126,7 +130,7 @@ impl App {
         let vip_registry = Arc::new(RedisVipRegistry::new(redis_client.clone()));
         let tier_cache = Arc::new(RedisTierCache::new(redis_client.clone()));
         let following_store = Arc::new(RedisFollowingStore::new(redis_client.clone()));
-        let audio_feed_store = Arc::new(RedisAudioFeedStore::new(redis_client));
+        let audio_feed_store = Arc::new(RedisAudioFeedStore::new(redis_client.clone()));
 
         // ── Persistence adapters ─────────────────────────────────────────────
         let feed_repository = Arc::new(ScyllaFeedRepository::new(Arc::clone(&scylla_client)));
@@ -258,6 +262,8 @@ impl App {
             author_post_repo: author_post_repo as Arc<dyn AuthorPostRepository>,
             audio_feed_store,
             audio_feed_repo,
+            scylla: scylla_client,
+            redis: redis_client,
         })
     }
 }

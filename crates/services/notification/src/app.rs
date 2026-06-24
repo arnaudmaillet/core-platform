@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use transport::kafka::config::client::KafkaClientConfig;
 
 use crate::application::command::create_notification::{
@@ -65,6 +65,10 @@ pub struct App {
     pub counter:         Arc<dyn UnreadCounter>,
     pub repository:      Arc<dyn NotificationRepository>,
     pub block_cache:     Arc<dyn BlockCache>,
+    /// Live storage clients, retained so the runtime's readiness loop can probe
+    /// their liveness (see [`crate::service`]).
+    pub scylla:          Arc<ScyllaClient>,
+    pub redis:           RedisClient,
 }
 
 impl App {
@@ -189,6 +193,8 @@ impl App {
             counter:     counter as Arc<dyn UnreadCounter>,
             repository:  repository as Arc<dyn NotificationRepository>,
             block_cache: block_cache as Arc<dyn BlockCache>,
+            scylla:      scylla_client,
+            redis:       redis_client,
         })
     }
 }

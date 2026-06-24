@@ -27,6 +27,7 @@ pub mod infra;
 pub mod registry;
 pub mod reload;
 pub mod schema;
+pub mod telemetry;
 pub mod traffic;
 pub mod watcher;
 
@@ -37,5 +38,8 @@ pub use infra::InfraRegistry;
 pub use registry::ResilienceRegistry;
 pub use reload::Reloadable;
 pub use schema::{InfrastructureConfig, ResilienceSection};
+pub use telemetry::{
+    TelemetryRegistry, TelemetrySamplingSpec, TelemetrySection, TelemetrySettings, TelemetrySink,
+};
 pub use traffic::{TrafficRegistry, TrafficSection};
 pub use watcher::{load_from_path, spawn_watcher};

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig, RedisSubscriberBuilder};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig, RedisSubscriberBuilder};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use transport::kafka::config::client::KafkaClientConfig;
 use transport::kafka::config::producer::ProducerConfig;
 use transport::kafka::producer::KafkaProducerBuilder;
@@ -88,6 +88,10 @@ pub struct AppConfig {
 /// here, so a scenario reads the live state the handler mutates.
 pub struct App {
     pub handler:           ChatServiceHandler<InMemoryCommandBus, InMemoryQueryBus>,
+    /// Live storage clients, retained so the runtime's readiness loop can probe
+    /// their liveness (see [`crate::service`]).
+    pub scylla:            Arc<ScyllaClient>,
+    pub redis:             RedisClient,
     pub presence:          Arc<dyn PresenceStore>,
     pub routing:           Arc<dyn RoutingRegistry>,
     pub hot_tail:          Arc<dyn HotTailCache>,
@@ -227,6 +231,8 @@ impl App {
 
         Ok(Self {
             handler,
+            scylla: scylla_client,
+            redis: redis_client,
             presence: presence as Arc<dyn PresenceStore>,
             routing: routing as Arc<dyn RoutingRegistry>,
             hot_tail: hot_tail as Arc<dyn HotTailCache>,

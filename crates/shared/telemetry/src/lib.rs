@@ -6,6 +6,7 @@
 //! lifetime of the process; dropping it flushes all in-flight spans and logs.
 
 pub mod config;
+pub mod control;
 pub mod error;
 pub mod guard;
 pub mod init;
@@ -14,6 +15,8 @@ pub mod metrics;
 pub mod trace;
 
 pub use config::TelemetryConfig;
+pub use control::TelemetryControl;
 pub use error::TelemetryError;
 pub use guard::TelemetryGuard;
 pub use init::init;
+pub use trace::config::SamplingStrategy;

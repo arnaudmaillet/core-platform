@@ -1,0 +1,116 @@
+//! Adapts the chat composition root to the fleet [`service_runtime::Service`]
+//! contract so the shared runtime can host it.
+//!
+//! All domain wiring stays in [`crate::app`]; this module only maps env → config,
+//! defers to [`App::build`], registers the concrete tonic services, and reports
+//! backend liveness via [`FnProbe`] closures over the storage clients `App`
+//! retains. It is the seam that lets `chat-server` be a one-liner over the shared
+//! runtime while the integration harness keeps driving [`App::build`] directly.
+//!
+//! The probes are wired here (not in the storage crates) because the
+//! `HealthProbe`/`FnProbe` machinery is a platform concern a storage crate must
+//! not depend on; once the role-tiering lands, the storage crates can expose
+//! their own probe constructors, shared across services.
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use cqrs::command::InMemoryCommandBus;
+use cqrs::query::InMemoryQueryBus;
+use infra_config::InfraRegistry;
+use redis_storage::RedisConfig;
+use scylla_storage::ScyllaConfig;
+use service_runtime::{FnProbe, HealthProbe, Service};
+use tonic::service::RoutesBuilder;
+use tonic_reflection::server::Builder as ReflectionBuilder;
+use transport::kafka::config::client::KafkaClientConfig;
+
+use crate::app::{App, AppConfig, Backends};
+use crate::config::ChatConfig;
+use crate::infrastructure::grpc::handler::{ChatServiceHandler, ChatServiceServer};
+use crate::infrastructure::grpc::server::FILE_DESCRIPTOR_SET;
+
+/// The concrete tonic server type for chat, named once so both the health key
+/// and the reflection registration agree.
+type ChatServer = ChatServiceServer<ChatServiceHandler<InMemoryCommandBus, InMemoryQueryBus>>;
+
+/// The chat service as hosted by [`service_runtime`]. Owns the wired [`App`]
+/// until it is consumed into the gRPC router.
+pub struct ChatService {
+    app: App,
+}
+
+#[async_trait]
+impl Service for ChatService {
+    const NAME: &'static str = "chat";
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    const GRPC_SERVICE_NAME: &'static str = <ChatServer as tonic::server::NamedService>::NAME;
+
+    async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
+        // chat reads its tuning from the environment today; `_infra` is the seam
+        // for migrating these knobs onto hot-reloadable `[traffic]`/`[cache]`
+        // sections later without touching this signature.
+        let config = ChatConfig::from_env();
+
+        let app_config = AppConfig {
+            max_page_size:               config.max_page_size,
+            hot_tail_cache_size:         config.hot_tail_cache_size,
+            message_bucket_hours:        config.message_bucket_hours,
+            member_stream_buffer_size:   config.member_stream_buffer_size,
+            audience_stream_buffer_size: config.audience_stream_buffer_size,
+            audience_shard_count:        config.audience_shard_count,
+            presence_ttl_secs:           config.presence_ttl_secs,
+            typing_ttl_secs:             config.typing_ttl_secs,
+            // Production reuses the presence TTL for the Audience Plane.
+            audience_ttl_secs:           config.presence_ttl_secs,
+            visibility_consumer_group:   "chat-visibility-consumer".to_owned(),
+        };
+
+        let backends = Backends {
+            scylla: ScyllaConfig::from_env(),
+            redis:  RedisConfig::from_env(),
+            kafka:  Some(KafkaClientConfig::from_env()),
+        };
+
+        // `App::build` errors are `Box<dyn Error>` (not `Send + Sync`), so flatten
+        // to a message rather than propagating the box into `anyhow`.
+        let app = App::build(&app_config, backends)
+            .await
+            .map_err(|e| anyhow::anyhow!("chat app build: {e}"))?;
+
+        Ok(Self { app })
+    }
+
+    fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
+        let scylla = Arc::clone(&self.app.scylla);
+        let redis = self.app.redis.clone();
+        vec![
+            Arc::new(FnProbe::new("scylla", move || {
+                let scylla = Arc::clone(&scylla);
+                async move {
+                    scylla_storage::health::health_check(&scylla.session)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("scylla: {e}"))
+                }
+            })),
+            Arc::new(FnProbe::new("redis", move || {
+                let redis = redis.clone();
+                async move {
+                    redis_storage::health::health_check(&*redis)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("redis: {e}"))
+                }
+            })),
+        ]
+    }
+
+    fn register(self, routes: &mut RoutesBuilder) -> anyhow::Result<()> {
+        let reflection = ReflectionBuilder::configure()
+            .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+            .build_v1()?;
+
+        routes.add_service(reflection);
+        routes.add_service(ChatServiceServer::new(self.app.handler));
+        Ok(())
+    }
+}

@@ -7,6 +7,10 @@ use super::handler::account_service_handler::{proto, AccountServiceHandler};
 // Import the tonic-generated trait from the bundled proto module.
 use proto::account_service_server::AccountService;
 
+/// Encoded protobuf descriptor set for gRPC server reflection, emitted by
+/// `build.rs`. Registered by the service's runtime adapter ([`crate::service`]).
+pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("account_descriptor");
+
 #[tonic::async_trait]
 impl<CB, QB> AccountService for AccountServiceHandler<CB, QB>
 where

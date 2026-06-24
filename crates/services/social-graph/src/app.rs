@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use cqrs::command::{CommandBusBuilder, InMemoryCommandBus};
 use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
-use redis_storage::{RedisClientBuilder, RedisConfig};
-use scylla_storage::{ScyllaConfig, ScyllaSessionBuilder};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
+use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 
 use crate::application::command::{
     BlockProfileCommand, BlockProfileHandler, FollowProfileCommand, FollowProfileHandler,
@@ -42,6 +42,10 @@ pub struct Backends {
 pub struct App {
     pub command_bus: Arc<InMemoryCommandBus>,
     pub query_bus:   Arc<InMemoryQueryBus>,
+    /// Live storage clients, retained so the runtime's readiness loop can probe
+    /// their liveness (see [`crate::service`]).
+    pub scylla:      Arc<ScyllaClient>,
+    pub redis:       Arc<RedisClient>,
 }
 
 impl App {
@@ -58,9 +62,9 @@ impl App {
         let redis_client = Arc::new(RedisClientBuilder::new(redis).build().await?);
 
         let repo: Arc<dyn SocialGraphRepository> =
-            Arc::new(ScyllaSocialGraphRepository::new(scylla_client));
+            Arc::new(ScyllaSocialGraphRepository::new(Arc::clone(&scylla_client)));
         let cache: Arc<dyn SocialGraphCache> =
-            Arc::new(RedisSocialGraphCache::new(redis_client));
+            Arc::new(RedisSocialGraphCache::new(Arc::clone(&redis_client)));
 
         let command_bus = Arc::new(
             CommandBusBuilder::new()
@@ -99,6 +103,6 @@ impl App {
                 .build(),
         );
 
-        Ok(Self { command_bus, query_bus })
+        Ok(Self { command_bus, query_bus, scylla: scylla_client, redis: redis_client })
     }
 }

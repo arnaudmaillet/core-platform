@@ -311,3 +311,29 @@ cargo check -p timeline
 # Build
 cargo build -p timeline
 ```
+
+---
+
+## 🚀 Deployment
+
+Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
+as `timeline::service::TimelineService`. `build` maps `TimelineConfig` →
+`AppConfig`, constructs the social-graph gRPC client (`SocialGraphGrpcClient` over
+a lazily-connected channel, so timeline boots even if social-graph isn't yet
+reachable), assembles the cache/persistence adapters and CQRS buses, and spawns
+the ingestion workers; `register` adds the gRPC + reflection services (the surface
+is query-only — writes arrive via Kafka); `health_probes` checks Scylla/Redis. The
+deployable binary is `crates/apps/timeline-server`:
+
+```rust
+use std::net::SocketAddr;
+use timeline::service::TimelineService;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("TIMELINE_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50060".to_owned())
+        .parse()?;
+    service_runtime::serve::<TimelineService>(addr).await
+}
+```

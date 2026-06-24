@@ -17,6 +17,7 @@ members = [
     "crates/shared/validate-core",
     "crates/shared/validation",
     "crates/shared/test-support",
+    "crates/platform/service-runtime",
     "crates/services/account",
     "crates/services/profile",
     "crates/services/social-graph",
@@ -27,6 +28,16 @@ members = [
     "crates/services/notification",
     "crates/services/timeline",
     "crates/services/chat",
+    "crates/apps/chat-server",
+    "crates/apps/profile-server",
+    "crates/apps/social-graph-server",
+    "crates/apps/geo-discovery-server",
+    "crates/apps/notification-server",
+    "crates/apps/post-server",
+    "crates/apps/comment-server",
+    "crates/apps/engagement-server",
+    "crates/apps/account-server",
+    "crates/apps/timeline-server",
 ]
 resolver = "2"
 
@@ -60,6 +71,17 @@ postgres-storage = { path = "crates/shared/storage/postgres", package = "postgre
 scylla-storage   = { path = "crates/shared/storage/scylla" }
 redis-storage    = { path = "crates/shared/storage/redis" }
 test-support     = { path = "crates/shared/test-support" }
+service-runtime  = { path = "crates/platform/service-runtime" }
+account          = { path = "crates/services/account" }
+chat             = { path = "crates/services/chat" }
+profile          = { path = "crates/services/profile" }
+social-graph     = { path = "crates/services/social-graph" }
+post             = { path = "crates/services/post" }
+engagement       = { path = "crates/services/engagement" }
+comment          = { path = "crates/services/comment" }
+geo-discovery    = { path = "crates/services/geo-discovery" }
+notification     = { path = "crates/services/notification" }
+timeline         = { path = "crates/services/timeline" }
 
 
 # Communs
