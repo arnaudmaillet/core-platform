@@ -10,9 +10,9 @@ members = [
     "crates/platform/telemetry",
     "crates/platform/transport",
     "crates/platform/cqrs",
-    "crates/shared/storage/postgres",
-    "crates/shared/storage/scylla",
-    "crates/shared/storage/redis",
+    "crates/storage/postgres",
+    "crates/storage/scylla",
+    "crates/storage/redis",
     "crates/platform/auth-context",
     "crates/foundation/validate-core",
     "crates/platform/validation",
@@ -68,9 +68,9 @@ cqrs             = { path = "crates/platform/cqrs" }
 auth-context     = { path = "crates/platform/auth-context" }
 validate-core    = { path = "crates/foundation/validate-core" }
 validation       = { path = "crates/platform/validation" }
-postgres-storage = { path = "crates/shared/storage/postgres", package = "postgres" }
-scylla-storage   = { path = "crates/shared/storage/scylla" }
-redis-storage    = { path = "crates/shared/storage/redis" }
+postgres-storage = { path = "crates/storage/postgres", package = "postgres" }
+scylla-storage   = { path = "crates/storage/scylla" }
+redis-storage    = { path = "crates/storage/redis" }
 test-support     = { path = "crates/shared/test-support" }
 service-runtime  = { path = "crates/platform/service-runtime" }
 account          = { path = "crates/services/account" }
