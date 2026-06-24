@@ -6,7 +6,6 @@ resources:
   - ../../base/services/profile/postgres
   - ../../base/services/profile/redis
   - ../../base/services/profile/scylla
-  - ../../base/services/profile/apps/command-server
   - ../../base/services/chat/server
   - ../../base/services/social-graph/server
   - ../../base/services/profile/server
@@ -24,9 +23,6 @@ namePrefix: dev-
 configurations:
   - karpenter-refs-config.yaml
 configMapGenerator:
-  - name: profile-api-config
-    envs:
-      - profile-api.env
   - name: chat-config
     envs:
       - chat.env
@@ -62,8 +58,6 @@ configMapGenerator:
     files:
       - infrastructure.toml
 images:
-  - name: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-command-server
-    newTag: latest
   - name: core-platform-chat-server
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-chat-server
     newTag: latest
@@ -98,7 +92,6 @@ images:
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
     newTag: latest
 patches:
-  - path: patch-init.yaml
   - target:
       kind: Cluster
       name: profile-db
