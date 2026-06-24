@@ -10,6 +10,13 @@ timeout = { duration_ms = 10000 }
 circuit_breaker = { failure_threshold = 5, success_threshold = 2, open_duration_ms = 30000, half_open_max_calls = 1 }
 retry = { max_attempts = 3, backoff = { kind = "exponential", base_ms = 50, max_ms = 10000, jitter = "full" } }
 
+# Dependency -> profile bindings. Only the `standard` profile exists in this overlay,
+# so every binding resolves to it (same as the unbound fallback); the entry is here to
+# make the dependency name discoverable and ready to re-point once more profiles land.
+[resilience.bindings]
+# timeline -> social-graph (fan-out + cold-rebuild reads)
+"social-graph" = "standard"
+
 [traffic]
 default_profile = "standard"
 

@@ -3,8 +3,8 @@
 //! [`App::build`] is *pure composition*: storage configs and a
 //! [`SocialGraphClient`] in, a fully-wired service graph out. It binds no socket
 //! and reads no environment, so the production entrypoint
-//! ([`crate::infrastructure::grpc::server::serve`]) and the live integration
-//! harness drive the exact same assembly.
+//! ([`crate::service::TimelineService`], hosted by the fleet runtime) and the live
+//! integration harness drive the exact same assembly.
 //!
 //! Two deliberate seams make the read-heavy timeline testable:
 //!

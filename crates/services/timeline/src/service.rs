@@ -4,8 +4,11 @@
 //! Timeline depends on social-graph over gRPC: the concrete
 //! [`SocialGraphGrpcClient`] is built here from the configured endpoint (lazily
 //! connected, so boot doesn't block on the dependency) and injected into the
-//! otherwise client-generic [`App::build`]. The gRPC surface is query-only;
-//! ingestion runs via Kafka workers spawned inside `App::build`.
+//! otherwise client-generic [`App::build`]. The channel is wrapped in the shared
+//! resilience stack (timeout + circuit breaker) resolved from the `social-graph`
+//! binding in `infrastructure.toml` via [`InfraRegistry::resilience`], so it
+//! hot-reloads with the fleet config. The gRPC surface is query-only; ingestion
+//! runs via Kafka workers spawned inside `App::build`.
 
 use std::sync::Arc;
 
@@ -15,8 +18,8 @@ use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
 use tonic::service::RoutesBuilder;
-use tonic::transport::Channel;
 use tonic_reflection::server::Builder as ReflectionBuilder;
+use transport::grpc::client::{GrpcClientBuilder, GrpcClientConfig};
 use transport::kafka::config::KafkaClientConfig;
 
 use crate::app::{App, AppConfig, Backends};
@@ -26,6 +29,11 @@ use crate::infrastructure::grpc::handler::{TimelineServiceHandler, TimelineServi
 use crate::infrastructure::grpc::server::FILE_DESCRIPTOR_SET;
 
 type TimelineServer = TimelineServiceServer<TimelineServiceHandler<Arc<InMemoryQueryBus>>>;
+
+/// Logical dependency name for the outbound social-graph channel — the key its
+/// resilience profile is bound to under `[resilience.bindings]` in `infrastructure.toml`
+/// (falls back to the default profile when unbound).
+const SOCIAL_GRAPH_DEPENDENCY: &str = "social-graph";
 
 /// The timeline service as hosted by [`service_runtime`].
 pub struct TimelineService {
@@ -38,7 +46,7 @@ impl Service for TimelineService {
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <TimelineServer as tonic::server::NamedService>::NAME;
 
-    async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
+    async fn build(infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let cfg = TimelineConfig::from_env();
 
         let app_config = AppConfig {
@@ -65,11 +73,16 @@ impl Service for TimelineService {
             kafka:  Some(KafkaClientConfig::from_env()),
         };
 
-        // Lazily-connected channel: timeline boots even if social-graph is not
-        // yet reachable; the worker/cold-rebuild call sites tolerate latency.
-        let channel = Channel::from_shared(cfg.social_graph_endpoint.clone())
-            .map_err(|e| anyhow::anyhow!("invalid social-graph endpoint: {e}"))?
-            .connect_lazy();
+        // Lazily-connected, resilience-wrapped channel: timeline boots even if
+        // social-graph is not yet reachable (the connection opens on first RPC),
+        // and the timeout + circuit-breaker stack — resolved from the
+        // `social-graph` binding and shared across the fleet — wraps every call.
+        let channel = GrpcClientBuilder::new(
+            GrpcClientConfig::new(cfg.social_graph_endpoint.clone())
+                .with_dependency(SOCIAL_GRAPH_DEPENDENCY),
+        )
+        .build_from_registry_lazy(&infra.resilience())
+        .map_err(|e| anyhow::anyhow!("build social-graph client: {e}"))?;
         let social_graph = Arc::new(SocialGraphGrpcClient::new(channel));
 
         let app = App::build(&app_config, backends, social_graph)

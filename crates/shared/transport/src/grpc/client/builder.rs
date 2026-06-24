@@ -1,12 +1,15 @@
 use resilience::{error::ResilienceError, ResilienceProfile};
 use infra_config::ResilienceRegistry;
 use tonic::transport::Channel;
-use tower::{util::BoxCloneService, Layer, ServiceBuilder};
+use tower::{Layer, ServiceBuilder};
 
 use crate::{
     error::TransportError,
     grpc::{
-        client::config::GrpcClientConfig,
+        client::{
+            config::GrpcClientConfig,
+            sync_box::BoxCloneSyncService,
+        },
         layer::outbound::{OutboundTraceLayer, OutboundTraceService},
     },
 };
@@ -18,7 +21,11 @@ use crate::{
 /// Because the circuit-breaker and timeout layers read their config from the originating
 /// [`ResilienceProfile`]'s shared handles, a control-plane hot-swap reconfigures this live
 /// stack with no rebuild.
-pub type ResilientChannel = BoxCloneService<
+///
+/// The erasure is [`Send`] **and** [`Sync`] (via [`BoxCloneSyncService`]): a client adapter
+/// typically stores it behind an `Arc` and shares it across worker tasks, and `Arc<T>: Sync`
+/// requires `T: Sync`.
+pub type ResilientChannel = BoxCloneSyncService<
     http::Request<tonic::body::Body>,
     http::Response<tonic::body::Body>,
     TransportError,
@@ -46,7 +53,7 @@ fn compose_resilient(channel: Channel, profile: &ResilienceProfile) -> Resilient
         .layer(profile.circuit_breaker_layer())
         .service(traced);
 
-    BoxCloneService::new(svc)
+    BoxCloneSyncService::new(svc)
 }
 
 /// Builds a Tonic gRPC client channel, with optional TLS and outbound trace injection.
@@ -59,6 +66,10 @@ fn compose_resilient(channel: Channel, profile: &ResilienceProfile) -> Resilient
 /// | `build_traced()` | `OutboundTraceService<Channel>` | ✅ | trace injection only |
 /// | `build_resilient(&profile)` | [`ResilientChannel`] | ✅ | trace + circuit breaker + timeout |
 /// | `build_from_registry(&registry)` | [`ResilientChannel`] | ✅ | resolves the profile from bindings, then as above |
+///
+/// `build_resilient` / `build_from_registry` connect eagerly; their `*_lazy` counterparts
+/// compose the identical stack over a lazily-connected channel for callers that must not
+/// block boot on the dependency.
 ///
 /// # Resilience
 ///
@@ -131,6 +142,22 @@ impl GrpcClientBuilder {
         Ok(compose_resilient(channel, profile))
     }
 
+    /// Lazy counterpart to [`build_resilient`](Self::build_resilient): composes the same
+    /// stack over a [`connect_lazy`](tonic::transport::Endpoint::connect_lazy) channel, so
+    /// the connection is established on the first RPC instead of up front.
+    ///
+    /// Prefer this when the caller must boot even if the dependency is unreachable — the
+    /// channel is built without a network round-trip, and connect failures surface on the
+    /// first call (where the circuit breaker and timeout already wrap them) rather than at
+    /// construction. It is therefore synchronous: only endpoint/TLS parsing can fail here.
+    pub fn build_resilient_lazy(
+        self,
+        profile: &ResilienceProfile,
+    ) -> Result<ResilientChannel, TransportError> {
+        let channel = build_channel_lazy(&self.config)?;
+        Ok(compose_resilient(channel, profile))
+    }
+
     /// Resolves this client's resilience profile from the registry — keyed by
     /// [`GrpcClientConfig::dependency`] (its `[resilience.bindings]` entry, falling back to
     /// the default profile) — and builds the resilient channel from it.
@@ -153,9 +180,30 @@ impl GrpcClientBuilder {
         let profile = registry.profile_for(&self.config.dependency);
         self.build_resilient(&profile).await
     }
+
+    /// Lazy counterpart to [`build_from_registry`](Self::build_from_registry): resolves the
+    /// profile binding exactly the same way, but composes the stack over a lazily-connected
+    /// channel (see [`build_resilient_lazy`](Self::build_resilient_lazy)).
+    ///
+    /// This is the entry point for a caller that must not block boot on the dependency —
+    /// e.g. a read-path service whose downstream is only needed on cold-rebuild.
+    ///
+    /// ```rust,ignore
+    /// let channel = GrpcClientBuilder::new(GrpcClientConfig::new(uri).with_dependency("social-graph"))
+    ///     .build_from_registry_lazy(&infra.resilience())?;
+    /// let client = SocialGraphServiceClient::new(channel);
+    /// ```
+    pub fn build_from_registry_lazy(
+        self,
+        registry: &ResilienceRegistry,
+    ) -> Result<ResilientChannel, TransportError> {
+        let profile = registry.profile_for(&self.config.dependency);
+        self.build_resilient_lazy(&profile)
+    }
 }
 
-async fn build_channel(cfg: &GrpcClientConfig) -> Result<tonic::transport::Channel, TransportError> {
+/// Builds a configured [`Endpoint`] (URI, connect timeout, optional TLS) without connecting.
+fn build_endpoint(cfg: &GrpcClientConfig) -> Result<tonic::transport::Endpoint, TransportError> {
     use tonic::transport::{Certificate, ClientTlsConfig, Endpoint, Identity};
 
     let mut endpoint = Endpoint::new(cfg.endpoint.clone())
@@ -179,7 +227,18 @@ async fn build_channel(cfg: &GrpcClientConfig) -> Result<tonic::transport::Chann
         })?;
     }
 
-    endpoint.connect().await.map_err(TransportError::from)
+    Ok(endpoint)
+}
+
+/// Connects eagerly: the returned channel is backed by an established connection.
+async fn build_channel(cfg: &GrpcClientConfig) -> Result<tonic::transport::Channel, TransportError> {
+    build_endpoint(cfg)?.connect().await.map_err(TransportError::from)
+}
+
+/// Builds a lazily-connected channel: no network round-trip here; the connection is opened
+/// on first use. Only endpoint/TLS parsing can fail.
+fn build_channel_lazy(cfg: &GrpcClientConfig) -> Result<tonic::transport::Channel, TransportError> {
+    Ok(build_endpoint(cfg)?.connect_lazy())
 }
 
 #[cfg(test)]
@@ -202,6 +261,15 @@ retry = { max_attempts = 1, backoff = { kind = "exponential", base_ms = 20, max_
 [resilience.bindings]
 "post-command" = "critical"
 "#;
+
+    // A `ResilientChannel` is stored behind an `Arc` in client adapters that are shared
+    // across worker tasks, so it must be `Send + Sync` (not just `Send`). This locks in the
+    // `BoxCloneSyncService` erasure — a plain `BoxCloneService` would fail to compile here.
+    #[test]
+    fn resilient_channel_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<ResilientChannel>();
+    }
 
     #[tokio::test]
     async fn composes_resilient_channel_bound_to_registry_profile() {
