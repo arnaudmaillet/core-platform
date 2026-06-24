@@ -3,6 +3,7 @@
 [workspace]
 members = [
     "crates/foundation/error",
+    "crates/foundation/health",
     "crates/foundation/resilience",
     "crates/foundation/infra-config",
     "crates/foundation/traffic",
@@ -68,6 +69,7 @@ description = "core-platform repo"
 # `package`) to avoid colliding with the crates.io `postgres` crate and to keep
 # the naming symmetric with `scylla-storage` / `redis-storage`.
 error             = { path = "crates/foundation/error" }
+health            = { path = "crates/foundation/health" }
 resilience        = { path = "crates/foundation/resilience" }
 infra-config      = { path = "crates/foundation/infra-config" }
 traffic           = { path = "crates/foundation/traffic" }

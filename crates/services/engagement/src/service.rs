@@ -13,7 +13,7 @@ use cqrs::command::InMemoryCommandBus;
 use cqrs::query::InMemoryQueryBus;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
-use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::{HealthProbe, InfraRegistry, Service};
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{KafkaClientConfig, ProducerConfig};
@@ -65,15 +65,7 @@ impl Service for EngagementService {
     }
 
     fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
-        let redis = self.app.redis.clone();
-        vec![Arc::new(FnProbe::new("redis", move || {
-            let redis = redis.clone();
-            async move {
-                redis_storage::health::health_check(&*redis)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("redis: {e}"))
-            }
-        }))]
+        vec![redis_storage::health::probe(self.app.redis.clone())]
     }
 
     fn register(self, routes: &mut RoutesBuilder) -> anyhow::Result<()> {

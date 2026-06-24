@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use cqrs::command::InMemoryCommandBus;
 use cqrs::query::InMemoryQueryBus;
 use postgres_storage::{PgPoolBuilder, PostgresConfig};
-use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::{HealthProbe, InfraRegistry, Service};
 use sqlx::PgPool;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
@@ -47,15 +47,7 @@ impl Service for AccountService {
     }
 
     fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
-        let pool = self.pool.clone();
-        vec![Arc::new(FnProbe::new("postgres", move || {
-            let pool = pool.clone();
-            async move {
-                postgres_storage::health_check(&pool)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("postgres: {e}"))
-            }
-        }))]
+        vec![postgres_storage::health::probe(self.pool.clone())]
     }
 
     fn register(self, routes: &mut RoutesBuilder) -> anyhow::Result<()> {

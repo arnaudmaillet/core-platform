@@ -70,60 +70,11 @@ const TRAFFIC_PRUNE_INTERVAL_ENV: &str = "TRAFFIC_PRUNE_INTERVAL_SECS";
 /// Default traffic-registry prune cadence.
 const DEFAULT_TRAFFIC_PRUNE_INTERVAL_SECS: u64 = 60;
 
-/// A liveness probe the runtime polls to drive the service's gRPC health status.
-///
-/// Implemented by the *service* over its live backend clients (a storage crate
-/// can't depend on this platform crate), typically via [`FnProbe`]. Probes must
-/// be cheap — they run on every readiness tick.
-#[async_trait]
-pub trait HealthProbe: Send + Sync + 'static {
-    /// Short identifier for logs, e.g. `"scylla"` or `"redis"`.
-    fn name(&self) -> &str;
-
-    /// Returns `Ok(())` when the dependency is reachable. Any `Err` demotes the
-    /// whole service to `NOT_SERVING` until the next tick clears it.
-    async fn check(&self) -> anyhow::Result<()>;
-}
-
-/// A [`HealthProbe`] backed by an async closure, so a service registers a backend
-/// check without hand-rolling a trait impl per dependency. The closure is `Fn`
-/// (re-run every tick), typically capturing a cloned client handle:
-///
-/// ```ignore
-/// FnProbe::new("redis", move || {
-///     let client = client.clone();
-///     async move {
-///         redis_storage::health::health_check(&*client)
-///             .await
-///             .map_err(|e| anyhow::anyhow!("redis: {e}"))
-///     }
-/// })
-/// ```
-pub struct FnProbe<F> {
-    name: &'static str,
-    check: F,
-}
-
-impl<F> FnProbe<F> {
-    pub fn new(name: &'static str, check: F) -> Self {
-        Self { name, check }
-    }
-}
-
-#[async_trait]
-impl<F, Fut> HealthProbe for FnProbe<F>
-where
-    F: Fn() -> Fut + Send + Sync + 'static,
-    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
-{
-    fn name(&self) -> &str {
-        self.name
-    }
-
-    async fn check(&self) -> anyhow::Result<()> {
-        (self.check)().await
-    }
-}
+/// Backend health probes now live in the `health` foundation crate, so storage
+/// crates can expose ready-made probes (`<storage>::health::probe(...)`) without
+/// depending on this platform crate. Re-exported here for ergonomic use from
+/// service `health_probes()` impls and the readiness loop below.
+pub use health::{FnProbe, HealthProbe};
 
 /// A fleet service the [`serve`] runtime can host.
 ///
