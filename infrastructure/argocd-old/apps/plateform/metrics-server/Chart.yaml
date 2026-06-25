@@ -1,6 +1,0 @@
-# infrastructure/argocd/apps/plateform/metrics-server/Chart.yaml
-
-apiVersion: v2
-name: metrics-server
-description: Helm chart pour Metrics Server (HPA dependancy)
-version: 1.0.0

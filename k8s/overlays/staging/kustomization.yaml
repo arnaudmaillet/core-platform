@@ -1,18 +1,91 @@
-#  k8s/overlays/staging/kustomization.yaml
-
+# k8s/overlays/staging/kustomization.yaml
+#
+# Staging fleet on managed backends (MSK + ElastiCache) + in-cluster operators
+# (scylla-operator ScyllaCluster, CNPG for account). Deployed by ArgoCD via
+# infrastructure/argocd/apps/deployments/staging.
+#
+# NB: ScyllaDB is NOT here — it's the standalone, un-prefixed ScyllaCluster in
+# namespace `scylla` (k8s/base/infra/scylla-cluster), applied separately so the
+# env's scylla-client.scylla.svc FQDN is not rewritten by namePrefix.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources:
-  - ../../base/postgres
 namePrefix: staging-
+resources:
+  # ── Services ─────────────────────────────────────────────────────────────────
+  - ../../base/services/chat/server
+  - ../../base/services/social-graph/server
+  - ../../base/services/profile/server
+  - ../../base/services/geo-discovery/server
+  - ../../base/services/notification/server
+  - ../../base/services/post/server
+  - ../../base/services/comment/server
+  - ../../base/services/engagement/server
+  - ../../base/services/account/server
+  - ../../base/services/timeline/server
+  # ── In-cluster stateful backends + secrets sync ──────────────────────────────
+  - account-postgres.yaml
+  - external-secrets.yaml
+configMapGenerator:
+  - name: chat-config
+    envs: [chat.env]
+  - name: social-graph-config
+    envs: [social-graph.env]
+  - name: profile-config
+    envs: [profile.env]
+  - name: geo-discovery-config
+    envs: [geo-discovery.env]
+  - name: notification-config
+    envs: [notification.env]
+  - name: post-config
+    envs: [post.env]
+  - name: comment-config
+    envs: [comment.env]
+  - name: engagement-config
+    envs: [engagement.env]
+  - name: account-config
+    envs: [account.env]
+  - name: timeline-config
+    envs: [timeline.env]
+  - name: infra-config
+    files: [infrastructure.toml]
+images:
+  - name: core-platform-chat-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-chat-server
+    newTag: staging
+  - name: core-platform-social-graph-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-social-graph-server
+    newTag: staging
+  - name: core-platform-profile-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-profile-server
+    newTag: staging
+  - name: core-platform-geo-discovery-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-geo-discovery-server
+    newTag: staging
+  - name: core-platform-notification-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-notification-server
+    newTag: staging
+  - name: core-platform-post-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-post-server
+    newTag: staging
+  - name: core-platform-comment-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-comment-server
+    newTag: staging
+  - name: core-platform-engagement-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-engagement-server
+    newTag: staging
+  - name: core-platform-account-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-account-server
+    newTag: staging
+  - name: core-platform-timeline-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-timeline-server
+    newTag: staging
+  - name: core-platform-migrator
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
+    newTag: staging
 patches:
-  - target:
-      kind: Cluster
-      name: platform-db
-    patch: |-
-      - op: replace
-        path: /spec/instances
-        value: 2
-      - op: replace
-        path: /spec/storage/size
-        value: 20Gi
+  # Inject the synced MSK/Redis creds into every service container.
+  - path: patch-backend-creds.yaml
+    target:
+      kind: Deployment
+  # account-server gets DATABASE_URL from the CNPG-generated secret.
+  - path: patch-account-db.yaml

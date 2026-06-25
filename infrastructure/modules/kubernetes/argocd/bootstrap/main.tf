@@ -34,9 +34,9 @@ spec:
   source:
     repoURL: ${var.repository_url}
     targetRevision: ${var.target_revision}
-    path: infrastructure/argocd/bootstrap
+    path: ${var.bootstrap_path}
     directory:
-      exclude: 'global-params.json'
+      exclude: '${var.global_params_file}'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -55,22 +55,25 @@ YAML
 resource "github_repository_file" "argocd_params" {
   repository = "core-platform"
   branch     = var.target_revision
-  file       = "infrastructure/argocd/bootstrap/global-params.json"
+  file       = "infrastructure/argocd/bootstrap/${var.global_params_file}"
 
   content = jsonencode({
     global = {
-      region              = var.region
-      env                 = var.env
-      repository_url      = var.repository_url
-      target_revision     = var.target_revision
-      clusterName         = var.cluster_name
-      clusterEndpoint     = var.cluster_endpoint
-      vpcId               = var.vpc_id
-      certificateArn      = var.ssl_certificate_arn
-      certManagerRoleArn  = var.addons_iam_roles["cert_manager"]
-      karpenterRoleArn    = var.addons_iam_roles["karpenter"]
-      lbControllerRoleArn = var.addons_iam_roles["lb_controller"]
-      externalDnsRoleArn  = var.addons_iam_roles["external_dns"]
+      region                  = var.region
+      env                     = var.env
+      repository_url          = var.repository_url
+      target_revision         = var.target_revision
+      clusterName             = var.cluster_name
+      clusterEndpoint         = var.cluster_endpoint
+      vpcId                   = var.vpc_id
+      certificateArn          = var.ssl_certificate_arn
+      certManagerRoleArn      = var.addons_iam_roles["cert_manager"]
+      karpenterRoleArn        = var.addons_iam_roles["karpenter"]
+      lbControllerRoleArn     = var.addons_iam_roles["lb_controller"]
+      externalDnsRoleArn      = var.addons_iam_roles["external_dns"]
+      # Optional: only set where the IRSA role exists (staging/prod via
+      # enable_external_secrets). Empty on dev, which doesn't run ESO.
+      externalSecretsRoleArn  = lookup(var.addons_iam_roles, "external_secrets", "")
     }
   })
 

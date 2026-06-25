@@ -1,0 +1,30 @@
+# infrastructure/argocd/apps/deployments/staging/fleet.yaml
+#
+# Staging is the first env on the NEW Kustomize deploy path: one ArgoCD
+# Application syncs the k8s/overlays/staging overlay (services + CNPG + External
+# Secrets). Discovered by the staging root-workloads appset
+# (bootstrap/staging/root-appset-workloads.yaml -> folder deployments/staging).
+#
+# (dev still runs the legacy Helm catalog/profile-service path — superseded by
+# this Kustomize approach but not yet migrated.)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: staging-fleet
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arnaudmaillet/core-platform
+    targetRevision: develop
+    path: k8s/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,23 @@
+# Operator-managed ScyllaDB for staging (scylla-operator). Standalone + un-prefixed
+# in namespace `scylla` so the env's scylla-client.scylla.svc FQDN resolves
+# unchanged. Name `scylla` -> the operator creates the `scylla-client` service.
+# Apply AFTER the scylla-operator is healthy:  kubectl apply -k k8s/base/infra/scylla-cluster
+apiVersion: scylla.scylladb.com/v1
+kind: ScyllaCluster
+metadata:
+  name: scylla
+  namespace: scylla
+spec:
+  version: 5.4.0
+  agentVersion: 3.2.6
+  datacenter:
+    name: datacenter1
+    racks:
+      - name: rack1
+        members: 3
+        storage:
+          capacity: 20Gi
+          storageClassName: gp3
+        resources:
+          requests: { cpu: "1", memory: 2Gi }
+          limits:   { cpu: "1", memory: 2Gi }
