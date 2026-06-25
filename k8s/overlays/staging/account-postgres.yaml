@@ -1,0 +1,17 @@
+# Account PostgreSQL via CloudNativePG. namePrefix -> staging-account-postgres;
+# CNPG exposes staging-account-postgres-rw:5432 and a staging-account-postgres-app
+# Secret (key `uri` = full connection string) wired into account-server (see patch).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: account-postgres
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: account
+      owner: app
+  storage:
+    size: 10Gi
+    storageClass: gp3
