@@ -1,0 +1,84 @@
+[package]
+name        = "moderation"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Moderation microservice — the platform's integrity decision-of-record and enforcement brain (trust, safety & compliance)."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# Only the canonical error namespace (MOD-XXXX) lives here today. Subsequent
+# phases add: domain/ (Phase 2: Case/Decision/EnforcementAction/PenaltyLedger/
+# Appeal/Report + the graduated-enforcement engine), application/ + AFIT ports
+# (Phase 3), infrastructure/ adapters incl. Postgres SoR / Scylla signal-history /
+# Redis enforcement-projection + Screen hash-corpus / Kafka ingestion consumers
+# (Phase 4), and the composition root + tonic/service-runtime wiring (Phase 5).
+# Dependencies grow per phase — kept minimal here.
+[dependencies]
+# ── Contracts ─────────────────────────────────────────────────────────────────
+moderation-api = { workspace = true }
+anyhow         = { workspace = true }
+
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error      = { workspace = true }
+validation = { workspace = true }
+
+# ── Application layer (Phase 3): CQRS envelope/query bus + async ports ─────────
+cqrs        = { workspace = true }
+async-trait = { workspace = true }
+
+# ── Storage delegates (the three-store split: Postgres SoR · Scylla signal/
+#    evidence history · Redis hot-path enforcement projection + Screen corpus) ──
+postgres-storage = { workspace = true }
+scylla-storage   = { workspace = true }
+redis-storage    = { workspace = true }
+
+# ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
+transport   = { workspace = true }
+account-api = { workspace = true }
+sqlx        = { workspace = true }
+fred        = { workspace = true }
+scylla      = { workspace = true }
+tonic       = { workspace = true }
+tracing     = { workspace = true }
+
+# ── Server wiring (Phase 5) ───────────────────────────────────────────────────
+service-runtime  = { workspace = true }
+tonic-reflection = { workspace = true }
+prost-types      = { workspace = true }
+tokio            = { workspace = true }
+
+# ── Domain types (Phase 2) ────────────────────────────────────────────────────
+serde      = { workspace = true }
+serde_json = { workspace = true }
+uuid       = { workspace = true }
+chrono     = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = { workspace = true }
+http      = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs). Off
+# by default so `cargo test -p moderation` stays a fast, infra-free unit run; the
+# live suite boots real Postgres + Scylla + Redis containers and is opt-in via
+# `cargo test -p moderation --features integration-moderation`.
+integration-moderation = []
+
+[dev-dependencies]
+# Live integration suite: shared container orchestration + migration runners.
+test-support     = { workspace = true }
+cqrs             = { workspace = true }
+postgres-storage = { workspace = true }
+redis-storage    = { workspace = true }
+scylla-storage   = { workspace = true }
+async-trait      = { workspace = true }
+tokio            = { workspace = true }
+sqlx             = { workspace = true }
+fred             = { workspace = true }
+tonic            = { workspace = true }
+uuid             = { workspace = true }
+chrono           = { workspace = true }
+serde_json       = { workspace = true }
+

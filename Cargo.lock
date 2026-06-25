@@ -2494,6 +2494,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "moderation"
+version = "0.1.0"
+dependencies = [
+ "account-api",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cqrs",
+ "error",
+ "fred",
+ "http",
+ "moderation-api",
+ "postgres",
+ "prost-types",
+ "redis-storage",
+ "scylla",
+ "scylla-storage",
+ "serde",
+ "serde_json",
+ "service-runtime",
+ "sqlx",
+ "test-support",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic 0.14.6",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "uuid",
+ "validation",
+]
+
+[[package]]
+name = "moderation-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "moderation-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "moderation",
+ "service-runtime",
+ "tokio",
+]
+
+[[package]]
 name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
