@@ -1,419 +1,179 @@
-# redis-storage — High-performance Redis client abstraction for hyperscale social infrastructure
+# `redis-storage` — Instrumented, topology-agnostic Redis client on the `fred` driver
 
-## 🎯 Overview & Service Role
-
-`redis-storage` is the shared Redis infrastructure crate for the `core-platform` workspace. It provides a **production-grade, fully-instrumented Redis client abstraction** built on the [`fred`](https://crates.io/crates/fred) driver (v10.x), wiring automatic multiplexing, topology agnosticism, exponential backoff reconnection, OTel-native telemetry, and a structured `AppError`-compatible error type into a single, reusable primitive.
-
-**Upstream consumers** (CQRS handlers, cache utilities, rate-limit middleware) import `RedisClient` or `RedisPool` and use fred's command traits directly — without ever touching connection lifecycle, backoff logic, or tracing wiring.
-
-**Critical scope boundary:** This crate contains **zero** application-specific cache keys, TTL values, domain models, Lua scripts, or rate-limiting logic. It exposes only the transport and connection capability.
-
-### Core technical objectives
-
-- **Zero-cost multiplexing** via fred's lock-free, single-connection command queue — thousands of concurrent commands over one TCP socket without a semaphore.
-- **Topology agnosticism** — switch between Standalone / Redis Cluster / Redis Sentinel via a single environment variable with no code change.
-- **Full OTel integration** — fred's built-in tracing feature emits command-level spans; a dedicated event listener bridges connection lifecycle events (connect / reconnect / error) to the process-global OTel subscriber.
-- **Structured error propagation** — every `fred::error::RedisError` maps to a named `RedisStorageError` variant with a stable `RDS-xxxx` code, `Severity`, retryability flag, and HTTP status that integrate directly with the platform's `AppError` pipeline.
+> **Crate Card**
+>
+> | | |
+> |---|---|
+> | **Role** | `storage` — Redis transport/connection capability (no keys, TTLs, or scripts) |
+> | **Package** | `redis-storage` (dir: `crates/storage/redis`) |
+> | **Consumed by** | `chat`, `profile`, `social-graph`, `engagement`, `geo-discovery`, `notification`, `timeline` |
+> | **Depends on** | `fred` 10.x, `telemetry`, `error`, `health` |
+> | **Stability** | stable contract |
+> | **Feature flags** | inherits fred features (e.g. `subscriber-client` for `SSUBSCRIBE`/`SPUBLISH`) |
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
 
 ---
 
-## 📐 Architecture & Concepts
+## 🎯 Overview & role
 
-### Layered architecture
+`redis-storage` is the shared Redis infrastructure crate: a production-grade, fully-instrumented client
+abstraction over the [`fred`](https://crates.io/crates/fred) driver (v10.x), wiring automatic
+multiplexing, topology agnosticism, exponential-backoff reconnection, OTel-native telemetry, and an
+`AppError`-compatible error type into one reusable primitive. Consumers import `RedisClient` /
+`RedisPool` and use fred's command traits directly (via `Deref`).
 
-```
-┌─────────────────────────────────────────────────────┐
-│               Upstream Consumers                     │
-│  (CQRS handlers, cache utils, rate-limit middleware) │
-└──────────────────┬──────────────────────────────────┘
-                   │ RedisClient / RedisPool
-┌──────────────────▼──────────────────────────────────┐
-│                redis-storage                         │
-│                                                      │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
-│  │   config/   │  │   error/    │  │  listener/  │  │
-│  │ connection  │  │    map      │  │    event    │  │
-│  │  topology   │  │             │  │             │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  │
-│         │                │                │          │
-│  ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼──────┐  │
-│  │   client/   │  │    pool/    │  │   health/   │  │
-│  │   builder   │  │   builder   │  │    check    │  │
-│  └─────────────┘  └─────────────┘  └─────────────┘  │
-└──────────────────────────────────────────────────────┘
-                   │ fred::types::Builder
-┌──────────────────▼──────────────────────────────────┐
-│              fred 10.x driver                        │
-│  (multiplexer, pipeline engine, reconnect policy)    │
-└──────────────────────────────────────────────────────┘
-                   │ TCP / TLS
-┌──────────────────▼──────────────────────────────────┐
-│         Redis Cluster / Sentinel / Standalone        │
-└──────────────────────────────────────────────────────┘
-```
-
-### fred multiplexing model
-
-Fred routes **all commands from all callers through a single background writer task** per `RedisClient`. This means:
-
-- No per-command lock contention — the command is atomically pushed onto a lock-free queue.
-- Auto-pipelining (`REDIS_AUTO_PIPELINE=true`) batches commands that arrive within the same scheduler tick into one `PIPELINE` flush, amortising RTT across concurrent callers.
-- A `RedisPool` of size `N` creates `N` independent multiplexers for workloads that saturate one connection's write bandwidth.
-
-### Topology agnosticism
-
-`TopologyKind::into_server_config()` is the single point that translates our environment-driven config into fred's `ServerConfig` enum. Adding a new topology (e.g., `RedisStack`, `ElastiCache`) requires only extending `TopologyKind` and this one function — all builders, error mapping, and telemetry remain unchanged.
-
-```
-REDIS_TOPOLOGY=standalone  →  ServerConfig::Centralized { server: Server }
-REDIS_TOPOLOGY=cluster     →  ServerConfig::Clustered   { hosts: Vec<Server> }
-REDIS_TOPOLOGY=sentinel    →  ServerConfig::Sentinel    { hosts, service_name, ... }
-```
-
-### Resilience guarantees & high-load behaviour
-
-| Concern | Mechanism |
-|---|---|
-| **Transient disconnects** | Exponential backoff reconnect policy (`ReconnectPolicy::new_exponential`). Configurable min/max delay, multiplier, max attempts. |
-| **Command timeout** | Per-command deadline via `PerformanceConfig::default_command_timeout`. Surfaces as `RDS-1001 Timeout`. |
-| **Backpressure** | Internal command buffer bounded by `REDIS_MAX_COMMAND_BUFFER_LEN`. When full, fred returns `RedisErrorKind::Backpressure` → `RDS-1004`. Callers should retry with a brief delay. |
-| **Cluster topology change** | fred's cluster client follows MOVED/ASK redirects automatically. Limit configurable via `REDIS_MAX_REDIRECTIONS`. |
-| **Sentinel failover** | fred promotes the new primary transparently. Brief window of `RDS-7001 Sentinel` errors during election is expected and retryable. |
-| **Unresponsive connection** | Detected after `REDIS_UNRESPONSIVE_TIMEOUT_SECS` and replaced automatically by the reconnect policy. |
-| **Pool saturation** | When all pool members queue more commands than their buffer allows, callers receive `RDS-2001 PoolExhausted` (retryable with backoff). |
+**Architectural boundary** — it contains **zero** application cache keys, TTLs, domain models, Lua
+scripts, or rate-limit logic. It exposes only the transport and connection capability.
 
 ---
 
-## 🔌 Public Interfaces & API Contract
+## 📐 Architecture & key decisions
 
-### Core types
-
-```rust
-// Single multiplexed connection — sufficient for most services.
-pub struct RedisClient {
-    pub inner: fred::clients::RedisClient,
-}
-impl Deref for RedisClient { type Target = fred::clients::RedisClient; }
-
-// Pool of N multiplexed connections — for throughput-critical workloads.
-pub struct RedisPool {
-    pub inner: fred::clients::Pool,
-}
-impl Deref for RedisPool { type Target = fred::clients::Pool; }
+```
+Consumers (CQRS, cache utils, rate-limit mw) ── RedisClient / RedisPool
+        ▼
+redis-storage: config(topology) · error(map) · listener(event) · client/pool(builder) · health(check)
+        ▼  fred::types::Builder
+fred 10.x (multiplexer, pipeline engine, reconnect policy)  ──TCP/TLS──► Cluster / Sentinel / Standalone
 ```
 
-### Builders
-
-```rust
-pub struct RedisClientBuilder { /* ... */ }
-impl RedisClientBuilder {
-    pub fn new(config: RedisConfig) -> Self;
-    pub async fn build(self) -> Result<RedisClient, RedisStorageError>;
-}
-
-pub struct RedisPoolBuilder { /* ... */ }
-impl RedisPoolBuilder {
-    pub fn new(config: RedisConfig) -> Self;
-    pub async fn build(self) -> Result<RedisPool, RedisStorageError>;
-}
-```
-
-### Error type
-
-```rust
-#[non_exhaustive]
-pub enum RedisStorageError {
-    Timeout { message: String },          // RDS-1001  retryable  High    503
-    Disconnected { message: String },     // RDS-1002  retryable  High    503
-    Io { message: String },              // RDS-1003  retryable  High    503
-    Backpressure,                         // RDS-1004  retryable  High    503
-    Canceled,                             // RDS-1005  retryable  Medium  503
-    PoolExhausted { message: String },    // RDS-2001  retryable  High    503
-    Authentication { message: String },   // RDS-3001  permanent  Crit    500
-    WrongType { message: String },        // RDS-4001  permanent  Low     422
-    InvalidArgument { message: String },  // RDS-4002  permanent  Low     422
-    InvalidCommand { message: String },   // RDS-4003  permanent  Medium  500
-    NotFound,                             // RDS-4004  permanent  Low     404
-    Cluster { message: String },          // RDS-5001  retryable  High    503
-    Sentinel { message: String },         // RDS-7001  retryable  High    503
-    Configuration { message: String },    // RDS-8001  permanent  Crit    500
-    Tls { message: String },             // RDS-8002  permanent  Crit    500
-    Protocol { message: String },         // RDS-8003  permanent  Crit    500
-    Parse { message: String },            // RDS-8004  permanent  Medium  500
-    Unknown { message: String },          // RDS-9000  permanent  Medium  500
-}
-```
-
-All variants implement `error::AppError`:
-
-```rust
-pub trait AppError {
-    fn error_code(&self)          -> &'static str;   // e.g. "RDS-1001"
-    fn http_status(&self)         -> StatusCode;
-    fn severity(&self)            -> Severity;        // Critical / High / Medium / Low
-    fn is_retryable(&self)        -> bool;
-    fn category(&self)            -> &'static str;   // always "RDS"
-    fn user_facing_message(&self) -> &'static str;
-}
-```
-
-### Health check
-
-```rust
-// Works with RedisClient, RedisPool, or any fred ClientLike + HeartbeatInterface
-pub async fn health_check<C: ClientLike + HeartbeatInterface>(
-    client: &C,
-) -> Result<(), RedisStorageError>;
-```
-
-### Event listener
-
-```rust
-// Spawns 3 background tasks bridging fred lifecycle streams → tracing spans.
-// Called automatically by the builders; exposed for advanced usage.
-pub fn spawn_event_listener<C: EventInterface>(client: &C) -> [JoinHandle<()>; 3];
-```
+- **One multiplexer per client** — fred routes *all* commands from *all* callers through a single
+  lock-free background writer, so there's no per-command lock; same-tick commands auto-pipeline into
+  one flush (`REDIS_AUTO_PIPELINE`). A `RedisPool` of size N is N independent multiplexers for
+  write-bandwidth-bound workloads.
+- **Topology behind one function** — `TopologyKind::into_server_config()` is the single translation of
+  env config into fred's `ServerConfig` (`standalone`→Centralized, `cluster`→Clustered,
+  `sentinel`→Sentinel). Adding a topology touches only that enum + function.
+- **Errors mapped to stable `RDS-xxxx`** — every `fred::error::RedisError` collapses to a named
+  `RedisStorageError` variant with code, `Severity`, retryability, and HTTP status, so consumers branch
+  on the platform contract, not fred internals.
+- **Telemetry bridged at construction** — the builders spawn an event listener bridging fred's
+  connect/reconnect/error lifecycle to the process-global OTel subscriber, so it **must** be installed
+  *before* `build()`.
 
 ---
 
-## 📦 Integration & Usage
+## 🔌 Public API & contract
 
-### Dependency declaration
+```rust
+pub struct RedisClient { pub inner: fred::clients::RedisClient }   // single multiplexed connection
+pub struct RedisPool   { pub inner: fred::clients::Pool }          // N connections (throughput-critical)
+impl Deref for RedisClient/RedisPool { /* → fred client; use command traits directly */ }
+
+pub struct RedisClientBuilder; impl { pub fn new(RedisConfig) -> Self; pub async fn build(self) -> Result<RedisClient, RedisStorageError>; }
+pub struct RedisPoolBuilder;   impl { pub fn new(RedisConfig) -> Self; pub async fn build(self) -> Result<RedisPool, RedisStorageError>; }
+
+pub async fn health_check<C: ClientLike + HeartbeatInterface>(client: &C) -> Result<(), RedisStorageError>;
+pub fn spawn_event_listener<C: EventInterface>(client: &C) -> [JoinHandle<()>; 3];   // called by builders
+```
+
+> **Contract notes:** clients/pools `Deref` to the fred client — call fred command traits
+> (`KeysInterface`, `HashesInterface`, …) directly. `RedisClient` is cheaply cloneable. The OTel
+> subscriber must be installed before `build()` (fred emits spans at construction).
+
+---
+
+## 🧯 Error model
+
+`RedisStorageError` (`#[non_exhaustive]`) implements `error::AppError`; category is always `"RDS"`:
+
+| Code | Variant | Retryable | Severity | HTTP |
+|---|---|---|---|---|
+| RDS-1001 | `Timeout` | yes | High | 503 |
+| RDS-1002 | `Disconnected` | yes | High | 503 |
+| RDS-1003 | `Io` | yes | High | 503 |
+| RDS-1004 | `Backpressure` | yes | High | 503 |
+| RDS-1005 | `Canceled` | yes | Medium | 503 |
+| RDS-2001 | `PoolExhausted` | yes | High | 503 |
+| RDS-3001 | `Authentication` | no | Critical | 500 |
+| RDS-4001 | `WrongType` | no | Low | 422 |
+| RDS-4002 | `InvalidArgument` | no | Low | 422 |
+| RDS-4003 | `InvalidCommand` | no | Medium | 500 |
+| RDS-4004 | `NotFound` | no | Low | 404 |
+| RDS-5001 | `Cluster` | yes | High | 503 |
+| RDS-7001 | `Sentinel` | yes | High | 503 |
+| RDS-8001..8004 | `Configuration`/`Tls`/`Protocol`/`Parse` | no | Crit/Crit/Crit/Medium | 500 |
+| RDS-9000 | `Unknown` | no | Medium | 500 |
+
+---
+
+## 📦 Integration
 
 ```toml
-# Cargo.toml
 [dependencies]
 redis-storage = { workspace = true }
 ```
-
-### Standard bootstrap — pool (recommended for production)
 
 ```rust
 use fred::interfaces::{KeysInterface, HashesInterface};
 use redis_storage::{RedisConfig, RedisPoolBuilder, health::health_check};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // 1. The telemetry crate must install its subscriber BEFORE building
-    //    the pool — fred's tracing hooks emit into the active subscriber.
-    telemetry::init(telemetry::Config::from_env()).await?;
-
-    // 2. Load config from environment variables.
-    let config = RedisConfig::from_env();
-
-    // 3. Build the pool. This:
-    //    - Resolves topology (REDIS_TOPOLOGY → ServerConfig variant)
-    //    - Connects all pool members (REDIS_POOL_SIZE connections)
-    //    - Spawns the OTel event listener
-    let pool = RedisPoolBuilder::new(config).build().await?;
-
-    // 4. Optional startup liveness check.
-    health_check(&pool).await?;
-
-    // 5. Use fred command traits directly on pool (via Deref).
-    pool.set::<(), _, _>("session:42", "payload", None, None, false).await?;
-    let val: Option<String> = pool.get("session:42").await?;
-
-    // 6. Hash operations example (CQRS command handler pattern).
-    pool.hset::<(), _, _>("user:profile:42", vec![
-        ("name", "Alice"),
-        ("score", "9500"),
-    ]).await?;
-
-    Ok(())
-}
-```
-
-### Lightweight single-client bootstrap
-
-```rust
-use redis_storage::{RedisConfig, RedisClientBuilder};
-
-let config = RedisConfig::from_env();
-let client = RedisClientBuilder::new(config).build().await?;
-
-// client is cheaply cloneable — pass Arc<RedisClient> or clone into tasks.
-let client_clone = client.clone();
-tokio::spawn(async move {
-    let _: Option<String> = client_clone.get("live:counter").await.ok().flatten();
-});
+telemetry::init(telemetry::Config::from_env()).await?;          // BEFORE build — fred emits into the subscriber
+let pool = RedisPoolBuilder::new(RedisConfig::from_env()).build().await?;
+health_check(&pool).await?;
+pool.set::<(), _, _>("session:42", "payload", None, None, false).await?;  // fred traits via Deref
 ```
 
 ---
 
-## ⚙️ Configuration & Runtime Environment
+## ⚙️ Configuration & feature flags
 
-### Connection & topology
+**Connection / topology:** `REDIS_TOPOLOGY` (`standalone`|`cluster`|`sentinel`, default `standalone`),
+`REDIS_HOSTS` (default `127.0.0.1:6379`), `REDIS_USERNAME`/`REDIS_PASSWORD`, `REDIS_DATABASE` (0–15,
+ignored in cluster). **Sentinel:** `REDIS_SENTINEL_SERVICE_NAME` (default `mymaster`) +
+`REDIS_SENTINEL_USERNAME`/`PASSWORD`. **Tuning:** `REDIS_CONNECTION_TIMEOUT_SECS` (5),
+`REDIS_COMMAND_TIMEOUT_MS` (3000; 0 disables), `REDIS_FAIL_FAST` (true),
+`REDIS_UNRESPONSIVE_TIMEOUT_SECS` (60). **Pool:** `REDIS_POOL_SIZE` (8). **Pipelining:**
+`REDIS_AUTO_PIPELINE` (true), `REDIS_PIPELINE_BATCH_SIZE` (200), `REDIS_MAX_COMMAND_BUFFER_LEN`
+(10000). **Reconnect:** `REDIS_RECONNECT_MIN/MAX_DELAY_MS` (100 / 30000), `REDIS_RECONNECT_MAX_ATTEMPTS`
+(0 = unlimited), `REDIS_RECONNECT_MULTIPLIER` (2). **Cluster:** `REDIS_MAX_REDIRECTIONS` (fred default 16).
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_TOPOLOGY` | No | `standalone` | Deployment topology: `standalone` \| `cluster` \| `sentinel` |
-| `REDIS_HOSTS` | No | `127.0.0.1:6379` | Comma-separated `host:port` list. All entries used for cluster/sentinel; only first for standalone. |
-| `REDIS_USERNAME` | No | — | ACL username for data-plane AUTH. |
-| `REDIS_PASSWORD` | No | — | Password for data-plane AUTH. |
-| `REDIS_DATABASE` | No | `0` | Database index (0–15). Ignored in cluster mode. |
-
-### Sentinel-specific
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_SENTINEL_SERVICE_NAME` | No | `mymaster` | Logical name of the Sentinel-managed primary. |
-| `REDIS_SENTINEL_USERNAME` | No | — | Username for authenticating to Sentinel nodes. |
-| `REDIS_SENTINEL_PASSWORD` | No | — | Password for authenticating to Sentinel nodes. |
-
-### Connection tuning
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_CONNECTION_TIMEOUT_SECS` | No | `5.0` | TCP handshake deadline per node. |
-| `REDIS_COMMAND_TIMEOUT_MS` | No | `3000` | Per-command response deadline. `0` disables timeout. |
-| `REDIS_FAIL_FAST` | No | `true` | When `true`, startup fails immediately if Redis is unreachable. |
-| `REDIS_UNRESPONSIVE_TIMEOUT_SECS` | No | `60.0` | Seconds before an unresponsive connection is replaced. |
-
-### Pool
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_POOL_SIZE` | No | `8` | Number of independent `RedisClient` connections in the pool. |
-
-### Pipelining
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_AUTO_PIPELINE` | No | `true` | Batch same-tick commands into one pipeline flush. |
-| `REDIS_PIPELINE_BATCH_SIZE` | No | `200` | Maximum commands per pipeline flush. |
-| `REDIS_MAX_COMMAND_BUFFER_LEN` | No | `10000` | Internal command queue depth before backpressure fires. |
-
-### Reconnect (exponential backoff)
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_RECONNECT_MIN_DELAY_MS` | No | `100` | Initial reconnect delay in milliseconds. |
-| `REDIS_RECONNECT_MAX_DELAY_MS` | No | `30000` | Maximum reconnect delay cap in milliseconds. |
-| `REDIS_RECONNECT_MAX_ATTEMPTS` | No | `0` | Maximum reconnect attempts. `0` = unlimited. |
-| `REDIS_RECONNECT_MULTIPLIER` | No | `2` | Exponential multiplier applied per failed attempt. |
-
-### Cluster
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `REDIS_MAX_REDIRECTIONS` | No | fred default (16) | Maximum MOVED/ASK redirects per command before error. |
+**Feature flags:** inherits fred's — notably `subscriber-client` (transitively enabled for services
+using sharded pub/sub `SSUBSCRIBE`/`SPUBLISH`, e.g. `chat`).
 
 ---
 
-## 📈 Telemetry, Performance & Metrics
+## 🔭 Observability
 
-### Prerequisites
+fred emits `fred.command` spans (`DEBUG`, `db.system=redis`, `net.peer.*`). The event listener emits
+connect/reconnect (`INFO`) and connection-error (`ERROR`, `error.message`) events, all
+`otel.kind=CLIENT`.
 
-- A Tokio `rt-multi-thread` runtime must be active before calling `build()` — the event listener spawns background tasks via `tokio::spawn`.
-- The `telemetry` crate must install its OTel subscriber **before** building the client or pool. Fred emits tracing spans into the active subscriber at construction time.
-
-### OTel spans emitted by fred (via `tracing` feature)
-
-| Span name | Level | Key fields |
-|---|---|---|
-| `fred.command` | `DEBUG` | `db.operation`, `db.system=redis`, `net.peer.name`, `net.peer.port` |
-
-### Connection lifecycle events (emitted by `listener/event.rs`)
-
-| Event | Level | Key fields |
-|---|---|---|
-| Redis connect | `INFO` | `db.system=redis`, `otel.kind=CLIENT` |
-| Redis reconnect | `INFO` | `db.system=redis`, `otel.kind=CLIENT` |
-| Redis connection error | `ERROR` | `db.system=redis`, `otel.kind=CLIENT`, `error=true`, `error.message` |
-
-### Recommended Prometheus/OTel alerts
-
-| Alert | Condition | Severity |
-|---|---|---|
-| High RDS-1001 rate | `rate(rds_errors_total{code="RDS-1001"}[5m]) > 10` | High — likely network instability |
-| Any RDS-3001 | `rds_errors_total{code="RDS-3001"} > 0` | Critical — credential misconfiguration |
-| RDS-2001 sustained | `rate(rds_errors_total{code="RDS-2001"}[5m]) > 5` | High — pool undersized for load |
-| RDS-5001 spikes | `rate(rds_errors_total{code="RDS-5001"}[1m]) > 20` | High — cluster failover in progress |
+Suggested alerts: `RDS-1001` rate > 10/5m ⇒ high (network); any `RDS-3001` ⇒ critical (creds);
+sustained `RDS-2001` ⇒ high (pool undersized); `RDS-5001` spikes ⇒ high (cluster failover).
 
 ---
 
-## 🛠️ Local Development & Contribution
-
-### Start a local Redis instance
+## 🧪 Testing
 
 ```bash
-# Standalone (default)
-docker compose up -d redis
-
-# Redis Cluster (6-node, 3 primary + 3 replica)
-docker compose -f docker-compose.cluster.yml up -d
-
-# Sentinel (1 primary + 2 replicas + 3 sentinels)
-docker compose -f docker-compose.sentinel.yml up -d
-```
-
-### Build & lint
-
-```bash
-cargo build -p redis-storage
-cargo clippy -p redis-storage -- -D warnings
-cargo fmt --check -p redis-storage
-```
-
-### Unit tests (no Redis required)
-
-```bash
-cargo test -p redis-storage
-```
-
-### Integration tests (live Redis required)
-
-```bash
-# Standalone
-REDIS_HOSTS=127.0.0.1:6379 \
-  cargo test -p redis-storage -- --include-ignored
-
-# Cluster
-REDIS_TOPOLOGY=cluster \
-REDIS_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002 \
-  cargo test -p redis-storage -- --include-ignored
-
-# Sentinel
-REDIS_TOPOLOGY=sentinel \
-REDIS_HOSTS=127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381 \
-REDIS_SENTINEL_SERVICE_NAME=mymaster \
-  cargo test -p redis-storage -- --include-ignored
+cargo test   -p redis-storage                 # unit — no Redis
+cargo clippy -p redis-storage --all-targets
+# integration (live):
+REDIS_HOSTS=127.0.0.1:6379 cargo test -p redis-storage -- --include-ignored
+REDIS_TOPOLOGY=cluster REDIS_HOSTS=127.0.0.1:7000,7001,7002 cargo test -p redis-storage -- --include-ignored
 ```
 
 ---
 
-## 🚨 Troubleshooting & Runbook (FAQ)
+## 🚨 Gotchas / FAQ
 
-### 1. `RedisStorageError::Configuration` at startup — empty host list
+> The sharp edges. One entry per real trap.
 
-**Root cause:** `REDIS_HOSTS` is set to an empty string, or only whitespace.
+**1. `RedisStorageError::Configuration` at startup — empty host list.**
+`REDIS_HOSTS` is empty/whitespace. `from_env()` asserts at least one valid `host:port`. Set
+`REDIS_HOSTS=127.0.0.1:6379`.
 
-**Fix:** Ensure `REDIS_HOSTS` contains at least one valid `host:port` entry. The crate asserts non-emptiness at `from_env()` time.
+**2. `Disconnected` with `fail_fast = true` — service won't start.**
+Redis wasn't reachable at boot (race with container health, or it's down). Add a Redis readiness probe
++ `depends_on`, or set `REDIS_FAIL_FAST=false` to enter the reconnect loop instead of failing, or raise
+`REDIS_CONNECTION_TIMEOUT_SECS` on high-RTT networks.
 
-```bash
-export REDIS_HOSTS=127.0.0.1:6379
-```
+**3. Sustained `RDS-2001 PoolExhausted` under load.**
+`REDIS_POOL_SIZE` too small (each member is one TCP connection). Raise it (16→32, profiling server-side
+conn count first), raise `REDIS_MAX_COMMAND_BUFFER_LEN` to absorb spikes, confirm
+`REDIS_AUTO_PIPELINE=true` (amortises RTT). If Redis CPU is the bottleneck, scale Redis horizontally.
 
----
-
-### 2. `RedisStorageError::Disconnected` with `fail_fast = true` — service fails to start
-
-**Root cause:** Redis is not yet reachable when the service starts (race with container health checks, or Redis is genuinely down).
-
-**Mitigations:**
-- Add a readiness probe on the Redis container and set `depends_on` with health checks in Docker Compose.
-- Set `REDIS_FAIL_FAST=false` to enter the reconnect loop instead of failing immediately — appropriate when Redis startup may lag behind the application.
-- Increase `REDIS_CONNECTION_TIMEOUT_SECS` if the network RTT to Redis is high.
-
----
-
-### 3. Sustained `RDS-2001 PoolExhausted` under load
-
-**Root cause:** `REDIS_POOL_SIZE` is too small for the command throughput. Each `RedisClient` in the pool is a single TCP connection; when the write bandwidth of all connections is saturated, backpressure propagates to callers.
-
-**Mitigations:**
-1. Increase `REDIS_POOL_SIZE` (try `16` → `32`). Profile server-side connection count and memory before going higher.
-2. Increase `REDIS_MAX_COMMAND_BUFFER_LEN` to absorb short traffic spikes without surfacing as pool errors.
-3. Verify that `REDIS_AUTO_PIPELINE=true` — this amortises RTT and increases effective throughput per connection significantly.
-4. If the bottleneck is Redis CPU rather than connection bandwidth, scale Redis horizontally (add shards / cluster nodes).
+**4. No spans for my commands, or lifecycle events missing.**
+The OTel subscriber wasn't installed before `build()`. Call `telemetry::init(...)` first — fred wires
+its tracing hooks into the *active* subscriber at construction time.

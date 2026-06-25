@@ -1,25 +1,37 @@
-# `infra-config` — Externalized Configuration & Hot-Reload for Fleet Infrastructure
+# `infra-config` — Externalized configuration & hot-reload for the fleet's infrastructure layers
 
-## 🎯 Overview & Service Role
-
-`infra-config` is the **policy / IO layer** that bridges the pure middleware crates (starting with [`resilience`](../resilience)) to an externalized configuration paradigm. The middleware crates own the *mechanism* (Tower layers, cache adapters, serde-able wire types); this crate owns everything the mechanism must **not** depend on:
-
-- **File IO + parsing** — reads `infrastructure.toml` into typed, per-section config.
-- **Validation** — rejects structurally-valid-but-semantically-broken configs *before* they reach the data path (fail-closed).
-- **Fleet bindings** — resolves a dependency/namespace name (`"post-command"`, `"profile-view"`) to a named class-of-service profile (`"critical"`, `"hot"`).
-- **Hot-reload** — a `notify`-based watcher that re-applies the file on change via lock-free `ArcSwap` swaps, with no restart and no torn in-flight futures.
-
-It is **multi-tenant**: each infrastructure category is a `[section]` sharing one watcher and one fail-closed reload path. It ships four sections: `[resilience]` (timeouts, circuit breakers, retries), `[cache]` (TTL profiles), `[traffic]` (ingress rate limiting), and `[telemetry]` (log filter + trace sampling). The first three are catalog-shaped (profiles + bindings); `[telemetry]` carries two global dials pushed to the live observability pipeline through a [`TelemetrySink`] the serving binary registers (so this crate stays free of any tracing dependency).
-
-Keeping this separate is deliberate: the middleware crates link no `notify`, no `toml`, no filesystem. Services depend on **both** — the middleware for the layers/adapters, `infra-config` for where the numbers come from.
-
-> **Status:** complete and tested — `[resilience]` + `[cache]` + `[traffic]` + `[telemetry]` sections, the generic catalog, the aggregate `InfraRegistry`, fail-closed cross-section validation, and a real-filesystem end-to-end hot-reload test. The serving binary (`service-runtime`) loads the document, spawns the watcher, and registers the traffic layer and telemetry sink — see [`service-runtime`](../../platform/service-runtime/README.md).
+> **Crate Card**
+>
+> | | |
+> |---|---|
+> | **Role** | `foundation` — the policy / IO layer feeding the pure middleware crates |
+> | **Package** | `infra-config` (dir: `crates/foundation/infra-config`) |
+> | **Consumed by** | `service-runtime` (loads + watches); services read resolved `[cache]` profiles |
+> | **Depends on** | `notify`, `toml`, `serde`, `arc-swap` |
+> | **Stability** | evolving (new `[section]`s are added over time) |
+> | **Feature flags** | none |
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
 
 ---
 
-## 📐 Architecture & Concepts
+## 🎯 Overview & role
 
-```text
+`infra-config` is the **policy / IO layer** that bridges the pure middleware crates (e.g.
+[`resilience`](../resilience)) to an externalized configuration paradigm. The middleware crates own
+the *mechanism* (Tower layers, cache adapters, serde wire types); this crate owns everything the
+mechanism must **not** depend on: file IO + parsing (`infrastructure.toml` → typed config),
+fail-closed validation, fleet bindings (resolve a dependency/namespace name to a class-of-service
+profile), and `notify`-based hot-reload via lock-free `ArcSwap` swaps.
+
+**Architectural boundary** — the middleware crates link **no** `notify`, `toml`, or filesystem.
+Services depend on **both**: the middleware for the layers/adapters, `infra-config` for where the
+numbers come from. It ships four sections: `[resilience]`, `[cache]`, `[traffic]`, `[telemetry]`.
+
+---
+
+## 📐 Architecture & key decisions
+
+```
 infrastructure.toml ──load──▶ InfrastructureConfig ──resolve──▶ InfraRegistry
                                      ▲                          ├─ ResilienceRegistry ─▶ Tower layers
                                 notify event                    ├─ CacheRegistry ──────▶ cache adapters
@@ -28,42 +40,29 @@ infrastructure.toml ──load──▶ InfrastructureConfig ──resolve──
                               (single writer, fail-closed, all-sections-or-nothing)
 ```
 
-### The catalog shape (every section shares it)
-
-A *section* is a catalog of named class-of-service profiles plus a binding table mapping each dependency/namespace to a profile, with a default for the unbound. The reference-integrity check (`catalog::validate_bindings`) and the resolved lookup (`catalog::Catalog<L>`) are written **once** and reused by every section — adding a tenant means adding a spec + live type, not re-implementing resolution.
-
-### Two representations (per section)
-
-| | Type (resilience / cache) | Role |
-|---|---|---|
-| **Wire** | `ResilienceProfileSpec` / `CacheProfileSpec` | Flat, serde-friendly. Pure data parsed from TOML. |
-| **Runtime** | `ResilienceProfile` / `CacheProfile` | Holds shared `Arc<ArcSwap<_>>` handles the data path reads each call/write. |
-
-### Topology vs. contents
-
-- **Topology** — which sections/profiles exist and which dependency binds to which — is **fixed at boot**. Callers capture a profile's handle when wired, so re-binding (or adding a section) requires a restart.
-- **Contents** — a profile's values (timeout, trip threshold, TTL) — **hot-reload**. This is the incident-critical path (tighten a deadline, widen a TTL to ride out a stampede, fleet-wide in seconds).
-
-### Hot-reload safety
-
-- **Single writer.** All swaps happen in one spawned task — reloads never race.
-- **Fail-closed, all-or-nothing.** `InfraRegistry::apply` validates *every* present section before swapping *any*; a bad push to one section leaves all sections on their previous values.
-- **K8s-aware.** ConfigMaps are mounted via an atomically-swapped `..data` symlink that replaces the file's inode. The watcher therefore watches the **parent directory**, not the file path, or it would go deaf after the first swap.
-- **Coalesced.** Editors and atomic swaps emit event bursts; the watcher drains them and reloads once.
+- **One catalog shape, written once** — every section is a catalog of named profiles + a binding
+  table (dependency → profile, with a default). `catalog::validate_bindings` and `Catalog<L>` are
+  shared by all sections, so adding a tenant means adding a spec + live type, not re-implementing
+  resolution.
+- **Two representations per section** — a flat serde **Wire** type (`…ProfileSpec`, parsed from TOML)
+  and a **Runtime** type (`…Profile`) holding `Arc<ArcSwap<_>>` handles the data path reads each call.
+- **Topology fixed at boot, contents hot-reload** — *which* sections/profiles exist and *which*
+  dependency binds where is captured when wired (re-binding needs a restart). A profile's *values*
+  (timeout, TTL) hot-reload — that's the incident-critical path.
+- **Hot-reload safety** — all swaps happen in **one** spawned task (no races); `apply` validates
+  *every* present section before swapping *any* (**fail-closed, all-or-nothing**); the watcher watches
+  the **parent directory** not the file (K8s ConfigMaps swap the `..data` symlink inode, so a
+  file-path watch goes deaf after the first change); event bursts are coalesced into one reload.
 
 ---
 
-## 🔌 Public Interfaces & API Contract
+## 🔌 Public API & contract
 
 ```rust
 // schema.rs — top-level document; new sections are Option<…> for backward compatibility.
-pub struct InfrastructureConfig {
-    pub resilience: ResilienceSection,
-    pub cache: Option<CacheSection>,
-}
 impl InfrastructureConfig {
     pub fn from_toml(raw: &str) -> Result<Self, ConfigError>;
-    pub fn validate(&self) -> Result<(), ConfigError>;   // every present section
+    pub fn validate(&self) -> Result<(), ConfigError>;        // every present section
 }
 
 // reload.rs — the watcher's target, decoupled from any section's shape.
@@ -78,29 +77,21 @@ impl InfraRegistry {
     pub fn cache(&self) -> Option<Arc<CacheRegistry>>;
     pub fn apply(&self, InfrastructureConfig) -> Result<(), ConfigError>;
 }
-// impl Reloadable for InfraRegistry      — all sections
-// impl Reloadable for ResilienceRegistry — standalone, resilience-only deployments
-
-// registry.rs / cache.rs — per-section resolution + hot-apply.
-impl ResilienceRegistry { pub fn profile_for(&self, dependency: &str) -> ResilienceProfile; /* … */ }
-impl CacheRegistry      { pub fn profile_for(&self, namespace: &str) -> CacheProfile;        /* … */ }
+// impl Reloadable for InfraRegistry (all sections) and for ResilienceRegistry (resilience-only)
 
 // watcher.rs — generic over the target.
 pub fn load_from_path(path: &Path) -> Result<InfrastructureConfig, ConfigError>;
-pub fn spawn_watcher<R: Reloadable>(path: PathBuf, target: Arc<R>)
-    -> Result<notify::RecommendedWatcher, ConfigError>;   // KEEP the guard alive
+pub fn spawn_watcher<R: Reloadable>(path: PathBuf, target: Arc<R>) -> Result<notify::RecommendedWatcher, ConfigError>; // KEEP the guard alive
 ```
 
-**Validation invariants** (enforced before resolve *and* every hot-swap):
-- Every section: `default_profile` and every binding target must reference a defined profile.
-- `[resilience]`: thresholds / `half_open_max_calls` / `timeout` > 0; backoff `max_ms >= base_ms`.
-- `[cache]`: `ttl_secs` > 0.
-
-`ConfigError`: `Io` · `Toml` · `Watch` · `Validation(String)`.
+> **Validation invariants** (before resolve *and* every hot-swap): every section's `default_profile`
+> and binding targets must reference a defined profile; `[resilience]` thresholds / `half_open_max_calls`
+> / `timeout` > 0 and backoff `max_ms >= base_ms`; `[cache]` `ttl_secs` > 0. `ConfigError`: `Io` ·
+> `Toml` · `Watch` · `Validation(String)`.
 
 ---
 
-## 📦 Integration & Usage
+## 📦 Integration
 
 ```toml
 [dependencies]
@@ -111,44 +102,55 @@ infra-config = { workspace = true }
 use std::sync::Arc;
 use infra_config::{InfraRegistry, InfrastructureConfig, spawn_watcher};
 
-// Boot: load, resolve every section, start watching.
 let registry = Arc::new(InfraRegistry::from_config(
     InfrastructureConfig::from_toml(&std::fs::read_to_string("infrastructure.toml")?)?,
 )?);
-let _watcher = spawn_watcher("infrastructure.toml".into(), Arc::clone(&registry))?; // keep alive
+let _watcher = spawn_watcher("infrastructure.toml".into(), Arc::clone(&registry))?; // keep alive!
 
-// Resilience: build a hot-reloadable gRPC client stack from a binding.
-let channel = GrpcClientBuilder::new(
-    GrpcClientConfig::new("https://post:50051").with_dependency("post-command")
-)
-.build_from_registry(&registry.resilience())
-.await?;
-
-// Cache: hand a service its resolved TTL profiles (the service resolves its own namespaces).
+// resilience: hot-reloadable client stack from a binding; cache: hand a service its resolved TTLs
 let app = profile::app::App::build(backends, registry.cache().expect("[cache] configured")).await?;
 ```
 
-A resilience-only deployment can drive the same watcher with `Arc<ResilienceRegistry>` directly — both implement `Reloadable`. See [`examples/infrastructure.toml`](examples/infrastructure.toml) for the full `[resilience]` + `[cache]` catalogs and bindings.
+See [`examples/infrastructure.toml`](examples/infrastructure.toml) for the full catalogs + bindings.
 
 ---
 
-## 🛠️ Local Development
+## ⚙️ Configuration & feature flags
+
+No environment variables and no cargo features — configuration *is* the file
+(`infrastructure.toml`, path supplied by the caller). The serving binary (`service-runtime`) loads the
+document, spawns the watcher, and registers the traffic layer + telemetry sink.
+
+---
+
+## 🧪 Testing
 
 ```bash
-cargo test -p infra-config            # unit + integration (incl. real-fs hot-reload)
-cargo clippy -p infra-config -- -D warnings
+cargo test   -p infra-config           # unit + a real-filesystem hot-reload integration test
+cargo clippy -p infra-config --all-targets
 ```
 
-No external services required — the hot-reload test writes to a temp directory and watches it.
+No external services — the hot-reload test writes to a temp dir and watches it.
 
 ---
 
-## 🚨 Troubleshooting
+## 🚨 Gotchas / FAQ
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Config never reloads | The `RecommendedWatcher` guard was dropped | Bind it to a long-lived variable (`let _watcher = …`); dropping it stops the watch. |
-| Reload ignored after first change (in K8s) | Watching the file path, not the dir | This crate watches the parent dir for exactly this reason; ensure the mount path's parent is accessible. |
-| `Validation` error on a known-good file | An invariant violated (zero threshold/TTL, `max_ms < base_ms`, dangling binding) | Read the error message — it names the section and offending profile/field. Previous config stays live. |
-| One section's bad value blocks a different section's change | Reload is all-or-nothing across sections (fail-closed) | Fix the rejected section; the whole document re-applies together. |
-| Profile change not picked up | It's a *topology* change (added/removed profile or section, or a re-binding) | Restart — only profile *contents* hot-reload. |
+> The sharp edges. One entry per real trap.
+
+**1. Config never reloads.**
+The `RecommendedWatcher` guard was dropped. Bind it to a long-lived variable (`let _watcher = …`);
+dropping it stops the watch.
+
+**2. Reload ignored after the first change (in K8s).**
+Something watched the file *path* instead of the parent dir. This crate watches the parent dir for
+exactly this reason (ConfigMaps swap the `..data` symlink inode) — ensure the mount's parent is
+accessible.
+
+**3. `Validation` error on a known-good file.**
+An invariant was violated (zero threshold/TTL, `max_ms < base_ms`, dangling binding). Read the message
+— it names the section and field. The previous config stays live (fail-closed).
+
+**4. A profile change wasn't picked up despite a reload.**
+It's a *topology* change (added/removed profile or section, or a re-binding) — only profile *contents*
+hot-reload. Restart to apply topology changes.
