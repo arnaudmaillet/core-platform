@@ -1,0 +1,309 @@
+---
+i18n:
+  source: ./README.md
+  source_sha256: d2f518e96cfa9d80601bdab49c592fc5e9f5b94491a43f8f422144a1434fd553
+  translated_at: 2026-06-25
+  status: complete
+---
+> 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
+> En cas de divergence, l'anglais prime. Les contrats (codes d'erreur, variables
+> d'environnement, topics Kafka, identifiants) sont volontairement laissés en anglais.
+
+# `account` — Cycle de vie de l'identité privée : le registre de référence de la plateforme sur *qui* est une personne
+
+> **Fiche service**
+>
+> | | |
+> |---|---|
+> | **Propriétaire** | `<TODO: équipe>` · `<TODO: #canal-slack>` |
+> | **Astreinte / escalade** | `<TODO: rotation-astreinte>` → `<TODO: politique-escalade>` |
+> | **Palier (Tier)** | **TIER-0** — l'identité est sur le chemin critique d'authentification |
+> | **Binaire déployable** | `crates/apps/account-server` (crate bibliothèque : `crates/services/account`) |
+> | **Bases de données** | PostgreSQL / compatible CockroachDB (db `account`) |
+> | **Asynchrone** | publie `account.v1.events` (AccountCreated/Activated/Suspended/Deleted/…) · ne consomme rien |
+> | **Appelants amont** | `<TODO: passerelle d'authentification>`, `profile` (via événements) |
+> | **Dépendances aval** | PostgreSQL/CockroachDB |
+> | **SLO** | `<TODO : 99,95 %>` dispo · lecture de statut p99 `<TODO>` · écriture p99 `<TODO>` |
+
+---
+
+## 🎯 Vue d'ensemble & rôle du service
+
+`account` gère l'intégralité du **cycle de vie privé d'une personne physique** sur la plateforme :
+vérification d'identité, identifiants, conformité KYC, droits RGPD et contrôle d'accès par rôles. C'est
+le registre de référence de l'existence et du statut d'un compte — le middleware d'authentification de
+la passerelle résout chaque requête contre lui.
+
+Le problème difficile qu'il résout est la **correction sous concurrence et contrainte de conformité** :
+l'état du compte est une machine à états stricte (cycle de vie + KYC), chaque mutation doit être
+sérialisable face à des écrivains concurrents, et le traitement des données personnelles est encadré
+légalement (RGPD art. 17 / art. 20). Il résout cela avec un **agrégat à verrouillage optimiste**
+(compare-and-swap sur un compteur de version) sur CockroachDB, et une couche de domaine qui rejette
+d'emblée les transitions de statut illégales.
+
+**Objectifs fondamentaux :** ne jamais perdre une écriture face à une mise à jour concurrente ; ne
+jamais autoriser une transition de cycle de vie illégale ; ne jamais stocker un secret en clair. L'état
+financier est explicitement **hors périmètre** — il appartient au service dédié `ledger` (SRP à grande
+échelle).
+
+---
+
+## 📐 Architecture & concepts
+
+Architecture Clean / DDD (`domain` → `application` → `infrastructure`) : la couche `domain` est exempte
+d'E/S, `application` contient des handlers CQRS purs (17 commandes, 5 requêtes), toutes les E/S vivent
+dans `infrastructure` (adaptateur Postgres + gRPC tonic).
+
+```
+gRPC (tonic) ─► AccountServiceHandler ─► Command/Query bus ─► AccountRepository (port)
+                                                                      │
+                                                          PostgreSQL / CockroachDB
+                                                          (optimistic lock: version CAS)
+                  AccountCreated/… ─► account.v1.events (Kafka) ─► profile, …
+```
+
+**Verrouillage optimiste.** Chaque écriture est `UPDATE accounts SET …, version = version + 1 WHERE id
+= $1 AND version = $n`. Zéro ligne affectée ⇒ `ConcurrentModification` (réessayable, mappé sur
+`ABORTED`). `AccountId` (UUIDv7) implémente `ShardKey` ; toutes les écritures passent par
+`run_on_shard(&account_id, …)` pour un routage transactionnel agnostique de la topologie.
+
+> **Invariants** (et où ils sont imposés, dans l'agrégat `Account`) : les transitions de cycle de vie
+> (`PendingVerification→Active→Suspended→Active`, `→Deactivated`, `→Deleted`) et les transitions KYC
+> (`NotStarted→Submitted→InReview→Approved|Rejected`) sont imposées dans l'agrégat `Account` — une
+> transition illégale renvoie `FAILED_PRECONDITION`. L'unicité sur `(identity_id, email)` rend
+> `CreateAccount` idempotent.
+
+---
+
+## 📊 Objectifs de niveau de service (SLO)
+
+| SLI | Objectif | Fenêtre | Mesuré par |
+|---|---|---|---|
+| Disponibilité (non-`UNAVAILABLE`) | `<TODO : 99,95 %>` | glissante 30 j | métriques de statut gRPC |
+| `GetAccountStatus` p99 (chemin d'auth chaud) | `< <TODO> ms` | 1 h | histogramme gRPC |
+| Écriture p99 (commit CAS) | `< <TODO> ms` | 1 h | histogramme d'exécution Postgres |
+| Durabilité | aucune écriture acquittée perdue | — | commit sérialisable CockroachDB |
+
+**Budget d'erreur :** `<TODO>`. **En cas d'épuisement :** `<TODO>`. `GetAccountStatus` est le SLI le
+plus serré — la passerelle d'authentification l'appelle sur le chemin de requête, donc sa latence est
+multipliée sur toute la flotte.
+
+---
+
+## 🔗 Dépendances & rayon d'impact (blast radius)
+
+**Aval — ce dont `account` a besoin pour fonctionner :**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| PostgreSQL / CockroachDB | registre de référence | toutes les lectures + écritures échouent | **Dur** — `UNAVAILABLE` |
+| Kafka | émission d'événements (`account.v1.events`) | les projections aval stagnent | **Souple** — les écritures committent quand même |
+
+**Amont — qui dépend de `account` (rayon d'impact si `account` tombe) :**
+
+| Caller | Uses | Impact visible utilisateur si `account` est indisponible |
+|---|---|---|
+| `<TODO: passerelle d'auth>` | `GetAccountStatus` | **connexions/autorisations en échec sur toute la plateforme** |
+| `profile` | consomme `account.v1.events` | le masquage de profil à la suspension/suppression s'arrête |
+
+> **Chemin critique ?** **Oui** — `GetAccountStatus` est sur le chemin d'authentification synchrone ;
+> une panne de `account` dégrade chaque requête authentifiée de toute la flotte.
+
+---
+
+## 🔌 Interfaces publiques & contrat d'API
+
+### gRPC — `account.v1.AccountService`
+
+```protobuf
+service AccountService {
+  // Commands (all return CommandResponse { success, account_id })
+  rpc CreateAccount (CreateAccountRequest) returns (CommandResponse);
+  rpc VerifyEmail (VerifyEmailRequest) returns (CommandResponse);
+  rpc VerifyPhone (VerifyPhoneRequest) returns (CommandResponse);
+  rpc ChangePassword (ChangePasswordRequest) returns (CommandResponse);
+  rpc EnrollMfa (EnrollMfaRequest) returns (CommandResponse);
+  rpc RevokeMfa (RevokeMfaRequest) returns (CommandResponse);
+  rpc UpdateKycStatus (UpdateKycStatusRequest) returns (CommandResponse);
+  rpc SuspendAccount (SuspendAccountRequest) returns (CommandResponse);
+  rpc ReactivateAccount (ReactivateAccountRequest) returns (CommandResponse);
+  rpc DeactivateAccount (DeactivateAccountRequest) returns (CommandResponse);
+  rpc RecordLogin (RecordLoginRequest) returns (CommandResponse);
+  rpc RecordFailedLogin (RecordFailedLoginRequest) returns (CommandResponse);
+  rpc RequestGdprDeletion (RequestGdprDeletionRequest) returns (CommandResponse);
+  rpc AnonymizeAccount (AnonymizeAccountRequest) returns (CommandResponse);
+  rpc RequestDataExport (RequestDataExportRequest) returns (CommandResponse);
+  rpc AssignRole (AssignRoleRequest) returns (CommandResponse);
+  rpc RevokeRole (RevokeRoleRequest) returns (CommandResponse);
+  // Queries
+  rpc GetAccountById (GetAccountByIdRequest) returns (AccountView);
+  rpc GetAccountByIdentityId (GetAccountByIdentityIdRequest) returns (AccountView);
+  rpc GetAccountStatus (GetAccountStatusRequest) returns (AccountStatusView); // auth hot path
+  rpc GetGdprRecord (GetGdprRecordRequest) returns (GdprRecordView);          // restricted
+  rpc ListAccountsByStatus (ListAccountsByStatusRequest) returns (ListAccountsByStatusResponse);
+}
+```
+
+> **Contrat de sérialisation / enum :** les enums sont **basés sur 1** (pas de zéro `UNSPECIFIED`).
+> `AccountStatus` `PENDING_VERIFICATION=1…DELETED=5` ; `KycStatus` `NOT_STARTED=1…REJECTED=5` ;
+> `AccountRole` `USER=1…SUPER_ADMIN=6`. **Valeurs par défaut côté handler** pour les champs absents du
+> proto : `RecordFailedLogin.max_attempts=5`, `lockout_duration_secs=900`,
+> `RequestGdprDeletion.retention_days=30`, `EnrollMfa.recovery_code_hashes=[]` (générés côté serveur).
+
+**Sécurité à la frontière :** mots de passe stockés en Argon2id uniquement (jamais le clair accepté) ;
+seeds TOTP chiffrés AES-256-GCM (`EncryptedBytes`) ; codes de récupération hachés en Bcrypt ; les champs
+secrets suppriment `Display`/`Debug` et portent `#[serde(skip)]`.
+
+### Ports Rust (contrat hexagonal)
+
+```rust
+pub trait AccountRepository: Send + Sync + 'static { /* save (CAS), find_by_id, find_by_identity_id, … */ }
+```
+
+### Contrat d'erreur
+
+| Range / variant | gRPC status |
+|---|---|
+| `AccountNotFound`, `RoleNotAssigned` | `NOT_FOUND` |
+| `IdentityAlreadyRegistered`, `EmailAlreadyRegistered`, `MfaAlreadyEnrolled`, `RoleAlreadyAssigned`, `GdprDeletionAlreadyRequested`, `EmailAlreadyVerified` | `ALREADY_EXISTS` |
+| `ConcurrentModification` | `ABORTED` (**retryable**) |
+| `AccountNotActive`, `InvalidStatusTransition`, `InvalidKycTransition`, `MfaNotEnrolled`, `AccountAlreadyAnonymized` | `FAILED_PRECONDITION` |
+| `Validation`, `InvalidAccountRole/KycStatus/AccountStatus` | `INVALID_ARGUMENT` |
+| `Storage` | `UNAVAILABLE` |
+
+Les codes stables vont de `ACC-1xxx` (lifecycle) à `ACC-9xxx` (identifiers), via le crate partagé `error`.
+
+---
+
+## 📨 Contrat événementiel & asynchrone
+
+> Les topics Kafka sont une API. Un changement de schéma ici casse les consommateurs exactement comme un
+> changement de proto.
+
+**Publie :**
+
+| Topic | Carries (event kinds) | Key | Consumers |
+|---|---|---|---|
+| `account.v1.events` | `AccountCreated`, `AccountActivated`, `AccountSuspended`, `AccountDeactivated`, `AccountDeleted`, `EmailChanged`, `EmailVerified`, `PhoneChanged`, `PasswordChanged`, `KycStatusChanged`, `MfaEnrolled`, `MfaRevoked`, `GdprDeletionRequested`, `GdprDataExportRequested` | `account_id` | `profile` (suspend/delete → mask; activate → restore) |
+
+**Consomme :** rien — `account` est un producteur d'événements pur.
+
+> **Contrat d'exécution :** les événements sont publiés en best-effort après le commit durable ; un échec
+> Kafka ne fait pas échouer la commande. Les consommateurs (p. ex. `profile`) gèrent leur propre
+> traitement at-least-once sous `run_consumer` et dead-letter vers `account.v1.events.dlq`.
+
+---
+
+## 🌩️ Modes de défaillance & dégradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| Postgres/CockroachDB indisponible | toutes les RPC échouent | **Échec dur** — `UNAVAILABLE` ; rien d'acquitté, rien de perdu | vérifier le cluster DB / les ranges |
+| Contention d'écriture sur un compte chaud | `ConcurrentModification` (`ABORTED`) | le CAS rejette l'écrivain périmé ; le client réessaie | aucune — comportement correct ; investiguer les tempêtes de retry |
+| Kafka indisponible | projections aval périmées | **Souple** — les commits réussissent, événements bufferisés/abandonnés | vérifier les brokers ; rejeu côté aval |
+
+**Backpressure & limites.** `ListAccountsByStatus` est paginée. Le verrouillage après échecs de
+connexion (`max_attempts` défaut 5, `lockout_duration_secs` défaut 900) freine le credential-stuffing à
+la couche domaine.
+
+---
+
+## 📦 Intégration & utilisation
+
+```toml
+[dependencies]
+account = { path = "crates/services/account" }
+```
+
+Bibliothèque uniquement. Implémente [`service_runtime::Service`](../../platform/service-runtime/README.md)
+sous le nom `account::service::AccountService` — `build` construit le pool PostgreSQL via `PgPoolBuilder`
+et câble les bus CQRS, `register` ajoute les services gRPC + réflexion, `health_probes` vérifie Postgres
+(le pool `Arc`-backed est partagé avec la sonde).
+
+### Bootstrap (`crates/apps/account-server`)
+
+```rust
+use std::net::SocketAddr;
+use account::service::AccountService;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = std::env::var("ACCOUNT_GRPC_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:50059".to_owned())
+        .parse()?;
+    service_runtime::serve::<AccountService>(addr).await
+}
+```
+
+---
+
+## ⚙️ Configuration & environnement d'exécution
+
+### Variables d'infrastructure héritées
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `POSTGRES_*` (URL/pool/timeouts) | **Yes** | — | CockroachDB-compatible connection; see the `postgres-storage` crate. |
+| `KAFKA_BROKERS` | **Yes** | — | Kafka bootstrap brokers for `account.v1.events`. |
+| `ACCOUNT_GRPC_ADDR` | No | `0.0.0.0:50059` | gRPC bind address. |
+
+> Le réglage complet connexion/timeout/pool vit dans les crates partagés `postgres-storage` et `transport`.
+
+### Features de compilation
+- `build.rs` compile `proto/account/v1/*.proto` et émet le descriptor set de réflexion.
+
+---
+
+## 🚀 Déploiement, migrations & rollback
+
+- **Migrations :** `crates/services/account/migrations/*.sql` (sémantique ANSI, compatible CockroachDB,
+  PK UUIDv7 pour un clustering favorable aux ranges). Appliquer **avant** de déployer un nouveau binaire.
+- **Déploiement :** `<TODO : rolling / canary>`. Service sans état ; sûr à déployer.
+- **Rollback :** `<TODO : confirmer que les migrations sont rétro-compatibles avec le binaire N-1>`.
+- **Piège conformité :** `AnonymizeAccount` est irréversible (écrasement des PII) — ne jamais l'exécuter
+  dans le cadre d'un rollback/rejeu.
+
+---
+
+## 📈 Télémétrie, performance & métriques
+
+- **Runtime :** Tokio multi-thread. Subscriber global tracing/OTel installé avant `serve`.
+
+| Signal | Why it matters | Suggested alert |
+|---|---|---|
+| `GetAccountStatus` p99 | auth-path latency, fleet-amplified | p99 > SLO ⇒ page |
+| `ConcurrentModification` rate | write contention / retry storms | sustained spike ⇒ investigate hot accounts |
+| `account.v1.events` publish failures | downstream projection drift | sustained rate ⇒ check Kafka |
+| Postgres exec errors | DB health | any spike ⇒ check cluster |
+
+---
+
+## 🛠️ Développement local
+
+```bash
+cargo build -p account && cargo clippy -p account --all-targets
+cargo test  -p account
+docker compose up -d postgres                 # repo-root compose
+for f in crates/services/account/migrations/*.sql; do psql -f "$f"; done
+```
+
+---
+
+## 🚨 Dépannage & runbook
+
+> Format : **symptôme → cause racine → mitigation.**
+
+**1. `ABORTED: ConcurrentModification` à chaque écriture sur un même compte.**
+Cause racine : deux écrivains en course sur le CAS de version, ou un client qui réessaie sans relire la
+`version` courante. Mitigation : les clients doivent relire l'agrégat et réessayer avec la version
+fraîche ; une tempête persistante pointe vers une boucle de retry boguée, pas vers la DB.
+
+**2. `FAILED_PRECONDITION: InvalidStatusTransition`.**
+Cause racine : la transition de cycle de vie/KYC demandée est illégale depuis l'état courant (p. ex.
+réactiver un compte `Deleted`). Mitigation : interroger le `status`/`kyc_status` courant via
+`GetAccountById` ; la machine à états de la §Architecture définit les arêtes légales.
+
+**3. Profil non masqué après une suspension/suppression.**
+Cause racine : l'événement a bien été publié, mais le consommateur `account.v1.events` de `profile` est
+en retard ou a dead-lettered l'enregistrement. Mitigation : vérifier le lag du consumer-group et
+`account.v1.events.dlq` ; l'écriture du compte elle-même est durable quoi qu'il arrive.
