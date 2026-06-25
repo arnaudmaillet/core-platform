@@ -30,6 +30,7 @@ members = [
     "crates/services/timeline",
     "crates/services/chat",
     "crates/services/auth",
+    "crates/services/moderation",
     "crates/apps/chat-server",
     "crates/apps/profile-server",
     "crates/apps/social-graph-server",
@@ -41,6 +42,7 @@ members = [
     "crates/apps/account-server",
     "crates/apps/timeline-server",
     "crates/apps/auth-server",
+    "crates/apps/moderation-server",
     "crates/apps/migrator",
     "crates/contracts/social-graph-api",
     "crates/contracts/account-api",
@@ -53,6 +55,7 @@ members = [
     "crates/contracts/profile-api",
     "crates/contracts/timeline-api",
     "crates/contracts/auth-api",
+    "crates/contracts/moderation-api",
 ]
 resolver = "2"
 
@@ -101,6 +104,7 @@ post-api = { path = "crates/contracts/post-api" }
 profile-api = { path = "crates/contracts/profile-api" }
 timeline-api = { path = "crates/contracts/timeline-api" }
 auth-api = { path = "crates/contracts/auth-api" }
+moderation-api = { path = "crates/contracts/moderation-api" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
 profile          = { path = "crates/services/profile" }
@@ -112,6 +116,7 @@ geo-discovery    = { path = "crates/services/geo-discovery" }
 notification     = { path = "crates/services/notification" }
 timeline         = { path = "crates/services/timeline" }
 auth             = { path = "crates/services/auth" }
+moderation       = { path = "crates/services/moderation" }
 
 
 # Communs
