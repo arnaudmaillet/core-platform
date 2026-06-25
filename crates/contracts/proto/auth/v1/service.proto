@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package auth.v1;
+
+import "auth/v1/messages.proto";
+
+option java_package = "com.coreplatform.auth.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/auth/v1;authv1";
+
+// AuthService is the platform's issuance / session / IdP-broker boundary. It
+// brokers authentication to an external IdP, tracks the resulting session, mints
+// short-lived edge tokens, and revokes them.
+//
+// IdP-agnosticism is a hard contract: this surface exposes only NORMALIZED
+// identity types (account_id, session_id, generation, permissions). No
+// Keycloak/Cognito/Okta-specific field appears here — migrating IdP is an
+// infrastructure-adapter swap with zero change to this contract.
+//
+// Identity records (who a person is) are owned by AccountService; credentials
+// (passwords/MFA) are owned by the IdP. This service owns the authentication act
+// and its lifecycle only.
+//
+// Token model: `access_token` is verified LOCALLY by downstream services via the
+// `auth-context` library (pure CPU, no call to this service on the hot path);
+// `refresh_token` is opaque, single-use, and rotated on every Refresh.
+service AuthService {
+
+    // ── Session establishment ─────────────────────────────────────────────────
+
+    // Broker credentials/authorization-code to the IdP, establish a session, and
+    // return an edge access token + opaque refresh token. Resolves (or, on first
+    // login, creates) the IdP-subject → account link and gates issuance on the
+    // account being active.
+    rpc Login(LoginRequest) returns (LoginResponse);
+
+    // Rotate the refresh token (single-use) and mint a fresh edge token. Reusing
+    // an already-rotated refresh token is treated as compromise and revokes the
+    // entire session generation.
+    rpc Refresh(RefreshRequest) returns (RefreshResponse);
+
+    // ── Revocation ────────────────────────────────────────────────────────────
+
+    // Revoke a single session (the caller's current one by default). Idempotent.
+    rpc Logout(LogoutRequest) returns (LogoutResponse);
+
+    // Global sign-out: bump the account's session generation so every previously
+    // minted edge token is rejected at the edge within one cache read.
+    rpc LogoutAllSessions(LogoutAllSessionsRequest) returns (LogoutAllSessionsResponse);
+
+    // ── Introspection & device management ─────────────────────────────────────
+
+    // INTERNAL. Server-side token introspection returning the normalized
+    // principal, for callers that cannot verify edge tokens locally.
+    rpc Introspect(IntrospectRequest) returns (IntrospectResponse);
+
+    // List the account's active sessions for device-management UIs.
+    rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+}
