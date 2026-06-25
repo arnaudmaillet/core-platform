@@ -1,274 +1,210 @@
-# `account` — Core Account Microservice
+# `account` — Private identity lifecycle: the platform's system of record for who a person *is*
 
-Manages the complete private lifecycle of a physical person on the platform:
-identity verification, credentials, KYC compliance, GDPR rights, and
-role-based access control. Financial state is owned by the dedicated
-`services/ledger` microservice (Single Responsibility at hyperscale).
-
----
-
-## Architecture
-
-```
-crates/services/account/
-├── proto/account/v1/          # Protobuf contracts
-│   ├── enums.proto            # AccountStatus, KycStatus, AccountRole
-│   ├── messages.proto         # Request / response / view messages
-│   └── service.proto          # AccountService RPC definitions
-├── migrations/                # SQL migrations (CockroachDB-compatible)
-├── src/
-│   ├── domain/
-│   │   ├── aggregate/         # Account — DDD aggregate root
-│   │   ├── entity/            # MfaState, GdprRecord
-│   │   ├── event/             # Domain events (AccountCreated, …)
-│   │   └── value_object/      # AccountId, EmailAddress, PasswordHash, …
-│   ├── application/
-│   │   ├── port/              # AccountRepository trait (hex port)
-│   │   ├── command/           # 17 command handlers (CQRS)
-│   │   └── query/             # 5 query handlers (CQRS)
-│   ├── infrastructure/
-│   │   ├── persistence/       # Postgres adapter (CockroachDB-compatible SQL)
-│   │   └── grpc/              # Tonic gRPC server + handler
-│   ├── error.rs               # AccountError enum
-│   └── lib.rs
-└── Cargo.toml
-```
-
-The service follows **Clean Architecture**: the `domain/` layer is completely
-free of I/O dependencies; the `application/` layer contains pure CQRS handlers;
-all I/O lives in `infrastructure/`.
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-0** — identity is on the auth critical path |
+> | **Deployable** | `crates/apps/account-server` (library crate: `crates/services/account`) |
+> | **Datastores** | PostgreSQL / CockroachDB-compatible (db `account`) |
+> | **Async** | publishes `account.v1.events` (AccountCreated/Activated/Suspended/Deleted/…) · consumes nothing |
+> | **Upstream callers** | `<TODO: auth gateway>`, `profile` (via events) |
+> | **Downstream deps** | PostgreSQL/CockroachDB |
+> | **SLO** | `<TODO: 99.95%>` avail · status-read p99 `<TODO>` · write p99 `<TODO>` |
 
 ---
 
-## gRPC API — `account.v1.AccountService`
+## 🎯 Overview & Service Role
 
-Proto package: `account.v1`  
-Proto source: `proto/account/v1/service.proto`
+`account` manages the complete **private lifecycle of a physical person** on the platform: identity
+verification, credentials, KYC compliance, GDPR rights, and role-based access control. It is the
+authoritative system of record for account existence and status — the gateway's auth middleware
+resolves every request against it.
 
-### Commands (mutating RPCs)
+The hard problem it solves is **correctness under concurrency and compliance**: account state is a
+strict state machine (lifecycle + KYC), every mutation must be serializable against concurrent
+writers, and PII handling is legally constrained (GDPR Art. 17 / Art. 20). It resolves this with an
+**optimistic-locking aggregate** (compare-and-swap on a version counter) over CockroachDB, and a
+domain layer that rejects illegal status transitions outright.
 
-All commands return `CommandResponse { success: bool, account_id: string }`.
-
-| RPC | Request | Description |
-|-----|---------|-------------|
-| `CreateAccount` | `CreateAccountRequest` | Register a new account. Idempotent on `(identity_id, email)`. |
-| `VerifyEmail` | `VerifyEmailRequest` | Mark the email address as verified. |
-| `VerifyPhone` | `VerifyPhoneRequest` | Mark the phone number as verified. |
-| `ChangePassword` | `ChangePasswordRequest` | Replace the stored Argon2id password hash. |
-| `EnrollMfa` | `EnrollMfaRequest` | Store an AES-256-GCM encrypted TOTP seed and activate MFA. |
-| `RevokeMfa` | `RevokeMfaRequest` | Remove all MFA credentials. |
-| `UpdateKycStatus` | `UpdateKycStatusRequest` | Update the KYC verification outcome (admin/compliance only). |
-| `SuspendAccount` | `SuspendAccountRequest` | Suspend an account (admin action). |
-| `ReactivateAccount` | `ReactivateAccountRequest` | Lift a suspension and return to Active. |
-| `DeactivateAccount` | `DeactivateAccountRequest` | User-initiated self-deactivation. |
-| `RecordLogin` | `RecordLoginRequest` | Record a successful login; reset failed-attempt counter. |
-| `RecordFailedLogin` | `RecordFailedLoginRequest` | Increment failed-attempt counter; lock if threshold reached. |
-| `RequestGdprDeletion` | `RequestGdprDeletionRequest` | Initiate Art. 17 right-to-erasure request. |
-| `AnonymizeAccount` | `AnonymizeAccountRequest` | Anonymise all PII after retention period has elapsed. |
-| `RequestDataExport` | `RequestDataExportRequest` | Initiate Art. 20 data portability export. |
-| `AssignRole` | `AssignRoleRequest` | Grant an internal platform role (admin only). |
-| `RevokeRole` | `RevokeRoleRequest` | Remove an internal platform role (admin only). |
-
-### Queries (read RPCs)
-
-| RPC | Request | Response | Description |
-|-----|---------|----------|-------------|
-| `GetAccountById` | `GetAccountByIdRequest` | `AccountView` | Full aggregate view by primary key (UUIDv7). |
-| `GetAccountByIdentityId` | `GetAccountByIdentityIdRequest` | `AccountView` | Full aggregate view by IdP subject claim. |
-| `GetAccountStatus` | `GetAccountStatusRequest` | `AccountStatusView` | Lightweight status used by auth middleware and gateway. |
-| `GetGdprRecord` | `GetGdprRecordRequest` | `GdprRecordView` | Full GDPR compliance record (restricted endpoint). |
-| `ListAccountsByStatus` | `ListAccountsByStatusRequest` | `ListAccountsByStatusResponse` | Paginated account list filtered by lifecycle status. |
+**Core objectives:** never lose a write to a concurrent update; never permit an illegal lifecycle
+transition; never store a secret in plaintext. Financial state is explicitly **out of scope** —
+owned by the dedicated `ledger` service (SRP at hyperscale).
 
 ---
 
-## Domain Model
+## 📐 Architecture & Concepts
 
-### `Account` (aggregate root)
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `AccountId` (UUIDv7) | Shard key for distributed routing |
-| `identity_id` | `IdentityId` | External IdP subject claim |
-| `email` | `EmailAddress` | Unique; RFC 5321-normalised |
-| `email_verified` | `bool` | Set via `VerifyEmail` |
-| `phone` | `Option<PhoneNumber>` | E.164 format |
-| `phone_verified` | `bool` | Set via `VerifyPhone` |
-| `password_hash` | `Option<PasswordHash>` | Argon2id; `None` for SSO-only accounts |
-| `roles` | `Vec<AccountRole>` | Platform roles (additive) |
-| `status` | `AccountStatus` | Lifecycle state machine |
-| `kyc_status` | `KycStatus` | Verification state machine |
-| `mfa` | `MfaState` | Embedded MFA state |
-| `gdpr` | `GdprRecord` | Embedded GDPR compliance record |
-| `version` | `i64` | Optimistic-lock version counter |
-| `created_at` | `DateTime<Utc>` | Immutable after creation |
-| `updated_at` | `DateTime<Utc>` | Updated on every write |
-
-### Status State Machines
-
-**AccountStatus transitions:**
+Clean Architecture / DDD (`domain` → `application` → `infrastructure`): the `domain` layer is free of
+I/O, `application` holds pure CQRS handlers (17 commands, 5 queries), all I/O lives in
+`infrastructure` (Postgres adapter + tonic gRPC).
 
 ```
-PendingVerification ──▶ Active ──▶ Suspended ──▶ Active
-                  ╰──────────────▶ Deactivated
-                  ╰──────────────▶ Deleted
-Active            ──▶ Deactivated
-Active            ──▶ Deleted
-Deactivated       ──▶ Deleted
+gRPC (tonic) ─► AccountServiceHandler ─► Command/Query bus ─► AccountRepository (port)
+                                                                      │
+                                                          PostgreSQL / CockroachDB
+                                                          (optimistic lock: version CAS)
+                  AccountCreated/… ─► account.v1.events (Kafka) ─► profile, …
 ```
 
-**KycStatus transitions:**
+**Optimistic locking.** Every write is `UPDATE accounts SET …, version = version + 1 WHERE id = $1
+AND version = $n`. Zero rows affected ⇒ `ConcurrentModification` (retryable, mapped to `ABORTED`).
+`AccountId` (UUIDv7) implements `ShardKey`; all writes route through `run_on_shard(&account_id, …)`
+for topology-agnostic transaction routing.
 
-```
-NotStarted ──▶ Submitted ──▶ InReview ──▶ Approved
-                                      ╰──▶ Rejected ──▶ Submitted (resubmission)
-```
-
-### Enums
-
-**AccountStatus**
-
-| Proto value | Rust variant | i32 |
-|-------------|-------------|-----|
-| `ACCOUNT_STATUS_PENDING_VERIFICATION` | `PendingVerification` | 1 |
-| `ACCOUNT_STATUS_ACTIVE` | `Active` | 2 |
-| `ACCOUNT_STATUS_SUSPENDED` | `Suspended` | 3 |
-| `ACCOUNT_STATUS_DEACTIVATED` | `Deactivated` | 4 |
-| `ACCOUNT_STATUS_DELETED` | `Deleted` | 5 |
-
-**KycStatus**
-
-| Proto value | Rust variant | i32 |
-|-------------|-------------|-----|
-| `KYC_STATUS_NOT_STARTED` | `NotStarted` | 1 |
-| `KYC_STATUS_SUBMITTED` | `Submitted` | 2 |
-| `KYC_STATUS_IN_REVIEW` | `InReview` | 3 |
-| `KYC_STATUS_APPROVED` | `Approved` | 4 |
-| `KYC_STATUS_REJECTED` | `Rejected` | 5 |
-
-**AccountRole**
-
-| Proto value | Rust variant | i32 |
-|-------------|-------------|-----|
-| `ACCOUNT_ROLE_USER` | `User` | 1 |
-| `ACCOUNT_ROLE_CONTENT_MODERATOR` | `ContentModerator` | 2 |
-| `ACCOUNT_ROLE_SUPPORT_AGENT` | `SupportAgent` | 3 |
-| `ACCOUNT_ROLE_FINANCE_OPERATOR` | `FinanceOperator` | 4 |
-| `ACCOUNT_ROLE_ADMIN` | `Admin` | 5 |
-| `ACCOUNT_ROLE_SUPER_ADMIN` | `SuperAdmin` | 6 |
+> **Invariants** (and where enforced): lifecycle transitions
+> (`PendingVerification→Active→Suspended→Active`, `→Deactivated`, `→Deleted`) and KYC transitions
+> (`NotStarted→Submitted→InReview→Approved|Rejected`) are enforced in the `Account` aggregate —
+> illegal transitions return `FAILED_PRECONDITION`. Uniqueness on `(identity_id, email)` makes
+> `CreateAccount` idempotent.
 
 ---
 
-## Persistence
+## 📊 Service Level Objectives (SLO)
 
-### Database
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| Availability (non-`UNAVAILABLE`) | `<TODO: 99.95%>` | 30d rolling | gRPC status metrics |
+| `GetAccountStatus` p99 (auth hot path) | `< <TODO> ms` | 1h | gRPC histogram |
+| Write p99 (CAS commit) | `< <TODO> ms` | 1h | Postgres exec histogram |
+| Durability | no acked write lost | — | CockroachDB serializable commit |
 
-CockroachDB / distributed PostgreSQL. All SQL uses **ANSI semantics** — no
-PostgreSQL-specific extensions. The primary key is a UUIDv7, which provides
-time-sortable, append-friendly clustering compatible with CockroachDB's range
-partitioning.
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`. `GetAccountStatus` is the tightest SLI — the auth
+gateway calls it on the request path, so its latency is multiplied across the whole fleet.
 
-### Optimistic Locking
+---
 
-All writes use a compare-and-swap pattern:
+## 🔗 Dependencies & Blast Radius
 
-```sql
-UPDATE accounts SET ..., version = version + 1
-WHERE id = $1 AND version = $37
+**Downstream — what `account` needs to function:**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| PostgreSQL / CockroachDB | system of record | all reads + writes fail | **Hard** — `UNAVAILABLE` |
+| Kafka | event emission (`account.v1.events`) | downstream projections stall | **Soft** — writes still commit |
+
+**Upstream — who depends on `account` (blast radius if `account` fails):**
+
+| Caller | Uses | User-visible impact if `account` is down |
+|---|---|---|
+| `<TODO: auth gateway>` | `GetAccountStatus` | **logins/authz fail platform-wide** |
+| `profile` | consumes `account.v1.events` | profile masking on suspend/delete stops |
+
+> **Critical path?** **Yes** — `GetAccountStatus` is in the synchronous auth path; an account outage
+> degrades every authenticated request across the fleet.
+
+---
+
+## 🔌 Public Interfaces & API Contract
+
+### gRPC — `account.v1.AccountService`
+
+```protobuf
+service AccountService {
+  // Commands (all return CommandResponse { success, account_id })
+  rpc CreateAccount (CreateAccountRequest) returns (CommandResponse);
+  rpc VerifyEmail (VerifyEmailRequest) returns (CommandResponse);
+  rpc VerifyPhone (VerifyPhoneRequest) returns (CommandResponse);
+  rpc ChangePassword (ChangePasswordRequest) returns (CommandResponse);
+  rpc EnrollMfa (EnrollMfaRequest) returns (CommandResponse);
+  rpc RevokeMfa (RevokeMfaRequest) returns (CommandResponse);
+  rpc UpdateKycStatus (UpdateKycStatusRequest) returns (CommandResponse);
+  rpc SuspendAccount (SuspendAccountRequest) returns (CommandResponse);
+  rpc ReactivateAccount (ReactivateAccountRequest) returns (CommandResponse);
+  rpc DeactivateAccount (DeactivateAccountRequest) returns (CommandResponse);
+  rpc RecordLogin (RecordLoginRequest) returns (CommandResponse);
+  rpc RecordFailedLogin (RecordFailedLoginRequest) returns (CommandResponse);
+  rpc RequestGdprDeletion (RequestGdprDeletionRequest) returns (CommandResponse);
+  rpc AnonymizeAccount (AnonymizeAccountRequest) returns (CommandResponse);
+  rpc RequestDataExport (RequestDataExportRequest) returns (CommandResponse);
+  rpc AssignRole (AssignRoleRequest) returns (CommandResponse);
+  rpc RevokeRole (RevokeRoleRequest) returns (CommandResponse);
+  // Queries
+  rpc GetAccountById (GetAccountByIdRequest) returns (AccountView);
+  rpc GetAccountByIdentityId (GetAccountByIdentityIdRequest) returns (AccountView);
+  rpc GetAccountStatus (GetAccountStatusRequest) returns (AccountStatusView); // auth hot path
+  rpc GetGdprRecord (GetGdprRecordRequest) returns (GdprRecordView);          // restricted
+  rpc ListAccountsByStatus (ListAccountsByStatusRequest) returns (ListAccountsByStatusResponse);
+}
 ```
 
-Zero rows affected → `AccountError::ConcurrentModification` (retryable).
+> **Wire / enum contract:** enums are **1-based** (no `UNSPECIFIED` zero). `AccountStatus`
+> `PENDING_VERIFICATION=1…DELETED=5`; `KycStatus` `NOT_STARTED=1…REJECTED=5`; `AccountRole`
+> `USER=1…SUPER_ADMIN=6`. **Handler defaults** for fields absent in proto:
+> `RecordFailedLogin.max_attempts=5`, `lockout_duration_secs=900`,
+> `RequestGdprDeletion.retention_days=30`, `EnrollMfa.recovery_code_hashes=[]` (server-generated).
 
-### Sharding
+**Security at the boundary:** passwords stored as Argon2id only (plaintext never accepted); TOTP seeds
+AES-256-GCM encrypted (`EncryptedBytes`); recovery codes Bcrypt-hashed; secret fields suppress
+`Display`/`Debug` and carry `#[serde(skip)]`.
 
-`AccountId` implements `ShardKey` by feeding its UUID bytes into the hasher.
-All repository writes use `run_on_shard(&account_id, |tx| ...)` for
-topology-agnostic transaction routing.
+### Rust ports (hexagonal contract)
 
----
+```rust
+pub trait AccountRepository: Send + Sync + 'static { /* save (CAS), find_by_id, find_by_identity_id, … */ }
+```
 
-## Security Constraints
+### Error contract
 
-| Concern | Implementation |
-|---------|----------------|
-| Password storage | Argon2id hash only; plaintext never accepted or stored |
-| TOTP seed storage | AES-256-GCM encrypted (`EncryptedBytes`); key managed externally |
-| Log redaction | `PasswordHash` and `EncryptedBytes` suppress `Display` and `Debug` outputs |
-| Recovery codes | Bcrypt-hashed `RecoveryCodeHash` values; plaintext never persisted |
-| Secret fields | `#[serde(skip)]` on `PasswordHash` and `EncryptedBytes` in aggregate |
-
----
-
-## GDPR Compliance
-
-| Right | Implementation |
-|-------|----------------|
-| Art. 17 — Erasure | `RequestGdprDeletion` records request + scheduled deletion date; `AnonymizeAccount` overwrites PII fields |
-| Art. 20 — Portability | `RequestDataExport` records request; `data_export_completed_at` tracks fulfilment |
-| Consent audit | `data_processing_consented_at`, `marketing_consented_at`, `consent_ip`, `last_consent_version` stored in `GdprRecord` |
-
----
-
-## Error Mapping
-
-| `AccountError` variant | gRPC status code |
-|------------------------|-----------------|
-| `AccountNotFound` | `NOT_FOUND` |
-| `IdentityAlreadyRegistered` | `ALREADY_EXISTS` |
-| `EmailAlreadyRegistered` | `ALREADY_EXISTS` |
-| `ConcurrentModification` | `ABORTED` (retryable) |
-| `AccountNotActive` | `FAILED_PRECONDITION` |
-| `InvalidStatusTransition` | `FAILED_PRECONDITION` |
-| `InvalidKycTransition` | `FAILED_PRECONDITION` |
-| `MfaAlreadyEnrolled` | `ALREADY_EXISTS` |
-| `MfaNotEnrolled` | `FAILED_PRECONDITION` |
-| `GdprDeletionAlreadyRequested` | `ALREADY_EXISTS` |
-| `AccountAlreadyAnonymized` | `FAILED_PRECONDITION` |
-| `RoleAlreadyAssigned` | `ALREADY_EXISTS` |
-| `RoleNotAssigned` | `NOT_FOUND` |
-| `EmailAlreadyVerified` | `ALREADY_EXISTS` |
-| `InvalidAccountRole` / `InvalidKycStatus` / `InvalidAccountStatus` | `INVALID_ARGUMENT` |
-| `Validation` | `INVALID_ARGUMENT` |
+| Range / variant | gRPC status |
+|---|---|
+| `AccountNotFound`, `RoleNotAssigned` | `NOT_FOUND` |
+| `IdentityAlreadyRegistered`, `EmailAlreadyRegistered`, `MfaAlreadyEnrolled`, `RoleAlreadyAssigned`, `GdprDeletionAlreadyRequested`, `EmailAlreadyVerified` | `ALREADY_EXISTS` |
+| `ConcurrentModification` | `ABORTED` (**retryable**) |
+| `AccountNotActive`, `InvalidStatusTransition`, `InvalidKycTransition`, `MfaNotEnrolled`, `AccountAlreadyAnonymized` | `FAILED_PRECONDITION` |
+| `Validation`, `InvalidAccountRole/KycStatus/AccountStatus` | `INVALID_ARGUMENT` |
 | `Storage` | `UNAVAILABLE` |
 
----
-
-## Handler Defaults
-
-Two proto request messages omit fields that exist in the underlying CQRS
-command — the gRPC handler applies these hard-coded defaults:
-
-| RPC | Missing proto field | Default applied |
-|-----|--------------------|-----------------| 
-| `RecordFailedLogin` | `max_attempts` | `5` |
-| `RecordFailedLogin` | `lockout_duration_secs` | `900` (15 min) |
-| `RequestGdprDeletion` | `retention_days` | `30` |
-| `EnrollMfa` | `recovery_code_hashes` | `[]` (generated server-side) |
+Stable codes are `ACC-1xxx` (lifecycle) … `ACC-9xxx` (identifiers), via the shared `error` crate.
 
 ---
 
-## Dependencies
+## 📨 Events & Async Contract
 
-| Crate | Role |
-|-------|------|
-| `cqrs` | Command/query bus and envelope types |
-| `postgres-storage` | `StorageError`, `TransactionManager`, `run_on_shard` |
-| `validation` | Field-level validation errors |
-| `auth-context` | JWT principal propagation |
-| `telemetry` | OpenTelemetry tracing integration |
-| `transport` | gRPC channel configuration |
-| `tonic` / `prost` | gRPC server and protobuf codegen |
-| `uuid` (v7) | Time-sortable primary keys |
-| `chrono` | UTC timestamps |
+> Kafka topics are an API. A schema change here breaks consumers exactly like a proto change.
+
+**Publishes:**
+
+| Topic | Carries (event kinds) | Key | Consumers |
+|---|---|---|---|
+| `account.v1.events` | `AccountCreated`, `AccountActivated`, `AccountSuspended`, `AccountDeactivated`, `AccountDeleted`, `EmailChanged`, `EmailVerified`, `PhoneChanged`, `PasswordChanged`, `KycStatusChanged`, `MfaEnrolled`, `MfaRevoked`, `GdprDeletionRequested`, `GdprDataExportRequested` | `account_id` | `profile` (suspend/delete → mask; activate → restore) |
+
+**Consumes:** none — `account` is a pure event producer.
+
+> **Runtime contract:** events are published best-effort after the durable commit; a Kafka failure does
+> not fail the command. Consumers (e.g. `profile`) own at-least-once handling under `run_consumer` and
+> dead-letter to `account.v1.events.dlq`.
 
 ---
 
-## 🚀 Deployment
+## 🌩️ Failure Modes & Degradation
 
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `account::service::AccountService` (`build` constructs the PostgreSQL pool via
-`PgPoolBuilder` and wires the CQRS buses; `register` adds the gRPC + reflection
-services; `health_probes` checks Postgres — the pool is `Arc`-backed, so the probe
-shares it). The deployable binary is `crates/apps/account-server`:
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| Postgres/CockroachDB unavailable | all RPCs fail | **Hard fail** — `UNAVAILABLE`; nothing acked, nothing lost | check DB cluster / ranges |
+| Write contention on hot account | `ConcurrentModification` (`ABORTED`) | CAS rejects the stale writer; client retries | none — correct behavior; investigate retry storms |
+| Kafka unavailable | downstream projections stale | **Soft** — commits succeed, events buffered/dropped | check brokers; downstream replays |
+
+**Backpressure & limits.** `ListAccountsByStatus` is paginated. Failed-login lockout (`max_attempts`
+default 5, `lockout_duration_secs` default 900) throttles credential-stuffing at the domain layer.
+
+---
+
+## 📦 Integration & Usage
+
+```toml
+[dependencies]
+account = { path = "crates/services/account" }
+```
+
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`account::service::AccountService` — `build` constructs the PostgreSQL pool via `PgPoolBuilder` and
+wires the CQRS buses, `register` adds the gRPC + reflection services, `health_probes` checks Postgres
+(the `Arc`-backed pool is shared with the probe).
+
+### Bootstrap (`crates/apps/account-server`)
 
 ```rust
 use std::net::SocketAddr;
@@ -282,3 +218,76 @@ async fn main() -> anyhow::Result<()> {
     service_runtime::serve::<AccountService>(addr).await
 }
 ```
+
+---
+
+## ⚙️ Configuration & Runtime Environment
+
+### Inherited infrastructure variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `POSTGRES_*` (URL/pool/timeouts) | **Yes** | — | CockroachDB-compatible connection; see the `postgres-storage` crate. |
+| `KAFKA_BROKERS` | **Yes** | — | Kafka bootstrap brokers for `account.v1.events`. |
+| `ACCOUNT_GRPC_ADDR` | No | `0.0.0.0:50059` | gRPC bind address. |
+
+> Full connection/timeout/pool tuning lives in the shared `postgres-storage` and `transport` crates.
+
+### Compile-time features
+- `build.rs` compiles `proto/account/v1/*.proto` and emits the reflection descriptor set.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `crates/services/account/migrations/*.sql` (ANSI semantics, CockroachDB-compatible,
+  UUIDv7 PKs for range-friendly clustering). Apply **before** rolling a new binary.
+- **Rollout:** `<TODO: rolling / canary>`. Stateless service; safe to roll.
+- **Rollback:** `<TODO: confirm migrations forward-compatible with N-1 binary>`.
+- **Compliance gotcha:** `AnonymizeAccount` is irreversible (PII overwrite) — never run it as part of a
+  rollback/replay.
+
+---
+
+## 📈 Telemetry, Performance & Metrics
+
+- **Runtime:** Tokio multi-thread. Global tracing/OTel subscriber installed before `serve`.
+
+| Signal | Why it matters | Suggested alert |
+|---|---|---|
+| `GetAccountStatus` p99 | auth-path latency, fleet-amplified | p99 > SLO ⇒ page |
+| `ConcurrentModification` rate | write contention / retry storms | sustained spike ⇒ investigate hot accounts |
+| `account.v1.events` publish failures | downstream projection drift | sustained rate ⇒ check Kafka |
+| Postgres exec errors | DB health | any spike ⇒ check cluster |
+
+---
+
+## 🛠️ Local Development
+
+```bash
+cargo build -p account && cargo clippy -p account --all-targets
+cargo test  -p account
+docker compose up -d postgres                 # repo-root compose
+for f in crates/services/account/migrations/*.sql; do psql -f "$f"; done
+```
+
+---
+
+## 🚨 Troubleshooting & Runbook
+
+> Format: **symptom → root cause → mitigation.**
+
+**1. `ABORTED: ConcurrentModification` on every write to one account.**
+Root cause: two writers racing the version CAS, or a client that retries without re-reading the
+current `version`. Mitigation: clients must re-read the aggregate and retry with the fresh version;
+a persistent storm points at a buggy retry loop, not the DB.
+
+**2. `FAILED_PRECONDITION: InvalidStatusTransition`.**
+Root cause: the requested lifecycle/KYC transition is illegal from the current state (e.g. reactivating
+a `Deleted` account). Mitigation: query the current `status`/`kyc_status` via `GetAccountById`; the
+state machine in §Architecture defines the legal edges.
+
+**3. Profile not masked after a suspension/deletion.**
+Root cause: the event published, but `profile`'s `account.v1.events` consumer is lagging or
+dead-lettered the record. Mitigation: check the consumer group lag and `account.v1.events.dlq`; the
+account write itself is durable regardless.

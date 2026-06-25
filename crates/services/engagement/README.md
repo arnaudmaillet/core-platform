@@ -1,176 +1,192 @@
-# engagement — Weighted Reaction Scoring Engine & Interaction Counter
+# `engagement` — Weighted reaction scoring & high-volume interaction counters
+
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-1** — real-time interaction backbone; degradable to durable ledger |
+> | **Deployable** | `crates/apps/engagement-server` (library crate: `crates/services/engagement`) |
+> | **Datastores** | Redis (authoritative hot path) · ScyllaDB keyspace `engagement` (durable ledger) |
+> | **Async** | publishes `engagement.reactions` (+ `engagement.score_updated`) · consumes `comment.created` / `comment.deleted` |
+> | **Upstream callers** | `<TODO: gateway>` |
+> | **Downstream deps** | Redis, ScyllaDB, Kafka |
+> | **SLO** | reaction swap p99 **< 5 ms** (zero Scylla on hot path) · snapshot read p99 ~0.3 ms |
+
+---
 
 ## 🎯 Overview & Service Role
 
-The **engagement** service is the real-time interaction backbone of the Super-App. It owns and operates three categories of engagement data for every published post:
+`engagement` is the real-time interaction backbone. For every published post it owns three data
+categories: **weighted reactions** (emoji/icon/gif, one active per `(post_id, profile_id)`),
+**high-volume counters** (views/shares, Redis-incremented and write-behind-flushed to Scylla), and
+**comment counts** (reactively ingested from `comment.*`).
 
-- **Weighted reactions** (emoji/icon/gif) — each kind carries a configurable score weight; one active reaction per `(post_id, profile_id)` pair is enforced as an invariant.
-- **High-volume counters** (views, shares) — incremented atomically in Redis and periodically flushed to ScyllaDB via a write-behind worker.
-- **Comment counts** — reactively ingested from the `services/comment` Kafka event stream.
+The hard problem it solves is **millions of concurrent reactions without Paxos**: a naive
+read-modify-write or ScyllaDB LWT would collapse under rapid-toggle storms. It resolves this with a
+**Redis-primary Lua atomic swap** — Redis's single-threaded execution serializes all swaps for a
+`(post, profile)` pair, with zero Scylla reads on the hot path — and a **Kafka write-behind** path that
+persists the durable ledger asynchronously.
 
-**Core business impact:**
-- Sub-millisecond reaction swap with zero ScyllaDB reads on the hot path (Lua atomic swap).
-- Supports millions of concurrent reactions without Paxos overhead (no ScyllaDB LWT).
-- Eliminates rapid-toggle race conditions: concurrent swaps for the same `(post, profile)` pair are serialized by Redis's single-threaded Lua execution context.
-- Kafka write-behind provides multi-region event streaming and process-crash durability for ledger state.
+**Core objectives:** sub-ms reaction swap with no hot-path Scylla; no rapid-toggle races; Kafka
+write-behind for multi-region streaming and crash durability. **Redis is authoritative; Scylla counters
+are approximate analytics.**
 
 ---
 
 ## 📐 Architecture & Concepts
 
-### Data Flow
-
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                          WRITE PATH  (hot, <5 ms)                          │
-│                                                                            │
-│  gRPC Client ──► EngagementServiceHandler                                  │
-│                       │                                                    │
-│          ┌────────────┼────────────┬─────────────┐                        │
-│          ▼            ▼            ▼             ▼                        │
-│  UpsertReaction  RemoveReaction RecordView   RecordShare                   │
-│       │               │             │             │                        │
-│       ▼               ▼             ▼             ▼                        │
-│  RedisScoreStore (Lua EVAL / INCR — one round-trip each)                  │
-│       │               │                                                    │
-│       ▼               ▼                                                    │
-│  KafkaProducer  (engagement.reactions — keyed by post_id:profile_id)      │
-└────────────────────────────────────────────────────────────────────────────┘
+WRITE PATH (hot, <5ms): gRPC ─► Upsert/RemoveReaction, RecordView/Share
+                           ─► RedisScoreStore (Lua EVAL / INCR, one round-trip)
+                           ─► KafkaProducer(engagement.reactions, key post_id:profile_id)
 
-┌────────────────────────────────────────────────────────────────────────────┐
-│                      WRITE-BEHIND PATH  (async)                            │
-│                                                                            │
-│  ReactionWriteBehindWorker                                                 │
-│      Kafka consumer: engagement.reactions                                  │
-│      → ScyllaDB UPSERT engagement.post_reactions (idempotent)              │
-│                                                                            │
-│  CounterFlushWorker  (every 5 s by default)                                │
-│      DirtyPostTracker → Redis GETSET 0 (atomic snapshot)                  │
-│      → ScyllaDB COUNTER UPDATE engagement.post_interaction_counters        │
-│                                                                            │
-│  CommentEventConsumer                                                      │
-│      Kafka: comment.created / comment.deleted                              │
-│      → Redis INCR/DECR engagement:comments:{post_id}                      │
-│      → ScyllaDB COUNTER UPDATE engagement.post_interaction_counters        │
-└────────────────────────────────────────────────────────────────────────────┘
+WRITE-BEHIND (async): ReactionWriteBehindWorker  (consumes engagement.reactions → Scylla post_reactions, idempotent)
+                      CounterFlushWorker (every 5s) (DirtyPostTracker → Redis GETSET 0 → Scylla counters)
+                      CommentEventConsumer (consumes comment.created/deleted → Redis INCR/DECR + Scylla counter)
 
-┌────────────────────────────────────────────────────────────────────────────┐
-│                          READ PATH  (queries)                              │
-│                                                                            │
-│  GetPostEngagement → RedisScoreStore::get_snapshot()                       │
-│      HGETALL engagement:scores:{post_id}   (weighted scores per kind)     │
-│      GET    engagement:views:{post_id}                                     │
-│      GET    engagement:shares:{post_id}                                    │
-│      GET    engagement:comments:{post_id}                                  │
-│  (4 parallel GET operations, ~0.3 ms at p99)                              │
-└────────────────────────────────────────────────────────────────────────────┘
+READ PATH: GetPostEngagement ─► RedisScoreStore::get_snapshot (4 parallel GETs, ~0.3ms p99)
 ```
 
-### Redis Key Layout
+**Redis key layout:** `engagement:r:{post}:{profile}` (HASH, per-profile reaction = swap source);
+`engagement:scores:{post}` (HASH, authoritative weighted scores); `engagement:views/shares/comments:{post}`
+(counters). **ScyllaDB:** `engagement.post_reactions` (durable ledger, PK `((post_id), profile_id)`),
+`engagement.post_interaction_counters` (approximate counter table).
 
-| Key Pattern | Type | Purpose |
+> **Invariants** (and where enforced): one active reaction per `(post_id, profile_id)` — enforced
+> atomically by the Lua swap; concurrent swaps for the same pair are serialized by Redis's
+> single-threaded Lua context; ledger UPSERT is idempotent (safe re-delivery).
+
+---
+
+## 📊 Service Level Objectives (SLO)
+
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| Reaction swap p99 (hot path) | **< 5 ms** | 1h | `engagement_reaction_upsert_duration_ms` |
+| `GetPostEngagement` p99 | ~0.3 ms (target < 5 ms) | 1h | snapshot read histogram |
+| Counter flush lag | `< <TODO>` posts | live | `engagement_counter_flush_lag_posts` |
+| Write-behind consumer lag | `< <TODO>` | live | `engagement_write_behind_consumer_lag` |
+| Durability (reactions) | ledger eventually consistent | — | Kafka at-least-once → idempotent UPSERT |
+
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
+
+---
+
+## 🔗 Dependencies & Blast Radius
+
+**Downstream:**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| Redis | authoritative hot path | reaction/view/share commands fail | **Hard** — `503 Unavailable` (backpressure to callers) |
+| ScyllaDB | durable ledger + counters | write-behind backs off | **Soft** — Redis stays consistent; ledger catches up |
+| Kafka | write-behind + comment ingest | persistence + comment counts lag | **Soft** — hot path unaffected |
+
+**Upstream (blast radius):**
+
+| Caller | Uses | Impact if `engagement` is down |
 |---|---|---|
-| `engagement:r:{post_id}:{profile_id}` | `HASH { kind, weight }` | Per-profile reaction state — atomic swap source |
-| `engagement:scores:{post_id}` | `HASH { <kind>: <i64> }` | Real-time weighted scores — authoritative |
-| `engagement:views:{post_id}` | `STRING (i64)` | Accumulated view count — periodic flush |
-| `engagement:shares:{post_id}` | `STRING (i64)` | Accumulated share count — periodic flush |
-| `engagement:comments:{post_id}` | `STRING (i64)` | Comment count — driven by Kafka |
+| `<TODO: gateway>` | reaction/view/share + `GetPostEngagement` | no reactions, no engagement counts on posts |
+| `geo-discovery` | consumes `engagement.score_updated` | map virality scores go stale |
 
-### ScyllaDB Schema
-
-```
-engagement.post_reactions          — Durable ledger. PRIMARY KEY ((post_id), profile_id).
-engagement.post_interaction_counters — Approximate counter table (views/shares/comments).
-```
-
-### Resilience Guarantees & High-Load Behavior
-
-| Scenario | Behavior |
-|---|---|
-| Redis unavailable | gRPC commands return `503 Unavailable`. Backpressure propagates to callers. |
-| ScyllaDB unavailable | Write-behind workers back off and retry. Redis state remains consistent. |
-| Worker process crash | Kafka consumer group re-assigns partitions; messages re-delivered (at-least-once via `run_consumer`). Ledger UPSERT is idempotent; transient failures retry with backoff then dead-letter to `{topic}.dlq`. See the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard). |
-| Redis restart / flush | Counter data lost for the current flush window. Reaction state lost until cold-start recovery runs against ScyllaDB ledger. |
-| Rapid reaction toggle | Redis Lua serializes all swap operations for the same `(post, profile)` — no race condition possible. |
-| Counter table double-count | ScyllaDB counters are approximate analytics only; Redis is authoritative. |
+> **Critical path?** **Yes** for the reaction write/read path (Redis-backed); persistence is async.
 
 ---
 
 ## 🔌 Public Interfaces & API Contract
 
-### Proto service (`engagement.v1.EngagementService`)
+### gRPC — `engagement.v1.EngagementService`
 
 ```protobuf
 service EngagementService {
-    rpc UpsertReaction    (UpsertReactionRequest)    returns (CommandResponse);
-    rpc RemoveReaction    (RemoveReactionRequest)     returns (CommandResponse);
-    rpc RecordView        (RecordViewRequest)         returns (CommandResponse);
-    rpc RecordShare       (RecordShareRequest)        returns (CommandResponse);
-    rpc GetPostEngagement (GetPostEngagementRequest)  returns (PostEngagementView);
+  rpc UpsertReaction    (UpsertReactionRequest)    returns (CommandResponse);
+  rpc RemoveReaction    (RemoveReactionRequest)    returns (CommandResponse);
+  rpc RecordView        (RecordViewRequest)        returns (CommandResponse);
+  rpc RecordShare       (RecordShareRequest)       returns (CommandResponse);
+  rpc GetPostEngagement (GetPostEngagementRequest) returns (PostEngagementView);
 }
 ```
 
-### Core port traits
+### Rust ports (hexagonal contract)
 
 ```rust
-// Redis-primary scoring layer
-#[async_trait]
 pub trait ScoreStore: Send + Sync + 'static {
-    async fn atomic_upsert_reaction(
-        &self, post_id: &PostId, profile_id: &ProfileId,
-        new_kind: ReactionKind, new_weight: i64,
-    ) -> Result<Option<(ReactionKind, i64)>, EngagementError>;
-
-    async fn atomic_remove_reaction(
-        &self, post_id: &PostId, profile_id: &ProfileId,
-    ) -> Result<Option<(ReactionKind, i64)>, EngagementError>;
-
-    async fn incr_view(&self, post_id: &PostId) -> Result<(), EngagementError>;
-    async fn incr_share(&self, post_id: &PostId) -> Result<(), EngagementError>;
-    async fn get_snapshot(&self, post_id: &PostId) -> Result<PostEngagementSnapshot, EngagementError>;
+    async fn atomic_upsert_reaction(&self, post, profile, kind, weight) -> Result<Option<(ReactionKind, i64)>, EngagementError>;
+    async fn atomic_remove_reaction(&self, post, profile) -> Result<Option<(ReactionKind, i64)>, EngagementError>;
+    async fn incr_view(&self, post) -> Result<(), EngagementError>;
+    async fn incr_share(&self, post) -> Result<(), EngagementError>;
+    async fn get_snapshot(&self, post) -> Result<PostEngagementSnapshot, EngagementError>;
 }
-
-// ScyllaDB durable ledger (write-behind path only)
-#[async_trait]
-pub trait ReactionLedger: Send + Sync + 'static {
-    async fn upsert(...) -> Result<(), EngagementError>;
-    async fn remove(...) -> Result<(), EngagementError>;
-    async fn scan_for_recovery(post_id: &PostId) -> Result<Vec<ReactionRow>, EngagementError>;
-    async fn apply_interaction_delta(...) -> Result<(), EngagementError>;
-}
+pub trait ReactionLedger: Send + Sync + 'static { /* upsert/remove/scan_for_recovery/apply_interaction_delta (write-behind only) */ }
 ```
 
-### Error code namespace
+### Error contract (`ENG-xxxx`)
 
 | Range | Category |
 |---|---|
-| `ENG-1xxx` | Reaction state violations (not found, wrong author) |
-| `ENG-2xxx` | Reaction kind / weight validation |
-| `ENG-3xxx` | Kafka / event publish errors |
-| `ENG-5xxx` | Worker / Lua script errors |
-| `ENG-9xxx` | ID parsing / domain violations |
+| `ENG-1xxx` | reaction state (not found, wrong author) |
+| `ENG-2xxx` | reaction kind / weight validation |
+| `ENG-3xxx` | Kafka / event publish |
+| `ENG-5xxx` | worker / Lua script |
+| `ENG-9xxx` | id parsing / domain violation |
+
+---
+
+## 📨 Events & Async Contract
+
+**Publishes:**
+
+| Topic | Trigger | Key | Consumers |
+|---|---|---|---|
+| `engagement.reactions` | every reaction/view/share | `post_id:profile_id` | own `ReactionWriteBehindWorker`; `notification` (reactions) |
+| `engagement.score_updated` | virality recompute | `post_id` | `geo-discovery` (map score sync) |
+
+**Consumes:**
+
+| Topic | Consumer group | Purpose | On poison/exhaustion |
+|---|---|---|---|
+| `comment.created` / `comment.deleted` | `engagement-comment-consumer` | INCR/DECR comment counter (Redis + Scylla) | DLQ `{topic}.dlq` |
+
+> **Runtime contract (mandatory):** the comment consumer and write-behind worker run under
+> `run_consumer` — manual commit after success, bounded retry with backoff + jitter, DLQ on
+> exhaustion/poison. The ledger UPSERT is idempotent, so re-delivery is safe.
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| Redis unavailable | reaction/view/share fail | **Hard** — `503`; backpressure to callers | check Redis; hot path requires it |
+| ScyllaDB unavailable | write-behind backs off | **Soft** — Redis consistent; ledger catches up | check Scylla compaction/disk I/O |
+| Worker crash | partitions reassigned | at-least-once replay (`run_consumer`); idempotent UPSERT | none — self-healing |
+| Redis restart **without AOF** | scores + reaction state lost | counters lose current window; reactions need cold-start recovery | enable AOF; rebuild from Scylla ledger |
+| Rapid reaction toggle | — | Lua serializes; no race | none |
+
+**Backpressure & limits.** The hot path is one Redis round-trip per op. `CounterFlushWorker` (default
+5 s) bounds counter write amplification. ScyllaDB counters are approximate by design — never treat them
+as authoritative.
 
 ---
 
 ## 📦 Integration & Usage
 
-### Cargo.toml dependency
-
 ```toml
+[dependencies]
 engagement = { path = "crates/services/engagement" }
 ```
 
-### Bootstrap pattern
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`engagement::service::EngagementService` — `build` wires the Redis score store, reaction-weights config,
+the Kafka publisher, and the write-behind workers; `register` adds the gRPC + reflection services;
+`health_probes` checks Redis (the always-on hot path). Built with fred's `i-scripts` feature for Lua.
 
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `engagement::service::EngagementService` (`build` wires the Redis score store,
-reaction-weights config, the Kafka publisher, and the write-behind workers;
-`register` adds the gRPC + reflection services; `health_probes` checks Redis —
-the always-on hot path). The deployable binary is `crates/apps/engagement-server`:
+### Bootstrap (`crates/apps/engagement-server`)
 
 ```rust
 use std::net::SocketAddr;
-
 use engagement::service::EngagementService;
 
 #[tokio::main]
@@ -178,8 +194,6 @@ async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("ENGAGEMENT_GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50058".to_owned())
         .parse()?;
-
-    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
     service_runtime::serve::<EngagementService>(addr).await
 }
 ```
@@ -190,132 +204,85 @@ async fn main() -> anyhow::Result<()> {
 
 ### Reaction weight matrix
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ENGAGEMENT_REACTION_WEIGHT_HEART` | No | `1` | Score weight for ❤️ Heart reactions |
-| `ENGAGEMENT_REACTION_WEIGHT_FIRE` | No | `2` | Score weight for 🔥 Fire reactions |
-| `ENGAGEMENT_REACTION_WEIGHT_ROCKET` | No | `5` | Score weight for 🚀 Rocket reactions |
-| `ENGAGEMENT_REACTION_WEIGHT_CLAP` | No | `1` | Score weight for 👏 Clap reactions |
-| `ENGAGEMENT_REACTION_WEIGHT_SAD` | No | `1` | Score weight for 😢 Sad reactions |
+| Variable | Default | Description |
+|---|---|---|
+| `ENGAGEMENT_REACTION_WEIGHT_HEART` | `1` | ❤️ score weight |
+| `ENGAGEMENT_REACTION_WEIGHT_FIRE` | `2` | 🔥 score weight |
+| `ENGAGEMENT_REACTION_WEIGHT_ROCKET` | `5` | 🚀 score weight |
+| `ENGAGEMENT_REACTION_WEIGHT_CLAP` | `1` | 👏 score weight |
+| `ENGAGEMENT_REACTION_WEIGHT_SAD` | `1` | 😢 score weight |
 
-### ScyllaDB
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `SCYLLA_CONTACT_POINTS` | **Yes** | — | Comma-separated node addresses, e.g. `127.0.0.1:9042` |
-| `SCYLLA_LOCAL_DC` | **Yes** | — | Local datacenter name; must match `datacenter1` in dev |
-| `SCYLLA_KEYSPACE` | No | — | Keyspace to `USE` after session bootstrap |
-| `SCYLLA_USERNAME` | No | — | CQL username |
-| `SCYLLA_PASSWORD` | No | — | CQL password |
-
-### Redis
+### Service + inherited infrastructure
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `REDIS_URL` | **Yes** | — | Redis connection URL, e.g. `redis://127.0.0.1:6379` |
-| `REDIS_POOL_SIZE` | No | `8` | Connection pool size |
+| `ENGAGEMENT_COUNTER_FLUSH_INTERVAL_SECS` | No | `5` | View/share flush cadence. |
+| `REDIS_URL` | **Yes** | — | Redis connection (AOF recommended). |
+| `SCYLLA_CONTACT_POINTS` / `SCYLLA_LOCAL_DC` | **Yes** | — | ScyllaDB ledger. |
+| `KAFKA_BROKERS` | **Yes** | `localhost:9092` | Kafka brokers. |
+| `ENGAGEMENT_GRPC_ADDR` | No | `0.0.0.0:50058` | gRPC bind address. |
 
-### Kafka
+> Full `SCYLLA_*` / `REDIS_*` / `KAFKA_*` tuning lives in the shared storage/transport crates.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `KAFKA_BROKERS` | **Yes** | `localhost:9092` | Comma-separated broker list |
-| `KAFKA_SECURITY_PROTOCOL` | No | `PLAINTEXT` | `PLAINTEXT` or `SASL_SSL` |
-| `KAFKA_SASL_MECHANISM` | No | — | e.g. `PLAIN`, `SCRAM-SHA-256` |
-| `KAFKA_SASL_USERNAME` | No | — | SASL username |
-| `KAFKA_SASL_PASSWORD` | No | — | SASL password |
+### Compile-time features
+- `fred` with `i-scripts` (Lua atomic swap). `build.rs` compiles `proto/engagement/v1/*.proto`.
 
-### Service
+---
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ENGAGEMENT_GRPC_PORT` | No | `50054` | gRPC server bind port |
-| `ENGAGEMENT_COUNTER_FLUSH_INTERVAL_SECS` | No | `5` | View/share flush cadence in seconds |
-| `RUST_LOG` | No | `info` | Log filter (e.g. `engagement=debug,info`) |
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `0001_create_keyspace.cql` → `0002_create_post_reactions_table.cql` →
+  `0003_create_post_interaction_counters_table.cql` against `engagement`, applied **before** first start.
+- **Redis durability:** enable AOF (`appendonly yes`, `appendfsync everysec`) — without it, a restart
+  loses the current flush window and requires cold-start recovery from the Scylla ledger.
+- **Kafka:** pre-create `engagement.reactions` with ≥ 12 partitions.
+- **Rollout/Rollback:** `<TODO>`; the gRPC tier is stateless, but workers are at-least-once consumers —
+  safe to roll.
 
 ---
 
 ## 📈 Telemetry, Performance & Metrics
 
-### Runtime prerequisites
+- **Runtime:** Tokio multi-thread (required — `tokio::join!` on the read path).
 
-- Tokio multi-thread runtime (`rt-multi-thread` feature required).
-- Redis AOF persistence enabled (`appendonly yes`) to survive the flush outbox.
-- Kafka topic `engagement.reactions` pre-created with at least 12 partitions.
-- Kafka topics `comment.created` and `comment.deleted` consumed but not owned by this service.
-
-### Key operational metrics
-
-| Metric | Type | Alert |
+| Signal | Why it matters | Suggested alert |
 |---|---|---|
-| `engagement_reaction_upsert_duration_ms` | Histogram | p99 > 10 ms → Redis latency spike |
-| `engagement_reaction_upsert_total` | Counter | Sudden drop → upstream client issue |
-| `engagement_view_incr_total` | Counter | Baseline health check |
-| `engagement_counter_flush_lag_posts` | Gauge | > 10 000 → flush worker fallen behind |
-| `engagement_write_behind_consumer_lag` | Gauge | > 50 000 → Kafka consumer group lagging |
-| `engagement_redis_errors_total` | Counter | Any spike → Redis connectivity |
-| `engagement_scylla_errors_total` | Counter | Any spike → ScyllaDB connectivity |
+| `engagement_reaction_upsert_duration_ms` | hot-path latency | p99 > 10 ms ⇒ Redis spike |
+| `engagement_counter_flush_lag_posts` | flush worker health | > 10 000 ⇒ behind |
+| `engagement_write_behind_consumer_lag` | ledger persistence | > 50 000 ⇒ Kafka consumer lag |
+| `engagement_redis_errors_total` | hot-path availability | any spike ⇒ Redis connectivity |
+| `engagement_scylla_errors_total` | ledger durability | any spike ⇒ Scylla connectivity |
 
 ---
 
-## 🛠️ Local Development & Contribution
-
-### Prerequisites
+## 🛠️ Local Development
 
 ```bash
-docker compose up -d scylla redis kafka
-```
-
-Apply schema migrations manually:
-
-```bash
-cqlsh < migrations/0001_create_keyspace.cql
-cqlsh < migrations/0002_create_post_reactions_table.cql
-cqlsh < migrations/0003_create_post_interaction_counters_table.cql
-```
-
-### Build & check
-
-```bash
-# from workspace root
-cargo build -p engagement
-cargo clippy -p engagement -- -D warnings
-cargo fmt -p engagement -- --check
-```
-
-### Test
-
-```bash
-cargo test -p engagement
+cargo build -p engagement && cargo clippy -p engagement -- -D warnings
+cargo test  -p engagement
+docker compose up -d scylla redis kafka       # repo-root compose
+for f in crates/services/engagement/migrations/*.cql; do cqlsh -f "$f"; done
 ```
 
 ---
 
 ## 🚨 Troubleshooting & Runbook
 
-### 1. Reaction scores drift after Redis restart
+> Format: **symptom → root cause → mitigation.**
 
-**Root cause**: Redis was flushed or restarted without AOF persistence. The `engagement:scores:{post_id}` and `engagement:r:{post_id}:{profile_id}` hashes are lost.
+**1. Reaction scores drift after a Redis restart.**
+Root cause: Redis was flushed/restarted without AOF; the `engagement:scores:*` and `engagement:r:*`
+hashes are lost. Mitigation: enable AOF to prevent recurrence; run cold-start recovery (scan
+`engagement.post_reactions`, group by `(post_id, kind)`, sum weights, `HSET` rebuild) before restarting
+the gRPC server.
 
-**Mitigation**:
-1. Enable Redis AOF (`appendonly yes`, `appendfsync everysec`) to prevent recurrence.
-2. Run the cold-start recovery procedure: scan `engagement.post_reactions` in ScyllaDB, group by `(post_id, kind)`, sum weights, and rebuild Redis hashes via `HSET`.
-3. The recovery script is not bundled in this service — run it as an offline maintenance job before restarting the gRPC server.
+**2. Write-behind consumer lag grows continuously.**
+Root cause: Scylla writes slower than the produce rate, or too few consumer members. Mitigation: check
+`engagement_write_behind_consumer_lag`; scale `ReactionWriteBehindWorker` instances; verify
+`post_reactions` compaction isn't saturating disk I/O.
 
-### 2. Write-behind consumer lag growing continuously
-
-**Root cause**: ScyllaDB writes are slower than the Kafka produce rate, or the consumer group has too few members.
-
-**Mitigation**:
-1. Check `engagement_write_behind_consumer_lag` in Grafana.
-2. Scale up the number of `ReactionWriteBehindWorker` instances (one per service replica suffices for typical load; each processes a dedicated partition set).
-3. Verify ScyllaDB `engagement.post_reactions` table compaction is not saturating disk I/O (check `sstable_count` per node).
-
-### 3. `ENG-5001 ScriptReturnInvalid` errors in logs
-
-**Root cause**: The Lua swap script returned an unexpected value type. Usually caused by a Redis version incompatibility (EVAL behavior differs between Redis 6.x and 7.x regarding null returns).
-
-**Mitigation**:
-1. Verify Redis version is ≥ 7.0 (`redis-cli INFO server | grep redis_version`).
-2. Check for key type corruption: `redis-cli TYPE engagement:r:{post_id}:{profile_id}` should return `hash`.
-3. If key is of wrong type, delete it and let the next upsert recreate it: the Kafka outbox will still replay the reaction to ScyllaDB.
+**3. `ENG-5001 ScriptReturnInvalid` in logs.**
+Root cause: the Lua swap returned an unexpected type — usually a Redis version mismatch (null-return
+behavior differs 6.x vs 7.x) or a key of the wrong type. Mitigation: verify Redis ≥ 7.0; check
+`TYPE engagement:r:{post}:{profile}` is `hash`; delete a corrupt key and let the next upsert recreate
+it (the Kafka outbox still replays to Scylla).

@@ -1,329 +1,204 @@
-# timeline — Hybrid Fan-out Home Feed Aggregation Engine
+# `timeline` — Hybrid fan-out home feed that keeps celebrities off the write path
 
-## Overview & Service Role
-
-The timeline service provides the home feed ("Following" tab) for the location-first super-app. It aggregates posts from accounts a user follows into a ranked, paginated stream using a **hybrid Fan-out-on-Write / Fan-out-on-Read** architecture that prevents the Celebrity Fan-out Problem (VIP authors with millions of followers) from saturating the write path.
-
-**Critical business impact:**
-- **Sub-millisecond hot reads:** User feeds are pre-materialized in Redis ZSETs, sorted by `published_at_ms`, paginated via opaque cursors. No scatter-gather on read for Standard/Premium authors.
-- **VIP isolation:** Authors classified as `Vip` never trigger fan-out to followers' feeds on publish. Instead their posts are registered in a per-author ZSET and merged in-process at query time — bounding write amplification to O(1) per post regardless of follower count.
-- **Zero post content stored:** The service stores only `(post_id, author_id, published_at_ms)` tokens. All content hydration is delegated to the client/BFF calling services/post.
-- **Cold-start transparency:** When a feed has never been warmed, ScyllaDB data is returned immediately and Redis is populated asynchronously. The `is_cold` flag in the response lets the BFF show a "feed is loading" indicator.
-
----
-
-## Architecture & Concepts
-
-```
-                    ┌──────────────────────────────────────────────────────────────────┐
-                    │                        Kafka Cluster                             │
-                    │  post.published  │  post.deleted  │  social-graph.followed/unfollowed │
-                    └────────┬─────────┴───────┬────────┴──────────────┬──────────────┘
-                             │                 │                       │
-              ┌──────────────▼───────┐ ┌───────▼──────────┐ ┌─────────▼──────────────┐
-              │ PostPublishedWorker  │ │ PostDeletedWorker │ │ FollowCreatedWorker    │
-              │                      │ │                   │ │ FollowDeletedWorker    │
-              │ Tier routing:        │ │ VIP: ZREM from    │ │ Created: add to        │
-              │ Standard/Premium →   │ │ vip ZSET          │ │ following:set, backfill│
-              │   fan-out to all     │ │ Std/Prem: purge   │ │ Std/Prem posts         │
-              │   followers' ZSETs   │ │ ScyllaDB only     │ │ Deleted: remove from  │
-              │ Vip → ZADD into      │ │ (Redis: eventual) │ │ following:set, prune  │
-              │   timeline:vip:{}    │ │                   │ │ Std/Prem posts         │
-              └──────────────────────┘ └───────────────────┘ └────────────────────────┘
-                             │                 │                       │
-                    ┌────────▼─────────────────▼───────────────────────▼────────────┐
-                    │                     Redis (hot layer)                         │
-                    │  timeline:feed:{profile_id}   ZSET  (per-follower materialized)│
-                    │  timeline:vip:{author_id}     ZSET  (per-VIP-author registry) │
-                    │  timeline:following:{id}      SET   (following list cache)    │
-                    │  timeline:tier:{author_id}    STRING (author tier cache)      │
-                    │  timeline:warm:{profile_id}   STRING (warm flag + TTL)        │
-                    └─────────────────────────────────────────────────────────────┬─┘
-                                                                                  │ cold-start
-                    ┌─────────────────────────────────────────────────────────────▼─┐
-                    │                  ScyllaDB (durable cold store)                │
-                    │  timeline.feed_items_by_profile  (per-follower feed TWCS)    │
-                    │  timeline.posts_by_author        (per-author reverse index)  │
-                    └───────────────────────────────────────────────────────────────┘
-                                                                │
-                    ┌───────────────────────────────────────────▼────────────────────┐
-                    │                   gRPC (GetFollowingFeed)                      │
-                    │                        ↕ timeline.proto                        │
-                    │                      BFF / Mobile clients                      │
-                    └────────────────────────────────────────────────────────────────┘
-```
-
-### Fan-out Mode Routing
-
-Author tier is denormalized into every `post.published` Kafka event by `services/post` (sourced from `services/profile` via `services/geo-discovery`). Timeline consumes it directly — **no synchronous tier lookup on the write path**.
-
-| Tier | Fan-out mode | Write behaviour | Read behaviour |
-|------|-------------|-----------------|----------------|
-| `Standard` (0) | `Write` | Push to every follower's Redis ZSET + ScyllaDB INSERT | Serve from `timeline:feed:{profile_id}` |
-| `Premium` (1)  | `Write` | Same as Standard | Same as Standard |
-| `Vip` (2)      | `Read`  | ZADD into `timeline:vip:{author_id}` only | Merge at query time via `try_join_all` |
-
-This is a **hard domain invariant** encoded in `AuthorTier::fan_out_mode()` — not a runtime config flag.
-
-### Cold-Start Flow
-
-1. `GetFollowingFeedQuery` checks `timeline:warm:{profile_id}` existence.
-2. **Miss (first request or TTL expired):**
-   - Read regular feed from `feed_items_by_profile` (ScyllaDB).
-   - Read VIP slices from `posts_by_author` (ScyllaDB).
-   - Return merged page with `is_cold = true`.
-   - Spawn background task that reads ScyllaDB, writes to Redis ZSETs, sets warm flag.
-3. **Hit:** Pipeline Redis reads for regular feed + N VIP ZSETs, merge in-process, return `is_cold = false`.
-
-### Following Set Rebuild
-
-On cache miss for `timeline:following:{profile_id}` (e.g. after Redis eviction):
-1. Paginate `SocialGraphService.ListFollowing(profile_id)` to completion.
-2. Populate `timeline:following:{profile_id}` Redis SET.
-3. Per-author tier looked up from `timeline:tier:{author_id}` to split VIP vs regular.
-4. Cache miss on tier → conservatively route to `Standard` (no blocking; tier updated on next `post.published`).
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-1** — user-facing "Following" feed; derived, cold-start transparent |
+> | **Deployable** | `crates/apps/timeline-server` (library crate: `crates/services/timeline`) |
+> | **Datastores** | Redis (materialized feeds + VIP registries) · ScyllaDB keyspace `timeline` (durable cold store) |
+> | **Async** | publishes nothing · consumes `post.published` / `post.deleted` / `social-graph.followed` / `.unfollowed` |
+> | **Upstream callers** | `<TODO: BFF / mobile>`; calls `social-graph` (gRPC) |
+> | **Downstream deps** | Redis, ScyllaDB, Kafka, `social-graph` |
+> | **SLO** | hot-read sub-ms (Redis ZSET) · VIP write amplification O(1)/post |
 
 ---
 
-## Data Model
+## 🎯 Overview & Service Role
 
-### Redis Keys
+`timeline` provides the home feed (the "Following" tab). It aggregates posts from followed accounts
+into a ranked, paginated stream using a **hybrid fan-out-on-write / fan-out-on-read** architecture.
 
-| Key pattern | Type | Purpose | Cap / TTL |
-|-------------|------|---------|-----------|
-| `timeline:feed:{profile_id}` | ZSET | Materialized feed for Standard/Premium follows | Cap: `FEED_CAP` (default 500); no TTL |
-| `timeline:vip:{author_id}` | ZSET | Per-VIP recent post registry | Cap: `VIP_REGISTRY_CAP` (default 200); TTL: `VIP_REGISTRY_TTL_SECS` |
-| `timeline:following:{profile_id}` | SET | Following list cache for read-path routing | No TTL (rebuilt on miss) |
-| `timeline:tier:{author_id}` | STRING | Author tier cache | TTL: `TIER_CACHE_TTL_SECS` (default 3600s) |
-| `timeline:warm:{profile_id}` | STRING | Warm flag — existence signals Redis is populated | TTL: `WARM_TTL_SECS` (default 86400s) |
+The hard problem it solves is the **Celebrity Fan-out Problem**: a VIP author with millions of
+followers would, under pure fan-out-on-write, generate millions of feed writes per post. It resolves
+this by **tier-routing on the author**: Standard/Premium authors fan out to followers' Redis ZSETs;
+VIP authors never fan out — their posts land in a per-author ZSET that is merged in-process at query
+time, bounding write amplification to O(1) per post regardless of follower count.
 
-All ZSET entries are scored by `published_at_ms`. Feed ZSET members are encoded as `"{post_id}:{author_id}"` so the BFF can identify the author without a secondary lookup.
-
-### ScyllaDB Tables
-
-#### `timeline.feed_items_by_profile`
-
-Partition: `profile_id (uuid)` — per-follower feed.
-Clustering: `(published_at DESC, post_id ASC)` — recency-first, UUID v7 tie-break.
-
-```cql
-CREATE TABLE timeline.feed_items_by_profile (
-    profile_id  uuid,
-    published_at timestamp,
-    post_id     uuid,
-    author_id   uuid,
-    PRIMARY KEY (profile_id, published_at, post_id)
-) WITH CLUSTERING ORDER BY (published_at DESC, post_id ASC)
-  AND compaction = { 'class': 'TimeWindowCompactionStrategy',
-                     'compaction_window_unit': 'DAYS',
-                     'compaction_window_size': 30 }
-  AND default_time_to_live = 2592000;
-```
-
-Role: Cold-start source for regular feeds. `author_id` column enables unfollow-prune scans.
-
-#### `timeline.posts_by_author`
-
-Partition: `author_id (uuid)` — per-author reverse index.
-Clustering: `(published_at DESC, post_id ASC)`.
-
-```cql
-CREATE TABLE timeline.posts_by_author (
-    author_id   uuid,
-    published_at timestamp,
-    post_id     uuid,
-    author_tier tinyint,
-    PRIMARY KEY (author_id, published_at, post_id)
-) WITH CLUSTERING ORDER BY (published_at DESC, post_id ASC)
-  AND compaction = { 'class': 'TimeWindowCompactionStrategy', ... }
-  AND default_time_to_live = 2592000;
-```
-
-Dual role:
-1. **VIP cold-start source** — when `timeline:vip:{author_id}` is absent.
-2. **Follow-backfill source** — `FollowCreatedWorker` queries `posts_by_author` to retroactively populate a new follower's Redis feed.
+**Core objectives:** sub-ms hot reads (pre-materialized Redis ZSETs, opaque cursors); VIP write
+isolation; zero post content stored (only `(post_id, author_id, published_at_ms)` tokens — hydration is
+the client/BFF's job); cold-start transparency (Scylla served immediately, Redis warmed async,
+`is_cold` flag tells the BFF to show "loading").
 
 ---
 
-## Kafka Events Consumed
+## 📐 Architecture & Concepts
 
-| Topic | Worker | Event fields | Action |
-|-------|--------|-------------|--------|
-| `post.published` | `PostPublishedWorker` | `post_id`, `profile_id` (alias `author_id`), `author_tier`, `published_at_ms` | Fan-out to followers (Std/Prem) or register in VIP ZSET |
-| `post.deleted` | `PostDeletedWorker` | `post_id`, `profile_id`, `author_tier`, `published_at_ms` | Remove from VIP ZSET or prune from ScyllaDB |
-| `social-graph.followed` | `FollowCreatedWorker` | `actor_id` (follower), `target_id` (followee) | Backfill recent posts (Std/Prem), update following set |
-| `social-graph.unfollowed` | `FollowDeletedWorker` | `actor_id`, `target_id` | Prune posts from feed (Std/Prem), update following set |
+The gRPC surface is **query-only** — all writes arrive via Kafka workers.
 
-All workers run on the shared `run_consumer` at-least-once standard: manual offset commit after success, transient failures retried with bounded backoff then dead-lettered to `{topic}.dlq`, poison records dead-lettered immediately. All downstream writes are idempotent (ZADD is idempotent; ScyllaDB upserts via `INSERT`). See the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard).
+```
+Kafka: post.published │ post.deleted │ social-graph.followed/unfollowed
+   ▼                    ▼                ▼
+PostPublishedWorker  PostDeletedWorker  Follow{Created,Deleted}Worker
+ (Std/Prem → fan-out  (VIP → ZREM;       (Created → add to following set,
+  to followers' ZSETs;  Std/Prem → Scylla  backfill Std/Prem posts;
+  VIP → ZADD vip:{})    purge)             Deleted → prune)
+   └─────────────────────┬──────────────────────┘
+                         ▼
+   Redis: timeline:feed:{profile}  ZSET (per-follower) · timeline:vip:{author} ZSET
+          timeline:following:{id}  SET · timeline:tier:{author} · timeline:warm:{profile}
+                         ▼ cold-start
+   ScyllaDB: timeline.feed_items_by_profile (TWCS) · timeline.posts_by_author (reverse index)
+                         ▼
+   gRPC TimelineService.GetFollowingFeed ─► BFF / mobile
+```
+
+**Fan-out routing** (a hard domain invariant in `AuthorTier::fan_out_mode()`, **not** a config flag):
+
+| Tier | Mode | Write | Read |
+|---|---|---|---|
+| `Standard` (0) | `Write` | push to every follower ZSET + Scylla INSERT | serve `timeline:feed:{profile}` |
+| `Premium` (1) | `Write` | same as Standard | same |
+| `Vip` (2) | `Read` | ZADD `timeline:vip:{author}` only | merge at query time (`try_join_all`) |
+
+Author tier is denormalized into every `post.published` event — **no synchronous tier lookup on the
+write path**. ZSET members encode `"{post_id}:{author_id}"` so the BFF identifies the author without a
+secondary lookup.
+
+> **Invariants:** VIP authors never fan out (write amplification O(1)/post); cold-start returns Scylla
+> data with `is_cold=true` and warms Redis async; following-set rebuild on Redis miss paginates
+> `SocialGraphService.ListFollowing` and conservatively routes unknown tiers to `Standard`.
 
 ---
 
-## gRPC API
+## 📊 Service Level Objectives (SLO)
 
-**Package:** `timeline.v1`
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| `GetFollowingFeed` p99 — warm (Redis) | `< <TODO> ms` | 1h | gRPC histogram |
+| Cold-start fallback p99 (Scylla) | `< <TODO> ms` | 1h | Scylla read histogram |
+| Fan-out ingest lag (`post.published`) | `< <TODO> s` | live | consumer-group lag |
+| VIP write amplification | O(1) per post | — | invariant (`fan_out_mode`) |
 
-### `TimelineService.GetFollowingFeed`
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
+
+---
+
+## 🔗 Dependencies & Blast Radius
+
+**Downstream:**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| Redis | hot feed + VIP registries | warm reads fail | **Soft** — cold-start path serves from Scylla |
+| ScyllaDB (`timeline`) | durable cold store | cold-start + ingest fail | **Hard** for cold reads; ingest retries |
+| Kafka | fan-out ingest | feed stops updating | **Soft** — existing feed served |
+| `social-graph` (gRPC) | following-set rebuild | rebuild on Redis miss fails | **Soft** — boots lazily; `TML-3001` retryable |
+
+**Upstream (blast radius):**
+
+| Caller | Uses | Impact if `timeline` is down |
+|---|---|---|
+| `<TODO: BFF / mobile>` | `GetFollowingFeed` | the Following home feed stops loading |
+
+> **Critical path?** Yes for the home-feed surface; it is a derived read-model, so an outage degrades
+> the feed but not posting/social actions.
+
+---
+
+## 🔌 Public Interfaces & API Contract
+
+### gRPC — `timeline.v1.TimelineService`
 
 ```protobuf
 rpc GetFollowingFeed(GetFollowingFeedRequest) returns (GetFollowingFeedResponse);
 
-message GetFollowingFeedRequest {
-    string profile_id  = 1;  // UUID of the requesting user
-    int32  limit       = 2;  // Page size (clamped to MAX_PAGE_SIZE)
-    string page_token  = 3;  // Opaque cursor from previous response
-}
-
-message GetFollowingFeedResponse {
-    repeated FeedItem items          = 1;
-    string            next_page_token = 2;  // Empty when no more pages
-    bool              is_cold         = 3;  // True when served from ScyllaDB
-}
-
-message FeedItem {
-    string post_id         = 1;
-    string author_id       = 2;
-    int64  published_at_ms = 3;  // Unix epoch milliseconds
-}
+message GetFollowingFeedRequest  { string profile_id=1; int32 limit=2; string page_token=3; }
+message GetFollowingFeedResponse { repeated FeedItem items=1; string next_page_token=2; bool is_cold=3; }
+message FeedItem { string post_id=1; string author_id=2; int64 published_at_ms=3; }
 ```
 
-**Cursor format:** `base64url("{published_at_ms}:{post_id_hyphenated}")` — opaque to clients; decode only server-side.
+> **Wire contract:** the cursor is `base64url("{published_at_ms}:{post_id_hyphenated}")` — opaque to
+> clients, decoded server-side only. `limit` is clamped to `TIMELINE_MAX_PAGE_SIZE`. `is_cold=true` means
+> the page was served from ScyllaDB while Redis warms asynchronously.
 
----
+### Rust ports (hexagonal contract)
 
-## Configuration (Environment Variables)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TIMELINE_FEED_CAP` | `500` | Max entries per follower's Redis ZSET |
-| `TIMELINE_VIP_REGISTRY_CAP` | `200` | Max entries per VIP author's ZSET |
-| `TIMELINE_BACKFILL_LIMIT` | `100` | Max posts to backfill on follow |
-| `TIMELINE_WARM_TTL_SECS` | `86400` | Warm flag TTL (24 h) |
-| `TIMELINE_TIER_CACHE_TTL_SECS` | `3600` | Author tier cache TTL (1 h) |
-| `TIMELINE_VIP_REGISTRY_TTL_SECS` | `604800` | VIP ZSET TTL (7 days) |
-| `TIMELINE_MAX_PAGE_SIZE` | `50` | Maximum allowed page size for GetFollowingFeed |
-| `TIMELINE_MAX_VIP_MERGE_SOURCES` | `50` | Max VIP ZSETs merged per request |
-| `TIMELINE_SOCIAL_GRAPH_PAGE_SIZE` | `500` | Pagination size for social-graph ListFollowers/ListFollowing |
-| `TIMELINE_SOCIAL_GRAPH_ENDPOINT` | `http://social-graph:50051` | gRPC endpoint for services/social-graph |
-| `TIMELINE_KAFKA_GROUP_POST_PUBLISHED` | `timeline-post-published` | Consumer group ID |
-| `TIMELINE_KAFKA_GROUP_POST_DELETED` | `timeline-post-deleted` | Consumer group ID |
-| `TIMELINE_KAFKA_GROUP_SG_FOLLOWED` | `timeline-sg-followed` | Consumer group ID |
-| `TIMELINE_KAFKA_GROUP_SG_UNFOLLOWED` | `timeline-sg-unfollowed` | Consumer group ID |
-
-Standard ScyllaDB, Redis, and Kafka connection variables from `crates/shared/storage/` apply.
-
----
-
-## Error Codes
-
-| Code | Variant | HTTP | Description |
-|------|---------|------|-------------|
-| `TML-1001` | `FeedNotFound` | 404 | No feed found for profile |
-| `TML-2001` | `FanOutFailed` | 500 | Write fan-out dispatch failure |
-| `TML-2002` | `VipRegistryWriteFailed` | 500 | VIP ZSET write failure |
-| `TML-3001` | `SocialGraphClientError` | 500 | gRPC call to social-graph failed (retryable) |
-| `TML-3002` | `SocialGraphInvalidId` | 500 | Invalid profile ID in social-graph response |
-| `TML-4001` | `ColdStartFailed` | 500 | ScyllaDB cold-start read failure |
-| `TML-5001` | `ScriptReturnInvalid` | 500 | Lua script returned unexpected format |
-| `TML-5002` | `BackfillFailed` | 500 | Follow-backfill write failure |
-| `TML-6001` | `InvalidPageToken` | 422 | Malformed or expired pagination cursor |
-| `TML-9001` | `InvalidPostId` | 422 | Post UUID parse failure |
-| `TML-9002` | `InvalidProfileId` | 422 | Profile UUID parse failure |
-| `TML-9003` | `InvalidAuthorId` | 422 | Author UUID parse failure |
-| `TML-9004` | `DomainViolation` | 422 | Generic domain constraint violation |
-
-Shared storage errors inherit their codes from `crates/shared/storage/postgres` and `crates/shared/storage/scylla`.
-
----
-
-## Module Structure
-
-```
-src/
-├── lib.rs
-├── config/mod.rs              # TimelineConfig — from_env()
-├── error.rs                   # TimelineError + AppError impl
-├── domain/
-│   ├── aggregate/
-│   │   └── feed_entry.rs      # FeedEntry { post_id, author_id, published_at_ms }
-│   └── value_object/
-│       ├── author_id.rs       # AuthorId(Uuid)
-│       ├── author_tier.rs     # AuthorTier enum + FanOutMode
-│       ├── cursor.rs          # FeedCursor — base64url encode/decode
-│       ├── post_id.rs         # PostId(Uuid)
-│       └── profile_id.rs      # ProfileId(Uuid)
-├── application/
-│   ├── command/
-│   │   ├── ingest_post_published.rs  # IngestPostPublishedCommand + Handler
-│   │   ├── remove_post.rs            # RemovePostCommand + Handler
-│   │   ├── backfill_follow.rs        # BackfillFollowCommand + Handler
-│   │   └── prune_follow.rs           # PruneFollowCommand + Handler
-│   ├── query/
-│   │   └── get_following_feed.rs     # GetFollowingFeedQuery + Handler
-│   └── port/
-│       ├── feed_store.rs             # FeedStore trait (Redis hot layer)
-│       ├── vip_registry.rs           # VipRegistry trait (VIP ZSET)
-│       ├── tier_cache.rs             # TierCache trait (author tier + warm flag)
-│       ├── following_store.rs        # FollowingStore trait (following set)
-│       ├── feed_repository.rs        # FeedRepository trait (ScyllaDB cold layer)
-│       ├── author_post_repository.rs # AuthorPostRepository trait
-│       └── social_graph_client.rs    # SocialGraphClient trait (gRPC)
-└── infrastructure/
-    ├── cache/
-    │   ├── redis_feed_store.rs       # RedisFeedStore (Lua ZADD+cap+prefix-remove)
-    │   ├── redis_vip_registry.rs     # RedisVipRegistry (Lua ZADD+cap+TTL)
-    │   ├── redis_tier_cache.rs       # RedisTierCache (GET/SET with EX)
-    │   └── redis_following_store.rs  # RedisFollowingStore (SADD/SREM/SMEMBERS)
-    ├── persistence/
-    │   ├── model/
-    │   │   ├── feed_item_row.rs      # ScyllaDB row → FeedEntry deserialization
-    │   │   └── author_post_row.rs    # ScyllaDB row → FeedEntry deserialization
-    │   ├── scylla_feed_repository.rs
-    │   └── scylla_author_post_repository.rs
-    ├── client/
-    │   └── social_graph_grpc_client.rs  # SocialGraphGrpcClient (paginated gRPC)
-    ├── grpc/
-    │   ├── handler/
-    │   │   └── timeline_handler.rs   # TimelineServiceHandler<QB>
-    │   └── server.rs                 # serve() — wires all deps + spawns workers
-    └── worker/
-        ├── post_published_worker.rs
-        ├── post_deleted_worker.rs
-        ├── follow_created_worker.rs
-        └── follow_deleted_worker.rs
+```rust
+pub trait FeedStore: Send + Sync { /* Redis hot ZSET: add/cap/prefix-remove/range */ }
+pub trait VipRegistry: Send + Sync { /* per-VIP ZSET (ZADD+cap+TTL) */ }
+pub trait TierCache: Send + Sync { /* author tier + warm flag */ }
+pub trait FollowingStore: Send + Sync { /* following set (SADD/SREM/SMEMBERS) */ }
+pub trait FeedRepository / AuthorPostRepository: Send + Sync { /* ScyllaDB cold layer */ }
+pub trait SocialGraphClient: Send + Sync { /* paginated gRPC to social-graph */ }
 ```
 
+### Error contract (`TML-xxxx`)
+
+| Code | Variant | HTTP |
+|---|---|---|
+| TML-1001 | `FeedNotFound` | 404 |
+| TML-2001/2002 | `FanOutFailed` / `VipRegistryWriteFailed` | 500 |
+| TML-3001/3002 | `SocialGraphClientError` (retryable) / `SocialGraphInvalidId` | 500 |
+| TML-4001 | `ColdStartFailed` | 500 |
+| TML-5001/5002 | `ScriptReturnInvalid` / `BackfillFailed` | 500 |
+| TML-6001 | `InvalidPageToken` | 422 |
+| TML-9001..9004 | invalid ids / domain violation | 422 |
+
 ---
 
-## Local Development
+## 📨 Events & Async Contract
 
-```bash
-# Run ScyllaDB + Redis + Kafka via Docker
-docker compose up -d scylladb redis kafka
+**Publishes:** none — `timeline` is a pure read-model materializer.
 
-# Apply CQL migrations
-cqlsh < migrations/0001_create_keyspace.cql
-cqlsh < migrations/0002_create_feed_items_by_profile_table.cql
-cqlsh < migrations/0003_create_posts_by_author_table.cql
+**Consumes:**
 
-# Type-check
-cargo check -p timeline
+| Topic | Consumer group | Worker / action | On poison/exhaustion |
+|---|---|---|---|
+| `post.published` | `timeline-post-published` | fan-out (Std/Prem) or VIP-register | DLQ `{topic}.dlq` |
+| `post.deleted` | `timeline-post-deleted` | VIP ZREM or Scylla purge | DLQ `{topic}.dlq` |
+| `social-graph.followed` | `timeline-sg-followed` | backfill recent posts + update following set | DLQ `{topic}.dlq` |
+| `social-graph.unfollowed` | `timeline-sg-unfollowed` | prune posts + update following set | DLQ `{topic}.dlq` |
 
-# Build
-cargo build -p timeline
+> **Runtime contract (mandatory):** all workers run under `run_consumer` — manual commit after success,
+> bounded retry with backoff + jitter, DLQ on exhaustion/poison. All downstream writes are idempotent
+> (ZADD idempotent; Scylla upserts via INSERT).
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| Redis unavailable / cold | warm reads fail | **Soft** — cold-start serves Scylla (`is_cold=true`), warms async | check Redis; self-heals |
+| ScyllaDB unavailable | cold-start + ingest fail | **Hard** for cold path; ingest retries via `run_consumer` | check Scylla; drain DLQ |
+| `social-graph` unreachable at boot | following rebuild fails | lazily-connected channel — timeline still boots; `TML-3001` retryable | check social-graph health |
+| Tier cache miss | author tier unknown | conservatively routes to `Standard` (no blocking; corrected on next `post.published`) | none — self-correcting |
+| Fan-out ingest lag | feed stale | retries within budget | scale the relevant consumer |
+
+**Backpressure & limits.** `TIMELINE_FEED_CAP` (default 500) and `TIMELINE_VIP_REGISTRY_CAP` (200) bound
+ZSET size; `TIMELINE_MAX_VIP_MERGE_SOURCES` (50) caps per-request VIP merges; `TIMELINE_MAX_PAGE_SIZE`
+clamps pages.
+
+---
+
+## 📦 Integration & Usage
+
+```toml
+[dependencies]
+timeline = { path = "crates/services/timeline" }
 ```
 
----
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`timeline::service::TimelineService` — `build` maps `TimelineConfig → AppConfig`, constructs the
+social-graph gRPC client over a **lazily-connected** channel (timeline boots even if social-graph isn't
+reachable yet), assembles cache/persistence adapters + CQRS buses, and spawns the four ingestion
+workers; `register` adds the gRPC + reflection services (query-only surface); `health_probes` checks
+Scylla/Redis.
 
-## 🚀 Deployment
-
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `timeline::service::TimelineService`. `build` maps `TimelineConfig` →
-`AppConfig`, constructs the social-graph gRPC client (`SocialGraphGrpcClient` over
-a lazily-connected channel, so timeline boots even if social-graph isn't yet
-reachable), assembles the cache/persistence adapters and CQRS buses, and spawns
-the ingestion workers; `register` adds the gRPC + reflection services (the surface
-is query-only — writes arrive via Kafka); `health_probes` checks Scylla/Redis. The
-deployable binary is `crates/apps/timeline-server`:
+### Bootstrap (`crates/apps/timeline-server`)
 
 ```rust
 use std::net::SocketAddr;
@@ -337,3 +212,87 @@ async fn main() -> anyhow::Result<()> {
     service_runtime::serve::<TimelineService>(addr).await
 }
 ```
+
+---
+
+## ⚙️ Configuration & Runtime Environment
+
+### `timeline`-specific variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `TIMELINE_FEED_CAP` | `500` | Max entries per follower's Redis ZSET. |
+| `TIMELINE_VIP_REGISTRY_CAP` | `200` | Max entries per VIP author ZSET. |
+| `TIMELINE_BACKFILL_LIMIT` | `100` | Max posts backfilled on follow. |
+| `TIMELINE_WARM_TTL_SECS` | `86400` | Warm-flag TTL (24 h). |
+| `TIMELINE_TIER_CACHE_TTL_SECS` | `3600` | Author tier cache TTL. |
+| `TIMELINE_VIP_REGISTRY_TTL_SECS` | `604800` | VIP ZSET TTL (7 d). |
+| `TIMELINE_MAX_PAGE_SIZE` | `50` | Max page size. |
+| `TIMELINE_MAX_VIP_MERGE_SOURCES` | `50` | Max VIP ZSETs merged per request. |
+| `TIMELINE_SOCIAL_GRAPH_PAGE_SIZE` | `500` | Pagination size for social-graph lists. |
+| `TIMELINE_SOCIAL_GRAPH_ENDPOINT` | `http://social-graph:50051` | social-graph gRPC endpoint. |
+| `TIMELINE_KAFKA_GROUP_*` | `timeline-*` | Consumer group IDs (post-published/deleted, sg-followed/unfollowed). |
+
+> Standard ScyllaDB / Redis / Kafka connection variables from the shared storage crates apply.
+> `TIMELINE_GRPC_ADDR` defaults to `0.0.0.0:50060`.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `0001_create_keyspace.cql` → `0002_create_feed_items_by_profile_table.cql` →
+  `0003_create_posts_by_author_table.cql` against `timeline`, applied **before** first start.
+- **Stateful gotchas:** `AuthorTier::fan_out_mode()` is a hard invariant, not config — changing tier
+  semantics requires a feed rebuild. ZSET member encoding (`{post_id}:{author_id}`) and cursor format are
+  read contracts.
+- **Rollout/Rollback:** `<TODO>`; the lazily-connected social-graph channel makes boot order tolerant —
+  safe to roll.
+
+---
+
+## 📈 Telemetry, Performance & Metrics
+
+- **Runtime:** Tokio multi-thread (VIP merge uses `try_join_all`). Global tracing/OTel subscriber
+  installed before `serve`.
+
+| Signal | Why it matters | Suggested alert |
+|---|---|---|
+| `GetFollowingFeed` p99 (warm) | hot-read SLO | > SLO ⇒ page |
+| `is_cold` rate | Redis warm-coverage | sustained high ⇒ check warming / Redis evictions |
+| fan-out consumer lag | feed freshness | > threshold ⇒ scale consumers |
+| `TML-3001` rate | social-graph dependency health | spike ⇒ check social-graph |
+| DLQ produce rate (`{topic}.dlq`) | poison / retry-exhausted | any sustained rate ⇒ page |
+
+---
+
+## 🛠️ Local Development
+
+```bash
+docker compose up -d scylladb redis kafka     # repo-root compose
+for f in crates/services/timeline/migrations/*.cql; do cqlsh -f "$f"; done
+cargo build -p timeline && cargo clippy -p timeline --all-targets
+cargo test  -p timeline
+```
+
+---
+
+## 🚨 Troubleshooting & Runbook
+
+> Format: **symptom → root cause → mitigation.**
+
+**1. A VIP author's posts don't appear in followers' feeds.**
+Root cause: this is by design — VIP posts are *not* fanned out; they live in `timeline:vip:{author}` and
+are merged at query time. If they're missing from the merged result, check `TIMELINE_MAX_VIP_MERGE_SOURCES`
+(the follower may follow more VIPs than the merge cap) or the VIP ZSET TTL. Mitigation: confirm
+`ZCARD timeline:vip:{author}` > 0; raise the merge cap if a user follows many VIPs.
+
+**2. `GetFollowingFeed` keeps returning `is_cold=true`.**
+Root cause: the warm flag (`timeline:warm:{profile}`) keeps expiring or the async warm task is failing —
+often Redis eviction pressure or a `ScriptReturnInvalid` (TML-5001) in the warm path. Mitigation: check
+Redis `maxmemory`/eviction and the warm-task logs; the cold path is still correct (served from Scylla),
+just slower.
+
+**3. A new follow's posts don't show up (no backfill).**
+Root cause: the `social-graph.followed` event was consumed but backfill failed (`TML-5002`), or the
+followee is VIP (no backfill — merged live instead). Mitigation: check `timeline-sg-followed` lag/DLQ;
+verify the followee's tier — VIP follows are correct to skip backfill.

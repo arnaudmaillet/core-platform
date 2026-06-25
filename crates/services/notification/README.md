@@ -1,148 +1,184 @@
-# notification — Semantic Event Ingestion, Activity Feed, and Real-Time Push Engine
+# `notification` — Semantic event ingestion, durable activity feed, and real-time push
+
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-2** — derived/best-effort; feed is durable, pushes are best-effort |
+> | **Deployable** | `crates/apps/notification-server` (library crate: `crates/services/notification`) |
+> | **Datastores** | ScyllaDB keyspace `notification` (TWCS feed + counters) · Redis (collapse + unread) |
+> | **Async** | publishes nothing · consumes `engagement.reactions` / `comment.created` / `post.published` |
+> | **Upstream callers** | `<TODO: mobile / BFF (stream + feed reads)>` |
+> | **Downstream deps** | ScyllaDB, Redis, Kafka |
+> | **SLO** | unread-count read sub-ms (Redis) · feed read O(1) paginated · push best-effort |
+
+---
 
 ## 🎯 Overview & Service Role
 
-The notification service closes the user feedback loop for the location-first super-app. It ingests semantic business events from Kafka (`engagement.reactions`, `comment.created`, `post.published`), persists durable per-profile activity records to ScyllaDB, and dispatches real-time pushes to active mobile clients via a gRPC server-streaming channel.
+`notification` closes the user feedback loop. It ingests semantic business events from Kafka
+(`engagement.reactions`, `comment.created`, `post.published`), persists durable per-profile activity
+records to ScyllaDB, and dispatches real-time pushes to active clients via a gRPC server-streaming
+channel.
 
-**Critical business impact:**
-- **Activity Feed (bell icon):** O(1) paginated read with cursor-based pagination — no ALLOW FILTERING anywhere.
-- **Unread badge count:** Sub-millisecond Redis read path with ScyllaDB counter as durable fallback.
-- **Fan-out protection:** Layered write-collapse pipeline prevents celebrity partitions from saturating under 10k+ reactions/second.
-- **SRP boundary:** Stores semantic relation IDs only — no localized strings, no profile handles, no post content. UI hydration is delegated to the client/BFF.
+The hard problem it solves is **celebrity fan-out**: a post drawing 10k+ reactions/second would saturate
+a single ScyllaDB partition and spam the target. It resolves this with a **layered write-collapse
+pipeline** — in-batch HashMap collapse, a Redis cross-batch window for hot subjects, and an hourly
+per-subject cap — so a viral subject becomes a single, periodically-flushed activity row.
+
+**Core objectives:** O(1) cursor-paginated activity feed (no `ALLOW FILTERING`); sub-ms unread badge
+(Redis L1, Scylla counter L2 fallback); fan-out protection on celebrity partitions. **SRP:** stores
+semantic relation IDs only — no localized strings, handles, or content; UI hydration is the client's job.
 
 ---
 
 ## 📐 Architecture & Concepts
 
 ```
-                    ┌─────────────────────────────────────────────────────────────┐
-                    │                    Kafka Cluster                            │
-                    │  engagement.reactions  │  comment.created  │  post.published │
-                    └─────────┬─────────────┴──────────┬─────────┴────────┬───────┘
-                              │                         │                  │
-              ┌───────────────▼────────┐  ┌────────────▼──────┐  ┌───────▼──────────┐
-              │ ReactionNotification   │  │ CommentNotification│  │ MentionNotification│
-              │ Worker                 │  │ Worker             │  │ Worker             │
-              │                        │  │                    │  │                    │
-              │ Layer 1: in-batch      │  │ Cache comment      │  │ Cache post author  │
-              │ HashMap collapse       │  │ author → Redis     │  │ → Redis            │
-              │                        │  │                    │  │ Parse @mentions    │
-              │ Layer 2: Redis cross-  │  │ Block gate + self  │  │ from caption       │
-              │ batch window (hot      │  │ guard              │  │                    │
-              │ subjects only)         │  └─────────┬──────────┘  └────────┬───────────┘
-              │                        │            │                       │
-              │ Layer 3: hourly cap    │            │                       │
-              └──────────┬─────────────┘            │                       │
-                         │                          │                       │
-              ┌──────────▼──────────────────────────▼───────────────────────▼──────────┐
-              │                   CollapseFlushWorker                                  │
-              │  Polls notification:window_schedule ZSET every 30 s                    │
-              │  Drains settled Redis collapse windows → single ScyllaDB row           │
-              └──────────────────────────────────┬───────────────────────────────────  ┘
-                                                 │
-              ┌──────────────────────────────────▼───────────────────────────────────┐
-              │             ScyllaDB: notification.notifications_by_profile           │
-              │  TWCS 7-day windows │ 90-day TTL │ Partition: target_profile_id      │
-              │  Cluster: (created_at DESC, notification_id ASC)                     │
-              └──────────────────────────────────┬───────────────────────────────────┘
-                                                 │
-              ┌──────────────────────────────────▼───────────────────────────────────┐
-              │           gRPC Server  (NotificationService)                         │
-              │  ListNotifications  │  GetUnreadCount  │  MarkRead  │  MarkAllRead   │
-              │  StreamNotifications (server-streaming, tokio::broadcast per profile) │
-              └──────────────────────────────────────────────────────────────────────┘
+Kafka: engagement.reactions │ comment.created │ post.published
+   │                          │                 │
+ReactionNotificationWorker  CommentNotificationWorker  MentionNotificationWorker
+ (L1 in-batch collapse,     (cache comment author,    (cache post author, parse
+  L2 Redis hot window,       block-gate + self-guard)  @mentions from caption)
+  L3 hourly cap)
+   └──────────────┬──────────────────┬──────────────────┘
+                  ▼
+       CollapseFlushWorker (polls notification:window_schedule ZSET every 30s,
+                            drains settled Redis windows → single Scylla row)
+                  ▼
+   ScyllaDB notification.notifications_by_profile (TWCS 7d windows, 90d TTL,
+       PK target_profile_id, CK created_at DESC, notification_id ASC)
+                  ▼
+   gRPC NotificationService: List / GetUnreadCount / MarkRead / MarkAllRead
+                            + StreamNotifications (tokio::broadcast per profile)
 ```
 
-### Resilience Guarantees & High-Load Behavior
+> **Invariants:** `NotificationView` carries only UUIDs + enum ints (no PII/content). `MarkRead`
+> requires both `notification_id` AND `created_at_ms` (the full Scylla clustering key for a point
+> UPDATE). `read_horizon_ms` (set by `MarkAllRead`) renders everything `created_at_ms ≤ horizon` as read
+> regardless of the per-row `is_read` flag. Idempotency: dedupe claim keys
+> (`notification:dedupe:{profile}:…`) prevent a redelivered event from double-incrementing the counter.
 
-| Scenario | Behavior |
-|---|---|
-| **Celebrity fan-out (10k reactions/s)** | Layer 1 in-batch HashMap collapse (free, always on). Layer 2 Redis cross-batch 30-second window for subjects with heat > 100. Layer 3 hourly cap of 3 notifications per subject. |
-| **Redis unavailable** | Workers log a warning and proceed without the block/heat checks. ScyllaDB writes continue. The unread counter accumulates inconsistency until Redis recovers (ScyllaDB counter is the durability anchor). |
-| **ScyllaDB unavailable** | Manual-commit at-least-once: the offset is NOT committed until the write succeeds, so the message is retried (bounded backoff via `run_consumer`) and then dead-lettered. Stream pushes are best-effort. |
-| **Kafka consumer lag** | Manual offset commit after successful processing (`enable_auto_commit = false`), earliest reset. Transient failures retry with exponential backoff + jitter then dead-letter to `{topic}.dlq` — see the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard). Horizontal scaling: add consumer replicas up to the partition count of each topic. |
-| **gRPC stream slow client** | `tokio::sync::broadcast` drops old messages (capacity = `NOTIFICATION_STREAM_BUFFER_SIZE`). Client receives `RecvError::Lagged` → service terminates stream with `Status::DataLoss`. Client reconnects and re-polls `ListNotifications`. |
-| **CollapseFlushWorker crash** | Redis TTL (window TTL + 10s grace) naturally expires the key. At worst one collapse window of notifications is lost. The schedule ZSET member is NOT removed on crash, so the next worker startup will attempt a re-flush (DRAIN returns 0, no-op). |
+---
+
+## 📊 Service Level Objectives (SLO)
+
+> TIER-2: the durable feed and unread counter carry soft objectives; real-time pushes are explicitly
+> best-effort (no delivery guarantee — clients reconcile via `ListNotifications`).
+
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| `GetUnreadCount` p99 (Redis L1) | `< <TODO> ms` | 1h | gRPC histogram |
+| `ListNotifications` p99 (paginated) | `< <TODO> ms` | 1h | Scylla read histogram |
+| Ingest consumer lag | `< <TODO> s` | live | `kafka_consumer_group_lag{group=~"notification-.*"}` |
+| Feed durability | no acked notification lost | — | Scylla write + manual-commit at-least-once |
+
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
+
+---
+
+## 🔗 Dependencies & Blast Radius
+
+**Downstream:**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| ScyllaDB (`notification`) | durable feed + counters | feed writes/reads fail | **Hard** for feed; at-least-once retries |
+| Redis | collapse windows + unread L1 + block/author caches | collapse + unread degrade | **Soft** — Scylla counter is durability anchor |
+| Kafka | event ingest | new notifications stop | **Soft** — existing feed served; at-least-once on recovery |
+
+**Upstream (blast radius):**
+
+| Caller | Uses | Impact if `notification` is down |
+|---|---|---|
+| `<TODO: mobile / BFF>` | feed reads + `StreamNotifications` | the bell icon / activity feed stops updating |
+
+> **Critical path?** **No** — derived, async, best-effort. An outage degrades engagement but does not
+> block core user actions.
 
 ---
 
 ## 🔌 Public Interfaces & API Contract
 
-### Proto Service
+### gRPC — `notification.v1.NotificationService`
 
 ```protobuf
 service NotificationService {
-  rpc ListNotifications     (ListNotificationsRequest)   returns (ListNotificationsResponse);
-  rpc GetUnreadCount        (GetUnreadCountRequest)      returns (GetUnreadCountResponse);
-  rpc MarkRead              (MarkReadRequest)            returns (CommandResponse);
-  rpc MarkAllRead           (MarkAllReadRequest)         returns (CommandResponse);
-  rpc StreamNotifications   (StreamNotificationsRequest) returns (stream StreamNotificationsResponse);
+  rpc ListNotifications   (ListNotificationsRequest)   returns (ListNotificationsResponse);
+  rpc GetUnreadCount      (GetUnreadCountRequest)       returns (GetUnreadCountResponse);
+  rpc MarkRead            (MarkReadRequest)             returns (CommandResponse);  // needs notification_id + created_at_ms
+  rpc MarkAllRead         (MarkAllReadRequest)          returns (CommandResponse);  // sets read_horizon_ms
+  rpc StreamNotifications (StreamNotificationsRequest)  returns (stream StreamNotificationsResponse);
 }
 ```
 
-### Key Invariants
-
-- `NotificationView` contains **only UUIDs and enum integers**. No profile handles, avatars, or content text. The client hydrates those from profile and content services on demand.
-- `MarkReadRequest` requires both `notification_id` AND `created_at_ms` — ScyllaDB needs the full `(created_at, notification_id)` clustering key for a point UPDATE.
-- `ListNotificationsResponse.read_horizon_ms` is set by `MarkAllRead`. The client renders all notifications with `created_at_ms <= read_horizon_ms` as read, regardless of the individual `is_read` flag.
-
-### Port Traits
+### Rust ports (hexagonal contract)
 
 ```rust
-// NotificationRepository — ScyllaDB
-pub trait NotificationRepository: Send + Sync + 'static {
-    async fn insert(&self, notification: &Notification) -> Result<(), NotificationError>;
-    async fn list_paginated(&self, profile_id, limit, cursor) -> Result<(Vec<NotificationSummary>, Option<String>), NotificationError>;
-    async fn mark_read(&self, profile_id, notification_id, created_at_ms) -> Result<bool, NotificationError>;
-    async fn increment_counter(&self, profile_id) -> Result<(), NotificationError>;
-    async fn decrement_counter(&self, profile_id) -> Result<(), NotificationError>;
-    async fn reset_counter(&self, profile_id)     -> Result<(), NotificationError>;
-    async fn read_counter(&self, profile_id)      -> Result<i64, NotificationError>;
-}
-
-// UnreadCounter — Redis L1 + ScyllaDB L2
-pub trait UnreadCounter: Send + Sync + 'static {
-    async fn increment(&self, profile_id) -> Result<(), NotificationError>;
-    async fn decrement(&self, profile_id) -> Result<(), NotificationError>;
-    async fn reset(&self, profile_id)     -> Result<(), NotificationError>;
-    async fn get(&self, profile_id)       -> Result<i64, NotificationError>;
-    async fn set_read_horizon(&self, profile_id, horizon_ms) -> Result<(), NotificationError>;
-    async fn get_read_horizon(&self, profile_id) -> Result<i64, NotificationError>;
-}
-
-// BlockCache — social-graph gate
-pub trait BlockCache: Send + Sync + 'static {
-    async fn is_blocked(&self, sender, target) -> Result<bool, NotificationError>;
-}
-
-// StreamRegistry — real-time push surface
-pub trait StreamRegistry: Send + Sync + 'static {
-    fn subscribe(&self, profile_id) -> broadcast::Receiver<Arc<NotificationPayload>>;
-    fn broadcast(&self, profile_id, payload: Arc<NotificationPayload>);
-}
+pub trait NotificationRepository: Send + Sync + 'static { /* insert, list_paginated, mark_read, *_counter */ }
+pub trait UnreadCounter:          Send + Sync + 'static { /* incr/decr/reset/get + read_horizon (Redis L1 + Scylla L2) */ }
+pub trait BlockCache:             Send + Sync + 'static { /* is_blocked(sender, target) — social-graph gate */ }
+pub trait StreamRegistry:         Send + Sync + 'static { /* subscribe/broadcast (broadcast::Receiver per profile) */ }
 ```
+
+### Error contract (`NTF-xxxx`)
+
+`NTF-1xxx` lifecycle … `NTF-6001` author-cache miss (reaction notification dropped) … `NTF-9xxx`
+identifiers — via the shared `error` crate.
+
+---
+
+## 📨 Events & Async Contract
+
+**Publishes:** none — `notification` is a pure consumer/sink.
+
+**Consumes:**
+
+| Topic | Consumer group | Purpose | On poison/exhaustion |
+|---|---|---|---|
+| `engagement.reactions` | `notification-reaction-consumer` | reaction notifications (collapsed) | DLQ `{topic}.dlq` |
+| `comment.created` | `notification-comment-consumer` | comment notifications (block-gated, self-guarded) | DLQ `{topic}.dlq` |
+| `post.published` | `notification-mention-consumer` | parse `@mentions`, cache post author | DLQ `{topic}.dlq` |
+
+> **Runtime contract (mandatory):** all workers run under `run_consumer` — manual commit after success
+> (`enable_auto_commit=false`, earliest reset), bounded retry with backoff + jitter, DLQ on
+> exhaustion/poison. Scale consumer replicas up to each topic's partition count.
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| Celebrity fan-out (10k/s) | — | L1 in-batch + L2 Redis 30 s window (heat > 100) + L3 hourly cap (3/subject) | none — designed for it |
+| Redis unavailable | block/heat checks skipped | workers proceed; Scylla writes continue; unread accrues inconsistency until recovery | check Redis; Scylla counter reconciles |
+| ScyllaDB unavailable | feed writes fail | at-least-once: offset not committed → retry → DLQ; pushes best-effort | check Scylla; drain DLQ |
+| Slow stream client | `RecvError::Lagged` | `tokio::broadcast` drops old; stream ends with `Status::DataLoss` | client reconnects + re-polls `ListNotifications` |
+| CollapseFlushWorker crash | window not flushed | Redis TTL (window + 10 s grace) expires the key; schedule member stays so next startup re-drains (no-op if empty) | restart worker; at worst one window lost |
+
+**Backpressure & limits.** `NOTIFICATION_MAX_PAGE_SIZE` caps feed pages; `NOTIFICATION_STREAM_BUFFER_SIZE`
+bounds per-profile broadcast; the hourly cap and Redis collapse window bound celebrity write volume.
 
 ---
 
 ## 📦 Integration & Usage
 
 ```toml
-# Cargo.toml (service binary)
 [dependencies]
 notification = { path = "crates/services/notification" }
 ```
 
-### Bootstrap
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`notification::service::NotificationService` — `build` wires the repository, cache, broadcast registry,
+CQRS buses, and the Kafka workers; `register` adds the gRPC + reflection services; `health_probes`
+checks Scylla/Redis.
 
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `notification::service::NotificationService` (`build` wires the repository,
-cache, broadcast registry, CQRS buses, and the Kafka workers; `register` adds the
-gRPC + reflection services; `health_probes` checks Scylla/Redis). The deployable
-binary is `crates/apps/notification-server`:
+### Bootstrap (`crates/apps/notification-server`)
 
 ```rust
 use std::net::SocketAddr;
-
 use notification::service::NotificationService;
 
 #[tokio::main]
@@ -150,187 +186,95 @@ async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("NOTIFICATION_GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50055".to_owned())
         .parse()?;
-
-    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
     service_runtime::serve::<NotificationService>(addr).await
 }
-```
-
-### CQL Migrations (run in order before first boot)
-
-```bash
-cqlsh -f migrations/001_keyspace.cql
-cqlsh -f migrations/002_notifications_by_profile.cql
-cqlsh -f migrations/003_notification_unread_counters.cql
 ```
 
 ---
 
 ## ⚙️ Configuration & Runtime Environment
 
+### `notification`-specific variables (key subset)
+
+| Variable | Default | Description |
+|---|---|---|
+| `NOTIFICATION_HOT_SUBJECT_THRESHOLD` | `100` | Reactions / 5-min window to activate L2 Redis cross-batch collapse. |
+| `NOTIFICATION_COLLAPSE_WINDOW_SECS` | `30` | Redis collapse window TTL. |
+| `NOTIFICATION_COLLAPSE_FLUSH_INTERVAL_SECS` | `30` | CollapseFlushWorker poll cadence. |
+| `NOTIFICATION_MAX_PER_SUBJECT_PER_HOUR` | `3` | Hourly cap per `(target, subject, kind)`. |
+| `NOTIFICATION_UNREAD_CAP` | `99` | Max unread badge value (shows "99+"). |
+| `NOTIFICATION_DEDUPE_TTL_SECS` | `86400` | Idempotency claim TTL — must exceed worst-case redelivery window. |
+| `NOTIFICATION_MAX_PAGE_SIZE` | `50` | Feed page cap. |
+| `NOTIFICATION_STREAM_BUFFER_SIZE` | `256` | `tokio::broadcast` capacity per streaming profile. |
+
+### Inherited infrastructure variables
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SCYLLA_HOSTS` | Yes | — | Comma-separated ScyllaDB contact points (`host:port`). |
-| `SCYLLA_KEYSPACE` | No | `notification` | Default keyspace. |
-| `REDIS_URL` | Yes | — | Redis connection URL (`redis://host:port`). |
-| `KAFKA_BROKERS` | Yes | — | Comma-separated Kafka broker addresses. |
-| `NOTIFICATION_GRPC_ADDR` | No | `0.0.0.0:50056` | gRPC server bind address. |
-| `NOTIFICATION_HOT_SUBJECT_THRESHOLD` | No | `100` | Reactions per 5-minute window to classify a subject as hot and activate Redis cross-batch collapse. |
-| `NOTIFICATION_COLLAPSE_WINDOW_SECS` | No | `30` | TTL of a Redis cross-batch collapse window in seconds. |
-| `NOTIFICATION_COLLAPSE_FLUSH_INTERVAL_SECS` | No | `30` | How often `CollapseFlushWorker` polls for settled windows. |
-| `NOTIFICATION_MAX_PER_SUBJECT_PER_HOUR` | No | `3` | Maximum notifications delivered per `(target, subject, kind)` tuple per hour. |
-| `NOTIFICATION_UNREAD_CAP` | No | `99` | Maximum unread badge value stored in Redis (displays as "99+"). |
-| `NOTIFICATION_DEDUPE_TTL_SECS` | No | `86400` | TTL of the idempotency claim keys (`notification:dedupe:{profile}:…`) that prevent a redelivered event from double-incrementing the unread counter. Must exceed the worst-case redelivery window (24 h default). |
-| `NOTIFICATION_POST_AUTHOR_CACHE_TTL_SECS` | No | `604800` | TTL for `notification:pa:{post_id}` Redis entries (7 days). |
-| `NOTIFICATION_COMMENT_AUTHOR_CACHE_TTL_SECS` | No | `259200` | TTL for `notification:ca:{comment_id}` Redis entries (3 days). |
-| `NOTIFICATION_BLOCK_CACHE_TTL_SECS` | No | `300` | TTL for point-cache block-check entries (5 minutes). |
-| `NOTIFICATION_MAX_PAGE_SIZE` | No | `50` | Server-side cap on `ListNotifications` page size. |
-| `NOTIFICATION_STREAM_BUFFER_SIZE` | No | `256` | `tokio::broadcast` channel capacity per active streaming profile. |
-| `NOTIFICATION_MAX_SAMPLE_SENDERS` | No | `5` | Maximum distinct senders stored per collapse bucket. |
+| `SCYLLA_HOSTS` | **Yes** | — | ScyllaDB contact points. |
+| `SCYLLA_KEYSPACE` | No | `notification` | Keyspace. |
+| `REDIS_URL` | **Yes** | — | Redis connection URL. |
+| `KAFKA_BROKERS` | **Yes** | — | Kafka brokers. |
+| `NOTIFICATION_GRPC_ADDR` | No | `0.0.0.0:50055` | gRPC bind address. |
+
+> Full `SCYLLA_*` / `REDIS_*` / `KAFKA_*` tuning lives in the shared storage/transport crates.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `001_keyspace.cql` → `002_notifications_by_profile.cql` →
+  `003_notification_unread_counters.cql` against `notification`, applied **before** first boot.
+- **Kafka:** topics pre-created — `engagement.reactions` (key `{post}:{profile}`),
+  `comment.created`/`comment.deleted` (key `comment_id`), `post.published` (key `post_id`).
+- **Rollout/Rollback:** `<TODO>`; workers are at-least-once consumers, gRPC tier stateless — safe to roll.
 
 ---
 
 ## 📈 Telemetry, Performance & Metrics
 
-### Runtime Prerequisites
+- **Runtime:** Tokio multi-thread. Scylla 5.x+ RF=3; Redis 7.x+.
 
-- Tokio multi-thread runtime (`#[tokio::main]` with default thread count = CPU cores).
-- ScyllaDB 5.x+ with `datacenter1` replication factor 3.
-- Redis 7.x+ (Lua scripting, keyspace notifications optional).
-- Kafka 3.x+ with topics pre-created:
-  - `engagement.reactions` (partitioned by `{post_id}:{profile_id}`)
-  - `comment.created` / `comment.deleted` (partitioned by `comment_id`)
-  - `post.published` (partitioned by `post_id`)
-
-### Key OTel Metrics (Prometheus labels)
-
-| Metric | Type | Description |
+| Signal | Why it matters | Suggested alert |
 |---|---|---|
-| `notification_written_total` | Counter | Notifications persisted to ScyllaDB. Label: `kind`. |
-| `notification_suppressed_total` | Counter | Notifications dropped. Labels: `reason` (`blocked`, `self`, `capped`, `cache_miss`). |
-| `notification_collapse_batch_size` | Histogram | Events collapsed per batch flush. |
-| `notification_collapse_window_count` | Counter | Cross-batch Redis windows flushed by `CollapseFlushWorker`. |
-| `notification_unread_cache_hit_total` | Counter | Redis hits on unread counter. |
-| `notification_unread_cache_miss_total` | Counter | Falls back to ScyllaDB counter read. |
-| `notification_stream_broadcast_total` | Counter | Payloads broadcast to active gRPC streams. |
-| `notification_stream_lagged_total` | Counter | Streams terminated due to receiver lag. |
-
-### Recommended Alerts
-
-```yaml
-- alert: NotificationWriteErrorRate
-  expr: rate(notification_suppressed_total{reason="write_error"}[5m]) > 0.01
-  severity: critical
-
-- alert: CollapseFlushWorkerStopped
-  expr: increase(notification_collapse_window_count[5m]) == 0
-        and increase(notification_written_total[5m]) > 100
-  severity: warning
-
-- alert: KafkaConsumerLag
-  expr: kafka_consumer_group_lag{group=~"notification-.*"} > 10000
-  severity: warning
-```
+| `notification_suppressed_total{reason="write_error"}` | feed durability | rate > 0.01 ⇒ critical |
+| `notification_collapse_window_count` (vs `_written_total`) | flush worker health | flush == 0 while writes > 100 ⇒ warning |
+| `kafka_consumer_group_lag{group=~"notification-.*"}` | ingest freshness | > 10 000 ⇒ warning |
+| `notification_stream_lagged_total` | slow-client churn | spike ⇒ investigate buffer/clients |
+| `notification_unread_cache_miss_total` | Redis L1 health | sustained ⇒ check Redis |
 
 ---
 
-## 🛠️ Local Development & Contribution
-
-### Prerequisites
+## 🛠️ Local Development
 
 ```bash
-docker compose up -d scylla redis kafka
-```
-
-### Build & Check
-
-```bash
-# Build
-cargo build -p notification
-
-# Format
-cargo fmt -p notification
-
-# Lint
-cargo clippy -p notification -- -D warnings
-
-# Run CQL migrations (requires cqlsh in PATH)
-cqlsh -f crates/services/notification/migrations/001_keyspace.cql
-cqlsh -f crates/services/notification/migrations/002_notifications_by_profile.cql
-cqlsh -f crates/services/notification/migrations/003_notification_unread_counters.cql
-
-# Start service
-NOTIFICATION_GRPC_ADDR=0.0.0.0:50056 \
-SCYLLA_HOSTS=127.0.0.1:9042 \
-REDIS_URL=redis://127.0.0.1:6379 \
-KAFKA_BROKERS=127.0.0.1:9092 \
-  cargo run -p notification
-```
-
-### Sending a test gRPC call
-
-```bash
-# List notifications for a profile
-grpcurl -plaintext \
-  -d '{"profile_id": "018f..."}' \
-  127.0.0.1:50056 \
-  notification.v1.NotificationService/ListNotifications
-
-# Open a streaming subscription
-grpcurl -plaintext \
-  -d '{"profile_id": "018f..."}' \
-  127.0.0.1:50056 \
-  notification.v1.NotificationService/StreamNotifications
+docker compose up -d scylla redis kafka       # repo-root compose
+for f in crates/services/notification/migrations/*.cql; do cqlsh -f "$f"; done
+cargo build -p notification && cargo clippy -p notification -- -D warnings
+cargo test  -p notification
+# Smoke: grpcurl -plaintext -d '{"profile_id":"018f..."}' 127.0.0.1:50055 notification.v1.NotificationService/ListNotifications
 ```
 
 ---
 
 ## 🚨 Troubleshooting & Runbook
 
-### 1. Post author cache miss — reaction notifications not appearing
+> Format: **symptom → root cause → mitigation.**
 
-**Symptom:** `NTF-6001` in logs; reaction notifications are silently dropped for a post.
+**1. `NTF-6001`: reaction notifications silently dropped for a post.**
+Root cause: `ReactionNotificationWorker` reads `notification:pa:{post_id}` (populated by
+`MentionNotificationWorker` on `post.published`) before writing; the key is absent if the mention worker
+lags or the post predates deployment. Mitigation: check `notification-mention-consumer` lag; replay with
+`auto.offset.reset=earliest`; for immediate recovery `SET notification:pa:{post_id} {author} EX 604800`.
 
-**Root cause:** `ReactionNotificationWorker` looks up `notification:pa:{post_id}` before writing a REACTION notification. This key is populated by `MentionNotificationWorker` when it processes `post.published`. If the mention worker has consumer lag or the post was published before the notification service was deployed, the key is absent.
+**2. Unread badge out of sync after Mark-All-Read.**
+Root cause: Redis evicted (no persistence) or `MarkAllRead` reset Redis but failed before the Scylla
+counter row. Mitigation: read the durable counter
+(`SELECT unread_count FROM notification.notification_unread_counters WHERE target_profile_id = <uuid>`),
+then `DEL notification:unread:{profile_id}` — the next `GetUnreadCount` repopulates L1 from Scylla.
 
-**Mitigation:**
-1. Check `MentionNotificationWorker` consumer lag: `kafka-consumer-groups.sh --describe --group notification-mention-consumer`.
-2. If lag is high, restart the mention worker consumer group with `auto.offset.reset=earliest` to replay.
-3. For immediate recovery, manually SET the key in Redis:
-   ```bash
-   redis-cli SET "notification:pa:{post_id}" "{author_profile_id}" EX 604800
-   ```
-
----
-
-### 2. Unread count badge out of sync
-
-**Symptom:** The Redis unread counter shows a different value than what the user sees after marking all as read.
-
-**Root cause:** Redis was evicted (no persistence) or the `MarkAllRead` command failed after resetting Redis but before deleting the ScyllaDB counter row.
-
-**Mitigation:**
-1. Query the ScyllaDB counter directly:
-   ```cql
-   SELECT unread_count FROM notification.notification_unread_counters
-   WHERE target_profile_id = <uuid>;
-   ```
-2. Rehydrate Redis from ScyllaDB (the `UnreadCounter::get` method does this automatically on cache miss):
-   ```bash
-   redis-cli DEL "notification:unread:{profile_id}"
-   # Next GetUnreadCount call will repopulate from ScyllaDB
-   ```
-
----
-
-### 3. CollapseFlushWorker not flushing celebrity notifications
-
-**Symptom:** `notification:window_schedule` ZSET has growing membership; `CollapseFlushWorker` writes are zero.
-
-**Root cause:** The worker lost its Tokio task (panic) or `zrangebyscore` is failing due to a Redis connection issue.
-
-**Mitigation:**
-1. Check service logs for `CollapseFlushWorker` panic messages.
-2. Verify Redis connectivity: `redis-cli ping`.
-3. Inspect the schedule ZSET: `redis-cli ZRANGEBYSCORE notification:window_schedule -inf +inf WITHSCORES LIMIT 0 10`.
-4. Manually drain a stuck window using the `DRAIN_WINDOW_SCRIPT` via `redis-cli EVAL` if the worker cannot recover within 5 minutes. The windows have a natural TTL (`collapse_window_secs + 10`) so they self-expire without double-writes.
+**3. CollapseFlushWorker not flushing celebrity windows.**
+Root cause: the Tokio task panicked, or `zrangebyscore` is failing on a Redis connection issue.
+Mitigation: check logs for the worker panic; `redis-cli ping`; inspect
+`ZRANGEBYSCORE notification:window_schedule -inf +inf WITHSCORES LIMIT 0 10`. Windows self-expire
+(`collapse_window_secs + 10`), so no double-writes occur if you wait it out.

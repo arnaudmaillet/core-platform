@@ -1,199 +1,209 @@
-# profile — High-throughput public identity layer for hyperscale read traffic
+# `profile` — High-throughput public identity layer for hyperscale read traffic
+
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-0** — public read path, fleet-wide identity resolution |
+> | **Deployable** | `crates/apps/profile-server` (library crate: `crates/services/profile`) |
+> | **Datastores** | ScyllaDB keyspace `profile` · Redis (cache-aside) |
+> | **Async** | publishes `profile.tier_changed` · consumes `account.v1.events` |
+> | **Upstream callers** | `<TODO: gateway>`, recommendation/bulk-lookup consumers, `geo-discovery` (via events) |
+> | **Downstream deps** | ScyllaDB, Redis, Kafka |
+> | **SLO** | cache-hit read p99 **< 1 ms** · cache-miss p99 **< 5 ms** |
+
+---
 
 ## 🎯 Overview & Service Role
 
-The **Profile** microservice owns all public-facing identity metadata on the platform: @handles, display names, bios, avatars, and profile classification. It is the authoritative read path for any consumer that needs to resolve a public identity — from API gateways rendering user cards to recommendation engines performing bulk lookups.
+`profile` owns all **public-facing identity metadata**: @handles, display names, bios, avatars, and
+profile classification. It is the authoritative read path for any consumer resolving a public identity
+— from gateways rendering user cards to recommendation engines doing bulk lookups. It manages a
+1-to-N relationship between a private `AccountId` and multiple independent `Profile` aggregates
+(personal, professional, brand, bot).
 
-**What it does:**
-- Manages a 1-to-N relationship between a private `AccountId` and multiple independent `Profile` aggregates (personal, professional, brand, bot).
-- Provides sub-millisecond read latency under hyperscale traffic via a Redis cache-aside layer backed by ScyllaDB.
-- Reactively masks profiles via a Kafka consumer that ingests account lifecycle events (`AccountSuspended`, `AccountDeleted`, `AccountActivated`) — no cross-service database coupling.
-- Enforces globally unique @handles with a 30-day tombstone reservation on deletion, preventing rapid identity hijacking.
+The hard problem it solves is **sub-millisecond reads at hyperscale without cross-service coupling**: a
+Redis cache-aside layer over ScyllaDB serves cache hits in < 1 ms, and account lifecycle is ingested
+**reactively** via Kafka (`AccountSuspended/Deleted/Activated` → mask/restore) so there is no
+synchronous dependency on `account` on the read path.
 
-**Strict SRP boundary:** This service contains **zero** social graph logic. Follower counts, friend relationships, and feed relevance belong to a separate bounded context.
-
-**Core technical objectives:**
-- **P99 read latency < 1 ms** for cache-hit paths (Redis `GET`).
-- **P99 read latency < 5 ms** for cache-miss paths (ScyllaDB `LocalOne` + speculative execution).
-- **Handle uniqueness** enforced via ScyllaDB LWT (`IF NOT EXISTS`) — no distributed lock required.
-- **Concurrent write safety** via optimistic locking (`IF version = ?`) on every profile update.
+**Core objectives:** P99 < 1 ms cache hit, < 5 ms cache miss; globally-unique @handles via ScyllaDB
+LWT (`IF NOT EXISTS`, no distributed lock); concurrent-write safety via optimistic `IF version = ?`.
+**Strict SRP:** zero social-graph logic — follows/friends/feeds belong elsewhere.
 
 ---
 
 ## 📐 Architecture & Concepts
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          gRPC clients (gateway, services)                   │
-└───────────────────────────────────┬─────────────────────────────────────────┘
-                                    │ tonic / ProfileService
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         ProfileServiceHandler                               │
-│              (CommandBus dispatcher | QueryBus dispatcher)                  │
-└───────────┬────────────────────────────────────────┬────────────────────────┘
-            │ Commands                               │ Queries
-            ▼                                       ▼
-┌───────────────────────┐              ┌────────────────────────────────────┐
-│  CQRS Command Bus     │              │  CQRS Query Bus                    │
-│  - CreateProfile      │              │  1. cache.get_by_id()  ─► HIT ──►  │
-│  - UpdateProfile      │              │          │ MISS                    │
-│  - ChangeHandle  (LWT)│              │          ▼                         │
-│  - UpdateAvatar       │              │  2. repo.find_by_id()              │
-│  - UpdateBanner       │              │          │                         │
-│  - SetVisibility      │              │  3. cache.set_by_id() (async)      │
-│  - VerifyProfile      │              └────────────────────────────────────┘
-│  - HideProfile        │
-│  - RestoreProfile     │        ┌─── Redis (cache-aside) ────────────────────┐
-│  - DeleteProfile      │        │  profile:v1:{id}          TTL 300 s        │
-└──────────┬────────────┘        │  handle:v1:{handle}       TTL 600 s        │
-           │                     │  account:profiles:v1:{id} TTL 120 s        │
-           ▼                     └────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                ScyllaDB  (token-aware, DC-local routing)                    │
-│                                                                             │
-│  profile.profiles            (PK: profile_id)          — full aggregate    │
-│  profile.profiles_by_account (PK: account_id, CK: created_at DESC)        │
-│  profile.profile_handles     (PK: handle)              — handle index      │
-└─────────────────────────────────────────────────────────────────────────────┘
+Hexagonal / DDD, CQRS buses, ScyllaDB durable store, Redis cache-aside, Kafka reactive masking.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Kafka topic: account.v1.events        (account event consumer)             │
-│  AccountSuspended  ──► HideProfileCommand  (masking_reason=account_suspended)│
-│  AccountDeleted    ──► HideProfileCommand  (masking_reason=account_deleted)  │
-│  AccountActivated  ──► RestoreProfileCommand                                │
-└─────────────────────────────────────────────────────────────────────────────┘
+```
+gRPC ─► ProfileServiceHandler ─► Command bus            Query bus ─► cache.get ─HIT─► return
+            │                       │                        │ MISS
+            ▼                       ▼                        ▼
+   Create/Update/ChangeHandle(LWT)/…              repo.find_by_id ─► cache.set (async)
+            │
+            ▼
+   ScyllaDB: profiles (PK profile_id) · profiles_by_account (PK account_id, CK created_at DESC)
+             profile_handles (PK handle — LWT uniqueness index)
+
+   Redis cache-aside: profile:v1:{id} TTL 300s · handle:v1:{handle} TTL 600s · account:profiles:v1:{id} TTL 120s
+
+   Kafka account.v1.events ─► AccountSuspended→HideProfile · AccountDeleted→HideProfile · AccountActivated→RestoreProfile
 ```
 
-### Resilience Guarantees & High-Load Behavior
+**Cache-key versioning.** All keys carry a `v1:` prefix — bumping the suffix performs a zero-downtime
+cache invalidation during schema migrations. **Tombstone reservation:** a deleted handle is blocked
+for 30 days via `tombstoned_at`, preventing rapid identity hijacking (`handle_is_available()` enforces
+it at the application layer).
 
-| Concern | Mechanism |
-|---|---|
-| **Cache failure** | All cache errors are treated as misses — the service always falls back to ScyllaDB. Cache set errors are logged but never surfaced to the caller. |
-| **ScyllaDB read latency** | `Fast` execution profile: `LocalOne` consistency + speculative retry (fires 1 extra request after 20 ms). Limits tail latency without sacrificing correctness on reads. |
-| **ScyllaDB write safety** | `Strict` execution profile: `LocalQuorum` consistency. Mutations are rejected if quorum is unavailable. |
-| **Handle race conditions** | `IF NOT EXISTS` LWT on `profile_handles` table. Only one writer can claim a handle even under concurrent create storms. |
-| **Optimistic write conflicts** | `IF version = ?` LWT on `profile.profiles`. Returns `PRF-4001` (retryable) to the caller. |
-| **Kafka consumer failures** | Runs on the shared `run_consumer` standard: transient dispatch failures retry with bounded backoff then dead-letter; poison records are dead-lettered to `account.v1.events.dlq`; unknown event kinds commit as no-ops. Offsets commit only after success (`enable_auto_commit = false`). See the [consumer runtime standard](../../shared/transport/README.md#consumer-runtime-standard). |
-| **Tombstone reservation** | Deleted handles are blocked for 30 days via `tombstoned_at` timestamp; `handle_is_available()` enforces this at the application layer. |
-| **Cache key versioning** | All keys prefixed with `v1:` — bumping the version suffix allows zero-downtime cache invalidation during schema migrations. |
+> **Invariants** (and where enforced): handle uniqueness via `IF NOT EXISTS` LWT on `profile_handles`;
+> optimistic concurrency via `IF version = ?` LWT on `profiles` (→ `PRF-4001`, retryable); status
+> transitions (`Active⇄Suspended⇄Hidden→Deleted`, `Deleted` terminal) in the aggregate; `profile_kind`
+> immutable after creation.
+
+---
+
+## 📊 Service Level Objectives (SLO)
+
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| Read p99 — cache hit | **< 1 ms** | 1h | `profile.grpc.request.duration` |
+| Read p99 — cache miss | **< 5 ms** | 1h | `profile.scylla.query.duration` |
+| gRPC p99 (all RPCs) | < 50 ms (page) | 1h | `profile.grpc.request.duration` |
+| Cache hit ratio (`by_id`) | > 80% | 5m | `profile.cache.hit_ratio` |
+| Durability | no acked write lost | — | Scylla `LocalQuorum` on writes |
+
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
+
+---
+
+## 🔗 Dependencies & Blast Radius
+
+**Downstream — what `profile` needs to function:**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| ScyllaDB (keyspace `profile`) | durable store | reads + writes fail | **Hard** — `UNAVAILABLE` |
+| Redis | cache-aside | cache misses to Scylla | **Soft** — all reads fall through; latency rises |
+| Kafka | reactive masking + `profile.tier_changed` | suspend/delete masking stalls | **Soft** — reads/writes unaffected |
+
+**Upstream — who depends on `profile` (blast radius if `profile` fails):**
+
+| Caller | Uses | User-visible impact if `profile` is down |
+|---|---|---|
+| `<TODO: gateway>` | `GetProfileById/ByHandle` | user cards / identity rendering fail |
+| `geo-discovery` | consumes `profile.tier_changed` | map author-tier badges go stale |
+
+> **Critical path?** **Yes** — public identity resolution is in the synchronous render path of most
+> user-facing surfaces.
 
 ---
 
 ## 🔌 Public Interfaces & API Contract
 
-### gRPC Service — `profile.v1.ProfileService`
+### gRPC — `profile.v1.ProfileService`
 
 ```protobuf
 service ProfileService {
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-    rpc CreateProfile(CreateProfileRequest)   returns (CommandResponse);
-    rpc UpdateProfile(UpdateProfileRequest)   returns (CommandResponse);
-    rpc ChangeHandle(ChangeHandleRequest)     returns (CommandResponse);
-    rpc UpdateAvatar(UpdateAvatarRequest)     returns (CommandResponse);
-    rpc UpdateBanner(UpdateBannerRequest)     returns (CommandResponse);
-    rpc SetVisibility(SetVisibilityRequest)   returns (CommandResponse);
-    rpc VerifyProfile(VerifyProfileRequest)   returns (CommandResponse);
-    rpc HideProfile(HideProfileRequest)       returns (CommandResponse);
-    rpc RestoreProfile(RestoreProfileRequest) returns (CommandResponse);
-    rpc DeleteProfile(DeleteProfileRequest)   returns (CommandResponse);
-    // ── Queries ───────────────────────────────────────────────────────────────
-    rpc GetProfileById(GetProfileByIdRequest)              returns (ProfileView);
-    rpc GetProfileByHandle(GetProfileByHandleRequest)      returns (ProfileView);
-    rpc ListProfilesByAccount(ListProfilesByAccountRequest) returns (ListProfilesByAccountResponse);
+  // Lifecycle (all return CommandResponse)
+  rpc CreateProfile(CreateProfileRequest) returns (CommandResponse);
+  rpc UpdateProfile(UpdateProfileRequest) returns (CommandResponse);
+  rpc ChangeHandle(ChangeHandleRequest) returns (CommandResponse);   // LWT
+  rpc UpdateAvatar(UpdateAvatarRequest) returns (CommandResponse);
+  rpc UpdateBanner(UpdateBannerRequest) returns (CommandResponse);
+  rpc SetVisibility(SetVisibilityRequest) returns (CommandResponse);
+  rpc VerifyProfile(VerifyProfileRequest) returns (CommandResponse);
+  rpc HideProfile(HideProfileRequest) returns (CommandResponse);
+  rpc RestoreProfile(RestoreProfileRequest) returns (CommandResponse);
+  rpc DeleteProfile(DeleteProfileRequest) returns (CommandResponse);
+  // Queries
+  rpc GetProfileById(GetProfileByIdRequest) returns (ProfileView);
+  rpc GetProfileByHandle(GetProfileByHandleRequest) returns (ProfileView);
+  rpc ListProfilesByAccount(ListProfilesByAccountRequest) returns (ListProfilesByAccountResponse);
 }
 ```
 
-### Core Domain Types (Rust)
+### Rust ports (hexagonal contract)
 
 ```rust
-// Aggregate root
-pub struct Profile {
-    id: ProfileId,                         // UUID v7
-    account_id: AccountId,                 // UUID v7, immutable
-    version: i64,                          // optimistic lock counter
-    handle: Handle,                        // validated slug [a-z0-9_.], 2-30 chars
-    display_name: DisplayName,             // max 100 chars
-    bio: Option<Bio>,                      // max 500 chars
-    avatar_url: Option<AvatarUrl>,         // HTTPS CDN URL
-    banner_url: Option<BannerUrl>,         // HTTPS CDN URL
-    website_url: Option<WebsiteUrl>,       // HTTPS URL
-    custom_links: Vec<ProfileLink>,        // max 5 entries
-    profile_kind: ProfileKind,             // Personal | Professional | Brand | Bot (immutable)
-    visibility: ProfileVisibility,         // Public | Private
-    verified: bool,
-    verification_kind: Option<VerificationKind>, // Official | Notable | Business
-    locale: Locale,                        // BCP-47
-    timezone: Option<String>,              // IANA tz
-    status: ProfileStatus,                 // Active | Suspended | Hidden | Deleted
-    masked_at: Option<DateTime<Utc>>,      // set by reactive account events
-    masking_reason: Option<MaskingReason>, // AccountSuspended | AccountDeleted | ContentPolicy
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    deleted_at: Option<DateTime<Utc>>,
-}
-
-// Port traits (injected at the composition root)
-pub trait ProfileRepository: Send + Sync + 'static { /* ... */ }
-pub trait ProfileCache:      Send + Sync + 'static { /* ... */ }
+pub trait ProfileRepository: Send + Sync + 'static { /* find_by_id, claim_handle (LWT), save (CAS), … */ }
+pub trait ProfileCache:      Send + Sync + 'static { /* get_by_id, set_by_id, invalidate_by_id, … */ }
 ```
 
-### Status Transition Matrix
+`Profile` aggregate carries `version` (optimistic lock), `handle` (slug `[a-z0-9_.]`, 2–30),
+`profile_kind` (immutable), `visibility`, `verified`, `masked_at`/`masking_reason` (set reactively).
 
-```
-Active  ──► Suspended | Hidden | Deleted
-Suspended ──► Active | Hidden | Deleted
-Hidden ──► Active | Suspended | Deleted
-Deleted  — terminal, no outgoing transitions
-```
-
-### Error Catalogue (PRF-xxxx)
+### Error contract (`PRF-xxxx`)
 
 | Code | Variant | HTTP | Retryable |
 |---|---|---|---|
 | PRF-1001 | `ProfileNotFound` | 404 | No |
 | PRF-1002 | `HandleAlreadyTaken` | 409 | No |
 | PRF-1003 | `HandleReserved` | 409 | No |
-| PRF-2001 | `ProfileNotActive` | 422 | No |
-| PRF-2002 | `InvalidStatusTransition` | 422 | No |
+| PRF-2001/2002 | `ProfileNotActive` / `InvalidStatusTransition` | 422 | No |
 | PRF-4001 | `ConcurrentModification` | 409 | **Yes** |
 | PRF-5001 | `ProfileAlreadyVerified` | 409 | No |
-| PRF-9001 | `DomainViolation` | 422 | No |
-| PRF-9002–9010 | Parse/validation errors | 422 | No |
-| SDB-* | ScyllaDB storage (delegated) | varies | varies |
-| RDB-* | Redis cache (delegated) | 500 | varies |
+| PRF-9001–9010 | domain / parse / validation | 422 | No |
+| SDB-* / RDB-* | storage (delegated) | varies | varies |
+
+---
+
+## 📨 Events & Async Contract
+
+**Publishes:**
+
+| Topic | Trigger | Key | Consumers |
+|---|---|---|---|
+| `profile.tier_changed` | author tier change (one event per affected `post_id`) | `post_id` | `geo-discovery` (card tier sync), `timeline` (tier routing, indirect) |
+
+**Consumes:**
+
+| Topic | Consumer group | Purpose | On poison/exhaustion |
+|---|---|---|---|
+| `account.v1.events` | `profile-service` | `AccountSuspended/Deleted` → `HideProfile`; `AccountActivated` → `RestoreProfile`; unknown kinds = no-op commit | DLQ `account.v1.events.dlq` |
+
+> **Runtime contract (mandatory):** the account-event consumer runs under `run_consumer` — manual
+> commit after success (`enable_auto_commit=false`), bounded retry with backoff + jitter, DLQ on
+> exhaustion/poison. Cache errors are always treated as misses; cache-set failures are logged, never
+> surfaced.
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| ScyllaDB unavailable | reads + writes fail | **Hard** — `UNAVAILABLE` | check Scylla cluster / DC |
+| Redis unavailable / cold | latency rises | **Soft** — all reads fall through to Scylla (Fast profile) | verify cache hit ratio; usually self-heals |
+| Handle LWT race | `PRF-1002` to the losing writer | correct serialization at storage layer | none — surface to user to pick another handle |
+| Account-event consumer lag | profiles not masked on suspend/delete | retries within budget; offset uncommitted | check consumer lag; re-dispatch masking if needed |
+
+**Backpressure & limits.** Writes use the Scylla **Strict** profile (`LocalQuorum`); reads use **Fast**
+(`LocalOne` + speculative retry firing 1 extra request after 20 ms) to bound tail latency.
 
 ---
 
 ## 📦 Integration & Usage
-
-### Cargo.toml
 
 ```toml
 [dependencies]
 profile = { path = "crates/services/profile" }
 ```
 
-### Bootstrap Pattern
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`profile::service::ProfileService`. `build(infra)` reads cache-TTL profiles from the `[cache]` section
+of `infrastructure.toml`, assembles repository/cache/CQRS buses, and **self-spawns the supervised
+account-event consumer**; `register` adds the gRPC + reflection services; `health_probes` checks
+Scylla/Redis. Profile is the canonical *infra-consuming* service. The integration harness drives
+`App::build` directly, so the wired graph under test is the one that ships.
 
-Library-only: all of the wiring shown previously here now lives in
-`profile::app::App::build` and `profile::service::ProfileService`, which
-implements [`service_runtime::Service`](../../platform/service-runtime/README.md).
-Profile is the canonical *infra-consuming* service:
-
-- `build(infra)` reads its cache-TTL profiles from `infra.cache()` (the `[cache]`
-  section of `infrastructure.toml`), assembles the repository, cache, and CQRS
-  buses, and **self-spawns the supervised account-event Kafka consumer** (poison
-  records dead-lettered to `account.v1.events.dlq`).
-- `register` adds the gRPC + reflection services (the handler is built from the
-  `Arc<InMemoryCommandBus>` / `Arc<InMemoryQueryBus>` the buses expose).
-- `health_probes` checks Scylla/Redis.
-
-The deployable binary is `crates/apps/profile-server`:
+### Bootstrap (`crates/apps/profile-server`)
 
 ```rust
 use std::net::SocketAddr;
-
 use profile::service::ProfileService;
 
 #[tokio::main]
@@ -201,134 +211,85 @@ async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("PROFILE_GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50052".to_owned())
         .parse()?;
-
-    // Runtime owns telemetry, infrastructure.toml load + hot-reload (incl. the
-    // [cache] TTLs profile consumes), traffic, health, and shutdown.
     service_runtime::serve::<ProfileService>(addr).await
 }
 ```
-
-The integration harness still drives `App::build` directly, so the wired graph
-under test is the one that ships.
 
 ---
 
 ## ⚙️ Configuration & Runtime Environment
 
+### Inherited infrastructure variables (key subset)
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SCYLLA_CONTACT_POINTS` | Yes | `127.0.0.1:9042` | Comma-separated list of ScyllaDB `host:port` contact points for bootstrap discovery. |
-| `SCYLLA_LOCAL_DC` | Yes | `datacenter1` | Datacenter name this process is co-located with. Must match `system.local`. Drives token-aware, DC-local routing. |
-| `SCYLLA_KEYSPACE` | No | _(none)_ | Default keyspace sent on session open. Leave unset if queries fully-qualify table names (recommended). |
-| `SCYLLA_USERNAME` | No | _(none)_ | CQL authentication username. |
-| `SCYLLA_PASSWORD` | No | _(none)_ | CQL authentication password. |
-| `SCYLLA_COMPRESSION` | No | `lz4` | Wire-protocol compression: `lz4` \| `snappy` \| `none`. |
-| `SCYLLA_CONNECT_TIMEOUT_SECS` | No | `5` | TCP+CQL handshake timeout in seconds. |
-| `SCYLLA_REQUEST_TIMEOUT_SECS` | No | `5` | Per-request timeout in seconds. |
-| `SCYLLA_STATEMENT_CACHE_CAPACITY` | No | `256` | Prepared-statement LRU cache size (entries). |
-| `REDIS_URL` | Yes | `redis://127.0.0.1:6379` | Redis connection URL (single-node, sentinel, or cluster). |
-| `REDIS_POOL_SIZE` | No | `8` | Number of Redis connections in the pool. |
-| `REDIS_CONNECT_TIMEOUT_SECS` | No | `3` | TCP connection timeout in seconds. |
-| `KAFKA_BROKERS` | Yes | `127.0.0.1:9092` | Comma-separated Kafka broker addresses. |
-| `KAFKA_CONSUMER_GROUP` | No | `profile-service` | Kafka consumer group ID. |
-| `KAFKA_AUTO_OFFSET_RESET` | No | `earliest` | Offset reset policy for new consumer groups. |
-| `PROFILE_GRPC_ADDR` | No | `0.0.0.0:50052` | Bind address for the gRPC server (read by `profile-server`). |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | _(none)_ | OpenTelemetry collector endpoint (traces + metrics). |
-| `OTEL_SERVICE_NAME` | No | `profile` | Service name reported in OTel spans and metrics. |
-| `RUST_LOG` | No | `info` | Tracing log filter (e.g. `profile=debug,scylla=warn`). |
+| `SCYLLA_CONTACT_POINTS` | **Yes** | `127.0.0.1:9042` | ScyllaDB contact points. |
+| `SCYLLA_LOCAL_DC` | **Yes** | `datacenter1` | DC for token-aware routing. |
+| `SCYLLA_KEYSPACE` | No | — | Leave unset if queries fully-qualify table names (recommended). |
+| `REDIS_URL` | **Yes** | `redis://127.0.0.1:6379` | Redis connection URL. |
+| `KAFKA_BROKERS` | **Yes** | `127.0.0.1:9092` | Kafka brokers. |
+| `KAFKA_CONSUMER_GROUP` | No | `profile-service` | account-event consumer group. |
+| `PROFILE_GRPC_ADDR` | No | `0.0.0.0:50052` | gRPC bind address. |
+
+> Full `SCYLLA_*` / `REDIS_*` / `KAFKA_*` tuning is documented in the shared storage/transport crates.
+> The `[cache]` TTL profiles are consumed from `infrastructure.toml`, not env.
+
+### Compile-time features
+- `build.rs` compiles `proto/profile/v1/*.proto` and emits the reflection descriptor set.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `crates/services/profile/migrations/000{1..4}_*.cql` against the `profile` keyspace,
+  applied **before** first start.
+- **Cache version bump:** to invalidate cache fleet-wide during a schema change, bump the `v1:` key
+  prefix — no flush, no downtime.
+- **Rollout/Rollback:** `<TODO: strategy>`; stateless service, safe to roll.
 
 ---
 
 ## 📈 Telemetry, Performance & Metrics
 
-### Runtime Prerequisites
+- **Runtime:** Tokio multi-thread. Requires a reachable contact point in `SCYLLA_LOCAL_DC` at startup;
+  Redis unavailability degrades gracefully.
 
-- **Async runtime:** Tokio multi-thread (`rt-multi-thread` feature).
-- **ScyllaDB:** Requires at least one reachable contact point in `SCYLLA_LOCAL_DC` at startup.
-- **Redis:** Requires a reachable Redis node. Cache unavailability degrades gracefully (all reads fall through to ScyllaDB).
-
-### Key OTel Metrics
-
-| Metric | Type | Labels | Alert Threshold |
-|---|---|---|---|
-| `profile.grpc.request.duration` | Histogram | `rpc`, `status_code` | P99 > 50 ms → page |
-| `profile.cache.hit_ratio` | Gauge | `namespace` (by_id / by_handle) | < 80% → investigate TTL or eviction |
-| `profile.scylla.query.duration` | Histogram | `operation` | P99 > 10 ms → page |
-| `profile.handle.claim.conflict_total` | Counter | — | Spike > 10/min → possible attack |
-| `profile.concurrent_modification_total` | Counter | — | Sustained > 0 → retry-storm risk |
-| `profile.kafka.consumer.lag` | Gauge | `partition` | > 1 000 → consumer falling behind |
-| `profile.kafka.event.processed_total` | Counter | `event_kind` | — |
-| `profile.cache.invalidation_total` | Counter | `reason` | — |
-
-### Recommended Production Alerts
-
-- **P99 gRPC latency > 50 ms** sustained for > 2 minutes → page on-call.
-- **Cache hit ratio < 70%** for `by_id` namespace → investigate Redis capacity or TTL configuration.
-- **`PRF-4001` (ConcurrentModification) rate > 5/min** → check for write hot-spots on popular profiles.
-- **Kafka consumer lag > 5 000 messages** → scale consumer replicas or investigate downstream ScyllaDB pressure.
+| Signal | Why it matters | Suggested alert |
+|---|---|---|
+| `profile.grpc.request.duration` p99 | read-path SLO | > 50 ms for 2m ⇒ page |
+| `profile.cache.hit_ratio` (`by_id`) | cache health | < 70% ⇒ investigate TTL/eviction |
+| `profile.handle.claim.conflict_total` | LWT contention | > 10/min ⇒ possible hijack attempt |
+| `profile.concurrent_modification_total` | write hot-spots | sustained > 0 ⇒ retry-storm risk |
+| `profile.kafka.consumer.lag` | masking freshness | > 5 000 ⇒ scale consumers |
 
 ---
 
-## 🛠️ Local Development & Contribution
-
-### Prerequisites
+## 🛠️ Local Development
 
 ```bash
-docker compose up -d   # starts ScyllaDB, Redis, Kafka, and an OTel collector
+docker compose up -d                          # ScyllaDB, Redis, Kafka, OTel collector
+cargo build -p profile && cargo clippy -p profile -- -D warnings
+cargo test  -p profile                        # add --features integration for live-infra tests
+for f in crates/services/profile/migrations/*.cql; do cqlsh -f "$f"; done
 ```
-
-### Build & Lint
-
-```bash
-# from workspace root
-cargo build -p profile
-cargo clippy -p profile -- -D warnings
-cargo fmt --package profile -- --check
-```
-
-### Unit Tests
-
-```bash
-cargo test -p profile
-```
-
-### Integration Tests
-
-Integration tests require live infrastructure (ScyllaDB + Redis). Apply the CQL migrations first:
-
-```bash
-# Apply CQL DDL (requires cqlsh or equivalent)
-cqlsh -f crates/services/profile/migrations/0001_create_keyspace.cql
-cqlsh -f crates/services/profile/migrations/0002_create_profiles_table.cql
-cqlsh -f crates/services/profile/migrations/0003_create_profiles_by_account_table.cql
-cqlsh -f crates/services/profile/migrations/0004_create_profile_handles_table.cql
-
-# Run integration tests
-cargo test -p profile --features integration
-```
-
-### Proto Codegen
-
-Proto files are compiled automatically by `build.rs` during `cargo build`. No manual codegen step is needed.
 
 ---
 
 ## 🚨 Troubleshooting & Runbook
 
-### 1. `PRF-1002 HandleAlreadyTaken` on `CreateProfile` even though the handle appears free
+> Format: **symptom → root cause → mitigation.**
 
-**Root cause:** A concurrent `CreateProfile` or `ChangeHandle` request won the ScyllaDB LWT race (`IF NOT EXISTS`). The `claim_handle` call in the handler returned `applied = false`.
+**1. `PRF-1002 HandleAlreadyTaken` though the handle looks free.**
+Root cause: a concurrent `CreateProfile`/`ChangeHandle` won the `IF NOT EXISTS` LWT race. Mitigation:
+correct behavior — the LWT serialized the conflict at storage; the client should prompt for a different
+handle. No manual intervention.
 
-**Mitigation:** This is correct behavior — the LWT serialized the conflict at the storage layer. The client should surface the error to the user and prompt them to choose a different handle. No manual intervention is needed.
+**2. Profile cache shows stale data after an update.**
+Root cause: a parallel read repopulated the cache from an in-flight Scylla query that returned the old
+version pre-quorum. Mitigation: the 300 s TTL bounds staleness; for immediate consistency
+`DEL profile:v1:{id}` and `DEL handle:v1:{handle}`, then re-read to repopulate.
 
-### 2. Profile cache shows stale data after an update
-
-**Root cause:** The cache invalidation step (`cache.invalidate_by_id`) completed, but a parallel read populated the cache from an in-flight ScyllaDB query that returned the old version before the write quorum was achieved.
-
-**Mitigation:** Redis TTLs (300 s) bound the staleness window. For immediate consistency, call `DEL profile:v1:{id}` and `DEL handle:v1:{handle}` manually in redis-cli, then re-read the profile to trigger a fresh cache population from ScyllaDB.
-
-### 3. Kafka consumer stops processing account events after a ScyllaDB node failure
-
-**Root cause:** The `HideProfileCommand` or `RestoreProfileCommand` handler returned a `Storage` error, which the consumer logged and skipped. The consumer continued to the next message, but the affected profiles were not masked.
-
-**Mitigation:** Monitor `profile.kafka.event.processed_total` vs `profile.kafka.consumer.lag`. If lag is not growing but some profiles remain unmasked, query ScyllaDB directly for the affected `account_id` and dispatch the masking commands manually via the admin gRPC endpoint or a one-shot migration script. Long-term: implement a Kafka dead-letter topic for failed masking events.
+**3. Account events stop masking profiles after a Scylla node failure.**
+Root cause: a `HideProfile`/`RestoreProfile` handler returned `Storage`; the message retries/dead-letters.
+Mitigation: watch `profile.kafka.consumer.lag` and `account.v1.events.dlq`; for stuck profiles, query
+Scylla by `account_id` and re-dispatch masking via admin tooling.
