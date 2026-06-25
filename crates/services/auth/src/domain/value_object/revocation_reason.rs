@@ -1,0 +1,54 @@
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
+use crate::error::AuthError;
+
+/// Why a session was revoked — carried on the `SessionRevoked` event for audit
+/// and anomaly analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RevocationReason {
+    /// User-initiated single-session sign-out.
+    Logout,
+    /// Account-wide sign-out (generation bump).
+    GlobalLogout,
+    /// A rotated refresh token was re-presented — treated as compromise.
+    RefreshReuse,
+    /// Operator / security action.
+    Administrative,
+}
+
+impl RevocationReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Logout => "logout",
+            Self::GlobalLogout => "global_logout",
+            Self::RefreshReuse => "refresh_reuse",
+            Self::Administrative => "administrative",
+        }
+    }
+}
+
+impl fmt::Display for RevocationReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl TryFrom<&str> for RevocationReason {
+    type Error = AuthError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        match s {
+            "logout" => Ok(Self::Logout),
+            "global_logout" => Ok(Self::GlobalLogout),
+            "refresh_reuse" => Ok(Self::RefreshReuse),
+            "administrative" => Ok(Self::Administrative),
+            other => Err(AuthError::DomainViolation {
+                field: "revocation_reason".into(),
+                message: format!("unknown revocation reason: '{other}'"),
+            }),
+        }
+    }
+}

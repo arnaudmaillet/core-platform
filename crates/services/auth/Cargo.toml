@@ -1,0 +1,86 @@
+[package]
+name        = "auth"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Auth microservice — issuance, session lifecycle, and IdP brokering boundary (identity SoR lives in `account`)."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# Only the canonical error namespace (AUT-XXXX) lives here today. Subsequent
+# phases add: domain/ (Phase 2), application/ + ports (Phase 3), infrastructure/
+# adapters incl. Keycloak/Postgres/Redis (Phase 4), and the service composition
+# root + tonic wiring (Phase 5). Dependencies grow per phase — kept minimal here
+[dependencies]
+# ── Contracts & runtime ───────────────────────────────────────────────────────
+auth-api        = { workspace = true }
+service-runtime = { workspace = true }
+anyhow          = { workspace = true }
+
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error            = { workspace = true }
+validate-core    = { workspace = true }
+validation       = { workspace = true }
+postgres-storage = { workspace = true }
+
+# ── Shared platform crates ────────────────────────────────────────────────────
+cqrs          = { workspace = true }
+transport     = { workspace = true }
+redis-storage = { workspace = true }
+account-api   = { workspace = true }
+async-trait   = { workspace = true }
+
+# ── Domain types ──────────────────────────────────────────────────────────────
+serde      = { workspace = true }
+serde_json = { workspace = true }
+uuid       = { workspace = true }
+chrono     = { workspace = true }
+
+# ── Persistence / cache / transport adapters (Phase 4) ────────────────────────
+sqlx             = { workspace = true }
+fred             = { workspace = true }
+tonic            = { workspace = true }
+tonic-reflection = { workspace = true }
+prost-types      = { workspace = true }
+
+# ── Token minter & IdP broker (Phase 4/7) ─────────────────────────────────────
+jsonwebtoken = { workspace = true }
+reqwest      = { workspace = true }
+rand         = { workspace = true }
+sha2         = { workspace = true }
+base64       = { workspace = true }
+# P-256 public-key parsing for JWKS publication (key-ring rotation, Phase 7).
+p256         = { version = "0.13", features = ["pem", "pkcs8"] }
+
+# ── Observability ─────────────────────────────────────────────────────────────
+tracing = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = { workspace = true }
+http      = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs). Off
+# by default so `cargo test -p auth` stays a fast, infra-free unit run; the live
+# suite boots real Postgres + Redis containers and is opt-in via
+# `cargo test -p auth --features integration-auth`.
+integration-auth = []
+
+[dev-dependencies]
+# Async runtime for the application-layer handler tests (#[tokio::test]).
+tokio        = { workspace = true }
+# Ephemeral P-256 keypair generation for tests — no key material is ever
+# hardcoded. `rand_core` 0.6 supplies the OsRng that `p256`'s ECDSA keygen wants
+# (the workspace `rand` 0.9 uses an incompatible rand_core major).
+rand_core    = { version = "0.6", features = ["getrandom"] }
+# Cross-crate edge-token verification (tests/edge_token_verify.rs) drives the same
+# `auth-context` decoder every downstream service uses — no container needed.
+auth-context = { workspace = true }
+# Live integration suite (feature = "integration-auth"): shared container
+# orchestration + `.sql` migration runner + `await_until`.
+test-support = { workspace = true }
+async-trait  = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+serde        = { workspace = true }

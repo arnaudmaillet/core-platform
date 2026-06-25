@@ -1,0 +1,428 @@
+//! In-memory fakes for every outbound port, plus a [`Fixture`] that wires them
+//! into the handlers. Test-only (`#[cfg(test)]`) — they prove the application
+//! layer works against the port contracts with no real backend, which is exactly
+//! what makes the abstraction credible before the Phase 4 adapters exist.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use chrono::{DateTime, Duration, Utc};
+use uuid::Uuid;
+
+use super::policy::SessionPolicy;
+use super::port::{
+    AccountActivation, AccountDirectory, AccountSnapshot, AuthnGrant, EventPublisher,
+    GeneratedRefresh, IdentityProvider, NormalizedClaims, RefreshTokenRepository, SessionCache,
+    SessionRepository, SubjectLinkRepository, TokenMinter,
+};
+use crate::domain::aggregate::{RefreshToken, Session, SubjectLink};
+use crate::domain::event::DomainEvent;
+use crate::domain::value_object::{
+    AccessTokenClaims, AccountId, Generation, IdpSubject, Permission, RefreshTokenHash, SessionId,
+    SessionStatus,
+};
+use crate::error::AuthError;
+
+/// A fixed reference instant for deterministic tests.
+pub fn t0() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-06-25T12:00:00Z").unwrap().with_timezone(&Utc)
+}
+
+// ─── IdentityProvider ────────────────────────────────────────────────────────
+
+pub struct StubIdentityProvider {
+    claims: Mutex<Option<NormalizedClaims>>,
+}
+
+impl StubIdentityProvider {
+    pub fn returning(issuer: &str, subject: &str) -> Self {
+        Self {
+            claims: Mutex::new(Some(NormalizedClaims {
+                issuer: issuer.to_owned(),
+                subject: subject.to_owned(),
+            })),
+        }
+    }
+
+    pub fn failing() -> Self {
+        Self { claims: Mutex::new(None) }
+    }
+}
+
+#[async_trait]
+impl IdentityProvider for StubIdentityProvider {
+    async fn authenticate(&self, _grant: AuthnGrant) -> Result<NormalizedClaims, AuthError> {
+        self.claims
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(AuthError::IdpAuthenticationFailed)
+    }
+}
+
+// ─── AccountDirectory ────────────────────────────────────────────────────────
+
+pub struct StubAccountDirectory {
+    subjects: Mutex<HashMap<IdpSubject, AccountId>>,
+    snapshots: Mutex<HashMap<AccountId, AccountSnapshot>>,
+}
+
+impl StubAccountDirectory {
+    pub fn new() -> Self {
+        Self { subjects: Mutex::new(HashMap::new()), snapshots: Mutex::new(HashMap::new()) }
+    }
+
+    /// Pre-binds a subject to a known account with the given activation + perms.
+    pub fn with_account(
+        &self,
+        subject: &IdpSubject,
+        account_id: AccountId,
+        activation: AccountActivation,
+        permissions: Vec<Permission>,
+    ) {
+        self.subjects.lock().unwrap().insert(subject.clone(), account_id);
+        self.snapshots
+            .lock()
+            .unwrap()
+            .insert(account_id, AccountSnapshot { activation, permissions });
+    }
+}
+
+#[async_trait]
+impl AccountDirectory for StubAccountDirectory {
+    async fn resolve_or_provision(&self, subject: &IdpSubject) -> Result<AccountId, AuthError> {
+        let mut subjects = self.subjects.lock().unwrap();
+        if let Some(id) = subjects.get(subject) {
+            return Ok(*id);
+        }
+        let id = AccountId::from_uuid(Uuid::now_v7());
+        subjects.insert(subject.clone(), id);
+        self.snapshots.lock().unwrap().insert(
+            id,
+            AccountSnapshot { activation: AccountActivation::Active, permissions: Vec::new() },
+        );
+        Ok(id)
+    }
+
+    async fn lookup(&self, account_id: &AccountId) -> Result<AccountSnapshot, AuthError> {
+        Ok(self.snapshots.lock().unwrap().get(account_id).cloned().unwrap_or(AccountSnapshot {
+            activation: AccountActivation::Active,
+            permissions: Vec::new(),
+        }))
+    }
+}
+
+// ─── SubjectLinkRepository ───────────────────────────────────────────────────
+
+pub struct InMemorySubjectLinkRepository {
+    links: Mutex<HashMap<IdpSubject, SubjectLink>>,
+}
+
+impl InMemorySubjectLinkRepository {
+    pub fn new() -> Self {
+        Self { links: Mutex::new(HashMap::new()) }
+    }
+}
+
+#[async_trait]
+impl SubjectLinkRepository for InMemorySubjectLinkRepository {
+    async fn find_by_subject(
+        &self,
+        subject: &IdpSubject,
+    ) -> Result<Option<SubjectLink>, AuthError> {
+        Ok(self.links.lock().unwrap().get(subject).cloned())
+    }
+
+    async fn save(&self, link: &SubjectLink) -> Result<(), AuthError> {
+        let mut links = self.links.lock().unwrap();
+        if links.contains_key(link.subject()) {
+            return Err(AuthError::SubjectAlreadyLinked {
+                iss: link.subject().issuer().to_owned(),
+                sub: link.subject().subject().to_owned(),
+            });
+        }
+        // Persistence does not round-trip pending events.
+        let mut stored = link.clone();
+        let _ = stored.drain_events();
+        links.insert(stored.subject().clone(), stored);
+        Ok(())
+    }
+}
+
+// ─── SessionRepository ───────────────────────────────────────────────────────
+
+pub struct InMemorySessionRepository {
+    sessions: Mutex<HashMap<SessionId, Session>>,
+}
+
+impl InMemorySessionRepository {
+    pub fn new() -> Self {
+        Self { sessions: Mutex::new(HashMap::new()) }
+    }
+
+    pub fn count(&self) -> usize {
+        self.sessions.lock().unwrap().len()
+    }
+}
+
+#[async_trait]
+impl SessionRepository for InMemorySessionRepository {
+    async fn save(&self, session: &Session) -> Result<(), AuthError> {
+        let mut stored = session.clone();
+        let _ = stored.drain_events(); // events do not survive persistence
+        self.sessions.lock().unwrap().insert(stored.id(), stored);
+        Ok(())
+    }
+
+    async fn find_by_id(&self, id: &SessionId) -> Result<Option<Session>, AuthError> {
+        Ok(self.sessions.lock().unwrap().get(id).cloned())
+    }
+
+    async fn list_active_by_account(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Vec<Session>, AuthError> {
+        Ok(self
+            .sessions
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|s| s.account_id() == *account_id && s.status() == SessionStatus::Active)
+            .cloned()
+            .collect())
+    }
+}
+
+// ─── RefreshTokenRepository ──────────────────────────────────────────────────
+
+pub struct InMemoryRefreshTokenRepository {
+    tokens: Mutex<HashMap<RefreshTokenHash, RefreshToken>>,
+}
+
+impl InMemoryRefreshTokenRepository {
+    pub fn new() -> Self {
+        Self { tokens: Mutex::new(HashMap::new()) }
+    }
+}
+
+#[async_trait]
+impl RefreshTokenRepository for InMemoryRefreshTokenRepository {
+    async fn save(&self, token: &RefreshToken) -> Result<(), AuthError> {
+        self.tokens.lock().unwrap().insert(token.token_hash().clone(), token.clone());
+        Ok(())
+    }
+
+    async fn find_by_hash(
+        &self,
+        hash: &RefreshTokenHash,
+    ) -> Result<Option<RefreshToken>, AuthError> {
+        Ok(self.tokens.lock().unwrap().get(hash).cloned())
+    }
+
+    async fn revoke_all_for_session(&self, session_id: &SessionId) -> Result<(), AuthError> {
+        // Modelled as deletion: a subsequent lookup misses, i.e. is invalid.
+        self.tokens.lock().unwrap().retain(|_, t| t.session_id() != *session_id);
+        Ok(())
+    }
+}
+
+// ─── SessionCache ────────────────────────────────────────────────────────────
+
+pub struct InMemorySessionCache {
+    generations: Mutex<HashMap<AccountId, Generation>>,
+    blacklist: Mutex<HashSet<SessionId>>,
+}
+
+impl InMemorySessionCache {
+    pub fn new() -> Self {
+        Self { generations: Mutex::new(HashMap::new()), blacklist: Mutex::new(HashSet::new()) }
+    }
+}
+
+#[async_trait]
+impl SessionCache for InMemorySessionCache {
+    async fn current_generation(&self, account_id: &AccountId) -> Result<Generation, AuthError> {
+        Ok(self.generations.lock().unwrap().get(account_id).copied().unwrap_or(Generation::INITIAL))
+    }
+
+    async fn bump_generation(&self, account_id: &AccountId) -> Result<Generation, AuthError> {
+        let mut gens = self.generations.lock().unwrap();
+        let next = gens.get(account_id).copied().unwrap_or(Generation::INITIAL).next();
+        gens.insert(*account_id, next);
+        Ok(next)
+    }
+
+    async fn blacklist_session(
+        &self,
+        session_id: &SessionId,
+        _ttl: Duration,
+    ) -> Result<(), AuthError> {
+        self.blacklist.lock().unwrap().insert(*session_id);
+        Ok(())
+    }
+
+    async fn is_blacklisted(&self, session_id: &SessionId) -> Result<bool, AuthError> {
+        Ok(self.blacklist.lock().unwrap().contains(session_id))
+    }
+}
+
+// ─── TokenMinter ─────────────────────────────────────────────────────────────
+
+pub struct StubTokenMinter {
+    issued: Mutex<HashMap<String, AccessTokenClaims>>,
+}
+
+impl StubTokenMinter {
+    pub fn new() -> Self {
+        Self { issued: Mutex::new(HashMap::new()) }
+    }
+}
+
+#[async_trait]
+impl TokenMinter for StubTokenMinter {
+    async fn mint_access(&self, claims: &AccessTokenClaims) -> Result<String, AuthError> {
+        let token = format!("access-{}", Uuid::now_v7());
+        self.issued.lock().unwrap().insert(token.clone(), claims.clone());
+        Ok(token)
+    }
+
+    async fn verify_access(&self, token: &str) -> Result<AccessTokenClaims, AuthError> {
+        self.issued
+            .lock()
+            .unwrap()
+            .get(token)
+            .cloned()
+            .ok_or(AuthError::IdpTokenRejected)
+    }
+
+    fn generate_refresh(&self) -> Result<GeneratedRefresh, AuthError> {
+        let plaintext = Uuid::now_v7().to_string();
+        let hash = self.hash_refresh(&plaintext)?;
+        Ok(GeneratedRefresh { plaintext, hash })
+    }
+
+    fn hash_refresh(&self, plaintext: &str) -> Result<RefreshTokenHash, AuthError> {
+        // Deterministic so generate→store and present→lookup agree.
+        RefreshTokenHash::new(format!("h:{plaintext}"))
+    }
+}
+
+// ─── EventPublisher ──────────────────────────────────────────────────────────
+
+pub struct RecordingEventPublisher {
+    events: Mutex<Vec<DomainEvent>>,
+}
+
+impl RecordingEventPublisher {
+    pub fn new() -> Self {
+        Self { events: Mutex::new(Vec::new()) }
+    }
+
+    pub fn event_types(&self) -> Vec<&'static str> {
+        self.events.lock().unwrap().iter().map(|e| e.event_type()).collect()
+    }
+
+    pub fn count(&self) -> usize {
+        self.events.lock().unwrap().len()
+    }
+}
+
+#[async_trait]
+impl EventPublisher for RecordingEventPublisher {
+    async fn publish(&self, event: &DomainEvent) -> Result<(), AuthError> {
+        self.events.lock().unwrap().push(event.clone());
+        Ok(())
+    }
+}
+
+// ─── Fixture ─────────────────────────────────────────────────────────────────
+
+/// Bundles concrete fakes and builds handlers wired to them. Handlers receive
+/// the fakes as `Arc<dyn Port>`; tests keep the concrete `Arc`s to assert on
+/// recorded state (published events, generation, stored sessions).
+pub struct Fixture {
+    pub idp: Arc<StubIdentityProvider>,
+    pub directory: Arc<StubAccountDirectory>,
+    pub links: Arc<InMemorySubjectLinkRepository>,
+    pub sessions: Arc<InMemorySessionRepository>,
+    pub refresh_tokens: Arc<InMemoryRefreshTokenRepository>,
+    pub cache: Arc<InMemorySessionCache>,
+    pub minter: Arc<StubTokenMinter>,
+    pub publisher: Arc<RecordingEventPublisher>,
+    pub policy: SessionPolicy,
+}
+
+impl Fixture {
+    /// Default: IdP returns `(iss, sub)`, directory auto-provisions active accounts.
+    pub fn new() -> Self {
+        Self {
+            idp: Arc::new(StubIdentityProvider::returning("https://idp.test", "sub-123")),
+            directory: Arc::new(StubAccountDirectory::new()),
+            links: Arc::new(InMemorySubjectLinkRepository::new()),
+            sessions: Arc::new(InMemorySessionRepository::new()),
+            refresh_tokens: Arc::new(InMemoryRefreshTokenRepository::new()),
+            cache: Arc::new(InMemorySessionCache::new()),
+            minter: Arc::new(StubTokenMinter::new()),
+            publisher: Arc::new(RecordingEventPublisher::new()),
+            policy: SessionPolicy::test_default(),
+        }
+    }
+
+    pub fn login_handler(&self) -> super::command::LoginHandler {
+        super::command::LoginHandler::new(
+            Arc::clone(&self.idp) as _,
+            Arc::clone(&self.directory) as _,
+            Arc::clone(&self.links) as _,
+            Arc::clone(&self.sessions) as _,
+            Arc::clone(&self.refresh_tokens) as _,
+            Arc::clone(&self.cache) as _,
+            Arc::clone(&self.minter) as _,
+            Arc::clone(&self.publisher) as _,
+            self.policy.clone(),
+        )
+    }
+
+    pub fn refresh_handler(&self) -> super::command::RefreshHandler {
+        super::command::RefreshHandler::new(
+            Arc::clone(&self.directory) as _,
+            Arc::clone(&self.sessions) as _,
+            Arc::clone(&self.refresh_tokens) as _,
+            Arc::clone(&self.cache) as _,
+            Arc::clone(&self.minter) as _,
+            Arc::clone(&self.publisher) as _,
+            self.policy.clone(),
+        )
+    }
+
+    pub fn logout_handler(&self) -> super::command::LogoutHandler {
+        super::command::LogoutHandler::new(
+            Arc::clone(&self.sessions) as _,
+            Arc::clone(&self.refresh_tokens) as _,
+            Arc::clone(&self.cache) as _,
+            Arc::clone(&self.publisher) as _,
+            self.policy.clone(),
+        )
+    }
+
+    pub fn logout_all_handler(&self) -> super::command::LogoutAllSessionsHandler {
+        super::command::LogoutAllSessionsHandler::new(
+            Arc::clone(&self.sessions) as _,
+            Arc::clone(&self.refresh_tokens) as _,
+            Arc::clone(&self.cache) as _,
+            Arc::clone(&self.publisher) as _,
+            self.policy.clone(),
+        )
+    }
+
+    pub fn introspect_handler(&self) -> super::query::IntrospectHandler {
+        super::query::IntrospectHandler::new(
+            Arc::clone(&self.minter) as _,
+            Arc::clone(&self.cache) as _,
+        )
+    }
+
+    pub fn list_sessions_handler(&self) -> super::query::ListSessionsHandler {
+        super::query::ListSessionsHandler::new(Arc::clone(&self.sessions) as _)
+    }
+}
