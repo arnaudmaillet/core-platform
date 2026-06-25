@@ -1,207 +1,186 @@
-# social-graph
+# `social-graph` — Directional follow/block edges between opaque profiles, block-gated and celebrity-safe
 
-Production-grade social graph microservice implementing directional follow/block relationships between opaque `ProfileId` (UUIDv7) primitives.
-
-## Bounded Context
-
-This service is the strict owner of **who follows whom** and **who blocks whom**.
-
-| In scope | Out of scope |
-|---|---|
-| Follow, Unfollow, Block, Unblock | Profile metadata (handles, bios, avatars) |
-| Follower/following counts (Redis) | Account management |
-| Block-gate enforcement | Timeline feed construction |
-| Mutual-follow derivation (Redis) | Notification delivery |
-| Kafka event emission | Post/content ownership |
-
-Profiles are treated as opaque UUIDv7 identifiers. This service never imports `services/profile` or `services/account`.
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-1** — feeds, notifications, and block-gating depend on it |
+> | **Deployable** | `crates/apps/social-graph-server` (library crate: `crates/services/social-graph`) |
+> | **Datastores** | ScyllaDB keyspace `social_graph` (4 tables) · Redis (sets + counters) |
+> | **Async** | publishes `social-graph.followed` / `.unfollowed` / `.blocked` · consumes nothing |
+> | **Upstream callers** | `timeline`, `notification`, `<TODO: gateway>` |
+> | **Downstream deps** | ScyllaDB, Redis, Kafka |
+> | **SLO** | `<TODO>` avail · `GetRelationStatus` p99 `<TODO>` · write p99 `<TODO>` |
 
 ---
 
-## Architecture
+## 🎯 Overview & Service Role
 
-```
-┌───────────────────────────────────────────────────┐
-│  gRPC (Tonic)  SocialGraphService                 │
-│  ─────────────────────────────────────────────── │
-│  Commands: Follow / Unfollow / Block / Unblock     │
-│  Queries:  GetRelationStatus / ListFollowers /     │
-│            ListFollowing / ListBlocks              │
-└───────────────────────┬───────────────────────────┘
-                        │ CQRS bus
-        ┌───────────────┼───────────────────┐
-        ▼               ▼                   ▼
-  Command Handlers  Query Handlers    EventPublisher
-        │               │                   │
-        ▼               ▼                   ▼
-  SocialGraphRepository  SocialGraphCache  KafkaProducerHandle
-        │                      │
-        ▼                      ▼
-   ScyllaDB (4 tables)    Redis (sets + counters)
-```
+`social-graph` is the strict owner of **who follows whom** and **who blocks whom**, over opaque
+`ProfileId` (UUIDv7) primitives. It enforces the block-gate, derives mutual-follow (friendship), and
+emits the follow/block events that drive timeline fan-out and notifications.
 
-### Layer responsibilities
+The hard problem it solves is the **celebrity fan-in asymmetry**: outbound follows are bounded
+(tens of thousands) but inbound follows are unbounded (millions for a celebrity). Materializing the
+full inbound set would exhaust Redis. It resolves this by storing **outbound follows as Redis Sets**
+(for O(1) mutual-follow derivation) but **inbound followers as O(1) INCR/DECR counters**.
 
-| Layer | Responsibility |
-|---|---|
-| `domain/aggregate/relation.rs` | Invariant enforcement (self-interaction, block-gate, sever-on-block) |
-| `application/command/` | Orchestrate repo + cache + publisher; no domain logic |
-| `application/query/` | Assemble read-model from ScyllaDB + Redis |
-| `infrastructure/persistence/` | ScyllaDB queries (strict/fast profiles) |
-| `infrastructure/cache/` | Redis Set (following, blocks) + INCR counters |
-| `infrastructure/publisher/` | Kafka JSON envelope per domain event |
-| `infrastructure/grpc/` | Proto↔domain mapping; error→Status translation |
+**Core objectives:** never import `profile` or `account` (profiles are opaque IDs); block always wins
+(severs follows both directions, gates future follows); friendship is *derived*, never dual-written.
+**Out of scope:** profile metadata, timeline construction, notification delivery.
 
 ---
 
-## ScyllaDB Schema
+## 📐 Architecture & Concepts
 
-### Keyspace
+Hexagonal / DDD, CQRS buses, ScyllaDB adjacency tables, Redis sets + counters, Kafka events.
 
-```cql
-CREATE KEYSPACE social_graph
-    WITH replication = {'class': 'NetworkTopologyStrategy', 'datacenter1': 3};
+```
+gRPC SocialGraphService ─► CQRS bus ─► Command handlers ─► SocialGraphRepository (ScyllaDB, 4 tables)
+                                    └─► Query handlers   ─► SocialGraphCache (Redis sets + counters)
+                                    └─► EventPublisher   ─► Kafka (social-graph.*)
 ```
 
-### Table Overview
+**ScyllaDB schema** (keyspace `social_graph`, NTS RF=3):
 
-| Table | Partition Key | Clustering Key | Purpose |
+| Table | Partition key | Clustering key | Purpose |
 |---|---|---|---|
-| `followers` | `followee_id` | `followed_at DESC, follower_id ASC` | Fan-in: who follows X? |
-| `following` | `follower_id` | `followed_at DESC, followee_id ASC` | Fan-out: who does X follow? |
-| `follow_status` | `follower_id` | `followee_id ASC` | Point-lookup + `followed_at` for DELETE |
-| `blocks` | `blocker_id` | `blockee_id ASC` | Block point-lookup + list |
+| `followers` | `followee_id` | `followed_at DESC, follower_id ASC` | fan-in: who follows X |
+| `following` | `follower_id` | `followed_at DESC, followee_id ASC` | fan-out: who X follows |
+| `follow_status` | `follower_id` | `followee_id ASC` | point-lookup + `followed_at` for DELETE |
+| `blocks` | `blocker_id` | `blockee_id ASC` | block point-lookup + list |
 
-#### Why `follow_status`?
+`follow_status` exists because Scylla DELETE needs the **full clustering key**: it stores `followed_at`
+as a regular column so unfollow/sever never read-before-write the adjacency lists. No `blocked_by`
+mirror is needed — the gate is two O(1) lookups on the same `blocks` table with swapped args.
 
-ScyllaDB DELETE requires the **full clustering key**. The `followers` and `following` tables include `followed_at` in their clustering key, so unfollowing and block-severing operations must know this timestamp before issuing a DELETE. `follow_status` stores it as a regular column, avoiding any read-before-write on the adjacency list tables.
+**Redis strategy:** `sg:following:v1:{id}` (Set) drives `IsFriend(A,B)` = `SISMEMBER(A,B) AND
+SISMEMBER(B,A)` — no `friends` table, so no dual-write desync. `sg:followers_count:v1:{id}` /
+`sg:following_count:v1:{id}` (counters) satisfy count reads in O(1) space.
 
-#### Why no `blocked_by` mirror?
-
-The block-gate check requires two point-lookups: `blocks(A,B)` and `blocks(B,A)`. Both are O(1) on the **same table** with swapped arguments — no mirror needed.
+> **Invariants** (and where enforced): no self-follow/self-block (handler pre-check); follow rejected
+> if any block exists either direction (`Relation::follow()`); re-follow/re-block rejected; block
+> severs existing follows both directions (`Relation::block()` → `SeveredFollows`); unblock does **not**
+> restore severed follows (intentional — user must re-follow).
 
 ---
 
-## Redis Cache Strategy
+## 📊 Service Level Objectives (SLO)
 
-| Key | Type | Written by | Read by |
+| SLI | Objective | Window | Measured by |
 |---|---|---|---|
-| `sg:following:v1:{id}` | Set | Follow / Unfollow / Block | Kafka downstream engines (SINTER for friend detection) |
-| `sg:blocks:v1:{id}` | Set | Block / Unblock | (future: fast gate check in read path) |
-| `sg:followers_count:v1:{id}` | String | Follow / Unfollow / Block | `GetRelationStatus` query |
-| `sg:following_count:v1:{id}` | String | Follow / Unfollow / Block | `GetRelationStatus` query |
+| Availability (non-`UNAVAILABLE`) | `<TODO>` | 30d | gRPC status metrics |
+| `GetRelationStatus` p99 (Redis path) | `< <TODO> ms` | 1h | gRPC histogram |
+| Follow/Block write p99 | `< <TODO> ms` | 1h | Scylla write histogram |
+| Durability | no acked edge lost | — | Scylla `LocalQuorum` |
 
-### Why Sets for `following` but counters for `followers`?
-
-Outbound follows are bounded for all users (max tens of thousands). Inbound follows are unbounded for celebrity profiles (millions). Materializing the full inbound set would exhaust Redis memory. A INCR/DECR counter satisfies count reads with O(1) space.
-
-### Mutual-follow (friendship) derivation
-
-```
-IsFriend(A, B) =
-    SISMEMBER sg:following:v1:{A} {B}   -- A follows B
-    AND
-    SISMEMBER sg:following:v1:{B} {A}   -- B follows A
-```
-
-No dedicated `friends` table exists. Derivation is computed via Redis SISMEMBER (O(1)) or SINTER for batch mutual-follows. This prevents dual-write desynchronization during unfollow/block events.
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
 
 ---
 
-## Domain Invariants
+## 🔗 Dependencies & Blast Radius
 
-| Invariant | Enforced in |
-|---|---|
-| A profile cannot follow itself | `FollowProfileHandler` (pre-aggregate check) |
-| A profile cannot block itself | `BlockProfileHandler` (pre-aggregate check) |
-| Block-gate: follow rejected if any block exists (either direction) | `Relation::follow()` |
-| Re-follow rejected if already following | `Relation::follow()` |
-| Re-block rejected if already blocked | `Relation::block()` |
-| Block severs existing follows in both directions | `Relation::block()` → returns `SeveredFollows` |
-| Unblock does not restore severed follows | Intentional; user must re-follow explicitly |
+**Downstream:**
 
----
-
-## Kafka Events
-
-| Event | Topic | Key | Subscribers |
+| Dependency | Purpose | If down → | Degradation |
 |---|---|---|---|
-| `ProfileFollowed` | `social-graph.followed` | `{actor}:{target}` | Timeline fan-out, notification service |
-| `ProfileUnfollowed` | `social-graph.unfollowed` | `{actor}:{target}` | Timeline pruning |
-| `ProfileBlocked` | `social-graph.blocked` | `{actor}:{target}` | Content filtering, notification suppression |
-| `ProfileUnblocked` | — | — | Not published (no downstream fan-out needed) |
+| ScyllaDB (`social_graph`) | durable edges | reads + writes fail | **Hard** — `UNAVAILABLE` |
+| Redis | sets + counters (status/friend/count reads) | status/count reads degrade | **Soft** — durable edges intact |
+| Kafka | event emission | downstream fan-out stalls | **Soft** — edges still committed |
+
+**Upstream (blast radius):**
+
+| Caller | Uses | User-visible impact if down |
+|---|---|---|
+| `timeline` | consumes `social-graph.followed/unfollowed` + calls `ListFollowing` | new follows don't reach the home feed |
+| `notification` | block-gate cache (`is_blocked`) | block suppression weakens |
+
+> **Critical path?** Partially — writes are user-initiated (follow/block); much consumption is async.
 
 ---
 
-## Error Catalogue
+## 🔌 Public Interfaces & API Contract
 
-| Code | Variant | HTTP | Retryable |
-|---|---|---|---|
-| SGR-1001 | AlreadyFollowing | 409 | No |
-| SGR-1002 | NotFollowing | 422 | No |
-| SGR-1003 | AlreadyBlocked | 409 | No |
-| SGR-1004 | NotBlocked | 422 | No |
-| SGR-2001 | SelfInteraction | 422 | No |
-| SGR-2002 | BlockGateDenied | 422 | No |
-| SGR-9001 | DomainViolation | 422 | No |
-| SGR-9002 | InvalidProfileId | 422 | No |
-| SDB-\* | Storage (ScyllaDB) | var | var |
-| RDB-\* | Cache (Redis) | 500 | var |
-| VAL-\* | Validation | 422 | No |
-
----
-
-## gRPC Service Interface
+### gRPC — `social_graph.v1.SocialGraphService`
 
 ```protobuf
 service SocialGraphService {
-    // Commands
-    rpc Follow(FollowRequest)       returns (CommandResponse);
-    rpc Unfollow(UnfollowRequest)   returns (CommandResponse);
-    rpc Block(BlockRequest)         returns (CommandResponse);
-    rpc Unblock(UnblockRequest)     returns (CommandResponse);
-
-    // Queries
-    rpc GetRelationStatus(GetRelationStatusRequest) returns (RelationStatusView);
-    rpc ListFollowers(ListFollowersRequest)         returns (ListFollowersResponse);
-    rpc ListFollowing(ListFollowingRequest)         returns (ListFollowingResponse);
-    rpc ListBlocks(ListBlocksRequest)               returns (ListBlocksResponse);
+  // Commands
+  rpc Follow(FollowRequest) returns (CommandResponse);
+  rpc Unfollow(UnfollowRequest) returns (CommandResponse);
+  rpc Block(BlockRequest) returns (CommandResponse);
+  rpc Unblock(UnblockRequest) returns (CommandResponse);
+  // Queries
+  rpc GetRelationStatus(GetRelationStatusRequest) returns (RelationStatusView);
+  rpc ListFollowers(ListFollowersRequest) returns (ListFollowersResponse);
+  rpc ListFollowing(ListFollowingRequest) returns (ListFollowingResponse);
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse);
 }
 ```
 
-`RelationStatus` enum values (from actor's perspective):
+> **Wire contract:** `RelationStatus` (actor's perspective): `NONE`, `FOLLOWING`, `FOLLOWED_BY`,
+> `MUTUAL` (implicit friendship), `BLOCKING`, `BLOCKED_BY`.
 
-| Value | Meaning |
-|---|---|
-| `NONE` | No relationship |
-| `FOLLOWING` | Actor follows target only |
-| `FOLLOWED_BY` | Target follows actor only |
-| `MUTUAL` | Both follow each other (implicit friendship) |
-| `BLOCKING` | Actor has blocked target |
-| `BLOCKED_BY` | Target has blocked actor |
+### Error contract (`SGR-xxxx`)
+
+| Code | Variant | HTTP |
+|---|---|---|
+| SGR-1001/1002 | `AlreadyFollowing` / `NotFollowing` | 409 / 422 |
+| SGR-1003/1004 | `AlreadyBlocked` / `NotBlocked` | 409 / 422 |
+| SGR-2001/2002 | `SelfInteraction` / `BlockGateDenied` | 422 |
+| SGR-9001/9002 | `DomainViolation` / `InvalidProfileId` | 422 |
+| SDB-* / RDB-* / VAL-* | storage / cache / validation (delegated) | varies |
 
 ---
 
-## Running Migrations
+## 📨 Events & Async Contract
 
-```bash
-# Apply in order using any CQL client (cqlsh, astra, etc.)
-cqlsh -f migrations/0001_create_keyspace.cql
-cqlsh -f migrations/0002_create_followers_table.cql
-cqlsh -f migrations/0003_create_following_table.cql
-cqlsh -f migrations/0004_create_follow_status_table.cql
-cqlsh -f migrations/0005_create_blocks_table.cql
+**Publishes:**
+
+| Topic | Trigger | Key | Consumers |
+|---|---|---|---|
+| `social-graph.followed` | `Follow` success | `{actor}:{target}` | `timeline` (fan-out), `notification` |
+| `social-graph.unfollowed` | `Unfollow` success | `{actor}:{target}` | `timeline` (pruning) |
+| `social-graph.blocked` | `Block` success | `{actor}:{target}` | content filtering, notification suppression |
+
+`ProfileUnblocked` is **not** published — no downstream fan-out needs it.
+
+**Consumes:** none.
+
+> **Runtime contract:** events are published via a durable Kafka producer after the edge commit.
+> Downstream consumers own at-least-once handling under `run_consumer`.
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| ScyllaDB unavailable | follow/block + lists fail | **Hard** — `UNAVAILABLE` | check Scylla cluster |
+| Redis unavailable | `GetRelationStatus`/counts degrade | **Soft** — derive from Scylla where possible | check Redis; counters resync on next write |
+| Kafka unavailable | timeline/notification fan-out stalls | **Soft** — edges committed | check brokers; consumers replay |
+| Counter drift after Redis loss | follower/following counts wrong | counters are derived, not source-of-truth | rebuild from `followers`/`following` tables |
+
+**Backpressure & limits.** `ListFollowers/Following/Blocks` are cursor-paginated. Writes use the Scylla
+**Strict** profile; status reads use **Fast**.
+
+---
+
+## 📦 Integration & Usage
+
+```toml
+[dependencies]
+social-graph = { path = "crates/services/social-graph" }
 ```
 
----
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`social_graph::service::SocialGraphService` — `build` wires the ScyllaDB repository, Redis cache, and
+durable Kafka publisher; `register` adds the gRPC + reflection services; `health_probes` checks
+Scylla/Redis.
 
-## 🚀 Deployment
-
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `social_graph::service::SocialGraphService` (`build` wires the ScyllaDB
-repository, Redis cache, and the durable Kafka event publisher; `register` adds
-the gRPC + reflection services; `health_probes` checks Scylla/Redis). The
-deployable binary is `crates/apps/social-graph-server`:
+### Bootstrap (`crates/apps/social-graph-server`)
 
 ```rust
 use std::net::SocketAddr;
@@ -215,3 +194,77 @@ async fn main() -> anyhow::Result<()> {
     service_runtime::serve::<SocialGraphService>(addr).await
 }
 ```
+
+---
+
+## ⚙️ Configuration & Runtime Environment
+
+### Inherited infrastructure variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SCYLLA_CONTACT_POINTS` / `SCYLLA_LOCAL_DC` | **Yes** | — | ScyllaDB contact points + DC for token-aware routing. |
+| `SCYLLA_KEYSPACE` | No | `social_graph` | Keyspace (see migrations). |
+| `REDIS_HOSTS` | **Yes** | — | Redis nodes for sets + counters. |
+| `KAFKA_BROKERS` | **Yes** | — | Kafka brokers for `social-graph.*`. |
+| `SOCIAL_GRAPH_GRPC_ADDR` | No | `0.0.0.0:50053` | gRPC bind address. |
+
+> Full `SCYLLA_*` / `REDIS_*` / `KAFKA_*` tuning lives in the shared storage/transport crates.
+
+### Compile-time features
+- `build.rs` compiles `proto/social_graph/v1/*.proto` and emits the reflection descriptor set.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `migrations/000{1..5}_*.cql` (keyspace + 4 tables) against `social_graph`, applied
+  **before** first start.
+- **Rollout/Rollback:** `<TODO>`; stateless service, safe to roll.
+- **Counter rebuild:** Redis follower/following counters are derived — if Redis is lost, rebuild them
+  by counting the `followers`/`following` adjacency tables (offline job).
+
+---
+
+## 📈 Telemetry, Performance & Metrics
+
+- **Runtime:** Tokio multi-thread. Global tracing/OTel subscriber installed before `serve`.
+
+| Signal | Why it matters | Suggested alert |
+|---|---|---|
+| `GetRelationStatus` p99 | status read-path latency | > SLO ⇒ page |
+| `social-graph.*` publish failures | downstream fan-out drift | sustained ⇒ check Kafka |
+| `BlockGateDenied` rate | abuse / harassment signal | unusual spike ⇒ investigate |
+| Scylla write errors | edge durability | any spike ⇒ check cluster |
+
+---
+
+## 🛠️ Local Development
+
+```bash
+cargo build -p social-graph && cargo clippy -p social-graph --all-targets
+cargo test  -p social-graph
+docker compose up -d scylla redis kafka       # repo-root compose
+for f in crates/services/social-graph/migrations/*.cql; do cqlsh -f "$f"; done
+```
+
+---
+
+## 🚨 Troubleshooting & Runbook
+
+> Format: **symptom → root cause → mitigation.**
+
+**1. `SGR-2002 BlockGateDenied` on a `Follow` between two seemingly unrelated profiles.**
+Root cause: a block exists in *either* direction (`blocks(A,B)` or `blocks(B,A)`); the gate is
+symmetric by design. Mitigation: check both `blocks` rows; if the block is intended, this is correct —
+the follow must stay denied until an `Unblock`.
+
+**2. Follower/following counts look wrong after a Redis incident.**
+Root cause: the counters are O(1) Redis derivations, not the source of truth; a Redis flush loses them.
+Mitigation: rebuild by counting `followers`/`following` for the affected profiles; counters self-heal
+forward on the next follow/unfollow.
+
+**3. A new follow never appears in the user's home feed.**
+Root cause: the edge committed and `social-graph.followed` published, but `timeline`'s consumer is
+lagging or dead-lettered the event. Mitigation: check timeline's `social-graph.followed` consumer lag
+and DLQ; the edge itself is durable in Scylla.

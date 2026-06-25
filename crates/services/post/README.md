@@ -1,136 +1,178 @@
-# Post Microservice
+# `post` — The canonical source of truth for user-created content
 
-Single-point post registry for multi-format media content (Carousel, MainVideo, TextOnly).
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-0** — the content publish path; feeds and discovery derive from its events |
+> | **Deployable** | `crates/apps/post-server` (library crate: `crates/services/post`) |
+> | **Datastores** | ScyllaDB keyspace `post` (2 tables) |
+> | **Async** | publishes `post.published` / `post.updated` / `post.deleted` · consumes nothing |
+> | **Upstream callers** | `<TODO: gateway>` |
+> | **Downstream deps** | ScyllaDB, Kafka |
+> | **SLO** | `<TODO>` avail · `GetPost` p99 `<TODO>` · publish p99 `<TODO>` |
 
 ---
 
-## Overview
+## 🎯 Overview & Service Role
 
-The `post` crate is the canonical source of truth for user-created posts. It enforces content invariants (carousel cardinality, video duration caps, attachment validation), manages a Draft → Published → Deleted lifecycle, and emits Kafka events on every state transition. It has no knowledge of feeds, timelines, or social graphs.
+`post` is the canonical registry for user-created posts across multiple media formats (Carousel,
+MainVideo, TextOnly). It enforces content invariants, manages a `Draft → Published → Deleted`
+lifecycle, and emits a Kafka event on every state transition. It is the **fan-out trigger** for the
+rest of the platform — timeline, geo-discovery, and notification all build their projections from
+`post.*` events.
+
+The hard problem it solves is **being a clean event source**: every published/updated/deleted post must
+produce exactly one durable, correctly-keyed event that downstream materializers can trust, while the
+write path stays O(1). It resolves this with a two-table wide-column schema (point store + creator
+index) and a publish step gated on a successful durable write. It has **no knowledge** of feeds,
+timelines, or social graphs.
+
+**Core objectives:** content invariants are non-negotiable (carousel cardinality, video caps, MIME
+allowlist); the lifecycle is forward-only (`Draft→Published` irreversible, soft-delete only); every
+transition emits its event.
 
 ---
 
-## Architecture
+## 📐 Architecture & Concepts
+
+Hexagonal / DDD, CQRS buses, ScyllaDB durable store, Kafka events.
 
 ```
-crates/services/post/
-├── migrations/            # CQL DDL — run in order against ScyllaDB
-├── proto/post/v1/         # Protobuf definitions (enums, messages, service)
-└── src/
-    ├── domain/
-    │   ├── aggregate/     # Post aggregate root — FSM + invariant enforcement
-    │   ├── entity/        # MediaAttachment entity
-    │   ├── event/         # DomainEvent enum (PostPublished, PostUpdated, PostDeleted)
-    │   └── value_object/  # PostId, ProfileId, PostKind, PostStatus, Caption, CdnUrl, MimeType
-    ├── application/
-    │   ├── command/       # CreatePost, PublishPost, UpdatePost, DeletePost handlers
-    │   ├── query/         # GetPost, ListPostsByProfile handlers
-    │   └── port/          # PostRepository and EventPublisher traits
-    ├── infrastructure/
-    │   ├── persistence/   # ScyllaPostRepository — dual-write, cursor pagination
-    │   ├── publisher/     # KafkaEventPublisher
-    │   └── grpc/          # PostServiceHandler (gRPC ↔ CQRS bridge) + server impl
-    └── error.rs           # PostError (PST-xxxx codes)
+gRPC PostService ─► CQRS bus ─► Create/Publish/Update/Delete handlers ─► ScyllaPostRepository (dual-write)
+                            └─► Get/ListByProfile handlers
+                                            │
+                  KafkaEventPublisher ◄─────┘  ─► post.published / post.updated / post.deleted
 ```
 
-**Storage design** — two-table wide-column schema:
-- `post.posts` — canonical store, partition key `post_id` for O(1) point lookups
-- `post.posts_by_profile` — creator-feed index, partition key `profile_id`, clustering `created_at DESC, post_id ASC`
+**Storage design — two-table wide-column schema:**
+- `post.posts` — canonical store, PK `post_id`, O(1) point lookups.
+- `post.posts_by_profile` — creator-feed index, PK `profile_id`, CK `created_at DESC, post_id ASC`.
 
-Every write dual-writes to both tables sequentially. Attachments are stored as validated JSON (`text` column) to avoid ScyllaDB UDT migration complexity.
+Every write **dual-writes both tables sequentially**. Attachments are stored as validated JSON (a
+`text` column) to avoid ScyllaDB UDT migration complexity.
 
----
-
-## Interface Contract
-
-### gRPC Service — `post.v1.PostService`
-
-| RPC | Input | Output | Purpose |
-|-----|-------|--------|---------|
-| `CreatePost` | `CreatePostRequest` | `CreatePostResponse` | Create a draft post; PostId pre-generated at gRPC boundary |
-| `PublishPost` | `PublishPostRequest` | `CommandResponse` | Transition Draft → Published; emits `post.published` |
-| `UpdatePost` | `UpdatePostRequest` | `CommandResponse` | Update caption/attachments; emits `post.updated` |
-| `DeletePost` | `DeletePostRequest` | `CommandResponse` | Soft-delete; emits `post.deleted` |
-| `GetPost` | `GetPostRequest` | `PostView` | Point lookup by `post_id` |
-| `ListPostsByProfile` | `ListPostsByProfileRequest` | `ListPostsByProfileResponse` | Cursor-paginated creator feed |
-
-### Kafka Topics
-
-| Topic | Key | Trigger |
-|-------|-----|---------|
-| `post.published` | `post_id` | `PublishPost` success |
-| `post.updated`   | `post_id` | `UpdatePost` success |
-| `post.deleted`   | `post_id` | `DeletePost` success |
+> **Invariants** (and where enforced, in the `Post` aggregate FSM): Carousel 2–10 items, carousel
+> videos ≤ 15 s, video items require `thumbnail_url`; MainVideo = single video + thumbnail; TextOnly =
+> zero attachments; threading `parent_id`/`root_id` both-present-or-both-absent; `profile_id` on
+> Publish/Update/Delete must match the author.
 
 ---
 
-## Error Codes
+## 📊 Service Level Objectives (SLO)
 
-| Code | Variant | HTTP | Description |
-|------|---------|------|-------------|
-| PST-1001 | `PostNotFound` | 404 | Post does not exist |
-| PST-1002 | `PostAlreadyPublished` | 409 | Post is already published |
-| PST-1003 | `PostAlreadyDeleted` | 409 | Post is already deleted |
-| PST-1004 | `NotDraft` | 422 | Can only publish a Draft post |
-| PST-1005 | `AuthorMismatch` | 403 | Caller is not the post author |
-| PST-2001 | `CarouselTooFewItems` | 422 | Carousel requires ≥ 2 items |
-| PST-2002 | `CarouselTooManyItems` | 422 | Carousel exceeds 10 items |
-| PST-2003 | `CarouselVideoTooLong` | 422 | Carousel video > 15 s |
-| PST-3001 | `MissingVideoThumbnail` | 422 | Video attachment lacks thumbnail |
-| PST-3002 | `InvalidMimeType` | 422 | MIME type not in allowlist |
-| PST-3003 | `InvalidCdnUrl` | 422 | URL is not a valid HTTPS CDN URL |
-| PST-3004 | `InvalidDimensions` | 422 | Attachment dimensions are zero |
-| PST-9001 | `InvalidPostId` | 422 | Not a valid UUID |
-| PST-9002 | `InvalidProfileId` | 422 | Not a valid UUID |
-| PST-9003 | `AttachmentsCorrupted` | 500 | JSON deserialization failure (High) |
-| PST-9004 | `DomainViolation` | 422 | Generic invariant breach |
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| Availability (non-`UNAVAILABLE`) | `<TODO>` | 30d | gRPC status metrics |
+| `GetPost` p99 (point read) | `< <TODO> ms` | 1h | Scylla read histogram |
+| `PublishPost` p99 (durable + event) | `< <TODO> ms` | 1h | handler histogram |
+| Event emission completeness | 1 event per committed transition | — | publish success rate |
+
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
 
 ---
 
-## Database Schema
+## 🔗 Dependencies & Blast Radius
 
-```
-Keyspace: post  (NetworkTopologyStrategy, datacenter1: 3, LZ4Compressor)
+**Downstream:**
 
-post.posts                      — canonical; partition by post_id
-post.posts_by_profile           — creator index; partition by profile_id
-                                   clustering: created_at DESC, post_id ASC
-```
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| ScyllaDB (`post`) | durable store | reads + writes fail | **Hard** — `UNAVAILABLE` |
+| Kafka | event emission | downstream projections stall | **Soft** — writes commit; see note |
 
-Run migrations in order: `0001_create_keyspace.cql` → `0002_create_posts_table.cql` → `0003_create_posts_by_profile_table.cql`.
+**Upstream (blast radius — `post.*` events feed most of the read fleet):**
 
----
+| Caller | Uses | User-visible impact if `post` is down |
+|---|---|---|
+| `timeline` | `post.published` / `post.deleted` | no new posts enter home feeds |
+| `geo-discovery` | `post.published` | new posts don't appear on the map |
+| `notification` | `post.published` (mentions) | mention notifications stop |
 
-## Business Rules
-
-- **Carousel**: 2–10 items; carousel videos ≤ 15 s each; video items require `thumbnail_url`
-- **MainVideo**: single video attachment; requires `thumbnail_url`
-- **TextOnly**: zero attachments (caption-only post)
-- **Threading**: `parent_id` and `root_id` must both be present or both absent
-- **Lifecycle**: Draft → Published (irreversible); Draft or Published → Deleted (soft-delete only)
-- **Ownership**: `profile_id` on PublishPost/UpdatePost/DeletePost must match the post author
+> **Critical path?** **Yes** for publishing; the write path is user-facing and the event is the
+> upstream trigger for the entire read-side fleet.
 
 ---
 
-## Deployment
+## 🔌 Public Interfaces & API Contract
 
-```bash
-# Apply CQL migrations (example with cqlsh)
-cqlsh -f migrations/0001_create_keyspace.cql
-cqlsh -f migrations/0002_create_posts_table.cql
-cqlsh -f migrations/0003_create_posts_by_profile_table.cql
+### gRPC — `post.v1.PostService`
+
+```protobuf
+service PostService {
+  rpc CreatePost (CreatePostRequest) returns (CreatePostResponse);          // draft; PostId pre-generated at boundary
+  rpc PublishPost (PublishPostRequest) returns (CommandResponse);           // Draft→Published; emits post.published
+  rpc UpdatePost (UpdatePostRequest) returns (CommandResponse);             // emits post.updated
+  rpc DeletePost (DeletePostRequest) returns (CommandResponse);             // soft-delete; emits post.deleted
+  rpc GetPost (GetPostRequest) returns (PostView);                          // point lookup
+  rpc ListPostsByProfile (ListPostsByProfileRequest) returns (ListPostsByProfileResponse); // cursor-paginated
+}
 ```
 
-Dependencies: ScyllaDB cluster (`datacenter1`), Kafka broker.
+### Error contract (`PST-xxxx`)
+
+| Code | Variant | HTTP |
+|---|---|---|
+| PST-1001 | `PostNotFound` | 404 |
+| PST-1002/1003 | `PostAlreadyPublished` / `PostAlreadyDeleted` | 409 |
+| PST-1004 | `NotDraft` | 422 |
+| PST-1005 | `AuthorMismatch` | 403 |
+| PST-2001..2003 | carousel cardinality / video length | 422 |
+| PST-3001..3004 | thumbnail / MIME / CDN URL / dimensions | 422 |
+| PST-9001/9002 | invalid post/profile ID | 422 |
+| PST-9003 | `AttachmentsCorrupted` (JSON deser) | 500 |
+| PST-9004 | `DomainViolation` | 422 |
 
 ---
 
-## 🚀 Deployment
+## 📨 Events & Async Contract
 
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `post::service::PostService` (`build` wires the ScyllaDB repository and the
-durable Kafka event publisher; `register` adds the gRPC + reflection services;
-`health_probes` checks Scylla). The deployable binary is `crates/apps/post-server`:
+> Kafka topics are an API. Downstream materializers (timeline, geo-discovery, notification) trust the
+> `author_tier` and coordinates carried here — schema changes break them like a proto change.
+
+**Publishes:**
+
+| Topic | Trigger | Key | Consumers |
+|---|---|---|---|
+| `post.published` | `PublishPost` success | `post_id` | `timeline`, `geo-discovery`, `notification` |
+| `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
+| `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
+
+**Consumes:** none.
+
+> **Runtime contract:** the event is published after the durable dual-write. Downstream consumers own
+> at-least-once handling under `run_consumer`; all of them treat `post.*` as idempotent by `post_id`.
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
+|---|---|---|---|
+| ScyllaDB unavailable | all RPCs fail | **Hard** — `UNAVAILABLE`; nothing acked | check Scylla cluster |
+| Partial dual-write (posts ok, index fails) | post readable by id, missing from creator feed | write returns error; client retries (idempotent by `post_id`) | retry; reconcile index if needed |
+| Kafka publish fails after commit | post durable, downstream projections miss it | **Soft** — content exists but feeds/map/notifications lag | re-emit event or rely on downstream backfill |
+| `AttachmentsCorrupted` on read | `PST-9003` | bad JSON in `text` column | inspect row; data-quality incident |
+
+**Backpressure & limits.** `ListPostsByProfile` is cursor-paginated. Inserts are idempotent on
+`post_id` (last-write-wins), so transient retries are safe.
+
+---
+
+## 📦 Integration & Usage
+
+```toml
+[dependencies]
+post = { path = "crates/services/post" }
+```
+
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`post::service::PostService` — `build` wires the ScyllaDB repository and the durable Kafka event
+publisher; `register` adds the gRPC + reflection services; `health_probes` checks Scylla.
+
+### Bootstrap (`crates/apps/post-server`)
 
 ```rust
 use std::net::SocketAddr;
@@ -144,3 +186,74 @@ async fn main() -> anyhow::Result<()> {
     service_runtime::serve::<PostService>(addr).await
 }
 ```
+
+---
+
+## ⚙️ Configuration & Runtime Environment
+
+### Inherited infrastructure variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SCYLLA_CONTACT_POINTS` / `SCYLLA_LOCAL_DC` | **Yes** | — | ScyllaDB contact points + DC for token-aware routing. |
+| `SCYLLA_KEYSPACE` | No | `post` | Keyspace (NTS RF=3, LZ4). |
+| `KAFKA_BROKERS` | **Yes** | — | Kafka brokers for `post.*`. |
+| `POST_GRPC_ADDR` | No | `0.0.0.0:50056` | gRPC bind address. |
+
+> Full `SCYLLA_*` / `KAFKA_*` tuning lives in the shared storage/transport crates.
+
+### Compile-time features
+- `build.rs` compiles `proto/post/v1/*.proto` and emits the reflection descriptor set.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `migrations/0001_create_keyspace.cql` → `0002_create_posts_table.cql` →
+  `0003_create_posts_by_profile_table.cql` against `post`, applied **before** first start.
+- **Rollout/Rollback:** `<TODO>`; stateless service, safe to roll.
+- **Schema gotcha:** the creator-index clustering order (`created_at DESC, post_id ASC`) is a read
+  contract — don't change it after data exists.
+
+---
+
+## 📈 Telemetry, Performance & Metrics
+
+- **Runtime:** Tokio multi-thread. Global tracing/OTel subscriber installed before `serve`.
+
+| Signal | Why it matters | Suggested alert |
+|---|---|---|
+| `PublishPost` p99 | publish-path latency | > SLO ⇒ page |
+| `post.*` publish failure rate | downstream feed/map drift | sustained ⇒ check Kafka |
+| Scylla write errors | content durability | any spike ⇒ check cluster |
+| `PST-9003 AttachmentsCorrupted` count | data-quality | > 0 ⇒ investigate |
+
+---
+
+## 🛠️ Local Development
+
+```bash
+cargo build -p post && cargo clippy -p post --all-targets
+cargo test  -p post
+docker compose up -d scylla kafka             # repo-root compose
+for f in crates/services/post/migrations/*.cql; do cqlsh -f "$f"; done
+```
+
+---
+
+## 🚨 Troubleshooting & Runbook
+
+> Format: **symptom → root cause → mitigation.**
+
+**1. `PST-1004 NotDraft` on `PublishPost`.**
+Root cause: the post is already `Published` or `Deleted` — the lifecycle is forward-only. Mitigation:
+`GetPost` to confirm status; publishing is irreversible and single-shot by design.
+
+**2. A published post is missing from the creator feed but readable by id.**
+Root cause: the dual-write partially failed (`posts` ok, `posts_by_profile` not). Mitigation: re-issue
+the write (idempotent on `post_id`); if it persists, reconcile the index from `post.posts`.
+
+**3. A new post never reaches timelines/map.**
+Root cause: the post committed but the `post.published` event failed to publish, or a downstream
+consumer is lagging. Mitigation: check Kafka health and the downstream consumer groups; re-emit the
+event if it was dropped post-commit.

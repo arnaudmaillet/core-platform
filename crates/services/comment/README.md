@@ -1,81 +1,106 @@
-# comment — 1-Level Threaded Comment Engine with GIF Support
+# `comment` — 1-level threaded comment engine with GIF support
+
+> **Service Card**
+>
+> | | |
+> |---|---|
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
+> | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
+> | **Tier** | **TIER-1** — user-facing content; drives engagement comment counters |
+> | **Deployable** | `crates/apps/comment-server` (library crate: `crates/services/comment`) |
+> | **Datastores** | ScyllaDB keyspace `comment` (2 tables) |
+> | **Async** | publishes `comment.created` / `comment.deleted` · consumes nothing |
+> | **Upstream callers** | `<TODO: gateway>` |
+> | **Downstream deps** | ScyllaDB, Kafka |
+> | **SLO** | feed read p99 **< 5 ms** · at-least-once `comment.*` delivery |
+
+---
 
 ## 🎯 Overview & Service Role
 
-`services/comment` is the exclusive owner of comment lifecycle state within the core-platform super-app. It enforces **strict 1-level threading** (TikTok/Instagram style), supports **rich GIF attachments**, and emits **Kafka events** that drive the `services/engagement` atomic comment counters in real time.
+`comment` is the exclusive owner of comment lifecycle state. It enforces **strict 1-level threading**
+(TikTok/Instagram style), supports rich GIF attachments, and emits Kafka events that drive the
+`engagement` service's atomic comment counters in real time.
 
-**Critical boundaries (SRP):**
-- **Owns:** comment persistence, threading invariants, author-gated deletion, lifecycle events.
-- **Does NOT own:** likes/reactions on comments (handled by `services/engagement`), post or profile data.
+The hard problem it solves is **paginated thread reads with zero `ALLOW FILTERING`**: top-level
+comments and replies must both be valid clustering-key prefix scans on the same partition. It resolves
+this with a **nil-UUID sentinel** for top-level parents, so `WHERE post_id = ? AND parent_id = <nil>`
+is a clean prefix scan.
 
-**Business-impact metrics targeted:**
-- Sub-5 ms P99 read latency for paginated top-level and reply feeds (ScyllaDB local quorum, TWCS partition locality).
-- Zero `ALLOW FILTERING` queries — all access patterns are valid clustering-key prefix scans.
-- At-least-once Kafka delivery for `comment.created` / `comment.deleted` events, consumed by the engagement service's `CommentEventConsumer` to increment/decrement its Redis and ScyllaDB counters.
+**Core objectives:** sub-5 ms P99 paginated reads (Scylla local quorum, TWCS locality); zero
+`ALLOW FILTERING`; at-least-once `comment.created`/`comment.deleted` delivery. **Out of scope:**
+likes/reactions on comments (owned by `engagement`), post/profile data.
 
 ---
 
 ## 📐 Architecture & Concepts
 
+Hexagonal / DDD, CQRS buses, ScyllaDB flat-tree store, Kafka events.
+
 ```
-gRPC Client
-    │
-    ▼
-CommentServiceHandler  (tonic)
-    │   │
-    │   ├── CommandBus ──► CreateCommentHandler ──► Comment::create() ──► ScyllaCommentRepository.insert()
-    │   │                                                                └──► KafkaCommentEventPublisher → "comment.created"
-    │   │
-    │   └── CommandBus ──► DeleteCommentHandler ──► repo.has_active_replies()
-    │                                           └──► Comment::delete(has_replies)
-    │                                                    ├── Tombstone ──► repo.soft_delete()
-    │                                                    └── Purge     ──► repo.purge()
-    │                                                └──► KafkaCommentEventPublisher → "comment.deleted"
-    │
-    └── QueryBus ──► GetCommentHandler         → comment.comments       (point read, LCS)
-                 ──► ListTopLevelHandler        → comment.comments_by_post (parent_id = nil UUID)
-                 ──► ListRepliesHandler         → comment.comments_by_post (parent_id = comment_id)
+gRPC CommentService ─► CommandBus ─► CreateComment ─► Comment::create() ─► repo.insert ─► comment.created
+                    │             └─► DeleteComment ─► has_active_replies? ─► Tombstone | Purge ─► comment.deleted
+                    └─► QueryBus  ─► GetComment (comments, point read, LCS)
+                                  ─► ListTopLevel / ListReplies (comments_by_post)
 ```
 
-### ScyllaDB Wide-Column Flat-Tree Layout
+**ScyllaDB wide-column flat-tree:**
 
 | Table | Partition key | Clustering keys | Purpose |
 |---|---|---|---|
-| `comment.comments` | `comment_id` | — | Source-of-truth point reads & mutations |
-| `comment.comments_by_post` | `post_id` | `parent_id, created_at DESC, comment_id` | Feed pagination without ALLOW FILTERING |
+| `comment.comments` | `comment_id` | — | source-of-truth point reads & mutations (LCS) |
+| `comment.comments_by_post` | `post_id` | `parent_id, created_at DESC, comment_id` | feed pagination, no ALLOW FILTERING (TWCS) |
 
-**Nil UUID sentinel:** top-level comments are stored with `parent_id = 00000000-0000-0000-0000-000000000000` in `comments_by_post`. This is the lexicographically smallest UUID, so `WHERE post_id = ? AND parent_id = <nil>` is a valid clustering-prefix scan. Replies use their actual parent `comment_id`.
+**Nil-UUID sentinel:** top-level comments store `parent_id = 0000…0000` (lexicographically smallest),
+making the top-level scan a valid clustering prefix; replies use their actual parent `comment_id`.
 
-### Deletion Strategy Decision Tree
+**Deletion strategy:** `has_active_replies` ? **Tombstone** (null body+gif, keep row so the thread stays
+navigable) : **Purge** (physical DELETE from both tables). Both paths emit `comment.deleted`.
 
-```
-DeleteComment called
-        │
-        ▼
-has_active_replies? ──Yes──► Tombstone: null body+gif, status=Deleted, keep row
-        │                    → feed remains navigable for reply thread
-        No
-        │
-        ▼
-      Purge: DELETE from both tables physically
-```
+> **Invariants** (enforced at the aggregate boundary): text ≤ 500; must have text OR gif (`EmptyContent`);
+> complete GIF metadata (`IncompleteGifMetadata`); 1-level max nesting (`NestingDepthExceeded`); cannot
+> reply to a deleted parent (`ParentDeleted`); only author may delete (`AuthorMismatch`); no
+> re-delete (`CommentAlreadyDeleted`).
 
-Both paths emit `CommentDeleted` to Kafka regardless of strategy.
+---
 
-### Resilience Guarantees
+## 📊 Service Level Objectives (SLO)
 
-| Concern | Mechanism |
-|---|---|
-| ScyllaDB write failure on insert | Caller receives `CommentError::Storage`; idempotent retry via same `comment_id` (INSERT is last-write-wins) |
-| Kafka publish failure | `CommentError::EventPublishFailed`; engagement counters lag until retry — eventual consistency |
-| Feed table lagging after soft-delete | Both tables updated in same handler; window is sub-ms |
-| Pagination correctness under concurrent inserts | Cursor based on `created_at DESC`; new inserts after cursor are never returned — monotonically stable pages |
+| SLI | Objective | Window | Measured by |
+|---|---|---|---|
+| Feed read p99 (`ListTopLevel`/`ListReplies`) | **< 5 ms** | 1h | Scylla read histogram |
+| `CreateComment` p99 | `< <TODO> ms` | 1h | gRPC histogram |
+| Event delivery | at-least-once `comment.*` | — | publish success rate |
+| Durability | no acked comment lost | — | Scylla `LocalQuorum` |
+
+**Error budget:** `<TODO>`. **On burn:** `<TODO>`.
+
+---
+
+## 🔗 Dependencies & Blast Radius
+
+**Downstream:**
+
+| Dependency | Purpose | If down → | Degradation |
+|---|---|---|---|
+| ScyllaDB (`comment`) | durable store | reads + writes fail | **Hard** — `CMT-…/Storage` |
+| Kafka | `comment.*` emission | engagement comment counters lag | **Soft** — comments still persist |
+
+**Upstream (blast radius):**
+
+| Caller | Uses | Impact if `comment` is down |
+|---|---|---|
+| `engagement` | consumes `comment.created`/`deleted` | comment counts stop updating |
+| `notification` | consumes `comment.created` | comment notifications stop |
+
+> **Critical path?** Partially — comment writes/reads are user-facing; counter/notification propagation
+> is async and eventually consistent.
 
 ---
 
 ## 🔌 Public Interfaces & API Contract
 
-### Proto service
+### gRPC — `comment.v1.CommentService`
 
 ```protobuf
 service CommentService {
@@ -87,64 +112,68 @@ service CommentService {
 }
 ```
 
-### Domain invariants (enforced at aggregate boundary)
+> **Wire contract:** a reply's `parent_id` must always be the **top-level** `comment_id` (never another
+> reply) — the flat-tree allows exactly one nesting level. Pagination cursors are `created_at DESC`;
+> inserts after the cursor are never returned (monotonically stable pages).
 
-| Invariant | Enforcement |
-|---|---|
-| Text ≤ 500 chars | `CommentBody::new()` |
-| Must have text OR gif OR both | `Comment::create()` — `EmptyContent` error |
-| GIF metadata must be complete | `parse_gif()` — `IncompleteGifMetadata` error |
-| 1-level max nesting | `Comment::create(parent_is_top_level)` — `NestingDepthExceeded` error |
-| Cannot reply to a deleted parent | `CreateCommentHandler` — `ParentDeleted` error |
-| Only author may delete | `DeleteCommentHandler` — `AuthorMismatch` error |
-| Deleted comments cannot be re-deleted | `Comment::delete()` — `CommentAlreadyDeleted` error |
-
-### Error code table
+### Error contract (`CMT-xxxx`)
 
 | Code | Error | HTTP |
 |---|---|---|
-| `CMT-1001` | Comment not found | 404 |
-| `CMT-1002` | Comment already deleted | 409 |
-| `CMT-1003` | Author mismatch (forbidden) | 403 |
-| `CMT-2001` | Nesting depth exceeded | 422 |
-| `CMT-2002` | Parent comment not found | 404 |
-| `CMT-2003` | Parent comment is deleted | 422 |
-| `CMT-3001` | Empty content | 422 |
-| `CMT-3002` | Incomplete GIF metadata | 422 |
-| `CMT-4001` | Kafka publish failed | 500 |
-| `CMT-9001` | Invalid comment ID | 422 |
-| `CMT-9002` | Invalid post ID | 422 |
-| `CMT-9003` | Invalid profile ID | 422 |
-| `CMT-9004` | Domain violation | 422 |
+| CMT-1001/1002/1003 | not found / already deleted / author mismatch | 404 / 409 / 403 |
+| CMT-2001/2002/2003 | nesting depth / parent not found / parent deleted | 422 / 404 / 422 |
+| CMT-3001/3002 | empty content / incomplete GIF metadata | 422 |
+| CMT-4001 | Kafka publish failed | 500 |
+| CMT-9001..9004 | invalid ids / domain violation | 422 |
 
-### Kafka events published
+---
 
-| Topic | Key | Payload fields | Consumer |
+## 📨 Events & Async Contract
+
+**Publishes:**
+
+| Topic | Trigger | Key | Payload | Consumers |
+|---|---|---|---|---|
+| `comment.created` | `CreateComment` success | `comment_id` | `comment_id, post_id, author_id, parent_id, created_at_ms` | `engagement` (incr), `notification` |
+| `comment.deleted` | `DeleteComment` (either strategy) | `comment_id` | `comment_id, post_id, author_id, deleted_at_ms` | `engagement` (decr) |
+
+**Consumes:** none.
+
+> **Runtime contract:** events are published after the durable write. The downstream
+> `engagement-comment-consumer` and `notification-comment-consumer` own at-least-once handling under
+> `run_consumer`; engagement can rebuild its counter from its own Scylla table, so a transient publish
+> failure is recoverable.
+
+---
+
+## 🌩️ Failure Modes & Degradation
+
+| Failure | Symptom | Service behavior | Operator action |
 |---|---|---|---|
-| `comment.created` | `comment_id` | `comment_id, post_id, author_id, parent_id, created_at_ms` | `services/engagement` (increments comment counter) |
-| `comment.deleted` | `comment_id` | `comment_id, post_id, author_id, deleted_at_ms` | `services/engagement` (decrements comment counter) |
+| ScyllaDB insert fails | `CommentError::Storage` to caller | retry with same `comment_id` (INSERT is LWW) | check Scylla; retry is safe |
+| Kafka publish fails | `CMT-4001`; engagement counters lag | **Soft** — comment persisted; eventual consistency | check Kafka; engagement rebuilds from its ledger |
+| Feed read right after soft-delete shows old content | stale replica at `LocalOne` | expected eventual consistency (sub-ms convergence) | retry / route through `GetComment` |
+
+**Backpressure & limits.** Feed lists are cursor-paginated; both tables are updated in the same handler
+(sub-ms window between point store and feed index).
 
 ---
 
 ## 📦 Integration & Usage
 
 ```toml
-# Cargo.toml
 [dependencies]
 comment = { path = "crates/services/comment" }
 ```
 
-### Bootstrap pattern
+Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
+`comment::service::CommentService` — `build` wires the ScyllaDB repository and durable Kafka publisher;
+`register` adds the gRPC + reflection services; `health_probes` checks Scylla.
 
-Library-only: implements [`service_runtime::Service`](../../platform/service-runtime/README.md)
-as `comment::service::CommentService` (`build` wires the ScyllaDB repository and
-the durable Kafka publisher; `register` adds the gRPC + reflection services;
-`health_probes` checks Scylla). The deployable binary is
-`crates/apps/comment-server`:
+### Bootstrap (`crates/apps/comment-server`)
 
 ```rust
 use std::net::SocketAddr;
-
 use comment::service::CommentService;
 
 #[tokio::main]
@@ -152,8 +181,6 @@ async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("COMMENT_GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50057".to_owned())
         .parse()?;
-
-    // Runtime owns telemetry, config + hot-reload, traffic, health, shutdown.
     service_runtime::serve::<CommentService>(addr).await
 }
 ```
@@ -162,90 +189,74 @@ async fn main() -> anyhow::Result<()> {
 
 ## ⚙️ Configuration & Runtime Environment
 
+### Inherited infrastructure variables
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SCYLLA_NODES` | Yes | — | Comma-separated ScyllaDB contact points (`host:port`) |
-| `SCYLLA_KEYSPACE` | No | `comment` | ScyllaDB keyspace name |
-| `SCYLLA_USERNAME` | No | — | ScyllaDB authentication username |
-| `SCYLLA_PASSWORD` | No | — | ScyllaDB authentication password |
-| `KAFKA_BOOTSTRAP_SERVERS` | Yes | — | Comma-separated Kafka broker addresses |
-| `KAFKA_SECURITY_PROTOCOL` | No | `PLAINTEXT` | `PLAINTEXT` or `SASL_SSL` |
-| `KAFKA_SASL_USERNAME` | No | — | Kafka SASL username (required when `SASL_SSL`) |
-| `KAFKA_SASL_PASSWORD` | No | — | Kafka SASL password (required when `SASL_SSL`) |
-| `GRPC_PORT` | No | `50054` | Port for the gRPC server to bind |
-| `RUST_LOG` | No | `info` | Tracing filter (e.g. `comment=debug,info`) |
+| `SCYLLA_NODES` | **Yes** | — | ScyllaDB contact points (`host:port`). |
+| `SCYLLA_KEYSPACE` | No | `comment` | Keyspace (see migrations). |
+| `KAFKA_BOOTSTRAP_SERVERS` | **Yes** | — | Kafka brokers. |
+| `KAFKA_SECURITY_PROTOCOL` / `KAFKA_SASL_*` | No | `PLAINTEXT` | Auth for managed Kafka. |
+| `COMMENT_GRPC_ADDR` | No | `0.0.0.0:50057` | gRPC bind address. |
+
+> Full `SCYLLA_*` / `KAFKA_*` tuning lives in the shared storage/transport crates.
+
+### Compile-time features
+- `build.rs` compiles `proto/comment/v1/*.proto` and emits the reflection descriptor set.
+
+---
+
+## 🚀 Deployment, Migrations & Rollback
+
+- **Migrations:** `0001_create_keyspace.cql` → `0002_create_comments_table.cql` →
+  `0003_create_comments_by_post_table.cql` against `comment`, applied **before** first start.
+- **Rollout/Rollback:** `<TODO>`; stateless service, safe to roll.
+- **Schema gotcha:** the nil-UUID sentinel and `comments_by_post` clustering order are a read contract —
+  do not change after data exists.
 
 ---
 
 ## 📈 Telemetry, Performance & Metrics
 
-**Runtime prerequisite:** Tokio multi-thread runtime (`rt-multi-thread` feature).
+- **Runtime:** Tokio multi-thread. Key spans: `comment.create`, `comment.delete`, `scylla.*`,
+  `kafka.publish`.
 
-### Key OTel spans emitted
-
-| Span | Layer |
-|---|---|
-| `comment.create` | CQRS command handler |
-| `comment.delete` | CQRS command handler |
-| `scylla.insert` / `scylla.select` / `scylla.update` / `scylla.delete` | ScyllaDB `HistoryListener` |
-| `kafka.publish` | Kafka producer |
-
-### Recommended Prometheus alerts
-
-| Metric pattern | Alert condition | Severity |
+| Signal | Why it matters | Suggested alert |
 |---|---|---|
-| `comment_event_publish_errors_total` | `rate > 0` for 5 min | High — engagement counters will diverge |
-| `scylla_execution_errors_total{service="comment"}` | `rate > 0.1` for 2 min | High |
-| `grpc_server_handling_seconds_bucket{rpc="CreateComment"}` | P99 > 500 ms | Medium |
-| `grpc_server_handled_total{grpc_code="FAILED_PRECONDITION"}` | Spike > baseline | Low — possible client-side abuse |
+| `comment_event_publish_errors_total` | engagement counters diverge | rate > 0 for 5m ⇒ high |
+| `scylla_execution_errors_total{service="comment"}` | store health | rate > 0.1 for 2m ⇒ high |
+| `CreateComment` p99 | write latency | > 500 ms ⇒ medium |
+| `FAILED_PRECONDITION` rate | possible client abuse | spike > baseline ⇒ low |
 
 ---
 
-## 🛠️ Local Development & Contribution
+## 🛠️ Local Development
 
 ```bash
-# Start infrastructure dependencies
-docker compose up -d scylla kafka
-
-# Apply CQL migrations (manual or via migration tool)
-cqlsh < crates/services/comment/migrations/0001_create_keyspace.cql
-cqlsh < crates/services/comment/migrations/0002_create_comments_table.cql
-cqlsh < crates/services/comment/migrations/0003_create_comments_by_post_table.cql
-
-# Build
-cargo build -p comment
-
-# Lint
-cargo clippy -p comment -- -D warnings
-
-# Format
-cargo fmt -p comment
-
-# Unit tests
-cargo test -p comment
+cargo build -p comment && cargo clippy -p comment -- -D warnings
+cargo test  -p comment
+docker compose up -d scylla kafka             # repo-root compose
+for f in crates/services/comment/migrations/*.cql; do cqlsh -f "$f"; done
 ```
 
 ---
 
 ## 🚨 Troubleshooting & Runbook
 
-### 1. Engagement comment counters are stale after comment creation
+> Format: **symptom → root cause → mitigation.**
 
-**Root cause:** Kafka publish succeeded but the engagement service's `CommentEventConsumer` is lagging or stopped.
+**1. Engagement comment counters are stale after a comment is created.**
+Root cause: the `comment.created` event published, but `engagement-comment-consumer` is lagging or
+stopped. Mitigation: check that consumer group's lag; restart the engagement comment consumer.
+Engagement rebuilds its counter from its own `post_interaction_counters` Scylla table on restart — no
+manual reconciliation needed.
 
-**Mitigation:**
-1. Check `engagement-comment-consumer` consumer-group lag in your Kafka console.
-2. Restart the `CommentEventConsumer` background task in the engagement service.
-3. The engagement service can rebuild its counter from its own ScyllaDB `post_interaction_counters` table on restart — no manual reconciliation needed.
+**2. `CMT-2001 NestingDepthExceeded` for a valid-looking reply.**
+Root cause: the request's `parent_id` points at a *reply* (non-nil parent), i.e. a reply-to-reply.
+Mitigation: clients must always use the original top-level `comment_id` as `parent_id`; verify the
+target's `parent_id` in `comment.comments` is the nil UUID.
 
-### 2. `CMT-2001 NestingDepthExceeded` returned for a valid reply
-
-**Root cause:** The `parent_id` passed in the request refers to a reply comment (non-nil UUID parent), not a top-level comment. The client is attempting to create a reply-to-reply.
-
-**Mitigation:** The client must always use the original top-level `comment_id` as `parent_id`, never the `comment_id` of a reply. Verify by checking `parent_id` in `comment.comments` for the target comment — it must be `00000000-0000-0000-0000-000000000000`.
-
-### 3. Feed table (`comments_by_post`) shows deleted content after soft-delete
-
-**Root cause:** ScyllaDB read-your-writes consistency is not guaranteed across nodes at `LOCAL_ONE`. The `ScyllaProfileKind::Fast` profile may return a stale replica immediately after a `Strict` write.
-
-**Mitigation:** This is expected eventual-consistency behaviour. The soft-delete propagates within milliseconds. For user-facing reads that must be consistent (e.g., author re-loading their own comment), add a short retry with `LOCAL_QUORUM` or route through the `GetComment` RPC (which reads from `comment.comments` under the `Fast` profile, which still converges faster than the feed table).
+**3. `comments_by_post` shows deleted content right after a soft-delete.**
+Root cause: read-your-writes isn't guaranteed at `LocalOne`; the Fast profile may hit a stale replica.
+Mitigation: expected eventual consistency (converges in ms). For consistency-sensitive reads, retry or
+route through `GetComment`.
