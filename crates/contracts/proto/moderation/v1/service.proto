@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package moderation.v1;
+
+import "moderation/v1/messages.proto";
+
+option java_package = "com.coreplatform.moderation.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/moderation/v1;moderationv1";
+
+// ModerationService is the platform's integrity decision-of-record and
+// enforcement brain (trust, safety & compliance).
+//
+// This SYNCHRONOUS surface is deliberately minimal. Moderation is overwhelmingly
+// asynchronous and post-hoc: content is reviewed off the write path (Plane A,
+// Kafka ingestion) and enforcement is read off the hot path via denormalized
+// state (Plane B, `moderation.v1.events` + a Redis projection). The only
+// synchronous, latency-bound entry point is the Screen gate (Plane C), and only
+// for catastrophic-harm categories.
+//
+// Boundary: moderation DECIDES; it does not store content (the content services
+// do) and it does not execute account suspension (`account` does). It consumes
+// classifier signals — it never runs ML inference inline. The wire surface
+// exposes only normalized integrity types (SubjectRef, PolicyCategory,
+// ActionType, ids) — never classifier-vendor or content-internal fields.
+service ModerationService {
+
+    // ── Plane C: pre-publish screening (fail-closed, catastrophic harm only) ──
+
+    // Synchronous, bounded-latency, deterministic screen against the known-bad
+    // corpus (hash match + critical-term blocklist). No ML inference inline.
+    // Called only by `media`/`post` for zero-tolerance categories; for those the
+    // caller's policy is fail-closed (BLOCK — and an unavailable gate — prevent
+    // publication). ALLOW means "no known-bad match", not "approved".
+    rpc Screen(ScreenRequest) returns (ScreenResponse);
+
+    // ── Case / queue lifecycle (ops console) ──────────────────────────────────
+
+    // Open (or idempotently return) a review case for a subject.
+    rpc OpenCase(OpenCaseRequest) returns (OpenCaseResponse);
+
+    // Assign a case to a reviewer.
+    rpc AssignCase(AssignCaseRequest) returns (AssignCaseResponse);
+
+    // Action or dismiss a case: records an immutable Decision under a pinned
+    // policy version and, unless dismissed, creates the EnforcementAction.
+    rpc DecideCase(DecideCaseRequest) returns (DecideCaseResponse);
+
+    // List the review queue (paged) for triage UIs.
+    rpc ListQueue(ListQueueRequest) returns (ListQueueResponse);
+
+    // ── Appeals ───────────────────────────────────────────────────────────────
+
+    // File an appeal against a decision (subject to the appeal window and
+    // appealability of the category).
+    rpc FileAppeal(FileAppealRequest) returns (FileAppealResponse);
+
+    // Resolve an appeal: uphold the original decision, or overturn it (which
+    // records a reversal decision and reverses the enforcement).
+    rpc ResolveAppeal(ResolveAppealRequest) returns (ResolveAppealResponse);
+
+    // ── Compliance / back-office ──────────────────────────────────────────────
+
+    // Return the DSA machine-readable Statement of Reasons for a decision.
+    rpc GetStatementOfReasons(GetStatementOfReasonsRequest) returns (GetStatementOfReasonsResponse);
+
+    // INTERNAL, discouraged on the hot path. Coarse enforcement state for an
+    // actor, for back-office/cold reads only — the fleet reads enforcement via
+    // Plane B (events + Redis projection), not this RPC.
+    rpc GetEnforcementState(GetEnforcementStateRequest) returns (GetEnforcementStateResponse);
+}

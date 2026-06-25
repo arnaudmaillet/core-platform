@@ -1,0 +1,233 @@
+syntax = "proto3";
+
+package moderation.v1;
+
+import "moderation/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.moderation.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/moderation/v1;moderationv1";
+
+// ── Shared value objects ──────────────────────────────────────────────────────
+
+// The thing being moderated. The linchpin reference type: moderation holds this,
+// not the content bytes. `actor_id` is the responsible account; `surface` is the
+// placement (e.g. "feed", "dm", "profile") for surface-scoped policy.
+message SubjectRef {
+    EntityType  entity_type = 1;
+    string      entity_id   = 2;
+    string      actor_id    = 3;
+    string      surface     = 4;
+}
+
+// A precomputed content fingerprint. Moderation matches these against the
+// known-bad corpus; it never receives raw content bytes (it is not a content
+// store). `algorithm` is e.g. "pdq", "md5", "photodna".
+message ContentHash {
+    string  algorithm = 1;
+    string  value     = 2;
+}
+
+// A single integrity signal contributing to a case (a classifier verdict or a
+// user-report-derived observation). Summarized for the review surface.
+message SignalSummary {
+    // Origin, e.g. "classifier:image-v3" or "report".
+    string                      source      = 1;
+    PolicyCategory              category    = 2;
+    // [0.0, 1.0] model/aggregate confidence.
+    float                       confidence  = 3;
+    google.protobuf.Timestamp   observed_at = 4;
+}
+
+// A review case as seen on the ops console.
+message CaseView {
+    string                      case_id   = 1;
+    SubjectRef                  subject   = 2;
+    CaseStatus                  status    = 3;
+    PolicyCategory              category  = 4;
+    // Triage routing hints.
+    string                      queue     = 5;
+    string                      priority  = 6;
+    string                      assignee  = 7; // reviewer id; empty if unassigned
+    repeated SignalSummary      signals   = 8;
+    google.protobuf.Timestamp   opened_at = 9;
+}
+
+// An immutable entry in the decision ledger (the legal evidence record). A
+// reversal is a NEW decision that references the original — never a mutation.
+message Decision {
+    string                      decision_id   = 1;
+    SubjectRef                  subject       = 2;
+    ActionType                  action        = 3;
+    PolicyCategory              category      = 4;
+    // The policy version this decision was made under (audit consistency).
+    string                      policy_version = 5;
+    string                      rationale     = 6;
+    // Reviewer id (human) or rule id (automated) — disambiguated by `automated`.
+    string                      decided_by    = 7;
+    bool                        automated     = 8;
+    // Set when this decision reverses an earlier one (appeal overturn / re-review).
+    string                      reverses_decision_id = 9;
+    google.protobuf.Timestamp   decided_at    = 10;
+}
+
+// The executable, lifecycle-bearing consequence of a decision.
+message EnforcementView {
+    string                      enforcement_id = 1;
+    SubjectRef                  subject        = 2;
+    ActionType                  action         = 3;
+    EnforcementStatus           status         = 4;
+    // Monotonic per-subject version; reversal must observe the current version.
+    int64                       version        = 5;
+    google.protobuf.Timestamp   applied_at     = 6;
+    // Unset for permanent actions (BAN); set for time-boxed restrictions.
+    google.protobuf.Timestamp   expires_at     = 7;
+}
+
+// An appeal against a decision.
+message AppealView {
+    string                      appeal_id    = 1;
+    string                      decision_id  = 2;
+    AppealStatus                status       = 3;
+    string                      statement    = 4; // the appellant's argument
+    google.protobuf.Timestamp   filed_at     = 5;
+    google.protobuf.Timestamp   resolved_at  = 6;
+}
+
+// ── Screen · Plane C (the narrow, fail-closed pre-publish gate) ───────────────
+
+message ScreenRequest {
+    SubjectRef               subject     = 1;
+    // Precomputed perceptual/cryptographic hashes to match against the corpus.
+    repeated ContentHash     hashes      = 2;
+    // Optional short text screened against the critical-term blocklist. Transient:
+    // it transits TLS for the lookup and is NEVER persisted by this service.
+    string                   text        = 3;
+    // Which catastrophic-harm categories to screen. Empty ⇒ all zero-tolerance.
+    repeated PolicyCategory  categories  = 4;
+}
+
+message ScreenResponse {
+    ScreenVerdict            verdict           = 1;
+    repeated PolicyCategory  matched_categories = 2;
+    // Corpus entry reference for the audit trail when a match occurs.
+    string                   match_reference   = 3;
+}
+
+// ── Case / queue management (ops console) ─────────────────────────────────────
+
+message OpenCaseRequest {
+    SubjectRef      subject  = 1;
+    PolicyCategory  category = 2;
+    string          reason   = 3;
+}
+
+message OpenCaseResponse {
+    CaseView  case    = 1;
+    // False when an existing case for this subject was returned (idempotent open).
+    bool      created = 2;
+}
+
+message AssignCaseRequest {
+    string  case_id     = 1;
+    string  reviewer_id = 2;
+}
+
+message AssignCaseResponse {
+    CaseView  case = 1;
+}
+
+message DecideCaseRequest {
+    string          case_id        = 1;
+    ActionType      action         = 2;
+    PolicyCategory  category       = 3;
+    string          rationale      = 4;
+    string          reviewer_id    = 5;
+    // Policy version the reviewer is deciding under (pinned for audit).
+    string          policy_version = 6;
+}
+
+message DecideCaseResponse {
+    Decision         decision    = 1;
+    // Present unless the action was NO_ACTION/dismiss.
+    EnforcementView  enforcement = 2;
+}
+
+message ListQueueRequest {
+    string      queue         = 1;
+    CaseStatus  status_filter = 2; // UNSPECIFIED ⇒ all open work
+    int32       page_size     = 3;
+    string      page_token    = 4;
+}
+
+message ListQueueResponse {
+    repeated CaseView  cases           = 1;
+    string             next_page_token = 2;
+}
+
+// ── Appeals ───────────────────────────────────────────────────────────────────
+
+message FileAppealRequest {
+    string  decision_id = 1;
+    string  actor_id    = 2;
+    string  statement   = 3;
+}
+
+message FileAppealResponse {
+    AppealView  appeal = 1;
+}
+
+message ResolveAppealRequest {
+    string  appeal_id   = 1;
+    // True ⇒ overturn (records a reversal decision); false ⇒ uphold.
+    bool    overturn    = 2;
+    string  rationale   = 3;
+    string  reviewer_id = 4;
+}
+
+message ResolveAppealResponse {
+    AppealView  appeal   = 1;
+    // The reversal decision, present only when the appeal was overturned.
+    Decision    reversal = 2;
+}
+
+// ── Compliance / back-office ──────────────────────────────────────────────────
+
+// The DSA Article 17 machine-readable Statement of Reasons for a single decision.
+message StatementOfReasons {
+    string                      decision_id   = 1;
+    SubjectRef                  subject       = 2;
+    PolicyCategory              category      = 3;
+    ActionType                  action        = 4;
+    string                      policy_version = 5;
+    // The factual basis for the decision.
+    string                      facts         = 6;
+    // The policy/legal ground relied upon.
+    string                      legal_ground  = 7;
+    bool                        automated     = 8;
+    // Whether the affected user was in scope of EU territorial obligations.
+    bool                        territorial_eu = 9;
+    google.protobuf.Timestamp   decided_at    = 10;
+}
+
+message GetStatementOfReasonsRequest {
+    string  decision_id = 1;
+}
+
+message GetStatementOfReasonsResponse {
+    StatementOfReasons  statement = 1;
+}
+
+// ── Enforcement state (INTERNAL — discouraged on the hot path) ────────────────
+
+message GetEnforcementStateRequest {
+    string  actor_id = 1;
+}
+
+message GetEnforcementStateResponse {
+    // Coarse "is this actor under any active restriction" — the same fact the
+    // Redis projection serves on the hot path. Prefer Plane B (events/projection).
+    bool                      actor_restricted    = 1;
+    repeated EnforcementView  active_enforcements = 2;
+}
