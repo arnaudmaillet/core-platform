@@ -1,141 +1,129 @@
-# validate-core — Zero-dependency validation abstraction
+# `validate-core` — Zero-dependency validation abstraction shared by `cqrs` and `validation`
 
-## 🎯 Overview & Service Role
+> **Crate Card**
+>
+> | | |
+> |---|---|
+> | **Role** | `foundation` — the validation abstraction boundary (Separated Interface) |
+> | **Package** | `validate-core` (dir: `crates/foundation/validate-core`) |
+> | **Consumed by** | `cqrs` (as a `Command` supertrait), `validation` (middleware + error types) |
+> | **Depends on** | **nothing** — zero dependencies is a hard, enforced constraint |
+> | **Stability** | stable contract |
+> | **Feature flags** | none (empty feature set enforces zero-dep) |
+> | **Owner** | `<TODO: team>` · `<TODO: #slack-channel>` |
 
-`validate-core` is the workspace-wide **validation abstraction boundary**. It defines exactly two public items:
+---
 
-- **`FieldViolation`** — a single field-level constraint failure carrying a stable `VAL-xxxx` code, a dot-notation field path, and a human-readable message.
-- **`Validate`** — a trait that any type can implement to express its own invariant checks, returning either `Ok(())` or `Err(Vec<FieldViolation>)` with a complete picture of every failure in one pass.
+## 🎯 Overview & role
 
-Its sole purpose is to allow `cqrs` (which adds `Validate` as a `Command` supertrait) and `validation` (which provides the full middleware and error types) to both point inward toward a shared abstraction without depending on each other. Zero external dependencies is a hard constraint — it must never grow a dependency.
+`validate-core` is the workspace-wide **validation abstraction boundary**. It defines exactly two
+public items: `FieldViolation` (a single field-level failure carrying a stable `VAL-xxxx` code, a
+dot-notation field path, and a message) and `Validate` (a trait any type implements to express its
+own invariant checks, returning `Ok(())` or `Err(Vec<FieldViolation>)`).
 
-## 📐 Architecture & Concepts
+**Architectural boundary** — it exists so `cqrs` and `validation` can both point inward at a shared
+abstraction **without depending on each other**. It must never grow a dependency, never pull in
+middleware, HTTP types, or error-framework machinery.
+
+---
+
+## 📐 Architecture & key decisions
 
 ```
        validate-core          (zero deps — the abstraction)
         ▲            ▲
         │            │
       cqrs       validation
-  (requires      (provides
-  Validate as     ValidationLayer
-  Command         + ValidationError
-  supertrait)     + VAL-xxxx codes)
+  (Validate as    (ValidationLayer + ValidationError + VAL-xxxx codes)
+   Command supertrait)
 ```
 
-**Why a separate crate and not a module inside `validation`?**
-If `Validate` lived in `validation`, then `cqrs` would depend on `validation`, pulling in middleware, HTTP status codes, and error-framework machinery. `cqrs` would own the bus protocol and the operational stack — a violation of the Single Responsibility Principle. `validate-core` is the Separated Interface pattern: both sides of the dependency graph converge on this thin abstraction.
+- **Separated Interface, not a module in `validation`** — if `Validate` lived in `validation`, `cqrs`
+  would depend on `validation` and inherit its middleware/HTTP/error stack, violating SRP. A thin
+  third crate lets both sides of the graph converge without coupling.
+- **Aggregation, not short-circuit** — `validate()` must collect **all** violations before returning.
+  A form with three bad fields yields three codes in one round-trip, not one error per submit.
+- **`&'static str` fields** — `field` and `code` are static, so a violation allocates nothing on the
+  validation hot path; only the `Vec` allocates, and only when there *is* a violation.
 
-**Aggregation, not short-circuit:**
-`validate()` is required to collect **all** violations before returning. A client that submits a form with three invalid fields must receive three error codes in a single round-trip, not one per request.
+---
 
-## 🔌 Public Interfaces & API Contract
+## 🔌 Public API & contract
 
 ```rust
-/// A single field-level constraint failure.
 pub struct FieldViolation {
     pub field:   &'static str,   // dot-notation path, e.g. "user.email"
     pub code:    &'static str,   // stable VAL-xxxx code, e.g. "VAL-1001"
-    pub message: String,         // human-readable explanation
+    pub message: String,
 }
+impl FieldViolation { pub fn new(field: &'static str, code: &'static str, message: impl Into<String>) -> Self; }
 
-impl FieldViolation {
-    pub fn new(field: &'static str, code: &'static str, message: impl Into<String>) -> Self;
-}
-
-/// Self-validation contract for any type.
 pub trait Validate {
-    /// Default implementation returns Ok(()) — override when constraints exist.
-    fn validate(&self) -> Result<(), Vec<FieldViolation>> { Ok(()) }
+    fn validate(&self) -> Result<(), Vec<FieldViolation>> { Ok(()) }   // default no-op — override when constrained
 }
 ```
 
-**Invariants:**
-- `field` and `code` are `&'static str` — no heap allocation per violation on the hot validation path.
-- A returned `Err(violations)` vec must be non-empty by convention (enforced with `debug_assert!` in `ValidationError::new` in the `validation` crate).
-- `Validate` is a supertrait of `cqrs::Command`. Every command automatically satisfies it via the default no-op unless explicitly overridden.
+> **Contract notes:** `Validate` is a supertrait of `cqrs::Command`, so every command satisfies it via
+> the default unless overridden. A returned `Err(violations)` must be **non-empty** by convention
+> (`ValidationError::new` in the `validation` crate `debug_assert!`s this). `field`/`code` must stay
+> `&'static str` — never `String`.
 
-## 📦 Integration & Usage
+---
+
+## 📦 Integration
 
 ```toml
-# Cargo.toml
 [dependencies]
 validate-core = { workspace = true }
 ```
 
-**Implementing on a command:**
-
 ```rust
 use validate_core::{FieldViolation, Validate};
-
-pub struct CreateUserCommand {
-    pub username: String,
-    pub age:      u8,
-}
 
 impl Validate for CreateUserCommand {
     fn validate(&self) -> Result<(), Vec<FieldViolation>> {
         let mut v = Vec::new();
-
-        if self.username.is_empty() {
-            v.push(FieldViolation::new("username", "VAL-1001", "must not be empty"));
-        }
-        if self.username.len() > 32 {
-            v.push(FieldViolation::new("username", "VAL-1002", "must be at most 32 characters"));
-        }
-        if self.age < 13 {
-            v.push(FieldViolation::new("age", "VAL-1004", "must be at least 13"));
-        }
-
+        if self.username.is_empty()   { v.push(FieldViolation::new("username", "VAL-1001", "must not be empty")); }
+        if self.username.len() > 32   { v.push(FieldViolation::new("username", "VAL-1002", "must be at most 32 characters")); }
+        if self.age < 13              { v.push(FieldViolation::new("age", "VAL-1004", "must be at least 13")); }
         if v.is_empty() { Ok(()) } else { Err(v) }
     }
 }
+
+// A command with no constraints uses the no-op default:
+impl Validate for PingCommand {}
 ```
 
-**Command with no validation (uses the no-op default):**
+---
 
-```rust
-use validate_core::Validate;
+## ⚙️ Configuration & feature flags
 
-pub struct PingCommand;
-impl Validate for PingCommand {}  // impl Command for PingCommand is sufficient
-```
+None. No runtime config, no env vars, no cargo features — the empty feature set is what *enforces* the
+zero-dependency guarantee.
 
-## ⚙️ Configuration & Runtime Environment
+---
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| — | — | — | This crate has no runtime configuration. It is a pure compile-time abstraction. |
-
-**Cargo features:** None. The zero-dependency guarantee is enforced by keeping the feature set empty.
-
-## 📈 Telemetry, Performance & Metrics
-
-- **No async runtime dependency.** `validate()` is a synchronous, infallible function call on the hot path.
-- **Allocation cost:** one `Vec` allocation only when violations are found. The happy path (`Ok(())`) allocates nothing.
-- **No metrics exposed.** Violation counts and field-level telemetry are the responsibility of the `ValidationLayer` in the `validation` crate.
-
-## 🛠️ Local Development & Contribution
+## 🧪 Testing
 
 ```bash
-# Build
-cargo build -p validate-core
-
-# Lint
-cargo clippy -p validate-core -- -D warnings
-
-# Test (doc-tests only — no unit tests by design)
-cargo test -p validate-core
+cargo test   -p validate-core          # doc-tests only (no unit tests by design)
+cargo clippy -p validate-core --all-targets
 ```
 
-**Hard constraints for contributors:**
-1. `[dependencies]` in `Cargo.toml` must remain empty.
-2. No `use` of `std::collections`, async types, or error-framework types.
-3. `FieldViolation` fields (`field`, `code`) must remain `&'static str` — never `String`.
+---
 
-## 🚨 Troubleshooting & Runbook
+## 🚨 Gotchas / FAQ
 
-**`validate_core::Validate` is not implemented for `MyCommand` and `Command` requires it.**
-Every type that implements `cqrs::Command` must also implement `Validate`. Add `impl Validate for MyCommand {}` to use the no-op default, or provide a real implementation if the command carries user-supplied data.
+> The sharp edges. One entry per real trap.
 
-**`violations` vec is empty but `ValidationError::new` panicked in debug mode.**
-`ValidationError::new` asserts the vec is non-empty. Your `validate()` implementation must only return `Err(v)` when `v` contains at least one `FieldViolation`. Guard with `if v.is_empty() { Ok(()) } else { Err(v) }`.
+**1. `Validate is not implemented for MyCommand` (and `Command` requires it).**
+Every `cqrs::Command` must also implement `Validate`. Add `impl Validate for MyCommand {}` for the
+no-op default, or a real impl if the command carries user-supplied data.
+
+**2. `ValidationError::new` panicked in debug though my `violations` vec was empty.**
+It `debug_assert!`s the vec is non-empty. `validate()` must only return `Err(v)` when `v` has ≥ 1
+violation — guard with `if v.is_empty() { Ok(()) } else { Err(v) }`.
+
+**3. A PR added a dependency / a `std::collections` import and CI/review pushed back.**
+By design: `[dependencies]` must remain empty and no `use` of `std::collections`, async, or
+error-framework types is allowed. The zero-dep constraint is the crate's entire reason to exist.
