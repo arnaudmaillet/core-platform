@@ -55,7 +55,11 @@ impl TestHarness {
         };
         let pool = PgPoolBuilder::build(config).await.expect("integration: Postgres pool");
 
-        let app = App::build(pool).await.expect("integration: build account app");
+        // Log publisher — this suite tests account behaviour, not event emission.
+        let publisher = std::sync::Arc::new(account::infrastructure::event::LogEventPublisher);
+        let app = App::build(pool, publisher)
+            .await
+            .expect("integration: build account app");
 
         Self { command_bus: app.command_bus, query_bus: app.query_bus }
     }
