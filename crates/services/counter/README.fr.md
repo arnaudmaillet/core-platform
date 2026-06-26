@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 58970053dfe1f633ebb5943250d8b9325f6ce510115aeee1d0a8cc5c3a5fb9fa
+  source_sha256: f88ba161dbeb9f4f620cb17197ee8933b5375043d899629788f8fb6be2f70dc6
   translated_at: 2026-06-26
   status: complete
 ---
@@ -206,7 +206,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-> **État de build :** complet jusqu'à la Phase 7 (les 8 phases : scaffold → proto → domaine → application+ports → adaptateurs → câblage serveur+worker → IT live → durcissement). La suite d'intégration live est protégée par `integration-counter` et exerce les vrais tiers Redis + Postgres + Scylla. Le `Reconciler` de la boucle de réconciliation + les écritures de guérison sont construits et testés ; câbler une boucle de réconciliation supervisée attend sa `ReconciliationSource` gRPC concrète (vers `engagement` / `social-graph`) — un suivi documenté, avec une cadence de popularité autonome et le producteur concret de fan-out par shard.
+> **État de build :** complet jusqu'à la Phase 7 (les 8 phases : scaffold → proto → domaine → application+ports → adaptateurs → câblage serveur+worker → IT live → durcissement). La suite d'intégration live est protégée par `integration-counter` et exerce les vrais tiers Redis + Postgres + Scylla. **La boucle de réconciliation est câblée :** le worker exécute un balayage supervisé qui pagine les paires réconciliables depuis le registre et guérit la dérive des compteurs exacts contre `social-graph` (le système de référence autoritaire) via `GetRelationStatus`. *Follower/following* sont réconciliés aujourd'hui ; la réconciliation *like/share/comment* reste différée — `engagement` expose des scores de réaction pondérés (pas un compte de réactions), et ses compteurs share/comment sont les approximatifs que ce service supersède. Suivis restants : une cadence de popularité autonome, le producteur concret de fan-out par shard, et un hook de drain à l'arrêt gracieux.
 >
 > **Autorisation (exigence de déploiement) :** `counter` ne s'auto-autorise en rien. Les RPC de lecture sont des magnitudes agrégées exposées à l'appelant ; contrôler l'accès au gateway / `auth-context` avant exposition. Les compteurs ne portent aucune identité par-acteur, donc ne fuitent aucune appartenance.
 
@@ -225,8 +225,9 @@ async fn main() -> anyhow::Result<()> {
 | `COUNTER_SHARD_COUNT` | Non | `16` | shards de clé pour entités chaudes (`entity_id:{0..N}`) |
 | `COUNTER_READ_TIMEOUT_MS` | Non | `50` | timeout dur de lecture chaude par requête ; à expiration la lecture échoue **open** (total ledger périmé) |
 | `COUNTER_POPULARITY_INTERVAL_S` | Non | `60` | cadence du signal de popularité (réservé ; actuellement couplé au flush) |
-| `COUNTER_RECONCILE_INTERVAL_S` | Non | `3600` | cadence de la boucle de réconciliation (réservé ; attend la source concrète) |
+| `COUNTER_RECONCILE_INTERVAL_S` | Non | `3600` | cadence du balayage de réconciliation (correction de dérive follower/following) |
 | `COUNTER_DRIFT_TOLERANCE` | Non | `5` | dérive absolue tolérée avant correction d'un compteur exact par la réconciliation |
+| `COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT` | Non | `http://localhost:50053` | endpoint `social-graph` — comptes follower/following autoritaires pour la réconciliation |
 
 ### Variables d'infrastructure héritées
 

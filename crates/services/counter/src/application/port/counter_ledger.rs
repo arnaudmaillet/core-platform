@@ -47,4 +47,26 @@ pub trait CounterLedger: Send + Sync + 'static {
         metric: Metric,
         value: i64,
     ) -> Result<(), CounterError>;
+
+    /// Page through the `(entity, metric)` pairs the reconciliation loop can correct
+    /// — those whose metric has an authoritative source (today: follower/following).
+    /// `after` is the opaque cursor of the last pair from the previous page
+    /// (`"{kind}:{id}:{metric}"`); `None` starts from the beginning. An empty result
+    /// signals the end of the sweep (the loop wraps back to the start).
+    async fn list_reconcilable(
+        &self,
+        after: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<(EntityRef, Metric)>, CounterError>;
+}
+
+/// The opaque reconciliation cursor for a pair — must match the ordering key the
+/// ledger pages by.
+pub fn reconcile_cursor(entity: &EntityRef, metric: Metric) -> String {
+    format!(
+        "{}:{}:{}",
+        entity.kind.as_str(),
+        entity.id.as_str(),
+        metric.as_str()
+    )
 }

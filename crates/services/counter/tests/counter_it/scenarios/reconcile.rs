@@ -42,3 +42,31 @@ async fn corrects_exact_counter_drift_on_both_tiers() {
     assert_eq!(h.total(&profile, Metric::Like).await, Some(100));
     assert_eq!(h.read(&profile, &[Metric::Like]).await.get(Metric::Like), Some(100));
 }
+
+#[tokio::test]
+async fn candidate_scan_finds_follower_pairs_on_live_ledger() {
+    use counter::domain::Observation;
+
+    let h = Harness::start().await;
+    let profile = fresh_profile();
+
+    // Accumulate a follower count so a reconcilable row exists in counter_totals.
+    let observations = (0..30)
+        .map(|i| Observation::sum(profile.clone(), Metric::Follower, 1, at(1_000 + i)).unwrap())
+        .collect();
+    h.ingest(observations).await;
+
+    // The real Postgres candidate scan (synthetic-key cursor) must surface this
+    // profile's follower pair; approximate metrics (views) never appear.
+    let pairs = h.ledger.list_reconcilable(None, 1_000).await.unwrap();
+    assert!(
+        pairs
+            .iter()
+            .any(|(e, m)| e.id.as_str() == profile.id.as_str() && *m == Metric::Follower),
+        "live candidate scan should include the seeded follower pair"
+    );
+    assert!(
+        pairs.iter().all(|(_, m)| matches!(m, Metric::Follower | Metric::Following)),
+        "only follower/following are reconcilable"
+    );
+}

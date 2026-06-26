@@ -152,4 +152,34 @@ mod tests {
         let outcome = fx.reconciler(5).reconcile(&post("ghost"), Metric::Like).await.unwrap();
         assert_eq!(outcome, ReconcileOutcome::NotApplicable);
     }
+
+    fn profile(id: &str) -> EntityRef {
+        EntityRef::new(EntityKind::Profile, EntityId::new(id).unwrap())
+    }
+
+    #[tokio::test]
+    async fn candidate_scan_lists_only_reconcilable_metrics_and_pages() {
+        use crate::application::port::{CounterLedger, reconcile_cursor};
+
+        let fx = Fixture::new();
+        fx.ledger.seed_total(&profile("a"), Metric::Follower, 10);
+        fx.ledger.seed_total(&profile("a"), Metric::Following, 5);
+        fx.ledger.seed_total(&profile("b"), Metric::Follower, 20);
+        fx.ledger.seed_total(&post("p"), Metric::View, 999); // approximate → excluded
+        fx.ledger.seed_total(&post("p"), Metric::Like, 7); // no source RPC → excluded
+
+        // Full page: exactly the three follower/following pairs, cursor-ordered.
+        let all = fx.ledger.list_reconcilable(None, 100).await.unwrap();
+        assert_eq!(all.len(), 3);
+        assert!(all.iter().all(|(e, m)| e.kind == EntityKind::Profile
+            && matches!(m, Metric::Follower | Metric::Following)));
+
+        // Paging: first 2, then the rest after the cursor.
+        let first = fx.ledger.list_reconcilable(None, 2).await.unwrap();
+        assert_eq!(first.len(), 2);
+        let (last_e, last_m) = first.last().unwrap();
+        let cursor = reconcile_cursor(last_e, *last_m);
+        let rest = fx.ledger.list_reconcilable(Some(&cursor), 100).await.unwrap();
+        assert_eq!(rest.len(), 1);
+    }
 }

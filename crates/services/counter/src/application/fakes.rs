@@ -276,6 +276,37 @@ impl CounterLedger for InMemoryLedger {
             .insert(mkey(entity, metric), value);
         Ok(())
     }
+
+    async fn list_reconcilable(
+        &self,
+        after: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<(EntityRef, Metric)>, CounterError> {
+        self.guard()?;
+        let totals = self.totals.lock().unwrap();
+        let mut pairs: Vec<(String, EntityRef, Metric)> = totals
+            .keys()
+            .filter_map(|(kind, id, metric)| {
+                let metric = Metric::try_from_str(metric).ok()?;
+                if !matches!(metric, Metric::Follower | Metric::Following) {
+                    return None;
+                }
+                let entity = EntityRef::new(
+                    crate::domain::EntityKind::try_from_str(kind).ok()?,
+                    crate::domain::EntityId::new(id.clone()).ok()?,
+                );
+                let cursor = format!("{kind}:{id}:{}", metric.as_str());
+                Some((cursor, entity, metric))
+            })
+            .collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(pairs
+            .into_iter()
+            .filter(|(cursor, _, _)| after.map(|a| cursor.as_str() > a).unwrap_or(true))
+            .take(limit.max(0) as usize)
+            .map(|(_, entity, metric)| (entity, metric))
+            .collect())
+    }
 }
 
 // ── Cold tier (Scylla time-series analogue) ───────────────────────────────────

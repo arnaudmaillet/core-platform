@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use postgres_storage::TransactionManager;
 
 use crate::application::port::{CounterLedger, FlushOutcome};
-use crate::domain::{EntityRef, Metric, WindowDelta};
+use crate::domain::{EntityId, EntityKind, EntityRef, Metric, WindowDelta};
 use crate::error::CounterError;
 
 /// Atomically: record the window (idempotent), and advance the total only if the
@@ -51,6 +51,17 @@ const SET_TOTAL_SQL: &str = r#"
 INSERT INTO counter_totals (entity_kind, entity_id, metric, total)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (entity_kind, entity_id, metric) DO UPDATE SET total = EXCLUDED.total
+"#;
+
+/// Page the reconcilable pairs (metrics with an authoritative source) by a synthetic
+/// `kind:id:metric` cursor, so a pair is never split across pages.
+const LIST_RECONCILABLE_SQL: &str = r#"
+SELECT entity_kind, entity_id, metric
+FROM counter_totals
+WHERE metric IN ('follower', 'following')
+  AND ($1::text IS NULL OR (entity_kind || ':' || entity_id || ':' || metric) > $1)
+ORDER BY (entity_kind || ':' || entity_id || ':' || metric)
+LIMIT $2
 "#;
 
 fn flush_err(e: sqlx::Error) -> CounterError {
@@ -125,5 +136,28 @@ impl CounterLedger for PgCounterLedger {
             .await
             .map_err(flush_err)?;
         Ok(())
+    }
+
+    async fn list_reconcilable(
+        &self,
+        after: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<(EntityRef, Metric)>, CounterError> {
+        let rows: Vec<(String, String, String)> = sqlx::query_as(LIST_RECONCILABLE_SQL)
+            .bind(after)
+            .bind(limit)
+            .fetch_all(self.tx.pool())
+            .await
+            .map_err(read_err)?;
+
+        // A row that fails to parse is a schema/data anomaly, not a reconcilable
+        // pair — skip it rather than abort the sweep.
+        Ok(rows
+            .into_iter()
+            .filter_map(|(kind, id, metric)| {
+                let entity = EntityRef::new(EntityKind::try_from_str(&kind).ok()?, EntityId::new(id).ok()?);
+                Some((entity, Metric::try_from_str(&metric).ok()?))
+            })
+            .collect())
     }
 }

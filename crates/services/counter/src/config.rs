@@ -33,11 +33,13 @@ pub struct CounterConfig {
     pub popularity_interval: Duration,
     /// Hard per-request hot-read timeout; on elapse the read fails open (stale).
     pub read_timeout: Duration,
-    /// Cadence of the reconciliation loop (reserved — the concrete source that
-    /// drives it is a deferred follow-up).
+    /// Cadence of the reconciliation sweep loop.
     pub reconcile_interval: Duration,
     /// Absolute drift tolerated before reconciliation corrects an exact counter.
     pub drift_tolerance: i64,
+    /// gRPC endpoint of `social-graph` — the authoritative source for
+    /// follower/following counts the reconciliation loop queries.
+    pub social_graph_endpoint: String,
 }
 
 impl CounterConfig {
@@ -72,6 +74,8 @@ impl CounterConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(DEFAULT_DRIFT_TOLERANCE),
+            social_graph_endpoint: std::env::var("COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT")
+                .unwrap_or_else(|_| "http://localhost:50053".to_owned()),
         }
     }
 }

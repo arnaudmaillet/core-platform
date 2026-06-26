@@ -16,7 +16,7 @@ pub mod reconciliation_source;
 pub mod signal_publisher;
 pub mod time_series;
 
-pub use counter_ledger::{CounterLedger, FlushOutcome};
+pub use counter_ledger::{CounterLedger, FlushOutcome, reconcile_cursor};
 pub use counter_store::CounterStore;
 pub use reconciliation_source::ReconciliationSource;
 pub use signal_publisher::SignalPublisher;
