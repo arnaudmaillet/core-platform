@@ -34,6 +34,11 @@ enum EventCategory {
     EVENT_CATEGORY_PRIVILEGED_ACTION = 8;
     // A retention or legal-hold lifecycle event.
     EVENT_CATEGORY_RETENTION         = 9;
+    // An account / identity lifecycle or identity-state event (account creation,
+    // activation, suspension, deletion, KYC status) — the subject's existence and
+    // standing, distinct from authentication (credentials) and authorization
+    // (permissions).
+    EVENT_CATEGORY_IDENTITY          = 10;
 }
 
 // Who performed the action. Identities are pseudonymous (see Actor) — this only

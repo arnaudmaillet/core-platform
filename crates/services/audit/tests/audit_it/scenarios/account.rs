@@ -49,12 +49,12 @@ async fn account_pii_is_sealed_and_gdpr_deletion_shreds_the_subject() {
     // The DEK is gone → all of the subject's sealed PII is permanently unreadable.
     assert!(!h.key_vault.key_exists(&key).await.unwrap());
 
-    // Both account records live in the tenant-less Authorization (account.created)
-    // and DataErasure (the gdpr request) partitions; both still verify.
-    let authz = PartitionKey::derive(None, EventCategory::Authorization);
+    // Both account records live in the tenant-less Identity (account.created) and
+    // DataErasure (the gdpr request) partitions; both still verify.
+    let identity = PartitionKey::derive(None, EventCategory::Identity);
     let erasure = PartitionKey::derive(None, EventCategory::DataErasure);
     assert_eq!(
-        h.verify().verify_partition(&authz).await.unwrap().status,
+        h.verify().verify_partition(&identity).await.unwrap().status,
         IntegrityStatus::Verified
     );
     assert_eq!(

@@ -17,6 +17,10 @@ pub enum EventCategory {
     DataErasure,
     PrivilegedAction,
     Retention,
+    /// Account / identity lifecycle (creation, activation, suspension, deletion,
+    /// KYC) — the subject's existence and standing, distinct from authentication
+    /// (credentials) and authorization (permissions).
+    Identity,
 }
 
 impl EventCategory {
@@ -52,6 +56,7 @@ impl EventCategory {
             EventCategory::DataErasure => 7,
             EventCategory::PrivilegedAction => 8,
             EventCategory::Retention => 9,
+            EventCategory::Identity => 10,
         }
     }
 }
@@ -165,6 +170,7 @@ mod tests {
             EventCategory::DataErasure,
             EventCategory::PrivilegedAction,
             EventCategory::Retention,
+            EventCategory::Identity,
         ];
         let mut tags: Vec<u8> = cats.iter().map(|c| c.hash_tag()).collect();
         tags.sort_unstable();

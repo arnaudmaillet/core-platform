@@ -258,7 +258,7 @@ pub fn map_account_created(
     }
     account_event(
         "account.created",
-        EventCategory::Authorization,
+        EventCategory::Identity,
         ActorType::System,
         SOURCE,
         &wire.account_id,
@@ -397,11 +397,11 @@ pub fn map_mfa_enrolled(wire: &MfaEnrolledWire) -> Result<AuditEvent, AuditError
 // ── Authorization (lifecycle + roles + kyc) ────────────────────────────────────
 
 pub fn map_account_activated(wire: &BareAccountEventWire) -> Result<AuditEvent, AuditError> {
-    bare(wire, "account.activated", EventCategory::Authorization, ActorType::System)
+    bare(wire, "account.activated", EventCategory::Identity, ActorType::System)
 }
 
 pub fn map_account_deactivated(wire: &BareAccountEventWire) -> Result<AuditEvent, AuditError> {
-    bare(wire, "account.deactivated", EventCategory::Authorization, ActorType::System)
+    bare(wire, "account.deactivated", EventCategory::Identity, ActorType::System)
 }
 
 pub fn map_account_suspended(wire: &AccountSuspendedWire) -> Result<AuditEvent, AuditError> {
@@ -411,7 +411,7 @@ pub fn map_account_suspended(wire: &AccountSuspendedWire) -> Result<AuditEvent, 
     }
     account_event(
         "account.suspended",
-        EventCategory::Authorization,
+        EventCategory::Identity,
         ActorType::System,
         SOURCE,
         &wire.account_id,
@@ -431,7 +431,7 @@ pub fn map_account_deleted(wire: &AccountDeletedWire) -> Result<AuditEvent, Audi
     };
     account_event(
         "account.deleted",
-        EventCategory::Authorization,
+        EventCategory::Identity,
         actor_type,
         actor,
         &wire.account_id,
@@ -457,7 +457,7 @@ pub fn map_kyc_status_changed(wire: &KycStatusChangedWire) -> Result<AuditEvent,
     attributes.insert("new_status".to_owned(), wire.new_status.clone());
     account_event(
         "account.kyc_status_changed",
-        EventCategory::Authorization,
+        EventCategory::Identity,
         ActorType::System,
         SOURCE,
         &wire.account_id,
@@ -542,7 +542,7 @@ mod tests {
             correlation_id: String::new(),
         };
         let e = map_account_created(&wire, sealed()).unwrap();
-        assert_eq!(e.category(), EventCategory::Authorization);
+        assert_eq!(e.category(), EventCategory::Identity);
         assert!(e.has_pii());
         assert!(!e.attributes().values().any(|v| v.contains("user@example.com")));
     }
@@ -558,12 +558,14 @@ mod tests {
     }
 
     #[test]
-    fn lifecycle_and_roles_map_to_authorization() {
-        assert_eq!(map_account_activated(&bare_wire()).unwrap().category(), EventCategory::Authorization);
+    fn lifecycle_maps_to_identity_and_roles_to_authorization() {
+        // Account lifecycle/identity-state → Identity.
+        assert_eq!(map_account_activated(&bare_wire()).unwrap().category(), EventCategory::Identity);
         let susp = AccountSuspendedWire { account_id: "acc-1".into(), reason: "fraud".into(), occurred_at: ts(), correlation_id: String::new() };
         let e = map_account_suspended(&susp).unwrap();
-        assert_eq!(e.action(), "account.suspended");
+        assert_eq!(e.category(), EventCategory::Identity);
         assert_eq!(e.attributes().get("reason").unwrap(), "fraud");
+        // Role grants are genuine authorization.
         let role = RoleWire { account_id: "acc-1".into(), role: "support_agent".into(), occurred_at: ts(), correlation_id: String::new() };
         let r = map_role_assigned(&role).unwrap();
         assert_eq!(r.category(), EventCategory::Authorization);
