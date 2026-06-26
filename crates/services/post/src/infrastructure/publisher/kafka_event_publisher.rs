@@ -124,6 +124,7 @@ mod tests {
             profile_id:      "prof-9".to_owned(),
             kind:            "text".to_owned(),
             published_at_ms: 1_700_000_000_000,
+            author_tier:     0,
             audio_id:        None,
             audio_kind:      None,
         });

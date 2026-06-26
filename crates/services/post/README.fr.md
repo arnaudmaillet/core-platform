@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 61e22da790d0aa82a96b28409247cbfec94016b3214f7d644198a6518213722a
+  source_sha256: 108236d88c76fe93fc08d03ad5c6f997df7741c14fcc4aba3cc9d6c4f2dc33bc
   translated_at: 2026-06-26
   status: complete
 ---
@@ -20,7 +20,7 @@ i18n:
 > | **Palier (Tier)** | **TIER-0** — le chemin de publication du contenu ; feeds et découverte dérivent de ses événements |
 > | **Binaire déployable** | `crates/apps/post-server` (crate bibliothèque : `crates/services/post`) |
 > | **Bases de données** | ScyllaDB keyspace `post` (2 tables) |
-> | **Asynchrone** | publie `post.v1.events` (unifié) + `post.published` / `post.updated` / `post.deleted` (legacy) · ne consomme rien |
+> | **Asynchrone** | publie `post.v1.events` (unifié) + `post.published` / `post.updated` / `post.deleted` (legacy) · consomme `profile.v1.events` (dénormalisation du palier auteur) |
 > | **Appelants amont** | `<TODO: passerelle>` |
 > | **Dépendances aval** | ScyllaDB, Kafka |
 > | **SLO** | `<TODO>` dispo · `GetPost` p99 `<TODO>` · publication p99 `<TODO>` |
@@ -150,13 +150,17 @@ service PostService {
 | Topic | Déclencheur | Clé | Consommateurs |
 |---|---|---|---|
 | `post.v1.events` | chaque événement de cycle de vie (`PostPublished` / `PostUpdated` / `PostDeleted`) | `post_id` | `search` (indexation des posts) |
-| `post.published` | `PublishPost` success | `post_id` | `timeline`, `geo-discovery`, `notification` |
+| `post.published` | `PublishPost` success — porte le `author_tier` dénormalisé de l'auteur | `post_id` | `timeline`, `geo-discovery`, `notification` |
 | `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
 | `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
 
 > **Deux styles d'émission, par conception.** `post.v1.events` est le flux unifié et versionné (la convention de la flotte, comme `moderation.v1.events` / `profile.v1.events`) : le `DomainEvent` entier tagué en interne, clé `post_id`. Les topics legacy par-type (`post.published` / `.updated` / `.deleted`, charges utiles brutes) sont conservés pour leurs consommateurs existants (`timeline` / `geo-discovery` / `notification`) ; chaque événement est publié sur **les deux**. Migrer ces consommateurs vers `post.v1.events` et retirer les topics legacy est un nettoyage futur.
 
-**Consomme :** rien.
+**Consomme :**
+
+| Topic | Consumer group | Purpose | On poison/exhaustion |
+|---|---|---|---|
+| `profile.v1.events` | `post-author-tier` | dénormalise `ProfileTierChanged` dans la projection `author_tiers` (`profile_id → tier`) ; lue sur le chemin de publication pour estampiller `author_tier` sur les posts publiés. Les autres types committent en no-op | DLQ `profile.v1.events.dlq` |
 
 > **Contrat d'exécution :** l'événement est publié après le dual-write durable. Les consommateurs aval
 > gèrent leur propre traitement at-least-once sous `run_consumer` ; tous traitent `post.*` comme

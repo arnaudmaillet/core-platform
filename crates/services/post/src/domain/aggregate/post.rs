@@ -115,6 +115,9 @@ impl Post {
             profile_id:      self.profile_id.as_str(),
             kind:            self.kind.to_string(),
             published_at_ms: now.timestamp_millis(),
+            // Placeholder; the publish handler stamps the author's current tier from
+            // the projection (the aggregate owns no denormalized profile state).
+            author_tier:     0,
             audio_id:        self.audio_ref.as_ref().map(|a| a.audio_id.as_str()),
             audio_kind:      self.audio_ref.as_ref().map(|a| a.audio_kind.as_tinyint() as u8),
         }));

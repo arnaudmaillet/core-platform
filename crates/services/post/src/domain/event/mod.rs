@@ -6,6 +6,11 @@ pub struct PostPublishedEvent {
     pub profile_id:      String,
     pub kind:            String,
     pub published_at_ms: i64,
+    /// The author's tier at publish time (0=Standard, 1=Premium, 2=Vip),
+    /// denormalized from `profile.v1.events` and stamped by the publish handler.
+    /// `timeline` routes VIP authors to its read path on this field.
+    #[serde(default)]
+    pub author_tier:     u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_id:        Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

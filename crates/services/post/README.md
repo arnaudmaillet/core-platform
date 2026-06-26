@@ -9,7 +9,7 @@
 > | **Tier** | **TIER-0** — the content publish path; feeds and discovery derive from its events |
 > | **Deployable** | `crates/apps/post-server` (library crate: `crates/services/post`) |
 > | **Datastores** | ScyllaDB keyspace `post` (2 tables) |
-> | **Async** | publishes `post.v1.events` (unified) + `post.published` / `post.updated` / `post.deleted` (legacy) · consumes nothing |
+> | **Async** | publishes `post.v1.events` (unified) + `post.published` / `post.updated` / `post.deleted` (legacy) · consumes `profile.v1.events` (author-tier denormalization) |
 > | **Upstream callers** | `<TODO: gateway>` |
 > | **Downstream deps** | ScyllaDB, Kafka |
 > | **SLO** | `<TODO>` avail · `GetPost` p99 `<TODO>` · publish p99 `<TODO>` |
@@ -137,13 +137,17 @@ service PostService {
 | Topic | Trigger | Key | Consumers |
 |---|---|---|---|
 | `post.v1.events` | every lifecycle event (`PostPublished` / `PostUpdated` / `PostDeleted`) | `post_id` | `search` (post indexing) |
-| `post.published` | `PublishPost` success | `post_id` | `timeline`, `geo-discovery`, `notification` |
+| `post.published` | `PublishPost` success — carries the author's denormalized `author_tier` | `post_id` | `timeline`, `geo-discovery`, `notification` |
 | `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
 | `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
 
 > **Two emission styles, by design.** `post.v1.events` is the unified, versioned stream (the fleet convention, like `moderation.v1.events` / `profile.v1.events`): the whole internally-tagged `DomainEvent`, keyed by `post_id`. The legacy per-type topics (`post.published` / `.updated` / `.deleted`, bare payloads) are retained for their existing consumers (`timeline` / `geo-discovery` / `notification`); every event is published to **both**. Migrating those consumers onto `post.v1.events` and retiring the legacy topics is a future cleanup.
 
-**Consumes:** none.
+**Consumes:**
+
+| Topic | Consumer group | Purpose | On poison/exhaustion |
+|---|---|---|---|
+| `profile.v1.events` | `post-author-tier` | denormalize `ProfileTierChanged` into the `author_tiers` projection (`profile_id → tier`); read on the publish path to stamp `author_tier` onto published posts. Other event types commit as no-ops | DLQ `profile.v1.events.dlq` |
 
 > **Runtime contract:** the event is published after the durable dual-write. Downstream consumers own
 > at-least-once handling under `run_consumer`; all of them treat `post.*` as idempotent by `post_id`.

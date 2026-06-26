@@ -20,12 +20,12 @@ use crate::application::command::create_post::{CreatePostCommand, CreatePostHand
 use crate::application::command::delete_post::{DeletePostCommand, DeletePostHandler};
 use crate::application::command::publish_post::{PublishPostCommand, PublishPostHandler};
 use crate::application::command::update_post::{UpdatePostCommand, UpdatePostHandler};
-use crate::application::port::EventPublisher;
+use crate::application::port::{AuthorTierStore, EventPublisher};
 use crate::application::query::get_post::{GetPostHandler, GetPostQuery};
 use crate::application::query::list_posts_by_profile::{
     ListPostsByProfileHandler, ListPostsByProfileQuery,
 };
-use crate::infrastructure::persistence::ScyllaPostRepository;
+use crate::infrastructure::persistence::{ScyllaAuthorTierStore, ScyllaPostRepository};
 
 /// Storage endpoints the graph is wired against. Post has no Redis and emits its
 /// events through the injected [`EventPublisher`], so only ScyllaDB is needed.
@@ -43,6 +43,9 @@ pub struct App {
     /// Live storage client, retained so the runtime's readiness loop can probe
     /// its liveness (see [`crate::service`]).
     pub scylla:      Arc<ScyllaClient>,
+    /// The author-tier projection, exposed so the serving binary can wire its
+    /// `profile.v1.events` consumer against the same instance.
+    pub author_tier_store: Arc<dyn AuthorTierStore>,
 }
 
 impl App {
@@ -54,6 +57,8 @@ impl App {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let scylla_client = Arc::new(ScyllaSessionBuilder::new(backends.scylla).build().await?);
         let repository = Arc::new(ScyllaPostRepository::new(Arc::clone(&scylla_client)));
+        let author_tier_store: Arc<dyn AuthorTierStore> =
+            Arc::new(ScyllaAuthorTierStore::new(Arc::clone(&scylla_client)));
 
         let command_bus = Arc::new(
             CommandBusBuilder::new()
@@ -62,8 +67,9 @@ impl App {
                     publisher:  Arc::clone(&publisher),
                 })?
                 .register::<PublishPostCommand, _>(PublishPostHandler {
-                    repository: Arc::clone(&repository),
-                    publisher:  Arc::clone(&publisher),
+                    repository:        Arc::clone(&repository),
+                    publisher:         Arc::clone(&publisher),
+                    author_tier_store: Arc::clone(&author_tier_store),
                 })?
                 .register::<UpdatePostCommand, _>(UpdatePostHandler {
                     repository: Arc::clone(&repository),
@@ -87,6 +93,6 @@ impl App {
                 .build(),
         );
 
-        Ok(Self { command_bus, query_bus, scylla: scylla_client })
+        Ok(Self { command_bus, query_bus, scylla: scylla_client, author_tier_store })
     }
 }
