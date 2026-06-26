@@ -9,7 +9,7 @@
 > | **Tier** | **TIER-0** — the content publish path; feeds and discovery derive from its events |
 > | **Deployable** | `crates/apps/post-server` (library crate: `crates/services/post`) |
 > | **Datastores** | ScyllaDB keyspace `post` (2 tables) |
-> | **Async** | publishes `post.published` / `post.updated` / `post.deleted` · consumes nothing |
+> | **Async** | publishes `post.v1.events` (unified) + `post.published` / `post.updated` / `post.deleted` (legacy) · consumes nothing |
 > | **Upstream callers** | `<TODO: gateway>` |
 > | **Downstream deps** | ScyllaDB, Kafka |
 > | **SLO** | `<TODO>` avail · `GetPost` p99 `<TODO>` · publish p99 `<TODO>` |
@@ -136,9 +136,12 @@ service PostService {
 
 | Topic | Trigger | Key | Consumers |
 |---|---|---|---|
+| `post.v1.events` | every lifecycle event (`PostPublished` / `PostUpdated` / `PostDeleted`) | `post_id` | `search` (post indexing) |
 | `post.published` | `PublishPost` success | `post_id` | `timeline`, `geo-discovery`, `notification` |
 | `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
 | `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
+
+> **Two emission styles, by design.** `post.v1.events` is the unified, versioned stream (the fleet convention, like `moderation.v1.events` / `profile.v1.events`): the whole internally-tagged `DomainEvent`, keyed by `post_id`. The legacy per-type topics (`post.published` / `.updated` / `.deleted`, bare payloads) are retained for their existing consumers (`timeline` / `geo-discovery` / `notification`); every event is published to **both**. Migrating those consumers onto `post.v1.events` and retiring the legacy topics is a future cleanup.
 
 **Consumes:** none.
 
