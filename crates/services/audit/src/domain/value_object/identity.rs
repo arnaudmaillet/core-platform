@@ -64,6 +64,22 @@ string_id!(
     PartitionKey, "partition_key"
 );
 
+impl PartitionKey {
+    /// Derive the chain partition for an event from its tenant and category — the
+    /// hybrid partitioning scheme. Chains are keyed by `(tenant, category)` (dense,
+    /// parallel-appendable, with strong ordering within a domain); the subject is
+    /// carried as an indexed field on the record, NOT the partition, so erasing a
+    /// subject never fragments a chain. Events with no tenant share a `_global`
+    /// realm. The category's stable numeric tag is used so the partition name does
+    /// not drift if a category is ever renamed.
+    pub fn derive(tenant: Option<&TenantId>, category: super::EventCategory) -> Self {
+        let realm = tenant.map(TenantId::as_str).unwrap_or("_global");
+        // Infallible: the composed string is always non-empty.
+        Self::new(format!("{realm}:{}", category.hash_tag()))
+            .expect("derived partition key is always non-empty")
+    }
+}
+
 string_id!(
     /// The pseudonym of the actor that performed an action (a user, admin, or
     /// service principal — never a cleartext identity).
@@ -97,5 +113,23 @@ mod tests {
         assert!(err.to_string().contains("subject_pseudonym"));
 
         assert_eq!(EventId::new("").unwrap_err().error_code(), "AUD-9002");
+    }
+
+    #[test]
+    fn partition_derivation_is_hybrid_and_subject_independent() {
+        use super::super::EventCategory;
+        let tenant = TenantId::new("tenant-7").unwrap();
+        // Same (tenant, category) → same partition, regardless of subject.
+        let a = PartitionKey::derive(Some(&tenant), EventCategory::Moderation);
+        let b = PartitionKey::derive(Some(&tenant), EventCategory::Moderation);
+        assert_eq!(a, b);
+        assert_eq!(a.as_str(), "tenant-7:3");
+        // Different category → different partition.
+        assert_ne!(a, PartitionKey::derive(Some(&tenant), EventCategory::Consent));
+        // No tenant → the shared global realm.
+        assert_eq!(
+            PartitionKey::derive(None, EventCategory::Authentication).as_str(),
+            "_global:1"
+        );
     }
 }

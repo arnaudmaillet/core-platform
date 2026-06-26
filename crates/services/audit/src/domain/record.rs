@@ -127,6 +127,18 @@ impl AuditRecord {
     pub fn pii_erased(&self) -> bool {
         self.pii_erased
     }
+
+    /// Test-only: a copy with a different event body but the **original** chain
+    /// link — it models a ledger row edited in place after its hash was stored, so
+    /// verification recomputes a mismatch. Lives here because it must reach the
+    /// record's private fields.
+    #[cfg(test)]
+    pub(crate) fn tampered_clone(&self, event: AuditEvent) -> AuditRecord {
+        AuditRecord {
+            event,
+            ..self.clone()
+        }
+    }
 }
 
 #[cfg(test)]
