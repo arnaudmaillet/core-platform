@@ -1,0 +1,279 @@
+//! Adapts the counter composition roots to the fleet [`service_runtime::Service`]
+//! contract — **twice**, because counter-analytics is two deployables that share a
+//! domain but no process or failure domain:
+//!
+//! * [`CounterReadService`] (`counter-server`) — the low-latency read API. Builds
+//!   the storage ports, composes the gRPC read handler, serves `counter.v1` on
+//!   :50064, and reports Redis liveness. No consumers, no aggregation.
+//! * [`CounterWorkerService`] (`counter-worker`) — the stream processor. Builds the
+//!   ports + the Kafka signal producer, spawns the five supervised firehose/domain
+//!   consumers folding into a shared [`WindowAggregator`], and runs the drain/flush
+//!   loop that fans windows out across the tiers and publishes popularity. Exposes
+//!   no domain RPC (only health + reflection on its port).
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::Context;
+use async_trait::async_trait;
+use fred::interfaces::LuaInterface;
+use redis_storage::RedisClient;
+use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use tokio::sync::Mutex;
+use tonic::service::RoutesBuilder;
+use tonic_reflection::server::Builder as ReflectionBuilder;
+use transport::kafka::config::{ConsumerConfig, KafkaClientConfig, ProducerConfig};
+use transport::kafka::consumer::{KafkaConsumerBuilder, KafkaConsumerHandle};
+use transport::kafka::producer::{KafkaProducerBuilder, KafkaProducerHandle};
+
+use crate::app::{Ports, compose_read};
+use crate::application::command::{DeltaFlusher, PopularityPublisher};
+use crate::application::port::SignalPublisher;
+use crate::config::CounterConfig;
+use crate::domain::{Observation, WindowAggregator};
+use crate::error::CounterError;
+use crate::infrastructure::consumer::{run_flush_loop, run_fold_consumer};
+use crate::infrastructure::decode::{
+    FollowWire, HitWire, ReactionWire, map_click, map_follow, map_impression, map_reaction, map_view,
+};
+use crate::infrastructure::grpc::{
+    CounterServiceHandler, CounterServiceServer, FILE_DESCRIPTOR_SET,
+};
+use crate::infrastructure::kafka_signal_publisher::KafkaSignalPublisher;
+use transport::kafka::envelope::ConsumablePayload;
+
+const VIEW_TOPIC: &str = "view.v1.events";
+const IMPRESSION_TOPIC: &str = "impression.v1.events";
+const CLICK_TOPIC: &str = "click.v1.events";
+const REACTION_TOPIC: &str = "engagement.reactions";
+const FOLLOW_TOPIC: &str = "social-graph.follows";
+
+const VIEW_GROUP: &str = "counter-view-aggregator";
+const IMPRESSION_GROUP: &str = "counter-impression-aggregator";
+const CLICK_GROUP: &str = "counter-click-aggregator";
+const REACTION_GROUP: &str = "counter-reaction-aggregator";
+const FOLLOW_GROUP: &str = "counter-follow-aggregator";
+
+/// Backoff before respawning a consumer after its runner returns.
+const CONSUMER_RESPAWN_BACKOFF: Duration = Duration::from_secs(5);
+
+type CounterServer = CounterServiceServer<CounterServiceHandler>;
+
+// ── Read server ───────────────────────────────────────────────────────────────
+
+/// The counter read API as hosted by [`service_runtime`].
+pub struct CounterReadService {
+    handler: CounterServiceHandler,
+    redis: RedisClient,
+}
+
+#[async_trait]
+impl Service for CounterReadService {
+    const NAME: &'static str = "counter";
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    const GRPC_SERVICE_NAME: &'static str = <CounterServer as tonic::server::NamedService>::NAME;
+
+    async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
+        let CounterConfig {
+            postgres,
+            redis,
+            scylla,
+            aggregation_window,
+            read_timeout,
+            ..
+        } = CounterConfig::from_env();
+        let ports = Ports::build(postgres, redis, scylla, aggregation_window)
+            .await
+            .map_err(|e| anyhow::anyhow!("counter read ports build: {e}"))?;
+        let handler = compose_read(
+            Arc::clone(&ports.store),
+            Arc::clone(&ports.ledger),
+            Arc::clone(&ports.series),
+            read_timeout,
+        );
+        Ok(Self {
+            handler,
+            redis: ports.redis,
+        })
+    }
+
+    fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
+        vec![redis_probe(self.redis.clone())]
+    }
+
+    fn register(self, routes: &mut RoutesBuilder) -> anyhow::Result<()> {
+        let reflection = ReflectionBuilder::configure()
+            .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+            .build_v1()?;
+        routes.add_service(reflection);
+        routes.add_service(CounterServiceServer::new(self.handler));
+        Ok(())
+    }
+}
+
+// ── Stream worker ───────────────────────────────────────────────────────────--
+
+/// The counter stream processor as hosted by [`service_runtime`]. Exposes no domain
+/// RPC; it serves only health + reflection on its port while the supervised
+/// consumers and the flush loop do the work.
+pub struct CounterWorkerService {
+    redis: RedisClient,
+}
+
+#[async_trait]
+impl Service for CounterWorkerService {
+    const NAME: &'static str = "counter-worker";
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    const GRPC_SERVICE_NAME: &'static str = <CounterServer as tonic::server::NamedService>::NAME;
+
+    async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
+        // `..` ignores the read-path + reconciliation knobs: the read timeout is the
+        // read server's, and the reconciliation loop is wired but not spawned here —
+        // its concrete `ReconciliationSource` (gRPC to engagement / social-graph) is a
+        // deferred follow-up. The `Reconciler` itself is built + unit-tested; once a
+        // source exists, spawn a supervised loop over `drift_tolerance` /
+        // `reconcile_interval` exactly like the consumers below.
+        let CounterConfig {
+            postgres,
+            redis,
+            scylla,
+            kafka,
+            aggregation_window,
+            flush_interval,
+            ..
+        } = CounterConfig::from_env();
+
+        let ports = Ports::build(postgres, redis, scylla, aggregation_window)
+            .await
+            .map_err(|e| anyhow::anyhow!("counter worker ports build: {e}"))?;
+
+        // Outbound signal producer (built once; the popularity loop reuses it).
+        let producer = KafkaProducerBuilder::new(ProducerConfig::new(kafka))
+            .build()
+            .context("build popularity producer")?;
+        let publisher: Arc<dyn SignalPublisher> = Arc::new(KafkaSignalPublisher::new(producer));
+
+        let flusher = Arc::new(DeltaFlusher::new(
+            Arc::clone(&ports.store),
+            Arc::clone(&ports.ledger),
+            Arc::clone(&ports.series),
+        ));
+        let popularity = Arc::new(PopularityPublisher::new(Arc::clone(&ports.store), publisher));
+        let aggregator = Arc::new(Mutex::new(WindowAggregator::new(aggregation_window)));
+
+        // Five supervised consumers fold into the one shared aggregator.
+        spawn_consumer::<HitWire, _>(VIEW_TOPIC, VIEW_GROUP, "view", &aggregator, map_view);
+        spawn_consumer::<HitWire, _>(
+            IMPRESSION_TOPIC,
+            IMPRESSION_GROUP,
+            "impression",
+            &aggregator,
+            map_impression,
+        );
+        spawn_consumer::<HitWire, _>(CLICK_TOPIC, CLICK_GROUP, "click", &aggregator, map_click);
+        spawn_consumer::<ReactionWire, _>(
+            REACTION_TOPIC,
+            REACTION_GROUP,
+            "reaction",
+            &aggregator,
+            map_reaction,
+        );
+        spawn_consumer::<FollowWire, _>(
+            FOLLOW_TOPIC,
+            FOLLOW_GROUP,
+            "follow",
+            &aggregator,
+            map_follow,
+        );
+
+        // The drain/flush + popularity loop.
+        tokio::spawn(run_flush_loop(
+            Arc::clone(&aggregator),
+            flusher,
+            popularity,
+            flush_interval,
+        ));
+
+        Ok(Self { redis: ports.redis })
+    }
+
+    fn health_probes(&self) -> Vec<Arc<dyn HealthProbe>> {
+        vec![redis_probe(self.redis.clone())]
+    }
+
+    fn register(self, routes: &mut RoutesBuilder) -> anyhow::Result<()> {
+        let reflection = ReflectionBuilder::configure()
+            .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+            .build_v1()?;
+        routes.add_service(reflection);
+        Ok(())
+    }
+}
+
+// ── Shared wiring helpers ─────────────────────────────────────────────────────
+
+/// A hot-tier liveness probe: a trivial `EVAL 'return 1'` round-trip to Redis.
+fn redis_probe(redis: RedisClient) -> Arc<dyn HealthProbe> {
+    Arc::new(FnProbe::new("redis", move || {
+        let redis = redis.clone();
+        async move {
+            let _: i64 = redis
+                .inner
+                .eval("return 1", Vec::<String>::new(), Vec::<String>::new())
+                .await
+                .map_err(|e: fred::error::Error| anyhow::anyhow!(e.to_string()))?;
+            Ok(())
+        }
+    }))
+}
+
+/// Spawns a supervised fold consumer: rebuilds its Kafka handles and restarts after
+/// a backoff whenever the runner returns.
+fn spawn_consumer<T, M>(
+    topic: &'static str,
+    group: &'static str,
+    label: &'static str,
+    aggregator: &Arc<Mutex<WindowAggregator>>,
+    map: M,
+) where
+    T: ConsumablePayload + Clone,
+    M: Fn(T) -> Result<Vec<Observation>, CounterError> + Copy + Send + Sync + 'static,
+{
+    let aggregator = Arc::clone(aggregator);
+    tokio::spawn(async move {
+        loop {
+            match build_consumer(topic, group) {
+                Ok((consumer, producer)) => {
+                    run_fold_consumer::<T, _>(
+                        label,
+                        consumer,
+                        producer,
+                        Arc::clone(&aggregator),
+                        map,
+                    )
+                    .await;
+                    tracing::warn!(label, "consumer exited; respawning after backoff");
+                }
+                Err(error) => tracing::error!(label, %error, "failed to build consumer; retrying"),
+            }
+            tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;
+        }
+    });
+}
+
+/// Builds a manual-commit consumer (subscribed to `topic`) and the dead-letter
+/// producer the runner needs. Kafka config is read fresh per respawn.
+fn build_consumer(
+    topic: &str,
+    group: &str,
+) -> anyhow::Result<(KafkaConsumerHandle, KafkaProducerHandle)> {
+    let kafka = KafkaClientConfig::from_env();
+    let consumer = KafkaConsumerBuilder::new(ConsumerConfig::new(kafka.clone(), group))
+        .subscribe(topic)
+        .build()
+        .with_context(|| format!("build consumer for {topic}"))?;
+    let producer = KafkaProducerBuilder::new(ProducerConfig::new(kafka))
+        .build()
+        .with_context(|| format!("build dead-letter producer for {topic}"))?;
+    Ok((consumer, producer))
+}
