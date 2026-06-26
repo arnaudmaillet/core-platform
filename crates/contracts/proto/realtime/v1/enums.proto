@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package realtime.v1;
+
+option java_package = "com.coreplatform.realtime.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/realtime/v1;realtimev1";
+
+// The multiplex channel CLASS a frame belongs to. A channel is a (class, key)
+// pair (see ChannelRef): the class selects the kind of stream, the key scopes it
+// to a specific subject. One physical WSS socket carries every class at once —
+// that multiplexing is the whole point of the plane (one socket per device).
+//
+// Authorization is by ownership of the key (see ChannelRef): DM / NOTIFICATION /
+// PRESENCE keys MUST equal the connection's pinned identity; COUNTER / FEED keys
+// are public entity ids. The realtime plane performs no other authorization —
+// content visibility was decided upstream when the event was emitted.
+enum ChannelClass {
+    CHANNEL_CLASS_UNSPECIFIED  = 0;
+    // Direct messages / chat. Key = the owning user id. At-least-once.
+    CHANNEL_CLASS_DM           = 1;
+    // Notification + badge updates. Key = the owning user id. At-least-once.
+    CHANNEL_CLASS_NOTIFICATION = 2;
+    // Presence (online/away). Key = the owning user id. Fire-and-forget.
+    CHANNEL_CLASS_PRESENCE     = 3;
+    // Live engagement magnitudes for an entity. Key = the entity id. Public,
+    // fire-and-forget (a dropped tick is superseded by the next).
+    CHANNEL_CLASS_COUNTER      = 4;
+    // Selective live feed signals. Key = the entity/author id. Fire-and-forget.
+    CHANNEL_CLASS_FEED         = 5;
+}
+
+// Server→client control directives, carried in a Control frame. These drive the
+// client's connection state machine; they are not domain events.
+enum ServerControl {
+    SERVER_CONTROL_UNSPECIFIED     = 0;
+    // Acknowledges a Subscribe for `channel`.
+    SERVER_CONTROL_SUBSCRIBED      = 1;
+    // Acknowledges an Unsubscribe for `channel`.
+    SERVER_CONTROL_UNSUBSCRIBED    = 2;
+    // The edge token is expiring/expired (RTM-1002). The client must silently
+    // refresh via `auth` and send an AuthRefresh (or re-handshake).
+    SERVER_CONTROL_REAUTH_REQUIRED = 3;
+    // The node is draining on rollout (RTM-5003). The client must reconnect —
+    // elsewhere — after `reconnect_after_ms` PLUS its own jitter (the jitter is
+    // mandatory: it prevents a reconnect thundering-herd into the auth path).
+    SERVER_CONTROL_RECONNECT       = 4;
+    // The connection exceeded a limit (subscriptions / frame rate / size).
+    SERVER_CONTROL_RATE_LIMITED    = 5;
+    // A terminal or per-request error; carries a stable RTM-XXXX `code`.
+    SERVER_CONTROL_ERROR           = 6;
+}
+
+// Why the gateway closed (or is about to close) a connection. Maps to the
+// RTM-1xxx / RTM-5xxx lifecycle codes so client telemetry can attribute churn.
+enum CloseReason {
+    CLOSE_REASON_UNSPECIFIED         = 0;
+    // Graceful node drain on rollout (RTM-5003) — reconnect with backoff+jitter.
+    CLOSE_REASON_DRAINING            = 1;
+    // No heartbeat pong within the deadline; half-open connection reaped (RTM-5002).
+    CLOSE_REASON_HEARTBEAT_TIMEOUT   = 2;
+    // The per-connection send queue overflowed; slow consumer shed (RTM-5001).
+    CLOSE_REASON_SEND_QUEUE_OVERFLOW = 3;
+    // The session's edge token expired and was not refreshed (RTM-1002).
+    CLOSE_REASON_AUTH_EXPIRED        = 4;
+    // A transport/framing/protocol violation (RTM-2xxx).
+    CLOSE_REASON_PROTOCOL_ERROR      = 5;
+}

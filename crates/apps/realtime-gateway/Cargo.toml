@@ -1,0 +1,23 @@
+[package]
+name                 = "realtime-gateway"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the realtime EDGE plane — the stateful gateway: terminates the client WebSocket connections, owns the per-node connection table, writes the presence registry, subscribes to its node-hop channel, and drains gracefully on rollout."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# No-op entrypoint today. Phase 5 wires this as the stateful edge: the public WSS
+# accept loop with bounded per-connection mailboxes + shedding, the handshake
+# token verification, the connection/presence registry writes, the node-hop
+# (Redis Pub/Sub) subscription, the heartbeat reaper, the graceful-drain hook, and
+# the internal gRPC health/reflection endpoint on :50066. Memory/FD-bound; scaled
+# (and autoscaled on connection-count + memory, NOT CPU) independently of
+# `realtime-dispatcher`.
+[dependencies]
+realtime        = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }
