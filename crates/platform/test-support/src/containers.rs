@@ -32,11 +32,14 @@ const REDIS_PORT: u16 = 6379;
 const SCYLLA_CQL_PORT: u16 = 9042;
 /// Internal PostgreSQL port.
 const POSTGRES_PORT: u16 = 5432;
+/// Internal OpenSearch REST port.
+const OPENSEARCH_PORT: u16 = 9200;
 
 static SCYLLA: OnceCell<ContainerAsync<ScyllaDB>> = OnceCell::const_new();
 static REDIS: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
 static KAFKA: OnceCell<ContainerAsync<Kafka>> = OnceCell::const_new();
 static POSTGRES: OnceCell<ContainerAsync<Postgres>> = OnceCell::const_new();
+static OPENSEARCH: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
 
 static SCYLLA_MIGRATED: OnceCell<()> = OnceCell::const_new();
 static POSTGRES_MIGRATED: OnceCell<()> = OnceCell::const_new();
@@ -106,6 +109,36 @@ pub async fn redis_endpoint() -> String {
         .await
         .expect("failed to resolve the mapped Redis port");
     format!("127.0.0.1:{port}")
+}
+
+// ── OpenSearch ───────────────────────────────────────────────────────────────
+
+/// Boots a single-node OpenSearch (once, security plugin disabled so it speaks
+/// plain HTTP on 9200) and returns its base URL, e.g. `http://127.0.0.1:49xxx`.
+///
+/// The search service's adapter creates its own indices/aliases at boot
+/// (`IndexAdmin::ensure_indices`), so there is no migration step here — unlike
+/// Scylla/Postgres. A small JVM heap keeps the container light on CI / laptops.
+pub async fn opensearch_ready() -> String {
+    let container = OPENSEARCH
+        .get_or_init(|| async {
+            GenericImage::new("opensearchproject/opensearch", "2.15.0")
+                .with_wait_for(WaitFor::message_on_stdout("] started"))
+                .with_env_var("discovery.type", "single-node")
+                .with_env_var("DISABLE_SECURITY_PLUGIN", "true")
+                .with_env_var("DISABLE_INSTALL_DEMO_CONFIG", "true")
+                .with_env_var("OPENSEARCH_JAVA_OPTS", "-Xms512m -Xmx512m")
+                .start()
+                .await
+                .expect("failed to start the OpenSearch test container")
+        })
+        .await;
+
+    let port = container
+        .get_host_port_ipv4(OPENSEARCH_PORT)
+        .await
+        .expect("failed to resolve the mapped OpenSearch port");
+    format!("http://127.0.0.1:{port}")
 }
 
 // ── Kafka ────────────────────────────────────────────────────────────────────

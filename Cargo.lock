@@ -4112,6 +4112,55 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
+name = "search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cqrs",
+ "error",
+ "http",
+ "post-api",
+ "prost-types",
+ "reqwest",
+ "search-api",
+ "serde",
+ "serde_json",
+ "service-runtime",
+ "test-support",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic 0.14.6",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "uuid",
+ "validation",
+]
+
+[[package]]
+name = "search-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "search-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "search",
+ "service-runtime",
+ "tokio",
+]
+
+[[package]]
 name = "sec1"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
