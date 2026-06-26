@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 3ed0278a8d7b9a1c0d9afb9e24e790cf7f105e59d9ce6c77a325ca5c4eaa49bf
-  translated_at: 2026-06-25
+  source_sha256: 61e22da790d0aa82a96b28409247cbfec94016b3214f7d644198a6518213722a
+  translated_at: 2026-06-26
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -20,7 +20,7 @@ i18n:
 > | **Palier (Tier)** | **TIER-0** — le chemin de publication du contenu ; feeds et découverte dérivent de ses événements |
 > | **Binaire déployable** | `crates/apps/post-server` (crate bibliothèque : `crates/services/post`) |
 > | **Bases de données** | ScyllaDB keyspace `post` (2 tables) |
-> | **Asynchrone** | publie `post.published` / `post.updated` / `post.deleted` · ne consomme rien |
+> | **Asynchrone** | publie `post.v1.events` (unifié) + `post.published` / `post.updated` / `post.deleted` (legacy) · ne consomme rien |
 > | **Appelants amont** | `<TODO: passerelle>` |
 > | **Dépendances aval** | ScyllaDB, Kafka |
 > | **SLO** | `<TODO>` dispo · `GetPost` p99 `<TODO>` · publication p99 `<TODO>` |
@@ -147,11 +147,14 @@ service PostService {
 
 **Publie :**
 
-| Topic | Trigger | Key | Consumers |
+| Topic | Déclencheur | Clé | Consommateurs |
 |---|---|---|---|
+| `post.v1.events` | chaque événement de cycle de vie (`PostPublished` / `PostUpdated` / `PostDeleted`) | `post_id` | `search` (indexation des posts) |
 | `post.published` | `PublishPost` success | `post_id` | `timeline`, `geo-discovery`, `notification` |
 | `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
 | `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
+
+> **Deux styles d'émission, par conception.** `post.v1.events` est le flux unifié et versionné (la convention de la flotte, comme `moderation.v1.events` / `profile.v1.events`) : le `DomainEvent` entier tagué en interne, clé `post_id`. Les topics legacy par-type (`post.published` / `.updated` / `.deleted`, charges utiles brutes) sont conservés pour leurs consommateurs existants (`timeline` / `geo-discovery` / `notification`) ; chaque événement est publié sur **les deux**. Migrer ces consommateurs vers `post.v1.events` et retirer les topics legacy est un nettoyage futur.
 
 **Consomme :** rien.
 
