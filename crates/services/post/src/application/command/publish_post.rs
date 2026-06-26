@@ -4,8 +4,8 @@ use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
 use crate::{
-    application::port::{EventPublisher, PostRepository},
-    domain::value_object::{PostId, ProfileId},
+    application::port::{AuthorTierStore, EventPublisher, PostRepository},
+    domain::{event::DomainEvent, value_object::{PostId, ProfileId}},
     error::PostError,
 };
 
@@ -30,8 +30,9 @@ impl Validate for PublishPostCommand {
 }
 
 pub struct PublishPostHandler<R, P> {
-    pub repository: Arc<R>,
-    pub publisher:  Arc<P>,
+    pub repository:        Arc<R>,
+    pub publisher:         Arc<P>,
+    pub author_tier_store: Arc<dyn AuthorTierStore>,
 }
 
 impl<R, P> CommandHandler<PublishPostCommand> for PublishPostHandler<R, P>
@@ -60,7 +61,21 @@ where
         post.publish()?;
         self.repository.update_lifecycle(&post).await?;
 
-        for event in post.take_events() {
+        // Stamp the author's current tier (denormalized from profile.v1.events)
+        // onto the published event so timeline routes VIP authors to its read path.
+        // A read failure degrades to Standard rather than blocking the publish.
+        let author_tier = match self.author_tier_store.get_tier(&profile_id).await {
+            Ok(tier) => tier,
+            Err(error) => {
+                tracing::warn!(%error, "author-tier read failed at publish; defaulting to Standard");
+                0
+            }
+        };
+
+        for mut event in post.take_events() {
+            if let DomainEvent::PostPublished(ref mut e) = event {
+                e.author_tier = author_tier;
+            }
             self.publisher.publish(&event).await?;
         }
         Ok(())
