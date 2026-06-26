@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package counter.v1;
+
+option java_package = "com.coreplatform.counter.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/counter/v1;counterv1";
+
+// The kind of entity a counter is attached to. Counter-analytics owns no entity;
+// it references the authoritative record by (entity_type, id) owned by the
+// originating service (`post` / `profile` / `media` / `comment`). A hashtag is
+// referenced by the tag itself as its id.
+enum CounterEntityType {
+    COUNTER_ENTITY_TYPE_UNSPECIFIED = 0;
+    COUNTER_ENTITY_TYPE_POST        = 1;
+    COUNTER_ENTITY_TYPE_PROFILE     = 2;
+    COUNTER_ENTITY_TYPE_MEDIA       = 3;
+    COUNTER_ENTITY_TYPE_HASHTAG     = 4;
+    COUNTER_ENTITY_TYPE_COMMENT     = 5;
+}
+
+// The metric being counted. The split is load-bearing (see CounterValueKind):
+// VIEW / IMPRESSION / CLICK / UNIQUE_VIEWER / REACH are firehose-volume and
+// served APPROXIMATE (sharded counters + HyperLogLog); LIKE / SHARE / COMMENT /
+// FOLLOWER / FOLLOWING are a window onto a set another service authoritatively
+// owns and are served EXACT (fast, periodically reconciled).
+enum CounterMetric {
+    COUNTER_METRIC_UNSPECIFIED   = 0;
+    COUNTER_METRIC_VIEW          = 1;
+    COUNTER_METRIC_IMPRESSION    = 2;
+    COUNTER_METRIC_CLICK         = 3;
+    COUNTER_METRIC_LIKE          = 4;
+    COUNTER_METRIC_SHARE         = 5;
+    COUNTER_METRIC_COMMENT       = 6;
+    COUNTER_METRIC_FOLLOWER      = 7;
+    COUNTER_METRIC_FOLLOWING     = 8;
+    COUNTER_METRIC_UNIQUE_VIEWER = 9;
+    COUNTER_METRIC_REACH         = 10;
+}
+
+// Provenance of a served value: whether it is an EXACT count (reconcilable
+// against the owning source-of-record) or an APPROXIMATE estimate (sharded
+// counter / HyperLogLog / Count-Min Sketch — accurate within a documented error
+// bound, never reconciled per-unit). Callers may render approximate values with
+// a "~" affordance.
+enum CounterValueKind {
+    COUNTER_VALUE_KIND_UNSPECIFIED = 0;
+    COUNTER_VALUE_KIND_EXACT       = 1;
+    COUNTER_VALUE_KIND_APPROXIMATE = 2;
+}
+
+// The aggregation scope for a trending query. GLOBAL ranks across the whole
+// network; the others rank within a qualifier supplied as `scope_key` (the
+// hashtag tag, a category id, a region code).
+enum TrendingScope {
+    TRENDING_SCOPE_UNSPECIFIED = 0;
+    TRENDING_SCOPE_GLOBAL      = 1;
+    TRENDING_SCOPE_HASHTAG     = 2;
+    TRENDING_SCOPE_CATEGORY    = 3;
+    TRENDING_SCOPE_REGION      = 4;
+}
+
+// Bucket size for a historical time-series query. Coarser granularities read
+// further back; the cold tier (Scylla TWCS) rolls finer buckets up over time.
+enum TimeGranularity {
+    TIME_GRANULARITY_UNSPECIFIED = 0;
+    TIME_GRANULARITY_HOUR        = 1;
+    TIME_GRANULARITY_DAY         = 2;
+    TIME_GRANULARITY_WEEK        = 3;
+}

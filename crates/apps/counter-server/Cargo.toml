@@ -1,0 +1,23 @@
+[package]
+name                 = "counter-server"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the counter-analytics READ path — the low-latency, stateless gRPC server over the hot counter tier."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# No-op entrypoint today. Phase 5 wires this over the shared fleet runtime
+# (`service_runtime::serve::<CounterReadService>`), exposing the read-only
+# `counter.v1` surface (BatchGetCounters / GetTrending / GetTimeSeries) on
+# :50064. This binary NEVER consumes the firehose or runs aggregation — that is
+# the separately-deployed `counter-worker`. The split is deliberate: reads scale
+# with fleet QPS, the worker scales with ingest volume, and they share no
+# failure domain.
+[dependencies]
+counter         = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

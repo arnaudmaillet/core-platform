@@ -33,6 +33,7 @@ members = [
     "crates/services/moderation",
     "crates/services/search",
     "crates/services/media",
+    "crates/services/counter",
     "crates/apps/chat-server",
     "crates/apps/profile-server",
     "crates/apps/social-graph-server",
@@ -47,6 +48,8 @@ members = [
     "crates/apps/moderation-server",
     "crates/apps/search-server",
     "crates/apps/media-server",
+    "crates/apps/counter-server",
+    "crates/apps/counter-worker",
     "crates/apps/migrator",
     "crates/contracts/social-graph-api",
     "crates/contracts/account-api",
@@ -62,6 +65,7 @@ members = [
     "crates/contracts/moderation-api",
     "crates/contracts/search-api",
     "crates/contracts/media-api",
+    "crates/contracts/counter-api",
 ]
 resolver = "2"
 
@@ -113,6 +117,7 @@ auth-api = { path = "crates/contracts/auth-api" }
 moderation-api = { path = "crates/contracts/moderation-api" }
 search-api = { path = "crates/contracts/search-api" }
 media-api = { path = "crates/contracts/media-api" }
+counter-api = { path = "crates/contracts/counter-api" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
 profile          = { path = "crates/services/profile" }
@@ -127,6 +132,7 @@ auth             = { path = "crates/services/auth" }
 moderation       = { path = "crates/services/moderation" }
 search           = { path = "crates/services/search" }
 media            = { path = "crates/services/media" }
+counter          = { path = "crates/services/counter" }
 
 
 # Communs
