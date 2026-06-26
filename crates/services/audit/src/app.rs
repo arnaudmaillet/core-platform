@@ -18,8 +18,8 @@ use crate::application::port::{
     CheckpointAnchor, Clock, KeyVault, LedgerStore, SubjectCipher, WormArchive,
 };
 use crate::application::{
-    CheckpointHandler, ExportHandler, IngestHandler, QueryHandler, RecordPrivilegedHandler,
-    VerifyHandler,
+    CheckpointHandler, CryptoShredHandler, ExportHandler, IngestHandler, QueryHandler,
+    RecordPrivilegedHandler, VerifyHandler,
 };
 use crate::config::AuditConfig;
 use crate::infrastructure::grpc::AuditServiceHandler;
@@ -86,6 +86,13 @@ impl Adapters {
         Arc::new(CheckpointHandler::new(
             Arc::clone(&self.ledger),
             Arc::clone(&self.anchor),
+            Arc::clone(&self.clock),
+        ))
+    }
+
+    pub fn shred_handler(&self) -> Arc<CryptoShredHandler> {
+        Arc::new(CryptoShredHandler::new(
+            Arc::clone(&self.key_vault),
             Arc::clone(&self.clock),
         ))
     }

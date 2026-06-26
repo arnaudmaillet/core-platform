@@ -2,6 +2,7 @@
 //! partition is unique and the suite runs in parallel against the shared
 //! containers.
 
+mod account;
 mod anchor;
 mod auth;
 mod chain;

@@ -21,6 +21,7 @@
 //! [`KeyVault`]: crate::application::port::KeyVault
 //! [`CheckpointAnchor`]: crate::application::port::CheckpointAnchor
 
+pub mod account_decode;
 pub mod aes_gcm_cipher;
 pub mod auth_decode;
 pub mod codec;
@@ -36,12 +37,17 @@ pub mod pg_key_vault;
 pub mod pg_ledger;
 pub mod system_clock;
 
+pub use account_decode::{
+    AccountEventWire, TOPIC_ACCOUNT_EVENTS, map_account_created, map_email_changed,
+    map_gdpr_data_export_requested, map_gdpr_deletion_requested,
+};
 pub use aes_gcm_cipher::AesGcmSubjectCipher;
 pub use auth_decode::{
     AuthEventWire, TOPIC_AUTH_EVENTS, map_session_issued, map_session_revoked,
 };
 pub use consumer::{
-    run_audit_ingest_consumer, run_auth_ingest_consumer, run_moderation_ingest_consumer,
+    run_account_ingest_consumer, run_audit_ingest_consumer, run_auth_ingest_consumer,
+    run_moderation_ingest_consumer,
 };
 pub use decode::{AuditEventWire, map_audit_event};
 pub use grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};

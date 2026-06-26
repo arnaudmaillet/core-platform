@@ -16,10 +16,14 @@ use std::sync::Arc;
 use transport::kafka::consumer::{ProcessOutcome, RetryPolicy, run_consumer, KafkaConsumerHandle};
 use transport::kafka::producer::KafkaProducerHandle;
 
-use crate::application::IngestHandler;
 use crate::application::port::SubjectCipher;
-use crate::domain::SubjectPseudonym;
+use crate::application::{CryptoShredHandler, IngestHandler};
+use crate::domain::{SubjectKeyRef, SubjectPseudonym};
 use crate::error::AuditError;
+use crate::infrastructure::account_decode::{
+    AccountEventWire, map_account_created, map_email_changed, map_gdpr_data_export_requested,
+    map_gdpr_deletion_requested,
+};
 use crate::infrastructure::auth_decode::{AuthEventWire, map_session_issued, map_session_revoked};
 use crate::infrastructure::decode::{AuditEventWire, map_audit_event};
 use crate::infrastructure::moderation_decode::{
@@ -59,6 +63,68 @@ pub async fn run_audit_ingest_consumer(
     .await;
     if let Err(e) = result {
         tracing::error!(error = %e, "audit ingest consumer stopped");
+    }
+}
+
+/// Run the `account.v1.events` ingest consumer until the stream ends.
+///
+/// PII-bearing events (`account_created`, `email_changed`) have their personal
+/// data sealed into a crypto-shreddable envelope before chaining. `gdpr_deletion
+/// _requested` is chained as a `DataErasure` record AND drives the actual
+/// crypto-shred: the subject's DEK is destroyed, so every PII envelope ever sealed
+/// for them (here and on the moderation feed) becomes permanently unreadable while
+/// the chain still verifies — the GDPR Art. 17 loop, closed end to end. Recording
+/// precedes shred, and both are idempotent, so a redelivery is safe.
+pub async fn run_account_ingest_consumer(
+    consumer: KafkaConsumerHandle,
+    producer: KafkaProducerHandle,
+    handler: Arc<IngestHandler>,
+    cipher: Arc<dyn SubjectCipher>,
+    shred: Arc<CryptoShredHandler>,
+) {
+    tracing::info!("audit account ingest consumer started");
+    let policy = RetryPolicy::default();
+    let result = run_consumer::<AccountEventWire, _>(&consumer, &producer, &policy, move |wire| {
+        let handler = Arc::clone(&handler);
+        let cipher = Arc::clone(&cipher);
+        let shred = Arc::clone(&shred);
+        let wire = wire.clone();
+        Box::pin(async move {
+            let outcome = async {
+                match wire {
+                    AccountEventWire::AccountCreated(created) => {
+                        let subject = SubjectPseudonym::new(created.account_id.clone())?;
+                        let pii = cipher.seal(&subject, &created.pii_plaintext()).await?;
+                        handler.ingest(map_account_created(&created, pii)?).await?;
+                    }
+                    AccountEventWire::EmailChanged(changed) => {
+                        let subject = SubjectPseudonym::new(changed.account_id.clone())?;
+                        let pii = cipher.seal(&subject, &changed.pii_plaintext()).await?;
+                        handler.ingest(map_email_changed(&changed, pii)?).await?;
+                    }
+                    AccountEventWire::GdprDeletionRequested(deletion) => {
+                        let subject = SubjectPseudonym::new(deletion.account_id.clone())?;
+                        // 1. Chain the erasure-request record (evidence the request happened).
+                        handler.ingest(map_gdpr_deletion_requested(&deletion)?).await?;
+                        // 2. Crypto-shred: destroy the subject's DEK → all their sealed
+                        //    PII is permanently unreadable; the chain stays verifiable.
+                        let key_ref = SubjectKeyRef::new(format!("dek:{}", subject.as_str()))?;
+                        shred.shred(&subject, &key_ref, &[]).await?;
+                    }
+                    AccountEventWire::GdprDataExportRequested(export) => {
+                        handler.ingest(map_gdpr_data_export_requested(&export)?).await?;
+                    }
+                    AccountEventWire::Other => {}
+                }
+                Ok::<(), AuditError>(())
+            }
+            .await;
+            ProcessOutcome::from_result(outcome)
+        })
+    })
+    .await;
+    if let Err(e) = result {
+        tracing::error!(error = %e, "audit account ingest consumer stopped");
     }
 }
 
