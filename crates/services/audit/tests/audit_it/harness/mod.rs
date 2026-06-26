@@ -12,7 +12,9 @@ use std::time::Duration;
 use chrono::{DateTime, TimeZone, Utc};
 use uuid::Uuid;
 
-use audit::application::port::{CheckpointAnchor, Clock, KeyVault, LedgerStore, WormArchive};
+use audit::application::port::{
+    CheckpointAnchor, Clock, KeyVault, LedgerStore, SubjectCipher, WormArchive,
+};
 use audit::application::{
     CheckpointHandler, CryptoShredHandler, IngestHandler, QueryHandler, VerifyHandler,
 };
@@ -21,7 +23,8 @@ use audit::domain::{
     PartitionKey, PiiEnvelope, ResourceRef, SubjectKeyRef, SubjectPseudonym, TenantId,
 };
 use audit::infrastructure::{
-    ObjectLockArchive, ObjectLockConfig, PgCheckpointAnchor, PgKeyVault, PgLedger, SystemClock,
+    AesGcmSubjectCipher, ObjectLockArchive, ObjectLockConfig, PgCheckpointAnchor, PgKeyVault,
+    PgLedger, SystemClock,
 };
 
 use postgres_storage::config::StatementLogLevel;
@@ -34,12 +37,16 @@ const PG_MIGRATIONS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
 /// tamper scenario can rewrite it via raw SQL.
 pub const LIVE_ACTION: &str = "live.action";
 
+/// A fixed test KEK (production reads a real one from env / KMS).
+const TEST_KEK: [u8; 32] = [42u8; 32];
+
 pub struct Harness {
     pub ledger: Arc<dyn LedgerStore>,
     pub archive: Arc<dyn WormArchive>,
     pub key_vault: Arc<dyn KeyVault>,
     pub anchor: Arc<dyn CheckpointAnchor>,
     pub clock: Arc<dyn Clock>,
+    pub cipher: Arc<dyn SubjectCipher>,
     pub pool: PgPool,
 }
 
@@ -80,6 +87,10 @@ impl Harness {
             Arc::new(PgCheckpointAnchor::new(TransactionManager::new(pool.clone())));
         let archive: Arc<dyn WormArchive> = Arc::new(archive);
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+        let cipher: Arc<dyn SubjectCipher> = Arc::new(AesGcmSubjectCipher::new(
+            TransactionManager::new(pool.clone()),
+            TEST_KEK,
+        ));
 
         Self {
             ledger,
@@ -87,6 +98,7 @@ impl Harness {
             key_vault,
             anchor,
             clock,
+            cipher,
             pool,
         }
     }

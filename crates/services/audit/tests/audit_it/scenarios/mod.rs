@@ -5,4 +5,5 @@
 mod anchor;
 mod chain;
 mod idempotency;
+mod moderation;
 mod shred;
