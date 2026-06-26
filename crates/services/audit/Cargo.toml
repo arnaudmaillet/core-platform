@@ -85,3 +85,12 @@ http      = { workspace = true }
 # append→chain→archive→verify path and the crypto-shred lifecycle over the real
 # adapters. Opt-in via `cargo test -p audit --features integration-audit`.
 integration-audit = []
+
+[dev-dependencies]
+# Live integration suite (Phase 6): shared container orchestration (Postgres +
+# MinIO) + await_until.
+test-support = { workspace = true }
+tokio        = { workspace = true }
+chrono       = { workspace = true }
+uuid         = { workspace = true }
+sqlx         = { workspace = true }

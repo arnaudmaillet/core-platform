@@ -56,6 +56,25 @@ impl ObjectLockArchive {
         })
     }
 
+    /// Idempotently create the bucket (for local/test environments where it does
+    /// not pre-exist; in production ops provisions it with Object Lock enabled). A
+    /// 409 (already owned) is success.
+    pub async fn ensure_bucket(&self) -> Result<(), AuditError> {
+        let url = self.bucket.create_bucket(&self.credentials).sign(self.presign_ttl);
+        let resp = self
+            .http
+            .put(url)
+            .send()
+            .await
+            .map_err(|_| AuditError::ArchiveUnavailable)?;
+        let status = resp.status();
+        if status.is_success() || status == reqwest::StatusCode::CONFLICT {
+            Ok(())
+        } else {
+            Err(AuditError::ArchiveUnavailable)
+        }
+    }
+
     async fn put(&self, key: &str, body: Vec<u8>) -> Result<(), AuditError> {
         let url: Url = self
             .bucket
