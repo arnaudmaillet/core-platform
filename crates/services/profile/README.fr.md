@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 18ab5e76420190ced87687f04b6933db1e4a92483d5322732ce3cd7bafd36032
-  translated_at: 2026-06-25
+  source_sha256: 7ed960bb816edbc6d1c8306c6e9d96cc8db2b7a8a8c7e348958b5d81bc12ce75
+  translated_at: 2026-06-26
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -20,7 +20,7 @@ i18n:
 > | **Palier (Tier)** | **TIER-0** — chemin de lecture public, résolution d'identité à l'échelle de la flotte |
 > | **Binaire déployable** | `crates/apps/profile-server` (crate bibliothèque : `crates/services/profile`) |
 > | **Bases de données** | ScyllaDB keyspace `profile` · Redis (cache-aside) |
-> | **Asynchrone** | publie `profile.tier_changed` · consomme `account.v1.events` |
+> | **Asynchrone** | publie `profile.v1.events` · consomme `account.v1.events` |
 > | **Appelants amont** | `<TODO: passerelle>`, consommateurs reco/lookup en masse, `geo-discovery` (via événements) |
 > | **Dépendances aval** | ScyllaDB, Redis, Kafka |
 > | **SLO** | lecture cache-hit p99 **< 1 ms** · cache-miss p99 **< 5 ms** |
@@ -169,9 +169,11 @@ réactivement).
 
 **Publie :**
 
-| Topic | Trigger | Key | Consumers |
+| Topic | Déclencheur | Clé | Consommateurs |
 |---|---|---|---|
-| `profile.tier_changed` | author tier change (one event per affected `post_id`) | `post_id` | `geo-discovery` (card tier sync), `timeline` (tier routing, indirect) |
+| `profile.v1.events` | chaque mutation de cycle de vie — `ProfileCreated` / `ProfileUpdated` / `HandleChanged` / `ProfileVerified` / `ProfileHidden` / `ProfileRestored` / `ProfileDeleted` | `profile_id` | `search` (indexation des profils) |
+
+> **Contrat de fil :** un topic versionné unique, tagué en interne sur `type` (convention du service moderation), clé `profile_id` pour l'ordre par-profil. Les événements sont **fins** (ids + horodatages, sans contenu d'affichage) — un consommateur qui a besoin du profil complet l'hydrate via `GetProfileById`. Chaque command handler draine les événements en attente de l'agrégat et les publie **après** l'écriture durable (durable-first ; un publisher no-op couvre la composition sans broker).
 
 **Consomme :**
 

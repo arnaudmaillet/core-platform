@@ -4,10 +4,12 @@
 //! graph out. It binds no socket and reads no environment, so a binary entrypoint
 //! and the live integration harness assemble the exact same graph.
 //!
-//! Profile is a downstream service — it publishes no events of its own, and its
-//! one inbound Kafka touchpoint (the account-event consumer) is wired separately
-//! by the serving binary against [`App::command_bus`]; it is intentionally not
-//! part of this composition root, so the graph needs no broker.
+//! Profile publishes its lifecycle events to `profile.v1.events` via an injected
+//! [`EventPublisher`]: each command handler drains the aggregate's pending events
+//! after the durable write and publishes them. The publisher is injected (Kafka in
+//! the binary, a no-op in broker-free composition) so the graph itself needs no
+//! broker. Its one inbound Kafka touchpoint (the account-event consumer) is wired
+//! separately by the serving binary against [`App::command_bus`].
 
 use std::sync::Arc;
 
@@ -24,7 +26,7 @@ use crate::application::command::{
     UpdateAvatarCommand, UpdateAvatarHandler, UpdateBannerCommand, UpdateBannerHandler,
     UpdateProfileCommand, UpdateProfileHandler, VerifyProfileCommand, VerifyProfileHandler,
 };
-use crate::application::port::{ProfileCache, ProfileRepository};
+use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::application::query::{
     GetProfileByHandleHandler, GetProfileByHandleQuery, GetProfileByIdHandler, GetProfileByIdQuery,
     ListProfilesByAccountHandler, ListProfilesByAccountQuery,
@@ -64,6 +66,7 @@ impl App {
     pub async fn build(
         backends: Backends,
         cache_registry: Arc<CacheRegistry>,
+        publisher: Arc<dyn EventPublisher>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let Backends { scylla, redis } = backends;
 
@@ -88,42 +91,52 @@ impl App {
                 .register::<CreateProfileCommand, _>(CreateProfileHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<UpdateProfileCommand, _>(UpdateProfileHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<ChangeHandleCommand, _>(ChangeHandleHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<UpdateAvatarCommand, _>(UpdateAvatarHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<UpdateBannerCommand, _>(UpdateBannerHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<SetVisibilityCommand, _>(SetVisibilityHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<VerifyProfileCommand, _>(VerifyProfileHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<HideProfileCommand, _>(HideProfileHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<RestoreProfileCommand, _>(RestoreProfileHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .register::<DeleteProfileCommand, _>(DeleteProfileHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
+                    Arc::clone(&publisher),
                 ))?
                 .build(),
         );

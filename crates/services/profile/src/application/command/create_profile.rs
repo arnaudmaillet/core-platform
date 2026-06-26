@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{ProfileCache, ProfileRepository};
+use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::domain::aggregate::{Profile, ProfileCreateParams};
 use crate::domain::value_object::{AccountId, AvatarUrl, BannerUrl, Bio, DisplayName, Handle, Locale, ProfileKind};
 use crate::error::ProfileError;
@@ -46,11 +46,12 @@ impl Validate for CreateProfileCommand {
 pub struct CreateProfileHandler {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn ProfileCache>,
+    publisher: Arc<dyn EventPublisher>,
 }
 
 impl CreateProfileHandler {
-    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>) -> Self {
-        Self { repo, cache }
+    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>, publisher: Arc<dyn EventPublisher>) -> Self {
+        Self { repo, cache, publisher }
     }
 }
 
@@ -73,7 +74,7 @@ impl CommandHandler<CreateProfileCommand> for CreateProfileHandler {
             return Err(ProfileError::HandleAlreadyTaken { handle: handle.as_str().to_owned() });
         }
 
-        let profile = Profile::create(ProfileCreateParams {
+        let mut profile = Profile::create(ProfileCreateParams {
             account_id,
             handle: handle.clone(),
             display_name,
@@ -93,6 +94,12 @@ impl CommandHandler<CreateProfileCommand> for CreateProfileHandler {
         let claimed = self.repo.claim_handle(&handle, profile.id(), account_id).await?;
         if !claimed {
             return Err(ProfileError::HandleAlreadyTaken { handle: handle.as_str().to_owned() });
+        }
+
+        // Publish only after the claim succeeds — a lost race must not emit a
+        // phantom ProfileCreated.
+        for event in profile.drain_events() {
+            self.publisher.publish(&event).await?;
         }
 
         let _ = self.cache.invalidate_account_profiles(&account_id).await;

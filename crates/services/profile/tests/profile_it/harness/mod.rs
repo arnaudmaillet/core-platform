@@ -3,7 +3,7 @@
 //! the repository and Redis cache handles for assertions.
 #![allow(dead_code)]
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use uuid::Uuid;
@@ -17,8 +17,11 @@ use scylla_storage::ScyllaConfig;
 
 use profile::app::{App, Backends};
 use profile::application::command::{CreateProfileCommand, UpdateProfileCommand};
-use profile::application::port::{ProfileCache, ProfileRepository};
+use profile::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use profile::application::query::{GetProfileByHandleQuery, GetProfileByIdQuery};
+use profile::domain::event::DomainEvent;
+use profile::error::ProfileError;
+use profile::infrastructure::publisher::wire::ProfileEventWire;
 
 pub use profile::application::port::profile_cache::ProfileView;
 pub use profile::domain::value_object::ProfileId;
@@ -54,12 +57,35 @@ ttl_secs = 600
 "handle-lookup" = "handles"
 "#;
 
+/// Captures the `type` tag of every published profile event, so a scenario can
+/// assert the durable write emitted the right `profile.v1.events` notification.
+#[derive(Default)]
+pub struct CapturingEventPublisher {
+    events: Mutex<Vec<String>>,
+}
+
+#[async_trait::async_trait]
+impl EventPublisher for CapturingEventPublisher {
+    async fn publish(&self, event: &DomainEvent) -> Result<(), ProfileError> {
+        let kind = ProfileEventWire::from(event).event_type();
+        self.events.lock().unwrap().push(kind.to_owned());
+        Ok(())
+    }
+}
+
+impl CapturingEventPublisher {
+    pub fn published(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
 /// A fully-wired profile service bound to ephemeral infra, plus assertion handles.
 pub struct TestHarness {
     pub command_bus: Arc<InMemoryCommandBus>,
     pub query_bus:   Arc<InMemoryQueryBus>,
     pub repository:  Arc<dyn ProfileRepository>,
     pub cache:       Arc<dyn ProfileCache>,
+    pub publisher:   Arc<CapturingEventPublisher>,
 }
 
 impl TestHarness {
@@ -86,15 +112,21 @@ impl TestHarness {
             CacheRegistry::from_section(cache_section).expect("integration: resolve cache registry"),
         );
 
-        let app = App::build(backends, cache_registry)
-            .await
-            .expect("integration: build profile app");
+        let publisher = Arc::new(CapturingEventPublisher::default());
+        let app = App::build(
+            backends,
+            cache_registry,
+            Arc::clone(&publisher) as Arc<dyn EventPublisher>,
+        )
+        .await
+        .expect("integration: build profile app");
 
         Self {
             command_bus: app.command_bus,
             query_bus:   app.query_bus,
             repository:  app.repository,
             cache:       app.cache,
+            publisher,
         }
     }
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{ProfileCache, ProfileRepository};
+use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::domain::value_object::{MaskingReason, ProfileId};
 use crate::error::ProfileError;
 
@@ -36,11 +36,12 @@ impl Validate for HideProfileCommand {
 pub struct HideProfileHandler {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn ProfileCache>,
+    publisher: Arc<dyn EventPublisher>,
 }
 
 impl HideProfileHandler {
-    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>) -> Self {
-        Self { repo, cache }
+    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>, publisher: Arc<dyn EventPublisher>) -> Self {
+        Self { repo, cache, publisher }
     }
 }
 
@@ -60,6 +61,10 @@ impl CommandHandler<HideProfileCommand> for HideProfileHandler {
 
         profile.hide(reason, cmd.suspension_reason.clone(), envelope.correlation_id)?;
         self.repo.save(&profile).await?;
+
+        for event in profile.drain_events() {
+            self.publisher.publish(&event).await?;
+        }
         let _ = self.cache.invalidate_by_id(&id).await;
         let _ = self.cache.invalidate_account_profiles(&profile.account_id()).await;
 

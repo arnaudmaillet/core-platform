@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{ProfileCache, ProfileRepository};
+use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::domain::value_object::{ProfileId, VerificationKind};
 use crate::error::ProfileError;
 
@@ -31,11 +31,12 @@ impl Validate for VerifyProfileCommand {
 pub struct VerifyProfileHandler {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn ProfileCache>,
+    publisher: Arc<dyn EventPublisher>,
 }
 
 impl VerifyProfileHandler {
-    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>) -> Self {
-        Self { repo, cache }
+    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>, publisher: Arc<dyn EventPublisher>) -> Self {
+        Self { repo, cache, publisher }
     }
 }
 
@@ -55,6 +56,10 @@ impl CommandHandler<VerifyProfileCommand> for VerifyProfileHandler {
 
         profile.verify(kind, envelope.correlation_id)?;
         self.repo.save(&profile).await?;
+
+        for event in profile.drain_events() {
+            self.publisher.publish(&event).await?;
+        }
         let _ = self.cache.invalidate_by_id(&id).await;
 
         Ok(())
