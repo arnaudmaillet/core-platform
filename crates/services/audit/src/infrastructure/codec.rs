@@ -51,6 +51,7 @@ fn category_to_pb(c: EventCategory) -> pb::EventCategory {
         EventCategory::DataErasure => pb::EventCategory::DataErasure,
         EventCategory::PrivilegedAction => pb::EventCategory::PrivilegedAction,
         EventCategory::Retention => pb::EventCategory::Retention,
+        EventCategory::Identity => pb::EventCategory::Identity,
     }
 }
 
@@ -65,6 +66,7 @@ fn category_from_pb(value: i32) -> Result<EventCategory, AuditError> {
         Ok(pb::EventCategory::DataErasure) => Ok(EventCategory::DataErasure),
         Ok(pb::EventCategory::PrivilegedAction) => Ok(EventCategory::PrivilegedAction),
         Ok(pb::EventCategory::Retention) => Ok(EventCategory::Retention),
+        Ok(pb::EventCategory::Identity) => Ok(EventCategory::Identity),
         Ok(pb::EventCategory::Unspecified) | Err(_) => Err(AuditError::UnknownEventCategory {
             category: value.to_string(),
         }),
