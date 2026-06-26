@@ -35,6 +35,7 @@ members = [
     "crates/services/media",
     "crates/services/counter",
     "crates/services/realtime",
+    "crates/services/audit",
     "crates/apps/chat-server",
     "crates/apps/profile-server",
     "crates/apps/social-graph-server",
@@ -53,6 +54,8 @@ members = [
     "crates/apps/counter-worker",
     "crates/apps/realtime-gateway",
     "crates/apps/realtime-dispatcher",
+    "crates/apps/audit-server",
+    "crates/apps/audit-worker",
     "crates/apps/migrator",
     "crates/contracts/social-graph-api",
     "crates/contracts/account-api",
@@ -139,6 +142,7 @@ search           = { path = "crates/services/search" }
 media            = { path = "crates/services/media" }
 counter          = { path = "crates/services/counter" }
 realtime         = { path = "crates/services/realtime" }
+audit            = { path = "crates/services/audit" }
 
 
 # Communs

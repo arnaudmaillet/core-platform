@@ -1,0 +1,20 @@
+[package]
+name                 = "audit-worker"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the audit INGEST/VERIFY plane — runs the supervised run_consumer ingestion lane (decode → chain → persist → archive) plus the verifier / checkpoint-anchor / retention / crypto-shred loops. Serves no domain RPC; only the gRPC health/reflection plane on its own port (:50069)."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# No-op entrypoint today: serves only the gRPC health/reflection plane via
+# service_runtime::serve on :50069 so Kubernetes can probe readiness. Phase 5
+# spawns the supervised consumer ingestion lane + the verify/anchor/retention/
+# shred loops. Throughput-bound; scaled independently of `audit-server`.
+[dependencies]
+audit           = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

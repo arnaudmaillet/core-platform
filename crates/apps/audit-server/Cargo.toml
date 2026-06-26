@@ -1,0 +1,20 @@
+[package]
+name                 = "audit-server"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the audit READ/RECORD plane — serves the access-controlled Query/Export/VerifyIntegrity reads and the synchronous, fail-closed RecordPrivileged RPC on the internal gRPC port :50068."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# No-op entrypoint today: serves only the gRPC health/reflection plane via
+# service_runtime::serve on :50068. Phase 5 wires the read handlers + the
+# synchronous fail-closed RecordPrivileged RPC over the real ledger + key
+# adapters. Scaled independently of `audit-worker`.
+[dependencies]
+audit           = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }
