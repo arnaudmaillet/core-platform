@@ -52,7 +52,12 @@ fn services() -> Vec<ServiceMigrations> {
         ServiceMigrations { name: "geo-discovery", store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/geo-discovery/migrations") },
         ServiceMigrations { name: "notification",  store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/notification/migrations") },
         ServiceMigrations { name: "timeline",      store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/timeline/migrations") },
-        ServiceMigrations { name: "account",       store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/account/migrations") },
+        // `counter` is the only dual-store service: its warm ledger is Postgres and
+        // its cold time-series is Scylla, so it registers one entry per backend
+        // (each pointing at the matching `migrations/<store>` subdir).
+        ServiceMigrations { name: "counter-timeseries", store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/counter/migrations/scylla") },
+        ServiceMigrations { name: "account",            store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/account/migrations") },
+        ServiceMigrations { name: "counter",            store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/counter/migrations/postgres") },
     ]
 }
 

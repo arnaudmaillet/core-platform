@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package counter.v1;
+
+import "counter/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.counter.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/counter/v1;counterv1";
+
+// ── Core references & values ──────────────────────────────────────────────────
+
+// A reference to the entity a count is attached to. Counter-analytics stores no
+// entity — only the magnitudes keyed by this reference. The caller hydrates the
+// entity itself (post body, profile, media URL) from its source-of-record.
+message EntityRef {
+    CounterEntityType entity_type = 1;
+    // The authoritative id (post id / profile id / media id / the tag itself for
+    // hashtags), owned by the originating service.
+    string            id          = 2;
+}
+
+// A single metric magnitude for an entity. The contract (LOCKED): this answers
+// "how many?", never "who?". It carries no actor identity and no set membership —
+// that edge state belongs to `engagement` (reactions) and `social-graph`
+// (follows).
+message CounterValue {
+    CounterMetric    metric = 1;
+    int64            value  = 2;
+    // EXACT (reconcilable) vs APPROXIMATE (HLL/sharded/CMS estimate). Lets the
+    // caller render precision honestly.
+    CounterValueKind kind   = 3;
+}
+
+// The set of requested metric magnitudes for one entity.
+message CounterSnapshot {
+    EntityRef             entity = 1;
+    repeated CounterValue values = 2;
+    // True when this snapshot was served from a stale fallback — the hot tier was
+    // partial/unavailable and the read failed OPEN to the last durable total
+    // rather than erroring. The fail-open marker.
+    bool                  degraded = 3;
+}
+
+// ── BatchGetCounters (the feed-hydration hot path) ────────────────────────────
+
+message BatchGetCountersRequest {
+    // The entities to read counts for, in one round-trip (a feed page).
+    repeated EntityRef     entities = 1;
+    // Restrict to these metrics; empty ⇒ all metrics defined for each entity kind.
+    repeated CounterMetric metrics  = 2;
+}
+
+message BatchGetCountersResponse {
+    // Positional, 1:1 with the request's `entities`.
+    repeated CounterSnapshot snapshots = 1;
+    // True when ANY snapshot was served degraded (hot tier partial/unavailable).
+    bool                     degraded  = 2;
+}
+
+// ── GetTrending (top-K from the Count-Min Sketch + bounded heap) ──────────────
+
+message GetTrendingRequest {
+    TrendingScope scope     = 1;
+    // Scope qualifier — the hashtag tag, a category id, or a region code. Empty
+    // for GLOBAL.
+    string        scope_key = 2;
+    // The metric driving the ranking (e.g. VIEW for trending content).
+    CounterMetric metric    = 3;
+    // Max results; the server clamps to a hard ceiling.
+    int32         limit     = 4;
+}
+
+message TrendingEntry {
+    EntityRef entity = 1;
+    // Approximate frequency/score from the Count-Min Sketch — a ranking signal,
+    // not an exact count.
+    int64     score  = 2;
+    // Zero-based rank within this trending response.
+    int32     rank   = 3;
+}
+
+message GetTrendingResponse {
+    repeated TrendingEntry entries  = 1;
+    // True when served from a degraded / partial sketch (fail-open).
+    bool                   degraded = 2;
+}
+
+// ── GetTimeSeries (historical buckets — the cold-tier read) ───────────────────
+
+// NOTE: this is the one RPC permitted to touch the cold time-series tier
+// (Scylla TWCS). It is explicitly NOT sub-millisecond and NOT on the feed-render
+// path; it backs analytics/insight surfaces.
+message GetTimeSeriesRequest {
+    EntityRef                 entity      = 1;
+    CounterMetric             metric      = 2;
+    TimeGranularity           granularity = 3;
+    // Inclusive lower bound of the requested range.
+    google.protobuf.Timestamp start       = 4;
+    // Exclusive upper bound of the requested range.
+    google.protobuf.Timestamp end         = 5;
+}
+
+message TimeSeriesBucket {
+    // Start of the bucket; width is the request's `granularity`.
+    google.protobuf.Timestamp bucket_start = 1;
+    int64                     value        = 2;
+}
+
+message GetTimeSeriesResponse {
+    repeated TimeSeriesBucket buckets  = 1;
+    // Provenance of the series as a whole (EXACT vs APPROXIMATE).
+    CounterValueKind          kind     = 2;
+    // True when the cold tier was partial/unavailable and the read failed OPEN.
+    bool                      degraded = 3;
+}
