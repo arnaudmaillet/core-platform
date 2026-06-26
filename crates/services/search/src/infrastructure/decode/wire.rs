@@ -72,3 +72,40 @@ pub struct SubjectWire {
     pub entity_type: String,
     pub entity_id: String,
 }
+
+// ── profile.v1.events (internally tagged on `type`, PascalCase) ───────────────
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type")]
+pub enum ProfileWireEvent {
+    ProfileCreated {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    ProfileUpdated {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    HandleChanged {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    ProfileVerified {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    ProfileHidden {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    ProfileRestored {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    ProfileDeleted {
+        profile_id: String,
+        occurred_at_ms: i64,
+    },
+    #[serde(other)]
+    Unknown,
+}

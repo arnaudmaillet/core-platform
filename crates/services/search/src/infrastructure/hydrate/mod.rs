@@ -1,18 +1,23 @@
 //! Content hydration — the seam between a thin notification and a fat document.
 //!
-//! `post.v1.events` are notifications (ids + timestamps), so a publish/update can't
-//! be projected directly: the consumer first resolves the authoritative snapshot
-//! from the `post` service over gRPC. This runs on the **ingestion** path only; the
-//! query path stays self-contained.
+//! `post.v1.events` and `profile.v1.events` are notifications (ids + timestamps),
+//! so a publish/update can't be projected directly: the consumer first resolves the
+//! authoritative snapshot from the owning service over gRPC (`GetPost` /
+//! `GetProfileById`). This runs on the **ingestion** path only; the query path stays
+//! self-contained.
 
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
-use post_api::post_service_client::PostServiceClient;
 use post_api::GetPostRequest;
-use tonic::transport::Channel;
+use post_api::post_service_client::PostServiceClient;
+use profile_api::GetProfileByIdRequest;
+use profile_api::profile_service_client::ProfileServiceClient;
 use tonic::Code;
+use tonic::transport::Channel;
 
-use crate::domain::{EntityKind, EntityDeletion, PostEvent, PostSnapshot, SourceEvent};
+use crate::domain::{
+    EntityDeletion, EntityKind, PostEvent, PostSnapshot, ProfileEvent, ProfileSnapshot, SourceEvent,
+};
 use crate::error::SearchError;
 use crate::infrastructure::decode::ContentRef;
 
@@ -27,76 +32,118 @@ pub trait SourceHydrator: Send + Sync + 'static {
     ) -> Result<SourceEvent, SearchError>;
 }
 
-/// The production hydrator: a `post` gRPC client.
-pub struct GrpcPostHydrator {
-    client: PostServiceClient<Channel>,
+/// The production hydrator: `post` + `profile` gRPC clients, routed by kind.
+pub struct GrpcSourceHydrator {
+    post: PostServiceClient<Channel>,
+    profile: ProfileServiceClient<Channel>,
 }
 
-impl GrpcPostHydrator {
-    pub fn new(channel: Channel) -> Self {
+impl GrpcSourceHydrator {
+    pub fn new(post: Channel, profile: Channel) -> Self {
         Self {
-            client: PostServiceClient::new(channel),
+            post: PostServiceClient::new(post),
+            profile: ProfileServiceClient::new(profile),
         }
+    }
+
+    async fn hydrate_post(&self, content_ref: ContentRef) -> Result<SourceEvent, SearchError> {
+        let mut client = self.post.clone();
+        let view = match client
+            .get_post(GetPostRequest {
+                post_id: content_ref.id.clone(),
+            })
+            .await
+        {
+            Ok(resp) => resp.into_inner(),
+            // Deleted between the event and our fetch — converge by removing it.
+            Err(status) if status.code() == Code::NotFound => {
+                return Ok(deleted(EntityKind::Post, content_ref.id));
+            }
+            Err(status) if is_transient(status.code()) => {
+                return Err(SearchError::EngineUnavailable);
+            }
+            Err(status) => {
+                return Err(SearchError::UnmappedSource {
+                    reason: format!("get_post failed: {status}"),
+                });
+            }
+        };
+
+        let snapshot = PostSnapshot {
+            post_id: view.post_id,
+            // The post's author is its profile; `author_handle` is a display field
+            // left to a future secondary profile lookup.
+            author_id: view.profile_id,
+            author_handle: String::new(),
+            hashtags: extract_hashtags(&view.caption),
+            caption: view.caption,
+            // Thumbnail derivation from `attachments` is deferred (display-only).
+            thumbnail_key: String::new(),
+            created_at: ms_to_dt(view.created_at_ms),
+            revision: content_ref.revision,
+        };
+        Ok(SourceEvent::Post(PostEvent::Published(snapshot)))
+    }
+
+    async fn hydrate_profile(&self, content_ref: ContentRef) -> Result<SourceEvent, SearchError> {
+        let mut client = self.profile.clone();
+        let view = match client
+            .get_profile_by_id(GetProfileByIdRequest {
+                profile_id: content_ref.id.clone(),
+            })
+            .await
+        {
+            Ok(resp) => resp.into_inner(),
+            Err(status) if status.code() == Code::NotFound => {
+                return Ok(deleted(EntityKind::Profile, content_ref.id));
+            }
+            Err(status) if is_transient(status.code()) => {
+                return Err(SearchError::EngineUnavailable);
+            }
+            Err(status) => {
+                return Err(SearchError::UnmappedSource {
+                    reason: format!("get_profile_by_id failed: {status}"),
+                });
+            }
+        };
+
+        let snapshot = ProfileSnapshot {
+            profile_id: view.profile_id,
+            handle: view.handle,
+            display_name: view.display_name,
+            bio: view.bio,
+            avatar_key: view.avatar_url,
+            verified: view.verified,
+            created_at: view.created_at.map(ts_to_dt).unwrap_or_else(Utc::now),
+            // The profile's own monotonic version is the authoritative content version.
+            revision: view.version.max(0) as u64,
+        };
+        Ok(SourceEvent::Profile(ProfileEvent::Upserted(snapshot)))
     }
 }
 
 #[async_trait]
-impl SourceHydrator for GrpcPostHydrator {
+impl SourceHydrator for GrpcSourceHydrator {
     async fn hydrate(
         &self,
         content_ref: ContentRef,
         _now: DateTime<Utc>,
     ) -> Result<SourceEvent, SearchError> {
         match content_ref.kind {
-            EntityKind::Post => {
-                let mut client = self.client.clone();
-                let view = match client
-                    .get_post(GetPostRequest {
-                        post_id: content_ref.id.clone(),
-                    })
-                    .await
-                {
-                    Ok(resp) => resp.into_inner(),
-                    // The post was deleted between the event and our fetch — converge
-                    // by removing it from the index (a delete is idempotent).
-                    Err(status) if status.code() == Code::NotFound => {
-                        return Ok(SourceEvent::Post(PostEvent::Deleted(EntityDeletion {
-                            id: content_ref.id,
-                        })));
-                    }
-                    // Transient source-service faults are retryable; the consumer
-                    // retries then dead-letters rather than dropping the update.
-                    Err(status) if is_transient(status.code()) => {
-                        return Err(SearchError::EngineUnavailable);
-                    }
-                    Err(status) => {
-                        return Err(SearchError::UnmappedSource {
-                            reason: format!("get_post failed: {status}"),
-                        });
-                    }
-                };
-
-                let snapshot = PostSnapshot {
-                    post_id: view.post_id,
-                    // The post's author is its profile; `author_handle` is a display
-                    // field left to a future secondary profile lookup.
-                    author_id: view.profile_id,
-                    author_handle: String::new(),
-                    hashtags: extract_hashtags(&view.caption),
-                    caption: view.caption,
-                    // Thumbnail derivation from `attachments` is deferred (display-only).
-                    thumbnail_key: String::new(),
-                    created_at: ms_to_dt(view.created_at_ms),
-                    revision: content_ref.revision,
-                };
-                Ok(SourceEvent::Post(PostEvent::Published(snapshot)))
-            }
-            // Only post content is hydrated today; profile ingestion is an upstream
-            // prerequisite (profile publishes no Kafka stream yet).
+            EntityKind::Post => self.hydrate_post(content_ref).await,
+            EntityKind::Profile => self.hydrate_profile(content_ref).await,
             other => Err(SearchError::UnmappedSource {
                 reason: format!("no hydrator for {other:?}"),
             }),
         }
+    }
+}
+
+fn deleted(kind: EntityKind, id: String) -> SourceEvent {
+    match kind {
+        EntityKind::Post => SourceEvent::Post(PostEvent::Deleted(EntityDeletion { id })),
+        EntityKind::Profile => SourceEvent::Profile(ProfileEvent::Deleted(EntityDeletion { id })),
+        EntityKind::Hashtag => SourceEvent::Post(PostEvent::Deleted(EntityDeletion { id })),
     }
 }
 
@@ -119,6 +166,12 @@ fn extract_hashtags(caption: &str) -> Vec<String> {
 
 fn ms_to_dt(ms: i64) -> DateTime<Utc> {
     Utc.timestamp_millis_opt(ms).single().unwrap_or_else(Utc::now)
+}
+
+fn ts_to_dt(ts: prost_types::Timestamp) -> DateTime<Utc> {
+    Utc.timestamp_opt(ts.seconds, ts.nanos.max(0) as u32)
+        .single()
+        .unwrap_or_else(Utc::now)
 }
 
 fn is_transient(code: Code) -> bool {

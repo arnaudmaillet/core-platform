@@ -40,6 +40,17 @@ pub enum ProfileEvent {
     /// Profile created or edited — full re-projection.
     Upserted(ProfileSnapshot),
     Deleted(EntityDeletion),
+    /// The owner masked their own profile — make it non-searchable under the
+    /// **owner** authority (independent of any moderation hide).
+    OwnerHidden {
+        profile_id: String,
+        occurred_at: DateTime<Utc>,
+    },
+    /// The owner un-masked their profile — restore owner-authority visibility.
+    OwnerRestored {
+        profile_id: String,
+        occurred_at: DateTime<Utc>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

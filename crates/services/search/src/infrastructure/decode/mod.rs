@@ -7,6 +7,7 @@ pub mod decoder;
 pub mod wire;
 
 pub use decoder::{
-    ContentRef, Decoded, decode_moderation, decode_post, map_moderation, map_post,
+    ContentRef, Decoded, decode_moderation, decode_post, decode_profile, map_moderation, map_post,
+    map_profile,
 };
-pub use wire::{ModerationWireEvent, PostWireEvent};
+pub use wire::{ModerationWireEvent, PostWireEvent, ProfileWireEvent};
