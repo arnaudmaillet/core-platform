@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package audit.v1;
+
+option java_package = "com.coreplatform.audit.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/audit/v1;auditv1";
+
+// The compliance CATEGORY of an audit event. This is the primary classifier the
+// worker uses to resolve a retention policy and to derive the chain partition
+// (partitioning is hybrid: by tenant + category — the subject is carried as an
+// indexed field, NOT as the partition, so per-subject erasure never fragments
+// the chain). Categories are coarse and stable on purpose: they are an API and a
+// legal taxonomy, not a debugging facet.
+enum EventCategory {
+    EVENT_CATEGORY_UNSPECIFIED       = 0;
+    // Authentication lifecycle (login, token issuance, MFA, session end).
+    EVENT_CATEGORY_AUTHENTICATION    = 1;
+    // Authorization decision (grant/deny of a protected operation).
+    EVENT_CATEGORY_AUTHORIZATION     = 2;
+    // A trust & safety enforcement decision + its DSA statement-of-reasons.
+    EVENT_CATEGORY_MODERATION        = 3;
+    // A consent / privacy-setting change (lawful-basis relevant).
+    EVENT_CATEGORY_CONSENT           = 4;
+    // Access to personal data (read/query of PII by an actor).
+    EVENT_CATEGORY_DATA_ACCESS       = 5;
+    // A formal data export (e.g. DPO / regulator / subject-access request).
+    EVENT_CATEGORY_DATA_EXPORT       = 6;
+    // A data-erasure action (GDPR Art. 17 — recorded as a fact; the PII itself
+    // is destroyed by crypto-shred, not stored here).
+    EVENT_CATEGORY_DATA_ERASURE      = 7;
+    // A privileged / administrative action (the sync fail-closed lane — see
+    // PrivilegedActionType).
+    EVENT_CATEGORY_PRIVILEGED_ACTION = 8;
+    // A retention or legal-hold lifecycle event.
+    EVENT_CATEGORY_RETENTION         = 9;
+}
+
+// Who performed the action. Identities are pseudonymous (see Actor) — this only
+// classifies the KIND of principal so reports can separate human from machine
+// activity. The real identity↔pseudonym mapping lives in `account`, never here.
+enum ActorType {
+    ACTOR_TYPE_UNSPECIFIED = 0;
+    // An end user acting on their own/again another's data.
+    ACTOR_TYPE_USER        = 1;
+    // A human operator / administrator (elevated privilege).
+    ACTOR_TYPE_ADMIN       = 2;
+    // A fleet service acting on its own behalf (a service principal).
+    ACTOR_TYPE_SERVICE     = 3;
+    // An automated system process (scheduled job, the worker itself).
+    ACTOR_TYPE_SYSTEM      = 4;
+}
+
+// The narrow, enumerated set of actions that MUST be recorded synchronously and
+// fail CLOSED — the action is denied if it cannot be provably recorded first
+// (RecordPrivileged). LOCKED scope (see project_audit_service_blueprint): strictly
+// break-glass access + legal-hold lifecycle. Everything else — including consent
+// changes — flows on the async, fail-open lane. The enum is open so the enrolled
+// set can widen later WITHOUT a contract change; widening is a deliberate
+// coupling decision, never a default.
+enum PrivilegedActionType {
+    PRIVILEGED_ACTION_TYPE_UNSPECIFIED         = 0;
+    // Emergency elevated access to data/systems outside normal authorization
+    // ("break glass"). Must be recorded before access is granted.
+    PRIVILEGED_ACTION_TYPE_BREAK_GLASS_ACCESS  = 1;
+    // Placing a subject/dataset under legal hold (suspends erasure).
+    PRIVILEGED_ACTION_TYPE_LEGAL_HOLD_PLACE    = 2;
+    // Releasing a legal hold (re-enables the retention/erasure lifecycle).
+    PRIVILEGED_ACTION_TYPE_LEGAL_HOLD_RELEASE  = 3;
+}
+
+// The outcome of the audited action. Kept generic so one envelope serves every
+// category: an authorization decision is PERMITTED/DENIED, a privileged action is
+// EXECUTED/FAILED. This is the "what happened" half of the record.
+enum Outcome {
+    OUTCOME_UNSPECIFIED = 0;
+    OUTCOME_PERMITTED   = 1;
+    OUTCOME_DENIED      = 2;
+    OUTCOME_EXECUTED    = 3;
+    OUTCOME_FAILED      = 4;
+}
+
+// The GDPR Art. 6 lawful basis under which the personal-data processing in the
+// event was carried out. Required on PII-touching categories so the trail is
+// self-describing for an accountability (Art. 5(2)) review.
+enum LawfulBasis {
+    LAWFUL_BASIS_UNSPECIFIED          = 0;
+    LAWFUL_BASIS_CONSENT              = 1;
+    LAWFUL_BASIS_CONTRACT             = 2;
+    LAWFUL_BASIS_LEGAL_OBLIGATION     = 3;
+    LAWFUL_BASIS_VITAL_INTERESTS      = 4;
+    LAWFUL_BASIS_PUBLIC_TASK          = 5;
+    LAWFUL_BASIS_LEGITIMATE_INTERESTS = 6;
+}
+
+// The result of a ledger integrity verification over a partition range
+// (VerifyIntegrity). Anything other than VERIFIED is a tamper/truncation signal
+// that must alarm — never be silently repaired (maps to AUD-2xxx).
+enum IntegrityStatus {
+    INTEGRITY_STATUS_UNSPECIFIED            = 0;
+    // The recomputed hash chain matches and agrees with the anchored checkpoint.
+    INTEGRITY_STATUS_VERIFIED               = 1;
+    // A recomputed record hash != the stored hash (AUD-2001) — tampering.
+    INTEGRITY_STATUS_HASH_MISMATCH          = 2;
+    // A hole in the monotonic per-partition sequence (AUD-2002) — truncation.
+    INTEGRITY_STATUS_SEQUENCE_GAP           = 3;
+    // A signed checkpoint disagrees with the external witness (AUD-2004) —
+    // operator-level tampering past the database role.
+    INTEGRITY_STATUS_CHECKPOINT_DIVERGENCE  = 4;
+}

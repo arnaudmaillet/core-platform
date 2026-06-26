@@ -1,0 +1,237 @@
+syntax = "proto3";
+
+package audit.v1;
+
+import "audit/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.audit.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/audit/v1;auditv1";
+
+// ── The canonical compliance event ────────────────────────────────────────────
+
+// AuditEvent is the ONE envelope every producer emits — on the async Kafka lane
+// (`audit.v1.events`) for ~99% of traffic, and inside RecordPrivilegedRequest for
+// the synchronous fail-closed lane. It is what gets hash-chained.
+//
+// Hard rules baked into this shape. It carries NO raw business content — only
+// references (ResourceRef) plus decision metadata. It carries NO cleartext PII —
+// the subject is an opaque pseudonym, and any unavoidable PII goes in the
+// crypto-shreddable `pii` envelope (the chain hashes the ciphertext, so erasure =
+// key destruction leaves the record verifiable). The `event_id` is a
+// DETERMINISTIC UUIDv5 over the event's identity, so the ingestion lane is
+// idempotent — each logical event is chained exactly once. And `occurred_at` is
+// EVENT-TIME (set by the producer), distinct from the ledger's record-time (set
+// at chaining, see AuditRecord.recorded_at).
+message AuditEvent {
+    // Deterministic UUIDv5 identity (idempotency key for the chain).
+    string event_id = 1;
+
+    // The compliance category — drives retention policy + chain partitioning.
+    EventCategory category = 2;
+
+    // Opaque pseudonym of the DATA SUBJECT the event concerns (the person whose
+    // data is touched). Indexed for subject-scoped query/export/erasure. Empty
+    // for events with no data subject (e.g. a pure system action).
+    string subject_pseudonym = 3;
+
+    // Optional pseudonymous tenant / realm scope. Together with `category` it
+    // determines the (internal) chain partition — partitioning is hybrid, so the
+    // subject can be erased without fragmenting the chain.
+    string tenant_id = 4;
+
+    // Who performed the action (pseudonymous).
+    Actor actor = 5;
+
+    // The action verb in a stable vocabulary, e.g. "account.suspend",
+    // "content.takedown", "data.export". NOT free-form prose.
+    string action = 6;
+
+    // What was acted upon — a reference, never the content itself.
+    ResourceRef resource = 7;
+
+    // The result of the action.
+    Outcome outcome = 8;
+
+    // The GDPR Art. 6 lawful basis for any personal-data processing. Required on
+    // PII-touching categories (validated on intake → AUD-1002 if missing).
+    LawfulBasis lawful_basis = 9;
+
+    // The fleet service that emitted the event (provenance).
+    string source_service = 10;
+
+    // The distributed-trace / request correlation id that ties this event to the
+    // operation that produced it (W3C trace context id).
+    string correlation_id = 11;
+
+    // EVENT-TIME: when the audited action occurred (producer clock).
+    google.protobuf.Timestamp occurred_at = 12;
+
+    // Optional crypto-shreddable PII envelope. Present only when the event must
+    // carry personal data; destroyed-by-key on erasure.
+    PiiEnvelope pii = 13;
+
+    // Non-PII structured metadata (decision reasons, policy ids, DSA
+    // statement-of-reasons fields, etc.). MUST NOT contain personal data.
+    map<string, string> attributes = 14;
+}
+
+// A pseudonymous actor. `session_ref` ties the action to an `auth` session
+// without revealing identity; the real identity is resolvable only in `account`
+// under its own access controls.
+message Actor {
+    ActorType type            = 1;
+    string    actor_pseudonym = 2;
+    string    session_ref     = 3;
+}
+
+// A reference to the thing acted upon — type + opaque id, never the content. The
+// caller hydrates the actual entity from its system of record if authorized.
+message ResourceRef {
+    string type = 1; // e.g. "post", "account", "media_asset"
+    string id   = 2; // the entity id in its owning service
+}
+
+// The crypto-shreddable PII envelope: ciphertext encrypted under a PER-SUBJECT
+// data-encryption key (DEK) held in the key vault and addressed by `subject_key_id`.
+// The hash chain covers the CIPHERTEXT, so destroying the DEK (GDPR erasure)
+// renders the PII permanently undecryptable while leaving the record, its
+// sequence and its hash intact and verifiable (read back as PiiState.erased).
+message PiiEnvelope {
+    // Key-vault reference to the per-subject DEK (NOT the key material).
+    string subject_key_id = 1;
+    // AEAD ciphertext of the PII payload.
+    bytes  ciphertext     = 2;
+    // AEAD nonce / IV.
+    bytes  nonce          = 3;
+    // Algorithm tag, e.g. "AES-256-GCM" (for crypto-agility on read).
+    string algorithm      = 4;
+}
+
+// ── Stored ledger record ──────────────────────────────────────────────────────
+
+// AuditRecord is an AuditEvent as it sits in the ledger, plus the tamper-evidence
+// metadata. Returned by Query / Export / the verifier. The `record_hash` /
+// `prev_hash` / `sequence_no` are the chain; `partition_key` is the resolved
+// (internal) chain partition this record belongs to.
+message AuditRecord {
+    AuditEvent event = 1;
+
+    // The resolved chain partition (hybrid: derived from tenant + category).
+    string partition_key = 2;
+    // Monotonic per-partition sequence — a hole here is a truncation signal.
+    uint64 sequence_no   = 3;
+    // H(prev_hash ‖ canonical(event) ‖ sequence_no), hex.
+    string record_hash   = 4;
+    // The previous record's hash in this partition (chain linkage), hex.
+    string prev_hash     = 5;
+    // LEDGER record-time: when the event was durably chained (distinct from the
+    // event's `occurred_at`).
+    google.protobuf.Timestamp recorded_at = 6;
+
+    // Whether this record's PII envelope has been crypto-shredded. When true the
+    // `event.pii` ciphertext is permanently undecryptable (the subject was
+    // erased); the rest of the record remains intact and verifiable.
+    bool pii_erased = 7;
+}
+
+// ── RecordPrivileged (sync, fail-closed) ──────────────────────────────────────
+
+message RecordPrivilegedRequest {
+    // The event to record before the action is permitted.
+    AuditEvent event = 1;
+    // The enrolled privileged-action type (LOCKED: break-glass + legal-hold).
+    PrivilegedActionType privileged_action = 2;
+}
+
+// Returned ONLY once the event is durably persisted AND chained — this response
+// IS the proof the caller needs to proceed. If durability cannot be confirmed
+// within the deadline the RPC fails with AUD-4004 and the action must be denied.
+message RecordPrivilegedResponse {
+    string event_id      = 1;
+    string partition_key = 2;
+    uint64 sequence_no   = 3;
+    string record_hash   = 4;
+    google.protobuf.Timestamp committed_at = 5;
+}
+
+// ── Query (access-controlled read; itself audited) ────────────────────────────
+
+// Every Query is itself recorded as an EVENT_CATEGORY_DATA_ACCESS event — reads
+// of the audit trail are evidence too. Access is need-to-know with separation of
+// duties (a forbidden caller → AUD-3001).
+message QueryRequest {
+    // Subject-scoped lookup (the common DPO path). Empty = not filtered.
+    string subject_pseudonym = 1;
+    // Tenant scope. Empty = not filtered (subject to caller authorization).
+    string tenant_id = 2;
+    // Category filter. UNSPECIFIED = any.
+    EventCategory category = 3;
+    // Inclusive event-time window (by AuditEvent.occurred_at).
+    google.protobuf.Timestamp from = 4;
+    google.protobuf.Timestamp to   = 5;
+
+    // Opaque forward-pagination cursor from a previous QueryResponse.
+    string page_token = 6;
+    // Page size hint (server clamps).
+    uint32 page_size  = 7;
+}
+
+message QueryResponse {
+    repeated AuditRecord records = 1;
+    // Empty when there are no further pages.
+    string next_page_token = 2;
+}
+
+// ── Export (formal, signed extraction; bytes fetched out-of-band) ─────────────
+
+// Export produces a formal, signed bundle for a subject or scope (DPO / regulator
+// / subject-access request) and records an EVENT_CATEGORY_DATA_EXPORT event. The
+// bytes never travel on gRPC — the response is a MANIFEST referencing a generated
+// artifact in object storage (consistent with the fleet's "bytes off the mesh"
+// rule). The caller fetches it via a separate, access-controlled channel.
+message ExportRequest {
+    // Subject-scoped (the Art. 15 / Art. 20 path) — one of subject/tenant.
+    string subject_pseudonym = 1;
+    string tenant_id         = 2;
+    // Inclusive event-time window.
+    google.protobuf.Timestamp from = 3;
+    google.protobuf.Timestamp to   = 4;
+}
+
+message ExportManifest {
+    // Id of the export operation (and of the audit event recording it).
+    string export_id = 1;
+    // Number of records in the bundle.
+    uint64 record_count = 2;
+    // Content hash of the generated bundle (integrity of the export itself).
+    string content_hash = 3;
+    // Opaque, access-controlled handle to the bundle in object storage (NOT a
+    // URL with bytes — a reference the caller resolves out-of-band).
+    string artifact_ref = 4;
+    google.protobuf.Timestamp generated_at = 5;
+}
+
+// ── VerifyIntegrity (the tamper-evidence proof on demand) ─────────────────────
+
+message VerifyIntegrityRequest {
+    // The chain partition to verify. Empty = verify all partition heads against
+    // the latest anchored checkpoint (the lighter, global check).
+    string partition_key = 1;
+    // Optional inclusive sequence range within the partition; 0/0 = full chain.
+    uint64 from_sequence = 2;
+    uint64 to_sequence   = 3;
+}
+
+message VerifyIntegrityResponse {
+    IntegrityStatus status = 1;
+    // The highest sequence the chain was verified through.
+    uint64 verified_through_sequence = 2;
+    // The signed Merkle checkpoint root the chain was reconciled against, hex.
+    string checkpoint_root = 3;
+    // On a non-VERIFIED status, the sequence where divergence was detected.
+    uint64 divergence_at_sequence = 4;
+    // Human-readable detail for the alarm (NEVER contains PII or payload).
+    string detail = 5;
+}

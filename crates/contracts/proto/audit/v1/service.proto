@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package audit.v1;
+
+import "audit/v1/messages.proto";
+
+option java_package = "com.coreplatform.audit.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/audit/v1;auditv1";
+
+// AuditService is the INTERNAL gRPC surface of the audit & compliance plane — the
+// fleet's tamper-evident System of Record for security-/privacy-/regulatory-
+// relevant events. It is NOT client-facing; end-user clients never speak to it.
+//
+// This surface is deliberately NARROW and asymmetric. The vast majority of audit
+// traffic does NOT arrive here at all: producers emit `AuditEvent`s on the async,
+// fail-open Kafka lane (`audit.v1.events`), where Kafka is the durable buffer that
+// absorbs write spikes and decouples the business mesh from audit liveness. This
+// service carries only two things. First, the ONE write that must be synchronous —
+// RecordPrivileged, which fails CLOSED (the privileged action is denied unless
+// provably recorded first). Second, the access-controlled reads — Query / Export /
+// VerifyIntegrity — used by DPO / internal audit / regulators, every one of which
+// is ITSELF recorded as an audit event (reads of the trail are evidence too).
+//
+// Boundary: this plane RECORDS decisions; it never MAKES them, and it publishes
+// nothing of record (a terminal evidence sink). It stores no business content and
+// no cleartext PII. See project_audit_service_blueprint.
+service AuditService {
+
+    // Synchronously record a privileged action and return the durable-commit
+    // proof. FAIL-CLOSED: returns only once the event is persisted AND chained;
+    // if durability is not confirmed within the deadline it errors (AUD-4004) and
+    // the caller MUST deny the action. Enrolled set is narrow and locked
+    // (break-glass + legal-hold); everything else uses the async lane.
+    rpc RecordPrivileged(RecordPrivilegedRequest) returns (RecordPrivilegedResponse);
+
+    // Read audit records for a subject/scope/category/time window. Access-
+    // controlled (need-to-know + separation of duties; AUD-3001 on denial) and
+    // itself recorded as a DATA_ACCESS event. Forward-paginated.
+    rpc Query(QueryRequest) returns (QueryResponse);
+
+    // Produce a formal, signed export bundle for a subject/scope (DPO / regulator
+    // / subject-access request) and return a MANIFEST referencing it — the bytes
+    // are fetched out-of-band, never over gRPC. Itself recorded as a DATA_EXPORT
+    // event (AUD-3002 on denial).
+    rpc Export(ExportRequest) returns (ExportManifest);
+
+    // Verify the hash chain (and, for the global check, the partition heads
+    // against the latest anchored checkpoint) and return the integrity status.
+    // Any non-VERIFIED result is a tamper/truncation signal (AUD-2xxx) that must
+    // alarm — never be silently repaired.
+    rpc VerifyIntegrity(VerifyIntegrityRequest) returns (VerifyIntegrityResponse);
+}

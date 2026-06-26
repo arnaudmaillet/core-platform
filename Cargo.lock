@@ -249,6 +249,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "audit-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
 name = "audit-server"
 version = "0.1.0"
 dependencies = [

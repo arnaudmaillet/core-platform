@@ -73,6 +73,7 @@ members = [
     "crates/contracts/media-api",
     "crates/contracts/counter-api",
     "crates/contracts/realtime-api",
+    "crates/contracts/audit-api",
 ]
 resolver = "2"
 
@@ -126,6 +127,7 @@ search-api = { path = "crates/contracts/search-api" }
 media-api = { path = "crates/contracts/media-api" }
 counter-api = { path = "crates/contracts/counter-api" }
 realtime-api = { path = "crates/contracts/realtime-api" }
+audit-api = { path = "crates/contracts/audit-api" }
 account          = { path = "crates/services/account" }
 chat             = { path = "crates/services/chat" }
 profile          = { path = "crates/services/profile" }
