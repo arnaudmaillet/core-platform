@@ -30,9 +30,12 @@ validation = { workspace = true }
 
 # ── Domain types (Phase 2): pure, clock-injected evidence model ───────────────
 # `serde` for value-object (de)serialization across later tier boundaries;
-# `chrono` for the injected wall clock (event-time, retention floors, hold expiry).
+# `chrono` for the injected wall clock (event-time, retention floors, hold expiry);
+# `sha2` for the tamper-evidence core — the per-partition hash chain + the Merkle
+# checkpoint root (pure, deterministic computation; no I/O).
 serde  = { workspace = true }
 chrono = { workspace = true }
+sha2   = { workspace = true }
 
 # ── Application layer (Phase 3): async ports held as Arc<dyn …> ────────────────
 async-trait = { workspace = true }

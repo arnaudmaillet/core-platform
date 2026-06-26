@@ -67,6 +67,7 @@
 //! external anchor/witness, the `run_consumer` ingestion lane). · Phase 5: `app`
 //! (composition roots) + the two runtime wirings in [`service`].
 
+pub mod domain;
 pub mod error;
 pub mod service;
 
