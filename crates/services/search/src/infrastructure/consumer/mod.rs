@@ -3,15 +3,18 @@
 //! (manual commit, bounded retry + jitter, DLQ on poison/exhaustion) and is
 //! self-spawned + supervised in [`crate::service`].
 //!
-//! Two consumers ship here: `post.v1.events` (content, hydrated via gRPC before
-//! projection) and `moderation.v1.events` (visibility transitions, no hydration).
-//! `profile.v1.events` is deferred — profile publishes no Kafka stream yet.
+//! Three consumers ship here: `post.v1.events` and `profile.v1.events` (content,
+//! hydrated via gRPC before projection; profile owner-masking is a no-hydration
+//! visibility flip), and `moderation.v1.events` (visibility transitions, no
+//! hydration).
 
 pub mod moderation_consumer;
 pub mod post_consumer;
+pub mod profile_consumer;
 
 pub use moderation_consumer::run_moderation_consumer;
 pub use post_consumer::run_post_consumer;
+pub use profile_consumer::run_profile_consumer;
 
 use crate::error::SearchError;
 

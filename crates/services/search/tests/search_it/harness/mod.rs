@@ -149,6 +149,23 @@ impl Harness {
         .await;
     }
 
+    /// Owner-authority masking (a profile masking itself) — distinct from moderation.
+    pub async fn owner_hide(&self, profile_id: &str, occurred_ms: i64) {
+        self.apply(SourceEvent::Profile(ProfileEvent::OwnerHidden {
+            profile_id: profile_id.to_owned(),
+            occurred_at: ms(occurred_ms),
+        }))
+        .await;
+    }
+
+    pub async fn owner_restore(&self, profile_id: &str, occurred_ms: i64) {
+        self.apply(SourceEvent::Profile(ProfileEvent::OwnerRestored {
+            profile_id: profile_id.to_owned(),
+            occurred_at: ms(occurred_ms),
+        }))
+        .await;
+    }
+
     pub async fn purge(&self, author: &str) {
         self.apply(SourceEvent::Compliance(ComplianceEvent::ActorPurged {
             author_id: author.to_owned(),

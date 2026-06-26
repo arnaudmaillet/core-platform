@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::domain::{
     AuthorId, DocVersion, EntityKind, IndexDocument, Searchable, SearchQuery, SearchResults,
-    SuggestQuery, Suggestions,
+    SuggestQuery, Suggestions, VisibilityAuthority,
 };
 use crate::error::SearchError;
 
@@ -17,26 +17,29 @@ pub enum WriteOutcome {
 
 /// The inverted index — the one port the read and write paths share.
 ///
-/// Two independent version namespaces guard one document. `upsert` carries the
+/// Independent version namespaces guard one document. `upsert` carries the
 /// **content** version (from the source revision) and replaces the matchable /
-/// display fields; it MUST preserve an already-stored moderation visibility (a
-/// content re-projection never un-hides a moderated document). `set_searchable`
-/// carries the **visibility** version (from the moderation event time) and updates
-/// only the `searchable` flag. Keeping the two guards separate is what lets content
-/// edits and moderation flips — which arrive on different topics with unrelated
-/// version timelines — interleave correctly, in any order.
+/// display fields; it MUST preserve already-stored visibility (a content
+/// re-projection never un-hides a document). `set_searchable` carries a
+/// **visibility** version (from the event time) and updates only that authority's
+/// flag — `moderation` and `owner` are separate fields with separate guards, so a
+/// document is searchable only when *both* permit it, and neither authority can
+/// override the other. Keeping the guards separate is what lets content edits and
+/// visibility flips — which arrive on different topics with unrelated version
+/// timelines — interleave correctly, in any order.
 #[async_trait]
 pub trait SearchIndex: Send + Sync + 'static {
     /// Index or replace a document's content, guarded by its content version.
-    /// First index seeds visibility from `document.searchable()`; a re-index
-    /// preserves the stored visibility.
+    /// First index seeds both visibility flags from `document.searchable()`; a
+    /// re-index preserves the stored visibility.
     async fn upsert(&self, document: &IndexDocument) -> Result<WriteOutcome, SearchError>;
 
-    /// Update only the moderation-visibility flag, guarded by the visibility
-    /// version. If the document is not yet indexed (a hide that raced ahead of the
+    /// Update one `authority`'s visibility flag, guarded by that authority's
+    /// version. If the document is not yet indexed (a flip that raced ahead of the
     /// content event), the intent is recorded so a later `upsert` honours it.
     async fn set_searchable(
         &self,
+        authority: VisibilityAuthority,
         kind: EntityKind,
         id: &str,
         searchable: Searchable,

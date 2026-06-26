@@ -20,7 +20,7 @@ use super::query::{SearchHandler, SuggestHandler};
 use crate::domain::{
     AuthorId, DocVersion, EntityKind, HitDisplay, IndexDocument, PostEvent, PostSnapshot,
     ProfileEvent, ProfileSnapshot, Searchable, SearchHit, SearchQuery, SearchResults, SourceEvent,
-    SuggestQuery, Suggestion, Suggestions,
+    SuggestQuery, Suggestion, Suggestions, VisibilityAuthority,
 };
 use crate::error::SearchError;
 
@@ -62,14 +62,51 @@ pub fn profile_event(profile_id: &str, handle: &str, revision: u64) -> SourceEve
 
 // ── In-memory index ───────────────────────────────────────────────────────────
 
+/// One authority's visibility flag + its independent version guard.
+#[derive(Clone, Copy)]
+struct Vis {
+    searchable: Searchable,
+    version: DocVersion,
+}
+
+impl Vis {
+    fn visible() -> Self {
+        Self {
+            searchable: Searchable::VISIBLE,
+            version: DocVersion::new(0),
+        }
+    }
+}
+
 /// One stored slot. `doc`/`content_version` are `None` until the content event
-/// arrives — a visibility-only placeholder created by a hide that raced ahead.
+/// arrives — a visibility-only placeholder created by a flip that raced ahead.
+/// Effective visibility is `moderation AND owner`.
 struct Entry {
     author_id: Option<AuthorId>,
     content_version: Option<DocVersion>,
-    visibility_version: DocVersion,
-    searchable: Searchable,
+    moderation: Vis,
+    owner: Vis,
     doc: Option<IndexDocument>,
+}
+
+impl Entry {
+    fn visible(&self) -> bool {
+        self.moderation.searchable.is_visible() && self.owner.searchable.is_visible()
+    }
+
+    fn vis(&self, authority: VisibilityAuthority) -> Vis {
+        match authority {
+            VisibilityAuthority::Moderation => self.moderation,
+            VisibilityAuthority::Owner => self.owner,
+        }
+    }
+
+    fn set_vis(&mut self, authority: VisibilityAuthority, vis: Vis) {
+        match authority {
+            VisibilityAuthority::Moderation => self.moderation = vis,
+            VisibilityAuthority::Owner => self.owner = vis,
+        }
+    }
 }
 
 pub struct InMemorySearchIndex {
@@ -94,13 +131,13 @@ impl InMemorySearchIndex {
             .is_some_and(|e| e.doc.is_some())
     }
 
-    /// Whether the slot is currently visible (indexed AND searchable).
+    /// Whether the slot is currently visible (indexed AND both authorities permit).
     pub fn is_visible(&self, kind: EntityKind, id: &str) -> bool {
         self.store
             .lock()
             .unwrap()
             .get(&(kind, id.to_owned()))
-            .is_some_and(|e| e.doc.is_some() && e.searchable.is_visible())
+            .is_some_and(|e| e.doc.is_some() && e.visible())
     }
 
     /// The stored caption (post only), for asserting content state.
@@ -115,7 +152,7 @@ impl InMemorySearchIndex {
     /// without threading a moderation event).
     pub fn force_hidden(&self, kind: EntityKind, id: &str) {
         if let Some(e) = self.store.lock().unwrap().get_mut(&(kind, id.to_owned())) {
-            e.searchable = Searchable::HIDDEN;
+            e.moderation.searchable = Searchable::HIDDEN;
         }
     }
 }
@@ -135,31 +172,35 @@ impl SearchIndex for InMemorySearchIndex {
                 Ok(WriteOutcome::RejectedStale)
             }
             // Existing slot (content or placeholder): replace content, PRESERVE
-            // the stored moderation visibility.
+            // both authorities' stored visibility.
             Some(e) => {
-                let searchable = e.searchable;
-                let visibility_version = e.visibility_version;
+                let moderation = e.moderation;
+                let owner = e.owner;
                 store.insert(
                     key,
                     Entry {
                         author_id: document.author_id().cloned(),
                         content_version: Some(document.version()),
-                        visibility_version,
-                        searchable,
+                        moderation,
+                        owner,
                         doc: Some(document.clone()),
                     },
                 );
                 Ok(WriteOutcome::Applied)
             }
-            // First time seen: seed visibility from the document.
+            // First time seen: seed both flags from the document's default.
             None => {
+                let seed = Vis {
+                    searchable: document.searchable(),
+                    version: DocVersion::new(0),
+                };
                 store.insert(
                     key,
                     Entry {
                         author_id: document.author_id().cloned(),
                         content_version: Some(document.version()),
-                        visibility_version: DocVersion::new(0),
-                        searchable: document.searchable(),
+                        moderation: seed,
+                        owner: seed,
                         doc: Some(document.clone()),
                     },
                 );
@@ -170,6 +211,7 @@ impl SearchIndex for InMemorySearchIndex {
 
     async fn set_searchable(
         &self,
+        authority: VisibilityAuthority,
         kind: EntityKind,
         id: &str,
         searchable: Searchable,
@@ -178,26 +220,25 @@ impl SearchIndex for InMemorySearchIndex {
         let key = (kind, id.to_owned());
         let mut store = self.store.lock().unwrap();
         match store.get_mut(&key) {
-            Some(e) if !version.is_newer_than(&e.visibility_version) => {
+            Some(e) if !version.is_newer_than(&e.vis(authority).version) => {
                 Ok(WriteOutcome::RejectedStale)
             }
             Some(e) => {
-                e.searchable = searchable;
-                e.visibility_version = version;
+                e.set_vis(authority, Vis { searchable, version });
                 Ok(WriteOutcome::Applied)
             }
-            // Hide/show raced ahead of content: record a visibility-only placeholder.
+            // Flip raced ahead of content: placeholder, the OTHER authority stays
+            // visible until its own event (or content seeding) arrives.
             None => {
-                store.insert(
-                    key,
-                    Entry {
-                        author_id: None,
-                        content_version: None,
-                        visibility_version: version,
-                        searchable,
-                        doc: None,
-                    },
-                );
+                let mut entry = Entry {
+                    author_id: None,
+                    content_version: None,
+                    moderation: Vis::visible(),
+                    owner: Vis::visible(),
+                    doc: None,
+                };
+                entry.set_vis(authority, Vis { searchable, version });
+                store.insert(key, entry);
                 Ok(WriteOutcome::Applied)
             }
         }
@@ -222,7 +263,7 @@ impl SearchIndex for InMemorySearchIndex {
             let Some(doc) = entry.doc.as_ref() else {
                 continue; // visibility-only placeholder, no content to match
             };
-            if !entry.searchable.is_visible() {
+            if !entry.visible() {
                 continue;
             }
             if !query.kinds.is_empty() && !query.kinds.contains(&doc.kind()) {
@@ -255,7 +296,7 @@ impl SearchIndex for InMemorySearchIndex {
             let Some(doc) = entry.doc.as_ref() else {
                 continue;
             };
-            if !entry.searchable.is_visible() {
+            if !entry.visible() {
                 continue;
             }
             if !query.kinds.is_empty() && !query.kinds.contains(&doc.kind()) {

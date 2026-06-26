@@ -131,10 +131,12 @@ Every fault implements `error::AppError` with a stable `SCH-XXXX` code, mapped t
 
 | Topic | Consumer group | Purpose | On poison/exhaustion |
 |---|---|---|---|
-| `post.v1.events` | `search-indexer` | index/update/delete post documents | DLQ `post.v1.events.dlq` |
-| `profile.v1.events` | `search-indexer` | index/update/delete profile documents | DLQ `profile.v1.events.dlq` |
-| `moderation.v1.events` | `search-indexer` | flip `searchable` on hide; restore on reversal | DLQ `moderation.v1.events.dlq` |
-| `<hashtag stream>` | `search-indexer` | maintain the hashtag index (derived from post events) | DLQ `<...>.dlq` |
+| `post.v1.events` | `search-post-indexer` | index/update/delete posts (content hydrated via `GetPost`) | DLQ `post.v1.events.dlq` |
+| `profile.v1.events` | `search-profile-indexer` | index/update/delete profiles (content hydrated via `GetProfileById`); owner masking → **owner** visibility flag | DLQ `profile.v1.events.dlq` |
+| `moderation.v1.events` | `search-moderation-indexer` | flip the **moderation** visibility flag on hide; restore on reversal | DLQ `moderation.v1.events.dlq` |
+| `<hashtag stream>` | `search-post-indexer` | maintain the hashtag index (derived from post events) | DLQ `<...>.dlq` |
+
+> **Dual visibility authorities:** a document is searchable only when **both** flags permit it — `searchable = moderation_searchable AND owner_searchable`. The two are independent fields, each with its own version guard, written by different streams (`moderation.v1.events` vs a profile owner-masking event). Neither authority can override the other: a profile owner restoring their own visibility cannot lift a platform moderation hide, and vice-versa.
 
 > **Runtime contract (mandatory):** all consumers run under `run_consumer` — manual commit after a terminal outcome, bounded retry with backoff + jitter, DLQ on exhaustion/poison, rebuild-from-last-committed-offset on broker error. **Idempotency:** the engine's external-version guard (`version_type=external`); deletes are naturally idempotent; a stale-version write (`SCH-2002`) and an unknown event type are folded into `Ok` so the offset still commits. One `run_consumer` loop per source topic (logic branches on topic).
 
@@ -176,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-> **Build status:** complete through Phase 7 (8 phases: scaffold → proto → domain → application+ports → OpenSearch adapter+decode → server+consumers → live IT → hardening). The live integration suite is gated behind `integration-search`. Post + moderation ingestion are wired; **profile indexing is pending an upstream prerequisite** (profile publishes no Kafka stream yet).
+> **Build status:** complete through Phase 7 (8 phases: scaffold → proto → domain → application+ports → OpenSearch adapter+decode → server+consumers → live IT → hardening). The live integration suite is gated behind `integration-search`. Post, **profile**, and moderation ingestion are all wired (post + profile content is hydrated via `GetPost` / `GetProfileById`).
 >
 > **Authorization (deployment requirement):** `search` self-authorizes nothing. `Search`/`Suggest` are caller-facing; the **edge** must resolve the viewer's `social-graph` block/mute set and pass it as `SearchRequest.exclude_author_ids` (personal exclusions are never indexed). Gate access at the gateway/`auth-context` before exposure.
 

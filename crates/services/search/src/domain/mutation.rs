@@ -8,7 +8,7 @@
 //! rather than dead-lettering — per the Consumer Runtime Standard.
 
 use super::document::IndexDocument;
-use super::value_object::{AuthorId, DocVersion, EntityKind, Searchable};
+use super::value_object::{AuthorId, DocVersion, EntityKind, Searchable, VisibilityAuthority};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IndexMutation {
@@ -16,9 +16,11 @@ pub enum IndexMutation {
     /// non-newer write at the engine — the idempotency guard).
     Upsert(IndexDocument),
 
-    /// Flip the moderation-visibility flag on an existing document. Carries a
-    /// `version` so a stale flip can't overwrite a newer state.
+    /// Flip one authority's visibility flag on a document. Carries the `authority`
+    /// (moderation vs owner) so the two flip independent fields, and a `version` so a
+    /// stale flip can't overwrite a newer state of that same authority.
     SetSearchable {
+        authority: VisibilityAuthority,
         kind: EntityKind,
         id: String,
         searchable: Searchable,

@@ -7,9 +7,11 @@ use crate::infrastructure::index::OpenSearchConfig;
 /// Fully-resolved search configuration.
 pub struct SearchConfig {
     pub opensearch: OpenSearchConfig,
-    /// gRPC endpoint of the `post` service, used by the ingestion hydrator to fetch
-    /// the authoritative snapshot behind a thin `post.v1.events` notification.
+    /// gRPC endpoint of the `post` service — the ingestion hydrator fetches the
+    /// authoritative snapshot behind a thin `post.v1.events` notification.
     pub post_endpoint: String,
+    /// gRPC endpoint of the `profile` service — same role for `profile.v1.events`.
+    pub profile_endpoint: String,
 }
 
 impl SearchConfig {
@@ -32,6 +34,7 @@ impl SearchConfig {
         Self {
             opensearch,
             post_endpoint: env_or("SEARCH_POST_GRPC_ENDPOINT", "http://localhost:50056"),
+            profile_endpoint: env_or("SEARCH_PROFILE_GRPC_ENDPOINT", "http://localhost:50052"),
         }
     }
 }

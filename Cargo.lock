@@ -4122,6 +4122,7 @@ dependencies = [
  "error",
  "http",
  "post-api",
+ "profile-api",
  "prost-types",
  "reqwest",
  "search-api",
