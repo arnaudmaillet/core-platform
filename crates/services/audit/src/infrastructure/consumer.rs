@@ -21,8 +21,11 @@ use crate::application::{CryptoShredHandler, IngestHandler};
 use crate::domain::{SubjectKeyRef, SubjectPseudonym};
 use crate::error::AuditError;
 use crate::infrastructure::account_decode::{
-    AccountEventWire, map_account_created, map_email_changed, map_gdpr_data_export_requested,
-    map_gdpr_deletion_requested,
+    AccountEventWire, map_account_activated, map_account_created, map_account_deactivated,
+    map_account_deleted, map_account_suspended, map_email_changed, map_email_verified,
+    map_gdpr_data_export_requested, map_gdpr_deletion_requested, map_kyc_status_changed,
+    map_mfa_enrolled, map_mfa_revoked, map_password_changed, map_phone_changed, map_role_assigned,
+    map_role_revoked,
 };
 use crate::infrastructure::auth_decode::{AuthEventWire, map_session_issued, map_session_revoked};
 use crate::infrastructure::decode::{AuditEventWire, map_audit_event};
@@ -113,6 +116,50 @@ pub async fn run_account_ingest_consumer(
                     }
                     AccountEventWire::GdprDataExportRequested(export) => {
                         handler.ingest(map_gdpr_data_export_requested(&export)?).await?;
+                    }
+                    AccountEventWire::EmailVerified(verified) => {
+                        let subject = SubjectPseudonym::new(verified.account_id.clone())?;
+                        let pii = cipher.seal(&subject, &verified.pii_plaintext()).await?;
+                        handler.ingest(map_email_verified(&verified, pii)?).await?;
+                    }
+                    AccountEventWire::PhoneChanged(phone) => {
+                        // Seal only when a number is present (a removal carries none).
+                        let subject = SubjectPseudonym::new(phone.account_id.clone())?;
+                        let pii = match phone.pii_plaintext() {
+                            Some(plaintext) => Some(cipher.seal(&subject, &plaintext).await?),
+                            None => None,
+                        };
+                        handler.ingest(map_phone_changed(&phone, pii)?).await?;
+                    }
+                    AccountEventWire::PasswordChanged(e) => {
+                        handler.ingest(map_password_changed(&e)?).await?;
+                    }
+                    AccountEventWire::MfaEnrolled(e) => {
+                        handler.ingest(map_mfa_enrolled(&e)?).await?;
+                    }
+                    AccountEventWire::MfaRevoked(e) => {
+                        handler.ingest(map_mfa_revoked(&e)?).await?;
+                    }
+                    AccountEventWire::RoleAssigned(e) => {
+                        handler.ingest(map_role_assigned(&e)?).await?;
+                    }
+                    AccountEventWire::RoleRevoked(e) => {
+                        handler.ingest(map_role_revoked(&e)?).await?;
+                    }
+                    AccountEventWire::AccountActivated(e) => {
+                        handler.ingest(map_account_activated(&e)?).await?;
+                    }
+                    AccountEventWire::AccountDeactivated(e) => {
+                        handler.ingest(map_account_deactivated(&e)?).await?;
+                    }
+                    AccountEventWire::AccountSuspended(e) => {
+                        handler.ingest(map_account_suspended(&e)?).await?;
+                    }
+                    AccountEventWire::AccountDeleted(e) => {
+                        handler.ingest(map_account_deleted(&e)?).await?;
+                    }
+                    AccountEventWire::KycStatusChanged(e) => {
+                        handler.ingest(map_kyc_status_changed(&e)?).await?;
                     }
                     AccountEventWire::Other => {}
                 }
