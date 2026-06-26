@@ -1,0 +1,17 @@
+[package]
+name        = "realtime-api"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Generated gRPC + transport contract for realtime.v1 — the client-facing WSS envelope (ClientFrame/ServerFrame) and the internal node-hop dispatch surface (server + client stubs and reflection descriptor)."
+
+[dependencies]
+tonic       = { workspace = true }
+tonic-prost = { workspace = true }
+prost       = { workspace = true }
+prost-types = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }

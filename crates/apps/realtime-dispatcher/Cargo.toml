@@ -1,0 +1,23 @@
+[package]
+name                 = "realtime-dispatcher"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the realtime FAN-OUT path — the stateless dispatcher: consumes the upstream Kafka event streams, resolves which gateway node owns each recipient via the connection registry, and publishes the event to that node's hop channel."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# No-op entrypoint today. Phase 5 wires this as the fan-out worker: supervised
+# `run_consumer` loops over the upstream streams (chat / notification /
+# counter.v1.popularity / post.v1.events), the connection-registry lookup that
+# resolves recipient -> owning node(s), and the targeted publish to each node's
+# Redis Pub/Sub hop channel. It serves no domain RPC — only the gRPC
+# health/reflection endpoint on its own port (default :50067). Throughput-bound;
+# scaled independently of `realtime-gateway`.
+[dependencies]
+realtime        = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

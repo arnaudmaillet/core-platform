@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package realtime.v1;
+
+import "realtime/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.realtime.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/realtime/v1;realtimev1";
+
+// ── Channel addressing ────────────────────────────────────────────────────────
+
+// A channel is a (class, key) pair. The key is the qualifier the class scopes
+// to: the user id for DM / NOTIFICATION / PRESENCE (which MUST equal the
+// connection's pinned identity — this is the plane's only authorization), or the
+// entity id for COUNTER / FEED (public). A connection subscribes to a set of
+// these; a frame is delivered on exactly one.
+message ChannelRef {
+    ChannelClass class = 1;
+    string       key   = 2;
+}
+
+// A per-channel resume cursor: the last `stream_seq` the client durably
+// processed on that channel. Presented on reconnect (see Resume) so the client
+// can drive its catch-up — note the authoritative backfill comes from the owning
+// SoR (`chat` / `notification`), NOT from the realtime plane, which buffers
+// nothing.
+message ChannelCursor {
+    ChannelRef channel    = 1;
+    uint64     stream_seq = 2;
+}
+
+// ── Client → server frames (protobuf-encoded, carried over WSS) ───────────────
+
+// Everything a client sends after the handshake. The handshake itself carries
+// the edge token out-of-band (WS upgrade headers / subprotocol) and is verified
+// ONCE; frames below are never re-authenticated per message.
+message ClientFrame {
+    oneof body {
+        Subscribe   subscribe    = 1;
+        Unsubscribe unsubscribe  = 2;
+        ClientAck   ack          = 3;
+        Pong        pong         = 4;
+        AuthRefresh auth_refresh = 5;
+        Resume      resume       = 6;
+    }
+}
+
+// Subscribe to channels. Each is authorized against the pinned identity; a
+// forbidden key yields a Control(ERROR, RTM-3001) and is not added.
+message Subscribe {
+    repeated ChannelRef channels = 1;
+}
+
+message Unsubscribe {
+    repeated ChannelRef channels = 1;
+}
+
+// Acknowledge receipt up to `stream_seq` on an at-least-once channel (DM /
+// NOTIFICATION). Advances the server's per-(connection,channel) ack watermark.
+message ClientAck {
+    ChannelRef channel    = 1;
+    uint64     stream_seq = 2;
+}
+
+// Reply to a server Ping; echoes the nonce. Liveness only — its absence within
+// the deadline reaps the connection (RTM-5002).
+message Pong {
+    uint64 nonce = 1;
+}
+
+// Supply a freshly-minted edge token before the current one expires, so the
+// session continues without a full reconnect.
+message AuthRefresh {
+    string edge_token = 1;
+}
+
+// Sent right after a reconnect: the client's last-seen cursors per channel. The
+// gateway re-subscribes and resumes live flow; gap-fill for anything older than
+// what the plane still has in flight is the client's responsibility against the
+// owning SoR.
+message Resume {
+    repeated ChannelCursor cursors = 1;
+}
+
+// ── Server → client frames (protobuf-encoded, carried over WSS) ───────────────
+
+message ServerFrame {
+    oneof body {
+        Event   event   = 1;
+        Ping    ping    = 2;
+        Control control = 3;
+    }
+}
+
+// The core delivery frame: an already-authorized, already-serialized domain
+// event addressed to a channel. The realtime plane is a courier — `payload` is
+// OPAQUE to it (bytes produced upstream by `chat` / `notification` / `counter`),
+// never inspected, never stored.
+message Event {
+    ChannelRef channel = 1;
+    // Monotonic per-(connection, channel) sequence. The client dedupes on it,
+    // acks on it (at-least-once channels), and presents it as its resume cursor.
+    uint64     stream_seq = 2;
+    // Whether the client must ClientAck this event (at-least-once: DM /
+    // NOTIFICATION) or it is fire-and-forget (PRESENCE / COUNTER / FEED).
+    bool       ack_required = 3;
+    // The opaque upstream payload. NOT interpreted by the realtime plane.
+    bytes      payload = 4;
+    // Routing/telemetry hint for the client (e.g. "chat.message", "notif.badge",
+    // "counter.popularity"). Advisory; not a contract on `payload`'s schema.
+    string     event_type = 5;
+    // When the source event was emitted (event-time, propagated from upstream).
+    google.protobuf.Timestamp emitted_at = 6;
+}
+
+// Server liveness probe; the client must answer with a Pong echoing `nonce`.
+message Ping {
+    uint64 nonce = 1;
+}
+
+// A control directive driving the client connection state machine.
+message Control {
+    ServerControl control = 1;
+    // For SUBSCRIBED / UNSUBSCRIBED: the affected channel.
+    ChannelRef    channel = 2;
+    // For ERROR / RATE_LIMITED: the stable RTM-XXXX code and a human message.
+    string        code    = 3;
+    string        message = 4;
+    // For RECONNECT: base delay before reconnecting; the client ADDS jitter on
+    // top (mandatory, to avoid a reconnect herd).
+    uint32        reconnect_after_ms = 5;
+}
+
+// ── Node-hop fabric · internal (dispatcher → the owning gateway node) ─────────
+
+// What travels from the dispatcher to the gateway node that owns a recipient's
+// socket — fabric-agnostic. In v1 it is published, serialized, on that node's
+// Redis Pub/Sub channel (`node:{node_id}`); the gRPC RealtimeDispatchService
+// (see service.proto) carries the SAME message when the swappable backpressure
+// variant is wired. The owning node resolves `recipient_user_id` to its local
+// connection(s) and emits an `Event` frame on each subscribed socket.
+message DeliverEnvelope {
+    // The target user; the gateway maps it to that user's local connection(s).
+    string     recipient_user_id   = 1;
+    // Optional: restrict delivery to one device; empty ⇒ all of the user's
+    // connections on this node.
+    string     recipient_device_id = 2;
+    ChannelRef channel             = 3;
+    bool       ack_required        = 4;
+    // Opaque upstream payload, forwarded verbatim into the Event frame.
+    bytes      payload             = 5;
+    string     event_type          = 6;
+    google.protobuf.Timestamp emitted_at = 7;
+    // Idempotency key derived from the source event, so a Kafka redelivery (the
+    // dispatcher runs under `run_consumer`, at-least-once) does not double-emit
+    // on a reconnected client that already saw it.
+    string     idempotency_key     = 8;
+}
+
+// The result of a node-hop delivery.
+message DeliverAck {
+    // How many local connections the event was written to. Zero is normal and
+    // benign: the dispatcher's registry was momentarily stale and the recipient
+    // is no longer on this node — a fail-open miss the client recovers from on
+    // its next reconnect/resync.
+    uint32 delivered = 1;
+}
