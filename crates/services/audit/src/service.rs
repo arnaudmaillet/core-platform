@@ -32,14 +32,17 @@ use crate::application::IngestHandler;
 use crate::application::port::SubjectCipher;
 use crate::config::AuditConfig;
 use crate::infrastructure::grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};
+use crate::infrastructure::auth_decode::TOPIC_AUTH_EVENTS;
 use crate::infrastructure::moderation_decode::TOPIC_MODERATION_EVENTS;
 use crate::infrastructure::run_audit_ingest_consumer;
+use crate::infrastructure::run_auth_ingest_consumer;
 use crate::infrastructure::run_checkpoint_loop;
 use crate::infrastructure::run_moderation_ingest_consumer;
 
 const INGEST_TOPIC: &str = "audit.v1.events";
 const INGEST_GROUP: &str = "audit-ingest";
 const MODERATION_GROUP: &str = "audit-moderation";
+const AUTH_GROUP: &str = "audit-auth";
 
 /// Backoff before respawning the ingest consumer after its runner returns.
 const CONSUMER_RESPAWN_BACKOFF: Duration = Duration::from_secs(5);
@@ -109,6 +112,7 @@ impl Service for AuditWorkerService {
         // moderation compliance feed (sealing the rationale before chaining).
         spawn_ingest(adapters.ingest_handler());
         spawn_moderation_ingest(adapters.ingest_handler(), Arc::clone(&adapters.cipher));
+        spawn_auth_ingest(adapters.ingest_handler());
 
         // The periodic checkpoint-anchor loop.
         tokio::spawn(run_checkpoint_loop(
@@ -171,6 +175,25 @@ fn spawn_moderation_ingest(handler: Arc<IngestHandler>, cipher: Arc<dyn SubjectC
                 }
                 Err(error) => {
                     tracing::error!(%error, "failed to build audit moderation consumer; retrying")
+                }
+            }
+            tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;
+        }
+    });
+}
+
+/// Spawn the supervised auth-feed consumer (maps the authentication lifecycle, no
+/// sealing). Same respawn discipline as [`spawn_ingest`].
+fn spawn_auth_ingest(handler: Arc<IngestHandler>) {
+    tokio::spawn(async move {
+        loop {
+            match build_consumer(TOPIC_AUTH_EVENTS, AUTH_GROUP) {
+                Ok((consumer, producer)) => {
+                    run_auth_ingest_consumer(consumer, producer, Arc::clone(&handler)).await;
+                    tracing::warn!("audit auth consumer exited; respawning after backoff");
+                }
+                Err(error) => {
+                    tracing::error!(%error, "failed to build audit auth consumer; retrying")
                 }
             }
             tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;

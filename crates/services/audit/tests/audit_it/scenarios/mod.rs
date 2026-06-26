@@ -3,6 +3,7 @@
 //! containers.
 
 mod anchor;
+mod auth;
 mod chain;
 mod idempotency;
 mod moderation;

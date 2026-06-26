@@ -20,6 +20,7 @@ use crate::application::IngestHandler;
 use crate::application::port::SubjectCipher;
 use crate::domain::SubjectPseudonym;
 use crate::error::AuditError;
+use crate::infrastructure::auth_decode::{AuthEventWire, map_session_issued, map_session_revoked};
 use crate::infrastructure::decode::{AuditEventWire, map_audit_event};
 use crate::infrastructure::moderation_decode::{
     ModerationEventWire, map_decision_recorded, map_enforcement_applied,
@@ -58,6 +59,43 @@ pub async fn run_audit_ingest_consumer(
     .await;
     if let Err(e) = result {
         tracing::error!(error = %e, "audit ingest consumer stopped");
+    }
+}
+
+/// Run the `auth.v1.events` ingest consumer until the stream ends. Auth events
+/// carry no free-text PII, so there is no sealing — `session_issued` /
+/// `session_revoked` map directly and chain; every other auth event is a benign
+/// committed skip.
+pub async fn run_auth_ingest_consumer(
+    consumer: KafkaConsumerHandle,
+    producer: KafkaProducerHandle,
+    handler: Arc<IngestHandler>,
+) {
+    tracing::info!("audit auth ingest consumer started");
+    let policy = RetryPolicy::default();
+    let result = run_consumer::<AuthEventWire, _>(&consumer, &producer, &policy, move |wire| {
+        let handler = Arc::clone(&handler);
+        let wire = wire.clone();
+        Box::pin(async move {
+            let outcome = async {
+                match wire {
+                    AuthEventWire::SessionIssued(issued) => {
+                        handler.ingest(map_session_issued(&issued)?).await?;
+                    }
+                    AuthEventWire::SessionRevoked(revoked) => {
+                        handler.ingest(map_session_revoked(&revoked)?).await?;
+                    }
+                    AuthEventWire::Other => {}
+                }
+                Ok::<(), AuditError>(())
+            }
+            .await;
+            ProcessOutcome::from_result(outcome)
+        })
+    })
+    .await;
+    if let Err(e) = result {
+        tracing::error!(error = %e, "audit auth ingest consumer stopped");
     }
 }
 
