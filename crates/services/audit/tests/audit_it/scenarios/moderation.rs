@@ -74,6 +74,30 @@ async fn moderation_decision_is_sealed_chained_and_shred_preserves_chain() {
 }
 
 #[tokio::test]
+async fn moderation_decision_replay_is_deduped() {
+    let h = Harness::start().await;
+    let actor = Uuid::now_v7().to_string();
+    let subject = SubjectPseudonym::new(actor.clone()).unwrap();
+    let wire = decision_wire(&actor, "violates policy");
+
+    // The audit event id is a deterministic UUIDv5 of the decision id, so a
+    // redelivery maps to the same id and the ledger dedupes it — even though each
+    // seal produces a fresh envelope.
+    let first = {
+        let pii = h.cipher.seal(&subject, &wire.rationale).await.unwrap();
+        h.ingest().ingest(map_decision_recorded(&wire, pii).unwrap()).await.unwrap()
+    };
+    let again = {
+        let pii = h.cipher.seal(&subject, &wire.rationale).await.unwrap();
+        h.ingest().ingest(map_decision_recorded(&wire, pii).unwrap()).await.unwrap()
+    };
+
+    assert!(!first.is_duplicate());
+    assert!(again.is_duplicate());
+    assert_eq!(first.proof(), again.proof());
+}
+
+#[tokio::test]
 async fn cipher_reuses_per_subject_dek_with_fresh_nonces() {
     let h = Harness::start().await;
     let actor = Uuid::now_v7().to_string();

@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: b522dc35f459f23adda955d4c9bc7126760ec2588255e6d7bd1bba8beef857ac
+  source_sha256: 97f48a4ef2167cd22f8a7f43130a39c5bb64a6134dd69fb4d5a57618678f1fc8
   translated_at: 2026-06-26
   status: complete
 ---
@@ -131,7 +131,7 @@ Chaque faute implémente `error::AppError` avec un code `AUD-XXXX` stable, mapp�
 | Topic | Groupe de consommateurs | But | Sur poison/épuisement |
 |---|---|---|---|
 | `audit.v1.events` | `audit-ingest` | le firehose d'événements de conformité de toute la flotte → dédup → chaîne → persiste → archive | DLQ `audit.v1.events.dlq` |
-| `moderation.v1.events` | `audit-moderation` | décisions d'application + énoncés de motifs DSA | DLQ `moderation.v1.events.dlq` |
+| `moderation.v1.events` ✅ câblé | `audit-moderation` | `decision_recorded` (l'autorité + le motif DSA — scellé dans une enveloppe crypto-effaçable à l'ingestion) et `enforcement_applied` ; les autres variants sont un skip inoffensif | DLQ `moderation.v1.events.dlq` |
 | `<flux de décisions auth / account>` | `audit-<src>` | émission / bris de glace / consentement + cycle de vie PII | DLQ `<topic>.dlq` |
 
 > **Contrat runtime (obligatoire) :** tous les consommateurs tournent sous `run_consumer` — commit manuel uniquement après que l'événement est persisté de façon durable *et* chaîné, retry borné avec backoff + jitter, DLQ sur poison/épuisement. **Aucun offset commité n'avance jamais au-delà d'un événement non persisté → zéro perte.** **Idempotence :** les événements portent un id UUIDv5 déterministe ; une redélivrance est dédupliquée (`AUD-1004`, replié dans `Ok`), donc chaque événement logique apparaît exactement une fois dans la chaîne. Un événement sans rien d'enregistrable (`AUD-8002`) est un skip inoffensif replié dans `Ok`. Les chaînes par partition gardent le chemin d'écriture parallèle (pas de sérialisation globale) ; une racine de Merkle globale périodique recoud les têtes de partition.
@@ -169,7 +169,7 @@ Bibliothèque uniquement. Implémente [`service_runtime::Service`](../../platfor
 >
 > **Différé (explicite, pas des lacunes) :**
 > - **Le provisionnement réel KMS/HSM + Object-Lock + témoin externe** est un engagement IAM / structure organisationnelle — l'intégrité ne vaut que par la séparation entre le principal du registre, le principal de signature et le témoin. Le coffre de clés et l'ancrage v1 sont adossés à Postgres ; la production substitue KMS/HSM et un témoin RFC 3161 / bucket WORM compte-séparé sans changement de domaine ni d'application.
-> - **L'adoption par les producteurs** est une campagne d'instrumentation à l'échelle de la flotte — le service est inerte tant que `moderation` / `auth` / `account` n'émettent pas `audit.v1.events`.
+> - **L'adoption par les producteurs** est une campagne d'instrumentation à l'échelle de la flotte. **`moderation` est câblé** — ses événements `decision_recorded` + `enforcement_applied` sur `moderation.v1.events` sont consommés, scellés et chaînés (le motif dans une enveloppe crypto-effaçable). `auth` et `account` sont encore en attente.
 > - **Le consommateur de crypto-effacement** (nécessite une source de demandes d'effacement) et **le balayage d'expiration-rétention** (nécessite des politiques de rétention résolues) — les handlers existent et sont testés ; seules les boucles worker qui les pilotent attendent leurs sources.
 > - **L'autorisation des lectures + l'auto-audit des lectures** (`AUD-3001`/`AUD-3002` + l'enregistrement de chaque requête comme événement `DATA_ACCESS`) se câblent via l'intercepteur d'ingress `auth-context` au déploiement.
 > - **La pagination** au-delà d'une page bornée ; **l'ancrage blockchain** (excessif — RFC 3161 + WORM compte-séparé suffit) ; **le streaming SIEM temps réel** ; **la génération automatisée de rapports de transparence DSA** ; **la réplication inter-région du registre**.
@@ -184,6 +184,7 @@ Bibliothèque uniquement. Implémente [`service_runtime::Service`](../../platfor
 |---|---|---|---|
 | `AUDIT_SERVER_GRPC_ADDR` | Non | `0.0.0.0:50068` | server : adresse gRPC lectures + `RecordPrivileged` |
 | `AUDIT_WORKER_GRPC_ADDR` | Non | `0.0.0.0:50069` | worker : adresse health/reflection (aucun RPC de domaine) |
+| `AUDIT_KEK_BASE64` | **Oui (prod)** | clé dev | base64 de la clé d'enveloppe (KEK) de 32 octets qui enrobe les DEK par sujet ; **doit être définie en production** (sinon une clé dev fixe est dérivée). KMS reprend la garde ensuite |
 | `<config registre / archive / KMS / témoin>` | **Oui** *(Phase 4)* | — | Postgres append-only, magasin Object-Lock, signataire KMS/HSM + coffre DEK, ancrage externe |
 | `<KAFKA_BROKERS>` | **Oui** *(worker, Phase 4)* | — | ingestion amont de conformité + décisions |
 
