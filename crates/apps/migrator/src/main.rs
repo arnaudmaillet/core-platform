@@ -58,6 +58,7 @@ fn services() -> Vec<ServiceMigrations> {
         ServiceMigrations { name: "counter-timeseries", store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/counter/migrations/scylla") },
         ServiceMigrations { name: "account",            store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/account/migrations") },
         ServiceMigrations { name: "counter",            store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/counter/migrations/postgres") },
+        ServiceMigrations { name: "audit",              store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/audit/migrations") },
     ]
 }
 

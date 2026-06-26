@@ -232,6 +232,70 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "audit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "audit-api",
+ "base64 0.22.1",
+ "chrono",
+ "error",
+ "http",
+ "postgres",
+ "prost 0.14.4",
+ "prost-types",
+ "reqwest",
+ "rusty-s3",
+ "serde",
+ "serde_json",
+ "service-runtime",
+ "sha2 0.11.0",
+ "sqlx",
+ "test-support",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic 0.14.6",
+ "tonic-reflection",
+ "tracing",
+ "transport",
+ "url",
+ "uuid",
+ "validation",
+]
+
+[[package]]
+name = "audit-api"
+version = "0.1.0"
+dependencies = [
+ "prost 0.14.4",
+ "prost-types",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "audit-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "audit",
+ "service-runtime",
+ "tokio",
+]
+
+[[package]]
+name = "audit-worker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "audit",
+ "service-runtime",
+ "tokio",
+]
+
+[[package]]
 name = "auth"
 version = "0.1.0"
 dependencies = [
