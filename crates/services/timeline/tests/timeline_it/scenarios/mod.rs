@@ -4,4 +4,5 @@
 
 mod fanout_ordering;
 mod following_cache;
+mod vip_routing;
 mod warmup_lifecycle;
