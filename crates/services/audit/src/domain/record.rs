@@ -120,6 +120,10 @@ impl AuditRecord {
         &self.link.record_hash
     }
 
+    pub fn prev_hash(&self) -> &RecordHash {
+        &self.link.prev_hash
+    }
+
     pub fn recorded_at(&self) -> DateTime<Utc> {
         self.recorded_at
     }

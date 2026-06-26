@@ -160,6 +160,34 @@ impl AuditEvent {
         self.lawful_basis
     }
 
+    pub fn actor(&self) -> &Actor {
+        &self.actor
+    }
+
+    pub fn action(&self) -> &str {
+        &self.action
+    }
+
+    pub fn resource(&self) -> &ResourceRef {
+        &self.resource
+    }
+
+    pub fn outcome(&self) -> Outcome {
+        self.outcome
+    }
+
+    pub fn source_service(&self) -> &str {
+        &self.source_service
+    }
+
+    pub fn correlation_id(&self) -> &str {
+        &self.correlation_id
+    }
+
+    pub fn attributes(&self) -> &BTreeMap<String, String> {
+        &self.attributes
+    }
+
     pub fn occurred_at(&self) -> DateTime<Utc> {
         self.occurred_at
     }

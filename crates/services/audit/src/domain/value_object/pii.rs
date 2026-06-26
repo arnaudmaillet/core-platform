@@ -55,6 +55,10 @@ impl PiiEnvelope {
         &self.ciphertext
     }
 
+    pub fn nonce(&self) -> &[u8] {
+        &self.nonce
+    }
+
     pub fn algorithm(&self) -> &str {
         &self.algorithm
     }

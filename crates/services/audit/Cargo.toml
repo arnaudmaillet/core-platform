@@ -52,6 +52,27 @@ anyhow          = { workspace = true }
 # runtime.
 tonic           = { workspace = true }
 
+# ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
+# Contract: the audit.v1 proto types (the codec maps them ⇄ the domain for the
+# gRPC sync/read surface). Canonical ledger = append-only Postgres (sqlx). WORM
+# archive + checkpoint anchor = an S3/MinIO Object-Lock bucket (rusty-s3 mints
+# signed URLs, reqwest executes; bytes never touch the mesh). Async ingest lane =
+# the Kafka run_consumer runtime over an audit-owned JSON wire schema (serde_json;
+# base64 for the binary PII envelope on that lane). Key vault = Postgres for v1
+# (a separate trust domain in production — see the README deferral).
+audit-api        = { workspace = true }
+postgres-storage = { workspace = true }
+sqlx             = { workspace = true }
+transport        = { workspace = true }
+serde_json       = { workspace = true }
+base64           = { workspace = true }
+rusty-s3         = { workspace = true }
+reqwest          = { workspace = true }
+url              = { workspace = true }
+prost            = { workspace = true }
+prost-types      = { workspace = true }
+tracing          = { workspace = true }
+
 # ── Error handling ────────────────────────────────────────────────────────────
 thiserror = { workspace = true }
 http      = { workspace = true }
