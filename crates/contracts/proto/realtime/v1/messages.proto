@@ -157,6 +157,13 @@ message DeliverEnvelope {
     // dispatcher runs under `run_consumer`, at-least-once) does not double-emit
     // on a reconnected client that already saw it.
     string     idempotency_key     = 8;
+    // Delivery mode. When false (the default), this is a TARGETED delivery to
+    // `recipient_user_id` (identity-scoped channels: dm / notif / presence). When
+    // true, it is a PUBLIC BROADCAST: `recipient_user_id` is empty and every node
+    // delivers it to its local connections subscribed to `channel` (entity
+    // channels: counter / feed). Carried on the fleet broadcast channel, not a
+    // single node's hop channel.
+    bool       broadcast           = 9;
 }
 
 // The result of a node-hop delivery.

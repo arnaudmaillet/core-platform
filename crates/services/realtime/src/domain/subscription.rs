@@ -38,6 +38,12 @@ impl SubscriptionSet {
         self.channels.contains_key(channel)
     }
 
+    /// The channels currently subscribed — used by the gateway to clean its
+    /// broadcast index on teardown.
+    pub fn channels(&self) -> Vec<ChannelRef> {
+        self.channels.keys().cloned().collect()
+    }
+
     /// Subscribe to `channel`. Idempotent: re-subscribing to an existing channel
     /// is a no-op that preserves its sequence state (so a duplicate Subscribe
     /// never resets a client's ack progress). Returns `true` if newly added.

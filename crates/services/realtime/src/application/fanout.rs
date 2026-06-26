@@ -9,10 +9,12 @@ use crate::error::RealtimeError;
 /// The outcome of fanning one event out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FanOutOutcome {
-    /// How many distinct gateway nodes the event was published to.
+    /// How many distinct gateway nodes a *targeted* event was published to.
     pub nodes_published: usize,
-    /// True when the recipient had no live connection (a fail-open no-op).
+    /// True when a *targeted* recipient had no live connection (a fail-open no-op).
     pub offline: bool,
+    /// True when this was a public broadcast (published once to the fleet channel).
+    pub broadcast: bool,
 }
 
 /// The dispatcher's core use case: resolve a recipient against the registry and
@@ -38,7 +40,20 @@ impl FanOutHandler {
         &self,
         event: &DeliverableEvent,
     ) -> Result<FanOutOutcome, RealtimeError> {
-        let locations = self.registry.resolve(&event.recipient).await?;
+        // Public broadcast (counter / feed): one publish to the fleet channel;
+        // every node delivers to its local subscribers. Never "offline".
+        let Some(recipient) = &event.recipient else {
+            self.channel.broadcast(event).await?;
+            return Ok(FanOutOutcome {
+                nodes_published: 0,
+                offline: false,
+                broadcast: true,
+            });
+        };
+
+        // Targeted (dm / notif / presence): resolve the recipient and hop to its
+        // owning node(s).
+        let locations = self.registry.resolve(recipient).await?;
 
         // Optionally restrict to a single device; otherwise every placement.
         let targets = locations.iter().filter(|loc| match &event.device_id {
@@ -58,11 +73,13 @@ impl FanOutHandler {
             return Ok(FanOutOutcome {
                 nodes_published: 0,
                 offline: true,
+                broadcast: false,
             });
         }
         Ok(FanOutOutcome {
             nodes_published: published_nodes.len(),
             offline: false,
+            broadcast: false,
         })
     }
 }
@@ -92,13 +109,25 @@ mod tests {
 
     fn event_for(recipient: &str, device: Option<&str>) -> DeliverableEvent {
         DeliverableEvent {
-            recipient: UserId::new(recipient).unwrap(),
+            recipient: Some(UserId::new(recipient).unwrap()),
             device_id: device.map(|d| DeviceId::new(d).unwrap()),
             channel: ChannelRef::new(ChannelClass::Dm, ChannelKey::new(recipient).unwrap()),
             payload: b"hello".to_vec(),
             event_type: "chat.message".to_owned(),
             emitted_at: Fixture::fixed_now(),
             idempotency_key: "evt-1".to_owned(),
+        }
+    }
+
+    fn broadcast_event() -> DeliverableEvent {
+        DeliverableEvent {
+            recipient: None,
+            device_id: None,
+            channel: ChannelRef::new(ChannelClass::Counter, ChannelKey::new("post-1").unwrap()),
+            payload: b"{\"score\":9}".to_vec(),
+            event_type: "counter.popularity".to_owned(),
+            emitted_at: Fixture::fixed_now(),
+            idempotency_key: "pop-1".to_owned(),
         }
     }
 
@@ -162,6 +191,17 @@ mod tests {
         assert_eq!(out.nodes_published, 1);
         assert_eq!(fx.channel.published_to("node-2"), 1);
         assert_eq!(fx.channel.published_to("node-1"), 0);
+    }
+
+    #[tokio::test]
+    async fn broadcast_publishes_once_to_the_fleet_channel() {
+        let fx = Fixture::new();
+        let out = fx.fanout().fan_out(&broadcast_event()).await.unwrap();
+
+        assert!(out.broadcast);
+        assert!(!out.offline);
+        assert_eq!(fx.channel.broadcast_count(), 1);
+        assert_eq!(fx.channel.publish_count(), 0); // no targeted node publish
     }
 
     #[tokio::test]

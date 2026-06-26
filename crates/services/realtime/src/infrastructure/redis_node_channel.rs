@@ -28,6 +28,11 @@ fn node_channel(node_id: &NodeId) -> String {
     format!("rt:node:{{{}}}", node_id.as_str())
 }
 
+/// The single fleet-wide broadcast channel every gateway subscribes to. Hash-tag
+/// keeps it on one cluster slot; broadcast rate is low (coarse counter/feed
+/// signals), so the single-shard concentration is acceptable.
+pub const BROADCAST_CHANNEL: &str = "rt:broadcast:{0}";
+
 fn channel_err(e: fred::error::Error) -> RealtimeError {
     tracing::warn!(error = %e, "node channel redis error");
     RealtimeError::NodeChannelUnavailable
@@ -57,6 +62,17 @@ impl NodeChannel for RedisNodeChannel {
             .client
             .inner
             .spublish(node_channel(node_id), payload)
+            .await
+            .map_err(channel_err)?;
+        Ok(())
+    }
+
+    async fn broadcast(&self, event: &DeliverableEvent) -> Result<(), RealtimeError> {
+        let payload = codec::envelope_to_pb(event).encode_to_vec();
+        let _: i64 = self
+            .client
+            .inner
+            .spublish(BROADCAST_CHANNEL, payload)
             .await
             .map_err(channel_err)?;
         Ok(())

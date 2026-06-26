@@ -30,10 +30,14 @@ pub struct ConnHandle {
     pub sender: mpsc::Sender<Vec<u8>>,
 }
 
-/// Maps a `user_id` to the handles of its live connections on this node.
+/// Maps a `user_id` to the handles of its live connections on this node (the
+/// targeted index), and a channel string (`class:key`, e.g. `counter:post-42`) to
+/// the handles subscribed to it (the broadcast index). The per-socket task keeps
+/// the channel index in sync as the client subscribes / unsubscribes.
 #[derive(Default)]
 pub struct ConnectionTable {
     by_user: DashMap<String, Vec<ConnHandle>>,
+    by_channel: DashMap<String, Vec<ConnHandle>>,
 }
 
 impl ConnectionTable {
@@ -46,6 +50,8 @@ impl ConnectionTable {
     }
 
     /// Remove one connection; drops the user's entry entirely when it empties.
+    /// The caller (per-socket teardown) also `unsubscribe_channel`s each channel
+    /// the connection held, keeping the broadcast index consistent.
     pub fn remove(&self, user_id: &str, connection_id: &ConnectionId) {
         if let Some(mut handles) = self.by_user.get_mut(user_id) {
             handles.retain(|h| &h.connection_id != connection_id);
@@ -53,29 +59,71 @@ impl ConnectionTable {
         self.by_user.remove_if(user_id, |_, v| v.is_empty());
     }
 
+    /// Index a connection under a channel it just subscribed to (the broadcast
+    /// index). Idempotent on `connection_id`.
+    pub fn subscribe_channel(&self, channel: &str, handle: ConnHandle) {
+        let mut entry = self.by_channel.entry(channel.to_owned()).or_default();
+        if !entry.iter().any(|h| h.connection_id == handle.connection_id) {
+            entry.push(handle);
+        }
+    }
+
+    /// Drop a connection from a channel's broadcast index.
+    pub fn unsubscribe_channel(&self, channel: &str, connection_id: &ConnectionId) {
+        if let Some(mut handles) = self.by_channel.get_mut(channel) {
+            handles.retain(|h| &h.connection_id != connection_id);
+        }
+        self.by_channel.remove_if(channel, |_, v| v.is_empty());
+    }
+
     pub fn connection_count(&self) -> usize {
         self.by_user.iter().map(|e| e.value().len()).sum()
     }
 
-    /// Deliver an event to the recipient's matching connections on this node,
-    /// stamping each with that connection's next per-channel sequence. Returns the
-    /// number of sockets the frame was queued onto.
-    ///
-    /// Skips connections not subscribed to the event's channel (a non-error), and
-    /// honours an optional device filter. A full outbound queue sheds the frame
-    /// for that connection (the slow-consumer protection) without affecting others.
+    /// Deliver a **targeted** event to the recipient's matching connections on this
+    /// node, honouring an optional device filter. Returns the number of sockets the
+    /// frame was queued onto. A broadcast event (no recipient) yields 0 here — use
+    /// [`deliver_broadcast`](Self::deliver_broadcast).
     pub async fn deliver(&self, event: &DeliverableEvent) -> usize {
+        let Some(recipient) = &event.recipient else {
+            return 0;
+        };
         let Some(handles) = self
             .by_user
-            .get(event.recipient.as_str())
+            .get(recipient.as_str())
             .map(|e| e.value().clone())
         else {
             return 0;
         };
+        self.deliver_to(handles, event, event.device_id.as_ref()).await
+    }
 
+    /// Deliver a **public broadcast** event to every local connection subscribed to
+    /// its channel (the broadcast index), stamping each with its own sequence.
+    pub async fn deliver_broadcast(&self, event: &DeliverableEvent) -> usize {
+        let Some(handles) = self
+            .by_channel
+            .get(&event.channel.to_string())
+            .map(|e| e.value().clone())
+        else {
+            return 0;
+        };
+        self.deliver_to(handles, event, None).await
+    }
+
+    /// Shared per-handle delivery: skip connections not subscribed to the event's
+    /// channel (a non-error) and those failing the device filter, stamp each with
+    /// its next per-channel sequence, and `try_send` (a full queue sheds the frame
+    /// for that connection — the slow-consumer protection — without blocking others).
+    async fn deliver_to(
+        &self,
+        handles: Vec<ConnHandle>,
+        event: &DeliverableEvent,
+        device_filter: Option<&DeviceId>,
+    ) -> usize {
         let mut delivered = 0;
         for handle in handles {
-            if let Some(device) = &event.device_id
+            if let Some(device) = device_filter
                 && &handle.device_id != device
             {
                 continue;
@@ -92,7 +140,6 @@ impl ConnectionTable {
                 }
             };
 
-            // try_send: a full queue is a slow consumer — shed rather than block.
             if handle.sender.try_send(frame).is_ok() {
                 delivered += 1;
             }
@@ -142,13 +189,25 @@ mod tests {
 
     fn deliverable(recipient: &str, device: Option<&str>) -> DeliverableEvent {
         DeliverableEvent {
-            recipient: UserId::new(recipient).unwrap(),
+            recipient: Some(UserId::new(recipient).unwrap()),
             device_id: device.map(|d| DeviceId::new(d).unwrap()),
             channel: ChannelRef::new(ChannelClass::Dm, ChannelKey::new(recipient).unwrap()),
             payload: b"x".to_vec(),
             event_type: "chat.message".to_owned(),
             emitted_at: Utc::now(),
             idempotency_key: "e1".to_owned(),
+        }
+    }
+
+    fn counter_event(entity: &str) -> DeliverableEvent {
+        DeliverableEvent {
+            recipient: None,
+            device_id: None,
+            channel: ChannelRef::new(ChannelClass::Counter, ChannelKey::new(entity).unwrap()),
+            payload: b"{\"score\":9}".to_vec(),
+            event_type: "counter.popularity".to_owned(),
+            emitted_at: Utc::now(),
+            idempotency_key: "p1".to_owned(),
         }
     }
 
@@ -227,6 +286,30 @@ mod tests {
     async fn offline_user_delivers_to_nobody() {
         let table = ConnectionTable::new();
         assert_eq!(table.deliver(&deliverable("ghost", None)).await, 0);
+    }
+
+    #[tokio::test]
+    async fn broadcast_delivers_to_channel_subscribers_only() {
+        let table = ConnectionTable::new();
+        let counter = ChannelRef::new(ChannelClass::Counter, ChannelKey::new("post-7").unwrap());
+
+        // A viewer subscribed to counter:post-7 (indexed under the broadcast index).
+        let (viewer, mut viewer_rx) = handle("alice", "phone", "c1");
+        viewer.connection.lock().await.subscribe(counter.clone()).unwrap();
+        table.subscribe_channel(&counter.to_string(), viewer.clone());
+        table.insert("alice", viewer);
+
+        // A non-viewer (subscribed to nothing on this entity) is not indexed.
+        let (other, mut other_rx) = handle("bob", "phone", "c2");
+        table.insert("bob", other);
+
+        assert_eq!(table.deliver_broadcast(&counter_event("post-7")).await, 1);
+        assert!(viewer_rx.try_recv().is_ok());
+        assert!(other_rx.try_recv().is_err());
+
+        // After unsubscribe, the broadcast reaches nobody.
+        table.unsubscribe_channel(&counter.to_string(), &ConnectionId::new("c1").unwrap());
+        assert_eq!(table.deliver_broadcast(&counter_event("post-7")).await, 0);
     }
 
     #[tokio::test]
