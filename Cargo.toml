@@ -177,6 +177,7 @@ url = "2.5.7"
 dyn-clone = "1.0.17"
 dotenvy = "0.15.7"
 sha2 = "0.11.0"
+aes-gcm = "0.10"
 include_dir = "0.7"
 
 # Observabilité

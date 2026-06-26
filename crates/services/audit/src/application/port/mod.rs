@@ -18,6 +18,7 @@ pub mod clock;
 pub mod event_source;
 pub mod key_vault;
 pub mod ledger_store;
+pub mod subject_cipher;
 pub mod worm_archive;
 
 pub use checkpoint_anchor::CheckpointAnchor;
@@ -25,4 +26,5 @@ pub use clock::Clock;
 pub use event_source::EventSource;
 pub use key_vault::KeyVault;
 pub use ledger_store::LedgerStore;
+pub use subject_cipher::SubjectCipher;
 pub use worm_archive::WormArchive;
