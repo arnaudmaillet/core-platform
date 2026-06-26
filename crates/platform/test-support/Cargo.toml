@@ -14,7 +14,7 @@ publish = false
 [dependencies]
 # ── Container orchestration ──────────────────────────────────────────────────
 testcontainers         = { workspace = true }
-testcontainers-modules = { workspace = true, features = ["scylladb", "redis", "kafka", "postgres"] }
+testcontainers-modules = { workspace = true, features = ["scylladb", "redis", "kafka", "postgres", "minio"] }
 rdkafka                = { workspace = true }
 
 # ── Async runtime ────────────────────────────────────────────────────────────
