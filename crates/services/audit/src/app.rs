@@ -199,4 +199,33 @@ mod tests {
             .into_inner();
         assert_eq!(resp.status, proto::IntegrityStatus::Verified as i32);
     }
+
+    /// Failure simulation (Phase 7): the audit store is wedged when a break-glass
+    /// action is attempted. The synchronous lane must FAIL CLOSED — the durable
+    /// -commit deadline elapses, the RPC returns DeadlineExceeded (AUD-4004), and
+    /// nothing is recorded, so the caller denies the privileged action.
+    #[tokio::test]
+    async fn break_glass_is_denied_when_audit_cannot_confirm_durability() {
+        let fx = Fixture::new();
+        fx.ledger.set_hang(true); // the ledger is wedged
+
+        let svc = compose_server(
+            fx.ledger.clone(),
+            fx.archive.clone(),
+            fx.anchor.clone(),
+            fx.clock.clone(),
+            Duration::from_millis(50), // tight durable-commit deadline
+        );
+
+        let status = svc
+            .record_privileged(Request::new(proto::RecordPrivilegedRequest {
+                event: Some(pb_event("bg-1", EventCategory::PrivilegedAction)),
+                privileged_action: proto::PrivilegedActionType::BreakGlassAccess as i32,
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(status.code(), Code::DeadlineExceeded);
+        assert_eq!(fx.ledger.record_count(), 0, "nothing may be recorded on a denied break-glass");
+    }
 }

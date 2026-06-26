@@ -45,6 +45,9 @@ impl Clock for FixedClock {
 pub struct InMemoryLedger {
     records: Mutex<Vec<AuditRecord>>,
     unavailable: AtomicBool,
+    /// When set, reads stall indefinitely — models a hung store so the sync lane's
+    /// durable-commit deadline (`AUD-4004`) can be exercised.
+    hang: AtomicBool,
     /// Number of upcoming appends to reject with ChainHeadConflict (lost-race sim).
     conflicts: AtomicUsize,
 }
@@ -52,6 +55,10 @@ pub struct InMemoryLedger {
 impl InMemoryLedger {
     pub fn set_unavailable(&self, down: bool) {
         self.unavailable.store(down, Ordering::SeqCst);
+    }
+
+    pub fn set_hang(&self, hang: bool) {
+        self.hang.store(hang, Ordering::SeqCst);
     }
 
     pub fn inject_conflicts(&self, n: usize) {
@@ -104,6 +111,10 @@ impl InMemoryLedger {
 #[async_trait]
 impl LedgerStore for InMemoryLedger {
     async fn head(&self, partition: &PartitionKey) -> Result<ChainHead, AuditError> {
+        if self.hang.load(Ordering::SeqCst) {
+            // Stall far past any test deadline; the timeout cancels this future.
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        }
         self.guard()?;
         Ok(Self::head_of(&self.records.lock().unwrap(), partition))
     }
