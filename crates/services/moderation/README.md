@@ -167,6 +167,9 @@ Every fault implements `error::AppError` with a stable `MOD-XXXX` code (see [`sr
 | Topic | Trigger | Key | Consumers |
 |---|---|---|---|
 | `moderation.v1.events` | enforcement applied/reversed, case opened/resolved, appeal resolved | `actor_id` | `timeline`, `chat`, `account` (Plane B denorm) |
+| `moderation.v1.events` · `decision_recorded` | a decision is recorded (automated screen, human review, appeal reversal) | `actor_id` | `audit` (compliance evidence) |
+
+> The **`decision_recorded`** event is the dedicated compliance-evidence record the `audit` plane consumes — unlike the offender-centric Plane-B events above, it carries *who decided* (the authority) and *why* (the rationale / DSA statement-of-reasons), sourced from the immutable `Decision` ledger. The rationale is sealed into a crypto-shreddable envelope by `audit` at ingest; by convention it is policy-referential, not content-quoting. Other consumers ignore this variant.
 
 **Consumes:**
 

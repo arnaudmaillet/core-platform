@@ -147,6 +147,12 @@ impl ResolveAppealHandler {
             )?;
             self.decisions.append(&rev).await?;
 
+            // 1b. Publish the compliance-evidence event (the audit feed) — the
+            // reversal carries `reverses` linking it to the decision it supersedes.
+            self.publisher
+                .publish(&super::decision_recorded(&rev, correlation_id))
+                .await?;
+
             // 2. Reverse the active enforcement(s) the original decision created.
             let actor = original.subject().actor_id();
             for mut enf in self.enforcements.list_active_for_actor(&actor).await? {
@@ -245,11 +251,16 @@ mod tests {
 
         assert!(out.reversal.is_some());
         assert_eq!(out.reversal.unwrap().reverses(), Some(decision_id));
-        // Projection cleared; EnforcementReversed then AppealResolved emitted.
+        // Projection cleared; DecisionRecorded (the reversal), then
+        // EnforcementReversed, then AppealResolved emitted.
         assert!(!fx.projection.is_actor_restricted(&subject().actor_id()).await.unwrap());
         assert_eq!(
             fx.publisher.event_types(),
-            vec!["moderation.enforcement_reversed", "moderation.appeal_resolved"]
+            vec![
+                "moderation.decision_recorded",
+                "moderation.enforcement_reversed",
+                "moderation.appeal_resolved"
+            ]
         );
     }
 

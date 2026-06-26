@@ -118,6 +118,12 @@ impl ScreenHandler {
         })?;
         self.decisions.append(&decision).await?;
 
+        // 1b. Publish the compliance-evidence event (the audit feed) — an automated
+        // (Rule) decision is evidence too.
+        self.publisher
+            .publish(&super::decision_recorded(&decision, correlation_id))
+            .await?;
+
         // 2. Apply the content removal enforcement and publish it.
         let version = self.enforcements.next_version(&cmd.subject).await?;
         let mut enforcement = EnforcementAction::apply(EnforcementParams {
@@ -209,9 +215,13 @@ mod tests {
         assert_eq!(out.matched_categories, vec![PolicyCategory::Csam]);
         assert_eq!(out.match_reference.as_deref(), Some("ncmec:123"));
         assert!(out.enforcement_id.is_some());
-        // One append-only decision + one EnforcementApplied event.
+        // One append-only decision → DecisionRecorded (evidence) then
+        // EnforcementApplied.
         assert_eq!(fx.decisions.count(), 1);
-        assert_eq!(fx.publisher.event_types(), vec!["moderation.enforcement_applied"]);
+        assert_eq!(
+            fx.publisher.event_types(),
+            vec!["moderation.decision_recorded", "moderation.enforcement_applied"]
+        );
         // CSAM weight (6) hits the Ban tier ⇒ actor restricted on the projection.
         assert!(fx.projection.is_actor_restricted(&subject().actor_id()).await.unwrap());
     }

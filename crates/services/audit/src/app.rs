@@ -14,7 +14,9 @@ use anyhow::Context;
 use postgres_storage::{PgPoolBuilder, PostgresConfig, TransactionManager};
 use sqlx::PgPool;
 
-use crate::application::port::{Clock, CheckpointAnchor, KeyVault, LedgerStore, WormArchive};
+use crate::application::port::{
+    CheckpointAnchor, Clock, KeyVault, LedgerStore, SubjectCipher, WormArchive,
+};
 use crate::application::{
     CheckpointHandler, ExportHandler, IngestHandler, QueryHandler, RecordPrivilegedHandler,
     VerifyHandler,
@@ -22,7 +24,7 @@ use crate::application::{
 use crate::config::AuditConfig;
 use crate::infrastructure::grpc::AuditServiceHandler;
 use crate::infrastructure::{
-    ObjectLockArchive, PgCheckpointAnchor, PgKeyVault, PgLedger, SystemClock,
+    AesGcmSubjectCipher, ObjectLockArchive, PgCheckpointAnchor, PgKeyVault, PgLedger, SystemClock,
 };
 
 /// The shared adapter set both binaries build from. Retains the concrete [`PgPool`]
@@ -33,6 +35,8 @@ pub struct Adapters {
     pub key_vault: Arc<dyn KeyVault>,
     pub anchor: Arc<dyn CheckpointAnchor>,
     pub clock: Arc<dyn Clock>,
+    /// Seals PII (the moderation rationale) into a crypto-shreddable envelope.
+    pub cipher: Arc<dyn SubjectCipher>,
     pub pool: PgPool,
 }
 
@@ -54,6 +58,10 @@ impl Adapters {
                 .map_err(|e| anyhow::anyhow!("build WORM archive: {e}"))?,
         );
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+        let cipher: Arc<dyn SubjectCipher> = Arc::new(AesGcmSubjectCipher::new(
+            TransactionManager::new(pool.clone()),
+            config.kek,
+        ));
 
         Ok(Adapters {
             ledger,
@@ -61,6 +69,7 @@ impl Adapters {
             key_vault,
             anchor,
             clock,
+            cipher,
             pool,
         })
     }

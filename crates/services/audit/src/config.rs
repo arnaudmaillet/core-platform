@@ -4,7 +4,9 @@
 
 use std::time::Duration;
 
+use base64::Engine as _;
 use postgres_storage::PostgresConfig;
+use sha2::{Digest, Sha256};
 use transport::kafka::config::KafkaClientConfig;
 
 use crate::infrastructure::ObjectLockConfig;
@@ -27,6 +29,10 @@ pub struct AuditConfig {
     /// How often the worker snapshots the partition heads into an anchored
     /// Merkle checkpoint.
     pub checkpoint_interval: Duration,
+    /// The service key-encryption key (32 bytes) that wraps the per-subject DEKs.
+    /// Lives in the environment, never in the database. Production hands custody to
+    /// KMS/HSM. `<TODO: must be set in production>`.
+    pub kek: [u8; 32],
 }
 
 impl AuditConfig {
@@ -43,8 +49,22 @@ impl AuditConfig {
                 "AUDIT_CHECKPOINT_INTERVAL_S",
                 DEFAULT_CHECKPOINT_INTERVAL_S,
             )),
+            kek: kek_from_env(),
         }
     }
+}
+
+/// Resolve the 32-byte KEK from `AUDIT_KEK_BASE64` (base64 of exactly 32 bytes).
+/// Absent or malformed → a deterministic **dev** key derived from a fixed phrase
+/// (sha256), so local/test runs work; this MUST be overridden in production.
+fn kek_from_env() -> [u8; 32] {
+    if let Ok(encoded) = std::env::var("AUDIT_KEK_BASE64")
+        && let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(encoded.trim())
+        && let Ok(key) = <[u8; 32]>::try_from(bytes.as_slice())
+    {
+        return key;
+    }
+    Sha256::digest(b"audit-dev-kek-do-not-use-in-prod").into()
 }
 
 fn object_lock_from_env() -> ObjectLockConfig {

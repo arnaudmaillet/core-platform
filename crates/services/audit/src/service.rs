@@ -29,13 +29,17 @@ use transport::kafka::producer::{KafkaProducerBuilder, KafkaProducerHandle};
 
 use crate::app::{Adapters, compose_server};
 use crate::application::IngestHandler;
+use crate::application::port::SubjectCipher;
 use crate::config::AuditConfig;
 use crate::infrastructure::grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};
+use crate::infrastructure::moderation_decode::TOPIC_MODERATION_EVENTS;
 use crate::infrastructure::run_audit_ingest_consumer;
 use crate::infrastructure::run_checkpoint_loop;
+use crate::infrastructure::run_moderation_ingest_consumer;
 
 const INGEST_TOPIC: &str = "audit.v1.events";
 const INGEST_GROUP: &str = "audit-ingest";
+const MODERATION_GROUP: &str = "audit-moderation";
 
 /// Backoff before respawning the ingest consumer after its runner returns.
 const CONSUMER_RESPAWN_BACKOFF: Duration = Duration::from_secs(5);
@@ -101,8 +105,10 @@ impl Service for AuditWorkerService {
         let config = AuditConfig::from_env();
         let adapters = Adapters::build(&config).await.context("build audit adapters")?;
 
-        // The supervised async ingest lane: decode → chain → archive.
+        // The supervised async ingest lanes: the generic audit feed, and the
+        // moderation compliance feed (sealing the rationale before chaining).
         spawn_ingest(adapters.ingest_handler());
+        spawn_moderation_ingest(adapters.ingest_handler(), Arc::clone(&adapters.cipher));
 
         // The periodic checkpoint-anchor loop.
         tokio::spawn(run_checkpoint_loop(
@@ -140,6 +146,31 @@ fn spawn_ingest(handler: Arc<IngestHandler>) {
                 }
                 Err(error) => {
                     tracing::error!(%error, "failed to build audit ingest consumer; retrying")
+                }
+            }
+            tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;
+        }
+    });
+}
+
+/// Spawn the supervised moderation-feed consumer (seals the rationale, maps, then
+/// chains). Same respawn discipline as [`spawn_ingest`].
+fn spawn_moderation_ingest(handler: Arc<IngestHandler>, cipher: Arc<dyn SubjectCipher>) {
+    tokio::spawn(async move {
+        loop {
+            match build_consumer(TOPIC_MODERATION_EVENTS, MODERATION_GROUP) {
+                Ok((consumer, producer)) => {
+                    run_moderation_ingest_consumer(
+                        consumer,
+                        producer,
+                        Arc::clone(&handler),
+                        Arc::clone(&cipher),
+                    )
+                    .await;
+                    tracing::warn!("audit moderation consumer exited; respawning after backoff");
+                }
+                Err(error) => {
+                    tracing::error!(%error, "failed to build audit moderation consumer; retrying")
                 }
             }
             tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;

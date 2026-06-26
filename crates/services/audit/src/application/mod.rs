@@ -41,7 +41,7 @@ pub use dto::{
 };
 pub use ingest::{IngestHandler, run_ingest};
 pub use port::{
-    CheckpointAnchor, Clock, EventSource, KeyVault, LedgerStore, WormArchive,
+    CheckpointAnchor, Clock, EventSource, KeyVault, LedgerStore, SubjectCipher, WormArchive,
 };
 pub use privileged::RecordPrivilegedHandler;
 pub use query::{ExportHandler, QueryHandler};

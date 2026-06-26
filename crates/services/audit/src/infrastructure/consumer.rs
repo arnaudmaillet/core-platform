@@ -17,8 +17,13 @@ use transport::kafka::consumer::{ProcessOutcome, RetryPolicy, run_consumer, Kafk
 use transport::kafka::producer::KafkaProducerHandle;
 
 use crate::application::IngestHandler;
+use crate::application::port::SubjectCipher;
+use crate::domain::SubjectPseudonym;
 use crate::error::AuditError;
 use crate::infrastructure::decode::{AuditEventWire, map_audit_event};
+use crate::infrastructure::moderation_decode::{
+    ModerationEventWire, map_decision_recorded, map_enforcement_applied,
+};
 
 /// Lets the at-least-once runner classify a failure: delegate to the error's own
 /// retry verdict — transient store faults retry; decode / domain faults are poison
@@ -53,5 +58,53 @@ pub async fn run_audit_ingest_consumer(
     .await;
     if let Err(e) = result {
         tracing::error!(error = %e, "audit ingest consumer stopped");
+    }
+}
+
+/// Run the `moderation.v1.events` ingest consumer until the stream ends.
+///
+/// For a `decision_recorded` it seals the rationale into a crypto-shreddable
+/// envelope (the `cipher`) before mapping + chaining; for an `enforcement_applied`
+/// it maps directly (no PII); every other moderation event is a benign skip that
+/// still commits the offset. The cipher's key-vault faults are retryable (`run_consumer`
+/// retries without committing); a decode/domain fault is poison and dead-letters.
+pub async fn run_moderation_ingest_consumer(
+    consumer: KafkaConsumerHandle,
+    producer: KafkaProducerHandle,
+    handler: Arc<IngestHandler>,
+    cipher: Arc<dyn SubjectCipher>,
+) {
+    tracing::info!("audit moderation ingest consumer started");
+    let policy = RetryPolicy::default();
+    let result = run_consumer::<ModerationEventWire, _>(&consumer, &producer, &policy, move |wire| {
+        let handler = Arc::clone(&handler);
+        let cipher = Arc::clone(&cipher);
+        let wire = wire.clone();
+        Box::pin(async move {
+            let outcome = async {
+                match wire {
+                    ModerationEventWire::DecisionRecorded(decision) => {
+                        let subject = SubjectPseudonym::new(decision.subject.actor_id.clone())?;
+                        // Seal the DSA rationale into a crypto-shreddable envelope.
+                        let sealed = cipher.seal(&subject, &decision.rationale).await?;
+                        let event = map_decision_recorded(&decision, sealed)?;
+                        handler.ingest(event).await?;
+                    }
+                    ModerationEventWire::EnforcementApplied(enforcement) => {
+                        let event = map_enforcement_applied(&enforcement)?;
+                        handler.ingest(event).await?;
+                    }
+                    // Out-of-scope moderation event: a harmless committed skip.
+                    ModerationEventWire::Other => {}
+                }
+                Ok::<(), AuditError>(())
+            }
+            .await;
+            ProcessOutcome::from_result(outcome)
+        })
+    })
+    .await;
+    if let Err(e) = result {
+        tracing::error!(error = %e, "audit moderation ingest consumer stopped");
     }
 }

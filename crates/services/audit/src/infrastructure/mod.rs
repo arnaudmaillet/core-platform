@@ -21,21 +21,28 @@
 //! [`KeyVault`]: crate::application::port::KeyVault
 //! [`CheckpointAnchor`]: crate::application::port::CheckpointAnchor
 
+pub mod aes_gcm_cipher;
 pub mod codec;
 pub mod consumer;
 pub mod decode;
+pub mod envelope;
 pub mod grpc;
 pub mod loops;
+pub mod moderation_decode;
 pub mod object_lock_archive;
 pub mod pg_anchor;
 pub mod pg_key_vault;
 pub mod pg_ledger;
 pub mod system_clock;
 
-pub use consumer::run_audit_ingest_consumer;
+pub use aes_gcm_cipher::AesGcmSubjectCipher;
+pub use consumer::{run_audit_ingest_consumer, run_moderation_ingest_consumer};
 pub use decode::{AuditEventWire, map_audit_event};
 pub use grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};
 pub use loops::run_checkpoint_loop;
+pub use moderation_decode::{
+    ModerationEventWire, TOPIC_MODERATION_EVENTS, map_decision_recorded, map_enforcement_applied,
+};
 pub use object_lock_archive::{ObjectLockArchive, ObjectLockConfig};
 pub use pg_anchor::PgCheckpointAnchor;
 pub use pg_key_vault::PgKeyVault;

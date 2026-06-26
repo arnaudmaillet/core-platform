@@ -73,6 +73,12 @@ url              = { workspace = true }
 prost            = { workspace = true }
 prost-types      = { workspace = true }
 tracing          = { workspace = true }
+# Rationale-sealing (Phase 3, audit-adoption): AES-256-GCM envelope encryption —
+# a random per-subject DEK encrypts the PII, wrapped under a service KEK and stored
+# in subject_keys (crypto-shred = delete the wrapped DEK). KMS later takes over KEK
+# custody. `rand`/`OsRng` mints the DEK + nonces.
+aes-gcm          = { workspace = true }
+rand             = { workspace = true }
 
 # ── Error handling ────────────────────────────────────────────────────────────
 thiserror = { workspace = true }
