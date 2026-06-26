@@ -26,13 +26,16 @@ use transport::kafka::config::{ConsumerConfig, KafkaClientConfig, ProducerConfig
 use transport::kafka::consumer::{KafkaConsumerBuilder, KafkaConsumerHandle};
 use transport::kafka::producer::{KafkaProducerBuilder, KafkaProducerHandle};
 
+use tonic::transport::Channel;
+
 use crate::app::{Ports, compose_read};
-use crate::application::command::{DeltaFlusher, PopularityPublisher};
-use crate::application::port::SignalPublisher;
+use crate::application::command::{DeltaFlusher, PopularityPublisher, Reconciler};
+use crate::application::port::{ReconciliationSource, SignalPublisher};
 use crate::config::CounterConfig;
 use crate::domain::{Observation, WindowAggregator};
 use crate::error::CounterError;
 use crate::infrastructure::consumer::{run_flush_loop, run_fold_consumer};
+use crate::infrastructure::reconcile::{GrpcReconciliationSource, run_reconcile_loop};
 use crate::infrastructure::decode::{
     FollowWire, HitWire, ReactionWire, map_click, map_follow, map_impression, map_reaction, map_view,
 };
@@ -127,12 +130,6 @@ impl Service for CounterWorkerService {
     const GRPC_SERVICE_NAME: &'static str = <CounterServer as tonic::server::NamedService>::NAME;
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
-        // `..` ignores the read-path + reconciliation knobs: the read timeout is the
-        // read server's, and the reconciliation loop is wired but not spawned here —
-        // its concrete `ReconciliationSource` (gRPC to engagement / social-graph) is a
-        // deferred follow-up. The `Reconciler` itself is built + unit-tested; once a
-        // source exists, spawn a supervised loop over `drift_tolerance` /
-        // `reconcile_interval` exactly like the consumers below.
         let CounterConfig {
             postgres,
             redis,
@@ -140,6 +137,9 @@ impl Service for CounterWorkerService {
             kafka,
             aggregation_window,
             flush_interval,
+            reconcile_interval,
+            drift_tolerance,
+            social_graph_endpoint,
             ..
         } = CounterConfig::from_env();
 
@@ -192,6 +192,25 @@ impl Service for CounterWorkerService {
             flusher,
             popularity,
             flush_interval,
+        ));
+
+        // The reconciliation sweep: heal exact-counter drift against social-graph.
+        // Lazy connect — a cold start does not require the dependency to be up.
+        let social_graph = Channel::from_shared(social_graph_endpoint)
+            .context("invalid social-graph endpoint")?
+            .connect_lazy();
+        let source: Arc<dyn ReconciliationSource> =
+            Arc::new(GrpcReconciliationSource::new(social_graph));
+        let reconciler = Arc::new(Reconciler::new(
+            Arc::clone(&ports.store),
+            Arc::clone(&ports.ledger),
+            source,
+            drift_tolerance,
+        ));
+        tokio::spawn(run_reconcile_loop(
+            reconciler,
+            Arc::clone(&ports.ledger),
+            reconcile_interval,
         ));
 
         Ok(Self { redis: ports.redis })

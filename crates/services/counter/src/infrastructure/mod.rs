@@ -16,6 +16,7 @@ pub mod decode;
 pub mod grpc;
 pub mod kafka_signal_publisher;
 pub mod pg_counter_ledger;
+pub mod reconcile;
 pub mod redis_counter_store;
 pub mod scylla_time_series;
 
