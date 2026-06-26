@@ -22,6 +22,7 @@
 //! [`CheckpointAnchor`]: crate::application::port::CheckpointAnchor
 
 pub mod aes_gcm_cipher;
+pub mod auth_decode;
 pub mod codec;
 pub mod consumer;
 pub mod decode;
@@ -36,7 +37,12 @@ pub mod pg_ledger;
 pub mod system_clock;
 
 pub use aes_gcm_cipher::AesGcmSubjectCipher;
-pub use consumer::{run_audit_ingest_consumer, run_moderation_ingest_consumer};
+pub use auth_decode::{
+    AuthEventWire, TOPIC_AUTH_EVENTS, map_session_issued, map_session_revoked,
+};
+pub use consumer::{
+    run_audit_ingest_consumer, run_auth_ingest_consumer, run_moderation_ingest_consumer,
+};
 pub use decode::{AuditEventWire, map_audit_event};
 pub use grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};
 pub use loops::run_checkpoint_loop;

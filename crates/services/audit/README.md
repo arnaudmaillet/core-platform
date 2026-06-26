@@ -120,7 +120,8 @@ Every fault implements `error::AppError` with a stable `AUD-XXXX` code, mapped t
 |---|---|---|---|
 | `audit.v1.events` | `audit-ingest` | the fleet-wide compliance event firehose → dedupe → chain → persist → archive | DLQ `audit.v1.events.dlq` |
 | `moderation.v1.events` ✅ wired | `audit-moderation` | `decision_recorded` (the authority + the DSA rationale — sealed into a crypto-shreddable envelope at ingest) and `enforcement_applied`; other variants are a benign skip | DLQ `moderation.v1.events.dlq` |
-| `<auth / account decision streams>` | `audit-<src>` | issuance / break-glass / consent + PII lifecycle | DLQ `<topic>.dlq` |
+| `auth.v1.events` ✅ wired | `audit-auth` | `session_issued` / `session_revoked` (the authentication lifecycle — structured metadata, no PII, no sealing); other variants are a benign skip | DLQ `auth.v1.events.dlq` |
+| `<account PII-lifecycle stream>` | `audit-account` | consent + PII lifecycle | DLQ `<topic>.dlq` |
 
 > **Runtime contract (mandatory):** all consumers run under `run_consumer` — manual commit only after the event is durably persisted *and* chained, bounded retry with backoff + jitter, DLQ on poison/exhaustion. **No committed offset ever advances past an un-persisted event → zero loss.** **Idempotency:** events carry a deterministic UUIDv5 id; a redelivery is deduped (`AUD-1004`, folded into `Ok`), so each logical event appears in the chain exactly once. An event with nothing recordable (`AUD-8002`) is a harmless skip folded into `Ok`. Per-partition chains keep the write path parallel (no global serialization); a periodic global Merkle root stitches the partition heads.
 
@@ -157,7 +158,7 @@ Library-only. Implements [`service_runtime::Service`](../../platform/service-run
 >
 > **Deferred (explicit, not gaps):**
 > - **Real KMS/HSM + Object-Lock + external witness provisioning** is an IAM / org-structure commitment — the integrity story is only as strong as the separation between the ledger principal, the signing principal and the witness. The v1 key vault and checkpoint anchor are Postgres-backed; production swaps in KMS/HSM and an RFC 3161 / cross-account WORM witness with no domain or application change.
-> - **Producer adoption** is a fleet-wide instrumentation campaign. **`moderation` is wired** — its `decision_recorded` + `enforcement_applied` events on `moderation.v1.events` are consumed, sealed and chained (the rationale into a crypto-shreddable envelope). `auth` and `account` are still pending.
+> - **Producer adoption** is a fleet-wide instrumentation campaign. **`moderation` and `auth` are wired** — moderation's `decision_recorded` + `enforcement_applied` (the rationale sealed into a crypto-shreddable envelope) and auth's `session_issued` + `session_revoked` (structured metadata, no PII) are consumed and chained. `account` (consent / PII lifecycle) is still pending.
 > - **The crypto-shred consumer** (needs an erasure-request source) and **the retention-expiry sweep** (needs resolved retention policies) — the handlers exist and are tested; only the worker loops that drive them await their input sources.
 > - **Read authorization + read-self-auditing** (`AUD-3001`/`AUD-3002` + recording each query as a `DATA_ACCESS` event) wire via the `auth-context` ingress interceptor at deployment.
 > - **Forward pagination** beyond a single capped page; **blockchain anchoring** (overkill — RFC 3161 + cross-account WORM suffices); **real-time SIEM streaming**; **automated DSA transparency-report generation**; **cross-region ledger replication**.
