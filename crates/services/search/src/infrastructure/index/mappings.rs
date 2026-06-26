@@ -40,14 +40,19 @@ fn analysis() -> Value {
 /// Fields every index carries regardless of kind.
 fn common_properties() -> Value {
     json!({
-        "entity_type":        { "type": "keyword" },
-        "author_id":          { "type": "keyword" },
-        "searchable":         { "type": "boolean" },
-        "content_version":    { "type": "long" },
-        "visibility_version": { "type": "long" },
-        "created_at":         { "type": "date" },
-        "indexed_at":         { "type": "date" },
-        "popularity":         { "type": "double" }
+        "entity_type":                   { "type": "keyword" },
+        "author_id":                     { "type": "keyword" },
+        // Two independent visibility authorities; a doc is searchable only when both
+        // are true. `moderation` = platform trust-and-safety; `owner` = the entity's
+        // own masking. Each has its own monotonic version guard.
+        "moderation_searchable":         { "type": "boolean" },
+        "moderation_visibility_version": { "type": "long" },
+        "owner_searchable":              { "type": "boolean" },
+        "owner_visibility_version":      { "type": "long" },
+        "content_version":               { "type": "long" },
+        "created_at":                    { "type": "date" },
+        "indexed_at":                    { "type": "date" },
+        "popularity":                    { "type": "double" }
     })
 }
 

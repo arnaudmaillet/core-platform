@@ -56,13 +56,14 @@ impl ProjectionHandler {
                 WriteOutcome::RejectedStale => ApplyOutcome::StaleIgnored,
             },
             IndexMutation::SetSearchable {
+                authority,
                 kind,
                 id,
                 searchable,
                 version,
             } => match self
                 .index
-                .set_searchable(kind, &id, searchable, version)
+                .set_searchable(authority, kind, &id, searchable, version)
                 .await?
             {
                 WriteOutcome::Applied => ApplyOutcome::VisibilityUpdated,
@@ -87,14 +88,115 @@ mod tests {
     use error::AppError;
     use uuid::Uuid;
 
+    use chrono::{TimeZone, Utc};
+
     use super::*;
     use crate::application::fakes::{Fixture, post_event, profile_event};
     use crate::domain::{
-        ComplianceEvent, EntityDeletion, EntityKind, ModerationEvent, PostEvent, VisibilityChange,
+        ComplianceEvent, EntityDeletion, EntityKind, ModerationEvent, PostEvent, ProfileEvent,
+        VisibilityChange,
     };
 
     fn env(event: SourceEvent) -> Envelope<SourceEvent> {
         Envelope::new(Uuid::now_v7(), event)
+    }
+
+    #[tokio::test]
+    async fn moderation_and_owner_visibility_are_independent() {
+        let fx = Fixture::new();
+        let h = fx.projection_handler();
+        let t1 = Utc.timestamp_opt(1_700_000_100, 0).unwrap();
+        let t2 = Utc.timestamp_opt(1_700_000_200, 0).unwrap();
+
+        h.apply(env(profile_event("prof-1", "alice", 1)), fx.now())
+            .await
+            .unwrap();
+        assert!(fx.index.is_visible(EntityKind::Profile, "prof-1"));
+
+        // Moderation hides it.
+        h.apply(
+            env(SourceEvent::Moderation(ModerationEvent::VisibilityRevoked(
+                VisibilityChange {
+                    kind: Some(EntityKind::Profile),
+                    id: "prof-1".to_owned(),
+                    occurred_at: t1,
+                },
+            ))),
+            fx.now(),
+        )
+        .await
+        .unwrap();
+        assert!(!fx.index.is_visible(EntityKind::Profile, "prof-1"));
+
+        // The owner "restores" their own visibility — must NOT override moderation.
+        h.apply(
+            env(SourceEvent::Profile(ProfileEvent::OwnerRestored {
+                profile_id: "prof-1".to_owned(),
+                occurred_at: t2,
+            })),
+            fx.now(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            !fx.index.is_visible(EntityKind::Profile, "prof-1"),
+            "an owner restore must not lift a moderation hide"
+        );
+
+        // Moderation lifts its own hide → both authorities now permit → visible.
+        h.apply(
+            env(SourceEvent::Moderation(ModerationEvent::VisibilityRestored(
+                VisibilityChange {
+                    kind: Some(EntityKind::Profile),
+                    id: "prof-1".to_owned(),
+                    occurred_at: t2,
+                },
+            ))),
+            fx.now(),
+        )
+        .await
+        .unwrap();
+        assert!(fx.index.is_visible(EntityKind::Profile, "prof-1"));
+    }
+
+    #[tokio::test]
+    async fn moderation_cannot_lift_an_owner_mask() {
+        let fx = Fixture::new();
+        let h = fx.projection_handler();
+        let t1 = Utc.timestamp_opt(1_700_000_100, 0).unwrap();
+
+        h.apply(env(profile_event("prof-1", "alice", 1)), fx.now())
+            .await
+            .unwrap();
+        // Owner masks themselves.
+        h.apply(
+            env(SourceEvent::Profile(ProfileEvent::OwnerHidden {
+                profile_id: "prof-1".to_owned(),
+                occurred_at: t1,
+            })),
+            fx.now(),
+        )
+        .await
+        .unwrap();
+        assert!(!fx.index.is_visible(EntityKind::Profile, "prof-1"));
+
+        // A moderation "restore" must not reveal an owner-masked profile.
+        h.apply(
+            env(SourceEvent::Moderation(ModerationEvent::VisibilityRestored(
+                VisibilityChange {
+                    kind: Some(EntityKind::Profile),
+                    id: "prof-1".to_owned(),
+                    occurred_at: t1,
+                },
+            ))),
+            fx.now(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            !fx.index.is_visible(EntityKind::Profile, "prof-1"),
+            "a moderation restore must not lift an owner mask"
+        );
     }
 
     #[tokio::test]

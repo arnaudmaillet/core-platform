@@ -24,5 +24,5 @@ pub use query::{
     HitDisplay, SearchHit, SearchQuery, SearchResults, SuggestQuery, Suggestion, Suggestions,
 };
 pub use value_object::{
-    AuthorId, DocVersion, EntityKind, PopularityScore, Searchable, SortStrategy,
+    AuthorId, DocVersion, EntityKind, PopularityScore, Searchable, SortStrategy, VisibilityAuthority,
 };

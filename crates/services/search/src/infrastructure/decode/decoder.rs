@@ -3,9 +3,12 @@
 //! moderation actions are reduced to visibility transitions, thin content events
 //! are marked for hydration, and everything search ignores collapses to `Ignore`.
 
-use super::wire::{ModerationWireEvent, PostWireEvent};
+use chrono::{DateTime, TimeZone, Utc};
+
+use super::wire::{ModerationWireEvent, PostWireEvent, ProfileWireEvent};
 use crate::domain::{
-    EntityDeletion, EntityKind, ModerationEvent, PostEvent, SourceEvent, VisibilityChange,
+    EntityDeletion, EntityKind, ModerationEvent, PostEvent, ProfileEvent, SourceEvent,
+    VisibilityChange,
 };
 use crate::error::SearchError;
 
@@ -119,8 +122,69 @@ fn is_content_action(action: Option<&str>) -> bool {
     matches!(action, Some("RemoveContent") | Some("VisibilityLimit"))
 }
 
+/// Decode a `profile.v1.events` message body. Used by the unit tests; the live
+/// consumer lets `run_consumer` deserialize and calls [`map_profile`] directly.
+pub fn decode_profile(json: &[u8]) -> Result<Decoded, SearchError> {
+    let event: ProfileWireEvent =
+        serde_json::from_slice(json).map_err(|e| decode_err("profile", e))?;
+    Ok(map_profile(event))
+}
+
+/// Map an already-deserialized profile wire event to a [`Decoded`]. Content-bearing
+/// changes need hydration; owner masking maps to an owner-authority visibility flip
+/// (independent of any moderation hide); delete is direct. Pure, infallible.
+pub fn map_profile(event: ProfileWireEvent) -> Decoded {
+    match event {
+        ProfileWireEvent::ProfileCreated {
+            profile_id,
+            occurred_at_ms,
+        }
+        | ProfileWireEvent::ProfileUpdated {
+            profile_id,
+            occurred_at_ms,
+        }
+        | ProfileWireEvent::HandleChanged {
+            profile_id,
+            occurred_at_ms,
+        }
+        | ProfileWireEvent::ProfileVerified {
+            profile_id,
+            occurred_at_ms,
+        } => Decoded::NeedsContent(ContentRef {
+            kind: EntityKind::Profile,
+            id: profile_id.clone(),
+            author_id: profile_id,
+            revision: ms_to_revision(occurred_at_ms),
+        }),
+        ProfileWireEvent::ProfileDeleted { profile_id, .. } => {
+            Decoded::Ready(SourceEvent::Profile(ProfileEvent::Deleted(EntityDeletion {
+                id: profile_id,
+            })))
+        }
+        ProfileWireEvent::ProfileHidden {
+            profile_id,
+            occurred_at_ms,
+        } => Decoded::Ready(SourceEvent::Profile(ProfileEvent::OwnerHidden {
+            profile_id,
+            occurred_at: ms_to_dt(occurred_at_ms),
+        })),
+        ProfileWireEvent::ProfileRestored {
+            profile_id,
+            occurred_at_ms,
+        } => Decoded::Ready(SourceEvent::Profile(ProfileEvent::OwnerRestored {
+            profile_id,
+            occurred_at: ms_to_dt(occurred_at_ms),
+        })),
+        ProfileWireEvent::Unknown => Decoded::Ignore,
+    }
+}
+
 fn ms_to_revision(ms: i64) -> u64 {
     if ms < 0 { 0 } else { ms as u64 }
+}
+
+fn ms_to_dt(ms: i64) -> DateTime<Utc> {
+    Utc.timestamp_millis_opt(ms).single().unwrap_or_else(Utc::now)
 }
 
 fn decode_err(topic: &str, err: serde_json::Error) -> SearchError {
@@ -215,5 +279,47 @@ mod tests {
     fn other_moderation_events_are_ignored() {
         let json = br#"{"type":"case_opened","subject":{"entity_type":"Post","entity_id":"post-1","actor_id":"acct-9","surface":"feed"}}"#;
         assert_eq!(decode_moderation(json).unwrap(), Decoded::Ignore);
+    }
+
+    #[test]
+    fn profile_updated_needs_hydration() {
+        let json = br#"{"type":"ProfileUpdated","profile_id":"prof-1","occurred_at_ms":1700000000000}"#;
+        assert_eq!(
+            decode_profile(json).unwrap(),
+            Decoded::NeedsContent(ContentRef {
+                kind: EntityKind::Profile,
+                id: "prof-1".to_owned(),
+                author_id: "prof-1".to_owned(),
+                revision: 1_700_000_000_000,
+            })
+        );
+    }
+
+    #[test]
+    fn profile_hidden_is_an_owner_visibility_revoke() {
+        let json = br#"{"type":"ProfileHidden","profile_id":"prof-1","masking_reason":"user_request","occurred_at_ms":1700000000000}"#;
+        match decode_profile(json).unwrap() {
+            Decoded::Ready(SourceEvent::Profile(ProfileEvent::OwnerHidden { profile_id, .. })) => {
+                assert_eq!(profile_id, "prof-1");
+            }
+            other => panic!("expected owner-hidden, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn profile_deleted_is_direct() {
+        let json = br#"{"type":"ProfileDeleted","profile_id":"prof-1","occurred_at_ms":1700000000000}"#;
+        assert_eq!(
+            decode_profile(json).unwrap(),
+            Decoded::Ready(SourceEvent::Profile(ProfileEvent::Deleted(EntityDeletion {
+                id: "prof-1".to_owned()
+            })))
+        );
+    }
+
+    #[test]
+    fn unknown_profile_event_is_ignored() {
+        let json = br#"{"type":"SomethingNew","profile_id":"prof-1"}"#;
+        assert_eq!(decode_profile(json).unwrap(), Decoded::Ignore);
     }
 }
