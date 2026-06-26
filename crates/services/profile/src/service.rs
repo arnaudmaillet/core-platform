@@ -27,7 +27,7 @@ use transport::kafka::producer::{KafkaProducerBuilder, KafkaProducerHandle};
 
 use crate::app::{App, Backends};
 use crate::application::port::EventPublisher;
-use crate::infrastructure::consumer::run_account_event_consumer;
+use crate::infrastructure::consumer::{run_account_event_consumer, run_author_tier_consumer};
 use crate::infrastructure::grpc::server::FILE_DESCRIPTOR_SET;
 use crate::infrastructure::grpc::{ProfileServiceHandler, ProfileServiceServer};
 use crate::infrastructure::publisher::KafkaProfileEventPublisher;
@@ -36,6 +36,10 @@ use crate::infrastructure::publisher::KafkaProfileEventPublisher;
 const ACCOUNT_EVENTS_TOPIC: &str = "account.v1.events";
 /// Consumer group for profile's account-event consumer.
 const ACCOUNT_EVENTS_GROUP: &str = "profile-account-events";
+/// Kafka topic carrying the author-tier signal profile denormalizes.
+const AUTHOR_TIER_TOPIC: &str = "social-graph.author_tier_changed";
+/// Consumer group for profile's author-tier consumer.
+const AUTHOR_TIER_GROUP: &str = "profile-author-tier";
 /// Backoff before respawning the consumer after the runner returns.
 const CONSUMER_RESPAWN_BACKOFF: Duration = Duration::from_secs(5);
 
@@ -79,6 +83,8 @@ impl Service for ProfileService {
 
         // Inbound integration: account lifecycle → profile masking/restoration.
         spawn_account_event_consumer(Arc::clone(&app.command_bus));
+        // Inbound integration: author-tier signal → denormalized profile tier.
+        spawn_author_tier_consumer(Arc::clone(&app.command_bus));
 
         Ok(Self { app })
     }
@@ -140,5 +146,39 @@ fn build_account_event_consumer(
     let producer = KafkaProducerBuilder::new(ProducerConfig::new(kafka))
         .build()
         .context("build account event dead-letter producer")?;
+    Ok((consumer, producer))
+}
+
+/// Spawns the supervised author-tier consumer (social-graph → denormalized tier),
+/// respawning after a backoff whenever the runner returns.
+fn spawn_author_tier_consumer(command_bus: Arc<InMemoryCommandBus>) {
+    tokio::spawn(async move {
+        loop {
+            match build_author_tier_consumer() {
+                Ok((consumer, producer)) => {
+                    run_author_tier_consumer(consumer, Arc::clone(&command_bus), producer).await;
+                    tracing::warn!("author tier consumer exited; respawning after backoff");
+                }
+                Err(error) => {
+                    tracing::error!(%error, "failed to build author tier consumer; retrying");
+                }
+            }
+            tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;
+        }
+    });
+}
+
+/// Builds the manual-commit consumer (subscribed to the author-tier topic) and the
+/// dead-letter producer the runner needs.
+fn build_author_tier_consumer(
+) -> anyhow::Result<(KafkaConsumerHandle, KafkaProducerHandle)> {
+    let kafka = KafkaClientConfig::from_env();
+    let consumer = KafkaConsumerBuilder::new(ConsumerConfig::new(kafka.clone(), AUTHOR_TIER_GROUP))
+        .subscribe(AUTHOR_TIER_TOPIC)
+        .build()
+        .context("build author tier consumer")?;
+    let producer = KafkaProducerBuilder::new(ProducerConfig::new(kafka))
+        .build()
+        .context("build author tier dead-letter producer")?;
     Ok((consumer, producer))
 }

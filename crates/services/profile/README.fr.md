@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 7ed960bb816edbc6d1c8306c6e9d96cc8db2b7a8a8c7e348958b5d81bc12ce75
+  source_sha256: 8c0abf083f634da477572f8c16b4cfa5c1e2f452d7d27c2868ee0df674c1e646
   translated_at: 2026-06-26
   status: complete
 ---
@@ -20,7 +20,7 @@ i18n:
 > | **Palier (Tier)** | **TIER-0** — chemin de lecture public, résolution d'identité à l'échelle de la flotte |
 > | **Binaire déployable** | `crates/apps/profile-server` (crate bibliothèque : `crates/services/profile`) |
 > | **Bases de données** | ScyllaDB keyspace `profile` · Redis (cache-aside) |
-> | **Asynchrone** | publie `profile.v1.events` · consomme `account.v1.events` |
+> | **Asynchrone** | publie `profile.v1.events` (dont `ProfileTierChanged`) · consomme `account.v1.events`, `social-graph.author_tier_changed` |
 > | **Appelants amont** | `<TODO: passerelle>`, consommateurs reco/lookup en masse, `geo-discovery` (via événements) |
 > | **Dépendances aval** | ScyllaDB, Redis, Kafka |
 > | **SLO** | lecture cache-hit p99 **< 1 ms** · cache-miss p99 **< 5 ms** |
@@ -171,7 +171,7 @@ réactivement).
 
 | Topic | Déclencheur | Clé | Consommateurs |
 |---|---|---|---|
-| `profile.v1.events` | chaque mutation de cycle de vie — `ProfileCreated` / `ProfileUpdated` / `HandleChanged` / `ProfileVerified` / `ProfileHidden` / `ProfileRestored` / `ProfileDeleted` | `profile_id` | `search` (indexation des profils) |
+| `profile.v1.events` | chaque mutation de cycle de vie — `ProfileCreated` / `ProfileUpdated` / `HandleChanged` / `ProfileVerified` / `ProfileHidden` / `ProfileRestored` / `ProfileDeleted` / `ProfileTierChanged` | `profile_id` | `search` (indexation des profils), `post` (dénormalisation du palier auteur) |
 
 > **Contrat de fil :** un topic versionné unique, tagué en interne sur `type` (convention du service moderation), clé `profile_id` pour l'ordre par-profil. Les événements sont **fins** (ids + horodatages, sans contenu d'affichage) — un consommateur qui a besoin du profil complet l'hydrate via `GetProfileById`. Chaque command handler draine les événements en attente de l'agrégat et les publie **après** l'écriture durable (durable-first ; un publisher no-op couvre la composition sans broker).
 
@@ -179,7 +179,8 @@ réactivement).
 
 | Topic | Consumer group | Purpose | On poison/exhaustion |
 |---|---|---|---|
-| `account.v1.events` | `profile-service` | `AccountSuspended/Deleted` → `HideProfile`; `AccountActivated` → `RestoreProfile`; unknown kinds = no-op commit | DLQ `account.v1.events.dlq` |
+| `account.v1.events` | `profile-account-events` | `AccountSuspended/Deleted` → `HideProfile`; `AccountActivated` → `RestoreProfile`; unknown kinds = no-op commit | DLQ `account.v1.events.dlq` |
+| `social-graph.author_tier_changed` | `profile-author-tier` | dénormalise le palier auteur sur le profil (`SetProfileTier`) → ré-émet sur `profile.v1.events` (`ProfileTierChanged`) ; idempotent si palier inchangé | DLQ `social-graph.author_tier_changed.dlq` |
 
 > **Contrat d'exécution (obligatoire) :** le consommateur d'événements compte s'exécute sous
 > `run_consumer` — commit manuel après succès (`enable_auto_commit=false`), retries bornés avec backoff

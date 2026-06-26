@@ -9,7 +9,7 @@
 > | **Tier** | **TIER-0** — public read path, fleet-wide identity resolution |
 > | **Deployable** | `crates/apps/profile-server` (library crate: `crates/services/profile`) |
 > | **Datastores** | ScyllaDB keyspace `profile` · Redis (cache-aside) |
-> | **Async** | publishes `profile.v1.events` · consumes `account.v1.events` |
+> | **Async** | publishes `profile.v1.events` (incl. `ProfileTierChanged`) · consumes `account.v1.events`, `social-graph.author_tier_changed` |
 > | **Upstream callers** | `<TODO: gateway>`, recommendation/bulk-lookup consumers, `geo-discovery` (via events) |
 > | **Downstream deps** | ScyllaDB, Redis, Kafka |
 > | **SLO** | cache-hit read p99 **< 1 ms** · cache-miss p99 **< 5 ms** |
@@ -157,7 +157,7 @@ pub trait ProfileCache:      Send + Sync + 'static { /* get_by_id, set_by_id, in
 
 | Topic | Trigger | Key | Consumers |
 |---|---|---|---|
-| `profile.v1.events` | every profile lifecycle mutation — `ProfileCreated` / `ProfileUpdated` / `HandleChanged` / `ProfileVerified` / `ProfileHidden` / `ProfileRestored` / `ProfileDeleted` | `profile_id` | `search` (profile indexing) |
+| `profile.v1.events` | every profile lifecycle mutation — `ProfileCreated` / `ProfileUpdated` / `HandleChanged` / `ProfileVerified` / `ProfileHidden` / `ProfileRestored` / `ProfileDeleted` / `ProfileTierChanged` | `profile_id` | `search` (profile indexing), `post` (author-tier denormalization) |
 
 > **Wire contract:** one versioned topic, internally tagged on `type` (the moderation-service convention), keyed by `profile_id` for per-profile ordering. Events are **thin** (ids + timestamps, no display content) — a consumer that needs the full profile hydrates it via `GetProfileById`. Each command handler drains the aggregate's pending events and publishes them **after** the durable write (durable-first; a no-op publisher backs broker-free composition).
 
@@ -165,7 +165,8 @@ pub trait ProfileCache:      Send + Sync + 'static { /* get_by_id, set_by_id, in
 
 | Topic | Consumer group | Purpose | On poison/exhaustion |
 |---|---|---|---|
-| `account.v1.events` | `profile-service` | `AccountSuspended/Deleted` → `HideProfile`; `AccountActivated` → `RestoreProfile`; unknown kinds = no-op commit | DLQ `account.v1.events.dlq` |
+| `account.v1.events` | `profile-account-events` | `AccountSuspended/Deleted` → `HideProfile`; `AccountActivated` → `RestoreProfile`; unknown kinds = no-op commit | DLQ `account.v1.events.dlq` |
+| `social-graph.author_tier_changed` | `profile-author-tier` | denormalize the author tier onto the profile (`SetProfileTier`) → re-emit on `profile.v1.events` (`ProfileTierChanged`); idempotent on unchanged tier | DLQ `social-graph.author_tier_changed.dlq` |
 
 > **Runtime contract (mandatory):** the account-event consumer runs under `run_consumer` — manual
 > commit after success (`enable_auto_commit=false`), bounded retry with backoff + jitter, DLQ on

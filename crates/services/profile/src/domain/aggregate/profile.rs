@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::domain::entity::ProfileLink;
 use crate::domain::event::{
     DomainEvent, HandleChanged, ProfileCreated, ProfileDeleted, ProfileHidden, ProfileRestored,
-    ProfileUpdated, ProfileVerified,
+    ProfileUpdated, ProfileVerified, TierChanged,
 };
 use crate::domain::value_object::{
     AccountId, AvatarUrl, BannerUrl, Bio, DisplayName, Handle, Locale, MaskingReason, ProfileId,
@@ -53,6 +53,10 @@ pub struct Profile {
     visibility: ProfileVisibility,
     verified: bool,
     verification_kind: Option<VerificationKind>,
+    /// Author tier (0=Standard, 1=Premium, 2=Vip), denormalized from
+    /// `social-graph.author_tier_changed`. Profile is the tier owner: it persists
+    /// it and re-emits it on `profile.v1.events` for `post` to stamp onto posts.
+    tier: u8,
     locale: Locale,
     timezone: Option<String>,
     status: ProfileStatus,
@@ -97,6 +101,7 @@ impl Profile {
             visibility: ProfileVisibility::Public,
             verified: false,
             verification_kind: None,
+            tier: 0,
             locale: params.locale,
             timezone: None,
             status: ProfileStatus::Active,
@@ -128,6 +133,7 @@ impl Profile {
         visibility: ProfileVisibility,
         verified: bool,
         verification_kind: Option<VerificationKind>,
+        tier: u8,
         locale: Locale,
         timezone: Option<String>,
         status: ProfileStatus,
@@ -153,6 +159,7 @@ impl Profile {
             visibility,
             verified,
             verification_kind,
+            tier,
             locale,
             timezone,
             status,
@@ -344,6 +351,31 @@ impl Profile {
         Ok(())
     }
 
+    /// Set the author tier (denormalized from `social-graph.author_tier_changed`).
+    /// Idempotent: an unchanged tier is a no-op that emits nothing. A new tier is
+    /// persisted and re-emitted on `profile.v1.events` (`TierChanged`). Values
+    /// above the known taxonomy (`> 2`) are a contract fault.
+    pub fn set_tier(&mut self, new_tier: u8, correlation_id: Uuid) -> Result<(), ProfileError> {
+        if new_tier > 2 {
+            return Err(ProfileError::DomainViolation {
+                field: "tier".to_owned(),
+                message: format!("unknown author tier {new_tier}"),
+            });
+        }
+        if new_tier == self.tier {
+            return Ok(());
+        }
+        self.tier = new_tier;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::TierChanged(TierChanged {
+            profile_id: self.id,
+            tier: new_tier,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
     // ─── Event Drain ────────────────────────────────────────────────────────
 
     pub fn drain_events(&mut self) -> Vec<DomainEvent> {
@@ -355,6 +387,7 @@ impl Profile {
     pub fn id(&self) -> ProfileId { self.id }
     pub fn account_id(&self) -> AccountId { self.account_id }
     pub fn version(&self) -> i64 { self.version }
+    pub fn tier(&self) -> u8 { self.tier }
     pub fn handle(&self) -> &Handle { &self.handle }
     pub fn display_name(&self) -> &DisplayName { &self.display_name }
     pub fn bio(&self) -> Option<&Bio> { self.bio.as_ref() }
@@ -407,5 +440,59 @@ impl Profile {
         let now = Utc::now();
         self.touch(now);
         now
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::event::DomainEvent;
+    use crate::domain::value_object::{AccountId, Handle, Locale, ProfileKind};
+
+    fn sample_profile() -> Profile {
+        let mut p = Profile::create(ProfileCreateParams {
+            account_id: AccountId::try_from(uuid::Uuid::now_v7().to_string().as_str()).unwrap(),
+            handle: Handle::new("alicehandle").unwrap(),
+            display_name: DisplayName::new("Alice").unwrap(),
+            bio: None,
+            avatar_url: None,
+            banner_url: None,
+            profile_kind: ProfileKind::try_from("personal").unwrap(),
+            locale: Locale::new("en-US").unwrap(),
+            correlation_id: Uuid::now_v7(),
+        });
+        p.drain_events(); // discard the ProfileCreated event
+        p
+    }
+
+    #[test]
+    fn set_tier_emits_on_change_and_updates_state() {
+        let mut p = sample_profile();
+        assert_eq!(p.tier(), 0);
+
+        p.set_tier(2, Uuid::now_v7()).unwrap();
+        assert_eq!(p.tier(), 2);
+        let events = p.drain_events();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], DomainEvent::TierChanged(_)));
+    }
+
+    #[test]
+    fn set_tier_is_idempotent_when_unchanged() {
+        let mut p = sample_profile();
+        p.set_tier(1, Uuid::now_v7()).unwrap();
+        p.drain_events();
+
+        // Same tier again → no event, no version bump.
+        let version_before = p.version();
+        p.set_tier(1, Uuid::now_v7()).unwrap();
+        assert!(p.drain_events().is_empty());
+        assert_eq!(p.version(), version_before);
+    }
+
+    #[test]
+    fn set_tier_rejects_unknown_tier() {
+        let mut p = sample_profile();
+        assert!(p.set_tier(5, Uuid::now_v7()).is_err());
     }
 }
