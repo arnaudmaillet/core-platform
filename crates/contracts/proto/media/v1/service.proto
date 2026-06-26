@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package media.v1;
+
+import "media/v1/messages.proto";
+
+option java_package = "com.coreplatform.media.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/media/v1;mediav1";
+
+// MediaService is the platform's media CONTROL PLANE: the System-of-Record for
+// media assets and their processing lifecycle, and the broker of the byte plane
+// around them.
+//
+// The load-bearing contract (enforced at proto review): NO message on this surface
+// carries a `bytes` payload. Uploads are brokered as pre-signed direct-to-object-
+// store URLs (Plane A: IssueUploadTicket); the async transformation pipeline runs
+// off this synchronous surface, driven by Kafka (Plane B); and delivery is brokered
+// as CDN / short-lived signed URLs (Plane C: ResolveDelivery). Bytes flow client ⇄
+// object storage ⇄ CDN — a path this service authorizes and orchestrates but never
+// transports. If a JPEG ever appears in a request or response here, the design has
+// failed.
+//
+// Failure posture is mixed: the delivery plane is fail-OPEN (a not-yet-ready or
+// unresolvable asset yields a blurhash placeholder + DeliveredMedia.degraded, never
+// an upstream block), while the compliance gate is fail-CLOSED (CSAM-class media is
+// screened before it can go public, and a legal hold blocks deletion). Lifecycle
+// events are published on `media.v1.events` (serde structs, not proto).
+service MediaService {
+
+    // ── Plane A — upload brokerage ────────────────────────────────────────────
+
+    // Reserve an asset (PENDING) and return a pre-signed URL the client PUTs the
+    // bytes to, direct to object storage. The bytes never traverse this RPC.
+    rpc IssueUploadTicket(IssueUploadTicketRequest) returns (IssueUploadTicketResponse);
+
+    // Low-latency finalize nudge after the client's direct upload completes. The
+    // object-store event notification is the authoritative trigger; the two
+    // converge idempotently.
+    rpc CommitUpload(CommitUploadRequest) returns (CommitUploadResponse);
+
+    // Cancel a reserved-but-unfinalized upload, releasing the asset.
+    rpc AbortUpload(AbortUploadRequest) returns (AbortUploadResponse);
+
+    // ── Asset metadata ────────────────────────────────────────────────────────
+
+    // Fetch an asset's metadata + rendition catalog (no bytes, no URLs — use
+    // ResolveDelivery for URLs).
+    rpc GetAsset(GetAssetRequest) returns (GetAssetResponse);
+
+    // Owner-initiated hard delete. Refused (PERMISSION_DENIED, MED-7003) while a
+    // legal hold is active.
+    rpc DeleteAsset(DeleteAssetRequest) returns (DeleteAssetResponse);
+
+    // ── Plane C — delivery resolution (hot read) ──────────────────────────────
+
+    // Resolve one asset to a delivery URL set (CDN immutable or short-lived
+    // signed). Fails open to a placeholder.
+    rpc ResolveDelivery(ResolveDeliveryRequest) returns (ResolveDeliveryResponse);
+
+    // Resolve many assets in one round-trip (feed/timeline hydration); unresolvable
+    // assets are omitted, not errored.
+    rpc BatchResolveDelivery(BatchResolveDeliveryRequest) returns (BatchResolveDeliveryResponse);
+
+    // ── Ops ───────────────────────────────────────────────────────────────────
+
+    // Regenerate an asset's renditions (e.g. after a rendition-ladder change),
+    // moving it back to PROCESSING.
+    rpc Reprocess(ReprocessRequest) returns (ReprocessResponse);
+}

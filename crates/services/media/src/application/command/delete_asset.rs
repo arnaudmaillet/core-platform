@@ -1,0 +1,137 @@
+use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+use cqrs::Envelope;
+
+use crate::application::port::{AssetRepository, CdnGateway, DeliveryCache, EventPublisher, ObjectStore};
+use crate::domain::value_object::{AssetId, OwnerId, StorageKey};
+use crate::error::MediaError;
+
+/// Owner-initiated hard delete.
+#[derive(Debug, Clone)]
+pub struct DeleteAssetCommand {
+    pub asset_id: AssetId,
+    /// The requesting actor (edge-resolved); must own the asset.
+    pub owner_id: OwnerId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteOutcome {
+    pub deleted: bool,
+}
+
+/// Deletes an asset: the domain `delete` is attempted **first** so a legal hold
+/// (`LegalHoldActive`, MED-7003) blocks erasure before any byte is touched. On a
+/// real delete it purges every object (master + renditions + staging), invalidates
+/// the CDN, drops the cache, tombstones the row, and emits `AssetDeleted`.
+pub struct DeleteAssetHandler {
+    assets: Arc<dyn AssetRepository>,
+    store: Arc<dyn ObjectStore>,
+    cdn: Arc<dyn CdnGateway>,
+    cache: Arc<dyn DeliveryCache>,
+    publisher: Arc<dyn EventPublisher>,
+}
+
+impl DeleteAssetHandler {
+    pub fn new(
+        assets: Arc<dyn AssetRepository>,
+        store: Arc<dyn ObjectStore>,
+        cdn: Arc<dyn CdnGateway>,
+        cache: Arc<dyn DeliveryCache>,
+        publisher: Arc<dyn EventPublisher>,
+    ) -> Self {
+        Self { assets, store, cdn, cache, publisher }
+    }
+
+    pub async fn handle(
+        &self,
+        envelope: Envelope<DeleteAssetCommand>,
+        now: DateTime<Utc>,
+    ) -> Result<DeleteOutcome, MediaError> {
+        let cmd = envelope.payload;
+        let mut asset = self
+            .assets
+            .find_by_id(&cmd.asset_id)
+            .await?
+            .ok_or_else(|| MediaError::AssetNotFound { id: cmd.asset_id.as_str() })?;
+
+        // Don't leak existence to a non-owner — same response as a missing asset.
+        if asset.owner_id() != cmd.owner_id {
+            return Err(MediaError::AssetNotFound { id: cmd.asset_id.as_str() });
+        }
+
+        // Legal-hold guard fires here, before any byte is purged.
+        asset.delete(now)?;
+
+        // Purge bytes: every rendition object + the staging object.
+        let mut keys: Vec<StorageKey> =
+            asset.renditions().iter().map(|r| r.storage_key().clone()).collect();
+        keys.push(StorageKey::staging(asset.id()));
+        for key in &keys {
+            self.store.delete(key).await?;
+        }
+        self.cdn.invalidate(&keys).await?;
+        self.cache.invalidate(&asset.id()).await?;
+
+        self.assets.save(&asset).await?;
+        for event in asset.drain_events() {
+            self.publisher.publish(&event).await?;
+        }
+        Ok(DeleteOutcome { deleted: true })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::fakes::{t0, Fixture};
+    use crate::domain::value_object::{AssetState, MediaKind};
+    use uuid::Uuid;
+
+    fn env(asset_id: AssetId, owner_id: OwnerId) -> Envelope<DeleteAssetCommand> {
+        Envelope::new(Uuid::now_v7(), DeleteAssetCommand { asset_id, owner_id })
+    }
+
+    #[tokio::test]
+    async fn deletes_a_ready_asset_and_purges_bytes() {
+        let fx = Fixture::new();
+        let (asset_id, owner) = fx.ready_asset(MediaKind::PostImage).await;
+        fx.publisher.clear();
+
+        let out = fx.delete_handler().handle(env(asset_id, owner), t0()).await.unwrap();
+        assert!(out.deleted);
+
+        let asset = fx.assets.find_by_id(&asset_id).await.unwrap().unwrap();
+        assert_eq!(asset.state(), AssetState::Deleted);
+        assert_eq!(fx.publisher.event_types(), vec!["media.asset_deleted"]);
+        // The CDN was invalidated for the purged keys.
+        assert!(!fx.cdn.invalidated_keys().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_legal_hold_blocks_deletion_before_any_byte_is_touched() {
+        let fx = Fixture::new();
+        let (asset_id, owner) = fx.ready_asset(MediaKind::PostImage).await;
+        // Quarantine + legal hold via a CSAM screen path would set this; place it directly.
+        {
+            let mut a = fx.assets.find_by_id(&asset_id).await.unwrap().unwrap();
+            a.place_legal_hold(t0());
+            fx.assets.save(&a).await.unwrap();
+        }
+        let err = fx.delete_handler().handle(env(asset_id, owner), t0()).await.unwrap_err();
+        assert!(matches!(err, MediaError::LegalHoldActive));
+        // Nothing purged.
+        assert!(fx.cdn.invalidated_keys().is_empty());
+        let asset = fx.assets.find_by_id(&asset_id).await.unwrap().unwrap();
+        assert_eq!(asset.state(), AssetState::Ready);
+    }
+
+    #[tokio::test]
+    async fn a_non_owner_cannot_delete_and_sees_not_found() {
+        let fx = Fixture::new();
+        let (asset_id, _owner) = fx.ready_asset(MediaKind::PostImage).await;
+        let stranger = OwnerId::from_uuid(Uuid::from_u128(999));
+        let err = fx.delete_handler().handle(env(asset_id, stranger), t0()).await.unwrap_err();
+        assert!(matches!(err, MediaError::AssetNotFound { .. }));
+    }
+}

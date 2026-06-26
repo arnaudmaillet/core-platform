@@ -1,0 +1,86 @@
+[package]
+name        = "media"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Media microservice — the platform's media control plane: asset lifecycle SoR, async transformation pipeline, and CDN delivery brokerage (no bytes on the mesh)."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# Only the canonical error namespace (MED-XXXX) lives here today. Subsequent
+# phases add: domain/ (Phase 2: the Asset aggregate + lifecycle state machine,
+# Rendition catalog, UploadTicket, content-addressed VOs + the pure transition
+# logic), application/ + async ports (Phase 3: ObjectStore / AssetRepository /
+# RenditionRepository / DeliveryCache / Transcoder / ModerationScreen / CdnGateway
+# / EventPublisher + in-memory fakes), infrastructure/ adapters (Phase 4: the
+# S3/MinIO object-store adapter speaking pre-signed URLs, Postgres metadata SoR,
+# Redis hot-path delivery cache + ticket reservations, the image/transcode
+# processors, the CloudFront signer + the inbound finalize/moderation consumers),
+# and the composition root + tonic/service-runtime wiring (Phase 5). Dependencies
+# grow per phase — kept minimal here.
+[dependencies]
+# ── Contracts ─────────────────────────────────────────────────────────────────
+media-api = { workspace = true }
+anyhow    = { workspace = true }
+
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error      = { workspace = true }
+validation = { workspace = true }
+
+# ── Domain types (Phase 2): pure, clock-injected asset model ───────────────────
+serde  = { workspace = true }
+uuid   = { workspace = true }
+chrono = { workspace = true }
+
+# ── Application layer (Phase 3): CQRS query bus + async ports ───────────────────
+cqrs        = { workspace = true }
+async-trait = { workspace = true }
+# tokio is a runtime dep: the pipeline wraps the moderation Screen call in a hard
+# timeout (`tokio::time::timeout`) so a slow gate can't wedge processing.
+tokio       = { workspace = true }
+
+# ── Storage delegates (the byte/metadata split: object storage is canonical for
+#    bytes [Phase 4, not a fleet crate]; Postgres is the asset-metadata SoR;
+#    Redis is the hot-path delivery cache + upload-ticket reservations) ─────────
+postgres-storage = { workspace = true }
+redis-storage    = { workspace = true }
+
+# ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
+# Fleet-standard: Postgres SoR (sqlx), Redis hot cache (fred), Kafka publisher
+# (transport), moderation Screen gRPC client (tonic + moderation-api).
+transport      = { workspace = true }
+moderation-api = { workspace = true }
+sqlx           = { workspace = true }
+fred           = { workspace = true }
+tonic          = { workspace = true }
+tracing        = { workspace = true }
+serde_json     = { workspace = true }
+# Byte plane: presigned S3 URLs (rusty-s3 mints, reqwest executes) + the image
+# pipeline (decode/probe/resize) + content hashing.
+rusty-s3 = { workspace = true }
+reqwest  = { workspace = true }
+image    = { workspace = true }
+blurhash = { workspace = true }
+sha2     = { workspace = true }
+url      = { workspace = true }
+
+# ── Server wiring (Phase 5): runtime, tonic ingress, reflection ────────────────
+service-runtime  = { workspace = true }
+tonic-reflection = { workspace = true }
+prost-types      = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = { workspace = true }
+http      = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (Phase 6, tests/integration.rs).
+# Off by default so `cargo test -p media` stays a fast, infra-free unit run; the
+# live suite boots real MinIO (S3-compatible object storage) + Postgres + Redis
+# and is opt-in via `cargo test -p media --features integration-media`.
+integration-media = []
+
+[dev-dependencies]
+# Live integration suite (Phase 6): shared MinIO + Postgres + Redis containers.
+test-support = { workspace = true }

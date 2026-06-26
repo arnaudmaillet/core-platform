@@ -20,6 +20,7 @@ use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use testcontainers_modules::kafka::apache::{Kafka, KAFKA_PORT};
+use testcontainers_modules::minio::MinIO;
 use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::scylladb::ScyllaDB;
 use tokio::sync::OnceCell;
@@ -34,12 +35,15 @@ const SCYLLA_CQL_PORT: u16 = 9042;
 const POSTGRES_PORT: u16 = 5432;
 /// Internal OpenSearch REST port.
 const OPENSEARCH_PORT: u16 = 9200;
+/// Internal MinIO S3 API port.
+const MINIO_PORT: u16 = 9000;
 
 static SCYLLA: OnceCell<ContainerAsync<ScyllaDB>> = OnceCell::const_new();
 static REDIS: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
 static KAFKA: OnceCell<ContainerAsync<Kafka>> = OnceCell::const_new();
 static POSTGRES: OnceCell<ContainerAsync<Postgres>> = OnceCell::const_new();
 static OPENSEARCH: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
+static MINIO: OnceCell<ContainerAsync<MinIO>> = OnceCell::const_new();
 
 static SCYLLA_MIGRATED: OnceCell<()> = OnceCell::const_new();
 static POSTGRES_MIGRATED: OnceCell<()> = OnceCell::const_new();
@@ -138,6 +142,31 @@ pub async fn opensearch_ready() -> String {
         .get_host_port_ipv4(OPENSEARCH_PORT)
         .await
         .expect("failed to resolve the mapped OpenSearch port");
+    format!("http://127.0.0.1:{port}")
+}
+
+// ── MinIO (S3-compatible object storage) ─────────────────────────────────────
+
+/// Boots a single MinIO container (once) and returns its S3 API base URL, e.g.
+/// `http://127.0.0.1:49xxx`. Default credentials are `minioadmin:minioadmin`.
+///
+/// There is no migration step — the media adapter creates its bucket idempotently
+/// (`S3Client::ensure_bucket`) at harness start, the object-storage analogue of how
+/// the OpenSearch adapter self-creates its indices.
+pub async fn minio_ready() -> String {
+    let container = MINIO
+        .get_or_init(|| async {
+            MinIO::default()
+                .start()
+                .await
+                .expect("failed to start the MinIO test container")
+        })
+        .await;
+
+    let port = container
+        .get_host_port_ipv4(MINIO_PORT)
+        .await
+        .expect("failed to resolve the mapped MinIO port");
     format!("http://127.0.0.1:{port}")
 }
 
