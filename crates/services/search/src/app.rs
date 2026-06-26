@@ -15,7 +15,7 @@ use crate::application::port::SearchIndex;
 use crate::application::query::{SearchHandler, SuggestHandler};
 use crate::config::SearchConfig;
 use crate::infrastructure::grpc::SearchServiceHandler;
-use crate::infrastructure::hydrate::{GrpcPostHydrator, SourceHydrator};
+use crate::infrastructure::hydrate::{GrpcSourceHydrator, SourceHydrator};
 use crate::infrastructure::index::OpenSearchIndex;
 
 /// A fully-wired search service. Retains the concrete engine adapter (for the
@@ -56,10 +56,11 @@ impl App {
         let index_port: Arc<dyn SearchIndex> = index.clone();
         let projection = Arc::new(ProjectionHandler::new(Arc::clone(&index_port)));
 
-        // Lazy connect: dials `post` on first use, so a cold start does not require
-        // the dependency to be up at boot.
-        let channel = Channel::from_shared(config.post_endpoint)?.connect_lazy();
-        let hydrator: Arc<dyn SourceHydrator> = Arc::new(GrpcPostHydrator::new(channel));
+        // Lazy connect: dials `post` / `profile` on first use, so a cold start does
+        // not require the dependencies to be up at boot.
+        let post = Channel::from_shared(config.post_endpoint)?.connect_lazy();
+        let profile = Channel::from_shared(config.profile_endpoint)?.connect_lazy();
+        let hydrator: Arc<dyn SourceHydrator> = Arc::new(GrpcSourceHydrator::new(post, profile));
 
         let handler = App::compose(index_port);
         Ok(App {

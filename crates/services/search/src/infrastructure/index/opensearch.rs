@@ -23,24 +23,28 @@ use super::mappings::{MAPPING_VERSION, index_body};
 use crate::application::port::{IndexAdmin, SearchIndex, WriteOutcome};
 use crate::domain::{
     AuthorId, DocVersion, EntityKind, HitDisplay, IndexDocument, Searchable, SearchHit, SearchQuery,
-    SearchResults, SuggestQuery, Suggestion, Suggestions,
+    SearchResults, SuggestQuery, Suggestion, Suggestions, VisibilityAuthority,
 };
 use crate::error::SearchError;
 
-/// Painless: apply content fields only if strictly newer; preserve moderation
-/// visibility across a re-projection.
+/// Painless: apply content fields only if strictly newer; preserve BOTH visibility
+/// authorities' flags across a re-projection, seeding each (and its version) only
+/// when absent.
 const CONTENT_SCRIPT: &str = "\
 if (ctx._source.content_version != null && params.content_version <= ctx._source.content_version) { ctx.op = 'noop'; } \
 else { for (entry in params.doc.entrySet()) { ctx._source[entry.getKey()] = entry.getValue(); } \
 ctx._source.content_version = params.content_version; \
-if (ctx._source.searchable == null) { ctx._source.searchable = params.default_searchable; } \
-if (ctx._source.visibility_version == null) { ctx._source.visibility_version = 0; } }";
+if (ctx._source.moderation_searchable == null) { ctx._source.moderation_searchable = params.default_searchable; } \
+if (ctx._source.moderation_visibility_version == null) { ctx._source.moderation_visibility_version = 0; } \
+if (ctx._source.owner_searchable == null) { ctx._source.owner_searchable = params.default_searchable; } \
+if (ctx._source.owner_visibility_version == null) { ctx._source.owner_visibility_version = 0; } }";
 
-/// Painless: flip the visibility flag only if strictly newer; seed a placeholder
-/// when the content has not yet arrived.
+/// Painless: flip ONE authority's flag (its field names passed as params) only if
+/// strictly newer; seed a placeholder when the content has not yet arrived, leaving
+/// the other authority visible by default.
 const VISIBILITY_SCRIPT: &str = "\
-if (ctx._source.visibility_version != null && params.visibility_version <= ctx._source.visibility_version) { ctx.op = 'noop'; } \
-else { ctx._source.searchable = params.searchable; ctx._source.visibility_version = params.visibility_version; \
+if (ctx._source[params.version_field] != null && params.version <= ctx._source[params.version_field]) { ctx.op = 'noop'; } \
+else { ctx._source[params.flag_field] = params.searchable; ctx._source[params.version_field] = params.version; \
 if (ctx._source.entity_type == null) { ctx._source.entity_type = params.entity_type; } }";
 
 /// Boosted matchable fields for the federated multi_match (missing fields per index
@@ -235,6 +239,7 @@ impl SearchIndex for OpenSearchIndex {
 
     async fn set_searchable(
         &self,
+        authority: VisibilityAuthority,
         kind: EntityKind,
         id: &str,
         searchable: Searchable,
@@ -247,7 +252,9 @@ impl SearchIndex for OpenSearchIndex {
                 "lang": "painless",
                 "source": VISIBILITY_SCRIPT,
                 "params": {
-                    "visibility_version": version.value(),
+                    "flag_field": authority.flag_field(),
+                    "version_field": authority.version_field(),
+                    "version": version.value(),
                     "searchable": searchable.is_visible(),
                     "entity_type": kind.as_str(),
                 }
@@ -315,7 +322,7 @@ impl SearchIndex for OpenSearchIndex {
         let body = json!({
             "size": query.limit,
             "query": { "bool": {
-                "filter": [{ "term": { "searchable": true } }],
+                "must_not": visibility_must_not(),
                 "must": [{ "multi_match": {
                     "query": query.prefix,
                     "type": "phrase_prefix",
@@ -451,28 +458,39 @@ fn content_source(doc: &IndexDocument) -> Value {
 }
 
 fn search_body(query: &SearchQuery) -> Value {
-    let mut bool_query = json!({
-        "must": [{ "multi_match": {
-            "query": query.text,
-            "fields": MATCH_FIELDS,
-            "fuzziness": "AUTO"
-        }}],
-        "filter": [{ "term": { "searchable": true } }]
-    });
+    // Exclude docs either authority has hidden. `must_not term=false` treats a
+    // missing flag as visible, so pre-flag documents still surface.
+    let mut must_not = visibility_must_not();
     if !query.exclude_author_ids.is_empty() {
         let ids: Vec<&str> = query
             .exclude_author_ids
             .iter()
             .map(|a| a.as_str())
             .collect();
-        bool_query["must_not"] = json!([{ "terms": { "author_id": ids } }]);
+        must_not.push(json!({ "terms": { "author_id": ids } }));
     }
+    let bool_query = json!({
+        "must": [{ "multi_match": {
+            "query": query.text,
+            "fields": MATCH_FIELDS,
+            "fuzziness": "AUTO"
+        }}],
+        "must_not": must_not,
+    });
     json!({
         "size": query.page_size,
         "track_total_hits": true,
         "query": { "bool": bool_query },
         "sort": sort_for(query.sort),
     })
+}
+
+/// `must_not` clauses excluding any document hidden by either authority.
+fn visibility_must_not() -> Vec<Value> {
+    vec![
+        json!({ "term": { "moderation_searchable": false } }),
+        json!({ "term": { "owner_searchable": false } }),
+    ]
 }
 
 fn sort_for(sort: crate::domain::SortStrategy) -> Value {

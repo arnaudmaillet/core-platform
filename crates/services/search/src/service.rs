@@ -18,12 +18,16 @@ use transport::kafka::producer::{KafkaProducerBuilder, KafkaProducerHandle};
 use crate::app::App;
 use crate::application::command::ProjectionHandler;
 use crate::config::SearchConfig;
-use crate::infrastructure::consumer::{run_moderation_consumer, run_post_consumer};
+use crate::infrastructure::consumer::{
+    run_moderation_consumer, run_post_consumer, run_profile_consumer,
+};
 use crate::infrastructure::grpc::{FILE_DESCRIPTOR_SET, SearchServiceHandler, SearchServiceServer};
 use crate::infrastructure::hydrate::SourceHydrator;
 
 const POST_TOPIC: &str = "post.v1.events";
 const POST_GROUP: &str = "search-post-indexer";
+const PROFILE_TOPIC: &str = "profile.v1.events";
+const PROFILE_GROUP: &str = "search-profile-indexer";
 const MODERATION_TOPIC: &str = "moderation.v1.events";
 const MODERATION_GROUP: &str = "search-moderation-indexer";
 /// Backoff before respawning a consumer after the runner returns.
@@ -48,8 +52,9 @@ impl Service for SearchService {
             .await
             .map_err(|e| anyhow::anyhow!("search app build: {e}"))?;
 
-        // Ingestion: content (hydrated) + moderation visibility.
+        // Ingestion: post + profile content (hydrated) + moderation visibility.
         spawn_post_consumer(Arc::clone(&app.projection), Arc::clone(&app.hydrator));
+        spawn_profile_consumer(Arc::clone(&app.projection), Arc::clone(&app.hydrator));
         spawn_moderation_consumer(Arc::clone(&app.projection));
 
         Ok(Self { app })
@@ -91,6 +96,30 @@ fn spawn_post_consumer(projection: Arc<ProjectionHandler>, hydrator: Arc<dyn Sou
                     tracing::warn!("post consumer exited; respawning after backoff");
                 }
                 Err(error) => tracing::error!(%error, "failed to build post consumer; retrying"),
+            }
+            tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;
+        }
+    });
+}
+
+/// Spawns the supervised profile-indexing consumer.
+fn spawn_profile_consumer(projection: Arc<ProjectionHandler>, hydrator: Arc<dyn SourceHydrator>) {
+    tokio::spawn(async move {
+        loop {
+            match build_consumer(PROFILE_TOPIC, PROFILE_GROUP) {
+                Ok((consumer, producer)) => {
+                    run_profile_consumer(
+                        consumer,
+                        Arc::clone(&projection),
+                        Arc::clone(&hydrator),
+                        producer,
+                    )
+                    .await;
+                    tracing::warn!("profile consumer exited; respawning after backoff");
+                }
+                Err(error) => {
+                    tracing::error!(%error, "failed to build profile consumer; retrying")
+                }
             }
             tokio::time::sleep(CONSUMER_RESPAWN_BACKOFF).await;
         }

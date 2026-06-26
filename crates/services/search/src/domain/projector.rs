@@ -18,7 +18,7 @@ use super::event::{
 };
 use super::mutation::{IndexMutation, SkipReason};
 use super::value_object::{
-    AuthorId, DocVersion, EntityKind, PopularityScore, Searchable,
+    AuthorId, DocVersion, EntityKind, PopularityScore, Searchable, VisibilityAuthority,
 };
 use crate::error::SearchError;
 
@@ -58,7 +58,31 @@ fn project_profile(event: ProfileEvent, now: DateTime<Utc>) -> Result<IndexMutat
             kind: EntityKind::Profile,
             id: non_empty_id(d.id)?,
         }),
+        // Owner masking is a distinct visibility authority from moderation — it
+        // flips the owner flag, leaving any moderation hide untouched.
+        ProfileEvent::OwnerHidden {
+            profile_id,
+            occurred_at,
+        } => owner_visibility(profile_id, occurred_at, Searchable::HIDDEN),
+        ProfileEvent::OwnerRestored {
+            profile_id,
+            occurred_at,
+        } => owner_visibility(profile_id, occurred_at, Searchable::VISIBLE),
     }
+}
+
+fn owner_visibility(
+    profile_id: String,
+    occurred_at: DateTime<Utc>,
+    searchable: Searchable,
+) -> Result<IndexMutation, SearchError> {
+    Ok(IndexMutation::SetSearchable {
+        authority: VisibilityAuthority::Owner,
+        kind: EntityKind::Profile,
+        id: non_empty_id(profile_id)?,
+        searchable,
+        version: DocVersion::from_event_time(occurred_at),
+    })
 }
 
 fn project_hashtag(event: HashtagEvent, now: DateTime<Utc>) -> Result<IndexMutation, SearchError> {
@@ -93,12 +117,13 @@ fn project_compliance(event: ComplianceEvent) -> Result<IndexMutation, SearchErr
     }
 }
 
-/// A visibility flip targets a search index only when the moderated entity maps to
-/// one; otherwise it is a benign skip. The version is derived from the moderation
-/// event time so a stale flip can't overwrite a newer state at the engine.
+/// A moderation visibility flip targets a search index only when the moderated
+/// entity maps to one; otherwise it is a benign skip. The version is derived from
+/// the moderation event time so a stale flip can't overwrite a newer state.
 fn visibility(change: VisibilityChange, searchable: Searchable) -> IndexMutation {
     match change.kind {
         Some(kind) => IndexMutation::SetSearchable {
+            authority: VisibilityAuthority::Moderation,
             kind,
             id: change.id,
             searchable,
@@ -304,12 +329,59 @@ mod tests {
         assert_eq!(
             m,
             IndexMutation::SetSearchable {
+                authority: VisibilityAuthority::Moderation,
                 kind: EntityKind::Post,
                 id: "post-1".to_owned(),
                 searchable: Searchable::HIDDEN,
                 version: DocVersion::from_event_time(occurred),
             }
         );
+    }
+
+    #[test]
+    fn owner_masking_flips_the_owner_flag_not_moderation() {
+        let occurred = Utc.timestamp_opt(1_700_000_400, 0).unwrap();
+        let m = project(
+            SourceEvent::Profile(ProfileEvent::OwnerHidden {
+                profile_id: "prof-1".to_owned(),
+                occurred_at: occurred,
+            }),
+            now(),
+        )
+        .unwrap();
+        assert_eq!(
+            m,
+            IndexMutation::SetSearchable {
+                authority: VisibilityAuthority::Owner,
+                kind: EntityKind::Profile,
+                id: "prof-1".to_owned(),
+                searchable: Searchable::HIDDEN,
+                version: DocVersion::from_event_time(occurred),
+            }
+        );
+    }
+
+    #[test]
+    fn owner_restore_flips_owner_flag_visible() {
+        let m = project(
+            SourceEvent::Profile(ProfileEvent::OwnerRestored {
+                profile_id: "prof-1".to_owned(),
+                occurred_at: now(),
+            }),
+            now(),
+        )
+        .unwrap();
+        match m {
+            IndexMutation::SetSearchable {
+                authority,
+                searchable,
+                ..
+            } => {
+                assert_eq!(authority, VisibilityAuthority::Owner);
+                assert!(searchable.is_visible());
+            }
+            other => panic!("expected owner SetSearchable, got {other:?}"),
+        }
     }
 
     #[test]
