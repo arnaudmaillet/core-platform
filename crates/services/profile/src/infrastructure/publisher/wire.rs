@@ -47,6 +47,14 @@ pub enum ProfileEventWire {
         profile_id: String,
         occurred_at_ms: i64,
     },
+    /// The author tier changed (denormalized from `social-graph`). `post`
+    /// consumes this to stamp the current tier onto new posts. `tier` is the
+    /// shared `u8` taxonomy (0=Standard, 1=Premium, 2=Vip).
+    ProfileTierChanged {
+        profile_id: String,
+        tier: u8,
+        occurred_at_ms: i64,
+    },
 }
 
 impl ProfileEventWire {
@@ -59,7 +67,8 @@ impl ProfileEventWire {
             | ProfileEventWire::ProfileVerified { profile_id, .. }
             | ProfileEventWire::ProfileHidden { profile_id, .. }
             | ProfileEventWire::ProfileRestored { profile_id, .. }
-            | ProfileEventWire::ProfileDeleted { profile_id, .. } => profile_id,
+            | ProfileEventWire::ProfileDeleted { profile_id, .. }
+            | ProfileEventWire::ProfileTierChanged { profile_id, .. } => profile_id,
         }
     }
 
@@ -73,6 +82,7 @@ impl ProfileEventWire {
             ProfileEventWire::ProfileHidden { .. } => "ProfileHidden",
             ProfileEventWire::ProfileRestored { .. } => "ProfileRestored",
             ProfileEventWire::ProfileDeleted { .. } => "ProfileDeleted",
+            ProfileEventWire::ProfileTierChanged { .. } => "ProfileTierChanged",
         }
     }
 }
@@ -111,6 +121,11 @@ impl From<&DomainEvent> for ProfileEventWire {
             },
             DomainEvent::ProfileDeleted(e) => ProfileEventWire::ProfileDeleted {
                 profile_id: e.profile_id.to_string(),
+                occurred_at_ms: e.occurred_at.timestamp_millis(),
+            },
+            DomainEvent::TierChanged(e) => ProfileEventWire::ProfileTierChanged {
+                profile_id: e.profile_id.to_string(),
+                tier: e.tier,
                 occurred_at_ms: e.occurred_at.timestamp_millis(),
             },
         }

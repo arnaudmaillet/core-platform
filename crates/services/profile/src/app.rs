@@ -22,9 +22,10 @@ use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use crate::application::command::{
     ChangeHandleCommand, ChangeHandleHandler, CreateProfileCommand, CreateProfileHandler,
     DeleteProfileCommand, DeleteProfileHandler, HideProfileCommand, HideProfileHandler,
-    RestoreProfileCommand, RestoreProfileHandler, SetVisibilityCommand, SetVisibilityHandler,
-    UpdateAvatarCommand, UpdateAvatarHandler, UpdateBannerCommand, UpdateBannerHandler,
-    UpdateProfileCommand, UpdateProfileHandler, VerifyProfileCommand, VerifyProfileHandler,
+    RestoreProfileCommand, RestoreProfileHandler, SetProfileTierCommand, SetProfileTierHandler,
+    SetVisibilityCommand, SetVisibilityHandler, UpdateAvatarCommand, UpdateAvatarHandler,
+    UpdateBannerCommand, UpdateBannerHandler, UpdateProfileCommand, UpdateProfileHandler,
+    VerifyProfileCommand, VerifyProfileHandler,
 };
 use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::application::query::{
@@ -134,6 +135,11 @@ impl App {
                     Arc::clone(&publisher),
                 ))?
                 .register::<DeleteProfileCommand, _>(DeleteProfileHandler::new(
+                    Arc::clone(&repository),
+                    Arc::clone(&cache),
+                    Arc::clone(&publisher),
+                ))?
+                .register::<SetProfileTierCommand, _>(SetProfileTierHandler::new(
                     Arc::clone(&repository),
                     Arc::clone(&cache),
                     Arc::clone(&publisher),

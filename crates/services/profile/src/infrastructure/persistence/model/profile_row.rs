@@ -33,6 +33,8 @@ pub struct ProfileRow {
     pub visibility:        String,
     pub verified:          bool,
     pub verification_kind: Option<String>,
+    /// `tinyint`; NULL on rows predating the tier column → treated as Standard.
+    pub tier:              Option<i8>,
     pub locale:            String,
     pub timezone:          Option<String>,
     pub status:            String,
@@ -129,6 +131,7 @@ impl TryFrom<ProfileRow> for Profile {
             visibility,
             row.verified,
             verification_kind,
+            row.tier.unwrap_or(0).clamp(0, 2) as u8,
             locale,
             row.timezone,
             status,

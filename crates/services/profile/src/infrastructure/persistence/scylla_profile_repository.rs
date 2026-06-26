@@ -57,6 +57,7 @@ struct ProfileInsert {
     created_at:        CqlTimestamp,
     updated_at:        CqlTimestamp,
     deleted_at:        Option<CqlTimestamp>,
+    tier:              i8,
 }
 
 /// Values for the 21-column LWT UPDATE of `profile.profiles`.
@@ -83,6 +84,7 @@ struct ProfileUpdate {
     masking_reason:    Option<String>,
     updated_at:        CqlTimestamp,
     deleted_at:        Option<CqlTimestamp>,
+    tier:              i8,
     new_version:       i64,
     profile_id:        Uuid,
     expected_version:  i64,
@@ -162,8 +164,8 @@ impl ProfileRepository for ScyllaProfileRepository {
                  (profile_id, account_id, version, handle, display_name, bio, avatar_url, \
                   banner_url, website_url, custom_links, profile_kind, visibility, verified, \
                   verification_kind, locale, timezone, status, suspension_reason, masked_at, \
-                  masking_reason, created_at, updated_at, deleted_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  masking_reason, created_at, updated_at, deleted_at, tier) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             );
             let values = ProfileInsert {
                 profile_id:        profile.id().as_uuid(),
@@ -189,6 +191,7 @@ impl ProfileRepository for ScyllaProfileRepository {
                 created_at:        Self::dt_ms(profile.created_at()),
                 updated_at:        Self::dt_ms(profile.updated_at()),
                 deleted_at:        profile.deleted_at().map(Self::dt_ms),
+                tier:              profile.tier() as i8,
             };
             self.client.session.execute_unpaged(stmt, values).await.map_err(scylla_err)?;
         } else {
@@ -199,7 +202,7 @@ impl ProfileRepository for ScyllaProfileRepository {
                      website_url = ?, custom_links = ?, visibility = ?, verified = ?, \
                      verification_kind = ?, locale = ?, timezone = ?, status = ?, \
                      suspension_reason = ?, masked_at = ?, masking_reason = ?, \
-                     updated_at = ?, deleted_at = ?, version = ? \
+                     updated_at = ?, deleted_at = ?, tier = ?, version = ? \
                  WHERE profile_id = ? \
                  IF version = ?",
             );
@@ -222,6 +225,7 @@ impl ProfileRepository for ScyllaProfileRepository {
                 masking_reason:    profile.masking_reason().map(|r| r.as_str().to_owned()),
                 updated_at:        Self::dt_ms(profile.updated_at()),
                 deleted_at:        profile.deleted_at().map(Self::dt_ms),
+                tier:              profile.tier() as i8,
                 new_version:       profile.version(),
                 profile_id:        profile.id().as_uuid(),
                 expected_version:  profile.version() - 1,
@@ -244,7 +248,7 @@ impl ProfileRepository for ScyllaProfileRepository {
         let stmt = self.fast_stmt(
             "SELECT profile_id, account_id, version, handle, display_name, bio, avatar_url, \
                     banner_url, website_url, custom_links, profile_kind, visibility, verified, \
-                    verification_kind, locale, timezone, status, suspension_reason, masked_at, \
+                    verification_kind, tier, locale, timezone, status, suspension_reason, masked_at, \
                     masking_reason, created_at, updated_at, deleted_at \
              FROM profile.profiles WHERE profile_id = ?",
         );
