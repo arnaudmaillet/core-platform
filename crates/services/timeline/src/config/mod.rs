@@ -57,7 +57,8 @@ pub struct TimelineConfig {
     /// Format: "http://host:port" (no trailing slash).
     pub social_graph_endpoint: String,
 
-    /// Kafka consumer group ID for the post.published worker.
+    /// Kafka consumer group ID for the post-published worker (consumes the unified
+    /// `post.v1.events` stream).
     pub kafka_group_post_published: String,
 
     /// Kafka consumer group ID for the post.deleted worker.
