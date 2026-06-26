@@ -109,20 +109,21 @@ impl SocialGraphCache for RedisSocialGraphCache {
 
     // ── Counter operations ────────────────────────────────────────────────────
 
-    async fn incr_followers_count(&self, profile_id: &ProfileId) -> Result<(), SocialGraphError> {
+    async fn incr_followers_count(&self, profile_id: &ProfileId) -> Result<i64, SocialGraphError> {
         let key = followers_count_key(profile_id);
-        self.client.incr::<i64, _>(&key).await.map_err(redis_err)?;
-        Ok(())
+        let value: i64 = self.client.incr(&key).await.map_err(redis_err)?;
+        Ok(value)
     }
 
-    async fn decr_followers_count(&self, profile_id: &ProfileId) -> Result<(), SocialGraphError> {
+    async fn decr_followers_count(&self, profile_id: &ProfileId) -> Result<i64, SocialGraphError> {
         let key   = followers_count_key(profile_id);
         let value: i64 = self.client.decr(&key).await.map_err(redis_err)?;
         // Clamp at zero: a decrement below zero signals a consistency gap.
         if value < 0 {
             let _ = self.client.set::<(), _, _>(&key, 0i64, None, None, false).await;
+            return Ok(0);
         }
-        Ok(())
+        Ok(value)
     }
 
     async fn incr_following_count(&self, profile_id: &ProfileId) -> Result<(), SocialGraphError> {

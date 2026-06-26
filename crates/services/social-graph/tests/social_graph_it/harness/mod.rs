@@ -68,9 +68,13 @@ impl TestHarness {
             redis: RedisConfig { hosts: vec![redis_endpoint], ..RedisConfig::default() },
         };
 
-        let app = App::build(backends, Arc::new(NoopPublisher) as Arc<dyn EventPublisher>)
-            .await
-            .expect("integration: build social-graph app");
+        let app = App::build(
+            backends,
+            Arc::new(NoopPublisher) as Arc<dyn EventPublisher>,
+            social_graph::domain::value_object::TierThresholds::new(10_000, 1_000_000),
+        )
+        .await
+        .expect("integration: build social-graph app");
 
         Self { command_bus: app.command_bus, query_bus: app.query_bus }
     }

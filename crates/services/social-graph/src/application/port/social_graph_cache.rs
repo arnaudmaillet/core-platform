@@ -75,11 +75,13 @@ pub trait SocialGraphCache: Send + Sync + 'static {
 
     // ── Counter operations ────────────────────────────────────────────────────
 
-    /// INCR `sg:followers_count:v1:{profile_id}`.
-    async fn incr_followers_count(&self, profile_id: &ProfileId) -> Result<(), SocialGraphError>;
+    /// INCR `sg:followers_count:v1:{profile_id}`. Returns the new count, so the
+    /// caller can detect an author-tier boundary crossing.
+    async fn incr_followers_count(&self, profile_id: &ProfileId) -> Result<i64, SocialGraphError>;
 
-    /// DECR `sg:followers_count:v1:{profile_id}` (floor at 0).
-    async fn decr_followers_count(&self, profile_id: &ProfileId) -> Result<(), SocialGraphError>;
+    /// DECR `sg:followers_count:v1:{profile_id}` (floor at 0). Returns the new
+    /// (clamped) count.
+    async fn decr_followers_count(&self, profile_id: &ProfileId) -> Result<i64, SocialGraphError>;
 
     /// INCR `sg:following_count:v1:{profile_id}`.
     async fn incr_following_count(&self, profile_id: &ProfileId) -> Result<(), SocialGraphError>;
