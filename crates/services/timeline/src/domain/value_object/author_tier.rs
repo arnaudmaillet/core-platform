@@ -71,3 +71,26 @@ pub enum FanOutMode {
     Write,
     Read,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The hard fan-out invariant the author-tier initiative exists to enforce:
+    /// a VIP author routes to the READ path (no write-fan-out to millions of
+    /// feeds); Standard/Premium route to the WRITE path. With the producer chain
+    /// (social-graph → profile → post) now supplying `author_tier` on the event,
+    /// this routing finally fires for real authors instead of always seeing 0.
+    #[test]
+    fn vip_routes_to_read_path_others_to_write() {
+        assert_eq!(AuthorTier::from_u8(2).fan_out_mode(), FanOutMode::Read);
+        assert!(AuthorTier::from_u8(2).is_vip());
+
+        assert_eq!(AuthorTier::from_u8(0).fan_out_mode(), FanOutMode::Write);
+        assert_eq!(AuthorTier::from_u8(1).fan_out_mode(), FanOutMode::Write);
+        assert!(!AuthorTier::from_u8(0).is_vip());
+
+        // Unknown tiers degrade to Standard (write path), never accidentally VIP.
+        assert_eq!(AuthorTier::from_u8(9).fan_out_mode(), FanOutMode::Write);
+    }
+}
