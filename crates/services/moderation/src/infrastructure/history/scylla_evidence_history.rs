@@ -65,6 +65,16 @@ fn project(event: &DomainEvent) -> HistoryRow {
             category: e.category.as_str().to_owned(),
             action: e.action.as_str().to_owned(),
         },
+        DomainEvent::DecisionRecorded(e) => {
+            let (et, eid) = subject_cols(&e.subject);
+            HistoryRow {
+                occurred_at: e.occurred_at.timestamp_millis(),
+                entity_type: et,
+                entity_id: eid,
+                category: e.category.as_str().to_owned(),
+                action: e.action.as_str().to_owned(),
+            }
+        }
         DomainEvent::EnforcementApplied(e) => {
             let (et, eid) = subject_cols(&e.subject);
             HistoryRow {

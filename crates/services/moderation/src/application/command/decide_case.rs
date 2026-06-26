@@ -189,6 +189,12 @@ impl DecideCaseHandler {
         })?;
         self.decisions.append(&decision).await?;
 
+        // 1b. Publish the compliance-evidence event (the audit feed) — carries the
+        // authority + rationale the offender-centric events omit.
+        self.publisher
+            .publish(&super::decision_recorded(&decision, correlation_id))
+            .await?;
+
         // 2. Apply enforcement (unless the action is a dismissal).
         let mut enforcement = None;
         if cmd.action.is_enforced() {
@@ -321,13 +327,49 @@ mod tests {
         assert_eq!(out.decision.action(), ActionType::RemoveContent);
         assert!(out.enforcement.is_some());
         assert_eq!(fx.decisions.count(), 1);
-        // EnforcementApplied then CaseResolved.
+        // DecisionRecorded (the evidence event), then EnforcementApplied, then
+        // CaseResolved.
         assert_eq!(
             fx.publisher.event_types(),
-            vec!["moderation.enforcement_applied", "moderation.case_resolved"]
+            vec![
+                "moderation.decision_recorded",
+                "moderation.enforcement_applied",
+                "moderation.case_resolved"
+            ]
         );
         // Content action ⇒ no actor restriction.
         assert!(!fx.projection.is_actor_restricted(&subject().actor_id()).await.unwrap());
+    }
+
+    /// The DecisionRecorded evidence event must carry who decided (the authority)
+    /// and why (the rationale) — the fields the offender-centric events omit and
+    /// the whole reason audit consumes this stream.
+    #[tokio::test]
+    async fn decision_recorded_carries_authority_and_reason() {
+        let fx = Fixture::new();
+        let case_id = open_case(&fx).await;
+        fx.publisher.clear();
+
+        fx.decide_handler()
+            .handle(decide_env(case_id, ActionType::RemoveContent), t0())
+            .await
+            .unwrap();
+
+        let recorded = fx
+            .publisher
+            .events()
+            .into_iter()
+            .find_map(|e| match e {
+                crate::domain::event::DomainEvent::DecisionRecorded(d) => Some(d),
+                _ => None,
+            })
+            .expect("a DecisionRecorded event was published");
+
+        assert_eq!(recorded.author, DecisionAuthor::Reviewer("rev-1".into()));
+        assert_eq!(recorded.rationale, "violates policy");
+        assert_eq!(recorded.policy_version, PolicyVersion::new("2026.06.1").unwrap());
+        assert_eq!(recorded.action, ActionType::RemoveContent);
+        assert!(recorded.reverses.is_none());
     }
 
     #[tokio::test]
@@ -344,7 +386,11 @@ mod tests {
 
         assert!(out.enforcement.is_none());
         assert_eq!(fx.decisions.count(), 1);
-        assert_eq!(fx.publisher.event_types(), vec!["moderation.case_resolved"]);
+        // A dismissal still records + publishes the decision evidence, then resolves.
+        assert_eq!(
+            fx.publisher.event_types(),
+            vec!["moderation.decision_recorded", "moderation.case_resolved"]
+        );
     }
 
     #[tokio::test]

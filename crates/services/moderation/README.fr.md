@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 9d684f4ea1ed5851a9165ba14e8c35063cb9dbce3288952c8c8788ba92af32df
+  source_sha256: 5276a8fd821ec8a56401d514440450ebe6679e7e868b9b91b4052b7ff2de94d6
   translated_at: 2026-06-26
   status: complete
 ---
@@ -178,6 +178,9 @@ Chaque faute implémente `error::AppError` avec un code stable `MOD-XXXX` (voir 
 | Topic | Déclencheur | Clé | Consommateurs |
 |---|---|---|---|
 | `moderation.v1.events` | application appliquée/annulée, dossier ouvert/résolu, appel résolu | `actor_id` | `timeline`, `chat`, `account` (dénorm Plan B) |
+| `moderation.v1.events` · `decision_recorded` | une décision est enregistrée (screen automatisé, revue humaine, annulation d'appel) | `actor_id` | `audit` (preuve de conformité) |
+
+> L'événement **`decision_recorded`** est l'enregistrement de preuve de conformité dédié que le plan `audit` consomme — contrairement aux événements Plan-B centrés sur le contrevenant ci-dessus, il porte *qui a décidé* (l'autorité) et *pourquoi* (le motif / énoncé de motifs DSA), issu du registre `Decision` immuable. Le motif est scellé dans une enveloppe crypto-effaçable par `audit` à l'ingestion ; par convention il est référentiel-aux-politiques, non citateur-de-contenu. Les autres consommateurs ignorent ce variant.
 
 **Consomme :**
 

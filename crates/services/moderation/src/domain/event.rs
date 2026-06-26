@@ -13,9 +13,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::domain::aggregate::DecisionAuthor;
 use crate::domain::value_object::{
     ActionType, ActorId, AppealId, CaseId, DecisionId, EnforcementId, EnforcementVersion,
-    PolicyCategory, SubjectRef,
+    PolicyCategory, PolicyVersion, SubjectRef,
 };
 
 /// A review case was opened for a subject.
@@ -79,12 +80,43 @@ pub struct AppealResolved {
     pub correlation_id: Uuid,
 }
 
+/// The **compliance evidence** record of a decision — the dedicated event the
+/// `audit` plane consumes (the existing offender-centric events above are the
+/// Plane-B denormalization feed and deliberately omit the authority + reason).
+///
+/// Unlike its siblings it carries *who decided* (`author` — a human reviewer or an
+/// automated rule) and *why* (`rationale`, the DSA statement-of-reasons) alongside
+/// the affected `subject`, so audit can answer "who did what, to whom, under what
+/// authority, with what stated reason". The `rationale` is sealed into a
+/// crypto-shreddable envelope by `audit` at ingest (it may reference content) — by
+/// convention it should be policy-referential, not content-quoting. Emitted at
+/// every site that records a `Decision` (automated screen, human review, appeal
+/// reversal). Partitioned by the affected actor, like its siblings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DecisionRecorded {
+    pub decision_id: DecisionId,
+    pub subject: SubjectRef,
+    /// Who (or what) made the decision — the authority.
+    pub author: DecisionAuthor,
+    pub action: ActionType,
+    pub category: PolicyCategory,
+    pub policy_version: PolicyVersion,
+    /// The DSA statement-of-reasons. Sealed into a crypto-shreddable PII envelope
+    /// downstream in `audit`.
+    pub rationale: String,
+    /// Set when this decision reverses an earlier one (an appeal overturn).
+    pub reverses: Option<DecisionId>,
+    pub occurred_at: DateTime<Utc>,
+    pub correlation_id: Uuid,
+}
+
 /// Sealed sum type of every domain event moderation publishes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DomainEvent {
     CaseOpened(CaseOpened),
     CaseResolved(CaseResolved),
+    DecisionRecorded(DecisionRecorded),
     EnforcementApplied(EnforcementApplied),
     EnforcementReversed(EnforcementReversed),
     AppealResolved(AppealResolved),
@@ -96,6 +128,7 @@ impl DomainEvent {
         match self {
             Self::CaseOpened(_) => "moderation.case_opened",
             Self::CaseResolved(_) => "moderation.case_resolved",
+            Self::DecisionRecorded(_) => "moderation.decision_recorded",
             Self::EnforcementApplied(_) => "moderation.enforcement_applied",
             Self::EnforcementReversed(_) => "moderation.enforcement_reversed",
             Self::AppealResolved(_) => "moderation.appeal_resolved",
@@ -108,6 +141,7 @@ impl DomainEvent {
         match self {
             Self::CaseOpened(e) => e.actor_id,
             Self::CaseResolved(e) => e.actor_id,
+            Self::DecisionRecorded(e) => e.subject.actor_id(),
             Self::EnforcementApplied(e) => e.actor_id,
             Self::EnforcementReversed(e) => e.actor_id,
             Self::AppealResolved(e) => e.actor_id,

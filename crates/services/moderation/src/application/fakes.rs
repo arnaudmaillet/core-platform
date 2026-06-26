@@ -403,6 +403,11 @@ impl RecordingEventPublisher {
         self.events.lock().unwrap().len()
     }
 
+    /// A clone of every published event, for asserting on payload content.
+    pub fn events(&self) -> Vec<DomainEvent> {
+        self.events.lock().unwrap().clone()
+    }
+
     /// Resets recorded events — used by tests that assert only on events emitted
     /// after a setup phase (e.g. open-then-decide).
     pub fn clear(&self) {

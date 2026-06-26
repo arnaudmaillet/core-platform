@@ -21,3 +21,27 @@ pub use ingest::{
     IngestReportCommand, IngestReportHandler, IngestSignalCommand, IngestSignalHandler,
 };
 pub use screen::{ScreenCommand, ScreenHandler, ScreenOutcome, ScreenVerdict};
+
+use uuid::Uuid;
+
+use crate::domain::aggregate::Decision;
+use crate::domain::event::{DecisionRecorded, DomainEvent};
+
+/// Build the `DecisionRecorded` compliance-evidence event from a just-recorded
+/// `Decision`, threading the command's `correlation_id`. Used at every site that
+/// appends a decision (automated screen, human review, appeal reversal) so the
+/// `audit` plane captures who decided, under what authority and with what reason.
+pub(crate) fn decision_recorded(decision: &Decision, correlation_id: Uuid) -> DomainEvent {
+    DomainEvent::DecisionRecorded(DecisionRecorded {
+        decision_id: decision.id(),
+        subject: decision.subject().clone(),
+        author: decision.author().clone(),
+        action: decision.action(),
+        category: decision.category(),
+        policy_version: decision.policy_version().clone(),
+        rationale: decision.rationale().to_owned(),
+        reverses: decision.reverses(),
+        occurred_at: decision.decided_at(),
+        correlation_id,
+    })
+}
