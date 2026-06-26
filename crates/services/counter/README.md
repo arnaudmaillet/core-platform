@@ -195,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-> **Build status:** complete through Phase 7 (all 8 phases: scaffold → proto → domain → application+ports → adapters → server+worker wiring → live IT → hardening). The live integration suite is gated behind `integration-counter` and exercises the real Redis + Postgres + Scylla tiers. The reconciliation loop's `Reconciler` + heal-writes are built and tested; wiring a supervised reconcile loop awaits its concrete gRPC `ReconciliationSource` (to `engagement` / `social-graph`) — a documented follow-up, along with a standalone popularity cadence and the concrete shard-fan-out producer.
+> **Build status:** complete through Phase 7 (all 8 phases: scaffold → proto → domain → application+ports → adapters → server+worker wiring → live IT → hardening). The live integration suite is gated behind `integration-counter` and exercises the real Redis + Postgres + Scylla tiers. **The reconciliation loop is wired:** the worker runs a supervised sweep that pages reconcilable pairs from the ledger and heals exact-counter drift against `social-graph` (the authoritative SoR) via `GetRelationStatus`. *Follower/following* are reconciled today; *like/share/comment* reconciliation stays deferred — `engagement` exposes weighted reaction scores (not a reaction count), and its share/comment counters are the approximate ones this service supersedes. Remaining follow-ups: a standalone popularity cadence, the concrete shard-fan-out producer, and a graceful-shutdown drain hook.
 >
 > **Authorization (deployment requirement):** `counter` self-authorizes nothing. The read RPCs are caller-facing aggregate magnitudes; gate access at the gateway / `auth-context` before exposure. Counts carry no per-actor identity, so they leak no membership.
 
@@ -214,8 +214,9 @@ async fn main() -> anyhow::Result<()> {
 | `COUNTER_SHARD_COUNT` | No | `16` | hot-entity key shards (`entity_id:{0..N}`) |
 | `COUNTER_READ_TIMEOUT_MS` | No | `50` | hard per-request hot-read timeout; on elapse the read fails **open** (stale ledger total) |
 | `COUNTER_POPULARITY_INTERVAL_S` | No | `60` | slow-loop cadence for the popularity signal (reserved; currently coupled to flush) |
-| `COUNTER_RECONCILE_INTERVAL_S` | No | `3600` | reconciliation-loop cadence (reserved; awaits the concrete source) |
+| `COUNTER_RECONCILE_INTERVAL_S` | No | `3600` | reconciliation sweep cadence (follower/following drift correction) |
 | `COUNTER_DRIFT_TOLERANCE` | No | `5` | absolute drift tolerated before reconciliation corrects an exact counter |
+| `COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT` | No | `http://localhost:50053` | `social-graph` endpoint — authoritative follower/following counts for reconciliation |
 
 ### Inherited infrastructure variables
 
