@@ -26,6 +26,7 @@ use crate::application::query::{
     GetRelationStatusHandler, GetRelationStatusQuery, ListBlocksHandler, ListBlocksQuery,
     ListFollowersHandler, ListFollowersQuery, ListFollowingHandler, ListFollowingQuery,
 };
+use crate::domain::value_object::TierThresholds;
 use crate::infrastructure::cache::RedisSocialGraphCache;
 use crate::infrastructure::persistence::ScyllaSocialGraphRepository;
 
@@ -53,8 +54,9 @@ impl App {
     /// and Redis cache, and registers every social-graph command and query
     /// against the supplied `publisher`.
     pub async fn build(
-        backends:  Backends,
-        publisher: Arc<dyn EventPublisher>,
+        backends:        Backends,
+        publisher:       Arc<dyn EventPublisher>,
+        tier_thresholds: TierThresholds,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let Backends { scylla, redis } = backends;
 
@@ -72,11 +74,13 @@ impl App {
                     Arc::clone(&repo),
                     Arc::clone(&cache),
                     Arc::clone(&publisher),
+                    tier_thresholds,
                 ))?
                 .register::<UnfollowProfileCommand, _>(UnfollowProfileHandler::new(
                     Arc::clone(&repo),
                     Arc::clone(&cache),
                     Arc::clone(&publisher),
+                    tier_thresholds,
                 ))?
                 .register::<BlockProfileCommand, _>(BlockProfileHandler::new(
                     Arc::clone(&repo),

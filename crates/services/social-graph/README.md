@@ -9,7 +9,7 @@
 > | **Tier** | **TIER-1** — feeds, notifications, and block-gating depend on it |
 > | **Deployable** | `crates/apps/social-graph-server` (library crate: `crates/services/social-graph`) |
 > | **Datastores** | ScyllaDB keyspace `social_graph` (4 tables) · Redis (sets + counters) |
-> | **Async** | publishes `social-graph.followed` / `.unfollowed` / `.blocked` · consumes nothing |
+> | **Async** | publishes `social-graph.followed` / `.unfollowed` / `.blocked` / `.author_tier_changed` · consumes nothing |
 > | **Upstream callers** | `timeline`, `notification`, `<TODO: gateway>` |
 > | **Downstream deps** | ScyllaDB, Redis, Kafka |
 > | **SLO** | `<TODO>` avail · `GetRelationStatus` p99 `<TODO>` · write p99 `<TODO>` |
@@ -144,6 +144,7 @@ service SocialGraphService {
 | `social-graph.followed` | `Follow` success | `{actor}:{target}` | `timeline` (fan-out), `notification` |
 | `social-graph.unfollowed` | `Unfollow` success | `{actor}:{target}` | `timeline` (pruning) |
 | `social-graph.blocked` | `Block` success | `{actor}:{target}` | content filtering, notification suppression |
+| `social-graph.author_tier_changed` | a follow/unfollow crosses a follower-count tier boundary | `{profile}` | `profile` (persists tier → re-emits on `profile.v1.events` for `post` to denormalize → `timeline`/`geo-discovery` fan-out routing). `{profile_id, new_tier, follower_count, changed_at_ms}` |
 
 `ProfileUnblocked` is **not** published — no downstream fan-out needs it.
 

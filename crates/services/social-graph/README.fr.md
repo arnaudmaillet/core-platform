@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 717d6564494e96cb95a956df5f6295bde36d63d9f7866106946fc86a0dc5540f
-  translated_at: 2026-06-25
+  source_sha256: 76dbe5c398c64fd84d891df6bb3ba9406fca746559cfaec7777e9c3a8f101e5e
+  translated_at: 2026-06-26
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -20,7 +20,7 @@ i18n:
 > | **Palier (Tier)** | **TIER-1** — feeds, notifications et filtrage par blocage en dépendent |
 > | **Binaire déployable** | `crates/apps/social-graph-server` (crate bibliothèque : `crates/services/social-graph`) |
 > | **Bases de données** | ScyllaDB keyspace `social_graph` (4 tables) · Redis (sets + compteurs) |
-> | **Asynchrone** | publie `social-graph.followed` / `.unfollowed` / `.blocked` · ne consomme rien |
+> | **Asynchrone** | publie `social-graph.followed` / `.unfollowed` / `.blocked` / `.author_tier_changed` · ne consomme rien |
 > | **Appelants amont** | `timeline`, `notification`, `<TODO: passerelle>` |
 > | **Dépendances aval** | ScyllaDB, Redis, Kafka |
 > | **SLO** | `<TODO>` dispo · `GetRelationStatus` p99 `<TODO>` · écriture p99 `<TODO>` |
@@ -161,6 +161,7 @@ service SocialGraphService {
 | `social-graph.followed` | `Follow` success | `{actor}:{target}` | `timeline` (fan-out), `notification` |
 | `social-graph.unfollowed` | `Unfollow` success | `{actor}:{target}` | `timeline` (pruning) |
 | `social-graph.blocked` | `Block` success | `{actor}:{target}` | content filtering, notification suppression |
+| `social-graph.author_tier_changed` | un follow/unfollow franchit un seuil de palier (follower count) | `{profile}` | `profile` (persiste le palier → ré-émet sur `profile.v1.events` pour que `post` le dénormalise → routage de fan-out `timeline`/`geo-discovery`). `{profile_id, new_tier, follower_count, changed_at_ms}` |
 
 `ProfileUnblocked` n'est **pas** publié — aucun fan-out aval n'en a besoin.
 

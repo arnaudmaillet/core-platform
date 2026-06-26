@@ -18,6 +18,24 @@ use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{KafkaClientConfig, ProducerConfig};
 use transport::kafka::producer::KafkaProducerBuilder;
 
+use crate::domain::value_object::TierThresholds;
+
+/// Default follower-count floors for tier classification (a product default; tune
+/// via `SOCIAL_GRAPH_PREMIUM_FOLLOWER_THRESHOLD` / `..._VIP_FOLLOWER_THRESHOLD`).
+const DEFAULT_PREMIUM_FOLLOWERS: i64 = 10_000;
+const DEFAULT_VIP_FOLLOWERS: i64 = 1_000_000;
+
+fn tier_thresholds_from_env() -> TierThresholds {
+    TierThresholds::new(
+        env_i64("SOCIAL_GRAPH_PREMIUM_FOLLOWER_THRESHOLD", DEFAULT_PREMIUM_FOLLOWERS),
+        env_i64("SOCIAL_GRAPH_VIP_FOLLOWER_THRESHOLD", DEFAULT_VIP_FOLLOWERS),
+    )
+}
+
+fn env_i64(key: &str, default: i64) -> i64 {
+    std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
 use crate::app::{App, Backends};
 use crate::application::port::EventPublisher;
 use crate::infrastructure::grpc::handler::social_graph_service_handler::SocialGraphServiceServer;
@@ -52,7 +70,7 @@ impl Service for SocialGraphService {
             .build()?;
         let publisher: Arc<dyn EventPublisher> = Arc::new(KafkaEventPublisher::new(producer));
 
-        let app = App::build(backends, publisher)
+        let app = App::build(backends, publisher, tier_thresholds_from_env())
             .await
             .map_err(|e| anyhow::anyhow!("social-graph app build: {e}"))?;
 
