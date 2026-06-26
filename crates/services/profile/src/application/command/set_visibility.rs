@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{ProfileCache, ProfileRepository};
+use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::domain::value_object::{ProfileId, ProfileVisibility};
 use crate::error::ProfileError;
 
@@ -31,11 +31,12 @@ impl Validate for SetVisibilityCommand {
 pub struct SetVisibilityHandler {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn ProfileCache>,
+    publisher: Arc<dyn EventPublisher>,
 }
 
 impl SetVisibilityHandler {
-    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>) -> Self {
-        Self { repo, cache }
+    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>, publisher: Arc<dyn EventPublisher>) -> Self {
+        Self { repo, cache, publisher }
     }
 }
 
@@ -55,6 +56,10 @@ impl CommandHandler<SetVisibilityCommand> for SetVisibilityHandler {
 
         profile.set_visibility(visibility, envelope.correlation_id)?;
         self.repo.save(&profile).await?;
+
+        for event in profile.drain_events() {
+            self.publisher.publish(&event).await?;
+        }
         let _ = self.cache.invalidate_by_id(&id).await;
         let _ = self.cache.invalidate_account_profiles(&profile.account_id()).await;
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{ProfileCache, ProfileRepository};
+use crate::application::port::{EventPublisher, ProfileCache, ProfileRepository};
 use crate::domain::value_object::{Handle, ProfileId};
 use crate::error::ProfileError;
 
@@ -31,11 +31,12 @@ impl Validate for ChangeHandleCommand {
 pub struct ChangeHandleHandler {
     repo: Arc<dyn ProfileRepository>,
     cache: Arc<dyn ProfileCache>,
+    publisher: Arc<dyn EventPublisher>,
 }
 
 impl ChangeHandleHandler {
-    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>) -> Self {
-        Self { repo, cache }
+    pub fn new(repo: Arc<dyn ProfileRepository>, cache: Arc<dyn ProfileCache>, publisher: Arc<dyn EventPublisher>) -> Self {
+        Self { repo, cache, publisher }
     }
 }
 
@@ -74,6 +75,10 @@ impl CommandHandler<ChangeHandleCommand> for ChangeHandleHandler {
 
         self.repo.tombstone_handle(&old_handle).await?;
         self.repo.save(&profile).await?;
+
+        for event in profile.drain_events() {
+            self.publisher.publish(&event).await?;
+        }
 
         let _ = self.cache.invalidate_handle(old_handle.as_str()).await;
         let _ = self.cache.invalidate_handle(new_handle.as_str()).await;

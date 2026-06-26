@@ -26,9 +26,11 @@ use transport::kafka::consumer::{KafkaConsumerBuilder, KafkaConsumerHandle};
 use transport::kafka::producer::{KafkaProducerBuilder, KafkaProducerHandle};
 
 use crate::app::{App, Backends};
+use crate::application::port::EventPublisher;
 use crate::infrastructure::consumer::run_account_event_consumer;
 use crate::infrastructure::grpc::server::FILE_DESCRIPTOR_SET;
 use crate::infrastructure::grpc::{ProfileServiceHandler, ProfileServiceServer};
+use crate::infrastructure::publisher::KafkaProfileEventPublisher;
 
 /// Kafka topic carrying the account lifecycle events profile reacts to.
 const ACCOUNT_EVENTS_TOPIC: &str = "account.v1.events";
@@ -65,7 +67,13 @@ impl Service for ProfileService {
             .cache()
             .context("profile requires a [cache] section in infrastructure.toml")?;
 
-        let app = App::build(backends, cache_registry)
+        // Outbound: profile lifecycle events → `profile.v1.events`.
+        let producer = KafkaProducerBuilder::new(ProducerConfig::new(KafkaClientConfig::from_env()))
+            .build()
+            .context("build profile event producer")?;
+        let publisher: Arc<dyn EventPublisher> = Arc::new(KafkaProfileEventPublisher::new(producer));
+
+        let app = App::build(backends, cache_registry, publisher)
             .await
             .map_err(|e| anyhow::anyhow!("profile app build: {e}"))?;
 
