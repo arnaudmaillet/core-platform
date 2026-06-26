@@ -24,14 +24,20 @@
 pub mod codec;
 pub mod consumer;
 pub mod decode;
+pub mod grpc;
+pub mod loops;
 pub mod object_lock_archive;
 pub mod pg_anchor;
 pub mod pg_key_vault;
 pub mod pg_ledger;
+pub mod system_clock;
 
 pub use consumer::run_audit_ingest_consumer;
 pub use decode::{AuditEventWire, map_audit_event};
+pub use grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};
+pub use loops::run_checkpoint_loop;
 pub use object_lock_archive::{ObjectLockArchive, ObjectLockConfig};
 pub use pg_anchor::PgCheckpointAnchor;
 pub use pg_key_vault::PgKeyVault;
 pub use pg_ledger::PgLedger;
+pub use system_clock::SystemClock;

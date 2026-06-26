@@ -47,10 +47,11 @@ async-trait = { workspace = true }
 service-runtime = { workspace = true }
 tokio           = { workspace = true }
 anyhow          = { workspace = true }
-# `tonic` only for the `Service::register` parameter type (`RoutesBuilder`); the
-# Phase 0 stubs register no domain service. The shared layer stack stays in the
-# runtime.
-tonic           = { workspace = true }
+# `tonic` carries the `AuditService` gRPC handler (Phase 5); `tonic-reflection`
+# serves the audit.v1 descriptor; `uuid` mints export ids.
+tonic            = { workspace = true }
+tonic-reflection = { workspace = true }
+uuid             = { workspace = true }
 
 # ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
 # Contract: the audit.v1 proto types (the codec maps them ⇄ the domain for the
