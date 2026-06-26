@@ -607,6 +607,13 @@ impl Account {
         std::mem::take(&mut self.pending_events)
     }
 
+    /// The pending domain events without consuming them — used by the repository to
+    /// publish after a successful durable write (the aggregate is dropped at the end
+    /// of the command, so there is no double-publish risk).
+    pub fn events(&self) -> &[DomainEvent] {
+        &self.pending_events
+    }
+
     // ─── Getters ────────────────────────────────────────────────────────────
 
     pub fn id(&self) -> AccountId { self.id }

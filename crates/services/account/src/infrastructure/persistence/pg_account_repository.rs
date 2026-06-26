@@ -32,14 +32,21 @@ use super::model::AccountRow;
 /// deployment where `identity_id` and `email` are the routing dimension, these
 /// queries would require an auxiliary index table or a secondary consistent hash.
 /// That routing strategy is intentionally deferred to the infrastructure evolution phase.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PgAccountRepository {
     tx_manager: TransactionManager,
+    publisher: std::sync::Arc<dyn crate::application::port::EventPublisher>,
 }
 
 impl PgAccountRepository {
-    pub fn new(tx_manager: TransactionManager) -> Self {
-        Self { tx_manager }
+    pub fn new(
+        tx_manager: TransactionManager,
+        publisher: std::sync::Arc<dyn crate::application::port::EventPublisher>,
+    ) -> Self {
+        Self {
+            tx_manager,
+            publisher,
+        }
     }
 }
 
@@ -99,7 +106,7 @@ impl AccountRepository for PgAccountRepository {
         let p_roles: Vec<String> = account.roles().iter().map(|r| r.as_str().to_owned()).collect();
         let p_perms: Vec<String> = account.permission_overrides().to_vec();
 
-        if account.version() == 0 {
+        let write_result = if account.version() == 0 {
             // New aggregate — INSERT.
             self.tx_manager
                 .run_on_shard(&id, |tx| {
@@ -279,7 +286,14 @@ impl AccountRepository for PgAccountRepository {
                     })
                 })
                 .await
+        };
+
+        // Persist durably first; only on success publish the aggregate's events.
+        write_result?;
+        for event in account.events() {
+            self.publisher.publish(event).await?;
         }
+        Ok(())
     }
 
     #[instrument(name = "account.repo.find_by_id", skip(self), fields(

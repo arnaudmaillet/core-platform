@@ -28,7 +28,7 @@ use crate::application::command::{
     SuspendAccountHandler, UpdateKycStatusCommand, UpdateKycStatusHandler, VerifyEmailCommand,
     VerifyEmailHandler, VerifyPhoneCommand, VerifyPhoneHandler,
 };
-use crate::application::port::AccountRepository;
+use crate::application::port::{AccountRepository, EventPublisher};
 use crate::application::query::{
     GetAccountByIdHandler, GetAccountByIdQuery, GetAccountByIdentityIdHandler,
     GetAccountByIdentityIdQuery, GetAccountStatusHandler, GetAccountStatusQuery,
@@ -49,9 +49,14 @@ pub struct App {
 impl App {
     /// Wraps `pool` in a [`TransactionManager`], builds the Postgres-backed
     /// repository, and registers every account command and query.
-    pub async fn build(pool: PgPool) -> Result<Self, Box<dyn std::error::Error>> {
-        let repository: Arc<dyn AccountRepository> =
-            Arc::new(PgAccountRepository::new(TransactionManager::new(pool)));
+    pub async fn build(
+        pool: PgPool,
+        publisher: Arc<dyn EventPublisher>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let repository: Arc<dyn AccountRepository> = Arc::new(PgAccountRepository::new(
+            TransactionManager::new(pool),
+            publisher,
+        ));
 
         let command_bus = Arc::new(
             CommandBusBuilder::new()

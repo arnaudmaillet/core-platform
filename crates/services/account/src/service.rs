@@ -14,9 +14,13 @@ use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 
 use crate::app::App;
+use crate::application::port::EventPublisher;
+use crate::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
 use crate::infrastructure::grpc::handler::account_service_handler::AccountServiceServer;
 use crate::infrastructure::grpc::handler::AccountServiceHandler;
 use crate::infrastructure::grpc::server::FILE_DESCRIPTOR_SET;
+use transport::kafka::config::{KafkaClientConfig, ProducerConfig};
+use transport::kafka::producer::KafkaProducerBuilder;
 
 type AccountServer =
     AccountServiceServer<AccountServiceHandler<Arc<InMemoryCommandBus>, Arc<InMemoryQueryBus>>>;
@@ -38,8 +42,12 @@ impl Service for AccountService {
             .await
             .map_err(|e| anyhow::anyhow!("account postgres pool: {e}"))?;
 
+        // Publish account.v1.events to Kafka when a broker is configured; otherwise
+        // a no-op log publisher keeps local/dev runs broker-free.
+        let publisher = build_publisher()?;
+
         // `PgPool` is `Arc`-backed: one clone serves the app graph, one the probe.
-        let app = App::build(pool.clone())
+        let app = App::build(pool.clone(), publisher)
             .await
             .map_err(|e| anyhow::anyhow!("account app build: {e}"))?;
 
@@ -62,5 +70,19 @@ impl Service for AccountService {
         routes.add_service(reflection);
         routes.add_service(AccountServiceServer::new(handler));
         Ok(())
+    }
+}
+
+/// Builds the account event publisher: Kafka when `KAFKA_BROKERS` is set,
+/// otherwise a no-op log publisher (broker-free local/dev).
+fn build_publisher() -> anyhow::Result<Arc<dyn EventPublisher>> {
+    if std::env::var("KAFKA_BROKERS").is_ok() {
+        let producer =
+            KafkaProducerBuilder::new(ProducerConfig::new(KafkaClientConfig::from_env()))
+                .build()
+                .map_err(|e| anyhow::anyhow!("account kafka producer: {e}"))?;
+        Ok(Arc::new(KafkaEventPublisher::new(producer)))
+    } else {
+        Ok(Arc::new(LogEventPublisher))
     }
 }

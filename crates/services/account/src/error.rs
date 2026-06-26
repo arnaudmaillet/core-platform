@@ -128,6 +128,9 @@ pub enum AccountError {
 
     #[error("unknown account role: '{0}'")]
     InvalidAccountRole(String),
+
+    #[error("failed to publish account event: {0}")]
+    EventPublishFailed(String),
 }
 
 impl AppError for AccountError {
@@ -166,6 +169,7 @@ impl AppError for AccountError {
             AccountError::InvalidAccountStatus(_)          => "ACC-9007",
             AccountError::InvalidKycStatus(_)              => "ACC-9008",
             AccountError::InvalidAccountRole(_)            => "ACC-9009",
+            AccountError::EventPublishFailed(_)            => "ACC-9010",
         }
     }
 
@@ -183,6 +187,8 @@ impl AppError for AccountError {
             | AccountError::MfaAlreadyEnrolled
             | AccountError::GdprDeletionAlreadyRequested
             | AccountError::RoleAlreadyAssigned(_) => StatusCode::CONFLICT,
+
+            AccountError::EventPublishFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
             _ => StatusCode::UNPROCESSABLE_ENTITY,
         }
