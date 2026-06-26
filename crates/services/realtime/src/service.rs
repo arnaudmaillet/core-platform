@@ -30,7 +30,9 @@ use crate::application::handshake::HandshakeHandler;
 use crate::application::lifecycle::ReapHandler;
 use crate::config::RealtimeConfig;
 use crate::domain::NodeId;
-use crate::infrastructure::decode::{NotificationWire, map_notification};
+use crate::infrastructure::decode::{
+    NotificationWire, PopularityWire, PostWire, map_counter_popularity, map_notification, map_post,
+};
 use crate::infrastructure::runtime::{
     ConnectionTable, GatewayState, run_fanout_consumer, serve_ws, spawn_node_subscriber,
 };
@@ -41,6 +43,10 @@ const HEALTH_KEY: &str = "realtime.v1.RealtimeDispatchService";
 
 const NOTIFICATION_TOPIC: &str = "notification.v1.events";
 const NOTIFICATION_GROUP: &str = "realtime-notif-fanout";
+const POPULARITY_TOPIC: &str = "counter.v1.popularity";
+const POPULARITY_GROUP: &str = "realtime-counter-fanout";
+const POST_TOPIC: &str = "post.v1.events";
+const POST_GROUP: &str = "realtime-post-fanout";
 
 /// Backoff before respawning a consumer after its runner returns.
 const CONSUMER_RESPAWN_BACKOFF: Duration = Duration::from_secs(5);
@@ -131,14 +137,28 @@ impl Service for RealtimeDispatcherService {
             Arc::clone(&adapters.node_channel),
         ));
 
-        // Supervised fan-out consumer(s). Only the notification stream is wired
-        // today; chat / counter / post follow the same shape as those producers land.
+        // Supervised fan-out consumers: notification (targeted), counter popularity
+        // and post (public broadcast). chat stays on its own live plane (coexist).
         spawn_fanout_consumer::<NotificationWire, _>(
             NOTIFICATION_TOPIC,
             NOTIFICATION_GROUP,
             "notification",
             &handler,
             map_notification,
+        );
+        spawn_fanout_consumer::<PopularityWire, _>(
+            POPULARITY_TOPIC,
+            POPULARITY_GROUP,
+            "popularity",
+            &handler,
+            map_counter_popularity,
+        );
+        spawn_fanout_consumer::<PostWire, _>(
+            POST_TOPIC,
+            POST_GROUP,
+            "post",
+            &handler,
+            map_post,
         );
 
         Ok(Self {
@@ -187,7 +207,7 @@ fn spawn_fanout_consumer<T, M>(
     map: M,
 ) where
     T: transport::kafka::envelope::ConsumablePayload + Clone,
-    M: Fn(T) -> Result<crate::application::DeliverableEvent, crate::error::RealtimeError>
+    M: Fn(T) -> Result<Option<crate::application::DeliverableEvent>, crate::error::RealtimeError>
         + Copy
         + Send
         + Sync

@@ -96,7 +96,7 @@ pub fn location(user: &UserId, device: &str, conn: &str, node: &str) -> Connecti
 
 pub fn dm_event(user: &UserId, payload: &[u8]) -> DeliverableEvent {
     DeliverableEvent {
-        recipient: user.clone(),
+        recipient: Some(user.clone()),
         device_id: None,
         channel: dm_channel(user),
         payload: payload.to_vec(),
@@ -104,6 +104,60 @@ pub fn dm_event(user: &UserId, payload: &[u8]) -> DeliverableEvent {
         emitted_at: Utc::now(),
         idempotency_key: Uuid::now_v7().to_string(),
     }
+}
+
+pub fn counter_channel(entity: &str) -> ChannelRef {
+    ChannelRef::new(ChannelClass::Counter, ChannelKey::new(entity.to_owned()).unwrap())
+}
+
+/// A public broadcast event (no recipient) on `counter:<entity>`.
+pub fn counter_event(entity: &str, payload: &[u8]) -> DeliverableEvent {
+    DeliverableEvent {
+        recipient: None,
+        device_id: None,
+        channel: counter_channel(entity),
+        payload: payload.to_vec(),
+        event_type: "counter.popularity".to_owned(),
+        emitted_at: Utc::now(),
+        idempotency_key: Uuid::now_v7().to_string(),
+    }
+}
+
+/// Register a connection subscribed to `counter:<entity>` in both the user index
+/// and the broadcast (channel) index, and return its socket receiver.
+pub async fn register_broadcast_subscriber(
+    table: &ConnectionTable,
+    user: &UserId,
+    entity: &str,
+    conn: &str,
+    node: &str,
+    queue_cap: usize,
+) -> mpsc::Receiver<Vec<u8>> {
+    let session = Session::new(
+        user.clone(),
+        DeviceId::new("phone").unwrap(),
+        Utc::now() + chrono::Duration::hours(1),
+    );
+    let mut connection = Connection::open(
+        ConnectionId::new(conn).unwrap(),
+        NodeId::new(node).unwrap(),
+        session,
+        16,
+        Utc::now(),
+    );
+    let channel = counter_channel(entity);
+    connection.subscribe(channel.clone()).unwrap();
+
+    let (tx, rx) = mpsc::channel(queue_cap);
+    let handle = ConnHandle {
+        connection_id: ConnectionId::new(conn).unwrap(),
+        device_id: DeviceId::new("phone").unwrap(),
+        connection: Arc::new(Mutex::new(connection)),
+        sender: tx,
+    };
+    table.subscribe_channel(&channel.to_string(), handle.clone());
+    table.insert(user.as_str(), handle);
+    rx
 }
 
 /// Register a connection in `table` subscribed to its `dm:<user>` channel, and

@@ -110,6 +110,11 @@ impl Connection {
         self.subscriptions.is_subscribed(channel)
     }
 
+    /// The channels this connection is currently subscribed to.
+    pub fn subscribed_channels(&self) -> Vec<ChannelRef> {
+        self.subscriptions.channels()
+    }
+
     pub fn subscription_count(&self) -> usize {
         self.subscriptions.len()
     }

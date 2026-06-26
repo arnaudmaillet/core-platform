@@ -125,6 +125,7 @@ impl ConnectionRegistry for InMemoryRegistry {
 #[derive(Default)]
 pub struct FakeNodeChannel {
     published: Mutex<Vec<(NodeId, DeliverableEvent)>>,
+    broadcasts: Mutex<Vec<DeliverableEvent>>,
     unavailable: AtomicBool,
 }
 
@@ -135,6 +136,10 @@ impl FakeNodeChannel {
 
     pub fn publish_count(&self) -> usize {
         self.published.lock().unwrap().len()
+    }
+
+    pub fn broadcast_count(&self) -> usize {
+        self.broadcasts.lock().unwrap().len()
     }
 
     pub fn published_to(&self, node: &str) -> usize {
@@ -161,6 +166,14 @@ impl NodeChannel for FakeNodeChannel {
             .lock()
             .unwrap()
             .push((node_id.clone(), event.clone()));
+        Ok(())
+    }
+
+    async fn broadcast(&self, event: &DeliverableEvent) -> Result<(), RealtimeError> {
+        if self.unavailable.load(Ordering::SeqCst) {
+            return Err(RealtimeError::NodeChannelUnavailable);
+        }
+        self.broadcasts.lock().unwrap().push(event.clone());
         Ok(())
     }
 }

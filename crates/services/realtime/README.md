@@ -10,7 +10,7 @@
 > | **Deployable** | **two** binaries — `crates/apps/realtime-gateway` (stateful edge, holds the connections) **and** `crates/apps/realtime-dispatcher` (stateless fan-out worker). Library crate: `crates/services/realtime` |
 > | **Listeners** | **two planes** (the fleet's first) — a public **WSS** client plane (default `:8443`, behind an L4 LB) on the gateway, and an internal **gRPC** health/control plane (`:50066` gateway · `:50067` dispatcher) |
 > | **Datastores** | **Redis** only — the connection/presence registry (`user → node` routing) + the node-hop Pub/Sub fabric. Owns no entity, persists no message |
-> | **Async** | consumes `chat` message events, `notification.v1.events`, `counter.v1.popularity`, `post.v1.events` (Kafka). Publishes nothing of record |
+> | **Async** | consumes `notification.v1.events` (targeted), `counter.v1.popularity` + `post.v1.events` (public broadcast) (Kafka). Publishes nothing of record. `chat` stays on its own live plane (coexist) |
 > | **Upstream callers** | end-user clients over WSS (mobile / web) — **not** internal services |
 > | **Downstream deps** | Redis, Kafka, and `auth` (edge-token verification via the `auth-context` library — a verify, not a call). Message/notification durability stays in `chat` / `notification` |
 > | **SLO** | `<TODO>` avail · event→device p99 `< <TODO ~250> ms` for online users · connection setup p99 `< <TODO> ms` |
@@ -152,10 +152,11 @@ Every fault implements `error::AppError` with a stable `RTM-XXXX` code, mapped t
 
 | Topic | Consumer group | Purpose | On poison/exhaustion |
 |---|---|---|---|
-| `<chat message events>` | `realtime-chat-fanout` | deliver DMs / messages to online recipients | DLQ `<...>.dlq` |
-| `notification.v1.events` | `realtime-notif-fanout` | deliver notification/badge updates live | DLQ `notification.v1.events.dlq` |
-| `counter.v1.popularity` | `realtime-counter-fanout` | deliver live engagement spikes to viewers of an entity | DLQ `counter.v1.popularity.dlq` |
-| `post.v1.events` | `realtime-post-fanout` | deliver live feed signals (selective) | DLQ `post.v1.events.dlq` |
+| `notification.v1.events` | `realtime-notif-fanout` | **targeted** — deliver notification/badge updates to the recipient's `notif:<user>` channel | DLQ `notification.v1.events.dlq` |
+| `counter.v1.popularity` | `realtime-counter-fanout` | **broadcast** — deliver live engagement spikes to viewers subscribed to `counter:<entity>` | DLQ `counter.v1.popularity.dlq` |
+| `post.v1.events` | `realtime-post-fanout` | **broadcast** — deliver post lifecycle to subscribers of the author's `feed:<profile_id>` | DLQ `post.v1.events.dlq` |
+
+> **Two fan-out modes.** *Targeted* events (notification — and DM/presence) name a recipient user; the dispatcher resolves them via the registry and hops to the owning node(s). *Broadcast* events (counter / feed) name an entity, not a user; the dispatcher publishes them once to the fleet broadcast channel, and every node delivers to its local connections subscribed to that channel. `chat.message.sent` is **not** consumed — it carries no member list and chat already runs its own live plane (the coexist-first decision); wiring it is a deliberate consolidation, not a decode.
 
 > **Runtime contract (mandatory):** all dispatcher consumers run under `run_consumer` — manual commit after a terminal outcome, bounded retry with backoff + jitter, DLQ on exhaustion/poison, rebuild-from-last-committed-offset on broker error. **Idempotency:** fan-out is naturally idempotent — a redelivered event re-resolves the registry and re-delivers; duplicate live frames are harmless (the client dedupes on `stream_seq`). An unroutable/unknown event (`RTM-8002` / `RTM-8003`) is folded into `Ok` so the offset still commits.
 
@@ -186,7 +187,7 @@ realtime = { path = "crates/services/realtime" }
 
 Library-only. Will implement [`service_runtime::Service`](../../platform/service-runtime/README.md) **twice** (Phase 5): `realtime::service::RealtimeGatewayService` (the `realtime-gateway` binary — the WSS accept loop, registry writes, node-hop subscription, drain hook, internal gRPC health) and `realtime::service::RealtimeDispatcherService` (the `realtime-dispatcher` binary — the supervised `run_consumer` fan-out loops, no domain RPC). Telemetry, config + hot-reload, health, and graceful shutdown are owned by the runtime.
 
-> **Build status:** **complete through Phase 7** (all 8 phases: scaffold → contract → domain → application+ports → adapters → gateway+dispatcher wiring → live IT → hardening). 52 unit tests plus a live `integration-realtime` suite (real Redis) cover the domain, the proto codec, the bounded-shed mailbox, the node-local routing table (incl. shed-under-pressure and graceful `broadcast_drain`), and the end-to-end bridge (fan-out → registry resolve → node hop → socket frame). Security-reviewed: no token or PII in logs, the opaque payload is never logged, and there is no panic in the accept or delivery hot path.
+> **Build status:** **complete through Phase 7 + the public-broadcast fan-out path.** 58 unit tests plus a live `integration-realtime` suite (real Redis) cover the domain, the proto codec, the bounded-shed mailbox, the node-local routing table (targeted + broadcast delivery, shed-under-pressure, graceful `broadcast_drain`), the upstream decode mappings (notification / counter / post), and the end-to-end bridges (targeted: fan-out → registry → node hop → socket; broadcast: fan-out → fleet channel → channel index → socket). Security-reviewed: no token or PII in logs, the opaque payload is never logged, and there is no panic in the accept or delivery hot path.
 >
 > **Deferred (explicit, not gaps):** the live WebSocket-accept-loop + auth/JWKS integration test (needs a live IdP and a browser-grade WS client — the routing fabric *is* covered live); the live Kafka dispatcher IT (the `run_consumer` runner is covered by `transport`'s own suite); the WebTransport / HTTP-3 transport lane; presence as a product-facing stream; cross-region / multi-PoP routing; the internal-gRPC `NodeChannel` backpressure variant; the `SIGTERM` → `broadcast_drain` runtime wiring; and the `chat` + `notification` client-streaming consolidation (coexist-first).
 >

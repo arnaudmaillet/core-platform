@@ -20,9 +20,18 @@ use crate::error::RealtimeError;
 /// silently dropped there — a fail-open miss the client recovers from on reconnect.
 #[async_trait]
 pub trait NodeChannel: Send + Sync + 'static {
+    /// Targeted hop: publish to the channel of the one node that owns the
+    /// recipient's socket(s).
     async fn publish(
         &self,
         node_id: &NodeId,
         event: &DeliverableEvent,
     ) -> Result<(), RealtimeError>;
+
+    /// Public broadcast: publish to the fleet broadcast channel, from which
+    /// *every* gateway node delivers the event to its local connections subscribed
+    /// to the event's channel. Used for entity channels (counter / feed) that have
+    /// no single recipient. Same fail-open posture as [`publish`](Self::publish)
+    /// (`RTM-4002` on a transport fault).
+    async fn broadcast(&self, event: &DeliverableEvent) -> Result<(), RealtimeError>;
 }

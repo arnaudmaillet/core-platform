@@ -27,7 +27,7 @@ pub async fn run_fanout_consumer<T, M>(
     map: M,
 ) where
     T: ConsumablePayload + Clone,
-    M: Fn(T) -> Result<DeliverableEvent, RealtimeError> + Copy + Send + Sync + 'static,
+    M: Fn(T) -> Result<Option<DeliverableEvent>, RealtimeError> + Copy + Send + Sync + 'static,
 {
     tracing::info!(label, "realtime dispatcher consumer started");
     let policy = RetryPolicy::default();
@@ -36,8 +36,11 @@ pub async fn run_fanout_consumer<T, M>(
         let event = event.clone();
         Box::pin(async move {
             let outcome = async {
-                let deliverable = map(event)?;
-                handler.fan_out(&deliverable).await?;
+                // `None` ⇒ an unroutable/unmapped event: a harmless skip that still
+                // commits the offset (never a DLQ).
+                if let Some(deliverable) = map(event)? {
+                    handler.fan_out(&deliverable).await?;
+                }
                 Ok::<(), RealtimeError>(())
             }
             .await;

@@ -31,6 +31,7 @@ use crate::application::lifecycle::ReapHandler;
 use crate::domain::{Connection, ConnectionId};
 use crate::error::RealtimeError;
 use crate::infrastructure::codec::{self, ClientIntent};
+use crate::infrastructure::redis_node_channel::BROADCAST_CHANNEL;
 use crate::infrastructure::runtime::connection_table::{ConnHandle, ConnectionTable};
 
 /// Shared state every WebSocket connection is served against.
@@ -92,15 +93,13 @@ async fn handle_socket(socket: WebSocket, state: GatewayState, token: String) {
     let connection = Arc::new(Mutex::new(connection));
 
     let (tx, mut rx) = mpsc::channel::<Vec<u8>>(state.send_queue_cap);
-    state.table.insert(
-        user_id.as_str(),
-        ConnHandle {
-            connection_id: connection_id.clone(),
-            device_id,
-            connection: Arc::clone(&connection),
-            sender: tx.clone(),
-        },
-    );
+    let handle = ConnHandle {
+        connection_id: connection_id.clone(),
+        device_id,
+        connection: Arc::clone(&connection),
+        sender: tx.clone(),
+    };
+    state.table.insert(user_id.as_str(), handle.clone());
 
     let (mut ws_tx, mut ws_rx) = socket.split();
 
@@ -125,7 +124,9 @@ async fn handle_socket(socket: WebSocket, state: GatewayState, token: String) {
             inbound = ws_rx.next() => match inbound {
                 Some(Ok(Message::Binary(data))) => {
                     connection.lock().await.heartbeat(Utc::now());
-                    if let Err(error) = handle_client_frame(&data, &connection, &tx).await {
+                    if let Err(error) =
+                        handle_client_frame(&data, &connection, &tx, &state, &handle).await
+                    {
                         tracing::debug!(%error, "client frame rejected");
                     }
                 }
@@ -156,7 +157,13 @@ async fn handle_socket(socket: WebSocket, state: GatewayState, token: String) {
         }
     }
 
-    // Teardown: free the routing slots (idempotent) and stop the writer.
+    // Teardown: drop the connection from the broadcast index for every channel it
+    // held, free the routing slots (idempotent), and stop the writer.
+    for channel in connection.lock().await.subscribed_channels() {
+        state
+            .table
+            .unsubscribe_channel(&channel.to_string(), &connection_id);
+    }
     state.table.remove(user_id.as_str(), &connection_id);
     if let Err(error) = state.reap.evict(&user_id, &connection_id).await {
         tracing::warn!(%error, "registry evict failed on teardown");
@@ -164,11 +171,14 @@ async fn handle_socket(socket: WebSocket, state: GatewayState, token: String) {
     writer.abort();
 }
 
-/// Decode one client frame and apply its intent to the connection.
+/// Decode one client frame and apply its intent to the connection, keeping the
+/// table's broadcast index in sync with the connection's subscriptions.
 async fn handle_client_frame(
     data: &[u8],
     connection: &Arc<Mutex<Connection>>,
     tx: &mpsc::Sender<Vec<u8>>,
+    state: &GatewayState,
+    handle: &ConnHandle,
 ) -> Result<(), RealtimeError> {
     let frame = pb::ClientFrame::decode(data).map_err(|e| RealtimeError::MalformedFrame {
         reason: e.to_string(),
@@ -179,7 +189,12 @@ async fn handle_client_frame(
             let mut conn = connection.lock().await;
             for channel in channels {
                 match conn.subscribe(channel.clone()) {
-                    Ok(_) => send_control(tx, pb::ServerControl::Subscribed, Some(&channel), "", ""),
+                    Ok(_) => {
+                        state
+                            .table
+                            .subscribe_channel(&channel.to_string(), handle.clone());
+                        send_control(tx, pb::ServerControl::Subscribed, Some(&channel), "", "");
+                    }
                     Err(error) => send_control(
                         tx,
                         pb::ServerControl::Error,
@@ -194,6 +209,9 @@ async fn handle_client_frame(
             let mut conn = connection.lock().await;
             for channel in channels {
                 if conn.unsubscribe(&channel).is_ok() {
+                    state
+                        .table
+                        .unsubscribe_channel(&channel.to_string(), &handle.connection_id);
                     send_control(tx, pb::ServerControl::Unsubscribed, Some(&channel), "", "");
                 }
             }
@@ -210,7 +228,11 @@ async fn handle_client_frame(
         ClientIntent::Resume(cursors) => {
             let mut conn = connection.lock().await;
             for (channel, _seq) in cursors {
-                let _ = conn.subscribe(channel);
+                if conn.subscribe(channel.clone()).is_ok() {
+                    state
+                        .table
+                        .subscribe_channel(&channel.to_string(), handle.clone());
+                }
             }
         }
     }
@@ -236,12 +258,17 @@ pub fn spawn_node_subscriber(
     table: Arc<ConnectionTable>,
 ) {
     tokio::spawn(async move {
-        let channel = format!("rt:node:{{{node_id}}}");
-        if let Err(error) = subscriber.inner.ssubscribe(channel.clone()).await {
-            tracing::error!(%error, channel, "failed to subscribe node channel");
+        // The node's own targeted hop channel, plus the fleet broadcast channel.
+        let node = format!("rt:node:{{{node_id}}}");
+        if let Err(error) = subscriber.inner.ssubscribe(node.clone()).await {
+            tracing::error!(%error, channel = node, "failed to subscribe node channel");
             return;
         }
-        tracing::info!(channel, "node subscriber listening");
+        if let Err(error) = subscriber.inner.ssubscribe(BROADCAST_CHANNEL).await {
+            tracing::error!(%error, "failed to subscribe broadcast channel");
+            return;
+        }
+        tracing::info!(channel = node, "node subscriber listening (targeted + broadcast)");
 
         let mut rx = subscriber.inner.message_rx();
         loop {
@@ -256,7 +283,13 @@ pub fn spawn_node_subscriber(
                     let Ok(event) = codec::envelope_from_pb(&envelope) else {
                         continue;
                     };
-                    table.deliver(&event).await;
+                    // A broadcast (no recipient) goes to local channel subscribers;
+                    // a targeted event goes to the recipient's connections.
+                    if event.is_broadcast() {
+                        table.deliver_broadcast(&event).await;
+                    } else {
+                        table.deliver(&event).await;
+                    }
                 }
                 Err(RecvError::Lagged(skipped)) => {
                     tracing::warn!(skipped, "node subscriber lagged")

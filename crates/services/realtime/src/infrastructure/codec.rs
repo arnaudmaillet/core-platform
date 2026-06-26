@@ -195,7 +195,11 @@ fn require<'a, T>(field: &'a Option<T>, name: &str) -> Result<&'a T, RealtimeErr
 
 pub fn envelope_to_pb(event: &DeliverableEvent) -> pb::DeliverEnvelope {
     pb::DeliverEnvelope {
-        recipient_user_id: event.recipient.as_str().to_owned(),
+        recipient_user_id: event
+            .recipient
+            .as_ref()
+            .map(|u| u.as_str().to_owned())
+            .unwrap_or_default(),
         recipient_device_id: event
             .device_id
             .as_ref()
@@ -207,6 +211,7 @@ pub fn envelope_to_pb(event: &DeliverableEvent) -> pb::DeliverEnvelope {
         event_type: event.event_type.clone(),
         emitted_at: Some(ts_to_pb(event.emitted_at)),
         idempotency_key: event.idempotency_key.clone(),
+        broadcast: event.is_broadcast(),
     }
 }
 
@@ -217,8 +222,14 @@ pub fn envelope_from_pb(env: &pb::DeliverEnvelope) -> Result<DeliverableEvent, R
     } else {
         Some(DeviceId::new(env.recipient_device_id.clone())?)
     };
+    // A broadcast (or an empty recipient) has no targeted user.
+    let recipient = if env.broadcast || env.recipient_user_id.is_empty() {
+        None
+    } else {
+        Some(UserId::new(env.recipient_user_id.clone())?)
+    };
     Ok(DeliverableEvent {
-        recipient: UserId::new(env.recipient_user_id.clone())?,
+        recipient,
         device_id,
         channel,
         payload: env.payload.clone(),
@@ -238,13 +249,25 @@ mod tests {
 
     fn sample_event() -> DeliverableEvent {
         DeliverableEvent {
-            recipient: UserId::new("alice").unwrap(),
+            recipient: Some(UserId::new("alice").unwrap()),
             device_id: Some(DeviceId::new("phone").unwrap()),
             channel: ChannelRef::new(ChannelClass::Dm, ChannelKey::new("alice").unwrap()),
             payload: b"ciphertext".to_vec(),
             event_type: "chat.message".to_owned(),
             emitted_at: DateTime::from_timestamp(1_750_000_000, 0).unwrap(),
             idempotency_key: "evt-1".to_owned(),
+        }
+    }
+
+    fn broadcast_event() -> DeliverableEvent {
+        DeliverableEvent {
+            recipient: None,
+            device_id: None,
+            channel: ChannelRef::new(ChannelClass::Counter, ChannelKey::new("post-42").unwrap()),
+            payload: b"{\"score\":9.0}".to_vec(),
+            event_type: "counter.popularity".to_owned(),
+            emitted_at: DateTime::from_timestamp(1_750_000_000, 0).unwrap(),
+            idempotency_key: "pop-1".to_owned(),
         }
     }
 
@@ -269,7 +292,19 @@ mod tests {
         let event = sample_event();
         let pb = envelope_to_pb(&event);
         assert!(pb.ack_required); // DM ⇒ at-least-once
+        assert!(!pb.broadcast); // targeted
         let back = envelope_from_pb(&pb).unwrap();
+        assert_eq!(back, event);
+    }
+
+    #[test]
+    fn broadcast_envelope_round_trips_with_no_recipient() {
+        let event = broadcast_event();
+        let pb = envelope_to_pb(&event);
+        assert!(pb.broadcast);
+        assert!(pb.recipient_user_id.is_empty());
+        let back = envelope_from_pb(&pb).unwrap();
+        assert!(back.is_broadcast());
         assert_eq!(back, event);
     }
 

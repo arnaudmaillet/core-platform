@@ -12,11 +12,17 @@ use crate::domain::{ChannelRef, DeviceId, UserId};
 /// — it is bytes produced upstream by `chat` / `notification` / `counter`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeliverableEvent {
-    /// The user the event is addressed to. The registry resolves this to the
-    /// node(s) holding the user's live sockets.
-    pub recipient: UserId,
-    /// Restrict delivery to one device; `None` ⇒ all of the recipient's
-    /// connections (the common case).
+    /// The delivery mode, by addressing:
+    /// * `Some(user)` — **targeted**: an identity-scoped event (dm / notif /
+    ///   presence). The registry resolves the user to the node(s) holding its
+    ///   sockets, and the dispatcher hops to those nodes.
+    /// * `None` — **public broadcast**: an entity-channel event (counter / feed)
+    ///   with no single recipient. The dispatcher publishes it to the fleet
+    ///   broadcast channel, and every node delivers it to its local connections
+    ///   subscribed to [`channel`](Self::channel).
+    pub recipient: Option<UserId>,
+    /// Restrict a *targeted* delivery to one device; `None` ⇒ all of the
+    /// recipient's connections. Ignored for a broadcast.
     pub device_id: Option<DeviceId>,
     pub channel: ChannelRef,
     /// Opaque upstream payload, forwarded verbatim — never interpreted or stored.
@@ -30,4 +36,11 @@ pub struct DeliverableEvent {
     /// dispatcher runs at-least-once under `run_consumer`) does not double-emit on
     /// a client that already saw it.
     pub idempotency_key: String,
+}
+
+impl DeliverableEvent {
+    /// Whether this is a public broadcast (no single recipient).
+    pub fn is_broadcast(&self) -> bool {
+        self.recipient.is_none()
+    }
 }

@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 474e6e05598cc47a03f4e7b3b44be1e8ca316eda439bf7bef1bf2669c5c9095e
+  source_sha256: e0839b81e1ebf56422362a0c1c7ad638c773c5030d3e6cd4b46e8cd4328fdf14
   translated_at: 2026-06-26
   status: complete
 ---
@@ -21,7 +21,7 @@ i18n:
 > | **Déployable** | **deux** binaires — `crates/apps/realtime-gateway` (bord avec état, détient les connexions) **et** `crates/apps/realtime-dispatcher` (worker de diffusion sans état). Crate bibliothèque : `crates/services/realtime` |
 > | **Écouteurs** | **deux plans** (le premier de la flotte) — un plan client public **WSS** (défaut `:8443`, derrière un LB L4) sur la gateway, et un plan interne **gRPC** de santé/contrôle (`:50066` gateway · `:50067` dispatcher) |
 > | **Datastores** | **Redis** uniquement — le registre de connexion/présence (routage `user → node`) + le tissu de saut inter-nœud Pub/Sub. Ne détient aucune entité, ne persiste aucun message |
-> | **Async** | consomme les événements de message `chat`, `notification.v1.events`, `counter.v1.popularity`, `post.v1.events` (Kafka). Ne publie rien de référence |
+> | **Async** | consomme `notification.v1.events` (ciblé), `counter.v1.popularity` + `post.v1.events` (broadcast public) (Kafka). Ne publie rien de référence. `chat` reste sur son propre plan live (coexistence) |
 > | **Appelants amont** | clients utilisateurs finaux via WSS (mobile / web) — **pas** les services internes |
 > | **Dépendances aval** | Redis, Kafka, et `auth` (vérification du jeton de bord via la bibliothèque `auth-context` — une vérification, pas un appel). La durabilité des messages/notifications reste dans `chat` / `notification` |
 > | **SLO** | `<TODO>` dispo · événement→appareil p99 `< <TODO ~250> ms` pour les utilisateurs en ligne · établissement de connexion p99 `< <TODO> ms` |
@@ -163,10 +163,11 @@ Chaque défaillance implémente `error::AppError` avec un code `RTM-XXXX` stable
 
 | Topic | Groupe de consommateurs | Rôle | En cas de poison/épuisement |
 |---|---|---|---|
-| `<chat message events>` | `realtime-chat-fanout` | livrer les DM / messages aux destinataires en ligne | DLQ `<...>.dlq` |
-| `notification.v1.events` | `realtime-notif-fanout` | livrer les mises à jour notification/badge en live | DLQ `notification.v1.events.dlq` |
-| `counter.v1.popularity` | `realtime-counter-fanout` | livrer les pics d'engagement live aux spectateurs d'une entité | DLQ `counter.v1.popularity.dlq` |
-| `post.v1.events` | `realtime-post-fanout` | livrer les signaux de fil live (sélectif) | DLQ `post.v1.events.dlq` |
+| `notification.v1.events` | `realtime-notif-fanout` | **ciblé** — livrer notification/badge au canal `notif:<user>` du destinataire | DLQ `notification.v1.events.dlq` |
+| `counter.v1.popularity` | `realtime-counter-fanout` | **broadcast** — livrer les pics d'engagement aux spectateurs abonnés à `counter:<entity>` | DLQ `counter.v1.popularity.dlq` |
+| `post.v1.events` | `realtime-post-fanout` | **broadcast** — livrer le cycle de vie du post aux abonnés du `feed:<profile_id>` de l'auteur | DLQ `post.v1.events.dlq` |
+
+> **Deux modes de diffusion.** Les événements *ciblés* (notification — et DM/présence) nomment un utilisateur destinataire ; le dispatcher les résout via le registre et saute vers le(s) nœud(s) propriétaire(s). Les événements *broadcast* (counter / feed) nomment une entité, pas un utilisateur ; le dispatcher les publie une fois sur le canal broadcast de la flotte, et chaque nœud livre à ses connexions locales abonnées à ce canal. `chat.message.sent` n'est **pas** consommé — il ne porte aucune liste de membres et chat exécute déjà son propre plan live (la décision coexistence-d'abord) ; le câbler est une consolidation délibérée, pas un décodage.
 
 > **Contrat d'exécution (obligatoire) :** tous les consommateurs du dispatcher tournent sous `run_consumer` — commit manuel après un résultat terminal, retry borné avec backoff + jitter, DLQ à l'épuisement/poison, reconstruction depuis le dernier offset commité sur erreur broker. **Idempotence :** la diffusion est naturellement idempotente — un événement redélivré ré-résout le registre et re-livre ; les trames live dupliquées sont inoffensives (le client déduplique sur `stream_seq`). Un événement non-routable/inconnu (`RTM-8002` / `RTM-8003`) est replié en `Ok` pour que l'offset commite quand même.
 
@@ -197,7 +198,7 @@ realtime = { path = "crates/services/realtime" }
 
 Bibliothèque uniquement. Implémentera [`service_runtime::Service`](../../platform/service-runtime/README.md) **deux fois** (Phase 5) : `realtime::service::RealtimeGatewayService` (le binaire `realtime-gateway` — la boucle d'acceptation WSS, les écritures de registre, l'abonnement au saut inter-nœud, le hook de drain, la santé gRPC interne) et `realtime::service::RealtimeDispatcherService` (le binaire `realtime-dispatcher` — les boucles de diffusion `run_consumer` supervisées, aucun RPC de domaine). Télémétrie, config + hot-reload, santé et arrêt gracieux sont détenus par le runtime.
 
-> **État de build :** **complet jusqu'à la Phase 7** (les 8 phases : scaffold → contrat → domaine → application+ports → adaptateurs → câblage gateway+dispatcher → IT live → durcissement). 52 tests unitaires plus une suite live `integration-realtime` (Redis réel) couvrent le domaine, le codec proto, la mailbox bornée-à-délestage, la table de routage locale au nœud (avec délestage-sous-pression et `broadcast_drain` gracieux) et le pont de bout en bout (fan-out → résolution registre → saut inter-nœud → trame socket). Revu côté sécurité : aucun jeton ni PII dans les logs, le payload opaque n'est jamais journalisé, et aucun panic dans le chemin chaud d'acceptation ou de livraison.
+> **État de build :** **complet jusqu'à la Phase 7 + le chemin de diffusion publique (broadcast).** 58 tests unitaires plus une suite live `integration-realtime` (Redis réel) couvrent le domaine, le codec proto, la mailbox bornée-à-délestage, la table de routage locale au nœud (livraison ciblée + broadcast, délestage-sous-pression, `broadcast_drain` gracieux), les mappings de décodage amont (notification / counter / post) et les ponts de bout en bout (ciblé : fan-out → registre → saut inter-nœud → socket ; broadcast : fan-out → canal flotte → index de canal → socket). Revu côté sécurité : aucun jeton ni PII dans les logs, le payload opaque n'est jamais journalisé, et aucun panic dans le chemin chaud d'acceptation ou de livraison.
 >
 > **Différé (explicite, pas des lacunes) :** le test d'intégration de la boucle d'acceptation WebSocket + auth/JWKS (nécessite un IdP live et un client WS de qualité navigateur — le tissu de routage *est* couvert en live) ; l'IT live du dispatcher Kafka (le runner `run_consumer` est couvert par la suite de `transport`) ; la voie de transport WebTransport / HTTP-3 ; la présence comme flux orienté produit ; le routage cross-région / multi-PoP ; la variante de contre-pression `NodeChannel` en gRPC interne ; le câblage `SIGTERM` → `broadcast_drain` ; et la consolidation du streaming client `chat` + `notification` (coexistence d'abord).
 >
