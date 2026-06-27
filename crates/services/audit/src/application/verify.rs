@@ -62,8 +62,21 @@ impl VerifyHandler {
     /// anchored yet, reports `Verified` (there is nothing to disagree with).
     pub async fn verify_global(&self) -> Result<IntegrityReport, AuditError> {
         let heads = self.ledger.partition_heads().await?;
-        let Some(checkpoint) = self.anchor.latest_anchored().await? else {
-            return Ok(IntegrityReport::verified(0));
+        let checkpoint = match self.anchor.latest_anchored().await {
+            Ok(Some(cp)) => cp,
+            Ok(None) => return Ok(IntegrityReport::verified(0)),
+            // The witness adapter validates the checkpoint signature before
+            // returning it; a forged/unverifiable witness entry is operator-level
+            // tampering, reported as divergence — not an availability fault.
+            Err(AuditError::CheckpointVerificationFailed) => {
+                return Ok(IntegrityReport {
+                    status: IntegrityStatus::CheckpointDivergence,
+                    verified_through: 0,
+                    divergence_at: None,
+                    checkpoint_root: None,
+                });
+            }
+            Err(other) => return Err(other),
         };
 
         match checkpoint.verify_against(&heads) {
@@ -182,6 +195,25 @@ mod tests {
         // ...but the global checkpoint catches the regressed head.
         let global = fx.verify().verify_global().await.unwrap();
         assert_eq!(global.status, IntegrityStatus::CheckpointDivergence);
+    }
+
+    /// Issue #483: when the witness adapter reports a signature failure (a forged
+    /// or unverifiable anchored entry), `verify_global` surfaces it as
+    /// `CheckpointDivergence` — a readable answer, not an RPC error.
+    #[tokio::test]
+    async fn global_check_reports_divergence_when_the_witness_signature_fails() {
+        let fx = Fixture::new();
+        seed_two(&fx).await;
+        let heads = fx.ledger.partition_heads().await.unwrap();
+        fx.anchor
+            .anchor(&MerkleCheckpoint::over(&heads, fx.now()))
+            .await
+            .unwrap();
+        // The operator rewrote the witness copy; its signature no longer validates.
+        fx.anchor.set_forged_witness(true);
+
+        let report = fx.verify().verify_global().await.unwrap();
+        assert_eq!(report.status, IntegrityStatus::CheckpointDivergence);
     }
 
     #[tokio::test]

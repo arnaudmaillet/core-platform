@@ -1,7 +1,7 @@
 //! Pure AES-256-GCM envelope-encryption primitives — the crypto behind
 //! rationale-sealing, with no I/O so it is fully unit-testable. The key custody
 //! (the per-subject DEK store + the KEK) lives in the adapter
-//! ([`super::aes_gcm_cipher`]); this module only does the math.
+//! ([`super::subject_cipher`]); this module only does the math.
 //!
 //! Scheme: a random 256-bit **data-encryption key (DEK)** encrypts the plaintext;
 //! the DEK is itself encrypted ("wrapped") under a service **key-encryption key

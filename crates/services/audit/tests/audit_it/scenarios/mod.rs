@@ -3,9 +3,11 @@
 //! containers.
 
 mod account;
+mod adversarial_witness;
 mod anchor;
 mod auth;
 mod chain;
 mod idempotency;
+mod kms_cipher;
 mod moderation;
 mod shred;
