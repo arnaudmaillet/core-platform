@@ -312,11 +312,19 @@ impl KeyVault for InMemoryKeyVault {
 pub struct InMemoryAnchor {
     latest: Mutex<Option<MerkleCheckpoint>>,
     unavailable: AtomicBool,
+    /// When set, `latest_anchored` returns `CheckpointVerificationFailed` — the
+    /// production witness adapter's signal that the anchored entry's signature did
+    /// not validate (an operator forged the witness copy).
+    forged_witness: AtomicBool,
 }
 
 impl InMemoryAnchor {
     pub fn set_unavailable(&self, down: bool) {
         self.unavailable.store(down, Ordering::SeqCst);
+    }
+
+    pub fn set_forged_witness(&self, forged: bool) {
+        self.forged_witness.store(forged, Ordering::SeqCst);
     }
 }
 
@@ -333,6 +341,9 @@ impl CheckpointAnchor for InMemoryAnchor {
     async fn latest_anchored(&self) -> Result<Option<MerkleCheckpoint>, AuditError> {
         if self.unavailable.load(Ordering::SeqCst) {
             return Err(AuditError::AnchorWitnessUnavailable);
+        }
+        if self.forged_witness.load(Ordering::SeqCst) {
+            return Err(AuditError::CheckpointVerificationFailed);
         }
         Ok(self.latest.lock().unwrap().clone())
     }

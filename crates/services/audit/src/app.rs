@@ -24,7 +24,9 @@ use crate::application::{
 use crate::config::AuditConfig;
 use crate::infrastructure::grpc::AuditServiceHandler;
 use crate::infrastructure::{
-    AesGcmSubjectCipher, ObjectLockArchive, PgCheckpointAnchor, PgKeyVault, PgLedger, SystemClock,
+    AesGcmSubjectCipher, AwsKms, KmsSigner, KmsSubjectCipher, LocalCheckpointSigner,
+    ObjectLockArchive, ObjectLockWitness, PgCheckpointAnchor, PgKeyVault, PgLedger, SystemClock,
+    Witness, WitnessCheckpointAnchor,
 };
 
 /// The shared adapter set both binaries build from. Retains the concrete [`PgPool`]
@@ -51,17 +53,71 @@ impl Adapters {
             Arc::new(PgLedger::new(TransactionManager::new(pool.clone())));
         let key_vault: Arc<dyn KeyVault> =
             Arc::new(PgKeyVault::new(TransactionManager::new(pool.clone())));
-        let anchor: Arc<dyn CheckpointAnchor> =
-            Arc::new(PgCheckpointAnchor::new(TransactionManager::new(pool.clone())));
         let archive: Arc<dyn WormArchive> = Arc::new(
             ObjectLockArchive::new(config.object_lock.clone())
                 .map_err(|e| anyhow::anyhow!("build WORM archive: {e}"))?,
         );
         let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-        let cipher: Arc<dyn SubjectCipher> = Arc::new(AesGcmSubjectCipher::new(
-            TransactionManager::new(pool.clone()),
-            config.kek,
-        ));
+
+        // The KMS client (issue #482/#483), built once when configured and shared as
+        // both the DEK cipher and the checkpoint signer (a single Arc<AwsKms>
+        // coerced to each port). Absent KMS → local fallbacks below.
+        let kms = match &config.kms {
+            Some(kms_cfg) => Some(
+                Arc::new(AwsKms::new(kms_cfg).map_err(|e| anyhow::anyhow!("build KMS client: {e}"))?),
+            ),
+            None => None,
+        };
+
+        // #482 — PII sealer: KMS-wrapped DEKs in production, env-KEK AES-GCM locally.
+        let cipher: Arc<dyn SubjectCipher> = match (&kms, &config.kms) {
+            (Some(kms), Some(kms_cfg)) => {
+                tracing::info!("audit subject-cipher: KMS KEK custody (issue #482)");
+                Arc::new(KmsSubjectCipher::new(
+                    TransactionManager::new(pool.clone()),
+                    Arc::clone(kms) as Arc<dyn crate::infrastructure::KmsCipher>,
+                    kms_cfg.dek_key_id.clone(),
+                ))
+            }
+            _ => Arc::new(AesGcmSubjectCipher::new(
+                TransactionManager::new(pool.clone()),
+                config.kek,
+            )),
+        };
+
+        // #483 — checkpoint anchor: KMS-signed root anchored to an independent WORM
+        // witness in production; the Postgres-only anchor for local/dev.
+        let anchor: Arc<dyn CheckpointAnchor> = match &config.witness {
+            Some(witness_cfg) => {
+                let witness = ObjectLockWitness::new(witness_cfg.clone())
+                    .map_err(|e| anyhow::anyhow!("build checkpoint witness: {e}"))?;
+                witness
+                    .ensure_bucket()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("ensure witness bucket: {e}"))?;
+                let (signer, key_id, algorithm): (Arc<dyn KmsSigner>, String, String) = match (&kms, &config.kms) {
+                    (Some(kms), Some(kms_cfg)) => (
+                        Arc::clone(kms) as Arc<dyn KmsSigner>,
+                        kms_cfg.signing_key_id.clone(),
+                        kms_cfg.signing_algorithm.clone(),
+                    ),
+                    _ => (
+                        Arc::new(LocalCheckpointSigner::new(config.checkpoint_signing_key)),
+                        "local-hmac".to_owned(),
+                        "HMAC_SHA_256".to_owned(),
+                    ),
+                };
+                tracing::info!("audit checkpoint anchor: signed + external WORM witness (issue #483)");
+                Arc::new(WitnessCheckpointAnchor::new(
+                    signer,
+                    key_id,
+                    algorithm,
+                    Arc::new(witness) as Arc<dyn Witness>,
+                    Some(PgCheckpointAnchor::new(TransactionManager::new(pool.clone()))),
+                ))
+            }
+            None => Arc::new(PgCheckpointAnchor::new(TransactionManager::new(pool.clone()))),
+        };
 
         Ok(Adapters {
             ledger,
