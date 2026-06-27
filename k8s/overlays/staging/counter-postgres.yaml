@@ -1,0 +1,22 @@
+# Counter warm-ledger PostgreSQL via CloudNativePG. namePrefix ->
+# staging-counter-postgres; CNPG exposes staging-counter-postgres-rw:5432 and a
+# staging-counter-postgres-app Secret (key `uri` = full connection string) wired
+# into counter-server + counter-worker (see patch-counter-db.yaml).
+#
+# This is only counter's Postgres warm tier — its hot tier is ElastiCache and its
+# cold time-series is the shared ScyllaCluster (counter-timeseries keyspace,
+# created by the migrator), neither of which is provisioned here.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: counter-postgres
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: counter
+      owner: app
+  storage:
+    size: 10Gi
+    storageClass: gp3

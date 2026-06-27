@@ -1,0 +1,17 @@
+# k8s/base/services/auth/server/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-server
+  labels:
+    app: auth-server
+spec:
+  selector:
+    app: auth-server
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 50060
+      targetPort: grpc
+      appProtocol: grpc
+  type: ClusterIP

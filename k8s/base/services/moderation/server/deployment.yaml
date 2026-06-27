@@ -1,0 +1,80 @@
+# k8s/base/services/moderation/server/deployment.yaml
+#
+# moderation-server — TIER-0 trust/safety decision + enforcement plane on the
+# shared fleet runtime. RPC-bound (hot-read enforcement + fail-closed Screen
+# gate), no Kafka consumer: scales on CPU (see hpa.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moderation-server
+  labels:
+    app: moderation-server
+    role: server
+    tier: tier-0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: moderation-server
+  template:
+    metadata:
+      labels:
+        app: moderation-server
+        role: server
+    spec:
+      # Dual-store, like counter: Postgres decision/enforcement SoR + Scylla
+      # append-only history. One idempotent migrator init container per backend
+      # (the migrator reads DATABASE_URL / Scylla config from moderation-config).
+      initContainers:
+        - name: migrate-moderation
+          image: core-platform-migrator
+          args: ["moderation"]
+          envFrom:
+            - configMapRef:
+                name: moderation-config
+        - name: migrate-moderation-history
+          image: core-platform-migrator
+          args: ["moderation-history"]
+          envFrom:
+            - configMapRef:
+                name: moderation-config
+      containers:
+        - name: server
+          image: core-platform-moderation-server
+          envFrom:
+            - configMapRef:
+                name: moderation-config
+          env:
+            - name: INFRA_CONFIG_PATH
+              value: /etc/infra/infrastructure.toml
+            - name: MODERATION_GRPC_ADDR
+              value: "0.0.0.0:50061"
+          ports:
+            - name: grpc
+              containerPort: 50061
+          volumeMounts:
+            - name: infra-config
+              mountPath: /etc/infra
+              readOnly: true
+          readinessProbe:
+            grpc:
+              port: 50061
+              service: moderation.v1.ModerationService
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50061
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+      volumes:
+        - name: infra-config
+          configMap:
+            name: infra-config

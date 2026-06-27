@@ -1,0 +1,22 @@
+# Moderation decision/enforcement PostgreSQL via CloudNativePG. namePrefix ->
+# staging-moderation-postgres; CNPG exposes staging-moderation-postgres-rw:5432
+# and a staging-moderation-postgres-app Secret (key `uri` = full connection
+# string) wired into moderation-server (see patch-moderation-db.yaml).
+#
+# Postgres is moderation's decision/enforcement SoR only; its append-only history
+# feed lives on the shared ScyllaCluster (moderation-history keyspace, created by
+# the migrator), not provisioned here.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: moderation-postgres
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: moderation
+      owner: app
+  storage:
+    size: 10Gi
+    storageClass: gp3

@@ -1,0 +1,21 @@
+# Auth PostgreSQL via CloudNativePG. namePrefix -> staging-auth-postgres; CNPG
+# exposes staging-auth-postgres-rw:5432 and a staging-auth-postgres-app Secret
+# (key `uri` = full connection string) wired into auth-server (see
+# patch-auth-db.yaml).
+#
+# Holds auth's own session/issuance state. The federated IdP (Keycloak) is a
+# separate concern — auth brokers to it; its datastore is not this cluster.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: auth-postgres
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: auth
+      owner: app
+  storage:
+    size: 10Gi
+    storageClass: gp3

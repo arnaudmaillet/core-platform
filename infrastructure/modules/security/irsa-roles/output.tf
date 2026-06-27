@@ -33,14 +33,26 @@ output "external_secrets_role_arn" {
 }
 
 # La map globale que ton module ArgoCD va adorer consommer
+output "audit_app_role_arn" {
+  description = "IRSA role ARN for audit-server/-worker (null unless audit_kek_arn set)."
+  value       = try(module.audit_app_irsa_role[0].iam_role_arn, null)
+}
+
+output "media_app_role_arn" {
+  description = "IRSA role ARN for media-server (null unless media_bucket_arn set)."
+  value       = try(module.media_app_irsa_role[0].iam_role_arn, null)
+}
+
 output "iam_role_arns" {
   value = {
-    lb_controller   = module.lb_controller_irsa_role.iam_role_arn
-    external_dns    = module.external_dns_irsa_role.iam_role_arn
-    karpenter       = module.karpenter_irsa_role.iam_role_arn
-    cert_manager    = module.cert_manager_irsa_role.iam_role_arn
-    k6              = module.k6_irsa_role.iam_role_arn
-    ebs_csi         = module.ebs_csi_irsa_role.iam_role_arn
+    lb_controller    = module.lb_controller_irsa_role.iam_role_arn
+    external_dns     = module.external_dns_irsa_role.iam_role_arn
+    karpenter        = module.karpenter_irsa_role.iam_role_arn
+    cert_manager     = module.cert_manager_irsa_role.iam_role_arn
+    k6               = module.k6_irsa_role.iam_role_arn
+    ebs_csi          = module.ebs_csi_irsa_role.iam_role_arn
     external_secrets = try(module.external_secrets_irsa_role[0].iam_role_arn, null)
+    audit_app        = try(module.audit_app_irsa_role[0].iam_role_arn, null)
+    media_app        = try(module.media_app_irsa_role[0].iam_role_arn, null)
   }
 }

@@ -1,0 +1,83 @@
+# .github/workflows/fleet-images-deploy.yml
+#
+# Build + push the new-fleet binaries (10 services) + the shared migrator to ECR,
+# one image per binary via the generic deploy/Dockerfile (`--build-arg BIN`). This
+# replaces the legacy per-service Bazel deploy workflows for the Rust crates/ fleet
+# (those target the old backend/ tree). Add a BIN to the matrix to ship a new one.
+#
+# Auth + region come from the same repo secrets the existing deploy workflows use
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION). Each binary is built in
+# parallel with a per-BIN BuildKit registry cache (core-platform-buildcache:<bin>),
+# so a source edit only rebuilds the workspace+build layer — the cargo-chef cook
+# layer (librdkafka, tonic, scylla, sqlx…) is reused. Images are tagged :staging
+# (what the overlay pulls) and :<git-sha> for traceability.
+name: Build & Push Fleet Images
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'deploy/Dockerfile'
+      - '.github/workflows/fleet-images-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to push (default: staging)'
+        default: staging
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bin:
+          - counter-server
+          - counter-worker
+          - audit-server
+          - audit-worker
+          - auth-server
+          - media-server
+          - moderation-server
+          - search-server
+          - realtime-gateway
+          - realtime-dispatcher
+          - migrator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.bin }}
+        env:
+          REG: ${{ steps.ecr.outputs.registry }}
+          BIN: ${{ matrix.bin }}
+          TAG: ${{ github.event.inputs.tag || 'staging' }}
+        run: |
+          docker buildx build \
+            -f deploy/Dockerfile \
+            --build-arg BIN="$BIN" \
+            --cache-from type=registry,ref="$REG/core-platform-buildcache:$BIN" \
+            --cache-to   type=registry,ref="$REG/core-platform-buildcache:$BIN",mode=max \
+            -t "$REG/core-platform-$BIN:$TAG" \
+            -t "$REG/core-platform-$BIN:${{ github.sha }}" \
+            --push .

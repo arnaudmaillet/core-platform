@@ -1,0 +1,22 @@
+# Audit ledger PostgreSQL via CloudNativePG. namePrefix -> staging-audit-postgres;
+# CNPG exposes staging-audit-postgres-rw:5432 and a staging-audit-postgres-app
+# Secret (key `uri` = full connection string) wired into audit-server +
+# audit-worker (see patch-audit-db.yaml).
+#
+# TIER-0 hash-chained evidence ledger: INSERT-only at the app layer. The crypto
+# material (per-subject DEKs, KEK) lives in AWS KMS, and the WORM checkpoint
+# anchor in the Object-Lock bucket — both provisioned in Terraform, not here.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: audit-postgres
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: audit
+      owner: app
+  storage:
+    size: 10Gi
+    storageClass: gp3

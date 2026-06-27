@@ -10,6 +10,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namePrefix: staging-
+# Teach kustomize to flow namePrefix into KEDA ScaledObject scaleTargetRef
+# (built-in name-reference covers HPA but not the keda.sh CRD). See the file.
+configurations:
+  - scaledobject-refs-config.yaml
 resources:
   # ── Services ─────────────────────────────────────────────────────────────────
   - ../../base/services/chat/server
@@ -22,8 +26,32 @@ resources:
   - ../../base/services/engagement/server
   - ../../base/services/account/server
   - ../../base/services/timeline/server
+  # ── New fleet (10 binaries) ──────────────────────────────────────────────────
+  - ../../base/services/counter/server
+  - ../../base/services/counter/worker
+  - ../../base/services/audit/server
+  - ../../base/services/audit/worker
+  - ../../base/services/auth/server
+  - ../../base/services/media/server
+  - ../../base/services/moderation/server
+  - ../../base/services/search/server
+  - ../../base/services/realtime/gateway
+  - ../../base/services/realtime/dispatcher
+  # Public WSS entrypoint for the gateway (internet-facing NLB, L4, TLS at edge).
+  - realtime-gateway-public.yaml
   # ── In-cluster stateful backends + secrets sync ──────────────────────────────
+  # CNPG Postgres clusters (one per Postgres-backed service). Each exposes a
+  # <cluster>-app Secret with the connection `uri`, injected via a per-svc DB patch.
   - account-postgres.yaml
+  - counter-postgres.yaml
+  - audit-postgres.yaml
+  - moderation-postgres.yaml
+  - auth-postgres.yaml
+  - media-postgres.yaml
+  # IRSA-annotated ServiceAccounts (audit-server/-worker, media-server).
+  - service-accounts.yaml
+  # KEDA SASL auth for the MSK lag scalers (counter/realtime/audit workers).
+  - keda-trigger-auth.yaml
   - external-secrets.yaml
 configMapGenerator:
   - name: chat-config
@@ -46,6 +74,21 @@ configMapGenerator:
     envs: [account.env]
   - name: timeline-config
     envs: [timeline.env]
+  # New fleet (server + worker of a service share one *-config).
+  - name: counter-config
+    envs: [counter.env]
+  - name: audit-config
+    envs: [audit.env]
+  - name: auth-config
+    envs: [auth.env]
+  - name: media-config
+    envs: [media.env]
+  - name: moderation-config
+    envs: [moderation.env]
+  - name: search-config
+    envs: [search.env]
+  - name: realtime-config
+    envs: [realtime.env]
   - name: infra-config
     files: [infrastructure.toml]
 images:
@@ -82,10 +125,73 @@ images:
   - name: core-platform-migrator
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
     newTag: staging
+  # ── New fleet (one image per binary) ─────────────────────────────────────────
+  - name: core-platform-counter-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-counter-server
+    newTag: staging
+  - name: core-platform-counter-worker
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-counter-worker
+    newTag: staging
+  - name: core-platform-audit-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-audit-server
+    newTag: staging
+  - name: core-platform-audit-worker
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-audit-worker
+    newTag: staging
+  - name: core-platform-auth-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-auth-server
+    newTag: staging
+  - name: core-platform-media-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-media-server
+    newTag: staging
+  - name: core-platform-moderation-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-moderation-server
+    newTag: staging
+  - name: core-platform-search-server
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-search-server
+    newTag: staging
+  - name: core-platform-realtime-gateway
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-realtime-gateway
+    newTag: staging
+  - name: core-platform-realtime-dispatcher
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-realtime-dispatcher
+    newTag: staging
 patches:
   # Inject the synced MSK/Redis creds into every service container.
   - path: patch-backend-creds.yaml
     target:
       kind: Deployment
-  # account-server gets DATABASE_URL from the CNPG-generated secret.
+  # DATABASE_URL from each CNPG cluster's -app secret (init container + runtime).
   - path: patch-account-db.yaml
+  - path: patch-counter-server-db.yaml
+  - path: patch-counter-worker-db.yaml
+  - path: patch-audit-server-db.yaml
+  - path: patch-audit-worker-db.yaml
+  - path: patch-moderation-db.yaml
+  - path: patch-auth-db.yaml
+  - path: patch-media-db.yaml
+  # MSK SASL/SCRAM + TLS + TriggerAuthentication for the KEDA lag scalers.
+  - path: patch-counter-worker-scaler.yaml
+  - path: patch-realtime-dispatcher-scaler.yaml
+  - path: patch-audit-worker-scaler.yaml
+  # Per-service sensitive creds via dedicated ExternalSecrets (envFrom).
+  - path: patch-search-secrets.yaml
+    target:
+      kind: Deployment
+      name: search-server
+  - path: patch-media-secrets.yaml
+    target:
+      kind: Deployment
+      name: media-server
+  - path: patch-auth-secrets.yaml
+    target:
+      kind: Deployment
+      name: auth-server
+  - path: patch-audit-secrets.yaml
+    target:
+      kind: Deployment
+      name: audit-server
+  - path: patch-audit-secrets.yaml
+    target:
+      kind: Deployment
+      name: audit-worker

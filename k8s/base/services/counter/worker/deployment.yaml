@@ -1,0 +1,73 @@
+# k8s/base/services/counter/worker/deployment.yaml
+#
+# counter-worker — TIER-1 firehose ingest/aggregation plane. Runs the supervised
+# run_consumer lanes (view/impression/click.v1.events → windowed N→1 pre-agg →
+# sharded counters) + the reconcile loop. Serves NO domain RPC; it exposes only
+# the gRPC health/reflection plane on :50065 so Kubernetes can probe readiness.
+#
+# Worker profile: throughput-bound, scaled on Kafka consumer-group lag (see
+# scaledobject.yaml), NOT on CPU. terminationGracePeriod is generous so an
+# evicted pod can drain in-flight batches and commit offsets (manual-commit
+# run_consumer contract) before SIGKILL — avoids replay churn on scale-down.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: counter-worker
+  labels:
+    app: counter-worker
+    role: worker
+    tier: tier-1
+spec:
+  # Replicas are owned by the KEDA ScaledObject; this is just the seed value.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: counter-worker
+  template:
+    metadata:
+      labels:
+        app: counter-worker
+        role: worker
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: core-platform-counter-worker
+          envFrom:
+            - configMapRef:
+                name: counter-config
+          env:
+            - name: INFRA_CONFIG_PATH
+              value: /etc/infra/infrastructure.toml
+            - name: COUNTER_WORKER_GRPC_ADDR
+              value: "0.0.0.0:50065"
+          ports:
+            - name: grpc
+              containerPort: 50065
+          volumeMounts:
+            - name: infra-config
+              mountPath: /etc/infra
+              readOnly: true
+          # No typed service on a worker — probe the overall ("") health key:
+          # SERVING once the consumers' backend probes pass.
+          readinessProbe:
+            grpc:
+              port: 50065
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50065
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
+      volumes:
+        - name: infra-config
+          configMap:
+            name: infra-config
