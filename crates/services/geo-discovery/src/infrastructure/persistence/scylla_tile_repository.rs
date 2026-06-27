@@ -181,24 +181,6 @@ impl TileRepository for ScyllaTileRepository {
         }
     }
 
-    async fn update_card_tier(
-        &self,
-        post_id: &PostId,
-        tier:    i8,
-    ) -> Result<(), GeoDiscoveryError> {
-        let stmt = self.strict_stmt(
-            "UPDATE geo_discovery.map_post_cards \
-             SET author_tier = ? \
-             WHERE post_id = ?",
-        );
-        self.client
-            .session
-            .execute_unpaged(stmt, (tier, post_id.as_uuid()))
-            .await
-            .map_err(scylla_err)?;
-        Ok(())
-    }
-
     async fn list_tile_post_ids(
         &self,
         h3_index:   H3Index,

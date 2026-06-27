@@ -42,11 +42,8 @@ pub struct GeoDiscoveryConfig {
     /// Kafka consumer group ID for `post.published`.
     pub post_indexer_group_id: String,
 
-    /// Kafka consumer group ID for `engagement.score_updated`.
+    /// Kafka consumer group ID for `counter.v1.popularity`.
     pub score_updater_group_id: String,
-
-    /// Kafka consumer group ID for `profile.tier_changed`.
-    pub tier_sync_group_id: String,
 }
 
 impl GeoDiscoveryConfig {
@@ -86,9 +83,6 @@ impl GeoDiscoveryConfig {
 
             score_updater_group_id: std::env::var("GEO_SCORE_UPDATER_GROUP_ID")
                 .unwrap_or_else(|_| "geo-discovery-score-updater".to_owned()),
-
-            tier_sync_group_id: std::env::var("GEO_TIER_SYNC_GROUP_ID")
-                .unwrap_or_else(|_| "geo-discovery-tier-sync".to_owned()),
         }
     }
 }

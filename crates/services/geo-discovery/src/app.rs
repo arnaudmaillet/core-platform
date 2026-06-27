@@ -20,7 +20,7 @@ use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use transport::kafka::config::client::KafkaClientConfig;
 
 use crate::application::command::{
-    IndexPostCommand, IndexPostHandler, SyncAuthorTierCommand, SyncAuthorTierHandler,
+    IndexPostCommand, IndexPostHandler,
     UpdateViralityWithTilesCommand, UpdateViralityWithTilesHandler,
 };
 use crate::application::query::query_tile::{QueryTileHandler, QueryTileQuery};
@@ -28,12 +28,12 @@ use crate::config::GeoDiscoveryConfig;
 use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex};
 use crate::infrastructure::persistence::ScyllaTileRepository;
 use crate::infrastructure::worker::{
-    PostIndexerWorker, ScoreUpdaterWorker, TierSyncWorker, TilePrunerWorker,
+    PostIndexerWorker, ScoreUpdaterWorker, TilePrunerWorker,
 };
 
 /// Storage/transport endpoints the graph is wired against.
 ///
-/// `kafka` is optional: `Some` spawns the indexer/score/tier/pruner workers;
+/// `kafka` is optional: `Some` spawns the indexer/score/pruner workers;
 /// `None` leaves the index command handlers driveable directly via the command
 /// bus.
 pub struct Backends {
@@ -80,10 +80,6 @@ impl App {
                     tile_repository:      Arc::clone(&tile_repository),
                     card_cache_threshold: cfg.card_cache_threshold,
                 })?
-                .register::<SyncAuthorTierCommand, _>(SyncAuthorTierHandler {
-                    card_store:      Arc::clone(&card_store),
-                    tile_repository: Arc::clone(&tile_repository),
-                })?
                 .register::<UpdateViralityWithTilesCommand, _>(UpdateViralityWithTilesHandler {
                     spatial_index:   Arc::clone(&spatial_index),
                     tile_repository: Arc::clone(&tile_repository),
@@ -120,15 +116,6 @@ impl App {
                     Arc::clone(&spatial_index),
                     Arc::clone(&tile_repository),
                     cfg.score_updater_group_id.clone(),
-                )
-                .run(),
-            );
-            tokio::spawn(
-                TierSyncWorker::new(
-                    kafka_config,
-                    Arc::clone(&card_store),
-                    Arc::clone(&tile_repository),
-                    cfg.tier_sync_group_id.clone(),
                 )
                 .run(),
             );
