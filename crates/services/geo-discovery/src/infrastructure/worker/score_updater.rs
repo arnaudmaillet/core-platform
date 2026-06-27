@@ -15,20 +15,30 @@ use crate::infrastructure::worker::build_dlq_producer;
 use crate::infrastructure::cache::RedisGeoSpatialIndex;
 use crate::infrastructure::persistence::ScyllaTileRepository;
 
-const TOPIC: &str = "engagement.score_updated";
+const TOPIC: &str = "counter.v1.popularity";
 
-/// Kafka event schema for `engagement.score_updated`.
+/// The `entity_type` discriminant geo cares about on the shared popularity
+/// stream. Counter emits one snapshot per entity kind (post/profile/media/…);
+/// geo only re-scores posts.
+const ENTITY_TYPE_POST: &str = "post";
+
+/// Kafka event schema for `counter.v1.popularity`.
 ///
-/// Published by `services/engagement` whenever a post's aggregate virality
-/// score changes (reaction upserted, removed, or counters flushed).
+/// Published by `services/counter` (its sole outbound signal) as a coarse,
+/// slow-loop popularity snapshot per entity. The wire shape is
+/// `{ entity_type, entity_id, score }`; geo filters for `entity_type == "post"`,
+/// maps `entity_id → post_id` and `score → new_score`, and commits every other
+/// entity kind as a no-op.
 #[derive(Debug, Deserialize)]
-pub struct ScoreUpdatedEvent {
-    pub post_id:   String,
-    pub new_score: f64,
+pub struct PopularityEvent {
+    pub entity_type: String,
+    pub entity_id:   String,
+    pub score:       f64,
 }
 
-/// Long-lived background worker that consumes `engagement.score_updated` events
-/// and propagates new virality scores to both ScyllaDB and Redis ZSETs.
+/// Long-lived background worker that consumes `counter.v1.popularity` snapshots
+/// (filtered to `entity_type == "post"`) and propagates new virality scores to
+/// both ScyllaDB and Redis ZSETs.
 ///
 /// Tile resolution: before dispatching the update command, this worker performs
 /// a ScyllaDB point-read on `map_post_cards` to fetch the canonical `h3_index_r7`
@@ -105,7 +115,7 @@ where
         tracing::info!(topic = TOPIC, group = %self.group_id, "score updater consumer started");
 
         let policy = RetryPolicy::default();
-        run_consumer::<ScoreUpdatedEvent, _>(&handle, producer, &policy, move |event| {
+        run_consumer::<PopularityEvent, _>(&handle, producer, &policy, move |event| {
             let worker = Arc::clone(&self);
             Box::pin(async move { ProcessOutcome::from_result(worker.process(event).await) })
         })
@@ -113,12 +123,18 @@ where
         .map_err(|e| e.to_string())
     }
 
-    async fn process(&self, event: &ScoreUpdatedEvent) -> Result<(), GeoDiscoveryError> {
+    async fn process(&self, event: &PopularityEvent) -> Result<(), GeoDiscoveryError> {
         use cqrs::{CommandHandler, Envelope};
         use uuid::Uuid;
         use crate::domain::value_object::H3Resolution;
 
-        let post_id = PostId::try_from(event.post_id.as_str())?;
+        // The popularity stream carries every entity kind; geo only re-scores
+        // posts. Anything else is a committed no-op.
+        if event.entity_type != ENTITY_TYPE_POST {
+            return Ok(());
+        }
+
+        let post_id = PostId::try_from(event.entity_id.as_str())?;
 
         // Resolve the post's tile indices from ScyllaDB (Fast profile).
         let card = self.tile_repository
@@ -148,8 +164,8 @@ where
         };
 
         let cmd = UpdateViralityWithTilesCommand {
-            post_id:     event.post_id.clone(),
-            new_score:   event.new_score,
+            post_id:     event.entity_id.clone(),
+            new_score:   event.score,
             h3_index_r5: h3_r5,
             h3_index_r7: h3_r7,
             h3_index_r9: h3_r9,

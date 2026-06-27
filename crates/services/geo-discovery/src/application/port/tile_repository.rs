@@ -41,16 +41,6 @@ pub trait TileRepository: Send + Sync {
         score:   f32,
     ) -> Result<(), GeoDiscoveryError>;
 
-    /// Updates only the `author_tier` column for an existing card.
-    ///
-    /// Called by `SyncAuthorTierHandler` after receiving a `profile.tier_changed`
-    /// event. The caller is responsible for invalidating the Redis card cache.
-    async fn update_card_tier(
-        &self,
-        post_id: &PostId,
-        tier:    i8,
-    ) -> Result<(), GeoDiscoveryError>;
-
     /// Reads a card by post ID. Returns `None` if the row has expired or
     /// does not exist.
     async fn get_card(

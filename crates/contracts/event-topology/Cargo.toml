@@ -1,0 +1,13 @@
+[package]
+name        = "event-topology"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Fleet Kafka topic topology registry + the contract test that fails the build on a phantom producer/consumer edge."
+
+# Pure const data + a contract test. No dependencies on purpose: this crate must
+# stay cheap to compile and free of cycles — it is the registry every service is
+# checked against, not a participant in the mesh.
+[dependencies]
