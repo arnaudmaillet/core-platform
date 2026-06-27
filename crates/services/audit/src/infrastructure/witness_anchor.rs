@@ -30,6 +30,7 @@ use url::Url;
 
 use crate::application::port::CheckpointAnchor;
 use crate::domain::MerkleCheckpoint;
+use crate::domain::value_object::CanonicalWriter;
 use crate::error::AuditError;
 use crate::infrastructure::kms::KmsSigner;
 use crate::infrastructure::object_lock_archive::ObjectLockConfig;
@@ -42,7 +43,9 @@ pub struct SignedCheckpoint {
     pub checkpoint: MerkleCheckpoint,
     /// Base64 of the raw signature bytes (KMS or HMAC).
     pub signature_b64: String,
-    /// The signing key id (informational; KMS recovers the key on verify).
+    /// The signing key id recorded at anchor time — an informational/audit
+    /// breadcrumb only. Verification pins to the anchor's *configured* signing key,
+    /// never this field (which the witness operator could otherwise control).
     pub key_id: String,
     /// Signing algorithm tag, e.g. `ECDSA_SHA_256` or `HMAC_SHA_256` (dev).
     pub algorithm: String,
@@ -51,10 +54,20 @@ pub struct SignedCheckpoint {
 /// The canonical bytes signed over a checkpoint. Covers the whole checkpoint
 /// (root + head count + timestamp), not just the root, so altering any field in a
 /// witness entry invalidates the signature.
+///
+/// Built with the domain's [`CanonicalWriter`] — the same length-prefixed,
+/// fixed-order encoding the hash chain and the Merkle root use — *not* `serde_json`.
+/// A JSON message would tie the signature to incidental library formatting
+/// (field order, `DateTime` rendering, whitespace): a `serde_json`/`chrono` bump
+/// could change the bytes across the store→read→re-serialize round trip and fail
+/// verification of every previously-anchored checkpoint — a fleet-wide false tamper
+/// alarm. The encoding is also infallible, so there is no error to swallow.
 pub fn canonical_bytes(checkpoint: &MerkleCheckpoint) -> Vec<u8> {
-    // The domain's serde representation is field-ordered and stable; good enough as
-    // a canonical message for signing (we sign exactly what we verify).
-    serde_json::to_vec(checkpoint).unwrap_or_default()
+    let mut w = CanonicalWriter::new();
+    w.str(checkpoint.root().as_str())
+        .u64(checkpoint.head_count())
+        .i64(checkpoint.created_at().timestamp_millis());
+    w.as_bytes().to_vec()
 }
 
 /// The independent witness the signed checkpoint is anchored to. The authority lives
@@ -68,8 +81,9 @@ pub trait Witness: Send + Sync + 'static {
 }
 
 /// The cross-account WORM-bucket witness (S3/MinIO Object Lock, compliance mode).
-/// Each checkpoint is one immutable, timestamp-keyed object; "latest" is the
-/// lexicographically greatest key under the prefix (keys are zero-padded millis).
+/// Each checkpoint is one immutable object keyed by an inverted timestamp (see
+/// [`witness_key`]); "latest" is the lexicographically *smallest* key under the
+/// prefix, so it is always on the first listing page.
 pub struct ObjectLockWitness {
     bucket: Bucket,
     credentials: Credentials,
@@ -78,6 +92,18 @@ pub struct ObjectLockWitness {
 }
 
 const WITNESS_PREFIX: &str = "checkpoints/";
+
+/// The witness object key for a checkpoint. The timestamp is stored **inverted**
+/// (`u64::MAX - millis`, zero-padded to 20 digits) so the newest checkpoint sorts
+/// *first* under the prefix. "Latest" is then the lexicographically *smallest* key,
+/// always retrievable from the first page of a `ListObjectsV2` — S3 caps a page at
+/// 1000 keys in ascending order, so a forward timestamp would bury the newest beyond
+/// page 1 once >1000 checkpoints accumulate in the never-pruned WORM bucket, silently
+/// returning a stale root.
+fn witness_key(created_at_millis: i64) -> String {
+    let inverted = u64::MAX - (created_at_millis.max(0) as u64);
+    format!("{WITNESS_PREFIX}{inverted:020}.json")
+}
 
 impl ObjectLockWitness {
     pub fn new(config: ObjectLockConfig) -> Result<Self, AuditError> {
@@ -119,12 +145,8 @@ impl ObjectLockWitness {
 #[async_trait]
 impl Witness for ObjectLockWitness {
     async fn publish(&self, signed: &SignedCheckpoint) -> Result<(), AuditError> {
-        // Zero-pad millis so lexical order == chronological order for the "latest"
-        // scan; one immutable object per checkpoint.
-        let key = format!(
-            "{WITNESS_PREFIX}{:020}.json",
-            signed.checkpoint.created_at().timestamp_millis()
-        );
+        // One immutable object per checkpoint, keyed so the newest sorts first.
+        let key = witness_key(signed.checkpoint.created_at().timestamp_millis());
         let body = serde_json::to_vec(signed).map_err(|_| AuditError::AnchorWitnessUnavailable)?;
         let url: Url = self
             .bucket
@@ -148,6 +170,11 @@ impl Witness for ObjectLockWitness {
     async fn latest(&self) -> Result<Option<SignedCheckpoint>, AuditError> {
         let mut list: ListObjectsV2 = self.bucket.list_objects_v2(Some(&self.credentials));
         list.with_prefix(WITNESS_PREFIX);
+        // Keys are inverted timestamps (see `witness_key`): the newest is the
+        // smallest key, so it is the first entry of the first ascending page —
+        // one key suffices and the result is correct no matter how many checkpoints
+        // have accumulated.
+        list.with_max_keys(1);
         let url = list.sign(self.presign_ttl);
         let resp = self
             .http
@@ -162,7 +189,8 @@ impl Witness for ObjectLockWitness {
         let parsed =
             ListObjectsV2::parse_response(&body).map_err(|_| AuditError::AnchorWitnessUnavailable)?;
 
-        let Some(latest_key) = parsed.contents.into_iter().map(|c| c.key).max() else {
+        // The smallest key under the prefix is the newest checkpoint.
+        let Some(latest_key) = parsed.contents.into_iter().map(|c| c.key).min() else {
             return Ok(None);
         };
 
@@ -254,9 +282,21 @@ impl CheckpointAnchor for WitnessCheckpointAnchor {
         .map_err(|_| AuditError::CheckpointVerificationFailed)?;
         let message = canonical_bytes(&signed.checkpoint);
 
+        // Verify against the anchor's *own configured* signing key, NOT the key id
+        // carried in the (operator-controlled) witness entry. Otherwise an operator
+        // who can rewrite the witness could re-sign a forged root with a key of their
+        // choosing and set `key_id` to match — KMS would happily verify it. Pinning
+        // to `self.signing_key_id` means a forged entry must be signed by the genuine
+        // key, which the operator cannot access. (`signed.key_id` is retained only as
+        // an informational/audit breadcrumb.)
+        //
         // A witness entry whose signature does not validate is operator-level
         // tampering, not an availability fault — surface it as divergence.
-        if !self.signer.verify(&signed.key_id, &message, &signature).await? {
+        if !self
+            .signer
+            .verify(&self.signing_key_id, &message, &signature)
+            .await?
+        {
             return Err(AuditError::CheckpointVerificationFailed);
         }
         Ok(Some(signed.checkpoint))
@@ -351,5 +391,113 @@ mod tests {
 
         let err = a.latest_anchored().await.unwrap_err();
         assert!(matches!(err, AuditError::CheckpointVerificationFailed));
+    }
+
+    /// A signer that models KMS faithfully: a signature is valid only under the key
+    /// that produced it. `sign`/`verify` use the per-key sentinel `sig-for-<key_id>`,
+    /// so a signature minted under one key never verifies under another.
+    struct KeyBoundSigner;
+
+    fn sig_for(key_id: &str) -> Vec<u8> {
+        format!("sig-for-{key_id}").into_bytes()
+    }
+
+    #[async_trait]
+    impl KmsSigner for KeyBoundSigner {
+        async fn sign(&self, key_id: &str, _message: &[u8]) -> Result<Vec<u8>, AuditError> {
+            Ok(sig_for(key_id))
+        }
+        async fn verify(
+            &self,
+            key_id: &str,
+            _message: &[u8],
+            signature: &[u8],
+        ) -> Result<bool, AuditError> {
+            Ok(signature == sig_for(key_id))
+        }
+    }
+
+    /// Issue #483 hardening: verification must pin to the anchor's *configured*
+    /// signing key, never the `key_id` carried in the witness entry. An operator who
+    /// rewrites the witness and re-signs with a key they control (setting `key_id` to
+    /// match their signature) must still be rejected.
+    #[tokio::test]
+    async fn a_forged_entry_signed_under_an_attacker_key_id_is_rejected() {
+        let witness = Arc::new(InMemoryWitness::default());
+        // The anchor is configured to trust only the genuine key.
+        let a = WitnessCheckpointAnchor::new(
+            Arc::new(KeyBoundSigner),
+            "genuine-key".to_owned(),
+            "ECDSA_SHA_256".to_owned(),
+            Arc::clone(&witness) as Arc<dyn Witness>,
+            None,
+        );
+
+        // The operator publishes a forged checkpoint signed with their OWN key and
+        // stamps `key_id` to match — a signature that genuinely verifies under
+        // "attacker-key" but not under "genuine-key".
+        witness
+            .publish(&SignedCheckpoint {
+                checkpoint: checkpoint(),
+                signature_b64: base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    sig_for("attacker-key"),
+                ),
+                key_id: "attacker-key".to_owned(),
+                algorithm: "ECDSA_SHA_256".to_owned(),
+            })
+            .await
+            .unwrap();
+
+        // Verifying against `signed.key_id` ("attacker-key") would ACCEPT it; pinning
+        // to the configured "genuine-key" rejects it.
+        let err = a.latest_anchored().await.unwrap_err();
+        assert!(matches!(err, AuditError::CheckpointVerificationFailed));
+    }
+
+    /// A signer that is *unreachable* — `verify` returns an availability error rather
+    /// than a true/false answer (e.g. a KMS outage).
+    struct UnavailableSigner;
+
+    #[async_trait]
+    impl KmsSigner for UnavailableSigner {
+        async fn sign(&self, _key_id: &str, _message: &[u8]) -> Result<Vec<u8>, AuditError> {
+            Err(AuditError::AnchorWitnessUnavailable)
+        }
+        async fn verify(
+            &self,
+            _key_id: &str,
+            _message: &[u8],
+            _signature: &[u8],
+        ) -> Result<bool, AuditError> {
+            Err(AuditError::AnchorWitnessUnavailable)
+        }
+    }
+
+    /// Issue #483 hardening: a signer *outage* during verification must propagate as
+    /// `AnchorWitnessUnavailable` ("couldn't check", retryable), never collapse into
+    /// `CheckpointVerificationFailed` (which the verifier escalates as tampering).
+    #[tokio::test]
+    async fn a_signer_outage_does_not_masquerade_as_tampering() {
+        let witness = Arc::new(InMemoryWitness::default());
+        // Seed a well-formed entry so we reach the verify step.
+        anchor(Arc::clone(&witness) as Arc<dyn Witness>)
+            .anchor(&checkpoint())
+            .await
+            .unwrap();
+
+        let a = WitnessCheckpointAnchor::new(
+            Arc::new(UnavailableSigner),
+            "genuine-key".to_owned(),
+            "ECDSA_SHA_256".to_owned(),
+            Arc::clone(&witness) as Arc<dyn Witness>,
+            None,
+        );
+
+        let err = a.latest_anchored().await.unwrap_err();
+        assert!(
+            matches!(err, AuditError::AnchorWitnessUnavailable),
+            "a verify outage must be 'couldn't check', not a divergence/tamper signal"
+        );
     }
 }

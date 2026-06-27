@@ -89,10 +89,16 @@ pub struct AwsKms {
 impl AwsKms {
     pub fn new(config: &KmsConfig) -> Result<Self, AuditError> {
         let endpoint = Url::parse(&config.endpoint).map_err(|_| AuditError::KeyVaultUnavailable)?;
-        let host = endpoint
-            .host_str()
-            .ok_or(AuditError::KeyVaultUnavailable)?
-            .to_owned();
+        // The signed `host` MUST equal the `Host` header the client transmits. hyper
+        // sends `host:port` whenever the port is non-default for the scheme; `Url`
+        // normalizes default ports away, so `port()` is exactly that condition. A
+        // bare `host_str()` would drop the port and break SigV4 against any custom
+        // endpoint (LocalStack, a MinIO/KMS proxy) while silently passing on AWS:443.
+        let host_str = endpoint.host_str().ok_or(AuditError::KeyVaultUnavailable)?;
+        let host = match endpoint.port() {
+            Some(port) => format!("{host_str}:{port}"),
+            None => host_str.to_owned(),
+        };
         let http = reqwest::Client::builder()
             .timeout(config.request_timeout)
             .build()
@@ -112,18 +118,24 @@ impl AwsKms {
     }
 
     /// Issue one signed `TrentService.<target>` call and return the parsed JSON
-    /// body. `on_unavailable` maps a transport/HTTP fault to the caller's domain
-    /// error (key-vault vs witness), so a KMS outage surfaces with the right code.
+    /// body on success. A non-2xx response is classified as [`KmsFault`] so the
+    /// caller can tell an *invalid signature* (HTTP 400 `KMSInvalidSignatureException`
+    /// — a valid "no") apart from an *availability* fault (everything else).
     async fn call(
         &self,
         target: &str,
         body: serde_json::Value,
-        on_unavailable: fn() -> AuditError,
-    ) -> Result<serde_json::Value, AuditError> {
-        let payload = serde_json::to_vec(&body).map_err(|_| on_unavailable())?;
+    ) -> Result<serde_json::Value, KmsFault> {
+        let payload = serde_json::to_vec(&body).map_err(|_| KmsFault::Unavailable)?;
         let amz_target = format!("TrentService.{target}");
+        // The timestamp is both a signed header and the date in the string-to-sign;
+        // derive it once from `now` so the two are identical.
+        let now = Utc::now();
+        let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
 
-        // Canonical headers MUST be lowercase and sorted by name.
+        // Canonical headers MUST be lowercase and sorted by name. AWS requires every
+        // `x-amz-*` header on the request (here `x-amz-date` and `x-amz-target`) to
+        // be signed, alongside `host`.
         let headers = [
             SignedHeader {
                 name: "content-type",
@@ -132,6 +144,10 @@ impl AwsKms {
             SignedHeader {
                 name: "host",
                 value: &self.host,
+            },
+            SignedHeader {
+                name: "x-amz-date",
+                value: &amz_date,
             },
             SignedHeader {
                 name: "x-amz-target",
@@ -145,7 +161,7 @@ impl AwsKms {
             "",
             &headers,
             &payload,
-            Utc::now(),
+            now,
         );
 
         let resp = self
@@ -158,13 +174,32 @@ impl AwsKms {
             .body(payload)
             .send()
             .await
-            .map_err(|_| on_unavailable())?;
+            .map_err(|_| KmsFault::Unavailable)?;
 
-        if !resp.status().is_success() {
-            return Err(on_unavailable());
+        let status = resp.status();
+        if status.is_success() {
+            return resp.json().await.map_err(|_| KmsFault::Unavailable);
         }
-        resp.json().await.map_err(|_| on_unavailable())
+        // Classify the error: a 400 whose `__type` is the invalid-signature
+        // exception is a definite "signature does not match"; anything else
+        // (throttle, 5xx, auth, transport) is an availability fault.
+        let kind = resp.text().await.unwrap_or_default();
+        if status == reqwest::StatusCode::BAD_REQUEST
+            && kind.contains("KMSInvalidSignatureException")
+        {
+            Err(KmsFault::InvalidSignature)
+        } else {
+            Err(KmsFault::Unavailable)
+        }
     }
+}
+
+/// How a KMS call failed: a definite invalid-signature answer vs. an availability
+/// fault. Keeping these distinct is what stops a KMS outage from being reported as
+/// operator-level tampering.
+enum KmsFault {
+    InvalidSignature,
+    Unavailable,
 }
 
 fn b64(bytes: &[u8]) -> String {
@@ -205,12 +240,9 @@ struct VerifyResp {
 impl KmsCipher for AwsKms {
     async fn encrypt(&self, key_id: &str, plaintext: &[u8]) -> Result<Vec<u8>, AuditError> {
         let resp = self
-            .call(
-                "Encrypt",
-                json!({ "KeyId": key_id, "Plaintext": b64(plaintext) }),
-                || AuditError::KeyVaultUnavailable,
-            )
-            .await?;
+            .call("Encrypt", json!({ "KeyId": key_id, "Plaintext": b64(plaintext) }))
+            .await
+            .map_err(|_| AuditError::KeyVaultUnavailable)?;
         let parsed: CiphertextResp =
             serde_json::from_value(resp).map_err(|_| AuditError::KeyVaultUnavailable)?;
         unb64(&parsed.ciphertext_blob, || AuditError::KeyVaultUnavailable)
@@ -218,12 +250,9 @@ impl KmsCipher for AwsKms {
 
     async fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, AuditError> {
         let resp = self
-            .call(
-                "Decrypt",
-                json!({ "CiphertextBlob": b64(ciphertext) }),
-                || AuditError::KeyVaultUnavailable,
-            )
-            .await?;
+            .call("Decrypt", json!({ "CiphertextBlob": b64(ciphertext) }))
+            .await
+            .map_err(|_| AuditError::KeyVaultUnavailable)?;
         let parsed: PlaintextResp =
             serde_json::from_value(resp).map_err(|_| AuditError::KeyVaultUnavailable)?;
         unb64(&parsed.plaintext, || AuditError::KeyVaultUnavailable)
@@ -242,9 +271,9 @@ impl KmsSigner for AwsKms {
                     "MessageType": "RAW",
                     "SigningAlgorithm": self.signing_algorithm,
                 }),
-                || AuditError::AnchorWitnessUnavailable,
             )
-            .await?;
+            .await
+            .map_err(|_| AuditError::AnchorWitnessUnavailable)?;
         let parsed: SignResp =
             serde_json::from_value(resp).map_err(|_| AuditError::AnchorWitnessUnavailable)?;
         unb64(&parsed.signature, || AuditError::AnchorWitnessUnavailable)
@@ -256,9 +285,6 @@ impl KmsSigner for AwsKms {
         message: &[u8],
         signature: &[u8],
     ) -> Result<bool, AuditError> {
-        // KMS returns HTTP 400 `KMSInvalidSignatureException` for a bad signature.
-        // We surface that as `Ok(false)` (a valid "no") rather than a transport
-        // error, so the verifier reports divergence instead of "couldn't check".
         let payload = json!({
             "KeyId": key_id,
             "Message": b64(message),
@@ -266,18 +292,18 @@ impl KmsSigner for AwsKms {
             "Signature": b64(signature),
             "SigningAlgorithm": self.signing_algorithm,
         });
-        match self
-            .call("Verify", payload, || AuditError::AnchorWitnessUnavailable)
-            .await
-        {
+        match self.call("Verify", payload).await {
             Ok(resp) => {
                 let parsed: VerifyResp = serde_json::from_value(resp)
                     .map_err(|_| AuditError::AnchorWitnessUnavailable)?;
                 Ok(parsed.signature_valid)
             }
-            // An invalid signature is the answer "no", not an availability fault.
-            Err(AuditError::AnchorWitnessUnavailable) => Ok(false),
-            Err(other) => Err(other),
+            // A *definite* invalid-signature answer is "no", not a fault — only this
+            // case becomes Ok(false). A transport/availability fault propagates as
+            // Err, so "we couldn't check" is never misreported as "the signature is
+            // bad" (which the verifier would escalate as operator-level tampering).
+            Err(KmsFault::InvalidSignature) => Ok(false),
+            Err(KmsFault::Unavailable) => Err(AuditError::AnchorWitnessUnavailable),
         }
     }
 }
