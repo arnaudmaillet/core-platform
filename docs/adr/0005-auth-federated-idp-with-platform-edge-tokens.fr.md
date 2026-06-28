@@ -1,0 +1,51 @@
+---
+i18n:
+  source: ./0005-auth-federated-idp-with-platform-edge-tokens.md
+  source_sha256: 1c8d06299212ce64736e03ba23385a9ca17c2253842bec77622cbce2e8cf2dc5
+  translated_at: 2026-06-28
+  status: complete
+---
+> 🇫🇷 Traduction française — la version **anglaise** [`0005-auth-federated-idp-with-platform-edge-tokens.md`](./0005-auth-federated-idp-with-platform-edge-tokens.md) fait foi.
+> En cas de divergence, l'anglais prime. Les identifiants, codes, noms de types et statuts restent en anglais.
+
+# ADR-0005 : Auth fédère un IdP et émet des edge tokens ES256 plateforme avec révocation par génération
+
+- **Statut :** Accepted
+- **Date :** 2026-06-26
+- **Contexte(s) affecté(s) :** auth ; account ; auth-context (lib de vérif) ; realtime ; tous les services
+- **Décideurs :** arnaudmaillet (architecture)
+
+## Contexte et problème
+
+L'authentification recouvre trois préoccupations faciles à confondre : le **compte** (qui existe — un
+SoR), la **vérification** (ce token est-il valide — une préoccupation par-service) et l'**émission**
+(frapper un identifiant, gérer la session). Il faut aussi des tokens rapides et stateless-à-vérifier à
+l'edge *et* pouvoir révoquer instantanément — deux objectifs qui normalement s'opposent (les tokens
+stateless ne se rappellent pas).
+
+## Décision
+
+`auth` est un contexte distinct qui **fédère un IdP externe (Keycloak) pour les identifiants** et
+**émet les propres edge tokens ES256 courts de la plateforme**. Il est séparé d'`account` (le SoR
+d'identité) et d'`auth-context` (la bibliothèque de vérification en process que chaque service utilise
+— une vérification, pas un appel). La révocation instantanée malgré une vérification stateless est
+obtenue avec une **`Generation` monotone par-sujet** : l'incrémenter invalide toute une famille de
+tokens ; les refresh tokens sont à usage unique (la rotation invalide le précédent).
+
+## Conséquences
+
+- **Positives :** la vérification est bon marché et décentralisée (`auth-context`, pas d'appel à auth
+  par requête) ; les identifiants réutilisent un IdP durci ; la révocation est immédiate via le bump
+  de génération.
+- **Négatives / compromis accepté :** le compteur de génération doit être vérifié au moment de la
+  vérif (un petit lookup) pour que la révocation soit rapide ; le réglage de durée de vie des tokens
+  arbitre entre latence de révocation et coût de vérification.
+- **Clôt :** la confusion compte/vérif/émission ; la tension stateless-vs-révocable.
+
+## Alternatives rejetées
+
+| Option | Pourquoi rejetée |
+|---|---|
+| Tokens opaques vérifiés en appelant auth par requête | Réintroduit un saut synchrone à chaque appel authentifié |
+| Tokens longue durée, sans génération | Pas de révocation instantanée ; un token fuité reste valide jusqu'à expiration |
+| Construire notre propre store d'identifiants au lieu de fédérer | Re-résout un problème générique et sensible à la sécurité qu'un IdP résout déjà |
