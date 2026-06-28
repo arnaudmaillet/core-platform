@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./EVENT_CATALOG.md
-  source_sha256: 4124a4f580517b57ac43551aa1a2a121a00d30f522efe102a04d242f2659d237
+  source_sha256: fb20e6a0d6d8151278ad094f920a9588aa20f0f78e4cbaa49d751f15c308a509
   translated_at: 2026-06-28
   status: complete
 ---
@@ -18,16 +18,77 @@ i18n:
 
 ## Source de vérité & maintenance
 
-La liste des topics, producteurs et consommateurs est **vérifiée par machine** par la garde de
-registre de topologie d'événements (avec ses tests de contrat). Les colonnes **topic / producteur /
-consommateur** ici devraient être **réconciliées avec ce registre** (idéalement générées depuis lui)
-afin de ne pas dériver ; seules les colonnes **sémantiques** (*signifie* / *déclencheur*) sont
-rédigées à la main. Tant que la génération n'est pas câblée, considérer la garde de topologie — et
-non cette table — comme l'autorité sur *quelles* arêtes existent ; cette table fait autorité sur leur
-*sens*.
+Ce catalogue a deux moitiés :
+
+- **Le câblage des topics** (quel service produit/consomme quel topic) est **généré** depuis le
+  registre de topologie d'événements (`crates/contracts/event-topology`) dans le bloc ci-dessous —
+  il fait autorité sur *quelles* arêtes existent et ne peut dériver (un golden test +
+  `tools/event-catalog/sync.sh` l'imposent). Ne pas l'éditer à la main ; changer le registre et
+  régénérer.
+- **La sémantique des événements** (ce que chaque événement *signifie*, quand il se déclenche, qui
+  réagit et *pourquoi*) est rédigée à la main dans les sections par-domaine qui suivent.
 
 Croiser chaque arête dans [`CONTEXT_MAP.md`](./CONTEXT_MAP.md), et le détail par événement dans le
 §8 de chaque producteur.
+
+## Câblage des topics (généré)
+
+<!-- BEGIN GENERATED: topic-wiring · source crates/contracts/event-topology · do not edit by hand -->
+> ⚙️ Generated from the event-topology registry (`crates/contracts/event-topology`). Do not edit by hand — change the registry and run `cargo run -p event-topology --bin gen-event-catalog` (or `tools/event-catalog/sync.sh --write`). The *meaning* of each event is authored in the semantic sections below.
+
+### Produced topics → consumers
+
+| Topic | Producer | Consumers |
+|---|---|---|
+| `account.v1.events` | `account` | `audit`, `profile` |
+| `profile.v1.events` | `profile` | `search`, `post` |
+| `post.published` | `post` | `notification`, `geo-discovery` |
+| `post.updated` | `post` | — *(orphan — see below)* |
+| `post.deleted` | `post` | `timeline` |
+| `post.v1.events` | `post` | `timeline`, `search`, `realtime` |
+| `comment.created` | `comment` | `notification`, `engagement` |
+| `comment.deleted` | `comment` | `engagement` |
+| `engagement.reactions` | `engagement` | `counter`, `notification`, `engagement` |
+| `social-graph.followed` | `social-graph` | `timeline` |
+| `social-graph.unfollowed` | `social-graph` | `timeline` |
+| `social-graph.blocked` | `social-graph` | — *(orphan — see below)* |
+| `social-graph.author_tier_changed` | `social-graph` | `profile` |
+| `chat.conversation.created` | `chat` | — *(orphan — see below)* |
+| `chat.conversation.published` | `chat` | — *(orphan — see below)* |
+| `chat.conversation.unpublished` | `chat` | `chat` |
+| `chat.member.joined` | `chat` | — *(orphan — see below)* |
+| `chat.member.left` | `chat` | — *(orphan — see below)* |
+| `chat.message.sent` | `chat` | — *(orphan — see below)* |
+| `counter.v1.popularity` | `counter` | `realtime`, `geo-discovery` |
+| `moderation.v1.events` | `moderation` | `audit`, `search`, `media` |
+| `auth.v1.events` | `auth` | `audit` |
+| `media.v1.events` | `media` | `media` |
+
+### Deferred — consumed, producer intentionally not in-repo
+
+| Topic | Consumer(s) | Why |
+|---|---|---|
+| `audit.v1.events` | `audit` | Generic privileged-record ingest lane. Domain producers emit their own topics (account/auth/moderation .v1.events) which audit consumes directly; this lane is fed by the sync gRPC RecordPrivileged path and future generic producers. |
+| `moderation.reports` | `moderation` | External user-report intake — produced by the client/edge, not a fleet service. |
+| `moderation.signals` | `moderation` | External ML-classifier signals — produced off-fleet. |
+| `view.v1.events` | `counter` | Upstream view telemetry producer not yet built (counter-analytics blueprint deferral). |
+| `impression.v1.events` | `counter` | Upstream impression telemetry producer not yet built (counter deferral). |
+| `click.v1.events` | `counter` | Upstream click telemetry producer not yet built (counter deferral). |
+| `social-graph.follows` | `counter` | Counter wants a single combined follow stream; social-graph emits the split past-tense social-graph.followed/.unfollowed instead. Combined producer is deferred — TRACKED NAMING MISMATCH, not just a missing emitter. |
+
+### Orphan producers — produced, no in-repo consumer
+
+| Topic | Producer | Why |
+|---|---|---|
+| `post.updated` | `post` | No stream consumer — search/timeline/realtime act on post.v1.events PostUpdated; the legacy per-type topic is emitted for completeness. |
+| `social-graph.blocked` | `social-graph` | Block is enforced on the gRPC read path; no stream consumer yet. |
+| `chat.conversation.created` | `chat` | Chat owns its own delivery plane; reserved for future fan-out. |
+| `chat.conversation.published` | `chat` | Chat delivery-plane headroom. |
+| `chat.member.joined` | `chat` | Chat delivery-plane headroom. |
+| `chat.member.left` | `chat` | Chat delivery-plane headroom. |
+| `chat.message.sent` | `chat` | Future realtime/notification consolidation; chat streams to clients directly today. |
+
+<!-- END GENERATED: topic-wiring -->
 
 ## Identité & Compte — `account.v1.events` (producteur : `account`)
 
@@ -117,7 +178,11 @@ Croiser chaque arête dans [`CONTEXT_MAP.md`](./CONTEXT_MAP.md), et le détail p
 | `asset_quarantined` / `asset_deleted` / `asset_restored` | une transition sécurité/cycle de vie | échec Screen / takedown / restauration | intégrations, livraison |
 | `asset_failed` | le traitement a échoué | timeout/erreur | UX d'upload |
 
-## Social Graph — événements de relation (producteur : `social-graph`) — **producteur Kafka différé**
+## Social Graph — événements de relation (producteur : `social-graph`)
+
+> Les topics scindés au passé ci-dessous **sont** produits et consommés (voir le bloc de câblage).
+> Seul le stream *combiné* `social-graph.follows` que `counter` préférerait est différé (un
+> mismatch de nommage suivi) ; `counter` réconcilie via gRPC en attendant.
 
 | Événement | Signifie | Émis quand | Consommateurs & pourquoi |
 |---|---|---|---|

@@ -1,0 +1,34 @@
+name: event-catalog
+
+# Guards the Kafka topic topology and the generated catalog:
+#   - the phantom-edge contract tests (a consumer with no producer fails the build), and
+#   - the golden test that the generated wiring block in docs/domain/EVENT_CATALOG.md(.fr.md)
+#     still matches the registry — i.e. someone changed PRODUCERS/CONSUMERS without regenerating.
+# Regenerate locally with: tools/event-catalog/sync.sh --write
+#
+# Runs only when the registry, the catalog docs, or the tooling change, so it stays cheap.
+
+on:
+  pull_request:
+    paths:
+      - 'crates/contracts/event-topology/**'
+      - 'docs/domain/EVENT_CATALOG.md'
+      - 'docs/domain/EVENT_CATALOG.fr.md'
+      - 'tools/event-catalog/**'
+      - '.github/workflows/event-catalog.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'crates/contracts/event-topology/**'
+      - 'docs/domain/EVENT_CATALOG.md'
+      - 'docs/domain/EVENT_CATALOG.fr.md'
+      - 'tools/event-catalog/**'
+
+jobs:
+  topology:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Topology contract + generated-catalog golden tests
+        run: cargo test -p event-topology

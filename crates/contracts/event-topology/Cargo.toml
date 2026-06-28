@@ -11,3 +11,8 @@ description = "Fleet Kafka topic topology registry + the contract test that fail
 # stay cheap to compile and free of cycles — it is the registry every service is
 # checked against, not a participant in the mesh.
 [dependencies]
+
+# Generator for the docs/domain/EVENT_CATALOG.md wiring block (std-only).
+[[bin]]
+name = "gen-event-catalog"
+path = "src/bin/gen_event_catalog.rs"

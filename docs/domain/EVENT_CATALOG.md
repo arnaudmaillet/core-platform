@@ -6,15 +6,76 @@
 
 ## Source of truth & maintenance
 
-The list of topics, producers, and consumers is **machine-checked** by the event-topology registry
-guard (with its contract tests). The **topic / producer / consumer** columns here should be
-**reconciled with that registry** (ideally generated from it) so they cannot drift; only the
-**semantic** columns (*means* / *trigger*) are authored by humans. Until generation is wired, treat
-the registry guard — not this table — as the authority on *which* edges exist; this table is the
-authority on what they *mean*.
+This catalog has two halves:
+
+- **Topic wiring** (which service produces/consumes which topic) is **generated** from the
+  event-topology registry (`crates/contracts/event-topology`) into the block below — it is the
+  authority on *which* edges exist and cannot drift (a golden test + `tools/event-catalog/sync.sh`
+  enforce it). Don't hand-edit it; change the registry and regenerate.
+- **Event semantics** (what each event *means*, when it fires, who reacts and *why*) are authored by
+  humans in the per-domain sections that follow.
 
 Cross-reference each edge in [`CONTEXT_MAP.md`](./CONTEXT_MAP.md), and the per-event detail in each
 producer's `DOMAIN.md §8`.
+
+## Topic wiring (generated)
+
+<!-- BEGIN GENERATED: topic-wiring · source crates/contracts/event-topology · do not edit by hand -->
+> ⚙️ Generated from the event-topology registry (`crates/contracts/event-topology`). Do not edit by hand — change the registry and run `cargo run -p event-topology --bin gen-event-catalog` (or `tools/event-catalog/sync.sh --write`). The *meaning* of each event is authored in the semantic sections below.
+
+### Produced topics → consumers
+
+| Topic | Producer | Consumers |
+|---|---|---|
+| `account.v1.events` | `account` | `audit`, `profile` |
+| `profile.v1.events` | `profile` | `search`, `post` |
+| `post.published` | `post` | `notification`, `geo-discovery` |
+| `post.updated` | `post` | — *(orphan — see below)* |
+| `post.deleted` | `post` | `timeline` |
+| `post.v1.events` | `post` | `timeline`, `search`, `realtime` |
+| `comment.created` | `comment` | `notification`, `engagement` |
+| `comment.deleted` | `comment` | `engagement` |
+| `engagement.reactions` | `engagement` | `counter`, `notification`, `engagement` |
+| `social-graph.followed` | `social-graph` | `timeline` |
+| `social-graph.unfollowed` | `social-graph` | `timeline` |
+| `social-graph.blocked` | `social-graph` | — *(orphan — see below)* |
+| `social-graph.author_tier_changed` | `social-graph` | `profile` |
+| `chat.conversation.created` | `chat` | — *(orphan — see below)* |
+| `chat.conversation.published` | `chat` | — *(orphan — see below)* |
+| `chat.conversation.unpublished` | `chat` | `chat` |
+| `chat.member.joined` | `chat` | — *(orphan — see below)* |
+| `chat.member.left` | `chat` | — *(orphan — see below)* |
+| `chat.message.sent` | `chat` | — *(orphan — see below)* |
+| `counter.v1.popularity` | `counter` | `realtime`, `geo-discovery` |
+| `moderation.v1.events` | `moderation` | `audit`, `search`, `media` |
+| `auth.v1.events` | `auth` | `audit` |
+| `media.v1.events` | `media` | `media` |
+
+### Deferred — consumed, producer intentionally not in-repo
+
+| Topic | Consumer(s) | Why |
+|---|---|---|
+| `audit.v1.events` | `audit` | Generic privileged-record ingest lane. Domain producers emit their own topics (account/auth/moderation .v1.events) which audit consumes directly; this lane is fed by the sync gRPC RecordPrivileged path and future generic producers. |
+| `moderation.reports` | `moderation` | External user-report intake — produced by the client/edge, not a fleet service. |
+| `moderation.signals` | `moderation` | External ML-classifier signals — produced off-fleet. |
+| `view.v1.events` | `counter` | Upstream view telemetry producer not yet built (counter-analytics blueprint deferral). |
+| `impression.v1.events` | `counter` | Upstream impression telemetry producer not yet built (counter deferral). |
+| `click.v1.events` | `counter` | Upstream click telemetry producer not yet built (counter deferral). |
+| `social-graph.follows` | `counter` | Counter wants a single combined follow stream; social-graph emits the split past-tense social-graph.followed/.unfollowed instead. Combined producer is deferred — TRACKED NAMING MISMATCH, not just a missing emitter. |
+
+### Orphan producers — produced, no in-repo consumer
+
+| Topic | Producer | Why |
+|---|---|---|
+| `post.updated` | `post` | No stream consumer — search/timeline/realtime act on post.v1.events PostUpdated; the legacy per-type topic is emitted for completeness. |
+| `social-graph.blocked` | `social-graph` | Block is enforced on the gRPC read path; no stream consumer yet. |
+| `chat.conversation.created` | `chat` | Chat owns its own delivery plane; reserved for future fan-out. |
+| `chat.conversation.published` | `chat` | Chat delivery-plane headroom. |
+| `chat.member.joined` | `chat` | Chat delivery-plane headroom. |
+| `chat.member.left` | `chat` | Chat delivery-plane headroom. |
+| `chat.message.sent` | `chat` | Future realtime/notification consolidation; chat streams to clients directly today. |
+
+<!-- END GENERATED: topic-wiring -->
 
 ## Identity & Account — `account.v1.events` (producer: `account`)
 
@@ -103,7 +164,11 @@ producer's `DOMAIN.md §8`.
 | `asset_quarantined` / `asset_deleted` / `asset_restored` | a safety/lifecycle transition | Screen fail / takedown / restore | embeds, delivery |
 | `asset_failed` | processing failed | timeout/error | upload UX |
 
-## Social Graph — relation events (producer: `social-graph`) — **Kafka producer deferred**
+## Social Graph — relation events (producer: `social-graph`)
+
+> The split, past-tense topics below **are** produced and consumed (see the wiring block). Only the
+> *combined* `social-graph.follows` stream `counter` would prefer is deferred (a tracked naming
+> mismatch); `counter` reconciles via gRPC meanwhile.
 
 | Event | Means | Emitted when | Consumers & why |
 |---|---|---|---|

@@ -228,6 +228,104 @@ pub const SERVICES: &[&str] = &[
     "audit",
 ];
 
+// ---------------------------------------------------------------------------------------------
+// Event-catalog generation
+//
+// docs/domain/EVENT_CATALOG.md carries a machine-generated "topic wiring" block (topics →
+// producer → consumers, plus the deferred and orphan tables) rendered from the registry above, so
+// the wiring half of the catalog cannot drift from the contract tests. Humans author only the
+// *semantic* tables (what each event means); this block owns the *wiring*.
+//
+// Regenerate with `cargo run -p event-topology --bin gen-event-catalog`
+// (or `tools/event-catalog/sync.sh --write`). The golden test below fails the build if the block
+// committed in the doc no longer matches the registry.
+// ---------------------------------------------------------------------------------------------
+
+/// Opening marker of the generated block in EVENT_CATALOG.md (and its translations).
+pub const CATALOG_BEGIN: &str =
+    "<!-- BEGIN GENERATED: topic-wiring · source crates/contracts/event-topology · do not edit by hand -->";
+/// Closing marker of the generated block.
+pub const CATALOG_END: &str = "<!-- END GENERATED: topic-wiring -->";
+
+/// Consumers of `topic`, in registry (source) order.
+fn consumers_of(topic: &str) -> Vec<&'static str> {
+    CONSUMERS
+        .iter()
+        .filter(|(t, _)| *t == topic)
+        .map(|(_, s)| *s)
+        .collect()
+}
+
+fn code_list(items: &[&str]) -> String {
+    if items.is_empty() {
+        "—".to_string()
+    } else {
+        items
+            .iter()
+            .map(|s| format!("`{s}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+/// Render the complete generated topic-wiring block (markers included) from the registry.
+/// Deterministic: ordering follows the source order of [`PRODUCERS`] / [`DEFERRED`] /
+/// [`ORPHAN_PRODUCERS`].
+pub fn render_catalog_block() -> String {
+    let mut out = String::new();
+    out.push_str(CATALOG_BEGIN);
+    out.push('\n');
+    out.push_str(
+        "> ⚙️ Generated from the event-topology registry \
+         (`crates/contracts/event-topology`). Do not edit by hand — change the registry and run \
+         `cargo run -p event-topology --bin gen-event-catalog` (or `tools/event-catalog/sync.sh \
+         --write`). The *meaning* of each event is authored in the semantic sections below.\n\n",
+    );
+
+    out.push_str("### Produced topics → consumers\n\n");
+    out.push_str("| Topic | Producer | Consumers |\n|---|---|---|\n");
+    for (topic, producer) in PRODUCERS {
+        let consumers = consumers_of(topic);
+        let cell = if consumers.is_empty() {
+            "— *(orphan — see below)*".to_string()
+        } else {
+            code_list(&consumers)
+        };
+        out.push_str(&format!("| `{topic}` | `{producer}` | {cell} |\n"));
+    }
+
+    out.push_str("\n### Deferred — consumed, producer intentionally not in-repo\n\n");
+    out.push_str("| Topic | Consumer(s) | Why |\n|---|---|---|\n");
+    for (topic, reason) in DEFERRED {
+        out.push_str(&format!(
+            "| `{topic}` | {} | {reason} |\n",
+            code_list(&consumers_of(topic))
+        ));
+    }
+
+    out.push_str("\n### Orphan producers — produced, no in-repo consumer\n\n");
+    out.push_str("| Topic | Producer | Why |\n|---|---|---|\n");
+    for (topic, reason) in ORPHAN_PRODUCERS {
+        let producer = PRODUCERS
+            .iter()
+            .find(|(t, _)| t == topic)
+            .map(|(_, s)| *s)
+            .unwrap_or("—");
+        out.push_str(&format!("| `{topic}` | `{producer}` | {reason} |\n"));
+    }
+
+    out.push('\n');
+    out.push_str(CATALOG_END);
+    out
+}
+
+/// Extract the `CATALOG_BEGIN..=CATALOG_END` block from a document, if present.
+pub fn extract_catalog_block(doc: &str) -> Option<&str> {
+    let start = doc.find(CATALOG_BEGIN)?;
+    let end = doc[start..].find(CATALOG_END)? + start + CATALOG_END.len();
+    Some(&doc[start..end])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,5 +473,40 @@ mod tests {
                 "topic {topic:?} is excepted without a reason"
             );
         }
+    }
+
+    // --- generated event-catalog block stays in sync with the registry -----------------------
+
+    const EVENT_CATALOG: &str =
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/domain/EVENT_CATALOG.md"));
+    const EVENT_CATALOG_FR: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../docs/domain/EVENT_CATALOG.fr.md"
+    ));
+
+    /// The generated wiring block committed in the English catalog must match the registry.
+    #[test]
+    fn generated_block_matches_registry_en() {
+        let committed = extract_catalog_block(EVENT_CATALOG)
+            .expect("BEGIN/END markers missing in docs/domain/EVENT_CATALOG.md");
+        assert_eq!(
+            committed,
+            render_catalog_block(),
+            "docs/domain/EVENT_CATALOG.md generated block is STALE — \
+             run `tools/event-catalog/sync.sh --write` and commit"
+        );
+    }
+
+    /// The French mirror carries the identical (language-invariant) wiring block.
+    #[test]
+    fn generated_block_matches_registry_fr() {
+        let committed = extract_catalog_block(EVENT_CATALOG_FR)
+            .expect("BEGIN/END markers missing in docs/domain/EVENT_CATALOG.fr.md");
+        assert_eq!(
+            committed,
+            render_catalog_block(),
+            "docs/domain/EVENT_CATALOG.fr.md generated block is STALE — \
+             run `tools/event-catalog/sync.sh --write` and commit"
+        );
     }
 }
