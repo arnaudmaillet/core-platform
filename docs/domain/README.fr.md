@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: d6a559f60da5ec140b40edd1b2aa958c24b5f808a1caf21a52d81ab3091831af
+  source_sha256: 45671c0f3716c4c40b31a9ac33be15594fbc64c5b9968d1e880295765b0a70d1
   translated_at: 2026-06-28
   status: complete
 ---
@@ -73,10 +73,46 @@ TIER-2 conserve CORE plus des sections DEEP réduites à une ligne.
 | `social-graph` | Relations followers / following | [`crates/services/social-graph/docs/DOMAIN.md`](../../crates/services/social-graph/docs/DOMAIN.md) | ✅ |
 | `timeline` | Fan-out de timeline | [`crates/services/timeline/docs/DOMAIN.md`](../../crates/services/timeline/docs/DOMAIN.md) | ✅ |
 
+## Contrats de bibliothèque d'infrastructure partagée (`foundation/` + `platform/`)
+
+Les 14 bibliothèques transversales que chaque service compose. Ce ne sont **pas** des bounded contexts —
+elles ne possèdent aucune donnée métier et n'émettent aucun événement de domaine ; elles possèdent une
+**capacité technique** (un mécanisme, un contrat, une séquence de boot). Leur `DOMAIN.md` suit donc la
+**variante bibliothèque** ([`docs/templates/DOMAIN.lib.template.md`](../templates/DOMAIN.lib.template.md)) :
+même squelette à 10 sections et tiering CORE/DEEP, mais la section « propriété des données » devient une
+frontière de *direction de dépendance / pureté* et la section « événements de domaine » se réduit aux
+signaux émis (`tracing`/métriques/aucun).
+
+**`foundation/`** — feuilles pures et contrats quasi-racine (aucune IO sauf indication) :
+
+| Crate | Capacité partagée | `DOMAIN.md` | Statut |
+|---|---|---|---|
+| `error` | Contrat d'erreur distribuée (trait · sévérité · forme wire) | [`crates/foundation/error/docs/DOMAIN.md`](../../crates/foundation/error/docs/DOMAIN.md) | ✅ |
+| `health` | Contrat de probe liveness/readiness (feuille du graphe) | [`crates/foundation/health/docs/DOMAIN.md`](../../crates/foundation/health/docs/DOMAIN.md) | ✅ |
+| `infra-config` | Config externalisée & hot-reload fail-closed | [`crates/foundation/infra-config/docs/DOMAIN.md`](../../crates/foundation/infra-config/docs/DOMAIN.md) | ✅ |
+| `resilience` | Tolérance aux pannes en sortie (circuit breaker · retry · timeout) | [`crates/foundation/resilience/docs/DOMAIN.md`](../../crates/foundation/resilience/docs/DOMAIN.md) | ✅ |
+| `traffic` | Rate limiting en entrée (mécanisme GCRA pur) | [`crates/foundation/traffic/docs/DOMAIN.md`](../../crates/foundation/traffic/docs/DOMAIN.md) | ✅ |
+| `validate-core` | Abstraction de validation zéro-dépendance (Separated Interface) | [`crates/foundation/validate-core/docs/DOMAIN.md`](../../crates/foundation/validate-core/docs/DOMAIN.md) | ✅ |
+
+**`platform/`** — les couches dispatch applicatif, transport, sécurité, et runtime :
+
+| Crate | Capacité partagée | `DOMAIN.md` | Statut |
+|---|---|---|---|
+| `auth-context` | Vérification JWT en entrée + identité task-local | [`crates/platform/auth-context/docs/DOMAIN.md`](../../crates/platform/auth-context/docs/DOMAIN.md) | ✅ |
+| `cqrs` | Bus Command/Query in-process + pipeline de middleware | [`crates/platform/cqrs/docs/DOMAIN.md`](../../crates/platform/cqrs/docs/DOMAIN.md) | ✅ |
+| `service-runtime` | Bootstrap unifié de la flotte (le trait `Service` + `serve`) | [`crates/platform/service-runtime/docs/DOMAIN.md`](../../crates/platform/service-runtime/docs/DOMAIN.md) | ✅ |
+| `telemetry` | Bootstrap d'observabilité en un appel (logs · traces · métriques) | [`crates/platform/telemetry/docs/DOMAIN.md`](../../crates/platform/telemetry/docs/DOMAIN.md) | ✅ |
+| `test-support` | Échafaudage de tests d'intégration (dev-only) | [`crates/platform/test-support/docs/DOMAIN.md`](../../crates/platform/test-support/docs/DOMAIN.md) | ✅ |
+| `traffic-redis` | Backend distribué Redis-lease pour `traffic` | [`crates/platform/traffic-redis/docs/DOMAIN.md`](../../crates/platform/traffic-redis/docs/DOMAIN.md) | ✅ |
+| `transport` | gRPC + Kafka avec propagation de trace + `run_consumer` | [`crates/platform/transport/docs/DOMAIN.md`](../../crates/platform/transport/docs/DOMAIN.md) | ✅ |
+| `validation` | Middleware de validation d'entrée CQRS + codes `VAL-xxxx` | [`crates/platform/validation/docs/DOMAIN.md`](../../crates/platform/validation/docs/DOMAIN.md) | ✅ |
+
 ## Rédaction
 
-- Modèle : [`docs/templates/DOMAIN.template.md`](../templates/DOMAIN.template.md) — copier vers
+- Modèle service : [`docs/templates/DOMAIN.template.md`](../templates/DOMAIN.template.md) — copier vers
   `crates/services/<svc>/docs/DOMAIN.md` et le remplir.
+- Modèle bibliothèque partagée : [`docs/templates/DOMAIN.lib.template.md`](../templates/DOMAIN.lib.template.md)
+  — pour `crates/foundation/*` et `crates/platform/*` ; même squelette, sections orientées bibliothèque.
 - Décisions : consigner la justification dans des ADR immuables sous [`docs/adr/`](../adr/README.md)
   et les relier depuis `DOMAIN.md §9` — ne jamais intégrer le *pourquoi* en ligne.
 - i18n : l'anglais est canonique ; un miroir `DOMAIN.fr.md` suit le
