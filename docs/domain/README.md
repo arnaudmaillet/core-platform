@@ -43,25 +43,25 @@ The 17 services. Each link will resolve once that service's `docs/DOMAIN.md` lan
 rollout in the strategy). Tier drives depth: TIER-0/1 get the full DEEP sections; TIER-2 keeps
 CORE plus collapsed one-line DEEP sections.
 
-| Service | Bounded context | `DOMAIN.md` |
-|---|---|---|
-| `account` | Account / identity SoR | `crates/services/account/docs/DOMAIN.md` |
-| `audit` | Tamper-evident compliance evidence | `crates/services/audit/docs/DOMAIN.md` |
-| `auth` | Issuance / session / IdP broker | `crates/services/auth/docs/DOMAIN.md` |
-| `chat` | Conversations & messaging | `crates/services/chat/docs/DOMAIN.md` |
-| `comment` | Comment threads | `crates/services/comment/docs/DOMAIN.md` |
-| `counter` | Counter / analytics SoReference | `crates/services/counter/docs/DOMAIN.md` |
-| `engagement` | Reactions & edge state | `crates/services/engagement/docs/DOMAIN.md` |
-| `geo-discovery` | Geo-spatial discovery | `crates/services/geo-discovery/docs/DOMAIN.md` |
-| `media` | Media control plane | `crates/services/media/docs/DOMAIN.md` |
-| `moderation` | Trust & safety decisions | `crates/services/moderation/docs/DOMAIN.md` |
-| `notification` | Notification activity feed | `crates/services/notification/docs/DOMAIN.md` |
-| `post` | Content / posts | `crates/services/post/docs/DOMAIN.md` |
-| `profile` | Public personas | `crates/services/profile/docs/DOMAIN.md` |
-| `realtime` | Connection / delivery plane | `crates/services/realtime/docs/DOMAIN.md` |
-| `search` | Discovery read-model | `crates/services/search/docs/DOMAIN.md` |
-| `social-graph` | Follower / following relations | `crates/services/social-graph/docs/DOMAIN.md` |
-| `timeline` | Timeline fan-out | `crates/services/timeline/docs/DOMAIN.md` |
+| Service | Bounded context | `DOMAIN.md` | Status |
+|---|---|---|---|
+| `account` | Account / identity SoR | `crates/services/account/docs/DOMAIN.md` | ⬜ |
+| `audit` | Tamper-evident compliance evidence | [`crates/services/audit/docs/DOMAIN.md`](../../crates/services/audit/docs/DOMAIN.md) | ✅ |
+| `auth` | Issuance / session / IdP broker | `crates/services/auth/docs/DOMAIN.md` | ⬜ |
+| `chat` | Conversations & messaging | `crates/services/chat/docs/DOMAIN.md` | ⬜ |
+| `comment` | Comment threads | `crates/services/comment/docs/DOMAIN.md` | ⬜ |
+| `counter` | Counter / analytics SoReference | `crates/services/counter/docs/DOMAIN.md` | ⬜ |
+| `engagement` | Reactions & edge state | `crates/services/engagement/docs/DOMAIN.md` | ⬜ |
+| `geo-discovery` | Geo-spatial discovery | `crates/services/geo-discovery/docs/DOMAIN.md` | ⬜ |
+| `media` | Media control plane | `crates/services/media/docs/DOMAIN.md` | ⬜ |
+| `moderation` | Trust & safety decisions | [`crates/services/moderation/docs/DOMAIN.md`](../../crates/services/moderation/docs/DOMAIN.md) | ✅ |
+| `notification` | Notification activity feed | `crates/services/notification/docs/DOMAIN.md` | ⬜ |
+| `post` | Content / posts | `crates/services/post/docs/DOMAIN.md` | ⬜ |
+| `profile` | Public personas | `crates/services/profile/docs/DOMAIN.md` | ⬜ |
+| `realtime` | Connection / delivery plane | [`crates/services/realtime/docs/DOMAIN.md`](../../crates/services/realtime/docs/DOMAIN.md) | ✅ |
+| `search` | Discovery read-model | `crates/services/search/docs/DOMAIN.md` | ⬜ |
+| `social-graph` | Follower / following relations | `crates/services/social-graph/docs/DOMAIN.md` | ⬜ |
+| `timeline` | Timeline fan-out | `crates/services/timeline/docs/DOMAIN.md` | ⬜ |
 
 ## Authoring
 
