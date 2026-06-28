@@ -98,6 +98,7 @@ read-models or evidence sinks. See each Domain Card §8.
 
 ## Diagram
 
-> A C4 Container/Component view will be **regenerated from this map** (and the per-service Domain
-> Cards) as a derived artifact. Until then, this document is authoritative. Do **not** link the
-> legacy C4 in [`docs/_legacy/`](../_legacy/README.md).
+> The C4 model has been **regenerated from this map** (and the per-service Domain Cards) as a derived
+> artifact: [`docs/architecture/workspace.dsl`](../architecture/workspace.dsl). This document remains
+> the authoritative source for the relationships; the diagram is generated to match it. Do **not**
+> link the legacy C4 in [`docs/_legacy/`](../_legacy/README.md).

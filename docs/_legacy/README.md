@@ -34,7 +34,7 @@ before the current fleet, and never updated since.
 
 ## Disposition
 
-This C4 model will be **regenerated from the new functional documentation** (the per-service
-Domain Cards in `crates/services/<svc>/docs/DOMAIN.md` plus `docs/domain/CONTEXT_MAP.md`) as a
-*derived* artifact, so the diagram can no longer drift without the doc — and its CI gate —
-catching it. Once that regenerated model exists, this directory may be deleted outright.
+This C4 model has been **superseded by a corrected model regenerated from the functional
+documentation** (the per-service Domain Cards plus `docs/domain/CONTEXT_MAP.md`), now living at
+[`docs/architecture/`](../architecture/README.md). This `_legacy/` directory is retained only for
+historical reference and **may be deleted outright** — nothing current references it.
