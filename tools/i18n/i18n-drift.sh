@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 #
-# i18n-drift.sh — detect drift between canonical README.md files and their translations.
+# i18n-drift.sh — detect drift between canonical docs and their translations.
 #
-# A translation (README.<lang>.md) records, in its YAML frontmatter, the SHA-256 of the
-# sibling README.md it was translated from. This script recomputes that hash and flags any
-# translation whose recorded hash no longer matches — unless it is explicitly `status: stale`.
+# A translation (<name>.<lang>.md, e.g. README.fr.md, DOMAIN.fr.md, CONTEXT_MAP.fr.md) records,
+# in its YAML frontmatter, the SHA-256 of the canonical <name>.md it was translated from. This
+# script recomputes that hash and flags any translation whose recorded hash no longer matches —
+# unless it is explicitly `status: stale`.
 #
 # Usage:
-#   tools/i18n/i18n-drift.sh check                 # verify all translations (CI gate)
-#   tools/i18n/i18n-drift.sh stamp <README.fr.md>  # record current source hash into a translation
+#   tools/i18n/i18n-drift.sh check               # verify all translations (CI gate)
+#   tools/i18n/i18n-drift.sh stamp <name>.fr.md  # record current source hash into a translation
 #
 # See docs/i18n/TRANSLATION.md for the full standard.
 
@@ -33,20 +34,24 @@ frontmatter_get() {
   ' "$1"
 }
 
-# --- discover all translation files (README.<lang>.md, excluding plain README.md) ----------
+# --- discover all translation files (<name>.<lang>.md, two-letter lang code) ----------------
+# Matches README.fr.md, DOMAIN.fr.md, CONTEXT_MAP.fr.md, … but never a canonical <name>.md
+# (which has no .<lang>. segment). The canonical sibling is derived by stripping .<lang>.md.
 find_translations() {
-  find . -path ./target -prune -o -type f \
-    \( -name 'README.*.md' -a ! -name 'README.md' \) -print | sort
+  find . -path ./target -prune -o -type f -name '*.[a-z][a-z].md' -print | sort
 }
+
+# --- canonical source for a translation: strip the .<lang>.md suffix, append .md -----------
+canonical_for() { printf '%s.md\n' "${1%.[a-z][a-z].md}"; }
 
 check() {
   local fail=0 found=0 fr src want status got
   while IFS= read -r fr; do
     [ -n "$fr" ] || continue
     found=1
-    src="$(dirname "$fr")/README.md"
+    src="$(canonical_for "$fr")"
     if [ ! -f "$src" ]; then
-      printf 'FAIL  %s\n        no sibling README.md\n' "$fr"; fail=1; continue
+      printf 'FAIL  %s\n        no canonical source %s\n' "$fr" "$src"; fail=1; continue
     fi
     want="$(frontmatter_get "$fr" source_sha256 || true)"
     status="$(frontmatter_get "$fr" status || true)"
@@ -72,8 +77,8 @@ stamp() {
   local fr="${1:-}"
   [ -n "$fr" ] && [ -f "$fr" ] || { echo "usage: $0 stamp <README.<lang>.md>" >&2; exit 2; }
   local src want today tmp
-  src="$(dirname "$fr")/README.md"
-  [ -f "$src" ] || { echo "no sibling README.md for $fr" >&2; exit 2; }
+  src="$(canonical_for "$fr")"
+  [ -f "$src" ] || { echo "no canonical source $src for $fr" >&2; exit 2; }
   want="$(sha "$src")"; today="$(date +%F)"; tmp="$(mktemp)"
   awk -v h="$want" -v d="$today" '
     /^---[[:space:]]*$/ { blk++ }

@@ -70,8 +70,8 @@ CORE plus collapsed one-line DEEP sections.
 - Decisions: capture rationale as immutable ADRs under [`docs/adr/`](../adr/README.md) and link
   them from `DOMAIN.md §9` — never inline the *why*.
 - i18n: English is canonical; a `DOMAIN.fr.md` mirror follows the
-  [translation standard](../i18n/TRANSLATION.md). The drift gate currently scans `README.*.md`
-  only; extending it to `DOMAIN.*.md` is part of the rollout's governance phase.
+  [translation standard](../i18n/TRANSLATION.md). The drift gate (`tools/i18n/i18n-drift.sh`)
+  covers **any** `<name>.<lang>.md`, so `DOMAIN.fr.md`, `CONTEXT_MAP.fr.md`, etc. are checked the
+  same way as READMEs.
 
-> 🇫🇷 A French mirror (`README.fr.md`) of this index will be added once the scaffold is filled
-> with real content, per the translation standard.
+> 🇫🇷 French mirror: [`README.fr.md`](./README.fr.md).
