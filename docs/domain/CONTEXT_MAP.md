@@ -1,46 +1,103 @@
 # Context Map
 
-> 🟡 **Scaffold.** This file is the cross-context relationship map for the platform. It is
-> **multi-owner** — no single crate can keep it true — so it lives here, owned by the
-> architecture guild. Fill it from ground truth (the crates, their `*.v1` protos, and the
-> event-topology registry guard), **never** from the quarantined legacy C4.
+> Populated from the 17 per-service Domain Cards (`crates/services/<svc>/docs/DOMAIN.md` §1 + §7),
+> grounded in the crates, their `*.v1` protos, and the event-topology registry guard. This file is
+> **multi-owner** (the architecture guild owns it). Do **not** derive it from the quarantined
+> legacy C4 in [`docs/_legacy/`](../_legacy/README.md).
 
 ## What this document is
 
-A [DDD **context map**](https://martinfowler.com/bliki/BoundedContext.html): the bounded
-contexts and the *type of coupling* on every edge between them. The coupling type — not just
-"A talks to B" — is the point, because it tells a reviewer what breaks when a neighbour changes.
+A [DDD **context map**](https://martinfowler.com/bliki/BoundedContext.html): the bounded contexts
+and the *type of coupling* on every edge between them. The coupling type — not just "A talks to B" —
+tells a reviewer what breaks when a neighbour changes.
 
 ## Relationship patterns (the vocabulary)
 
 | Pattern | Meaning in this codebase |
 |---|---|
 | **Open-Host Service / Published Language (OHS/PL)** | A context publishes a stable contract for all comers — our `*.v1` protos and Kafka topics |
-| **Anti-Corruption Layer (ACL)** | A consumer translates a foreign schema into its own model at the edge — e.g. `infrastructure/decode.rs` wire→domain mappers |
+| **Anti-Corruption Layer (ACL)** | A consumer translates a foreign schema into its own model at the edge — the `infrastructure/decode.rs` wire→domain mappers |
 | **Conformist** | A downstream accepts an upstream's model as-is, no translation |
-| **Customer / Supplier** | Downstream's needs are negotiated into the upstream's roadmap |
-| **Shared Kernel** | A shared model both contexts depend on (use sparingly — e.g. shared foundation crates) |
-| **Partnership** | Two contexts succeed or fail together and coordinate releases |
+| **Customer / Supplier** | A synchronous (gRPC) dependency where the downstream's needs shape the upstream |
+| **Separate Ways** | Two contexts deliberately *not* integrated (decoupled on purpose) |
+| **Shared Kernel** | A shared model both contexts depend on (the foundation crates, e.g. `auth-context`) |
 
 ## Subdomain classification
 
-Each context is **Core**, **Supporting**, or **Generic** — this drives investment. Record it in
-each service's Domain Card; this table is the roll-up.
+Drives investment. Rolled up from each Domain Card's class line.
 
-| Context | Subdomain class | Notes |
+| Subdomain class | Contexts | Rationale |
 |---|---|---|
-| `<ctx>` | `<Core \| Supporting \| Generic>` | `<one line>` |
+| **Core** | `post`, `comment`, `chat`, `social-graph`, `engagement` | The content + social fabric — the platform's competitive substance |
+| **Supporting** | `account`, `auth`, `profile`, `audit`, `moderation`*, `media`, `notification`, `realtime`, `search`, `geo-discovery`, `counter`, `timeline` | Necessary capabilities and derived read-models / planes; bespoke but not value-origin |
 
-## The map
+> \* `moderation` is classed **Core** in its own Domain Card (trust & safety is product-differentiating
+> for a UGC network); it is the one judgement call most worth revisiting. All other classifications
+> follow "Core = where truth/value originates; Supporting = derived, infrastructural, or compliance".
 
-> Fill one row per directed edge. Direction is from the perspective of the **owning** context.
+## The map — asynchronous edges (Kafka, Published Language)
 
-| Upstream context | Downstream context | Pattern | Mechanism (topic / RPC) | What breaks downstream if upstream changes |
+> Direction is **producer → consumer**. Every producer topic is part of that context's OHS/PL; every
+> consumer applies an ACL (`decode.rs`) unless noted Conformist.
+
+| Producer | Topic (Published Language) | Consumer | Pattern | What breaks downstream if the producer changes |
 |---|---|---|---|---|
-| `<ctx>` | `<ctx>` | `<OHS/PL \| ACL \| Conformist \| …>` | `<topic.* \| pkg.v1.Rpc>` | `<impact>` |
+| `account` | `account.v1.events` | `audit` | ACL | compliance evidence + GDPR Art. 17 crypto-shred loop |
+| `account` | `account.v1.events` | `profile` | ACL | persona provisioning |
+| `auth` | `auth.v1.events` | `audit` | ACL | session-lifecycle evidence |
+| `profile` | `profile.v1.events` | `post` | ACL | author snapshots on posts |
+| `profile` | `profile.v1.events` | `search` | ACL | profile indexing |
+| `profile` | `profile.v1.events` (`tier_changed`) | `geo-discovery` | ACL | author-tier ranking weight |
+| `profile` | `profile.v1.events` (`tier_changed`) | `timeline` | ACL | push/pull fan-out decision |
+| `profile` | `profile.v1.events` | `social-graph` | ACL | relation validity vs profile existence |
+| `post` | `post.v1.events` | `timeline` | ACL | feed fan-out |
+| `post` | `post.v1.events` | `search` | ACL | post indexing |
+| `post` | `post.v1.events` | `geo-discovery` | ACL | map cards |
+| `post` | `post.v1.events` | `counter` | ACL | post magnitudes |
+| `post` | `post.v1.events` | `realtime` | ACL (broadcast) | live post broadcast |
+| `comment` | `comment.created` / `comment.deleted` | `notification` | ACL | reply notifications |
+| `comment` | `comment.created` / `comment.deleted` | `engagement` / `counter` | ACL | comment counts |
+| `engagement` | `engagement.reactions` | `notification` | ACL | reaction notifications |
+| `engagement` | `engagement.reactions` | `counter` | ACL | reaction magnitudes |
+| `engagement` | `engagement.score_updated` | `geo-discovery` | ACL | virality ranking |
+| `counter` | `counter.v1.popularity` | `search` | ACL | popularity ranking signal |
+| `counter` | `counter.v1.popularity` | `realtime` | ACL (broadcast) | live engagement counters |
+| `moderation` | `moderation.v1.events` (`decision_recorded`) | `audit` | ACL | DSA-rationale compliance evidence |
+| `moderation` | `moderation.v1.events` (Plane B) | `timeline`, `chat`, `account` | ACL | enforcement denormalization |
+| `moderation` | `moderation.v1.events` | `post`, `search` | ACL | content visibility/enforcement reflection |
+| `moderation` | `moderation.v1.events` (takedown) | `media` | ACL | asset takedown |
+| `media` | `media.v1.events` | `post`, `profile`, `search` | ACL | embeds / indexing |
+| `notification` | `notification.v1.events` | `realtime` | ACL (targeted) | live notification delivery |
+| `chat` | `chat.conversation.unpublished` | `chat` `VisibilityWorker` | internal | audience-plane teardown |
+| `social-graph` | relation events (`ProfileFollowed`…) | — | OHS (deferred) | the `social-graph.follows` Kafka producer is **deferred**; consumers read via gRPC today |
+
+## The map — synchronous edges (gRPC + verify)
+
+| Caller | Callee | Pattern | Mechanism | What breaks if the callee changes |
+|---|---|---|---|---|
+| `media` | `moderation` | Customer/Supplier (sync, fail-closed) | `Screen` RPC | catastrophic-category upload gating |
+| `moderation` | `account` | Customer/Supplier | suspension/ban execution | enforcement application |
+| `timeline` | `social-graph` | Customer/Supplier | follower-set reads for fan-out | feed fan-out |
+| `counter` | `social-graph` | Customer/Supplier | follower-count reconciliation | follower-magnitude drift heal |
+| `post` | `media` | Customer/Supplier | `MediaAttachment` references | media in posts |
+| `comment` | `post` | Customer/Supplier | `PostId` references | comment validity |
+| `auth` | `account` | Customer/Supplier | `SubjectLink` ↔ `AccountId` | session subject resolution |
+| `realtime` | `auth` | Conformist (verify-only) | `auth-context` ES256 token verify at handshake | new connection authentication |
+| **all services** | `auth` | Shared Kernel / OHS | edge token verified in-process via `auth-context` | every authenticated call |
+
+## Notable non-integrations (Separate Ways)
+
+| A | B | Why deliberately decoupled |
+|---|---|---|
+| `realtime` | `chat` | `chat.message.sent` is **not** consumed by `realtime`; chat runs its own live plane (coexist-first — see [`ADR-0003`](../adr/0003-realtime-is-a-fail-open-system-of-connection.md) / [`ADR-0006`](../adr/0006-chat-shadowing-pattern-member-vs-audience-plane.md)). Consolidation is a future decision. |
+
+## Terminal sinks (consume, never produce of record)
+
+`audit`, `search`, `timeline`, `geo-discovery`, `realtime` publish **nothing of record** — they are
+read-models or evidence sinks. See each Domain Card §8.
 
 ## Diagram
 
 > A C4 Container/Component view will be **regenerated from this map** (and the per-service Domain
-> Cards) once the scaffold is filled. Until then, this table is authoritative. Do **not** link
-> the legacy C4 in `docs/_legacy/`.
+> Cards) as a derived artifact. Until then, this document is authoritative. Do **not** link the
+> legacy C4 in [`docs/_legacy/`](../_legacy/README.md).
