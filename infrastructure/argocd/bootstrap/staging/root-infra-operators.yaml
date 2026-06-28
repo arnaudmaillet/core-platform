@@ -1,10 +1,12 @@
 # infrastructure/argocd/bootstrap/staging/root-infra-operators.yaml
 #
-# Staging operators — adds scylla-operator + external-secrets to the dev set
-# (cnpg, k6). Each operator gets its own namespace (vs dev's shared argocd ns),
+# Staging operators — adds scylla-operator + external-secrets + keda to the dev
+# set (cnpg, k6). Each operator gets its own namespace (vs dev's shared argocd ns),
 # and the ESO ServiceAccount receives its IRSA role-arn injected from
 # global-params-staging (externalSecretsRoleArn), the same pattern the platform
-# appset uses for lb-controller/karpenter.
+# appset uses for lb-controller/karpenter. KEDA owns the keda.sh CRDs the
+# event-driven workers (counter/realtime/audit) scale on — it must land at this
+# wave (-10) so those CRDs exist before the workload overlay (wave 0).
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -30,6 +32,9 @@ spec:
                 - name: external-secrets
                   folder: infrastructure/argocd/apps/infrastructure/operators/external-secrets
                   destNamespace: external-secrets
+                - name: keda
+                  folder: infrastructure/argocd/apps/infrastructure/operators/keda
+                  destNamespace: keda
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop

@@ -56,9 +56,16 @@ fn services() -> Vec<ServiceMigrations> {
         // its cold time-series is Scylla, so it registers one entry per backend
         // (each pointing at the matching `migrations/<store>` subdir).
         ServiceMigrations { name: "counter-timeseries", store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/counter/migrations/scylla") },
+        // `moderation` is dual-store like `counter`: its decision/enforcement SoR is
+        // Postgres and its append-only history feed is Scylla. Same split: one entry
+        // per backend, each pointing at the matching `migrations/<store>` subdir.
+        ServiceMigrations { name: "moderation-history", store: Store::Scylla,   dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/moderation/migrations/scylla") },
         ServiceMigrations { name: "account",            store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/account/migrations") },
         ServiceMigrations { name: "counter",            store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/counter/migrations/postgres") },
         ServiceMigrations { name: "audit",              store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/audit/migrations") },
+        ServiceMigrations { name: "moderation",         store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/moderation/migrations/postgres") },
+        ServiceMigrations { name: "auth",               store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/auth/migrations") },
+        ServiceMigrations { name: "media",              store: Store::Postgres, dir: include_dir!("$CARGO_MANIFEST_DIR/../../services/media/migrations") },
     ]
 }
 

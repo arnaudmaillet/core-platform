@@ -174,7 +174,7 @@ module "cert_manager_irsa_role" {
 
   oidc_providers = {
     main = {
-      provider_arn               = var.oidc_provider_arn
+      provider_arn = var.oidc_provider_arn
       namespace_service_accounts = [
         "cert-manager:cert-manager",
         "cert-manager:cert-manager-cainjector",
@@ -213,7 +213,7 @@ data "aws_acm_certificate" "issued" {
 # puisse demander des instances Spot sur ce compte AWS.
 resource "aws_iam_service_linked_role" "spot" {
   aws_service_name = "spot.amazonaws.com"
-  
+
   # On ajoute un cycle de vie pour éviter les erreurs si le rôle existe déjà 
   # sur le compte AWS (car ce rôle est global au compte).
   lifecycle {
@@ -267,6 +267,107 @@ resource "aws_iam_role_policy" "external_secrets_read" {
         Condition = {
           StringLike = { "kms:ViaService" = "secretsmanager.*.amazonaws.com" }
         }
+      }
+    ]
+  })
+}
+
+# --- 8. AUDIT APP (KMS KEK + WORM bucket) ------------------------------------
+# audit-server (sync RecordPrivileged seals PII; Query decrypts) and audit-worker
+# (ingest seals; checkpoint anchors to WORM) are the SOLE principals on the audit
+# KEK and the Object-Lock bucket. Write-only on the bucket: PutObject + retention,
+# explicitly NO DeleteObject — WORM is enforced by Object-Lock COMPLIANCE, this
+# just removes the ability from the role itself. Created only when the KEK ARN is
+# supplied (staging/prod).
+module "audit_app_irsa_role" {
+  count = var.audit_kek_arn != "" ? 1 : 0
+
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "${var.cluster_name}-audit-role"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = var.oidc_provider_arn
+      namespace_service_accounts = var.audit_service_accounts
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "audit_app" {
+  count = var.audit_kek_arn != "" ? 1 : 0
+
+  name = "AuditKekAndWorm"
+  role = module.audit_app_irsa_role[0].iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "WrapUnwrapSubjectDeks"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = var.audit_kek_arn
+      },
+      {
+        # Write + tamper-evident retention, NEVER delete/overwrite.
+        Sid    = "WormWriteOnly"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectRetention",
+          "s3:GetObject",
+          "s3:GetObjectRetention",
+          "s3:ListBucket",
+          "s3:GetBucketObjectLockConfiguration"
+        ]
+        Resource = [var.audit_worm_bucket_arn, "${var.audit_worm_bucket_arn}/*"]
+      }
+    ]
+  })
+}
+
+# --- 9. MEDIA APP (asset bucket) ---------------------------------------------
+# media-server brokers presigned upload/download + lifecycle, so it needs full
+# object RW (incl. delete for asset takedown) on its bucket only. Created only
+# when the media bucket ARN is supplied (staging/prod).
+module "media_app_irsa_role" {
+  count = var.media_bucket_arn != "" ? 1 : 0
+
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "${var.cluster_name}-media-role"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = var.oidc_provider_arn
+      namespace_service_accounts = var.media_service_accounts
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "media_app" {
+  count = var.media_bucket_arn != "" ? 1 : 0
+
+  name = "MediaBucketReadWrite"
+  role = module.media_app_irsa_role[0].iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ObjectReadWrite"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = ["${var.media_bucket_arn}/*"]
+      },
+      {
+        Sid      = "ListAndLocate"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket", "s3:GetBucketLocation"]
+        Resource = [var.media_bucket_arn]
       }
     ]
   })

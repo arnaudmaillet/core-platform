@@ -1,0 +1,22 @@
+# Media asset-lifecycle PostgreSQL via CloudNativePG. namePrefix ->
+# staging-media-postgres; CNPG exposes staging-media-postgres-rw:5432 and a
+# staging-media-postgres-app Secret (key `uri` = full connection string) wired
+# into media-server (see patch-media-db.yaml).
+#
+# Postgres is media's asset-lifecycle SoR (the JSONB asset document). The bytes
+# live in S3 (presigned direct upload/delivery) and the hot cache in ElastiCache;
+# neither is provisioned here.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: media-postgres
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: media
+      owner: app
+  storage:
+    size: 10Gi
+    storageClass: gp3
