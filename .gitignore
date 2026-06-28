@@ -27,6 +27,8 @@ rust-project.json
 # Structurizr
 .structurizr/
 **/structurizr-*-key.json
+# Workspace state Lite regenerates from workspace.dsl (derived, not source)
+docs/architecture/workspace.json
 
 # Fichiers et dossiers générés par Terraform
 .terraform.lock.hcl
