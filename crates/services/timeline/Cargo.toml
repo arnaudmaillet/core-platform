@@ -16,7 +16,6 @@ validation     = { workspace = true }
 scylla-storage = { workspace = true }
 redis-storage  = { workspace = true }
 cqrs           = { workspace = true }
-telemetry      = { workspace = true }
 transport      = { workspace = true }
 service-runtime = { workspace = true }
 anyhow         = { workspace = true }
@@ -24,7 +23,6 @@ anyhow         = { workspace = true }
 # ── Async runtime & utilities ─────────────────────────────────────────────────
 tokio        = { workspace = true }
 futures      = { workspace = true }
-futures-util = { workspace = true }
 async-trait  = { workspace = true }
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
@@ -33,7 +31,6 @@ serde_json   = { workspace = true }
 
 # ── Domain utilities ──────────────────────────────────────────────────────────
 uuid    = { workspace = true }
-chrono  = { workspace = true }
 base64  = { workspace = true }
 
 # ── Error handling & observability ───────────────────────────────────────────
@@ -43,10 +40,6 @@ tracing   = { workspace = true }
 # ── gRPC / proto ─────────────────────────────────────────────────────────────
 social-graph-api = { workspace = true }   # cross-service client stubs (contracts tier)
 tonic            = { workspace = true }
-tonic-prost      = { workspace = true }
-prost            = { workspace = true }
-prost-types      = { workspace = true }
-tonic-health     = { workspace = true }
 tonic-reflection = { workspace = true }
 http             = { workspace = true }
 

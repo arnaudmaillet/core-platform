@@ -17,25 +17,20 @@ postgres-storage = { workspace = true }
 
 # ── Shared platform crates ────────────────────────────────────────────────────
 cqrs         = { workspace = true }
-auth-context = { workspace = true }
-telemetry    = { workspace = true }
 transport    = { workspace = true }
 service-runtime = { workspace = true }
 anyhow       = { workspace = true }
 
 # ── Async runtime & utilities ─────────────────────────────────────────────────
 tokio        = { workspace = true }
-futures      = { workspace = true }
 async-trait  = { workspace = true }
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
 serde        = { workspace = true }
-serde_json   = { workspace = true }
 
 # ── Domain types ──────────────────────────────────────────────────────────────
 uuid         = { workspace = true }
 chrono       = { workspace = true }
-regex        = { workspace = true }
 
 # ── Error handling ────────────────────────────────────────────────────────────
 thiserror    = { workspace = true }
@@ -45,10 +40,7 @@ tracing      = { workspace = true }
 
 # ── gRPC / Protobuf ───────────────────────────────────────────────────────────
 tonic             = { workspace = true }
-tonic-prost       = { workspace = true }
-prost             = { workspace = true }
 prost-types       = { workspace = true }
-tonic-health      = { workspace = true }
 tonic-reflection  = { workspace = true }
 http              = { workspace = true }
 sqlx              = { workspace = true }

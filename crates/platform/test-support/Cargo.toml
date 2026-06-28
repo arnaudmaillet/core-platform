@@ -22,9 +22,7 @@ tokio = { workspace = true }
 
 # ── ScyllaDB migration runner ────────────────────────────────────────────────
 scylla-storage = { workspace = true }
-scylla         = { workspace = true }
 
 # ── Postgres migration runner ────────────────────────────────────────────────
 sqlx = { workspace = true }
 
-tracing = { workspace = true }
