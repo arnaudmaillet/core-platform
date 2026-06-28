@@ -28,16 +28,23 @@ The system is built on four fundamental pillars:
   - **CD/GitOps:** ArgoCD.
 - **Messaging:** Apache Kafka (rdkafka).
 
-## System Architecture (C4 Model)
+## System Architecture & Documentation
 
-The system architecture is documented using the **C4 Model** and maintained via **Structurizr**. These diagrams provide a comprehensive view of our services, boundaries, and infrastructure:
+The platform's documentation is layered by concern, each layer derived from the code as ground truth:
 
-- **System Context Diagram:** High-level interactions between the platform and external systems.
-- **Container Diagram:** Relationships between microservices (Gateway, Account, Profile, Social, Post) and persistent stores.
-- **Cloud Infrastructure Diagram:** Detailed view of our AWS EKS deployment, VPC structure, and managed services.
+- **What each service does (domain / functional):** [`docs/domain/`](docs/domain/README.md) for
+  cross-context maps, and each service's `crates/services/<svc>/docs/DOMAIN.md` for its bounded
+  context, invariants, and data ownership.
+- **How the platform deploys & operates:** [`docs/infrastructure/`](docs/infrastructure/README.md)
+  (AWS EKS, VPC, managed services; diagram generated from `aws_production.py`).
+- **How to build & run each service:** the per-crate `README.md`, following
+  [`docs/templates/SERVICE_README.template.md`](docs/templates/SERVICE_README.template.md).
 
-> [!NOTE]
-> All source files for these diagrams are located in the `/docs` directory. You can visualize them using the [Structurizr CLI](https://structurizr.com/help/cli) or by importing the `workspace.dsl` files into the [Structurizr Lite](https://structurizr.com/lite) container.
+> [!WARNING]
+> The previous **C4 Model / Structurizr** diagrams described a pre-fleet design that diverged
+> from the system that exists today. They have been **quarantined** under
+> [`docs/_legacy/`](docs/_legacy/README.md) and must not be trusted. A corrected C4 model will be
+> regenerated from the functional documentation (`docs/domain/`) as a derived artifact.
 
 ## Development & Build
 
