@@ -14,7 +14,6 @@ fred = { workspace = true, features = ["i-scripts"] }
 async-trait = { workspace = true }
 dashmap = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
 
 [features]
 # Live-Redis integration test (requires a Docker daemon). Off by default so the unit

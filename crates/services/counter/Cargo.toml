@@ -49,7 +49,6 @@ transport        = { workspace = true }
 fred             = { workspace = true, features = ["partial-tracing", "i-scripts"] }
 sqlx             = { workspace = true }
 scylla           = { workspace = true }
-serde_json       = { workspace = true }
 tracing          = { workspace = true }
 
 # ── Server + worker wiring (Phase 5): runtime, tonic ingress, consumers ───────

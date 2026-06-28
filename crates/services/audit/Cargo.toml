@@ -70,7 +70,6 @@ base64           = { workspace = true }
 rusty-s3         = { workspace = true }
 reqwest          = { workspace = true }
 url              = { workspace = true }
-prost            = { workspace = true }
 prost-types      = { workspace = true }
 tracing          = { workspace = true }
 # Rationale-sealing (Phase 3, audit-adoption): AES-256-GCM envelope encryption —

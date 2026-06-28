@@ -14,13 +14,10 @@ validate-core    = { workspace = true }
 validation       = { workspace = true }
 scylla-storage   = { workspace = true }
 cqrs         = { workspace = true }
-auth-context = { workspace = true }
-telemetry    = { workspace = true }
 transport    = { workspace = true }
 service-runtime = { workspace = true }
 anyhow       = { workspace = true }
 tokio        = { workspace = true }
-futures      = { workspace = true }
 async-trait  = { workspace = true }
 serde        = { workspace = true }
 serde_json   = { workspace = true }
@@ -30,10 +27,6 @@ chrono       = { workspace = true }
 thiserror    = { workspace = true }
 tracing      = { workspace = true }
 tonic             = { workspace = true }
-tonic-prost       = { workspace = true }
-prost             = { workspace = true }
-prost-types       = { workspace = true }
-tonic-health      = { workspace = true }
 tonic-reflection  = { workspace = true }
 http              = { workspace = true }
 scylla = { workspace = true }
