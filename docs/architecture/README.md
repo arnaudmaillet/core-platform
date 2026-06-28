@@ -28,16 +28,27 @@ shipped — phantom services, wrong stack, 7 missing services.
 ## Rendering
 
 Render with the [Structurizr CLI](https://structurizr.com/help/cli) or by importing `workspace.dsl`
-into [Structurizr Lite](https://structurizr.com/lite):
+into [Structurizr Lite](https://structurizr.com/lite). Run from the repo root:
 
 ```bash
-docker run -it --rm -p 8080:8080 -v "$PWD/docs/architecture:/usr/local/structurizr" structurizr/lite
+docker run --rm -it -p 8080:8080 \
+  -v "$PWD/docs/architecture:/usr/local/structurizr" \
+  structurizr/lite:2025.05.28
 ```
+
+Then open <http://localhost:8080/>. Lite re-parses `workspace.dsl` on each request, so edits show
+up on refresh — no restart needed. On Apple Silicon, add `--platform linux/amd64` if the image tag
+you pull is amd64-only. Lite writes a derived `workspace.json` (gitignored) next to the DSL.
 
 ## Keeping it true
 
 When `CONTEXT_MAP.md` or a Domain Card changes a relationship, store, or subdomain class, update
 `workspace.dsl` in the same change. The model is small and hand-maintained on purpose; a future
 generator could emit it from the Domain Cards + the event-topology registry guard.
+
+> **DSL syntax gotcha.** Structurizr DSL is line-based: **one statement per line**, and blocks
+> (`element "Tag" { … }`, relationships) span multiple lines. There is no `;` separator. Packing
+> two relationships onto one line with `;`, or collapsing a style block onto a single line, makes
+> the parser fail with `Too many tokens`. Keep each statement on its own line.
 
 > 🇫🇷 Miroir français : [`README.fr.md`](./README.fr.md).

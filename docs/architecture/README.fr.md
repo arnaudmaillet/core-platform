@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: fbc0f03fb12485e283da98ceeac6b1fb7eb32bf8bcc056284974e6da6d29774c
-  translated_at: 2026-06-28
+  source_sha256: 1438dc450817ea3927ef2df20386163bbfeb39c6f545abfdd88a269a55e87877
+  translated_at: 2026-06-29
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -39,11 +39,18 @@ livrée — services fantômes, mauvaise stack, 7 services manquants.
 ## Rendu
 
 Rendre avec le [Structurizr CLI](https://structurizr.com/help/cli) ou en important `workspace.dsl`
-dans [Structurizr Lite](https://structurizr.com/lite) :
+dans [Structurizr Lite](https://structurizr.com/lite). Lancer depuis la racine du dépôt :
 
 ```bash
-docker run -it --rm -p 8080:8080 -v "$PWD/docs/architecture:/usr/local/structurizr" structurizr/lite
+docker run --rm -it -p 8080:8080 \
+  -v "$PWD/docs/architecture:/usr/local/structurizr" \
+  structurizr/lite:2025.05.28
 ```
+
+Puis ouvrir <http://localhost:8080/>. Lite re-parse `workspace.dsl` à chaque requête : les
+modifications apparaissent au rafraîchissement, sans redémarrage. Sur Apple Silicon, ajouter
+`--platform linux/amd64` si le tag d'image récupéré est amd64 uniquement. Lite écrit un
+`workspace.json` dérivé (gitignoré) à côté du DSL.
 
 ## Le garder vrai
 
@@ -51,5 +58,11 @@ Quand `CONTEXT_MAP.md` ou une Domain Card change une relation, un store ou une c
 sous-domaine, mettre à jour `workspace.dsl` dans le même changement. Le modèle est petit et
 maintenu à la main à dessein ; un futur générateur pourrait l'émettre depuis les Domain Cards + la
 garde de registre de topologie d'événements.
+
+> **Piège de syntaxe DSL.** Le DSL Structurizr est orienté ligne : **une instruction par ligne**,
+> et les blocs (`element "Tag" { … }`, relations) s'étendent sur plusieurs lignes. Il n'y a pas de
+> séparateur `;`. Empiler deux relations sur une ligne avec `;`, ou réduire un bloc de style à une
+> seule ligne, fait échouer le parseur avec `Too many tokens`. Garder chaque instruction sur sa
+> propre ligne.
 
 > 🇬🇧 Source anglaise : [`README.md`](./README.md).
