@@ -1,0 +1,132 @@
+---
+i18n:
+  source: ./EVENT_CATALOG.md
+  source_sha256: 4124a4f580517b57ac43551aa1a2a121a00d30f522efe102a04d242f2659d237
+  translated_at: 2026-06-28
+  status: complete
+---
+> 🇫🇷 Traduction française — la version **anglaise** [`EVENT_CATALOG.md`](./EVENT_CATALOG.md) fait foi.
+> En cas de divergence, l'anglais prime. Les noms d'événements, topics, types et identifiants sont
+> volontairement laissés en anglais.
+
+# Catalogue d'événements (sémantique)
+
+> Rempli depuis le §8 de chaque Domain Card producteur (`crates/services/<svc>/docs/DOMAIN.md`).
+> Consigne le **sens métier** de chaque événement de domaine — *qu'est-ce que ça signifie que ceci
+> soit arrivé, et qui réagit ?* Il ne **reformule pas** le schéma wire/proto (possédé par le contrat
+> de chaque producteur).
+
+## Source de vérité & maintenance
+
+La liste des topics, producteurs et consommateurs est **vérifiée par machine** par la garde de
+registre de topologie d'événements (avec ses tests de contrat). Les colonnes **topic / producteur /
+consommateur** ici devraient être **réconciliées avec ce registre** (idéalement générées depuis lui)
+afin de ne pas dériver ; seules les colonnes **sémantiques** (*signifie* / *déclencheur*) sont
+rédigées à la main. Tant que la génération n'est pas câblée, considérer la garde de topologie — et
+non cette table — comme l'autorité sur *quelles* arêtes existent ; cette table fait autorité sur leur
+*sens*.
+
+Croiser chaque arête dans [`CONTEXT_MAP.md`](./CONTEXT_MAP.md), et le détail par événement dans le
+§8 de chaque producteur.
+
+## Identité & Compte — `account.v1.events` (producteur : `account`)
+
+| Événement | Signifie (fait métier au passé) | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `account_created` / `email_changed` / `email_verified` / `phone_changed` | un fait de cycle de vie de compte porteur de PII s'est produit | la commande correspondante commite | `audit` (PII scellée en enveloppe crypto-shred), `profile` (persona) |
+| `password_changed` / `mfa_enrolled` / `mfa_revoked` | un fait sécurité/identifiant (sans PII) | changement d'identifiant | `audit` (catégorie Authentication) |
+| `activated` / `deactivated` / `suspended` / `deleted` / `kyc_status_changed` | une transition du cycle de vie de l'identité | changement de cycle de vie | `audit` (Identity), `profile` |
+| `role_assigned` / `role_revoked` | un octroi d'autorisation a changé | octroi/révocation de rôle | `audit` (Authorization) |
+| `gdpr_deletion_requested` | le droit à l'effacement (Art. 17) a été invoqué | demande utilisateur/DPO | `audit` → **crypto-shred du sujet** (ferme la boucle Art. 17) |
+| `gdpr_data_export_requested` | le droit d'accès/portabilité a été invoqué | demande utilisateur/DPO | exécution de l'export (en aval) |
+
+## Authentification — `auth.v1.events` (producteur : `auth`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `session_issued` | une session authentifiée a été établie | connexion / émission de token | `audit` (Authentication) |
+| `session_revoked` | une session a été invalidée | déconnexion / révocation / bump de génération | `audit` (Authentication) |
+| `subject_linked` | un sujet IdP a été lié à un compte | flux de liaison de compte | interne |
+
+## Profil — `profile.v1.events` (producteur : `profile`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `profile_created` / `profile_updated` | le persona public a été créé/édité | la commande commite | `post`/`search` (instantanés, indexation) |
+| `handle_changed` | le @handle a changé | revendication de handle | `search` (ré-indexation), intégrations |
+| `profile_verified` | le badge de vérification a changé | vérification | `search`, intégrations |
+| `tier_changed` | le tier d'auteur a changé | recalcul de tier (depuis `social-graph`) | `geo-discovery` (pondération), `timeline` (push/pull) |
+| `profile_hidden` / `profile_restored` / `profile_deleted` | une transition de visibilité/cycle de vie | action propriétaire ou modération | read-models (démantèlement/restauration) |
+
+## Contenu — `post.v1.events` (producteur : `post`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `post.published` | un nouveau contenu est en ligne | la publication commite | `timeline` (fan-out), `search`/`geo-discovery` (index), `counter`, `realtime` (broadcast) |
+| `post.updated` | le contenu a été édité | l'édition commite | `search`/`geo-discovery` (ré-indexation) |
+| `post.deleted` | le contenu a été retiré | la suppression commite | `timeline`/`search`/`geo-discovery` (démantèlement) |
+
+## Commentaires — `comment.created` / `comment.deleted` (producteur : `comment`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `comment.created` | un commentaire a été posté sur un post | la création commite | `notification` (notifier l'auteur), `counter`/`engagement` (compte++) |
+| `comment.deleted` | un commentaire a été tombstoné ou purgé | la suppression commite | `counter`/`engagement` (compte--), fils |
+
+## Engagement — `engagement.*` (producteur : `engagement`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `engagement.reactions` (`ReactionUpserted`/`Removed`) | une arête de réaction a été posée/retirée | react/unreact commite | `notification`, `counter` |
+| `engagement.score_updated` | le score d'engagement pondéré a changé | recalcul du score | `geo-discovery` (viralité), `counter` |
+| `engagement.post_reactions` / `engagement.post_interaction_counters` | agrégats de réactions/interactions par post | agrégation | consommateurs aval |
+
+## Magnitudes — `counter.v1.popularity` (producteur : `counter`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `counter.v1.popularity` | la magnitude de popularité d'une entité a changé | un flush de fenêtre met à jour un score de popularité | `search` (classement), `realtime` (broadcast live) |
+
+## Confiance & Sécurité — `moderation.v1.events` (producteur : `moderation`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `decision_recorded` | une décision d'intégrité faisant autorité a été prise — porte *qui a décidé* + *pourquoi* (SoR DSA) | une décision est enregistrée (auto-screen / revue humaine / réversion d'appel) | `audit` (scelle la justification en enveloppe crypto-shred) |
+| `enforcement_applied` / `enforcement_reversed` | une conséquence a été appliquée/levée contre un acteur (versionnée) | l'enforcement commite | `timeline`, `chat`, `account` (dénorm Plane-B) ; `audit` |
+| `case_opened` / `case_resolved` | une unité de revue a été ouverte/fermée | seuil d'ingestion / action du relecteur | consommateurs Plane-B |
+| `appeal_resolved` | un appel a été tranché | résolution de l'appel | consommateurs Plane-B |
+
+> Clé `actor_id` pour l'ordonnancement par acteur. `decision_recorded` est la variante preuve de
+> conformité (les consommateurs offender-centric l'ignorent ; `audit` consomme celui-ci +
+> `enforcement_applied`).
+
+## Conversations — `chat.*` (producteur : `chat`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `chat.conversation.created` / `chat.conversation.published` / `chat.conversation.unpublished` | faits de cycle de vie de conversation | création / publication / dépublication | `VisibilityWorker` (démantèlement du plan audience), consommateurs |
+| `chat.member.joined` / `chat.member.left` | l'appartenance a changé | join/leave | consommateurs |
+| `chat.message.sent` | un message a été commité dans le journal | l'envoi commite | plan live propre de chat (**non** consommé par `realtime` — Separate Ways) |
+
+## Média — `media.v1.events` (producteur : `media`)
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `asset_uploaded` | les octets ont atterri dans le store objet | finalize | le pipeline de transformation (Plane B) |
+| `asset_ready` / `asset_variant_ready` | l'asset (ou une variante) est sûr à livrer | le Screen CSAM passe / rendition terminée | `post`, `profile`, `search` |
+| `asset_quarantined` / `asset_deleted` / `asset_restored` | une transition sécurité/cycle de vie | échec Screen / takedown / restauration | intégrations, livraison |
+| `asset_failed` | le traitement a échoué | timeout/erreur | UX d'upload |
+
+## Social Graph — événements de relation (producteur : `social-graph`) — **producteur Kafka différé**
+
+| Événement | Signifie | Émis quand | Consommateurs & pourquoi |
+|---|---|---|---|
+| `ProfileFollowed` / `ProfileUnfollowed` | une arête de follow a été créée/retirée | follow/unfollow commite | `timeline`/`counter` (consomment **via gRPC aujourd'hui** ; le stream `social-graph.follows` est différé) |
+| `ProfileBlocked` / `ProfileUnblocked` | une arête de block a changé (sectionne les follows) | block/unblock commite | fils |
+| `AuthorTierChanged` | le tier de l'auteur a changé | le nombre de followers franchit un seuil | `profile` (possède + ré-émet en `tier_changed`) |
+
+## Puits terminaux — ne publient rien de référence
+
+`audit`, `search`, `timeline`, `geo-discovery`, `realtime` consomment ce qui précède et n'affirment
+aucun fait métier durable vers l'extérieur. Les `NotificationCreated`/`Read` de `notification` sont
+un état de fil interne, pas un stream System-of-Record.
