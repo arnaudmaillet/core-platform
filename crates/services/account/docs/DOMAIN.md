@@ -146,7 +146,7 @@ closing the erasure loop end to end.
 
 | Decision | ADR | Status |
 |---|---|---|
-| Account is the identity SoR; built its outbound event lane (was a phantom producer) so `audit`/`profile` can consume | _candidate — not yet recorded_ | — |
+| Account is the identity SoR; built its outbound event lane (was a phantom producer) so `audit`/`profile` can consume | [`ADR-0004`](../../../../docs/adr/0004-account-is-the-single-identity-sor.md) | Accepted |
 
 ---
 

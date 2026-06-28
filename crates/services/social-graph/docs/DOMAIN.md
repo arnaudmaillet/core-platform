@@ -136,7 +136,7 @@ counts via gRPC (the `social-graph.follows` Kafka stream is a deferred producer)
 
 | Decision | ADR | Status |
 |---|---|---|
-| 4-table ScyllaDB schema + Redis hot Sets + logged-batch atomicity for dual-write | _candidate — not yet recorded_ | — |
+| 4-table ScyllaDB schema + Redis hot Sets + logged-batch atomicity for dual-write | [`ADR-0016`](../../../../docs/adr/0016-social-graph-four-table-scylla-logged-batch.md) | Accepted |
 | Author tier: social-graph computes → profile owns + emits | _open — author-tier initiative_ | Scoped |
 
 ---

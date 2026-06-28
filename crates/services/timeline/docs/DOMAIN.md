@@ -126,7 +126,7 @@ the user's high-tier followees, ordered by score via Lua `ZREVRANGEBYSCORE`, pag
 
 | Decision | ADR | Status |
 |---|---|---|
-| Hybrid push/pull fan-out (materialize normal authors, pull high-tier at read) | _candidate — not yet recorded_ | — |
+| Hybrid push/pull fan-out (materialize normal authors, pull high-tier at read) | [`ADR-0017`](../../../../docs/adr/0017-timeline-hybrid-push-pull-fanout.md) | Accepted |
 | Forward-compatibility for author-tier-driven fan-out (shipped #469) | _open — author-tier initiative_ | Scoped |
 
 ---

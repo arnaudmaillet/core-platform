@@ -131,7 +131,7 @@ fans out, `search`/`geo-discovery` index, `counter` counts, `realtime` broadcast
 
 | Decision | ADR | Status |
 |---|---|---|
-| Two-table ScyllaDB layout (by id + by author) with `post.v1.events` as published language | _candidate — not yet recorded_ | — |
+| Two-table ScyllaDB layout (by id + by author) with `post.v1.events` as published language | [`ADR-0013`](../../../../docs/adr/0013-post-two-table-scylla-with-published-language.md) | Accepted |
 | Post→geo payload enrichment (lat/lng/caption) — open product decision | _open — see geo-discovery §6_ | Open |
 
 ---

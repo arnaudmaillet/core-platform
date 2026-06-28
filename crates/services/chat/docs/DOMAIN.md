@@ -135,7 +135,7 @@ unpublishing triggers the `VisibilityWorker` teardown, consuming `chat.conversat
 
 | Decision | ADR | Status |
 |---|---|---|
-| Shadowing Pattern — distinct Member vs Audience visibility planes | _candidate — not yet recorded_ | — |
+| Shadowing Pattern — distinct Member vs Audience visibility planes | [`ADR-0006`](../../../../docs/adr/0006-chat-shadowing-pattern-member-vs-audience-plane.md) | Accepted |
 | Coexist-first with `realtime` (chat keeps its own live plane for now) | _see ADR-0003 consequences_ | Accepted |
 
 ---

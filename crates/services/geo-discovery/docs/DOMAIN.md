@@ -127,7 +127,7 @@ return `MapPostCard`s. A degraded index returns fewer/staler cards (fail-open).
 
 | Decision | ADR | Status |
 |---|---|---|
-| H3 grid_disk viewport + dual-layer Redis (ZSET+cardinality) Top-K spatial index | _candidate — not yet recorded_ | — |
+| H3 grid_disk viewport + dual-layer Redis (ZSET+cardinality) Top-K spatial index | [`ADR-0010`](../../../../docs/adr/0010-geo-discovery-h3-grid-dual-layer-redis-topk.md) | Accepted |
 | Post→geo payload enrichment (lat/lng/caption) needs a product decision | _open — see pre-infra audit_ | Open |
 
 ---

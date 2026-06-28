@@ -131,8 +131,8 @@ filter by dual visibility → return `SearchResults` / `Suggestions`. Fail-open 
 
 | Decision | ADR | Status |
 |---|---|---|
-| OpenSearch single canonical store with external 2-version guard; pure-Kafka command side + stateless read RPC | _candidate — not yet recorded_ | — |
-| Dual visibility authority (owner + moderation) honoured at query time | _candidate — not yet recorded_ | — |
+| OpenSearch single canonical store with external 2-version guard; pure-Kafka command side + stateless read RPC | [`ADR-0015`](../../../../docs/adr/0015-search-opensearch-single-store-external-versioning.md) | Accepted |
+| Dual visibility authority (owner + moderation) honoured at query time | [`ADR-0015`](../../../../docs/adr/0015-search-opensearch-single-store-external-versioning.md) | Accepted |
 
 ---
 
