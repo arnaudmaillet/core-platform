@@ -122,8 +122,8 @@ in `counter` from comment's events).
 
 | Decision | ADR | Status |
 |---|---|---|
-| Nil-UUID sentinel flat-tree + two-table (LCS+TWCS) Scylla layout | _candidate — not yet recorded_ | — |
-| Tombstone vs purge deletion semantics | _candidate — not yet recorded_ | — |
+| Nil-UUID sentinel flat-tree + two-table (LCS+TWCS) Scylla layout | [`ADR-0007`](../../../../docs/adr/0007-comment-flat-thread-two-table-tombstone-purge.md) | Accepted |
+| Tombstone vs purge deletion semantics | [`ADR-0007`](../../../../docs/adr/0007-comment-flat-thread-two-table-tombstone-purge.md) | Accepted |
 
 ---
 

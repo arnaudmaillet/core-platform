@@ -90,7 +90,7 @@ N/A (TIER-2, collapsed) — publishes **none of record** (its `NotificationCreat
 
 ## 9. Decisions & Rationale &nbsp;·&nbsp; DEEP
 
-N/A (TIER-2, collapsed) — keystone choice: Redis write-collapse fan-out + claim-gated idempotent unread counter (deterministic UUIDv5 ids, event-time `created_at`, `SET NX` unread claim, `SADD` unique-sender collapse); candidate ADR not yet recorded.
+N/A (TIER-2, collapsed) — keystone choice: Redis write-collapse fan-out + claim-gated idempotent unread counter (deterministic UUIDv5 ids, event-time `created_at`, `SET NX` unread claim, `SADD` unique-sender collapse) — [`ADR-0012`](../../../../docs/adr/0012-notification-write-collapse-fanout-claim-gated-counter.md) (Accepted).
 
 ## 10. Subdomain Classification & Evolution &nbsp;·&nbsp; DEEP
 

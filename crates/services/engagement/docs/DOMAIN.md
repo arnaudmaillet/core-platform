@@ -120,7 +120,7 @@ for durable recording and downstream consumption.
 
 | Decision | ADR | Status |
 |---|---|---|
-| Redis-primary Lua-atomic reactions + Kafka write-behind durability | _candidate — not yet recorded_ | — |
+| Redis-primary Lua-atomic reactions + Kafka write-behind durability | [`ADR-0009`](../../../../docs/adr/0009-engagement-redis-primary-lua-atomic-with-kafka-write-behind.md) | Accepted |
 | Engagement keeps the reaction *edge*; `counter` supersedes raw magnitudes | _see counter §4_ | Accepted |
 
 ---

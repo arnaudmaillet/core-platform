@@ -137,8 +137,8 @@ error (tracked by `profile.handle.claim.conflict_total`).
 
 | Decision | ADR | Status |
 |---|---|---|
-| Profile is the public persona over the `account` SoR; emits `profile.v1.events` | _candidate — not yet recorded_ | — |
-| Dual-axis visibility (owner AND moderation) | _candidate — not yet recorded_ | — |
+| Profile is the public persona over the `account` SoR; emits `profile.v1.events` | [`ADR-0014`](../../../../docs/adr/0014-profile-public-persona-with-dual-axis-visibility.md) | Accepted |
+| Dual-axis visibility (owner AND moderation) | [`ADR-0014`](../../../../docs/adr/0014-profile-public-persona-with-dual-axis-visibility.md) | Accepted |
 | Author tier: social-graph computes → profile owns + emits | _open — author-tier initiative_ | Scoped |
 
 ---

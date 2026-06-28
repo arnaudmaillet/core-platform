@@ -136,8 +136,8 @@ blurhash, and transitions the asset to `ready` (or `quarantined`).
 
 | Decision | ADR | Status |
 |---|---|---|
-| Byte-free control plane — pre-signed direct-to-store uploads, bytes never on gRPC/Kafka | _candidate — not yet recorded_ | — |
-| Fail-open delivery / fail-closed CSAM Screen split | _candidate — not yet recorded_ | — |
+| Byte-free control plane — pre-signed direct-to-store uploads, bytes never on gRPC/Kafka | [`ADR-0011`](../../../../docs/adr/0011-media-byte-free-control-plane.md) | Accepted |
+| Fail-open delivery / fail-closed CSAM Screen split | [`ADR-0011`](../../../../docs/adr/0011-media-byte-free-control-plane.md) | Accepted |
 
 ---
 

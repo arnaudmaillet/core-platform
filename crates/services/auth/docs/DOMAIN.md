@@ -139,8 +139,8 @@ access token. Reuse of a rotated token is a security signal.
 
 | Decision | ADR | Status |
 |---|---|---|
-| Federated Keycloak credentials + bespoke ES256 edge tokens; distinct from `account` (SoR) and `auth-context` (verify lib) | _candidate — not yet recorded_ | — |
-| Instant revocation via monotonic per-subject `Generation` despite stateless tokens | _candidate — not yet recorded_ | — |
+| Federated Keycloak credentials + bespoke ES256 edge tokens; distinct from `account` (SoR) and `auth-context` (verify lib) | [`ADR-0005`](../../../../docs/adr/0005-auth-federated-idp-with-platform-edge-tokens.md) | Accepted |
+| Instant revocation via monotonic per-subject `Generation` despite stateless tokens | [`ADR-0005`](../../../../docs/adr/0005-auth-federated-idp-with-platform-edge-tokens.md) | Accepted |
 
 ---
 

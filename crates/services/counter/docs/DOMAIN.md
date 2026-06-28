@@ -135,8 +135,8 @@ stale/approximate value rather than erroring.
 
 | Decision | ADR | Status |
 |---|---|---|
-| Magnitudes ("how many") are a separate reconcilable SoRef, distinct from edge state ("who"); supersedes engagement's raw counts | _candidate — not yet recorded_ | — |
-| `WindowId`-gated idempotent flush across a 3-tier store | _candidate — not yet recorded_ | — |
+| Magnitudes ("how many") are a separate reconcilable SoRef, distinct from edge state ("who"); supersedes engagement's raw counts | [`ADR-0008`](../../../../docs/adr/0008-counter-magnitudes-are-a-reconcilable-soref.md) | Accepted |
+| `WindowId`-gated idempotent flush across a 3-tier store | [`ADR-0008`](../../../../docs/adr/0008-counter-magnitudes-are-a-reconcilable-soref.md) | Accepted |
 
 ---
 
