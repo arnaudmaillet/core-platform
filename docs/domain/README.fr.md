@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: a536df526782b80e4d5be226e8b9e41b6bccb94237a3d54d09a2306356c9f759
+  source_sha256: d6a559f60da5ec140b40edd1b2aa958c24b5f808a1caf21a52d81ab3091831af
   translated_at: 2026-06-28
   status: complete
 ---
@@ -36,9 +36,8 @@ La source de vérité sur *ce qui existe* est **le code**, jamais un diagramme :
 - leurs contrats proto `*.v1` ;
 - la **garde de registre de topologie d'événements** (vérifiée par machine, donc fiable).
 
-Toute la documentation ici en *dérive*. Le modèle C4 hérité a été mis en quarantaine dans
-[`docs/_legacy/`](../_legacy/README.md) et **ne doit pas être référencé** ; un modèle C4 corrigé a été
-*régénéré à partir* des Domain Cards + `CONTEXT_MAP.md` dans
+Toute la documentation ici en *dérive*. Le modèle C4 pré-flotte hérité a été **supprimé** ; un modèle
+C4 corrigé a été *régénéré à partir* des Domain Cards + `CONTEXT_MAP.md` dans
 [`docs/architecture/`](../architecture/README.md).
 
 ## Contenu

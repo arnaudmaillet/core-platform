@@ -8,9 +8,8 @@ This directory holds the **corrected C4 model**, expressed as a Structurizr work
 > the per-service Domain Cards (`crates/services/<svc>/docs/DOMAIN.md`). If the diagram disagrees
 > with those, the diagram is stale — regenerate it, don't trust it.
 
-It **supersedes** the pre-fleet model quarantined in [`docs/_legacy/`](../_legacy/README.md), which
-described an architecture that never shipped (phantom services, wrong stack, 7 missing services).
-Do not reference the legacy model.
+It **supersedes** the pre-fleet model (since removed), which described an architecture that never
+shipped — phantom services, wrong stack, 7 missing services.
 
 ## What's modelled
 

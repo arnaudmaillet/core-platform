@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: bfa91e2dc29ecf642d1f875b9c213b379fdfd1f9490032520963058bdedfce42
+  source_sha256: fbc0f03fb12485e283da98ceeac6b1fb7eb32bf8bcc056284974e6da6d29774c
   translated_at: 2026-06-28
   status: complete
 ---
@@ -19,9 +19,8 @@ Ce répertoire contient le **modèle C4 corrigé**, exprimé comme un workspace 
 > et les Domain Cards par service (`crates/services/<svc>/docs/DOMAIN.md`). Si le diagramme
 > diverge de ceux-ci, le diagramme est périmé — le régénérer, ne pas s'y fier.
 
-Il **supersède** le modèle pré-flotte mis en quarantaine dans [`docs/_legacy/`](../_legacy/README.md),
-qui décrivait une architecture jamais livrée (services fantômes, mauvaise stack, 7 services manquants).
-Ne pas référencer le modèle hérité.
+Il **supersède** le modèle pré-flotte (depuis supprimé), qui décrivait une architecture jamais
+livrée — services fantômes, mauvaise stack, 7 services manquants.
 
 ## Ce qui est modélisé
 

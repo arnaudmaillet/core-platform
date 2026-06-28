@@ -14,9 +14,9 @@
 
  GROUND TRUTH:
    Derive every statement from the code — the crate, its `*.v1` protos, and the
-   event-topology registry guard. Do NOT cite the quarantined legacy C4 in
-   docs/_legacy/. C4 references in §6/§7 are commented out until a corrected C4
-   model is regenerated from these docs.
+   event-topology registry guard. The corrected C4 lives at docs/architecture/
+   (derived from docs/domain/CONTEXT_MAP.md); you may reference its views from
+   §6/§7. Do NOT resurrect the old pre-fleet C4 (it has been removed).
 
  TIER RULE (how much to fill)
    CORE — every service, every tier:
@@ -138,8 +138,8 @@
 > How multi-step / cross-context processes run. Distinguish **sync** (in-request, gRPC) from
 > **async** (Kafka, eventually consistent). Name the **compensation** for every step that can
 > fail after a prior step committed.
-> <!-- After C4 is regenerated from docs/domain/, add: "see C4 dynamic view <id>".
->      Until then, describe the flow inline below — do NOT link docs/_legacy/. -->
+> <!-- Optionally add "see C4 dynamic view <id>" pointing at docs/architecture/workspace.dsl;
+>      otherwise describe the flow inline below. -->
 
 **`<Workflow name>`** (`<sync \| async saga>`)
 
