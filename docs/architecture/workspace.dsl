@@ -71,20 +71,33 @@ workspace "Core Platform" "Social platform backend — corrected C4, derived fro
 
             # === Service ↔ datastore =============================================================
             account -> postgres "reads/writes"
-            auth -> postgres "reads/writes" ; auth -> redis "session/revocation cache"
-            profile -> scylla "reads/writes" ; profile -> redis "L1 entity cache"
+            auth -> postgres "reads/writes"
+            auth -> redis "session/revocation cache"
+            profile -> scylla "reads/writes"
+            profile -> redis "L1 entity cache"
             post -> scylla "reads/writes (by id + by author)"
             comment -> scylla "reads/writes (LCS + TWCS)"
-            chat -> scylla "message log (bucketed)" ; chat -> redis "sharded pub/sub"
-            engagement -> redis "Lua-atomic edges" ; engagement -> scylla "durable write-behind"
-            socialGraph -> scylla "4-table relations" ; socialGraph -> redis "hot relation Sets"
-            timeline -> redis "feed ZSETs" ; timeline -> scylla "materialized feeds"
+            chat -> scylla "message log (bucketed)"
+            chat -> redis "sharded pub/sub"
+            engagement -> redis "Lua-atomic edges"
+            engagement -> scylla "durable write-behind"
+            socialGraph -> scylla "4-table relations"
+            socialGraph -> redis "hot relation Sets"
+            timeline -> redis "feed ZSETs"
+            timeline -> scylla "materialized feeds"
             search -> opensearch "index + query"
-            geo -> redis "H3 ZSET + cardinality" ; geo -> scylla "map_post_cards"
-            counter -> redis "hot counters" ; counter -> postgres "warm SoRef + ledger" ; counter -> scylla "cold TWCS"
-            notification -> scylla "TWCS activity feed" ; notification -> redis "write-collapse counters"
-            moderation -> postgres "decision/case SoR" ; moderation -> scylla "signal history" ; moderation -> redis "enforcement projection + Screen corpus"
-            media -> postgres "asset SoR" ; media -> redis "cache"
+            geo -> redis "H3 ZSET + cardinality"
+            geo -> scylla "map_post_cards"
+            counter -> redis "hot counters"
+            counter -> postgres "warm SoRef + ledger"
+            counter -> scylla "cold TWCS"
+            notification -> scylla "TWCS activity feed"
+            notification -> redis "write-collapse counters"
+            moderation -> postgres "decision/case SoR"
+            moderation -> scylla "signal history"
+            moderation -> redis "enforcement projection + Screen corpus"
+            media -> postgres "asset SoR"
+            media -> redis "cache"
             audit -> postgres "append-only ledger"
             realtimeGateway -> redis "connection/presence registry + node-hop pub/sub"
             realtimeDispatcher -> redis "resolve + publish (node-hop)"
@@ -175,18 +188,54 @@ workspace "Core Platform" "Social platform backend — corrected C4, derived fro
         }
 
         styles {
-            element "User" { shape Person background #2c3e50 color #ffffff }
-            element "External" { background #95a5a6 color #ffffff }
+            element "User" {
+                shape Person
+                background #2c3e50
+                color #ffffff
+            }
+            element "External" {
+                background #95a5a6
+                color #ffffff
+            }
             # shape from role, colour from subdomain class (Core vs Supporting)
-            element "Service" { shape RoundedBox color #ffffff }
-            element "Worker" { shape Hexagon color #ffffff }
-            element "Edge" { shape RoundedBox color #ffffff }
-            element "Supporting" { background #1168bd color #ffffff }
-            element "Core" { background #b8341b color #ffffff }
-            element "Datastore" { shape Cylinder background #6b4f9e color #ffffff }
-            element "MessageBroker" { shape Pipe background #d98c00 color #ffffff }
-            relationship "Async" { dashed true color #d98c00 }
-            relationship "Sync" { dashed false color #2c3e50 }
+            element "Service" {
+                shape RoundedBox
+                color #ffffff
+            }
+            element "Worker" {
+                shape Hexagon
+                color #ffffff
+            }
+            element "Edge" {
+                shape RoundedBox
+                color #ffffff
+            }
+            element "Supporting" {
+                background #1168bd
+                color #ffffff
+            }
+            element "Core" {
+                background #b8341b
+                color #ffffff
+            }
+            element "Datastore" {
+                shape Cylinder
+                background #6b4f9e
+                color #ffffff
+            }
+            element "MessageBroker" {
+                shape Pipe
+                background #d98c00
+                color #ffffff
+            }
+            relationship "Async" {
+                dashed true
+                color #d98c00
+            }
+            relationship "Sync" {
+                dashed false
+                color #2c3e50
+            }
         }
     }
 
