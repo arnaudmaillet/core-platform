@@ -44,8 +44,8 @@ The platform's documentation is layered by concern, each layer derived from the 
 
 > [!NOTE]
 > The C4 model in [`docs/architecture/`](docs/architecture/README.md) is regenerated from the
-> functional documentation. The previous, pre-fleet Structurizr diagrams have been **quarantined**
-> under [`docs/_legacy/`](docs/_legacy/README.md) and must not be trusted.
+> functional documentation. The previous, pre-fleet Structurizr diagrams (which described an
+> architecture that never shipped) have been **removed**.
 
 ## Development & Build
 

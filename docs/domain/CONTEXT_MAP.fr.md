@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./CONTEXT_MAP.md
-  source_sha256: 6281e15dbbca5e65c857a66f57a36f91cb005b895ffc291fbfce9a73408012ec
+  source_sha256: 9fa9352df3390495c8346ad78054a362495d457257287f2ad9b14a996511395d
   translated_at: 2026-06-28
   status: complete
 ---
@@ -13,8 +13,8 @@ i18n:
 
 > Rempli depuis les 17 Domain Cards par service (`crates/services/<svc>/docs/DOMAIN.md` §1 + §7),
 > ancré dans les crates, leurs protos `*.v1` et la garde de registre de topologie d'événements. Ce
-> fichier est **multi-propriétaire** (la guilde d'architecture le possède). Ne **pas** le dériver du
-> C4 hérité en quarantaine dans [`docs/_legacy/`](../_legacy/README.md).
+> fichier est **multi-propriétaire** (la guilde d'architecture le possède). Ne **pas** le dériver de
+> l'ancien C4 pré-flotte (depuis supprimé).
 
 ## Ce qu'est ce document
 
@@ -112,5 +112,4 @@ sont des read-models ou des puits de preuve. Voir le §8 de chaque Domain Card.
 
 > Le modèle C4 a été **régénéré à partir de cette carte** (et des Domain Cards) en tant qu'artefact
 > dérivé : [`docs/architecture/workspace.dsl`](../architecture/workspace.dsl). Ce document reste la
-> source faisant autorité pour les relations ; le diagramme est généré pour y correspondre. Ne **pas**
-> lier le C4 hérité dans [`docs/_legacy/`](../_legacy/README.md).
+> source faisant autorité pour les relations ; le diagramme est généré pour y correspondre.

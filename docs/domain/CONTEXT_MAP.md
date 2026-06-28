@@ -2,8 +2,8 @@
 
 > Populated from the 17 per-service Domain Cards (`crates/services/<svc>/docs/DOMAIN.md` §1 + §7),
 > grounded in the crates, their `*.v1` protos, and the event-topology registry guard. This file is
-> **multi-owner** (the architecture guild owns it). Do **not** derive it from the quarantined
-> legacy C4 in [`docs/_legacy/`](../_legacy/README.md).
+> **multi-owner** (the architecture guild owns it). Do **not** derive it from the old pre-fleet C4
+> (since removed).
 
 ## What this document is
 
@@ -100,5 +100,4 @@ read-models or evidence sinks. See each Domain Card §8.
 
 > The C4 model has been **regenerated from this map** (and the per-service Domain Cards) as a derived
 > artifact: [`docs/architecture/workspace.dsl`](../architecture/workspace.dsl). This document remains
-> the authoritative source for the relationships; the diagram is generated to match it. Do **not**
-> link the legacy C4 in [`docs/_legacy/`](../_legacy/README.md).
+> the authoritative source for the relationships; the diagram is generated to match it.
