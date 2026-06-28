@@ -26,8 +26,9 @@ The source of truth for *what exists* is **the code**, never a diagram:
 - the **event-topology registry guard** (machine-checked, therefore trustworthy).
 
 All documentation here is *derived from* those. The legacy C4 model has been quarantined to
-[`docs/_legacy/`](../_legacy/README.md) and **must not be referenced**; a corrected C4 model
-will be *regenerated from* the Domain Cards + `CONTEXT_MAP.md`.
+[`docs/_legacy/`](../_legacy/README.md) and **must not be referenced**; a corrected C4 model has been
+*regenerated from* the Domain Cards + `CONTEXT_MAP.md` at
+[`docs/architecture/`](../architecture/README.md).
 
 ## Contents
 

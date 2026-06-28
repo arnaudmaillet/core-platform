@@ -39,12 +39,13 @@ The platform's documentation is layered by concern, each layer derived from the 
   (AWS EKS, VPC, managed services; diagram generated from `aws_production.py`).
 - **How to build & run each service:** the per-crate `README.md`, following
   [`docs/templates/SERVICE_README.template.md`](docs/templates/SERVICE_README.template.md).
+- **System architecture (C4 Model):** [`docs/architecture/`](docs/architecture/README.md) —
+  a Structurizr workspace **regenerated from** `docs/domain/CONTEXT_MAP.md` as a derived artifact.
 
-> [!WARNING]
-> The previous **C4 Model / Structurizr** diagrams described a pre-fleet design that diverged
-> from the system that exists today. They have been **quarantined** under
-> [`docs/_legacy/`](docs/_legacy/README.md) and must not be trusted. A corrected C4 model will be
-> regenerated from the functional documentation (`docs/domain/`) as a derived artifact.
+> [!NOTE]
+> The C4 model in [`docs/architecture/`](docs/architecture/README.md) is regenerated from the
+> functional documentation. The previous, pre-fleet Structurizr diagrams have been **quarantined**
+> under [`docs/_legacy/`](docs/_legacy/README.md) and must not be trusted.
 
 ## Development & Build
 

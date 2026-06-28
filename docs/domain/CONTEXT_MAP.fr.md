@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./CONTEXT_MAP.md
-  source_sha256: 78fa1c52c786aafc0762034fcf7a106e368e71555bbeaf6d4d9f9f9d9e1a8f08
+  source_sha256: 6281e15dbbca5e65c857a66f57a36f91cb005b895ffc291fbfce9a73408012ec
   translated_at: 2026-06-28
   status: complete
 ---
@@ -110,6 +110,7 @@ sont des read-models ou des puits de preuve. Voir le §8 de chaque Domain Card.
 
 ## Diagramme
 
-> Une vue C4 Container/Component sera **régénérée à partir de cette carte** (et des Domain Cards) en
-> tant qu'artefact dérivé. D'ici là, ce document fait autorité. Ne **pas** lier le C4 hérité dans
-> [`docs/_legacy/`](../_legacy/README.md).
+> Le modèle C4 a été **régénéré à partir de cette carte** (et des Domain Cards) en tant qu'artefact
+> dérivé : [`docs/architecture/workspace.dsl`](../architecture/workspace.dsl). Ce document reste la
+> source faisant autorité pour les relations ; le diagramme est généré pour y correspondre. Ne **pas**
+> lier le C4 hérité dans [`docs/_legacy/`](../_legacy/README.md).
