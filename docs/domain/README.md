@@ -33,9 +33,9 @@ will be *regenerated from* the Domain Cards + `CONTEXT_MAP.md`.
 
 | File | What it holds | Status |
 |---|---|---|
-| [`CONTEXT_MAP.md`](./CONTEXT_MAP.md) | DDD context map across all contexts, with relationship patterns (ACL / Conformist / Published Language / OHS) | 🟡 scaffold |
+| [`CONTEXT_MAP.md`](./CONTEXT_MAP.md) | DDD context map across all 17 contexts, with relationship patterns (ACL / Conformist / Published Language / OHS / Customer-Supplier / Separate Ways) | ✅ populated |
 | [`UBIQUITOUS_LANGUAGE.md`](./UBIQUITOUS_LANGUAGE.md) | Terms shared across more than one context (per-context terms stay in each `DOMAIN.md`) | 🟡 scaffold |
-| [`EVENT_CATALOG.md`](./EVENT_CATALOG.md) | Semantic meaning of every domain event; **to be generated** from the topology guard | 🟡 scaffold |
+| [`EVENT_CATALOG.md`](./EVENT_CATALOG.md) | Semantic meaning of every domain event (authored from the Domain Cards; topic/producer/consumer columns to be reconciled with the topology guard) | ✅ populated |
 
 ## Service domain docs (per-crate `DOMAIN.md`)
 
