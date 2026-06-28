@@ -63,10 +63,45 @@ CORE plus collapsed one-line DEEP sections.
 | `social-graph` | Follower / following relations | [`crates/services/social-graph/docs/DOMAIN.md`](../../crates/services/social-graph/docs/DOMAIN.md) | ✅ |
 | `timeline` | Timeline fan-out | [`crates/services/timeline/docs/DOMAIN.md`](../../crates/services/timeline/docs/DOMAIN.md) | ✅ |
 
+## Shared infrastructure library contracts (`foundation/` + `platform/`)
+
+The 14 cross-cutting libraries every service composes onto. These are **not** bounded contexts — they own
+no business data and emit no domain events; they own a **technical capability** (a mechanism, a contract, a
+boot sequence). Their `DOMAIN.md` therefore follows the **library variant**
+([`docs/templates/DOMAIN.lib.template.md`](../templates/DOMAIN.lib.template.md)): same 10-section skeleton
+and CORE/DEEP tiering, but the "data ownership" section becomes a *dependency-direction / purity* boundary
+and the "domain events" section collapses to emitted signals (`tracing`/metrics/none).
+
+**`foundation/`** — pure leaves and near-root contracts (no IO unless stated):
+
+| Crate | Shared capability | `DOMAIN.md` | Status |
+|---|---|---|---|
+| `error` | Distributed-error contract (trait · severity · wire shape) | [`crates/foundation/error/docs/DOMAIN.md`](../../crates/foundation/error/docs/DOMAIN.md) | ✅ |
+| `health` | Liveness/readiness probe contract (graph-leaf) | [`crates/foundation/health/docs/DOMAIN.md`](../../crates/foundation/health/docs/DOMAIN.md) | ✅ |
+| `infra-config` | Externalized config & fail-closed hot-reload | [`crates/foundation/infra-config/docs/DOMAIN.md`](../../crates/foundation/infra-config/docs/DOMAIN.md) | ✅ |
+| `resilience` | Egress fault tolerance (circuit breaker · retry · timeout) | [`crates/foundation/resilience/docs/DOMAIN.md`](../../crates/foundation/resilience/docs/DOMAIN.md) | ✅ |
+| `traffic` | Ingress rate limiting (pure GCRA mechanism) | [`crates/foundation/traffic/docs/DOMAIN.md`](../../crates/foundation/traffic/docs/DOMAIN.md) | ✅ |
+| `validate-core` | Zero-dependency validation abstraction (Separated Interface) | [`crates/foundation/validate-core/docs/DOMAIN.md`](../../crates/foundation/validate-core/docs/DOMAIN.md) | ✅ |
+
+**`platform/`** — the application-dispatch, transport, security, and runtime layers:
+
+| Crate | Shared capability | `DOMAIN.md` | Status |
+|---|---|---|---|
+| `auth-context` | Inbound JWT verification + task-local identity | [`crates/platform/auth-context/docs/DOMAIN.md`](../../crates/platform/auth-context/docs/DOMAIN.md) | ✅ |
+| `cqrs` | In-process Command/Query bus + middleware pipeline | [`crates/platform/cqrs/docs/DOMAIN.md`](../../crates/platform/cqrs/docs/DOMAIN.md) | ✅ |
+| `service-runtime` | Unified fleet bootstrap (the `Service` trait + `serve`) | [`crates/platform/service-runtime/docs/DOMAIN.md`](../../crates/platform/service-runtime/docs/DOMAIN.md) | ✅ |
+| `telemetry` | One-call observability bootstrap (logs · traces · metrics) | [`crates/platform/telemetry/docs/DOMAIN.md`](../../crates/platform/telemetry/docs/DOMAIN.md) | ✅ |
+| `test-support` | Integration-test scaffolding (dev-only) | [`crates/platform/test-support/docs/DOMAIN.md`](../../crates/platform/test-support/docs/DOMAIN.md) | ✅ |
+| `traffic-redis` | Redis-lease distributed backend for `traffic` | [`crates/platform/traffic-redis/docs/DOMAIN.md`](../../crates/platform/traffic-redis/docs/DOMAIN.md) | ✅ |
+| `transport` | gRPC + Kafka with trace propagation + `run_consumer` | [`crates/platform/transport/docs/DOMAIN.md`](../../crates/platform/transport/docs/DOMAIN.md) | ✅ |
+| `validation` | CQRS input-validation middleware + `VAL-xxxx` codes | [`crates/platform/validation/docs/DOMAIN.md`](../../crates/platform/validation/docs/DOMAIN.md) | ✅ |
+
 ## Authoring
 
-- Template: [`docs/templates/DOMAIN.template.md`](../templates/DOMAIN.template.md) — copy to
+- Service template: [`docs/templates/DOMAIN.template.md`](../templates/DOMAIN.template.md) — copy to
   `crates/services/<svc>/docs/DOMAIN.md` and fill it.
+- Shared-library template: [`docs/templates/DOMAIN.lib.template.md`](../templates/DOMAIN.lib.template.md) —
+  for `crates/foundation/*` and `crates/platform/*`; same skeleton, library-oriented sections.
 - Decisions: capture rationale as immutable ADRs under [`docs/adr/`](../adr/README.md) and link
   them from `DOMAIN.md §9` — never inline the *why*.
 - i18n: English is canonical; a `DOMAIN.fr.md` mirror follows the
