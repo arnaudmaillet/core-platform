@@ -157,6 +157,10 @@ images:
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-realtime-dispatcher
     newTag: staging
 patches:
+  # Baseline pod-security hardening (non-root, seccomp, drop caps) on every Deployment.
+  - path: patch-securitycontext.yaml
+    target:
+      kind: Deployment
   # Inject the synced MSK/Redis creds into every service container.
   - path: patch-backend-creds.yaml
     target:
