@@ -7,6 +7,14 @@
 #
 # (dev still runs the legacy Helm catalog/profile-service path — superseded by
 # this Kustomize approach but not yet migrated.)
+#
+# RENDER: this overlay carries ${VAR} runtime endpoints (MSK brokers, ElastiCache/
+# OpenSearch endpoints, the ACM cert ARN) that are only known after the Terraform
+# data-store apply. They are resolved by the `envsubst` Config Management Plugin in
+# argocd-repo-server (see modules/kubernetes/argocd/server), which runs
+# `kustomize build | envsubst` over a Terraform-owned values Secret. Git holds the
+# template; the CMP renders concrete manifests, so selfHeal is stable (no manual
+# in-cluster edits to revert). Hence `source.plugin`, not a bare `path`.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -18,6 +26,8 @@ spec:
     repoURL: https://github.com/arnaudmaillet/core-platform
     targetRevision: develop
     path: k8s/overlays/staging
+    plugin:
+      name: envsubst
   destination:
     server: https://kubernetes.default.svc
     namespace: default

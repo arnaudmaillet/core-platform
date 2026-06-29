@@ -10,6 +10,35 @@ variable "cluster_endpoint" { type = string }
 variable "ssl_certificate_arn" { type = string }
 variable "addons_iam_roles" { type = map(string) }
 
+# --- CMP envsubst values (runtime data-store endpoints) ----------------------
+# Threaded into the cmp-envsubst-values Secret the repo-server plugin sources.
+# Default "" so single-env/dev (no managed data stores, no overlay) is unaffected.
+variable "msk_bootstrap_brokers" {
+  type        = string
+  default     = ""
+  description = "MSK SASL/SCRAM bootstrap brokers -> ${MSK_BOOTSTRAP_BROKERS_SASL_SCRAM}."
+}
+variable "elasticache_endpoint" {
+  type        = string
+  default     = ""
+  description = "ElastiCache cluster-mode configuration endpoint -> ${ELASTICACHE_CONFIG_ENDPOINT}."
+}
+variable "opensearch_endpoint" {
+  type        = string
+  default     = ""
+  description = "OpenSearch VPC endpoint (no scheme) -> ${OPENSEARCH_ENDPOINT}."
+}
+variable "auth_jwks_url" {
+  type        = string
+  default     = ""
+  description = "Auth JWKS URL -> ${AUTH_JWKS_URL} (empty until Keycloak/auth is provisioned)."
+}
+variable "keycloak_token_endpoint" {
+  type        = string
+  default     = ""
+  description = "Keycloak token endpoint -> ${KEYCLOAK_TOKEN_ENDPOINT} (empty until provisioned)."
+}
+
 # Per-env bootstrap wiring (defaults preserve the original single-env/dev behavior).
 variable "bootstrap_path" {
   type        = string

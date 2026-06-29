@@ -17,6 +17,30 @@ variable "ssl_certificate_arn" { type = string }
 variable "addons" { type = any }
 variable "tags" { type = map(string) }
 
+# --- CMP envsubst values (runtime data-store endpoints) ----------------------
+# Resolve the ${VAR} endpoints in the Kustomize workload overlay. Default "" so
+# the dev cluster (in-cluster data stores, legacy Helm path) is unaffected.
+variable "msk_bootstrap_brokers" {
+  type    = string
+  default = ""
+}
+variable "elasticache_endpoint" {
+  type    = string
+  default = ""
+}
+variable "opensearch_endpoint" {
+  type    = string
+  default = ""
+}
+variable "auth_jwks_url" {
+  type    = string
+  default = ""
+}
+variable "keycloak_token_endpoint" {
+  type    = string
+  default = ""
+}
+
 # Per-env bootstrap wiring (defaults preserve the original dev behavior).
 variable "bootstrap_path" {
   type    = string

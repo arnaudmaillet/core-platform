@@ -30,6 +30,13 @@ module "bootstrap" {
   bootstrap_path      = var.bootstrap_path
   global_params_file  = var.global_params_file
   server_dependency   = module.server.argocd_id
+
+  # CMP envsubst values (data-store endpoints) for the workload overlay render.
+  msk_bootstrap_brokers   = var.msk_bootstrap_brokers
+  elasticache_endpoint    = var.elasticache_endpoint
+  opensearch_endpoint     = var.opensearch_endpoint
+  auth_jwks_url           = var.auth_jwks_url
+  keycloak_token_endpoint = var.keycloak_token_endpoint
 }
 
 # 2. Installation des Addons EKS
