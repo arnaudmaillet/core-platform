@@ -15,6 +15,20 @@ spec:
     racks:
       - name: rack1
         members: 3
+        # Pin to the database node tier and tolerate its taint, so Scylla lands on
+        # the dedicated DB nodes instead of general/spot capacity.
+        placement:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: intent
+                      operator: In
+                      values: ["database"]
+          tolerations:
+            - key: dedicated
+              value: database
+              effect: NoSchedule
         storage:
           capacity: 20Gi
           storageClassName: gp3
