@@ -456,3 +456,49 @@ resource "aws_iam_role_policy" "karpenter_interruption" {
     }]
   })
 }
+
+# --- 11. CNPG BACKUPS (barmanObjectStore -> S3) ------------------------------
+# Each CNPG cluster's pods assume this role (via serviceAccountTemplate) to write
+# base backups + WAL to the shared backups bucket (path-prefixed per cluster).
+# Created only when the bucket ARN is supplied (staging/prod).
+module "cnpg_backup_irsa_role" {
+  count = var.cnpg_backup_bucket_arn != "" ? 1 : 0
+
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "${var.cluster_name}-cnpg-backup-role"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = var.oidc_provider_arn
+      namespace_service_accounts = var.cnpg_service_accounts
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "cnpg_backup" {
+  count = var.cnpg_backup_bucket_arn != "" ? 1 : 0
+
+  name = "CnpgBackupReadWrite"
+  role = module.cnpg_backup_irsa_role[0].iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # Barman needs read+write+delete (retention prunes old backups/WAL).
+        Sid      = "ObjectReadWrite"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = ["${var.cnpg_backup_bucket_arn}/*"]
+      },
+      {
+        Sid      = "ListAndLocate"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket", "s3:GetBucketLocation"]
+        Resource = [var.cnpg_backup_bucket_arn]
+      }
+    ]
+  })
+}

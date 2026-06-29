@@ -30,6 +30,12 @@ dependency "media_bucket" {
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
 }
 
+dependency "cnpg_backups" {
+  config_path                             = "../../data/cnpg-backups"
+  mock_outputs                            = { bucket_arn = "arn:aws:s3:::mock-cnpg-backups" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
 terraform {
   source = "../../../../../modules/security/irsa-roles"
 }
@@ -55,6 +61,17 @@ inputs = {
   ]
   media_bucket_arn       = dependency.media_bucket.outputs.bucket_arn
   media_service_accounts = ["default:staging-media-server"]
+
+  # CNPG backup role — each cluster's pod SA (name == cluster name) assumes it.
+  cnpg_backup_bucket_arn = dependency.cnpg_backups.outputs.bucket_arn
+  cnpg_service_accounts = [
+    "default:staging-account-postgres",
+    "default:staging-counter-postgres",
+    "default:staging-audit-postgres",
+    "default:staging-moderation-postgres",
+    "default:staging-auth-postgres",
+    "default:staging-media-postgres",
+  ]
 
   tags = {
     Environment = "staging"
