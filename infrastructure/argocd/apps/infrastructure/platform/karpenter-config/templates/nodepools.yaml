@@ -45,7 +45,10 @@ spec:
       expireAfter: 720h # Sécurité pour recycler les nœuds tous les 30 jours
   
   limits:
-    cpu: {{ $config.cpuLimit | default 1000 }} # 1cpu par defaut
+    # Karpenter limits.cpu is a CORE COUNT (a pool-wide vCPU ceiling), not
+    # millicores. Default 16 vCPUs if a pool omits cpuLimit — a real guardrail,
+    # never the old `1000` (which meant 1000 cores, effectively unlimited).
+    cpu: {{ $config.cpuLimit | default 16 }}
   
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
