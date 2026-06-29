@@ -5,7 +5,10 @@ include "root" {
 }
 
 terraform {
-  source = "../../../../../modules/artifacts/ecr"
+  # 4 levels up reaches infrastructure/ (this unit lives at live/global/artifacts/ecr).
+  # NB: a get_repo_root()//… source would try to copy the whole repo and trips over
+  # the broken bazel-* symlinks at the root.
+  source = "../../../../modules/artifacts/ecr"
 }
 
 inputs = {
