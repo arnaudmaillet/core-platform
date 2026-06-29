@@ -86,26 +86,36 @@ the break-glass `RecordPrivileged`/`Query` path (no normal-flow mesh caller).
 
 ---
 
-## 3. ⚠️ Open decision — the client-facing entry point
+## 3. ✅ Decision (2026-06-29) — client-facing entry point: keep same-ns for now
 
 The "client-facing" services above are read/command APIs meant to be called by a
-gateway/BFF, **not** by other fleet services. But:
+gateway/BFF, **not** by other fleet services. Evidence as of this decision:
 
-- there is **no in-cluster BFF/gateway** in this repo or the staging overlay (only a
-  `gateway-bff-deploy.yml` workflow — the BFF lives off-fleet);
-- staging has **no ALB ingress** (only the realtime NLB).
+- **No client edge is deployed to staging** — no ALB Ingress (only the realtime
+  NLB), and no in-cluster BFF. So these services have **no real in-cluster inbound**
+  beyond health probes today.
+- The GraphQL BFF (`backend/gateway/graphql-bff`) exists but in the **legacy Bazel
+  `backend/` tree** — built/pushed to ECR, but no k8s manifest in this repo and not
+  wired to the staging overlay.
+- `dev` exposes services via an **ALB → service directly** (per-service
+  `api-<svc>.core-platform.click`, gRPC backend, `target-type: ip` — see
+  `k8s/overlays/dev/ingress.yaml`), i.e. NOT fronted by the BFF.
 
-So today those services have **no in-cluster inbound** beyond health probes — they
-could be locked down hard right now. But that would block the BFF/edge the moment
-it's introduced. **Decision needed before writing their ingress policies:**
+**Decision:** keep the client-facing set on the **#519 same-namespace baseline** —
+no per-service ingress change. Tightening them now (to health-probes-only) would
+break the edge the moment it lands, for no real isolation gain while there is no
+edge. The cross-namespace + external isolation from #519 already applies.
 
-1. **Where does client traffic enter?** An in-cluster BFF pod (→ allow by its label),
-   an ALB (→ allow from the ALB/VPC ipBlock), or stays external-only for now (→ lock
-   to health probes + revisit when the BFF lands)?
+**Revisit trigger** — when a client edge is added to staging, pick the matching
+ingress source and tighten:
 
-Until that's answered, the safe move is to keep the **same-namespace baseline**
-(#519) for the client-facing set and only tighten the **6 mesh callees** + the
-**TIER-0/worker** services, whose inbound is fully known.
+| Edge added | Allow ingress to client-facing services from |
+|---|---|
+| ALB → service directly (mirror dev) | the VPC / public-subnet **ipBlock** (ALB ENIs), on the svc gRPC port |
+| Single in-cluster GraphQL BFF | the **BFF pod label** only (tightest) |
+
+The **6 mesh callees** + **TIER-0/worker** services are already tightened (§2, #521);
+this decision only concerns the remaining client-facing set.
 
 ---
 
@@ -191,15 +201,18 @@ Layered on top of the #519 baseline:
 
 ---
 
-## 7. Open decisions before implementing
+## 7. Decisions
 
-1. **Client entry point** (§3) — BFF pod label, ALB ipBlock, or lock-to-probes-for-now?
-2. **Egress scope** — do we want full egress lockdown now, or ingress-only v2 first?
+1. ~~**Client entry point**~~ ✅ Decided 2026-06-29 (§3) — **keep same-ns** until a
+   client edge is deployed to staging; revisit with the table in §3 when it lands.
+2. **Egress scope** — *OPEN.* Full egress lockdown now, or ingress-only first?
    (Egress needs the live data-subnet CIDRs + S3 handling; higher breakage risk.)
+   This is the only remaining open decision.
 3. ~~**Port collision** — fix `auth`/`timeline` both on 50060.~~ ✅ Done — `timeline` → 50070.
 4. **CNI** — confirm `enableNetworkPolicy=true` (shipped in #519) is live before any
    of this enforces.
 
-Once 1–2 are answered, the per-service policies are mechanical to generate from the
-matrices above. Rollout slots into Phase 3c of
+Ingress micro-segmentation is now as tight as the known graph allows (mesh callees
++ TIER-0/workers in #521; client-facing intentionally on same-ns per #1). The only
+remaining policy work is **egress** (#2). Rollout slots into Phase 3c of
 `docs/runbooks/audit-remediation-rollout.md` (apply allows first, deny last, watch).
