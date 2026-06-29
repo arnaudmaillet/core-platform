@@ -7,7 +7,7 @@ spec:
   triggers:
     - type: kafka
       metadata:
-        bootstrapServers: <<MSK_BOOTSTRAP_BROKERS_SASL_SCRAM>>
+        bootstrapServers: ${MSK_BOOTSTRAP_BROKERS_SASL_SCRAM}
         consumerGroup: audit-worker
         lagThreshold: "1000"
         offsetResetPolicy: earliest

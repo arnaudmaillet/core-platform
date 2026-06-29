@@ -32,7 +32,7 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
     # TLS termination at the NLB (L4 TLS listener). ARN filled at deploy.
-    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "<<ACM_CERTIFICATE_ARN>>"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "${ACM_CERTIFICATE_ARN}"
     service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
     service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
     # Even client spread across AZs; conns are long-lived so per-conn balancing.

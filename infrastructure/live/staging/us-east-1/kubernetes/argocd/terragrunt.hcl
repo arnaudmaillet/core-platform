@@ -26,6 +26,27 @@ dependency "security" {
   config_path = "../../security/irsa-roles"
 }
 
+# Data-store endpoints fed into the repo-server envsubst CMP (cmp-envsubst-values
+# Secret) so the workload overlay's ${VAR} endpoints resolve. mock_outputs let
+# `plan`/`validate` run before the data stores exist (e.g. first run-all).
+dependency "msk" {
+  config_path                             = "../../data/msk"
+  mock_outputs                            = { bootstrap_brokers_sasl_scram = "b-mock:9096" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
+dependency "elasticache" {
+  config_path                             = "../../data/elasticache"
+  mock_outputs                            = { configuration_endpoint = "mock.cache.amazonaws.com" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
+dependency "opensearch" {
+  config_path                             = "../../data/opensearch"
+  mock_outputs                            = { endpoint = "mock.es.amazonaws.com" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
 terraform {
   source = "../../../../../modules//kubernetes/argocd"
 }
@@ -49,6 +70,12 @@ inputs = {
 
   # --- Security & Certificates ---
   ssl_certificate_arn = dependency.security.outputs.certificate_arn
+
+  # --- CMP envsubst values (data-store endpoints for the workload overlay) ---
+  msk_bootstrap_brokers = dependency.msk.outputs.bootstrap_brokers_sasl_scram
+  elasticache_endpoint  = dependency.elasticache.outputs.configuration_endpoint
+  opensearch_endpoint   = dependency.opensearch.outputs.endpoint
+  # auth_jwks_url / keycloak_token_endpoint stay empty until auth/Keycloak lands.
 
   addons_iam_roles = {
     karpenter        = dependency.security.outputs.karpenter_role_arn
