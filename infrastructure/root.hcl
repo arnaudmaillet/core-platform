@@ -141,7 +141,10 @@ terraform {
     execute  = [
       "sh", 
       "-c", 
-      "aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws"
+      # Non-fatal: this is only a Helm pull-rate-limit convenience (and is a no-op
+      # for non-Helm units), so a flaky/rate-limited public.ecr.aws login must not
+      # abort the apply.
+      "aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws || true"
     ]
   }
 }
