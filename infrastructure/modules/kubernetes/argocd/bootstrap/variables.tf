@@ -16,27 +16,27 @@ variable "addons_iam_roles" { type = map(string) }
 variable "msk_bootstrap_brokers" {
   type        = string
   default     = ""
-  description = "MSK SASL/SCRAM bootstrap brokers -> ${MSK_BOOTSTRAP_BROKERS_SASL_SCRAM}."
+  description = "MSK SASL/SCRAM bootstrap brokers (CMP var MSK_BOOTSTRAP_BROKERS_SASL_SCRAM)."
 }
 variable "elasticache_endpoint" {
   type        = string
   default     = ""
-  description = "ElastiCache cluster-mode configuration endpoint -> ${ELASTICACHE_CONFIG_ENDPOINT}."
+  description = "ElastiCache cluster-mode configuration endpoint (CMP var ELASTICACHE_CONFIG_ENDPOINT)."
 }
 variable "opensearch_endpoint" {
   type        = string
   default     = ""
-  description = "OpenSearch VPC endpoint (no scheme) -> ${OPENSEARCH_ENDPOINT}."
+  description = "OpenSearch VPC endpoint, no scheme (CMP var OPENSEARCH_ENDPOINT)."
 }
 variable "auth_jwks_url" {
   type        = string
   default     = ""
-  description = "Auth JWKS URL -> ${AUTH_JWKS_URL} (empty until Keycloak/auth is provisioned)."
+  description = "Auth JWKS URL (CMP var AUTH_JWKS_URL; empty until Keycloak/auth is provisioned)."
 }
 variable "keycloak_token_endpoint" {
   type        = string
   default     = ""
-  description = "Keycloak token endpoint -> ${KEYCLOAK_TOKEN_ENDPOINT} (empty until provisioned)."
+  description = "Keycloak token endpoint (CMP var KEYCLOAK_TOKEN_ENDPOINT; empty until provisioned)."
 }
 
 # Per-env bootstrap wiring (defaults preserve the original single-env/dev behavior).
