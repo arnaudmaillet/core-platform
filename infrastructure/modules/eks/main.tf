@@ -21,6 +21,19 @@ module "eks" {
   enable_cluster_creator_admin_permissions = true
   enable_irsa                              = true
 
+  # Enable NetworkPolicy enforcement in the AWS VPC CNI — without this the CNI
+  # silently ignores NetworkPolicy objects, so the fleet's namespace-isolation
+  # baseline (k8s/overlays/staging/networkpolicies.yaml) would be a no-op. The CNI
+  # network-policy agent permits the node->pod kubelet health-probe path, so
+  # default-deny ingress does not break liveness/readiness probes.
+  cluster_addons = {
+    vpc-cni = {
+      configuration_values = jsonencode({
+        enableNetworkPolicy = "true"
+      })
+    }
+  }
+
   # --- MANAGED NODE GROUPS DYNAMIQUES ---
   # Ici, on passe directement la map configurée dans Terragrunt.
   # Cela permet de varier le nombre et le type de groupes selon l'environnement.

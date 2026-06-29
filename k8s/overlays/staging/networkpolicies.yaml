@@ -1,0 +1,68 @@
+# k8s/overlays/staging/networkpolicies.yaml
+#
+# Baseline namespace isolation for the fleet (default namespace). Before this,
+# every pod was reachable by every other pod from any namespace.
+#
+# v1 posture (INGRESS only — egress is left fully open on purpose):
+#   * default-deny all ingress;
+#   * allow ingress only from pods in the SAME namespace — this keeps the entire
+#     gRPC mesh + app->CNPG traffic working without having to enumerate the (partly
+#     code-level) call graph, while blocking cross-namespace and external direct
+#     ingress (observability / external-secrets / kube-system pods can no longer
+#     reach app pods directly);
+#   * the realtime gateway's public WSS port (8443) is internet-facing via the NLB,
+#     so it explicitly accepts ingress there.
+#
+# Egress is deliberately NOT restricted yet: locking it down needs the managed
+# data-store CIDRs (MSK/ElastiCache/OpenSearch ENIs), CoreDNS, the OTel collector
+# and S3 endpoints mapped first — doing it blind would break the fleet.
+#
+# NEXT (v2, needs the code-level gRPC call graph): per-service ingress so a
+# compromised peer can't reach TIER-0 audit/auth — e.g. the workers
+# (audit/counter/realtime-dispatcher) take no mesh ingress at all, audit-server's
+# sync RPC is break-glass only.
+#
+# PREREQUISITE: NetworkPolicy enforcement. The AWS VPC CNI ignores these objects
+# unless enableNetworkPolicy=true (set on the vpc-cni addon in modules/eks). The
+# VPC CNI permits the node->pod kubelet health-probe path, so default-deny does
+# not break liveness/readiness probes.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# The realtime gateway terminates client WebSockets on :8443 (public, via the NLB).
+# Its internal gRPC/health (:50066) is covered by allow-same-namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: realtime-gateway-public-wss
+spec:
+  podSelector:
+    matchLabels:
+      app: realtime-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8443
