@@ -73,3 +73,16 @@ variable "media_service_accounts" {
   type        = list(string)
   default     = []
 }
+
+# ── CNPG backups (barmanObjectStore -> S3) ────────────────────────────────────
+variable "cnpg_backup_bucket_arn" {
+  description = "ARN of the CNPG backups bucket. Empty disables the CNPG backup IRSA role."
+  type        = string
+  default     = ""
+}
+
+variable "cnpg_service_accounts" {
+  description = "Trust subjects (<ns>:<sa>) for the CNPG cluster pods that write backups (one per cluster, SA name == cluster name)."
+  type        = list(string)
+  default     = []
+}

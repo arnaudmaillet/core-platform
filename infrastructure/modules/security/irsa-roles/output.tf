@@ -43,6 +43,11 @@ output "media_app_role_arn" {
   value       = try(module.media_app_irsa_role[0].iam_role_arn, null)
 }
 
+output "cnpg_backup_role_arn" {
+  description = "IRSA role ARN for CNPG backups (null unless cnpg_backup_bucket_arn set)."
+  value       = try(module.cnpg_backup_irsa_role[0].iam_role_arn, null)
+}
+
 output "iam_role_arns" {
   value = {
     lb_controller    = module.lb_controller_irsa_role.iam_role_arn
