@@ -140,6 +140,7 @@ pub async fn dispatch_create(
         parent_id:   None,
         root_id:     None,
         audio_ref:   None,
+        location:    None,
     };
     command_bus.dispatch(Envelope::new(Uuid::now_v7(), cmd)).await
 }

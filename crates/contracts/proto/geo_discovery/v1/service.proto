@@ -5,12 +5,15 @@ package geo_discovery.v1;
 import "geo_discovery/v1/messages.proto";
 
 service GeoDiscoveryService {
-    // Returns all post cards visible within the given viewport at the given
-    // zoom level. Hot path: served from Redis ZSETs + MGET in two pipelined
-    // round-trips. Falls back to ScyllaDB on cache miss.
-    rpc QueryTile (QueryTileRequest) returns (QueryTileResponse);
+    // Radar (Step 1): returns lightweight pins visible within the viewport at the
+    // given zoom level. Hot path, served exclusively from Redis (spatial ZSETs +
+    // pin projection). No ScyllaDB, no card hydration — built for high-frequency
+    // pan/zoom. Fail-open: a missing pin is silently dropped.
+    rpc QueryTile      (QueryTileRequest)      returns (QueryTileResponse);
 
-    // Returns a single card by post ID. Used for deep-link map centering and
-    // share-sheet previews. Tries Redis first, falls back to ScyllaDB.
-    rpc GetCard   (GetCardRequest)   returns (GetCardResponse);
+    // Focus (Step 2): hydrates one or more focused pins into full cards (author
+    // metadata, caption, tier). Batched for bottom-sheet cluster expansion. Reads
+    // Redis, falls back to ScyllaDB on cache miss — the cold path the Radar pan
+    // path avoids.
+    rpc GetGeoTimeline (GetGeoTimelineRequest) returns (GetGeoTimelineResponse);
 }

@@ -28,7 +28,7 @@
 CREATE TABLE IF NOT EXISTS geo_discovery.posts_by_tile (
     h3_index     bigint,       -- Raw H3 cell index cast to signed int64 (bit 63 always 0)
     resolution   tinyint,      -- H3 resolution stored as raw integer: 5, 7, or 9
-    published_at timestamp,    -- Write-time bucket; drives TWCS window placement
+    published_at timestamp,    -- Write-time bucket, drives TWCS window placement
     post_id      uuid,
     PRIMARY KEY ((h3_index, resolution), published_at, post_id)
 ) WITH CLUSTERING ORDER BY (published_at DESC, post_id ASC)

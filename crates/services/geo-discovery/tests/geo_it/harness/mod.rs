@@ -17,6 +17,7 @@ use scylla_storage::ScyllaConfig;
 
 use geo_discovery::app::{App, Backends};
 use geo_discovery::application::command::IndexPostCommand;
+use geo_discovery::application::query::get_geo_timeline::{GetGeoTimelineQuery, GetGeoTimelineResult};
 use geo_discovery::application::query::query_tile::{QueryTileQuery, QueryTileResult};
 use geo_discovery::config::GeoDiscoveryConfig;
 
@@ -67,13 +68,27 @@ impl TestHarness {
 
     /// Indexes a post at `(lat, lng)` with the given virality, returning its uuid.
     pub async fn index_post(&self, lat: f64, lng: f64, virality: f64) -> Uuid {
+        self.index_post_full(lat, lng, virality, "", "").await
+    }
+
+    /// Indexes a post with an explicit caption and thumbnail — exercises the
+    /// Focus (GetGeoTimeline) hydration path.
+    pub async fn index_post_full(
+        &self,
+        lat:       f64,
+        lng:       f64,
+        virality:  f64,
+        caption:   &str,
+        thumbnail: &str,
+    ) -> Uuid {
         let post_uuid = Uuid::now_v7();
         let cmd = IndexPostCommand {
             post_id:           post_uuid.to_string(),
             author_id:         Uuid::now_v7().to_string(),
             author_handle:     "tester".to_owned(),
             author_avatar_url: String::new(),
-            thumbnail_url:     String::new(),
+            thumbnail_url:     thumbnail.to_owned(),
+            caption:           caption.to_owned(),
             lat,
             lng,
             virality_score:    virality,
@@ -86,6 +101,17 @@ impl TestHarness {
             .await
             .expect("index_post");
         post_uuid
+    }
+
+    /// Focus path: hydrates the given post ids into full cards.
+    pub async fn get_timeline(&self, post_ids: &[Uuid]) -> GetGeoTimelineResult {
+        self.query_bus
+            .dispatch(Envelope::new(
+                Uuid::now_v7(),
+                GetGeoTimelineQuery { post_ids: post_ids.to_vec() },
+            ))
+            .await
+            .expect("get_geo_timeline")
     }
 
     /// Queries a viewport box (`sw` < `ne`) at the given zoom.
@@ -107,7 +133,7 @@ impl TestHarness {
     }
 }
 
-/// Whether a query result contains a card for `post_uuid`.
+/// Whether a Radar query result contains a pin for `post_uuid`.
 pub fn result_contains(result: &QueryTileResult, post_uuid: &Uuid) -> bool {
-    result.cards.iter().any(|c| c.post_id == *post_uuid)
+    result.pins.iter().any(|p| p.post_id == *post_uuid)
 }

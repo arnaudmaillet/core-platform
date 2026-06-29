@@ -15,6 +15,24 @@ pub struct PostPublishedEvent {
     pub audio_id:        Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_kind:      Option<u8>,
+
+    // ── Denormalized for geo-discovery (Radar pin + Focus card) ──────────────
+    /// Post caption. Empty string when the post has none. Feeds the Focus-mode
+    /// card in geo-discovery. Additive + `#[serde(default)]`, so other consumers
+    /// (`notification`, `timeline`, `search`) ignore it transparently.
+    #[serde(default)]
+    pub caption:         String,
+    /// Cover thumbnail — the first attachment's `thumbnail_url`. Drives the map
+    /// pin image. Absent for text-only posts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail_url:   Option<String>,
+    /// Client-supplied post location (WGS-84). Absent → the post is NOT
+    /// geo-indexed (geo-discovery skips it). `lat`/`lng` are always emitted
+    /// together or not at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lat:             Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lng:             Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

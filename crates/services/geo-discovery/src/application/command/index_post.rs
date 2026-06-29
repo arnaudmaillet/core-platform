@@ -3,8 +3,8 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{CardStore, SpatialIndex, TileRepository};
-use crate::domain::entity::MapPostCard;
+use crate::application::port::{CardStore, PinStore, SpatialIndex, TileRepository};
+use crate::domain::entity::{MapPostCard, RadarPin};
 use crate::domain::value_object::{
     AuthorId, GeoCoordinate, H3Index, H3Resolution, PostId, RetentionTtl, ViralityScore,
 };
@@ -24,6 +24,9 @@ pub struct IndexPostCommand {
     pub author_handle:     String,
     pub author_avatar_url: String,
     pub thumbnail_url:     String,
+    /// Post caption, denormalized from `post.published`. Stored on the card for
+    /// the Focus-mode read path. Empty when the post has no caption.
+    pub caption:           String,
     pub lat:               f64,
     pub lng:               f64,
     pub virality_score:    f64,
@@ -59,18 +62,20 @@ impl Validate for IndexPostCommand {
     }
 }
 
-pub struct IndexPostHandler<SI, CS, TR> {
+pub struct IndexPostHandler<SI, CS, TR, PS> {
     pub spatial_index:       Arc<SI>,
     pub card_store:          Arc<CS>,
     pub tile_repository:     Arc<TR>,
+    pub pin_store:           Arc<PS>,
     pub card_cache_threshold: f64,
 }
 
-impl<SI, CS, TR> CommandHandler<IndexPostCommand> for IndexPostHandler<SI, CS, TR>
+impl<SI, CS, TR, PS> CommandHandler<IndexPostCommand> for IndexPostHandler<SI, CS, TR, PS>
 where
     SI: SpatialIndex + 'static,
     CS: CardStore + 'static,
     TR: TileRepository + 'static,
+    PS: PinStore + 'static,
 {
     type Error = GeoDiscoveryError;
 
@@ -95,6 +100,7 @@ where
             author_handle:     cmd.author_handle.clone(),
             author_avatar_url: cmd.author_avatar_url.clone(),
             thumbnail_url:     cmd.thumbnail_url.clone(),
+            caption:           cmd.caption.clone(),
             h3_index_r7:       idx_r7.as_i64(),
             virality_score:    score.as_f32(),
             published_at_ms:   cmd.published_at_ms,
@@ -120,7 +126,20 @@ where
             tracing::warn!(post_id = %post_id, error = %e, "spatial index write failed — ScyllaDB is durable");
         }
 
-        // ── 3. Redis card cache (conditional on score threshold) ───────────────
+        // ── 3. Redis pin projection (Radar path — ALWAYS) ─────────────────────
+        // Every indexed post needs a pin: the Radar pan query is Redis-only with
+        // no ScyllaDB fallback, so a missing pin means the marker never renders.
+        let pin = RadarPin {
+            post_id:       post_id.as_uuid(),
+            lat:           cmd.lat,
+            lng:           cmd.lng,
+            thumbnail_url: cmd.thumbnail_url.clone(),
+        };
+        if let Err(e) = self.pin_store.set(&pin, ttl).await {
+            tracing::warn!(post_id = %post_id, error = %e, "pin store write failed — Radar will miss this post until reindex");
+        }
+
+        // ── 4. Redis card cache (Focus path — conditional on score threshold) ──
         if score.exceeds_threshold(self.card_cache_threshold) {
             if let Err(e) = self.card_store.set(&card, ttl).await {
                 tracing::warn!(post_id = %post_id, error = %e, "card cache write failed — ScyllaDB is durable");

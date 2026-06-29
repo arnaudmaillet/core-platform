@@ -127,11 +127,59 @@ mod tests {
             author_tier:     0,
             audio_id:        None,
             audio_kind:      None,
+            caption:         "hello world".to_owned(),
+            thumbnail_url:   Some("https://cdn/t.jpg".to_owned()),
+            lat:             Some(48.8566),
+            lng:             Some(2.3522),
         });
         let value = serde_json::to_value(&event).expect("serialize");
         assert_eq!(value["type"], "PostPublished");
         assert_eq!(value["post_id"], "post-1");
         assert_eq!(value["profile_id"], "prof-9");
         assert_eq!(value["published_at_ms"], 1_700_000_000_000_i64);
+    }
+
+    /// Locks the geo-discovery denormalization carried on `post.published`:
+    /// caption, cover thumbnail, and optional location. Absent location must be
+    /// omitted from the wire payload (geo-discovery skips indexing in that case).
+    #[test]
+    fn post_published_carries_geo_denormalization() {
+        let with_location = serde_json::to_value(&PostPublishedEvent {
+            post_id:         "post-1".to_owned(),
+            profile_id:      "prof-9".to_owned(),
+            kind:            "text".to_owned(),
+            published_at_ms: 1_700_000_000_000,
+            author_tier:     0,
+            audio_id:        None,
+            audio_kind:      None,
+            caption:         "at the beach".to_owned(),
+            thumbnail_url:   Some("https://cdn/t.jpg".to_owned()),
+            lat:             Some(48.8566),
+            lng:             Some(2.3522),
+        })
+        .expect("serialize");
+        assert_eq!(with_location["caption"], "at the beach");
+        assert_eq!(with_location["thumbnail_url"], "https://cdn/t.jpg");
+        assert_eq!(with_location["lat"], 48.8566);
+        assert_eq!(with_location["lng"], 2.3522);
+
+        let no_location = serde_json::to_value(&PostPublishedEvent {
+            post_id:         "post-2".to_owned(),
+            profile_id:      "prof-9".to_owned(),
+            kind:            "text".to_owned(),
+            published_at_ms: 1_700_000_000_000,
+            author_tier:     0,
+            audio_id:        None,
+            audio_kind:      None,
+            caption:         String::new(),
+            thumbnail_url:   None,
+            lat:             None,
+            lng:             None,
+        })
+        .expect("serialize");
+        assert!(no_location.get("lat").is_none(), "absent lat must be omitted");
+        assert!(no_location.get("lng").is_none(), "absent lng must be omitted");
+        assert!(no_location.get("thumbnail_url").is_none(), "absent thumbnail must be omitted");
+        assert_eq!(no_location["caption"], "");
     }
 }

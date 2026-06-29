@@ -3,16 +3,18 @@ use std::sync::Arc;
 use cqrs::{Envelope, Query, QueryHandler};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{CardStore, SpatialIndex, TileRepository};
-use crate::domain::entity::MapPostCard;
+use crate::application::port::{PinStore, SpatialIndex};
+use crate::domain::entity::RadarPin;
 use crate::domain::value_object::{GeoCoordinate, zoom_to_resolution};
 use crate::error::GeoDiscoveryError;
 use crate::infrastructure::h3::h3_codec;
 
-/// Queries the spatial index for all visible post cards within a viewport.
+/// Radar path: resolves the lightweight pins visible within a viewport.
 ///
-/// Hot path: 2 Redis round-trips (ZRANGEBYSCORE × N tiles → MGET × M cards).
-/// Fallback: ScyllaDB point-reads for cards not present in Redis (cache miss).
+/// Hot path, Redis-only: 2 round-trips (ZRANGEBYSCORE × N tiles → pin GET × M).
+/// There is deliberately NO ScyllaDB fallback — a pin absent from Redis is
+/// silently dropped (fail-open). Card hydration (author metadata, caption) is
+/// the Focus path's job ([`super::get_geo_timeline`]), reached on pin tap.
 pub struct QueryTileQuery {
     pub sw_lat:     f64,
     pub sw_lng:     f64,
@@ -22,7 +24,7 @@ pub struct QueryTileQuery {
 }
 
 pub struct QueryTileResult {
-    pub cards:      Vec<MapPostCard>,
+    pub pins:       Vec<RadarPin>,
     pub tile_count: i32,
 }
 
@@ -55,17 +57,15 @@ impl Validate for QueryTileQuery {
     }
 }
 
-pub struct QueryTileHandler<SI, CS, TR> {
-    pub spatial_index:   Arc<SI>,
-    pub card_store:      Arc<CS>,
-    pub tile_repository: Arc<TR>,
+pub struct QueryTileHandler<SI, PS> {
+    pub spatial_index: Arc<SI>,
+    pub pin_store:     Arc<PS>,
 }
 
-impl<SI, CS, TR> QueryHandler<QueryTileQuery> for QueryTileHandler<SI, CS, TR>
+impl<SI, PS> QueryHandler<QueryTileQuery> for QueryTileHandler<SI, PS>
 where
     SI: SpatialIndex + 'static,
-    CS: CardStore + 'static,
-    TR: TileRepository + 'static,
+    PS: PinStore + 'static,
 {
     type Error = GeoDiscoveryError;
 
@@ -112,42 +112,19 @@ where
             // Touch hot tiles even for empty results (keeps active-area tiles warm).
             let touch_pairs: Vec<_> = tiles.iter().map(|t| (*t, resolution)).collect();
             let _ = self.spatial_index.touch_hot_tiles(&touch_pairs).await;
-            return Ok(QueryTileResult { cards: vec![], tile_count });
+            return Ok(QueryTileResult { pins: vec![], tile_count });
         }
 
-        // ── Phase 2: MGET for all cards (single round-trip) ──────────────────
-        let cached = self.card_store.mget(&post_ids).await?;
-
-        // ── Phase 3: ScyllaDB fallback for cache misses ───────────────────────
-        let mut cards: Vec<MapPostCard> = Vec::with_capacity(post_ids.len());
-        let mut miss_ids: Vec<uuid::Uuid> = Vec::new();
-
-        for (id, opt_card) in post_ids.iter().zip(cached) {
-            match opt_card {
-                Some(card) => cards.push(card),
-                None       => miss_ids.push(*id),
-            }
-        }
-
-        if !miss_ids.is_empty() {
-            let miss_futures: Vec<_> = miss_ids.iter()
-                .map(|id| {
-                    let post_id = crate::domain::value_object::PostId::from(*id);
-                    let tr = Arc::clone(&self.tile_repository);
-                    async move { tr.get_card(&post_id).await }
-                })
-                .collect();
-
-            let miss_results = futures::future::try_join_all(miss_futures).await?;
-            for maybe_card in miss_results.into_iter().flatten() {
-                cards.push(maybe_card);
-            }
-        }
+        // ── Phase 2: pin lookup (Redis-only, single fan-out round-trip) ───────
+        // No ScyllaDB fallback: the Radar pan path is fail-open. A pin absent from
+        // Redis is silently dropped — the user pans again, or taps a neighbour.
+        let cached = self.pin_store.mget(&post_ids).await?;
+        let pins: Vec<RadarPin> = cached.into_iter().flatten().collect();
 
         // Fire-and-forget: update hot_tiles scores for the queried tiles.
         let touch_pairs: Vec<_> = tiles.iter().map(|t| (*t, resolution)).collect();
         let _ = self.spatial_index.touch_hot_tiles(&touch_pairs).await;
 
-        Ok(QueryTileResult { cards, tile_count })
+        Ok(QueryTileResult { pins, tile_count })
     }
 }

@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 108236d88c76fe93fc08d03ad5c6f997df7741c14fcc4aba3cc9d6c4f2dc33bc
-  translated_at: 2026-06-26
+  source_sha256: e9355e6f6919bc56d2061d97c5e3bd12e2cf162da5415323ea2cc3fd69e7261e
+  translated_at: 2026-06-29
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -121,6 +121,8 @@ service PostService {
   rpc GetPost (GetPostRequest) returns (PostView);                          // point lookup
   rpc ListPostsByProfile (ListPostsByProfileRequest) returns (ListPostsByProfileResponse); // cursor-paginated
 }
+// CreatePostRequest / PostView portent une localisation GeoPoint optionnelle :
+message GeoPoint { double lat = 1; double lng = 2; }  // WGS-84 ; absent → post non géo-indexé
 ```
 
 ### Contrat d'erreur (`PST-xxxx`)
@@ -150,7 +152,7 @@ service PostService {
 | Topic | Déclencheur | Clé | Consommateurs |
 |---|---|---|---|
 | `post.v1.events` | chaque événement de cycle de vie (`PostPublished` / `PostUpdated` / `PostDeleted`) | `post_id` | `search` (indexation des posts) |
-| `post.published` | `PublishPost` success — porte le `author_tier` dénormalisé de l'auteur | `post_id` | `timeline`, `geo-discovery`, `notification` |
+| `post.published` | `PublishPost` success — porte le `author_tier` dénormalisé, plus `caption` / `thumbnail_url` / `lat`/`lng` optionnels pour la projection geo | `post_id` | `timeline`, `geo-discovery`, `notification` |
 | `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
 | `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
 

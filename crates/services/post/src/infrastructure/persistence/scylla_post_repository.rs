@@ -11,7 +11,7 @@ use scylla_storage::{ProfileKind as ScyllaProfileKind, ScyllaClient, ScyllaStora
 use crate::application::port::{PostRepository, PostSummary};
 use crate::domain::aggregate::Post;
 use crate::domain::entity::MediaAttachment;
-use crate::domain::value_object::{AudioId, AudioKind, AudioReference, Caption, PostId, PostKind, PostStatus, ProfileId};
+use crate::domain::value_object::{AudioId, AudioKind, AudioReference, Caption, GeoPoint, PostId, PostKind, PostStatus, ProfileId};
 use crate::error::PostError;
 use crate::infrastructure::persistence::model::{PostProfileRow, PostRow};
 
@@ -140,6 +140,11 @@ fn row_to_post(row: PostRow) -> Result<Post, PostError> {
         _ => None,
     };
 
+    let location: Option<GeoPoint> = match (row.lat, row.lng) {
+        (Some(lat), Some(lng)) => Some(GeoPoint::new(lat, lng)?),
+        _                      => None,
+    };
+
     let created_at   = ScyllaPostRepository::ms_to_dt(row.created_at.0, "created_at")?;
     let updated_at   = ScyllaPostRepository::ms_to_dt(row.updated_at.0, "updated_at")?;
     let published_at = row.published_at.map(|t| ScyllaPostRepository::ms_to_dt(t.0, "published_at")).transpose()?;
@@ -155,6 +160,7 @@ fn row_to_post(row: PostRow) -> Result<Post, PostError> {
         parent_id,
         root_id,
         audio_ref,
+        location,
         created_at,
         updated_at,
         published_at,
@@ -197,8 +203,8 @@ impl PostRepository for ScyllaPostRepository {
             "INSERT INTO post.posts \
              (post_id, profile_id, kind, status, caption, attachments, \
               parent_id, root_id, created_at, updated_at, published_at, deleted_at, \
-              audio_id, audio_kind) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              audio_id, audio_kind, lat, lng) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         );
         self.client
             .session
@@ -219,6 +225,8 @@ impl PostRepository for ScyllaPostRepository {
                     post.deleted_at().map(Self::dt_ms),
                     post.audio_ref().map(|a| a.audio_id.as_uuid()),
                     post.audio_ref().map(|a| a.audio_kind.as_tinyint()),
+                    post.location().map(|g| g.lat()),
+                    post.location().map(|g| g.lng()),
                 ),
             )
             .await
@@ -323,7 +331,7 @@ impl PostRepository for ScyllaPostRepository {
         let stmt = self.fast_stmt(
             "SELECT post_id, profile_id, kind, status, caption, attachments, \
              parent_id, root_id, created_at, updated_at, published_at, deleted_at, \
-             audio_id, audio_kind \
+             audio_id, audio_kind, lat, lng \
              FROM post.posts WHERE post_id = ?",
         );
         let result = self

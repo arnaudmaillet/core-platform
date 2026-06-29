@@ -8,8 +8,8 @@ use transport::kafka::config::consumer::{AutoOffsetReset, ConsumerConfig};
 use transport::kafka::producer::KafkaProducerHandle;
 
 use crate::application::command::IndexPostCommand;
-use crate::application::port::{CardStore, SpatialIndex, TileRepository};
-use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex};
+use crate::application::port::{CardStore, PinStore, SpatialIndex, TileRepository};
+use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex, RedisPinStore};
 use crate::infrastructure::persistence::ScyllaTileRepository;
 use crate::infrastructure::worker::build_dlq_producer;
 
@@ -18,26 +18,44 @@ const TOPIC: &str = "post.published";
 /// Kafka event schema for `post.published`.
 ///
 /// Published by `services/post` when a post transitions to Published status.
-/// All fields required for spatial indexing and card projection are included.
+/// `services/post` only emits POST-owned data: it does not carry the author's
+/// display name or avatar (those are profile-owned and joined separately from
+/// `profile.v1.events`). This struct mirrors that contract — every field beyond
+/// the post identity and timestamp is optional/defaulted, so a payload that
+/// omits a location, caption, thumbnail, or score decodes cleanly instead of
+/// being rejected to the DLQ.
 #[derive(Debug, Deserialize)]
 pub struct PostPublishedEvent {
-    pub post_id:           String,
-    pub author_id:         String,
-    pub author_handle:     String,
-    pub author_avatar_url: String,
-    pub thumbnail_url:     String,
-    pub lat:               f64,
-    pub lng:               f64,
-    /// Initial virality score. Typically 0.0 for brand-new posts.
-    pub virality_score:    f64,
+    pub post_id:         String,
+    /// Author identity. `services/post` emits this as `profile_id`; geo-discovery
+    /// treats it as the author id for the card projection.
+    pub profile_id:      String,
+    /// Post caption. Empty when the post has none. Stored on the card for the
+    /// Focus-mode read path.
+    #[serde(default)]
+    pub caption:         String,
+    /// Cover thumbnail for the map pin. Absent for text-only posts.
+    #[serde(default)]
+    pub thumbnail_url:   Option<String>,
+    /// Post location (WGS-84). `lat`/`lng` are emitted together by `services/post`
+    /// or not at all. Absent → the post is NOT spatially indexed (skipped).
+    #[serde(default)]
+    pub lat:             Option<f64>,
+    #[serde(default)]
+    pub lng:             Option<f64>,
+    /// Initial virality score. Typically 0.0 for brand-new posts. `services/post`
+    /// does not emit it; virality is geo-discovery's own concern.
+    #[serde(default)]
+    pub virality_score:  f64,
     /// Unix epoch milliseconds of the publication timestamp.
-    pub published_at_ms:   i64,
+    pub published_at_ms: i64,
     /// Optional retention override in seconds. Absent → 172 800 s (48 h).
-    pub retention_secs:    Option<u64>,
+    #[serde(default)]
+    pub retention_secs:  Option<u64>,
     /// Author tier at publish time. 0=Standard, 1=Premium, 2=VIP.
     /// Denormalized by services/post from services/profile. Absent → 0 (Standard).
     #[serde(default)]
-    pub author_tier:       u8,
+    pub author_tier:     u8,
 }
 
 /// Long-lived background worker that consumes `post.published` events and
@@ -46,21 +64,24 @@ pub struct PostPublishedEvent {
 /// Delivery semantics: at-least-once (auto-commit enabled). All writes are
 /// idempotent (ZADD + cap Lua, ScyllaDB INSERT with no IF conditions), so
 /// duplicate deliveries are safe.
-pub struct PostIndexerWorker<SI, CS, TR> {
+pub struct PostIndexerWorker<SI, CS, TR, PS> {
     kafka_config:        KafkaClientConfig,
     spatial_index:       Arc<SI>,
     card_store:          Arc<CS>,
     tile_repository:     Arc<TR>,
+    pin_store:           Arc<PS>,
     group_id:            String,
     card_cache_threshold: f64,
 }
 
-impl PostIndexerWorker<RedisGeoSpatialIndex, RedisCardStore, ScyllaTileRepository> {
+impl PostIndexerWorker<RedisGeoSpatialIndex, RedisCardStore, ScyllaTileRepository, RedisPinStore> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         kafka_config:        KafkaClientConfig,
         spatial_index:       Arc<RedisGeoSpatialIndex>,
         card_store:          Arc<RedisCardStore>,
         tile_repository:     Arc<ScyllaTileRepository>,
+        pin_store:           Arc<RedisPinStore>,
         group_id:            impl Into<String>,
         card_cache_threshold: f64,
     ) -> Self {
@@ -69,17 +90,19 @@ impl PostIndexerWorker<RedisGeoSpatialIndex, RedisCardStore, ScyllaTileRepositor
             spatial_index,
             card_store,
             tile_repository,
+            pin_store,
             group_id: group_id.into(),
             card_cache_threshold,
         }
     }
 }
 
-impl<SI, CS, TR> PostIndexerWorker<SI, CS, TR>
+impl<SI, CS, TR, PS> PostIndexerWorker<SI, CS, TR, PS>
 where
     SI: SpatialIndex + 'static,
     CS: CardStore + 'static,
     TR: TileRepository + 'static,
+    PS: PinStore + 'static,
 {
     pub async fn run(self) {
         let producer = match build_dlq_producer(&self.kafka_config) {
@@ -129,21 +152,38 @@ where
         use cqrs::{CommandHandler, Envelope};
         use uuid::Uuid;
 
+        // A post without a location is not a map post — skip spatial indexing.
+        // lat/lng are emitted together by services/post, so a partial pair is
+        // treated as "no location" rather than an error.
+        let (Some(lat), Some(lng)) = (event.lat, event.lng) else {
+            tracing::debug!(
+                post_id = %event.post_id,
+                "post.published carried no location — skipping geo indexing"
+            );
+            return Ok(());
+        };
+
         let handler = crate::application::command::IndexPostHandler {
             spatial_index:        Arc::clone(&self.spatial_index),
             card_store:           Arc::clone(&self.card_store),
             tile_repository:      Arc::clone(&self.tile_repository),
+            pin_store:            Arc::clone(&self.pin_store),
             card_cache_threshold: self.card_cache_threshold,
         };
 
         let cmd = IndexPostCommand {
             post_id:           event.post_id.clone(),
-            author_id:         event.author_id.clone(),
-            author_handle:     event.author_handle.clone(),
-            author_avatar_url: event.author_avatar_url.clone(),
-            thumbnail_url:     event.thumbnail_url.clone(),
-            lat:               event.lat,
-            lng:               event.lng,
+            // services/post emits the author identity as `profile_id`.
+            author_id:         event.profile_id.clone(),
+            // Display name + avatar are NOT carried on post.published (profile-owned).
+            // They are backfilled from profile.v1.events by a separate consumer;
+            // until that join runs, the card renders them empty.
+            author_handle:     String::new(),
+            author_avatar_url: String::new(),
+            thumbnail_url:     event.thumbnail_url.clone().unwrap_or_default(),
+            caption:           event.caption.clone(),
+            lat,
+            lng,
             virality_score:    event.virality_score,
             published_at_ms:   event.published_at_ms,
             retention_secs:    event.retention_secs,

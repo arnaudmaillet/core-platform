@@ -3,7 +3,7 @@ use crate::{
     domain::{
         entity::MediaAttachment,
         event::{DomainEvent, PostDeletedEvent, PostPublishedEvent, PostUpdatedEvent},
-        value_object::{AudioReference, Caption, PostId, PostKind, PostStatus, ProfileId},
+        value_object::{AudioReference, Caption, GeoPoint, PostId, PostKind, PostStatus, ProfileId},
     },
     error::PostError,
 };
@@ -21,6 +21,7 @@ pub struct Post {
     parent_id:      Option<PostId>,
     root_id:        Option<PostId>,
     audio_ref:      Option<AudioReference>,
+    location:       Option<GeoPoint>,
     created_at:     DateTime<Utc>,
     updated_at:     DateTime<Utc>,
     published_at:   Option<DateTime<Utc>>,
@@ -38,6 +39,7 @@ impl Post {
         parent_id:   Option<PostId>,
         root_id:     Option<PostId>,
         audio_ref:   Option<AudioReference>,
+        location:    Option<GeoPoint>,
     ) -> Result<Self, PostError> {
         validate_threading(&parent_id, &root_id)?;
         validate_attachments(kind, &attachments)?;
@@ -53,6 +55,7 @@ impl Post {
             parent_id,
             root_id,
             audio_ref,
+            location,
             created_at: now,
             updated_at: now,
             published_at: None,
@@ -71,6 +74,7 @@ impl Post {
         parent_id:    Option<PostId>,
         root_id:      Option<PostId>,
         audio_ref:    Option<AudioReference>,
+        location:     Option<GeoPoint>,
         created_at:   DateTime<Utc>,
         updated_at:   DateTime<Utc>,
         published_at: Option<DateTime<Utc>>,
@@ -86,6 +90,7 @@ impl Post {
             parent_id,
             root_id,
             audio_ref,
+            location,
             created_at,
             updated_at,
             published_at,
@@ -120,6 +125,15 @@ impl Post {
             author_tier:     0,
             audio_id:        self.audio_ref.as_ref().map(|a| a.audio_id.as_str()),
             audio_kind:      self.audio_ref.as_ref().map(|a| a.audio_kind.as_tinyint() as u8),
+            // Denormalized for geo-discovery. caption + cover thumbnail are owned by
+            // the aggregate; location is client-supplied at create. Absent location
+            // → geo-discovery does not spatially index the post.
+            caption:         self.caption.as_str().to_owned(),
+            thumbnail_url:   self.attachments.first()
+                                 .and_then(|a| a.thumbnail_url.as_ref())
+                                 .map(|u| u.as_str().to_owned()),
+            lat:             self.location.map(|g| g.lat()),
+            lng:             self.location.map(|g| g.lng()),
         }));
 
         Ok(now)
@@ -182,6 +196,7 @@ impl Post {
     pub fn parent_id(&self)    -> Option<&PostId>    { self.parent_id.as_ref() }
     pub fn root_id(&self)      -> Option<&PostId>    { self.root_id.as_ref() }
     pub fn audio_ref(&self)    -> Option<&AudioReference> { self.audio_ref.as_ref() }
+    pub fn location(&self)     -> Option<GeoPoint>   { self.location }
     pub fn created_at(&self)   -> DateTime<Utc>      { self.created_at }
     pub fn updated_at(&self)   -> DateTime<Utc>      { self.updated_at }
     pub fn published_at(&self) -> Option<DateTime<Utc>> { self.published_at }

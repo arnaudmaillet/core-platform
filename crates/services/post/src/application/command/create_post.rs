@@ -8,7 +8,7 @@ use crate::{
     domain::{
         aggregate::Post,
         entity::MediaAttachment,
-        value_object::{AudioReference, Caption, CdnUrl, MimeType, PostId, PostKind, ProfileId},
+        value_object::{AudioReference, Caption, CdnUrl, GeoPoint, MimeType, PostId, PostKind, ProfileId},
     },
     error::PostError,
 };
@@ -31,6 +31,10 @@ pub struct CreatePostCommand {
     pub parent_id:   Option<String>,
     pub root_id:     Option<String>,
     pub audio_ref:   Option<AudioReference>,
+    /// Optional client-supplied post location as `(lat, lng)`. Validated into a
+    /// `GeoPoint` during handling. Absent → the post carries no location and is
+    /// not geo-indexed downstream.
+    pub location:    Option<(f64, f64)>,
 }
 
 impl Command for CreatePostCommand {}
@@ -116,7 +120,11 @@ where
             .map(PostId::try_from)
             .transpose()?;
 
-        let post = Post::create(post_id, profile_id, kind, caption, attachments, parent_id, root_id, cmd.audio_ref.clone())?;
+        let location = cmd.location
+            .map(|(lat, lng)| GeoPoint::new(lat, lng))
+            .transpose()?;
+
+        let post = Post::create(post_id, profile_id, kind, caption, attachments, parent_id, root_id, cmd.audio_ref.clone(), location)?;
         self.repository.insert(&post).await?;
         Ok(())
     }

@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use cqrs::{Envelope, QueryBus};
 
+use crate::application::query::get_geo_timeline::GetGeoTimelineQuery;
 use crate::application::query::query_tile::QueryTileQuery;
 
 // ── Proto inclusion ───────────────────────────────────────────────────────────
@@ -55,25 +56,45 @@ where
             .await
             .map_err(cqrs_to_status)?;
 
+        let pins = result.pins
+            .into_iter()
+            .map(pin_to_proto)
+            .collect();
+
+        Ok(Response::new(proto::QueryTileResponse {
+            pins,
+            tile_count: result.tile_count,
+        }))
+    }
+
+    async fn get_geo_timeline_inner(
+        &self,
+        request: Request<proto::GetGeoTimelineRequest>,
+    ) -> Result<Response<proto::GetGeoTimelineResponse>, Status> {
+        let req = request.into_inner();
+
+        // Parse the requested ids, skipping any that are not valid UUIDs rather
+        // than failing the whole batch (a focus request is best-effort).
+        let post_ids: Vec<Uuid> = req.post_ids
+            .iter()
+            .filter_map(|s| Uuid::parse_str(s).ok())
+            .collect();
+
+        if post_ids.is_empty() {
+            return Ok(Response::new(proto::GetGeoTimelineResponse { cards: vec![] }));
+        }
+
+        let result = self.query_bus
+            .dispatch(Envelope::new(Uuid::now_v7(), GetGeoTimelineQuery { post_ids }))
+            .await
+            .map_err(cqrs_to_status)?;
+
         let cards = result.cards
             .into_iter()
             .map(card_to_proto)
             .collect();
 
-        Ok(Response::new(proto::QueryTileResponse {
-            cards,
-            tile_count: result.tile_count,
-        }))
-    }
-
-    async fn get_card_inner(
-        &self,
-        _request: Request<proto::GetCardRequest>,
-    ) -> Result<Response<proto::GetCardResponse>, Status> {
-        // GetCard is handled via QueryBus like QueryTile in a full implementation.
-        // Stubbed here to keep the example concise; add a GetCardQuery following
-        // the same pattern as QueryTileQuery.
-        Err(Status::unimplemented("GetCard not yet implemented"))
+        Ok(Response::new(proto::GetGeoTimelineResponse { cards }))
     }
 }
 
@@ -91,15 +112,24 @@ where
         self.query_tile_inner(request).await
     }
 
-    async fn get_card(
+    async fn get_geo_timeline(
         &self,
-        request: Request<proto::GetCardRequest>,
-    ) -> Result<Response<proto::GetCardResponse>, Status> {
-        self.get_card_inner(request).await
+        request: Request<proto::GetGeoTimelineRequest>,
+    ) -> Result<Response<proto::GetGeoTimelineResponse>, Status> {
+        self.get_geo_timeline_inner(request).await
     }
 }
 
 // ── Conversion helpers ────────────────────────────────────────────────────────
+
+fn pin_to_proto(pin: crate::domain::entity::RadarPin) -> proto::RadarPin {
+    proto::RadarPin {
+        post_id:       pin.post_id.to_string(),
+        lat:           pin.lat,
+        lng:           pin.lng,
+        thumbnail_url: pin.thumbnail_url,
+    }
+}
 
 fn card_to_proto(card: crate::domain::entity::MapPostCard) -> proto::MapPostCard {
     // Map u8 tier (0=Standard, 1=Premium, 2=VIP) to proto AuthorTier enum.
@@ -121,6 +151,7 @@ fn card_to_proto(card: crate::domain::entity::MapPostCard) -> proto::MapPostCard
         virality_score:    card.virality_score,
         published_at_ms:   card.published_at_ms,
         author_tier,
+        caption:           card.caption,
     }
 }
 

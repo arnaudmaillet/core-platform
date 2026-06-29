@@ -107,8 +107,8 @@ impl TileRepository for ScyllaTileRepository {
         let stmt = self.strict_stmt(
             "INSERT INTO geo_discovery.map_post_cards \
              (post_id, author_id, author_handle, author_avatar_url, thumbnail_url, \
-              h3_index_r7, virality_score, published_at, expires_at, author_tier) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+              caption, h3_index_r7, virality_score, published_at, expires_at, author_tier) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
              USING TTL ?",
         );
         self.client
@@ -121,6 +121,7 @@ impl TileRepository for ScyllaTileRepository {
                     card.author_handle.as_str(),
                     card.author_avatar_url.as_str(),
                     card.thumbnail_url.as_str(),
+                    card.caption.as_str(),
                     card.h3_index_r7,
                     card.virality_score,
                     CqlTimestamp(card.published_at_ms),
@@ -158,7 +159,7 @@ impl TileRepository for ScyllaTileRepository {
     ) -> Result<Option<MapPostCard>, GeoDiscoveryError> {
         let stmt = self.fast_stmt(
             "SELECT post_id, author_id, author_handle, author_avatar_url, thumbnail_url, \
-             h3_index_r7, virality_score, published_at, expires_at, author_tier \
+             caption, h3_index_r7, virality_score, published_at, expires_at, author_tier \
              FROM geo_discovery.map_post_cards \
              WHERE post_id = ?",
         );
