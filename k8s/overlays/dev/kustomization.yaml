@@ -21,11 +21,13 @@ resources:
   - ../../base/services/account/server
   - ../../base/services/timeline/server
   - ingress.yaml
-  - karpenter-config.yaml
   - hpa.yaml
+  # NB: Karpenter NodePools + EC2NodeClass are NOT defined here. They come from the
+  # single source of truth — the Helm `karpenter-config` chart deployed to every
+  # cluster by the platform appset (infrastructure/argocd/.../platform/karpenter-config),
+  # keyed on the `intent` label. A second, role-keyed copy used to live here and
+  # collided with it (duplicate NodePool/system + EC2NodeClass/default); removed.
 namePrefix: dev-
-configurations:
-  - karpenter-refs-config.yaml
 configMapGenerator:
   - name: chat-config
     envs:
