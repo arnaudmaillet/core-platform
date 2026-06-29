@@ -9,8 +9,16 @@
 # (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION). Each binary is built in
 # parallel with a per-BIN BuildKit registry cache (core-platform-buildcache:<bin>),
 # so a source edit only rebuilds the workspace+build layer — the cargo-chef cook
-# layer (librdkafka, tonic, scylla, sqlx…) is reused. Images are tagged :staging
-# (what the overlay pulls) and :<git-sha> for traceability.
+# layer (librdkafka, tonic, scylla, sqlx…) is reused.
+#
+# Each image is tagged with the immutable :<git-sha> (the deployment handle) and a
+# floating :staging (convenience only). After the matrix succeeds, the
+# `pin-staging-images` job rewrites the staging overlay's fleet image tags to that
+# :<git-sha> and commits back to develop — so ArgoCD sees a real manifest diff and
+# rolls out, deploys are content-addressed (IfNotPresent is correct for an
+# immutable tag), and a rollback is just `git revert`. Previously the overlay
+# pinned a MUTABLE :staging tag, so new builds never landed on reschedule and there
+# was no record of what was running.
 name: Build & Push Fleet Images
 
 on:
@@ -81,3 +89,55 @@ jobs:
             -t "$REG/core-platform-$BIN:$TAG" \
             -t "$REG/core-platform-$BIN:${{ github.sha }}" \
             --push .
+
+  # ── Pin the staging overlay to the immutable tag we just built ────────────────
+  # Runs once after ALL matrix builds succeed; if any binary fails, the fleet is
+  # not pinned (a partial rollout is never promoted). Rewrites ONLY the images this
+  # workflow builds — the legacy Bazel-built services keep their own tags — then
+  # commits back to develop so ArgoCD rolls out the new revision.
+  pin-staging-images:
+    name: Pin staging overlay to immutable tags
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Only auto-pin for the standard staging build (skip manual one-off tags).
+    if: ${{ github.event_name == 'push' || (github.event.inputs.tag || 'staging') == 'staging' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Pin fleet images to the built commit SHA
+        env:
+          TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Keep in sync with the build matrix above (the images this workflow ships).
+          for bin in \
+            counter-server counter-worker audit-server audit-worker \
+            auth-server media-server moderation-server search-server \
+            realtime-gateway realtime-dispatcher migrator; do
+            NAME="core-platform-$bin" NEWTAG="$TAG" \
+              yq -i '(.images[] | select(.name == strenv(NAME)).newTag) = strenv(NEWTAG)' \
+              k8s/overlays/staging/kustomization.yaml
+          done
+
+      - name: Commit & push
+        env:
+          TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- k8s/overlays/staging/kustomization.yaml; then
+            echo "Fleet images already pinned to ${TAG}; nothing to do."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s/overlays/staging/kustomization.yaml
+          git commit -m "chore(deploy): pin staging fleet images to ${TAG} [skip ci]"
+          # Rebase in case develop advanced while the matrix was building.
+          git pull --rebase origin develop
+          git push origin develop
