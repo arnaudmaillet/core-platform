@@ -22,4 +22,6 @@ inputs = {
   cluster_name       = "core-platform-${local.env_vars.locals.env}"
   vpc_cidr           = local.env_vars.locals.vpc_cidr
   availability_zones = ["${local.region_vars.locals.aws_region}a", "${local.region_vars.locals.aws_region}b"]
+  # Honor the env.hcl flag (was previously dead config). dev stays single-NAT.
+  single_nat_gateway = local.env_vars.locals.single_nat_gateway
 }
