@@ -57,6 +57,8 @@ resources:
   # KEDA SASL auth for the MSK lag scalers (counter/realtime/audit workers).
   - keda-trigger-auth.yaml
   - external-secrets.yaml
+  # Baseline namespace isolation (default-deny ingress + same-ns allow + public WSS).
+  - networkpolicies.yaml
 configMapGenerator:
   - name: chat-config
     envs: [chat.env]
