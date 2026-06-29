@@ -7,7 +7,7 @@
 > | **Bounded Context** | Geo Discovery — spatial discovery of posts on a map |
 > | **Subdomain class** | **Supporting** — a derived spatial read-model; product-distinctive surface but owns no truth |
 > | **System of …** | **Reference (SoRef)** — a queryable spatial index over posts, rebuildable from upstream |
-> | **Aggregate root(s)** | `MapPostCard` (projection) keyed by `H3Index` |
+> | **Aggregate root(s)** | `MapPostCard` (Focus projection) + `RadarPin` (Radar projection), keyed by `H3Index` |
 > | **Tier** | **TIER-1** |
 > | **Failure posture** | **Fail-open** — a degraded index returns fewer/staler cards, never an error |
 > | **Upstream contexts** | `post` (published posts w/ location), `engagement` (virality), `profile`/`social-graph` (author tier) — via **ACL** |
@@ -36,7 +36,8 @@ cardinality), with Lua Top-K / XX / prune scripts and TTL'd retention so the ind
 
 | Term | Meaning in this context | Code symbol |
 |---|---|---|
-| Map post card | The projected, map-renderable summary of a post | `MapPostCard` |
+| Radar pin | The lightweight map marker (id + coordinates + thumbnail) for the pan path | `RadarPin` |
+| Map post card | The fully-hydrated, map-renderable summary of a post for the focus path | `MapPostCard` |
 | H3 index / resolution | The hexagonal spatial cell id and its resolution | `H3Index`, `H3Resolution` |
 | Geo coordinate | A lat/lng point | `GeoCoordinate` |
 | Virality score | The engagement-derived ranking weight | `ViralityScore` |
@@ -49,7 +50,8 @@ cardinality), with Lua Top-K / XX / prune scripts and TTL'd retention so the ind
 
 | Element | Kind | Invariant boundary it guards |
 |---|---|---|
-| `MapPostCard` | projection (aggregate) | The map-renderable post summary in a cell |
+| `RadarPin` | projection (aggregate) | The lean map marker for the pan path |
+| `MapPostCard` | projection (aggregate) | The hydrated post summary for the focus path |
 | `H3Index` / `H3Resolution` | VO | Spatial cell identity + zoom granularity |
 | `GeoCoordinate` | VO | Valid lat/lng at construction |
 | `ViralityScore` / `AuthorTier` | VO/enum | Ranking inputs |
@@ -95,11 +97,18 @@ cardinality), with Lua Top-K / XX / prune scripts and TTL'd retention so the ind
 `engagement.score_updated` (re-rank), `profile.tier_changed` (re-weight) → update the dual-layer
 Redis ZSET via Lua Top-K/XX/prune; TTL handles retention.
 
-**Viewport query.** A map viewport → `H3 grid_disk` of covering cells → merge Top-K per cell →
-return `MapPostCard`s. A degraded index returns fewer/staler cards (fail-open).
+**Viewport query (Radar).** A map viewport → `H3 grid_disk` of covering cells → merge Top-K per cell →
+return lightweight `RadarPin`s (id + coordinates + thumbnail) from Redis only. A degraded index
+returns fewer/staler pins (fail-open).
 
-> **Known payload gap:** `post` currently emits no lat/lng/caption on `post.published`, so the geo
-> projection depends on a product decision to enrich the post event (recorded in the pre-infra audit).
+**Pin focus (Focus).** On tap, a batch of `post_id`s → `GetGeoTimeline` → fully-hydrated `MapPostCard`s
+(caption, author metadata, tier) from Redis with a ScyllaDB fallback — the cold read the Radar path
+deliberately avoids.
+
+> **Payload contract (resolved).** `post.published` now carries `lat`/`lng`, `caption`, and
+> `thumbnail_url` (client-supplied location at `CreatePost`); posts without a location are simply not
+> geo-indexed. `author_handle` / `author_avatar_url` are reserved on the card and backfilled from
+> `profile.v1.events` (a separate join).
 
 ---
 
@@ -128,7 +137,8 @@ return `MapPostCard`s. A degraded index returns fewer/staler cards (fail-open).
 | Decision | ADR | Status |
 |---|---|---|
 | H3 grid_disk viewport + dual-layer Redis (ZSET+cardinality) Top-K spatial index | [`ADR-0010`](../../../../docs/adr/0010-geo-discovery-h3-grid-dual-layer-redis-topk.md) | Accepted |
-| Post→geo payload enrichment (lat/lng/caption) needs a product decision | _open — see pre-infra audit_ | Open |
+| Radar/Focus read split: lean `RadarPin` (Redis-only pan) vs hydrated `MapPostCard` (`GetGeoTimeline` on tap) | _inline — this change_ | Accepted |
+| Post→geo payload enrichment: `post.published` carries lat/lng + caption + thumbnail (location client-supplied at `CreatePost`) | _resolved — this change_ | Accepted |
 
 ---
 
@@ -136,5 +146,6 @@ return `MapPostCard`s. A degraded index returns fewer/staler cards (fail-open).
 
 - **Classification:** Supporting — a distinctive but derived spatial projection.
 - **Volatility:** medium — ranking inputs evolve.
-- **Known modeling debt:** the post→geo payload gap (no lat/lng/caption emitted upstream).
+- **Known modeling debt:** `author_handle` / `author_avatar_url` await the `profile.v1.events` join
+  (reserved on the card, empty until then).
 - **Deferred capabilities:** richer spatial queries; clustering; heatmaps.

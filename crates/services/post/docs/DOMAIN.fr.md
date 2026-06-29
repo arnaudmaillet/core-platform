@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./DOMAIN.md
-  source_sha256: 8ff00a279c556291a43e769038a3fd74ef897c3768d3509ad085a1a8dbd3b995
-  translated_at: 2026-06-28
+  source_sha256: dbeeb09b840e944cbf349e728bf3255309ccceba986265f4dbd4fda37d787e56
+  translated_at: 2026-06-29
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`DOMAIN.md`](./DOMAIN.md) fait foi.
@@ -50,6 +50,7 @@ langage publié.
 |---|---|---|
 | Post | Une unité de contenu publié | `Post`, `PostId`, `PostKind`, `PostStatus` |
 | Caption | Le texte du post | `Caption` |
+| Location | Coordonnées du post optionnelles fournies par le client (WGS-84) | `GeoPoint` |
 | Media attachment | Une référence à un asset `media` + son URL CDN | `MediaAttachment`, `CdnUrl` |
 | Audio reference | Piste audio attachée | `AudioReference`, `AudioId`, `AudioKind` |
 
@@ -60,7 +61,7 @@ langage publié.
 | Élément | Type | Frontière d'invariant gardée |
 |---|---|---|
 | `Post` | racine d'agrégat | La machine à états du cycle de vie du contenu |
-| `Caption` / `MediaAttachment` / `AudioReference` | VO | Validité du contenu + références média/audio |
+| `Caption` / `MediaAttachment` / `AudioReference` / `GeoPoint` | VO | Validité du contenu + réf. média/audio + lat/lng valides |
 | `PostKind` / `PostStatus` | enum | Vocabulaires fermés kind/status (le proto mappe kind/status +1) |
 
 **Cycle de vie :**
@@ -132,7 +133,7 @@ consommer `moderation.v1.events` pour refléter l'enforcement.
 
 | Événement (`post.v1.events`) | Signifie | Émis quand | Qui réagit |
 |---|---|---|---|
-| `post.published` | un nouveau contenu est en ligne | la publication commite | `timeline` (fan-out), `search`/`geo` (index), `counter`, `realtime` |
+| `post.published` | un nouveau contenu est en ligne (porte `caption`, `thumbnail_url`, `lat`/`lng` optionnels pour `geo`) | la publication commite | `timeline` (fan-out), `search`/`geo` (index), `counter`, `realtime` |
 | `post.updated` | le contenu a été édité | l'édition commite | `search`/`geo` (ré-indexation) |
 | `post.deleted` | le contenu a été retiré | la suppression commite | `timeline`/`search`/`geo` (démantèlement) |
 
@@ -143,7 +144,7 @@ consommer `moderation.v1.events` pour refléter l'enforcement.
 | Décision | ADR | Statut |
 |---|---|---|
 | Layout ScyllaDB deux tables (par id + par auteur) avec `post.v1.events` comme langage publié | [`ADR-0013`](../../../../docs/adr/0013-post-two-table-scylla-with-published-language.md) | Accepté |
-| Enrichissement de payload post→geo (lat/lng/caption) — décision produit ouverte | _ouvert — voir geo-discovery §6_ | Ouvert |
+| Enrichissement de payload post→geo : `post.published` porte caption + miniature + localisation optionnelle (fournie par le client au `CreatePost`) ; les posts sans localisation ne sont pas géo-indexés | _résolu — voir geo-discovery §6_ | Accepté |
 
 ---
 
@@ -151,5 +152,5 @@ consommer `moderation.v1.events` pour refléter l'enforcement.
 
 - **Classification :** Core — le contenu est la substance primaire de la plateforme.
 - **Volatilité :** moyenne — les types de post et pièces jointes évoluent.
-- **Dette de modélisation connue :** `post.published` n'émet pas de payload geo (bloque l'enrichissement geo-discovery).
+- **Dette de modélisation connue :** la localisation n'est capturée qu'au `CreatePost` (pas encore de commande « définir la localisation » dédiée) ; les éditions ne la ré-émettent pas.
 - **Capacités différées :** média/audio plus riches ; posts programmés ; historique d'édition.

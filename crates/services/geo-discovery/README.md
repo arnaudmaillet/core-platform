@@ -8,7 +8,7 @@
 > | **On-call / escalation** | `<TODO: oncall-rotation>` → `<TODO: escalation-policy>` |
 > | **Tier** | **TIER-1** — query-only read surface; degradable to ScyllaDB |
 > | **Deployable** | `crates/apps/geo-discovery-server` (library crate: `crates/services/geo-discovery`) |
-> | **Datastores** | Redis (ZSET index + msgpack card cache) · ScyllaDB keyspace `geo_discovery` |
+> | **Datastores** | Redis (ZSET index + msgpack pin & card projections) · ScyllaDB keyspace `geo_discovery` |
 > | **Async** | publishes nothing · consumes `post.published` / `engagement.score_updated` / `profile.tier_changed` |
 > | **Upstream callers** | `<TODO: BFF / map clients>` |
 > | **Downstream deps** | Redis, ScyllaDB, Kafka |
@@ -20,14 +20,24 @@
 
 `geo-discovery` is the geospatial ingestion + query engine behind the global interactive map. Every
 published post is encoded into Uber H3 hexagonal cells at three resolutions, scored by real-time
-virality, and served as a fully-hydrated map card in **two Redis round-trips** — with no fan-out to
-`post` or `profile` at query time.
+virality, and exposed through a **two-step Radar/Focus read contract** — with no fan-out to `post` or
+`profile` at query time.
 
 The hard problem it solves is that **a global map feed with 100 M active posts cannot afford N+1 gRPC
-lookups on every viewport pan**. It resolves this with an independent read-model projection: card
-fields (`author_handle`, `thumbnail_url`, `author_avatar_url`, `author_tier`) are denormalized at
-ingest, so rendering data is entirely local. Dynamic relational state (friend/following) is resolved
-client-side, preserving a *shared* card cache and avoiding O(users × posts) cache variants.
+lookups on every viewport pan**. It resolves this by splitting the read path by interaction stage:
+
+- **Radar (`QueryTile`)** — the high-frequency pan/zoom path. Returns lightweight `RadarPin`s
+  (`post_id`, exact `lat`/`lng`, `thumbnail_url`) served **exclusively from Redis** (spatial ZSET +
+  pin projection). No card hydration, no ScyllaDB, fail-open.
+- **Focus (`GetGeoTimeline`)** — the on-tap path. Batches focused `post_id`s into fully-hydrated
+  `MapPostCard`s (caption, author metadata, tier), read from Redis with a ScyllaDB fallback — the cold
+  read the pan path deliberately avoids.
+
+Card fields are denormalized at ingest so rendering stays local. `thumbnail_url`, `caption`, and
+`author_tier` arrive on `post.published`; `author_handle` / `author_avatar_url` are reserved on the
+card and backfilled from `profile.v1.events` (a separate join — empty until then). Dynamic relational
+state (friend/following) is resolved client-side, preserving a *shared* card cache and avoiding
+O(users × posts) cache variants.
 
 **Core objectives:** sub-50 ms P99 tile query (Redis pipeline + MGET); ~9 GB Redis at 100 M posts
 (Top-K cap + cold eviction + power-law filtering); zero query-time fan-out; 48 h default TTL (30 d for
@@ -40,19 +50,22 @@ premium), enforced via Scylla `USING TTL` and Redis `EX`.
 The gRPC surface is **query-only** — all writes arrive via Kafka workers.
 
 ```
-WRITE: post.published          ─► PostIndexerWorker  (H3 encode R5/7/9 → Scylla INSERT ×4 → Redis ZADD+cap ×3 → card SET if score≥θ)
+WRITE: post.published          ─► PostIndexerWorker  (H3 encode R5/7/9 → Scylla INSERT ×4 → Redis ZADD+cap ×3 → pin SET always → card SET if score≥θ)
        engagement.score_updated ─► ScoreUpdaterWorker (Scylla UPDATE score → ZADD XX ×3, skip-if-absent)
        profile.tier_changed     ─► TierSyncWorker     (Scylla UPDATE author_tier → Redis DEL card)
        (60s tick)               ─► TilePrunerWorker    (PRUNE_COLD_TILES Lua → DEL cold tile ZSETs)
 
-READ:  QueryTile ─► zoom→resolution ─► viewport→grid_disk (≤50 tiles)
-                 ─► Phase 1: ZRANGEBYSCORE ×N (1 RTT via fred mux) → post_ids
-                 ─► Phase 2: MGET cards ×M (1 RTT)
-                 ─► Phase 3 (miss): Scylla get_card (Fast profile)
+READ (Radar):  QueryTile      ─► zoom→resolution ─► viewport→grid_disk (≤50 tiles)
+                              ─► Phase 1: ZRANGEBYSCORE ×N (1 RTT via fred mux) → post_ids
+                              ─► Phase 2: pin GET ×M (1 RTT) → RadarPin   (Redis-only, no Scylla fallback)
+READ (Focus):  GetGeoTimeline ─► card MGET ×M (1 RTT) → MapPostCard
+                              ─► (miss): Scylla get_card (Fast profile)
 ```
 
-**Redis taxonomy:** `sg:geo:tile:{h3}:{res}` (ZSET, score=virality, pruned), `sg:geo:card:{post_id}`
-(STRING, msgpack `MapPostCard`, `EX ttl`), `sg:geo:hot_tiles` (ZSET, last-access epoch per tile).
+**Redis taxonomy:** `sg:geo:tile:{h3}:{res}` (ZSET, score=virality, pruned), `sg:geo:pin:{post_id}`
+(STRING, msgpack `RadarPin`, `EX ttl` — Radar projection, written for every indexed post),
+`sg:geo:card:{post_id}` (STRING, msgpack `MapPostCard`, `EX ttl` — Focus projection, score-gated),
+`sg:geo:hot_tiles` (ZSET, last-access epoch per tile).
 **ScyllaDB:** `posts_by_tile` (TWCS, PK `(h3_index, resolution)` — composite to avoid hot urban shards),
 `map_post_cards` (LCS, PK `post_id` — pure point reads, single mutable score column).
 
@@ -97,7 +110,7 @@ retention window, so ingest-lag SLOs are softer than the query-latency SLO.
 
 | Caller | Uses | Impact if `geo-discovery` is down |
 |---|---|---|
-| `<TODO: BFF / map clients>` | `QueryTile`, `GetCard` | the map feed stops loading |
+| `<TODO: BFF / map clients>` | `QueryTile` (Radar), `GetGeoTimeline` (Focus) | the map feed stops loading |
 
 > **Critical path?** Yes for the map surface specifically; it is a derived read-model, so a full outage
 > degrades the map but nothing else.
@@ -110,24 +123,36 @@ retention window, so ingest-lag SLOs are softer than the query-latency SLO.
 
 ```protobuf
 service GeoDiscoveryService {
-  rpc QueryTile (QueryTileRequest) returns (QueryTileResponse);
-  rpc GetCard   (GetCardRequest)   returns (GetCardResponse);
+  rpc QueryTile      (QueryTileRequest)      returns (QueryTileResponse);      // Radar (pan): lean pins
+  rpc GetGeoTimeline (GetGeoTimelineRequest) returns (GetGeoTimelineResponse); // Focus (tap): full cards
 }
-message QueryTileRequest { Viewport viewport = 1; int32 zoom_level = 2; }  // zoom ∈ [0,15]
+message QueryTileRequest  { Viewport viewport = 1; int32 zoom_level = 2; }     // zoom ∈ [0,15]
+message QueryTileResponse { reserved 1; repeated RadarPin pins = 3; int32 tile_count = 2; } // field 1 was `cards`
+message RadarPin { string post_id=1; double lat=2; double lng=3; string thumbnail_url=4; }
+
+message GetGeoTimelineRequest  { repeated string post_ids = 1; }
+message GetGeoTimelineResponse { repeated MapPostCard cards = 1; }
 message MapPostCard { string post_id=1; string author_id=2; string author_handle=3;
   string author_avatar_url=4; string thumbnail_url=5; int64 h3_index_r7=6;
-  float virality_score=7; int64 published_at_ms=8; AuthorTier author_tier=9; }
+  float virality_score=7; int64 published_at_ms=8; AuthorTier author_tier=9; string caption=10; }
 ```
+
+> **Radar vs Focus.** `QueryTile` is the high-frequency pan path → lean `RadarPin`s (Redis-only,
+> fail-open). `GetGeoTimeline` is the on-tap batch path → hydrated `MapPostCard`s (Redis + Scylla
+> fallback). `QueryTileResponse` field **1** previously held `repeated MapPostCard cards`; it is now
+> **reserved**, with pins on a fresh field number to stay wire/JSON-compatible (`buf WIRE_JSON`).
 
 > **Wire contract:** `AuthorTier` is 0-based **with** an `UNSPECIFIED=0` safe default (= Standard);
 > `STANDARD=1, PREMIUM=2, VIP=3`. Badge rendering: `author_tier` → static badge; `is_friend`/`is_following`
-> are deliberately **absent** (resolved client-side from the session social graph).
+> are deliberately **absent** (resolved client-side from the session social graph). `author_handle` /
+> `author_avatar_url` are reserved on the card and backfilled from `profile.v1.events` (empty until then).
 
 ### Rust ports (hexagonal contract)
 
 ```rust
 pub trait SpatialIndex: Send + Sync { /* upsert (ZADD+cap), update_score (ZADD XX), query (ZRANGEBYSCORE), touch_hot_tiles */ }
-pub trait CardStore:    Send + Sync { /* set, mget (same-length Vec, None=miss), del */ }
+pub trait PinStore:     Send + Sync { /* set, mget (same-length Vec, None=miss), del — Radar pin projection */ }
+pub trait CardStore:    Send + Sync { /* set, mget (same-length Vec, None=miss), del — Focus card projection */ }
 pub trait TileRepository: Send + Sync { /* insert_tile_entry, upsert_card, update_card_score/tier, get_card, list_tile_post_ids */ }
 ```
 
@@ -186,7 +211,7 @@ geo-discovery = { path = "crates/services/geo-discovery" }
 
 Library-only. Implements [`service_runtime::Service`](../../platform/service-runtime/README.md) as
 `geo_discovery::service::GeoDiscoveryService` — `build` constructs Scylla/Redis clients, instantiates
-`RedisGeoSpatialIndex`/`RedisCardStore`/`ScyllaTileRepository`, registers `QueryTileHandler` (query-only
+`RedisGeoSpatialIndex`/`RedisPinStore`/`RedisCardStore`/`ScyllaTileRepository`, registers `QueryTileHandler` (Radar) + `GetGeoTimelineHandler` (Focus) (query-only
 surface; writes arrive via Kafka), and spawns the three workers + `TilePrunerWorker`; `register` adds
 the gRPC + reflection services; `health_probes` checks Scylla/Redis.
 
@@ -229,7 +254,8 @@ async fn main() -> anyhow::Result<()> {
 ## 🚀 Deployment, Migrations & Rollback
 
 - **Migrations:** `0001_create_keyspace.cql` → `0002_create_posts_by_tile_table.cql` →
-  `0003_create_map_post_cards_table.cql` against `geo_discovery`, applied **before** first start.
+  `0003_create_map_post_cards_table.cql` → `0004_add_author_tier_column.cql` →
+  `0005_add_caption_column.cql` against `geo_discovery`, applied **before** first start.
 - **Stateful gotchas:** `GEO_DEFAULT_RETENTION_SECS` must equal the Scylla table TTL; the composite
   `(h3_index, resolution)` partition key and zoom→resolution mapping are read contracts.
 - **Cold-start:** workers replay from `earliest`; Redis ZSETs repopulate automatically. Safe to roll.
@@ -270,11 +296,13 @@ SCYLLA_URI=127.0.0.1:9042 REDIS_URL=redis://127.0.0.1:6379 KAFKA_BROKERS=127.0.0
 
 > Format: **symptom → root cause → mitigation.**
 
-**1. `QueryTile` returns `tile_count > 0` but empty `cards`.**
+**1. `QueryTile` returns `tile_count > 0` but empty `pins`.**
 Root cause (most common): ZSETs empty but Scylla has rows ⇒ the `geo-discovery-post-indexer` is lagging;
-or ZSETs populated but cards empty ⇒ `GEO_CARD_CACHE_THRESHOLD` too high. Mitigation: check
-`kafka-consumer-groups --describe --group geo-discovery-post-indexer` and scale; or lower the threshold
-to `1.0` temporarily to confirm cards appear. Verify the client isn't sending inverted SW/NE coords.
+or ZSETs populated but pins missing ⇒ pin writes failed (the Radar path is Redis-only with no Scylla
+fallback — check `geo_discovery_card_serialization_errors` and indexer logs). Mitigation: check
+`kafka-consumer-groups --describe --group geo-discovery-post-indexer` and scale. Verify the client
+isn't sending inverted SW/NE coords. (Empty Focus `cards` from `GetGeoTimeline` instead points at
+`GEO_CARD_CACHE_THRESHOLD` too high — but Focus falls back to ScyllaDB, so a card should still resolve.)
 
 **2. Redis memory growing without bound.**
 Root cause: TilePruner crashed (check for `tile pruner worker started`; `geo_discovery_tile_pruner_evictions`

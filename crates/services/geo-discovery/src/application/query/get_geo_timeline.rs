@@ -1,0 +1,85 @@
+use std::sync::Arc;
+
+use cqrs::{Envelope, Query, QueryHandler};
+use uuid::Uuid;
+
+use crate::application::port::{CardStore, TileRepository};
+use crate::domain::entity::MapPostCard;
+use crate::domain::value_object::PostId;
+use crate::error::GeoDiscoveryError;
+
+/// Focus path: hydrates a batch of focused pins into fully-rendered cards.
+///
+/// Triggered when the user taps a pin (or expands a cluster bottom-sheet). This
+/// is the cold read the Radar pan path deliberately avoids: it MGETs the
+/// hydrated cards from Redis and falls back to ScyllaDB point-reads for any
+/// cache miss, so a card that aged out of Redis is still served.
+///
+/// Unresolved ids (never indexed / fully expired) are simply absent from the
+/// result — the handler does not error on partial resolution.
+pub struct GetGeoTimelineQuery {
+    pub post_ids: Vec<Uuid>,
+}
+
+pub struct GetGeoTimelineResult {
+    pub cards: Vec<MapPostCard>,
+}
+
+impl Query for GetGeoTimelineQuery {
+    type Response = GetGeoTimelineResult;
+}
+
+pub struct GetGeoTimelineHandler<CS, TR> {
+    pub card_store:      Arc<CS>,
+    pub tile_repository: Arc<TR>,
+}
+
+impl<CS, TR> QueryHandler<GetGeoTimelineQuery> for GetGeoTimelineHandler<CS, TR>
+where
+    CS: CardStore + 'static,
+    TR: TileRepository + 'static,
+{
+    type Error = GeoDiscoveryError;
+
+    async fn handle(
+        &self,
+        envelope: Envelope<GetGeoTimelineQuery>,
+    ) -> Result<GetGeoTimelineResult, GeoDiscoveryError> {
+        let post_ids = &envelope.payload.post_ids;
+
+        if post_ids.is_empty() {
+            return Ok(GetGeoTimelineResult { cards: vec![] });
+        }
+
+        // ── Phase 1: MGET hydrated cards from Redis ───────────────────────────
+        let cached = self.card_store.mget(post_ids).await?;
+
+        let mut cards: Vec<MapPostCard> = Vec::with_capacity(post_ids.len());
+        let mut miss_ids: Vec<Uuid> = Vec::new();
+
+        for (id, opt_card) in post_ids.iter().zip(cached) {
+            match opt_card {
+                Some(card) => cards.push(card),
+                None       => miss_ids.push(*id),
+            }
+        }
+
+        // ── Phase 2: ScyllaDB fallback for cache misses (the Focus cold path) ─
+        if !miss_ids.is_empty() {
+            let miss_futures: Vec<_> = miss_ids.iter()
+                .map(|id| {
+                    let post_id = PostId::from(*id);
+                    let tr = Arc::clone(&self.tile_repository);
+                    async move { tr.get_card(&post_id).await }
+                })
+                .collect();
+
+            let miss_results = futures::future::try_join_all(miss_futures).await?;
+            for maybe_card in miss_results.into_iter().flatten() {
+                cards.push(maybe_card);
+            }
+        }
+
+        Ok(GetGeoTimelineResult { cards })
+    }
+}

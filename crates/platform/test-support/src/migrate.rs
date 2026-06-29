@@ -36,12 +36,24 @@ pub async fn scylla_apply(contact_point: &str, keyspace: &str, migrations_dir: &
     let session = client.session.get_session();
 
     for statement in load_cql_statements(migrations_dir, keyspace) {
-        session
-            .query_unpaged(statement.as_str(), &[])
-            .await
-            .unwrap_or_else(|e| {
-                panic!("migration statement failed: {e}\n--- statement ---\n{statement}")
-            });
+        if let Err(e) = session.query_unpaged(statement.as_str(), &[]).await {
+            // Mirror the production migrator's idempotent-ALTER tolerance. Scylla
+            // has no `ALTER TABLE ADD IF NOT EXISTS`, so a per-column `ADD`
+            // migration that re-adds a column the (updated) CREATE TABLE already
+            // defines errors with "conflicts with an existing column". The geo /
+            // post migration sets are deliberately authored to apply idempotently
+            // to both fresh and legacy clusters (see the per-column ADD files),
+            // which requires treating that specific case as a benign no-op rather
+            // than a failure. Every other error still fails the suite loudly.
+            let msg = e.to_string();
+            let is_idempotent_add = statement.to_uppercase().contains("ALTER TABLE")
+                && (msg.contains("conflicts with an existing column")
+                    || msg.contains("already exists"));
+            if is_idempotent_add {
+                continue;
+            }
+            panic!("migration statement failed: {e}\n--- statement ---\n{statement}");
+        }
     }
 
     session

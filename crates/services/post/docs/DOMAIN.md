@@ -39,6 +39,7 @@ language.
 |---|---|---|
 | Post | A unit of published content | `Post`, `PostId`, `PostKind`, `PostStatus` |
 | Caption | The post's text | `Caption` |
+| Location | Optional client-supplied post coordinates (WGS-84) | `GeoPoint` |
 | Media attachment | A reference to a `media` asset + its CDN URL | `MediaAttachment`, `CdnUrl` |
 | Audio reference | Attached audio track | `AudioReference`, `AudioId`, `AudioKind` |
 
@@ -49,7 +50,7 @@ language.
 | Element | Kind | Invariant boundary it guards |
 |---|---|---|
 | `Post` | aggregate root | The content lifecycle state machine |
-| `Caption` / `MediaAttachment` / `AudioReference` | VO | Content validity + media/audio references |
+| `Caption` / `MediaAttachment` / `AudioReference` / `GeoPoint` | VO | Content validity + media/audio refs + valid lat/lng |
 | `PostKind` / `PostStatus` | enum | Closed kind/status vocabularies (proto maps kind/status +1) |
 
 **Lifecycle:**
@@ -121,7 +122,7 @@ fans out, `search`/`geo-discovery` index, `counter` counts, `realtime` broadcast
 
 | Event (`post.v1.events`) | Means | Emitted when | Who reacts |
 |---|---|---|---|
-| `post.published` | new content went live | publish commits | `timeline` (fan-out), `search`/`geo` (index), `counter`, `realtime` |
+| `post.published` | new content went live (carries `caption`, `thumbnail_url`, optional `lat`/`lng` for `geo`) | publish commits | `timeline` (fan-out), `search`/`geo` (index), `counter`, `realtime` |
 | `post.updated` | content was edited | update commits | `search`/`geo` (re-index) |
 | `post.deleted` | content was removed | delete commits | `timeline`/`search`/`geo` (teardown) |
 
@@ -132,7 +133,7 @@ fans out, `search`/`geo-discovery` index, `counter` counts, `realtime` broadcast
 | Decision | ADR | Status |
 |---|---|---|
 | Two-table ScyllaDB layout (by id + by author) with `post.v1.events` as published language | [`ADR-0013`](../../../../docs/adr/0013-post-two-table-scylla-with-published-language.md) | Accepted |
-| Post→geo payload enrichment (lat/lng/caption) — open product decision | _open — see geo-discovery §6_ | Open |
+| Post→geo payload enrichment: `post.published` carries caption + thumbnail + optional location (client-supplied at `CreatePost`); locationless posts are not geo-indexed | _resolved — see geo-discovery §6_ | Accepted |
 
 ---
 
@@ -140,5 +141,5 @@ fans out, `search`/`geo-discovery` index, `counter` counts, `realtime` broadcast
 
 - **Classification:** Core — content is the primary substance of the platform.
 - **Volatility:** medium — post kinds and attachments evolve.
-- **Known modeling debt:** `post.published` emits no geo payload (blocks geo-discovery enrichment).
+- **Known modeling debt:** location is captured only at `CreatePost` (no dedicated "set location" command yet); edits don't re-emit it.
 - **Deferred capabilities:** richer media/audio; scheduled posts; edit history.

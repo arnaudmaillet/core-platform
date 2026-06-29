@@ -14,6 +14,10 @@ pub struct MapCardRow {
     pub author_handle:     String,
     pub author_avatar_url: String,
     pub thumbnail_url:     String,
+    /// Post caption for the Focus-mode read path.
+    /// Option<String> because rows written before migration 0005 have NULL here.
+    /// NULL maps to an empty caption.
+    pub caption:           Option<String>,
     pub h3_index_r7:       i64,
     pub virality_score:    f32,
     pub published_at:      CqlTimestamp,
@@ -32,6 +36,7 @@ impl From<MapCardRow> for crate::domain::entity::MapPostCard {
             author_handle:     row.author_handle,
             author_avatar_url: row.author_avatar_url,
             thumbnail_url:     row.thumbnail_url,
+            caption:           row.caption.unwrap_or_default(),
             h3_index_r7:       row.h3_index_r7,
             virality_score:    row.virality_score,
             published_at_ms:   row.published_at.0,

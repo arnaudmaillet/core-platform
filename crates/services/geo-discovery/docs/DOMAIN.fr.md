@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./DOMAIN.md
-  source_sha256: a6e2a078fb92f1501144b2359efb68cc8308b5831f084c675f281a9b71e4f3e2
-  translated_at: 2026-06-28
+  source_sha256: 148912b8f98d84e0b3011554eb0580134eff92a9d42e0a9e216f459dfb9f3754
+  translated_at: 2026-06-29
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`DOMAIN.md`](./DOMAIN.md) fait foi.
@@ -18,9 +18,9 @@ i18n:
 > | **Bounded Context** | Geo Discovery — découverte spatiale de posts sur une carte |
 > | **Classe de sous-domaine** | **Supporting** — un read-model spatial dérivé ; surface produit distinctive mais ne possède aucune vérité |
 > | **System of …** | **Reference (SoRef)** — un index spatial requêtable sur les posts, reconstructible depuis l'amont |
-> | **Racine(s) d'agrégat** | `MapPostCard` (projection) clé par `H3Index` |
+> | **Racine(s) d'agrégat** | `MapPostCard` (projection Focus) + `RadarPin` (projection Radar), clé par `H3Index` |
 > | **Tier** | **TIER-1** |
-> | **Posture de défaillance** | **Fail-open** — un index dégradé retourne moins/des cartes plus périmées, jamais une erreur |
+> | **Posture de défaillance** | **Fail-open** — un index dégradé retourne moins/des pins plus périmés, jamais une erreur |
 > | **Contextes amont** | `post` (posts publiés avec localisation), `engagement` (viralité), `profile`/`social-graph` (tier d'auteur) — via **ACL** |
 > | **Contextes aval** | clients (requêtes de viewport carte) ; ne publie rien de référence |
 > | **Journal de décisions** | [`ADR-0010`](../../../../docs/adr/0010-geo-discovery-h3-grid-dual-layer-redis-topk.md) |
@@ -48,7 +48,8 @@ que l'index s'auto-élague.
 
 | Terme | Sens dans ce contexte | Symbole de code |
 |---|---|---|
-| Map post card | Le résumé projeté, rendable sur carte, d'un post | `MapPostCard` |
+| Radar pin | Le marqueur de carte léger (id + coordonnées + miniature) pour le chemin panoramique | `RadarPin` |
+| Map post card | Le résumé projeté, rendable sur carte, d'un post pour le chemin focus | `MapPostCard` |
 | H3 index / resolution | L'id de cellule spatiale hexagonale et sa résolution | `H3Index`, `H3Resolution` |
 | Geo coordinate | Un point lat/lng | `GeoCoordinate` |
 | Virality score | Le poids de classement dérivé de l'engagement | `ViralityScore` |
@@ -61,7 +62,8 @@ que l'index s'auto-élague.
 
 | Élément | Type | Frontière d'invariant gardée |
 |---|---|---|
-| `MapPostCard` | projection (agrégat) | Le résumé de post rendable sur carte dans une cellule |
+| `RadarPin` | projection (agrégat) | Le marqueur de carte léger pour le chemin panoramique |
+| `MapPostCard` | projection (agrégat) | Le résumé de post hydraté pour le chemin focus |
 | `H3Index` / `H3Resolution` | VO | Identité de cellule spatiale + granularité de zoom |
 | `GeoCoordinate` | VO | lat/lng valides à la construction |
 | `ViralityScore` / `AuthorTier` | VO/enum | Entrées de classement |
@@ -107,13 +109,18 @@ que l'index s'auto-élague.
 `engagement.score_updated` (re-classer), `profile.tier_changed` (re-pondérer) → mettre à jour le ZSET
 Redis double-couche via Lua Top-K/XX/prune ; le TTL gère la rétention.
 
-**Requête de viewport.** Un viewport de carte → `H3 grid_disk` des cellules couvrantes → fusionner
-Top-K par cellule → retourner des `MapPostCard`. Un index dégradé retourne moins/des cartes plus
-périmées (fail-open).
+**Requête de viewport (Radar).** Un viewport de carte → `H3 grid_disk` des cellules couvrantes →
+fusionner Top-K par cellule → retourner des `RadarPin` légers (id + coordonnées + miniature) depuis
+Redis seul. Un index dégradé retourne moins/des pins plus périmés (fail-open).
 
-> **Lacune de payload connue :** `post` n'émet actuellement ni lat/lng ni caption sur
-> `post.published`, donc la projection geo dépend d'une décision produit pour enrichir l'événement de
-> post (consignée dans l'audit pré-infra).
+**Focus de pin (Focus).** Au tap, un lot de `post_id` → `GetGeoTimeline` → `MapPostCard` entièrement
+hydratées (légende, métadonnées auteur, palier) depuis Redis avec repli ScyllaDB — la lecture à froid que
+le chemin Radar évite délibérément.
+
+> **Contrat de payload (résolu).** `post.published` porte désormais `lat`/`lng`, `caption` et
+> `thumbnail_url` (localisation fournie par le client au `CreatePost`) ; les posts sans localisation ne
+> sont simplement pas géo-indexés. `author_handle` / `author_avatar_url` sont réservés sur la carte et
+> complétés depuis `profile.v1.events` (jointure séparée).
 
 ---
 
@@ -142,7 +149,8 @@ périmées (fail-open).
 | Décision | ADR | Statut |
 |---|---|---|
 | Viewport H3 grid_disk + index spatial Top-K Redis double-couche (ZSET+cardinalité) | [`ADR-0010`](../../../../docs/adr/0010-geo-discovery-h3-grid-dual-layer-redis-topk.md) | Accepté |
-| Enrichissement de payload post→geo (lat/lng/caption) nécessite une décision produit | _ouvert — voir audit pré-infra_ | Ouvert |
+| Séparation de lecture Radar/Focus : `RadarPin` léger (panoramique Redis seul) vs `MapPostCard` hydratée (`GetGeoTimeline` au tap) | _inline — ce changement_ | Accepté |
+| Enrichissement de payload post→geo : `post.published` porte lat/lng + caption + miniature (localisation fournie par le client au `CreatePost`) | _résolu — ce changement_ | Accepté |
 
 ---
 
@@ -150,5 +158,6 @@ périmées (fail-open).
 
 - **Classification :** Supporting — une projection spatiale distinctive mais dérivée.
 - **Volatilité :** moyenne — les entrées de classement évoluent.
-- **Dette de modélisation connue :** la lacune de payload post→geo (pas de lat/lng/caption émis en amont).
+- **Dette de modélisation connue :** `author_handle` / `author_avatar_url` attendent la jointure
+  `profile.v1.events` (réservés sur la carte, vides jusque-là).
 - **Capacités différées :** requêtes spatiales plus riches ; clustering ; heatmaps.

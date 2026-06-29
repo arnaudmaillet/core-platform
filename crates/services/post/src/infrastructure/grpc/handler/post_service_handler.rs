@@ -71,6 +71,7 @@ where
             parent_id:   Some(req.parent_id).filter(|s| !s.is_empty()),
             root_id:     Some(req.root_id).filter(|s| !s.is_empty()),
             audio_ref,
+            location:    req.location.map(|g| (g.lat, g.lng)),
         };
 
         self.command_bus
@@ -218,6 +219,7 @@ fn post_to_proto(post: Post) -> proto::PostView {
         published_at_ms: post.published_at().map(|d| d.timestamp_millis()).unwrap_or_default(),
         deleted_at_ms:   post.deleted_at().map(|d| d.timestamp_millis()).unwrap_or_default(),
         audio_ref:       domain_audio_ref_to_proto(post.audio_ref()),
+        location:        post.location().map(|g| proto::GeoPoint { lat: g.lat(), lng: g.lng() }),
     }
 }
 

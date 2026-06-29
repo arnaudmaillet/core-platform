@@ -23,9 +23,10 @@ use crate::application::command::{
     IndexPostCommand, IndexPostHandler,
     UpdateViralityWithTilesCommand, UpdateViralityWithTilesHandler,
 };
+use crate::application::query::get_geo_timeline::{GetGeoTimelineHandler, GetGeoTimelineQuery};
 use crate::application::query::query_tile::{QueryTileHandler, QueryTileQuery};
 use crate::config::GeoDiscoveryConfig;
-use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex};
+use crate::infrastructure::cache::{RedisCardStore, RedisGeoSpatialIndex, RedisPinStore};
 use crate::infrastructure::persistence::ScyllaTileRepository;
 use crate::infrastructure::worker::{
     PostIndexerWorker, ScoreUpdaterWorker, TilePrunerWorker,
@@ -70,6 +71,7 @@ impl App {
 
         let spatial_index = Arc::new(RedisGeoSpatialIndex::new(redis_client.clone()));
         let card_store = Arc::new(RedisCardStore::new(redis_client.clone()));
+        let pin_store = Arc::new(RedisPinStore::new(redis_client.clone()));
         let tile_repository = Arc::new(ScyllaTileRepository::new(Arc::clone(&scylla_client)));
 
         let command_bus = Arc::new(
@@ -78,6 +80,7 @@ impl App {
                     spatial_index:        Arc::clone(&spatial_index),
                     card_store:           Arc::clone(&card_store),
                     tile_repository:      Arc::clone(&tile_repository),
+                    pin_store:            Arc::clone(&pin_store),
                     card_cache_threshold: cfg.card_cache_threshold,
                 })?
                 .register::<UpdateViralityWithTilesCommand, _>(UpdateViralityWithTilesHandler {
@@ -89,8 +92,13 @@ impl App {
 
         let query_bus = Arc::new(
             QueryBusBuilder::new()
+                // Radar (pan): Redis-only, returns lightweight pins.
                 .register::<QueryTileQuery, _>(QueryTileHandler {
-                    spatial_index:   Arc::clone(&spatial_index),
+                    spatial_index: Arc::clone(&spatial_index),
+                    pin_store:     Arc::clone(&pin_store),
+                })?
+                // Focus (tap): hydrates full cards, Redis + ScyllaDB fallback.
+                .register::<GetGeoTimelineQuery, _>(GetGeoTimelineHandler {
                     card_store:      Arc::clone(&card_store),
                     tile_repository: Arc::clone(&tile_repository),
                 })?
@@ -105,6 +113,7 @@ impl App {
                     Arc::clone(&spatial_index),
                     Arc::clone(&card_store),
                     Arc::clone(&tile_repository),
+                    Arc::clone(&pin_store),
                     cfg.post_indexer_group_id.clone(),
                     cfg.card_cache_threshold,
                 )

@@ -28,11 +28,12 @@ CREATE TABLE IF NOT EXISTS geo_discovery.map_post_cards (
     author_handle     text,
     author_avatar_url text,
     thumbnail_url     text,
+    caption           text,      -- Post caption, served on the Focus-mode read path
     h3_index_r7       bigint,    -- Canonical resolution-7 tile for deep-link centering
-    virality_score    float,     -- Mutable; updated by score_updater worker
+    virality_score    float,     -- Mutable, updated by score_updater worker
     published_at      timestamp,
     expires_at        timestamp, -- Explicit expiry for cold-start TTL computation
-    author_tier       tinyint,   -- 0=Standard, 1=Premium, 2=VIP; mutable via TierSyncWorker
+    author_tier       tinyint,   -- 0=Standard, 1=Premium, 2=VIP (mutable via TierSyncWorker)
     PRIMARY KEY (post_id)
 ) WITH compaction      = {'class': 'LeveledCompactionStrategy'}
   AND compression      = {'sstable_compression': 'LZ4Compressor'}

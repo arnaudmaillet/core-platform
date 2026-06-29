@@ -109,6 +109,8 @@ service PostService {
   rpc GetPost (GetPostRequest) returns (PostView);                          // point lookup
   rpc ListPostsByProfile (ListPostsByProfileRequest) returns (ListPostsByProfileResponse); // cursor-paginated
 }
+// CreatePostRequest / PostView carry an optional GeoPoint location:
+message GeoPoint { double lat = 1; double lng = 2; }  // WGS-84; absent → post is not geo-indexed
 ```
 
 ### Error contract (`PST-xxxx`)
@@ -137,7 +139,7 @@ service PostService {
 | Topic | Trigger | Key | Consumers |
 |---|---|---|---|
 | `post.v1.events` | every lifecycle event (`PostPublished` / `PostUpdated` / `PostDeleted`) | `post_id` | `search` (post indexing) |
-| `post.published` | `PublishPost` success — carries the author's denormalized `author_tier` | `post_id` | `timeline`, `geo-discovery`, `notification` |
+| `post.published` | `PublishPost` success — carries denormalized `author_tier`, plus `caption` / `thumbnail_url` / optional `lat`/`lng` for the geo projection | `post_id` | `timeline`, `geo-discovery`, `notification` |
 | `post.updated` | `UpdatePost` success | `post_id` | `<TODO>` |
 | `post.deleted` | `DeletePost` success | `post_id` | `timeline`, `geo-discovery` |
 
