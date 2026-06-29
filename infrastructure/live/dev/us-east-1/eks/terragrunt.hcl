@@ -36,6 +36,10 @@ inputs = {
   cluster_name       = "core-platform-${local.env_vars.locals.env}"
   vpc_id             = dependency.vpc.outputs.vpc_id
   private_subnet_ids = dependency.vpc.outputs.private_app_subnet_ids
+  vpc_cidr           = dependency.vpc.outputs.vpc_cidr_block
+
+  # Tighten the public API endpoint to your admin/CI ranges when ready, e.g.:
+  # endpoint_public_access_cidrs = ["203.0.113.4/32"]
 
   # Injecte la map dynamique définie dans env.hcl (Node Groups système)
   node_groups = local.env_vars.locals.node_groups
