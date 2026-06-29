@@ -36,4 +36,10 @@ spec:
         # Omitting `topic` monitors lag across ALL topics the group subscribes to
         # (view/impression/click.v1.events). Scale when avg lag/pod exceeds:
         lagThreshold: "5000"
-        offsetResetPolicy: latest
+        # `earliest` so a cold/reset consumer group counts the FULL unconsumed
+        # backlog as lag and KEDA scales up to drain it — the right policy for an
+        # analytics counter that must process every event. With `latest`, an
+        # uncommitted group reads lag as ~0 and the worker silently under-scales.
+        # (Matches the audit worker; the app consumer's own auto.offset.reset is
+        # separate and lives in counter's runtime config.)
+        offsetResetPolicy: earliest
