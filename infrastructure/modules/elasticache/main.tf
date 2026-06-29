@@ -76,11 +76,14 @@ module "redis" {
   at_rest_encryption_enabled = true
   auth_token                 = random_password.auth.result
 
-  # Networking: module-managed subnet group, our own SG.
-  create_subnet_group = true
-  subnet_group_name   = var.name
-  subnet_ids          = var.subnet_ids
-  security_group_ids  = [aws_security_group.redis.id]
+  # Networking: module-managed subnet group, our own SG. Disable the module's
+  # own SG creation — it builds one without a vpc_id and falls back to the
+  # (non-existent) default VPC, failing with VPCIdNotSpecified.
+  create_security_group = false
+  create_subnet_group   = true
+  subnet_group_name     = var.name
+  subnet_ids            = var.subnet_ids
+  security_group_ids    = [aws_security_group.redis.id]
 
   tags = var.tags
 }
