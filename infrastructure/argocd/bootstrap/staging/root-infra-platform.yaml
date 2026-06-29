@@ -51,8 +51,10 @@ spec:
                 value: "{{ .global.clusterEndpoint }}"
               - name: "karpenter.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
                 value: "{{ .global.karpenterRoleArn }}"
+              # Spot-interruption queue (Terraform names it == cluster name), so
+              # Karpenter drains reclaimed nodes gracefully instead of abrupt kills.
               - name: "karpenter.settings.interruptionQueue"
-                value: ""
+                value: "{{ .global.clusterName }}"
               # {{ end }}
 
               # {{ if eq .name "aws-load-balancer-controller" }}

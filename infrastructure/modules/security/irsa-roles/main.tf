@@ -372,3 +372,87 @@ resource "aws_iam_role_policy" "media_app" {
     ]
   })
 }
+
+# --- 10. KARPENTER SPOT-INTERRUPTION QUEUE -----------------------------------
+# Without this, Karpenter cannot receive the 2-minute spot interruption /
+# rebalance / scheduled-maintenance notices, so it can't cordon+drain a reclaimed
+# node gracefully — pods (incl. the realtime gateway's live WebSocket
+# connections) are killed abruptly. EventBridge routes those events to this SQS
+# queue; Karpenter polls it and starts a graceful drain on the warning. The queue
+# NAME == cluster name (Karpenter convention; the platform appset sets
+# settings.interruptionQueue from .global.clusterName).
+resource "aws_sqs_queue" "karpenter_interruption" {
+  name                      = var.cluster_name
+  message_retention_seconds = 300
+  sqs_managed_sse_enabled   = true
+  tags                      = var.tags
+}
+
+data "aws_iam_policy_document" "karpenter_interruption_queue" {
+  statement {
+    sid       = "EventBridgeAndSpotToQueue"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.karpenter_interruption.arn]
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com", "sqs.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "karpenter_interruption" {
+  queue_url = aws_sqs_queue.karpenter_interruption.id
+  policy    = data.aws_iam_policy_document.karpenter_interruption_queue.json
+}
+
+# The four event sources Karpenter consumes, each routed to the queue.
+locals {
+  karpenter_interruption_events = {
+    spot_interruption = {
+      source      = ["aws.ec2"]
+      detail_type = ["EC2 Spot Instance Interruption Warning"]
+    }
+    rebalance = {
+      source      = ["aws.ec2"]
+      detail_type = ["EC2 Instance Rebalance Recommendation"]
+    }
+    instance_state_change = {
+      source      = ["aws.ec2"]
+      detail_type = ["EC2 Instance State-change Notification"]
+    }
+    scheduled_change = {
+      source      = ["aws.health"]
+      detail_type = ["AWS Health Event"]
+    }
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "karpenter_interruption" {
+  for_each = local.karpenter_interruption_events
+
+  name          = "${var.cluster_name}-karpenter-${each.key}"
+  event_pattern = jsonencode({ "source" = each.value.source, "detail-type" = each.value.detail_type })
+  tags          = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "karpenter_interruption" {
+  for_each = local.karpenter_interruption_events
+
+  rule = aws_cloudwatch_event_rule.karpenter_interruption[each.key].name
+  arn  = aws_sqs_queue.karpenter_interruption.arn
+}
+
+# Let the Karpenter controller drain the interruption queue.
+resource "aws_iam_role_policy" "karpenter_interruption" {
+  name = "KarpenterInterruptionQueue"
+  role = module.karpenter_irsa_role.iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:DeleteMessage", "sqs:GetQueueUrl", "sqs:GetQueueAttributes", "sqs:ReceiveMessage"]
+      Resource = aws_sqs_queue.karpenter_interruption.arn
+    }]
+  })
+}
