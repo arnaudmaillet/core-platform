@@ -17,10 +17,14 @@ locals {
 }
 
 inputs = {
-  name                = "core-platform-${local.env_vars.locals.env}"
-  vpc_id              = dependency.vpc.outputs.vpc_id
-  subnet_ids          = dependency.vpc.outputs.private_data_subnet_ids
-  allowed_cidr_blocks = [dependency.vpc.outputs.vpc_cidr_block]
+  name       = "core-platform-${local.env_vars.locals.env}"
+  vpc_id     = dependency.vpc.outputs.vpc_id
+  subnet_ids = dependency.vpc.outputs.private_data_subnet_ids
+  # Broker count MUST be a multiple of the AZ/subnet count. Staging's VPC has 2
+  # data-subnet AZs, so 2 brokers (the module default is 3, which would fail to
+  # provision here). C7.
+  number_of_broker_nodes = 2
+  allowed_cidr_blocks    = [dependency.vpc.outputs.vpc_cidr_block]
 
   tags = {
     Environment = local.env_vars.locals.env
