@@ -27,6 +27,17 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "vpc_cidr" {
+  description = "VPC CIDR — used to scope the node SG rule that lets the ALB reach ArgoCD (8080)."
+  type        = string
+}
+
+variable "endpoint_public_access_cidrs" {
+  description = "CIDRs allowed to reach the EKS public API endpoint. Default 0.0.0.0/0 — TIGHTEN per-env to your admin/CI ranges."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 # --- CONFIGURATION DES NOEUDS ---
 variable "node_groups" {
   description = "Map complète des Managed Node Groups (passée par Terragrunt)"
