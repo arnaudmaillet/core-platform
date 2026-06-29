@@ -207,7 +207,7 @@ use timeline::service::TimelineService;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("TIMELINE_GRPC_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:50060".to_owned())
+        .unwrap_or_else(|_| "0.0.0.0:50070".to_owned())
         .parse()?;
     service_runtime::serve::<TimelineService>(addr).await
 }
@@ -234,7 +234,7 @@ async fn main() -> anyhow::Result<()> {
 | `TIMELINE_KAFKA_GROUP_*` | `timeline-*` | Consumer group IDs (post-published/deleted, sg-followed/unfollowed). |
 
 > Standard ScyllaDB / Redis / Kafka connection variables from the shared storage crates apply.
-> `TIMELINE_GRPC_ADDR` defaults to `0.0.0.0:50060`.
+> `TIMELINE_GRPC_ADDR` defaults to `0.0.0.0:50070`.
 
 ---
 
