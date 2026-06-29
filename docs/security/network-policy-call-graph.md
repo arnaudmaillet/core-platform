@@ -33,7 +33,7 @@ Derived from code + config, not guesswork:
 | 50058 | engagement | client-facing |
 | 50059 | account | **mesh callee** |
 | 50060 | auth | **mesh callee** (JWKS) |
-| 50060 | timeline | client-facing (read) |
+| 50070 | timeline | client-facing (read) |
 | 50061 | moderation | **mesh callee** (Screen) |
 | 50062 | search | client-facing (read) |
 | 50063 | media | client-facing |
@@ -44,10 +44,10 @@ Derived from code + config, not guesswork:
 | 50068 | audit-server | TIER-0 (break-glass RecordPrivileged + Query) |
 | 50069 | audit-worker | worker (health only) |
 
-> ⚠️ **Side-finding — port collision:** `auth` and `timeline` both listen on **50060**.
-> They're distinct ClusterIP services (different DNS/IPs), so k8s tolerates it and
-> NetworkPolicy still works per-pod — but it's almost certainly a copy-paste slip
-> (`timeline` should have its own port). Worth fixing independently of W8.
+> ✅ **Resolved (side-finding):** `auth` and `timeline` previously both listened on
+> `50060`. Distinct ClusterIPs so it worked, but it broke the one-port-per-service
+> convention — `timeline` moved to **50070** (it has no in-fleet caller, so nothing
+> dialed it). auth keeps 50060.
 
 ---
 
@@ -196,7 +196,7 @@ Layered on top of the #519 baseline:
 1. **Client entry point** (§3) — BFF pod label, ALB ipBlock, or lock-to-probes-for-now?
 2. **Egress scope** — do we want full egress lockdown now, or ingress-only v2 first?
    (Egress needs the live data-subnet CIDRs + S3 handling; higher breakage risk.)
-3. **Port collision** — fix `auth`/`timeline` both on 50060 first (independent of W8).
+3. ~~**Port collision** — fix `auth`/`timeline` both on 50060.~~ ✅ Done — `timeline` → 50070.
 4. **CNI** — confirm `enableNetworkPolicy=true` (shipped in #519) is live before any
    of this enforces.
 

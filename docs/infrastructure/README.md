@@ -23,9 +23,9 @@ Tier is an explicit runtime contract (`tier:` pod label) that dictates failure p
 |---|---|---|---|
 | **TIER-0** | **Fail-closed** | `auth` (50060), `moderation` (50061), `audit-server` (50068), `audit-worker` (50069) | Identity, trust/safety, and tamper-evident compliance. Correctness over availability — e.g. audit denies an unrecordable privileged write (break-glass). |
 | **TIER-1** | **Fail-open** | `counter-server/worker` (50064/50065), `media` (50063), `search` (50062), `realtime-gateway` (8443/50066), `realtime-dispatcher` (50067) | Systems-of-Reference / -Connection / -Delivery. Availability over completeness — degrade gracefully, re-derive from upstream SoRs. |
-| **Core (implicit)** | Mixed | `account` (50059), `profile` (50052), `social-graph` (50053), `post` (50056), `comment` (50057), `engagement` (50058), `geo-discovery` (50054), `notification` (50055), `timeline` (50060*), `chat` (50051) | The social-graph Systems-of-Record and read-models. |
+| **Core (implicit)** | Mixed | `account` (50059), `profile` (50052), `social-graph` (50053), `post` (50056), `comment` (50057), `engagement` (50058), `geo-discovery` (50054), `notification` (50055), `timeline` (50070), `chat` (50051) | The social-graph Systems-of-Record and read-models. |
 
-\* Internal ports are per-service ClusterIPs; numeric reuse (e.g. `timeline` and `auth` both at 50060) is harmless across distinct Services.
+Internal ports are per-service ClusterIPs; each service now owns a distinct port (`timeline` moved 50060 → 50070 to clear its reuse of `auth`'s port).
 
 ### 1.3 Deployment archetypes
 
@@ -155,7 +155,7 @@ Endpoint placeholders (`<<…>>`) are substituted from Terragrunt outputs at dep
 
 ## Appendix A — Port allocation
 
-`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50060 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069.
+`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069.
 
 ## Appendix B — Topic catalog
 

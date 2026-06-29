@@ -11,7 +11,7 @@ spec:
   ports:
     - name: grpc
       protocol: TCP
-      port: 50060
+      port: 50070
       targetPort: grpc
       appProtocol: grpc
   type: ClusterIP

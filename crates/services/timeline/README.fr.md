@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 0069353afdfe2430520f4d00722c2461ffb443cb7927f5deb5c3e41bad803a0a
-  translated_at: 2026-06-25
+  source_sha256: 6737910e3ddf997c4e171bc96166cfc3324613b06eb22f1a3605a5628d51382e
+  translated_at: 2026-06-29
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -223,7 +223,7 @@ use timeline::service::TimelineService;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = std::env::var("TIMELINE_GRPC_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:50060".to_owned())
+        .unwrap_or_else(|_| "0.0.0.0:50070".to_owned())
         .parse()?;
     service_runtime::serve::<TimelineService>(addr).await
 }
@@ -250,7 +250,7 @@ async fn main() -> anyhow::Result<()> {
 | `TIMELINE_KAFKA_GROUP_*` | `timeline-*` | Consumer group IDs (post-published/deleted, sg-followed/unfollowed). |
 
 > Les variables de connexion ScyllaDB / Redis / Kafka standard des crates de stockage partagés
-> s'appliquent. `TIMELINE_GRPC_ADDR` vaut par défaut `0.0.0.0:50060`.
+> s'appliquent. `TIMELINE_GRPC_ADDR` vaut par défaut `0.0.0.0:50070`.
 
 ---
 

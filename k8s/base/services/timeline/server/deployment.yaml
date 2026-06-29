@@ -39,9 +39,13 @@ spec:
             # The runtime is fail-closed on this file; mounted from infra-config.
             - name: INFRA_CONFIG_PATH
               value: /etc/infra/infrastructure.toml
+            # Own port (was 50060, which collided with auth — distinct ClusterIPs
+            # so it worked, but broke the one-port-per-service convention).
+            - name: TIMELINE_GRPC_ADDR
+              value: "0.0.0.0:50070"
           ports:
             - name: grpc
-              containerPort: 50060
+              containerPort: 50070
           volumeMounts:
             - name: infra-config
               mountPath: /etc/infra
@@ -51,7 +55,7 @@ spec:
           # so a pod leaves rotation when a dependency is unreachable.
           readinessProbe:
             grpc:
-              port: 50060
+              port: 50070
               service: timeline.v1.TimelineService
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -59,7 +63,7 @@ spec:
           # backend blip drops readiness without triggering a restart loop.
           livenessProbe:
             grpc:
-              port: 50060
+              port: 50070
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
