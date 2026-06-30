@@ -1,6 +1,6 @@
 # .github/workflows/fleet-images-deploy.yml
 #
-# Build + push the new-fleet binaries (10 services) + the shared migrator to ECR,
+# Build + push every fleet binary (20 services + the shared migrator) to ECR,
 # one image per binary via the generic deploy/Dockerfile (`--build-arg BIN`). This
 # replaces the legacy per-service Bazel deploy workflows for the Rust crates/ fleet
 # (those target the old backend/ tree). Add a BIN to the matrix to ship a new one.
@@ -56,6 +56,18 @@ jobs:
           - search-server
           - realtime-gateway
           - realtime-dispatcher
+          # ── Core services (same Rust workspace; the staging overlay deploys these too) ──
+          - account-server
+          - chat-server
+          - comment-server
+          - engagement-server
+          - geo-discovery-server
+          - notification-server
+          - post-server
+          - profile-server
+          - social-graph-server
+          - timeline-server
+          # ── Shared ──
           - migrator
     steps:
       - name: Checkout code
@@ -119,7 +131,11 @@ jobs:
           for bin in \
             counter-server counter-worker audit-server audit-worker \
             auth-server media-server moderation-server search-server \
-            realtime-gateway realtime-dispatcher migrator; do
+            realtime-gateway realtime-dispatcher \
+            account-server chat-server comment-server engagement-server \
+            geo-discovery-server notification-server post-server profile-server \
+            social-graph-server timeline-server \
+            migrator; do
             NAME="core-platform-$bin" NEWTAG="$TAG" \
               yq -i '(.images[] | select(.name == strenv(NAME)).newTag) = strenv(NEWTAG)' \
               k8s/overlays/staging/kustomization.yaml
