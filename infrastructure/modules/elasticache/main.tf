@@ -45,7 +45,10 @@ resource "random_password" "auth" {
 
 resource "aws_secretsmanager_secret" "auth" {
   name = "${var.name}-redis-auth"
-  tags = var.tags
+  # Disposable envs set 0 so a destroy frees the name immediately (otherwise the
+  # recovery window reserves it and the next apply collides). Default = AWS window.
+  recovery_window_in_days = var.secret_recovery_window_days
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "auth" {

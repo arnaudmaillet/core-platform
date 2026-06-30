@@ -49,3 +49,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "secret_recovery_window_days" {
+  type        = number
+  description = "Secrets Manager recovery window (days) for this module's secret. 0 = delete immediately on destroy (disposable/staging); 7-30 = recoverable (prod). Default keeps the AWS-standard window."
+  default     = 30
+  validation {
+    condition     = var.secret_recovery_window_days == 0 || (var.secret_recovery_window_days >= 7 && var.secret_recovery_window_days <= 30)
+    error_message = "secret_recovery_window_days must be 0 or between 7 and 30."
+  }
+}

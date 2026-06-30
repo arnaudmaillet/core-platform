@@ -60,7 +60,11 @@ resource "random_password" "scram" {
 resource "aws_secretsmanager_secret" "scram" {
   name       = "AmazonMSK_${var.name}_app"
   kms_key_id = aws_kms_key.scram.arn
-  tags       = var.tags
+  # Disposable envs set this to 0 so a destroy frees the name immediately;
+  # otherwise the recovery window reserves it and the next apply collides with
+  # "secret already scheduled for deletion". Default keeps the AWS-standard window.
+  recovery_window_in_days = var.secret_recovery_window_days
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "scram" {

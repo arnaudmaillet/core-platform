@@ -26,6 +26,11 @@ inputs = {
   number_of_broker_nodes = 2
   allowed_cidr_blocks    = [dependency.vpc.outputs.vpc_cidr_block]
 
+  # Disposable staging: drop the secret immediately on destroy so a rebuild
+  # doesn't collide with the SCRAM secret name's recovery window. PROD => omit
+  # (defaults to the recoverable AWS window).
+  secret_recovery_window_days = 0
+
   tags = {
     Environment = local.env_vars.locals.env
     ManagedBy   = "terragrunt"
