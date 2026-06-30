@@ -23,6 +23,9 @@ spec:
                 - name: metrics-server
                   folder: infrastructure/argocd/apps/infrastructure/platform/metrics-server
                   destNamespace: "kube-system"
+                - name: storage-class
+                  folder: infrastructure/argocd/apps/infrastructure/platform/storage-class
+                  destNamespace: "kube-system"
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop

@@ -47,7 +47,10 @@ resource "random_password" "master" {
 
 resource "aws_secretsmanager_secret" "master" {
   name = "${var.name}-opensearch-master"
-  tags = var.tags
+  # Disposable envs set 0 so a destroy frees the name immediately (otherwise the
+  # recovery window reserves it and the next apply collides). Default = AWS window.
+  recovery_window_in_days = var.secret_recovery_window_days
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "master" {

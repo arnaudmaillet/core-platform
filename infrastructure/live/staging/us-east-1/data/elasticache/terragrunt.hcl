@@ -22,6 +22,10 @@ inputs = {
   subnet_ids          = dependency.vpc.outputs.private_data_subnet_ids
   allowed_cidr_blocks = [dependency.vpc.outputs.vpc_cidr_block]
 
+  # Disposable staging: drop the Redis-auth secret immediately on destroy so a
+  # rebuild doesn't collide with its recovery window. PROD => omit (recoverable).
+  secret_recovery_window_days = 0
+
   tags = {
     Environment = local.env_vars.locals.env
     ManagedBy   = "terragrunt"
