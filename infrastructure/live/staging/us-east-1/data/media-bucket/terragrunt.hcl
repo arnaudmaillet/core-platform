@@ -22,6 +22,9 @@ inputs = {
   cors_enabled       = true
   # Tighten to the real web origins before prod; '*' is acceptable for staging.
   cors_allowed_origins = ["*"]
+  # Staging media is ephemeral test data — let destroy clean the bucket. (Prod
+  # would keep this false.)
+  force_destroy = true
 
   tags = {
     Environment = local.env_vars.locals.env
