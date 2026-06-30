@@ -50,11 +50,17 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ── Builder ───────────────────────────────────────────────────────────────────
 FROM chef AS builder
 
-# protoc: the `*-api` crates' build.rs run tonic-prost-build.
-# cmake + zlib: rdkafka builds librdkafka (bundled) from source.
+# protoc: the `*-api` crates' build.rs run tonic-prost-build. libprotobuf-dev ships
+# the well-known types (/usr/include/google/protobuf/*.proto) that several .proto
+# files import (e.g. google/protobuf/timestamp.proto) — without it protoc fails
+# "File not found". cmake + zlib: rdkafka builds librdkafka (bundled) from source.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    protobuf-compiler cmake zlib1g-dev \
+    protobuf-compiler libprotobuf-dev cmake zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Tell prost-build where the well-known types live so it adds them to protoc's
+# include path (the *-api build.rs only pass their own ../proto/ as an include).
+ENV PROTOC_INCLUDE=/usr/include
 
 # 1+2: cook the third-party graph. Baked into THIS layer (no target cache mount),
 # so it is reused via Docker/BuildKit layer cache until recipe.json changes. The
