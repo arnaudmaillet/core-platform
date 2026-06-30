@@ -27,7 +27,9 @@ spec:
     targetRevision: develop
     path: k8s/overlays/staging
     plugin:
-      name: envsubst
+      # ArgoCD names a versioned sidecar CMP "<metadata.name>-<spec.version>", so the
+      # plugin defined as envsubst / v1.0 is referenced as "envsubst-v1.0".
+      name: envsubst-v1.0
   destination:
     server: https://kubernetes.default.svc
     namespace: default
