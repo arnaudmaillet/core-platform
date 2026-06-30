@@ -49,6 +49,21 @@ dependency "opensearch" {
 
 terraform {
   source = "../../../../../modules//kubernetes/argocd"
+
+  # Drain operator-managed AWS resources (ALBs/NLBs, CNPG/Scylla EBS, Karpenter
+  # EC2) from inside the live cluster BEFORE Terraform deletes the cluster/VPC —
+  # otherwise they leak and leftover LB ENIs block VPC destroy. Staging is the
+  # one that actually carries the public NLB + 6 CNPG clusters + Scylla, so this
+  # is load-bearing here. Shared script keeps dev and staging in lockstep.
+  before_hook "graceful_cleanup" {
+    commands = ["destroy"]
+    execute = [
+      "/bin/bash",
+      "${get_repo_root()}/infrastructure/assets/teardown/k8s-graceful-cleanup.sh",
+      dependency.eks.outputs.cluster_name,
+      local.aws_region,
+    ]
+  }
 }
 
 inputs = {

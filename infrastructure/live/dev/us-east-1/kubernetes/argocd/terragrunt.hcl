@@ -6,7 +6,7 @@ include "root" {
 
 locals {
   region_vars = read_terragrunt_config(find_in_parent_folders("region.hcl"))
-  aws_region = local.region_vars.locals.aws_region
+  aws_region  = local.region_vars.locals.aws_region
 }
 
 dependency "vpc" {
@@ -18,41 +18,23 @@ dependency "eks" {
 }
 
 dependency "security" {
-  config_path = "../../security/irsa-roles" 
+  config_path = "../../security/irsa-roles"
 }
 
 terraform {
   source = "../../../../../modules//kubernetes/argocd"
 
+  # Drain operator-managed AWS resources (ALBs/NLBs, CNPG/Scylla EBS, Karpenter
+  # EC2) from inside the live cluster BEFORE Terraform deletes the cluster/VPC —
+  # otherwise they leak and leftover LB ENIs block VPC destroy. Shared script so
+  # dev and staging stay in lockstep. See the script header for the rationale.
   before_hook "graceful_cleanup" {
-    commands     = ["destroy"]
-    execute      = ["/bin/bash", "-c", <<-EOT
-      echo "--- Graceful Cleanup Start ---"
-      
-      # 1. Bloquer la réconciliation pour éviter les "zombies"
-      kubectl patch app root-bootstrap -n argocd --type merge -p '{"spec":{"syncPolicy":null}}' || true
-      
-      # 2. Supprimer les Ingress EN PREMIER (Crucial pour libérer les ALB)
-      # On attend que l'AWS Load Balancer Controller fasse son job
-      echo "Deleting all Ingresses..."
-      kubectl delete ingress --all -A --timeout=120s || echo "Ingress deletion timed out, continuing..."
-      
-      # 3. Supprimer les ApplicationSets
-      kubectl delete appsets --all -A || true
-      
-      # 4. Supprimer les Apps enfants avec cascade FOREGROUND
-      # On exclut le bootstrap et KARPENTER. Pourquoi ? 
-      # On a besoin que Karpenter soit vivant pour terminer la suppression des noeuds.
-      echo "Deleting Apps (excluding core controllers)..."
-      kubectl delete app -n argocd -l "argocd.argoproj.io/instance!=root-bootstrap,app.kubernetes.io/name!=karpenter" --cascade=foreground --timeout=180s || true
-      
-      # 5. Enfin, supprimer les nodes Karpenter proprement
-      # Cela force Karpenter à appeler l'API EC2 pour terminer les instances
-      echo "Draining Karpenter nodes..."
-      kubectl delete nodes -l karpenter.sh/nodepool --timeout=120s || true
-      
-      echo "--- Cleanup finished, proceeding to Terraform Destroy ---"
-    EOT
+    commands = ["destroy"]
+    execute = [
+      "/bin/bash",
+      "${get_repo_root()}/infrastructure/assets/teardown/k8s-graceful-cleanup.sh",
+      dependency.eks.outputs.cluster_name,
+      local.aws_region,
     ]
   }
 }
@@ -73,7 +55,7 @@ inputs = {
 
   # --- Sécurité & Certificats ---
   ssl_certificate_arn = dependency.security.outputs.certificate_arn
-  
+
   addons_iam_roles = {
     karpenter     = dependency.security.outputs.karpenter_role_arn
     lb_controller = dependency.security.outputs.lb_controller_role_arn
