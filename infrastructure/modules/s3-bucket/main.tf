@@ -18,6 +18,10 @@ resource "aws_s3_bucket" "this" {
   # Object Lock can ONLY be enabled at creation time and forces versioning on.
   object_lock_enabled = var.object_lock_mode != ""
 
+  # Let destroy empty an ephemeral bucket first. Off by default; never enabled
+  # for the WORM audit bucket (Object-Lock COMPLIANCE blocks deletion regardless).
+  force_destroy = var.force_destroy
+
   tags = var.tags
 }
 

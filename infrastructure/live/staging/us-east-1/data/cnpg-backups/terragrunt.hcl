@@ -24,6 +24,9 @@ inputs = {
   # Object-store WAL/base backups; no Object-Lock (retention is managed by CNPG's
   # barman retentionPolicy, which must be able to prune).
   cors_enabled = false
+  # Backups are re-derivable; let destroy empty + delete the bucket (CNPG starts
+  # WAL-archiving immediately, so it is never empty at teardown).
+  force_destroy = true
 
   tags = {
     Environment = local.env_vars.locals.env

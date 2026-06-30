@@ -45,6 +45,12 @@ variable "cors_allowed_origins" {
   default     = ["*"]
 }
 
+variable "force_destroy" {
+  type        = bool
+  description = "Allow `terraform destroy` to delete a non-empty bucket (deletes all objects + versions first). Safe default off; enable only for ephemeral/re-derivable buckets (NOT WORM/compliance)."
+  default     = false
+}
+
 variable "tags" {
   type        = map(string)
   description = "Tags applied to the bucket."
