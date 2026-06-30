@@ -47,6 +47,14 @@ dependency "opensearch" {
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
 }
 
+# Ordering-only: the workload ExternalSecrets (synced by ArgoCD) pull the app
+# secrets this unit seeds, so it must apply before ArgoCD brings up the fleet.
+# No outputs consumed here.
+dependency "app_secrets" {
+  config_path  = "../../data/app-secrets"
+  skip_outputs = true
+}
+
 terraform {
   source = "../../../../../modules//kubernetes/argocd"
 
