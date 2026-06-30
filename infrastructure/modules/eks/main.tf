@@ -57,5 +57,16 @@ module "eks" {
       # controller has created it.
       cidr_blocks = [var.vpc_cidr]
     }
+    # Let the (trusted) EKS control plane reach admission/conversion webhooks on
+    # ANY pod port. The module's defaults only cover 443/10250, so webhooks on
+    # other ports (e.g. scylla-operator on 5000) time out from the apiserver.
+    ingress_cluster_to_node_webhooks = {
+      description                   = "EKS control plane to node/pod webhooks (any port)"
+      protocol                      = "tcp"
+      from_port                     = 1025
+      to_port                       = 65535
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
   }
 }
