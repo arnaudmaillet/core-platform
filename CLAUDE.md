@@ -108,7 +108,12 @@ English inside FR files. See `docs/i18n/`.
 
 ## Key references
 
-- Infra & ops overview: `docs/infrastructure/README.md`
+- Infra & ops overview (canonical): `docs/infrastructure/README.md`
+- Docs entry point & taxonomy: `docs/README.md`
+- GitOps / ArgoCD operations: `docs/infrastructure/gitops-argocd.md`
+- Terragrunt units reference: `docs/infrastructure/terragrunt-units.md`
+- Secret topology (ESO / ClusterSecretStore): `docs/infrastructure/secrets-eso.md`
+- Environment lifecycle runbook: `docs/runbooks/environment-lifecycle.md`
 - Event plane (who produces/consumes what): `docs/domain/EVENT_CATALOG.md`
 - Domain context map / ubiquitous language: `docs/domain/`
 - Architecture decisions: `docs/adr/`

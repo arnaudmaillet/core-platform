@@ -2,6 +2,13 @@
 
 **Document class:** Definitive / Production-grade · **Scope:** `core-platform` monorepo (services, Terragrunt IaC, Kustomize delivery, event topology) · **Primary environment documented:** `staging` (the live Kustomize/GitOps path), with `dev` and `prod` deltas called out · **Status:** Authored from the current `develop` state; staging infrastructure is authored and statically validated but not yet applied to a live cluster.
 
+> **This is the canonical reference.** For task-focused operational deep-dives, see:
+> - [GitOps & ArgoCD operations](gitops-argocd.md) — the App-of-AppSets cascade, sync waves, the envsubst CMP, and day-2 ArgoCD ops.
+> - [Terragrunt units reference](terragrunt-units.md) — per-unit inputs/outputs/deps, the apply DAG, and exact invocations.
+> - [Secret topology (ESO / ClusterSecretStore)](secrets-eso.md) — how a credential travels from Terraform → Secrets Manager → pod env.
+> - [Environment lifecycle runbook](../runbooks/environment-lifecycle.md) — preflight → provision → validate → graceful teardown → rebuild.
+> - [Documentation entry point & taxonomy](../README.md) — the audience router and the platform/application boundary.
+
 ---
 
 ## 1. Core Technical Architecture & Deployment Archetypes

@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 63ac1bbdccbe90b81b852611050d76d4a0ccd919f16e9ff418dc89c2e3384fe5
-  translated_at: 2026-06-29
+  source_sha256: 63028fc90f0f0a0beb50350955d0c60ba8ecfde879facf1ef19c7323534de9b6
+  translated_at: 2026-07-01
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -13,6 +13,13 @@ i18n:
 # Core-Platform — Documentation d'Infrastructure et d'Exploitation
 
 **Classe du document :** Définitive / Qualité production · **Périmètre :** monorepo `core-platform` (services, IaC Terragrunt, livraison Kustomize, topologie événementielle) · **Environnement principal documenté :** `staging` (le chemin Kustomize/GitOps actif), avec mention des écarts `dev` et `prod` · **Statut :** Rédigé à partir de l'état actuel de `develop` ; l'infrastructure de staging est rédigée et validée statiquement mais pas encore appliquée à un cluster réel.
+
+> **Ceci est la référence canonique.** Pour les approfondissements opérationnels orientés tâche, voir :
+> - [Opérations GitOps & ArgoCD](gitops-argocd.md) — la cascade App-of-AppSets, les sync waves, le CMP envsubst, et les opérations ArgoCD au quotidien.
+> - [Référence des unités Terragrunt](terragrunt-units.md) — entrées/sorties/dépendances par unité, le DAG d'apply, et les invocations exactes.
+> - [Topologie des secrets (ESO / ClusterSecretStore)](secrets-eso.md) — comment un identifiant voyage de Terraform → Secrets Manager → env du pod.
+> - [Runbook de cycle de vie d'un environnement](../runbooks/environment-lifecycle.md) — preflight → provisionnement → validation → démontage gracieux → reconstruction.
+> - [Point d'entrée & taxonomie de la documentation](../README.md) — le routeur d'audience et la frontière plateforme/application.
 
 ---
 
