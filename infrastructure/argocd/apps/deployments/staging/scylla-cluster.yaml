@@ -1,0 +1,34 @@
+# infrastructure/argocd/apps/deployments/staging/scylla-cluster.yaml
+#
+# Deploys the ScyllaCluster (k8s/base/infra/scylla-cluster → name `scylla`, ns
+# `scylla`). SEPARATE from the staging-fleet Application on purpose: the fleet
+# overlay applies `namePrefix: staging-`, which would rename the cluster to
+# `staging-scylla` and make the operator publish `staging-scylla-client.scylla.svc`
+# — but every Scylla-backed service hardcodes `scylla-client.scylla.svc:9042` in
+# its DSN. Syncing the base directly (no prefix) keeps that FQDN intact.
+#
+# Discovered by the staging root-workloads appset (recurse over deployments/staging).
+# Without this, no ScyllaCluster CR is ever created → scylla-migration init
+# containers crash-loop ("could not resolve scylla-client.scylla.svc"). The
+# scylla-operator (root-operators appset, wave -10) installs the CRD first.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: staging-scylla-cluster
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arnaudmaillet/core-platform
+    targetRevision: develop
+    path: k8s/base/infra/scylla-cluster
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: scylla
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -46,6 +46,24 @@ kubectl get svc -A \
   [ -n "${name:-}" ] && kubectl delete svc -n "$ns" "$name" --timeout=180s || true
 done
 
+# 2b. WAIT for the LBs to actually deprovision in AWS. `kubectl delete svc` returns
+#     once the k8s object is gone, but the AWS LB controller then deletes the real
+#     NLB/ALB asynchronously (+ENIs), which can take minutes. If we don't wait, the
+#     later `eks` unit fails to delete its ACM cert (still referenced by the NLB's
+#     TLS listener → ResourceInUseException) and `vpc` early-exits on leftover ENIs.
+#     Poll until no load balancers remain in the cluster VPC (best-effort, ~5 min).
+vpc_id="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${AWS_REGION}" \
+  --query 'cluster.resourcesVpcConfig.vpcId' --output text 2>/dev/null || true)"
+if [ -n "${vpc_id:-}" ] && [ "${vpc_id}" != "None" ]; then
+  echo "Waiting for load balancers in ${vpc_id} to deprovision..."
+  for _ in $(seq 1 30); do
+    remaining="$(aws elbv2 describe-load-balancers --region "${AWS_REGION}" \
+      --query "length(LoadBalancers[?VpcId=='${vpc_id}'])" --output text 2>/dev/null || echo 0)"
+    [ "${remaining:-0}" = "0" ] && { echo "  all load balancers gone"; break; }
+    echo "  ${remaining} still deprovisioning..."; sleep 10
+  done
+fi
+
 # 3. Stateful workloads: delete the CRs (removes pods that hold the volumes), then
 #    PVCs, so ebs-csi issues DeleteVolume for the backing EBS volumes.
 echo "Deleting CNPG / ScyllaDB clusters..."
