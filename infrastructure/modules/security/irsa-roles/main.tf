@@ -200,11 +200,8 @@ module "k6_irsa_role" {
 }
 
 
-data "aws_acm_certificate" "issued" {
-  domain      = "core-platform.click"
-  statuses    = ["ISSUED"]
-  most_recent = true
-}
+# The ACM certificate now lives in its own decoupled unit (modules/acm-cert),
+# consumed directly by the argocd unit — no longer data-read here.
 
 
 

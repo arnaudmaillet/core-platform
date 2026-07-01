@@ -21,6 +21,13 @@ dependency "security" {
   config_path = "../../security/irsa-roles"
 }
 
+# ACM cert (decoupled from eks so its teardown can't leak the VPC — see the unit).
+dependency "acm_cert" {
+  config_path                             = "../../networking/acm-cert"
+  mock_outputs                            = { certificate_arn = "arn:aws:acm:us-east-1:000000000000:certificate/mock" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
 terraform {
   source = "../../../../../modules//kubernetes/argocd"
 
@@ -54,7 +61,7 @@ inputs = {
 
 
   # --- Sécurité & Certificats ---
-  ssl_certificate_arn = dependency.security.outputs.certificate_arn
+  ssl_certificate_arn = dependency.acm_cert.outputs.certificate_arn
 
   addons_iam_roles = {
     karpenter     = dependency.security.outputs.karpenter_role_arn

@@ -23,9 +23,6 @@ output "k6_role_arn" {
 output "ebs_csi_role_arn" {
   value = module.ebs_csi_irsa_role.iam_role_arn
 }
-output "certificate_arn" {
-  value = data.aws_acm_certificate.issued.arn
-}
 
 output "external_secrets_role_arn" {
   description = "IRSA role ARN for External Secrets Operator (null unless enable_external_secrets)."
