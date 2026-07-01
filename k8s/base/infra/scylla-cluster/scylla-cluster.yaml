@@ -14,7 +14,9 @@ spec:
     name: datacenter1
     racks:
       - name: rack1
-        members: 3
+        # Single-node for disposable staging: avoids needing 3 dedicated DB nodes
+        # for anti-affinity, and is sufficient to validate the fleet. (Prod: 3.)
+        members: 1
         # Pin to the database node tier and tolerate its taint, so Scylla lands on
         # the dedicated DB nodes instead of general/spot capacity.
         placement:
@@ -32,6 +34,9 @@ spec:
         storage:
           capacity: 20Gi
           storageClassName: gp3
+        # scylla-operator reserves ~1.5Gi/pod (manager-agent + OS), so a 2Gi limit
+        # left only ~476Mi/shard — below Scylla's 1Gi/shard floor → boot failure.
+        # 4Gi leaves ~2.5Gi/shard. Fits the t3.large (8Gi) DB nodes.
         resources:
-          requests: { cpu: "1", memory: 2Gi }
-          limits:   { cpu: "1", memory: 2Gi }
+          requests: { cpu: "1", memory: 4Gi }
+          limits:   { cpu: "1", memory: 4Gi }
