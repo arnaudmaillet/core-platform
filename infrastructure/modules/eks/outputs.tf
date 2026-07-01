@@ -38,8 +38,3 @@ output "node_iam_role_arns" {
   description = "Liste des ARNs des rôles IAM des Managed Node Groups (pour le PassRole de Karpenter)"
   value       = [for group in module.eks.eks_managed_node_groups : group.iam_role_arn]
 }
-
-output "ssl_certificate_arn" {
-  description = "L'ARN du certificat ACM validé pour l'Ingress"
-  value       = aws_acm_certificate.cert.arn
-}

@@ -47,6 +47,13 @@ dependency "opensearch" {
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
 }
 
+# ACM cert (decoupled from eks so its teardown can't leak the VPC — see the unit).
+dependency "acm_cert" {
+  config_path                             = "../../networking/acm-cert"
+  mock_outputs                            = { certificate_arn = "arn:aws:acm:us-east-1:000000000000:certificate/mock" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
 # Ordering-only: the workload ExternalSecrets (synced by ArgoCD) pull the app
 # secrets this unit seeds, so it must apply before ArgoCD brings up the fleet.
 # No outputs consumed here.
@@ -92,7 +99,7 @@ inputs = {
   cluster_ca_certificate = dependency.eks.outputs.cluster_certificate_authority_data
 
   # --- Security & Certificates ---
-  ssl_certificate_arn = dependency.security.outputs.certificate_arn
+  ssl_certificate_arn = dependency.acm_cert.outputs.certificate_arn
 
   # --- CMP envsubst values (data-store endpoints for the workload overlay) ---
   msk_bootstrap_brokers = dependency.msk.outputs.bootstrap_brokers_sasl_scram
