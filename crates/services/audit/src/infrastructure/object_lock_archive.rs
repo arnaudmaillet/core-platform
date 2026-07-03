@@ -56,10 +56,28 @@ impl ObjectLockArchive {
         })
     }
 
-    /// Idempotently create the bucket (for local/test environments where it does
-    /// not pre-exist; in production ops provisions it with Object Lock enabled). A
-    /// 409 (already owned) is success.
+    /// Verify the bucket is reachable, creating it only when absent.
+    ///
+    /// PROBE FIRST (HeadBucket, covered by the `s3:ListBucket` the audit static
+    /// keys are granted), then fall back to CreateBucket only on 404 — the
+    /// local/test path where the bucket doesn't pre-exist. Against provisioned
+    /// AWS (Terraform owns the bucket; the keys deliberately have NO
+    /// s3:CreateBucket) the old create-first probe got 403 and fail-closed the
+    /// whole service — found live on the staging bring-up.
     pub async fn ensure_bucket(&self) -> Result<(), AuditError> {
+        let head = self.bucket.head_bucket(Some(&self.credentials)).sign(self.presign_ttl);
+        let resp = self
+            .http
+            .head(head)
+            .send()
+            .await
+            .map_err(|_| AuditError::ArchiveUnavailable)?;
+        if resp.status().is_success() {
+            return Ok(());
+        }
+        if resp.status() != reqwest::StatusCode::NOT_FOUND {
+            return Err(AuditError::ArchiveUnavailable);
+        }
         let url = self.bucket.create_bucket(&self.credentials).sign(self.presign_ttl);
         let resp = self
             .http
