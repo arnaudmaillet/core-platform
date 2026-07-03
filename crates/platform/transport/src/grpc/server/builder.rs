@@ -83,6 +83,13 @@ impl GrpcServerBuilder {
         // nests rate-limiting inside the span.
         let mut server = Server::builder().layer(InboundTraceLayer).layer(traffic_layer);
 
+        if let Some(age) = self.config.max_connection_age {
+            server = server.max_connection_age(age);
+        }
+        if let Some(grace) = self.config.max_connection_age_grace {
+            server = server.max_connection_age_grace(grace);
+        }
+
         if let Some(tls) = self.config.tls {
             let identity = TlsIdentity::from_pem(&tls.cert_pem, &tls.key_pem);
             let mut tls_config = ServerTlsConfig::new().identity(identity);
