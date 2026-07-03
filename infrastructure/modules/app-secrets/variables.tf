@@ -15,6 +15,11 @@ variable "audit_worm_bucket_arn" {
   description = "ARN of the audit WORM bucket. The audit object-store + witness static-key IAM users are scoped to write here (append-only; Object-Lock blocks deletes regardless)."
 }
 
+variable "scylla_backups_bucket_arn" {
+  type        = string
+  description = "ARN of the Scylla Manager backup bucket. The scylla static-key IAM user is scoped to it (list/get/put/delete — the manager purges snapshots past retention). The scylla-manager-agent's rclone reads these keys from the agent-config Secret; IRSA is the tracked deferral, same as media."
+}
+
 variable "audit_kms_key_arn" {
   type        = string
   description = "ARN of the audit KEK (KMS). The audit static-key users need GenerateDataKey/Decrypt to write/read the SSE-KMS WORM objects. NOTE: distinct from the app-level env KEK (kek_base64) this module generates for crypto-shred."

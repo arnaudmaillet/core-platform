@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: scylla
 resources:
   - scylla-cluster.yaml
+  - externalsecret-agent-config.yaml

@@ -6,6 +6,7 @@
 # CreateContainerConfigError). Generates everything so a from-scratch env needs
 # zero manual steps:
 #   * <name>-media-s3     {access_key, secret_key}                 (rusty-s3 static keys)
+#   * <name>-scylla-s3    {access_key, secret_key}                 (scylla-manager-agent backups)
 #   * <name>-audit-crypto {object/witness S3 keys, kek_base64, signing_key_base64}
 #   * <name>-auth-secrets {ES256 signing PEM pair, keycloak_client_secret}
 #
@@ -64,6 +65,56 @@ resource "aws_secretsmanager_secret_version" "media_s3" {
   secret_string = jsonencode({
     access_key = aws_iam_access_key.media.id
     secret_key = aws_iam_access_key.media.secret
+  })
+}
+
+# ── scylla: static S3 keys for the Scylla Manager agent (backups) ─────────────
+# Unlike audit's append-only users, the agent PURGES snapshots past the backup
+# task's retention, so it needs delete on the backup bucket. Keys reach the
+# `scylla` namespace as scylla-agent-config-secret via an ExternalSecret
+# (k8s/base/infra/scylla-cluster).
+resource "aws_iam_user" "scylla" {
+  name = "${var.name}-scylla-s3"
+  tags = var.tags
+}
+
+resource "aws_iam_user_policy" "scylla" {
+  name = "scylla-backups-rw"
+  user = aws_iam_user.scylla.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket", "s3:GetBucketLocation"]
+        Resource = [var.scylla_backups_bucket_arn]
+      },
+      {
+        Sid      = "SnapshotRW"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
+        Resource = ["${var.scylla_backups_bucket_arn}/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_access_key" "scylla" {
+  user = aws_iam_user.scylla.name
+}
+
+resource "aws_secretsmanager_secret" "scylla_s3" {
+  name                    = "${var.name}-scylla-s3"
+  recovery_window_in_days = var.secret_recovery_window_days
+  tags                    = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "scylla_s3" {
+  secret_id = aws_secretsmanager_secret.scylla_s3.id
+  secret_string = jsonencode({
+    access_key = aws_iam_access_key.scylla.id
+    secret_key = aws_iam_access_key.scylla.secret
   })
 }
 
