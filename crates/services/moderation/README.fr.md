@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 5276a8fd821ec8a56401d514440450ebe6679e7e868b9b91b4052b7ff2de94d6
-  translated_at: 2026-06-26
+  source_sha256: 55c33a90935a2fa596a3f296627c935ffc3070110703895cae1ab43853826a26
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -240,6 +240,8 @@ async fn main() -> anyhow::Result<()> {
 |---|---|---|---|
 | `MODERATION_GRPC_ADDR` | Non | `0.0.0.0:50061` | adresse de bind gRPC |
 | `MODERATION_ACCOUNT_GRPC_ENDPOINT` | Non | `http://localhost:50059` | endpoint du service `account` (exécution des suspensions) |
+| `MODERATION_ACCOUNT_RPC_TIMEOUT_MS` | Non | `2000` | deadline par requête des RPC `account` (tonic n'a pas de timeout par défaut) |
+| `MODERATION_ACCOUNT_CONNECT_TIMEOUT_MS` | Non | `2000` | deadline de connexion à l'ouverture du canal `account` |
 | `MODERATION_SCREEN_TIMEOUT_MS` | Non | `200` | timeout strict de la porte Plan C ; à l'expiration la porte retourne `MOD-7002` et l'appelant échoue fermé pour les catégories catastrophiques |
 
 ### Variables d'infrastructure héritées

@@ -21,6 +21,11 @@ uuid      = { workspace = true }
 seahash   = { workspace = true }
 log       = "0.4"
 
+[features]
+# Live integration suites (require a real PostgreSQL via DATABASE_URL).
+# Opt-in via `cargo test -p postgres --features integration-postgres`.
+integration-postgres = []
+
 [dev-dependencies]
 tokio              = { workspace = true }
 tracing-subscriber = { workspace = true }

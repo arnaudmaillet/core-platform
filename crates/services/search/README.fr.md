@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: ef3da8bf38b8f1872d98411fe32e688faca678c47699b470d7aad2918be684ff
-  translated_at: 2026-06-26
+  source_sha256: 26a0168dbca36491c8925460046b3561f835c2fc3e8786c587aba3e4495d63ff
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -207,6 +207,8 @@ async fn main() -> anyhow::Result<()> {
 | `SEARCH_OPENSEARCH_USER` / `SEARCH_OPENSEARCH_PASSWORD` | Non | — | basic auth optionnelle (définir les deux) |
 | `SEARCH_QUERY_TIMEOUT_MS` | Non | `800` | timeout dur par requête moteur ; à l'expiration la requête échoue **ouvert** (dégradée) |
 | `SEARCH_POST_GRPC_ENDPOINT` | Non | `http://localhost:50056` | endpoint `post` pour l'hydrateur de contenu d'ingestion |
+| `SEARCH_HYDRATE_RPC_TIMEOUT_MS` | Non | `5000` | deadline par requête des RPC d'hydratation — un appel suspendu bloquerait sinon la partition du consumer |
+| `SEARCH_HYDRATE_CONNECT_TIMEOUT_MS` | Non | `2000` | deadline de connexion à l'ouverture des canaux `post` / `profile` |
 
 ### Variables d'infrastructure héritées
 

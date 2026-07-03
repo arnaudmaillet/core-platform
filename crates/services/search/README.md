@@ -196,6 +196,8 @@ async fn main() -> anyhow::Result<()> {
 | `SEARCH_OPENSEARCH_USER` / `SEARCH_OPENSEARCH_PASSWORD` | No | — | optional basic auth (set both) |
 | `SEARCH_QUERY_TIMEOUT_MS` | No | `800` | hard per-request engine timeout; on elapse the query fails **open** (degraded) |
 | `SEARCH_POST_GRPC_ENDPOINT` | No | `http://localhost:50056` | `post` endpoint for the ingestion content hydrator |
+| `SEARCH_HYDRATE_RPC_TIMEOUT_MS` | No | `5000` | per-request deadline on hydration RPCs — a hung call would otherwise stall the consumer's partition |
+| `SEARCH_HYDRATE_CONNECT_TIMEOUT_MS` | No | `2000` | connect deadline when dialing the `post` / `profile` channels |
 
 ### Inherited infrastructure variables
 

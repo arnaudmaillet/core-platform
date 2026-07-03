@@ -13,6 +13,10 @@ pub struct ModerationConfig {
     pub policy: ModerationPolicy,
     /// gRPC endpoint of the `account` service, e.g. `http://account:50059`.
     pub account_endpoint: String,
+    /// Per-request deadline on `account` RPCs — tonic has no default timeout.
+    pub account_rpc_timeout: std::time::Duration,
+    /// Connect deadline when dialing the `account` channel.
+    pub account_connect_timeout: std::time::Duration,
 }
 
 impl ModerationConfig {
@@ -36,6 +40,12 @@ impl ModerationConfig {
         Ok(Self {
             policy,
             account_endpoint: env_or("MODERATION_ACCOUNT_GRPC_ENDPOINT", "http://localhost:50059"),
+            account_rpc_timeout: std::time::Duration::from_millis(
+                env_secs("MODERATION_ACCOUNT_RPC_TIMEOUT_MS", 2_000) as u64,
+            ),
+            account_connect_timeout: std::time::Duration::from_millis(
+                env_secs("MODERATION_ACCOUNT_CONNECT_TIMEOUT_MS", 2_000) as u64,
+            ),
         })
     }
 }

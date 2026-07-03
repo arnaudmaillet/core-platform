@@ -101,7 +101,7 @@ impl CommandBus for InMemoryCommandBus {
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let bus = CommandBusBuilder::new()
 ///     .register::<CreatePostCommand, _>(CreatePostHandler::new(repo))?
 ///     .register::<DeletePostCommand, _>(DeletePostHandler::new(repo))?

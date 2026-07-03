@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: e68741a321f38a1747e8ecebd1db271f4503bd6c06d0cda131aba4db0d54d0b7
-  translated_at: 2026-06-25
+  source_sha256: 1c778bdaccacae89efddba09c3fda0a2baccaf3be14dcc66d3869ae9266b5b23
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -301,7 +301,7 @@ async fn main() -> anyhow::Result<()> {
         .parse()?;
 
     // Owns telemetry, infrastructure.toml load + hot-reload, the inbound-trace and traffic
-    // layers, dynamic gRPC health, and SIGINT-drained shutdown — then builds `ChatService`
+    // layers, dynamic gRPC health, and SIGTERM/SIGINT-drained shutdown — then builds `ChatService`
     // and serves until shutdown.
     service_runtime::serve::<ChatService>(addr).await
 }

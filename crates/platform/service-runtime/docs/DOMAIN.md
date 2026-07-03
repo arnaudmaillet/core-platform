@@ -107,7 +107,7 @@ needs both `infra-config` and `telemetry`, which must not depend on each other.
    add the health service + `S::register(routes)`. *(boot)*
 7. `spawn_readiness` (probes → gRPC health, transition-only writes) + `spawn_traffic_prune` (bounds limiter
    memory). *(background)*
-8. `serve_with_shutdown` — serve until SIGINT, then drain in-flight requests. *(lifetime → shutdown)*
+8. `serve_with_shutdown` — serve until SIGTERM/SIGINT, then drain in-flight requests. *(lifetime → shutdown)*
 
 ---
 
@@ -134,7 +134,7 @@ needs both `infra-config` and `telemetry`, which must not depend on each other.
 | `gRPC health status changed` | `tracing` INFO | a readiness transition | K8s readiness probes |
 | `traffic registry pruned` | `tracing` DEBUG | each prune tick | limiter-memory monitoring |
 
-Side effects: binds the listen socket, spawns the watcher/readiness/prune tasks, installs the SIGINT handler.
+Side effects: binds the listen socket, spawns the watcher/readiness/prune tasks, installs the SIGTERM + SIGINT handlers.
 
 ---
 
@@ -155,5 +155,5 @@ Side effects: binds the listen socket, spawns the watcher/readiness/prune tasks,
   concerns.
 - **Stability:** stable contract — the `Service` trait is settled across 17 services.
 - **Volatility:** low — new process-wide concerns (a new background loop, a new layer) are added here once.
-- **Deferred capabilities:** SIGTERM→drain wiring beyond SIGINT; richer drain/health hooks for stateful edge
-  services (noted in the realtime work).
+- **Deferred capabilities:** richer drain/health hooks for stateful edge services (noted in the realtime
+  work); SIGTERM is now handled alongside SIGINT.

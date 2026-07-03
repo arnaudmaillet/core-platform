@@ -85,7 +85,7 @@ impl IdempotencyStore for InMemoryIdempotencyStore {
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let bus = MiddlewarePipeline::new(inner_bus)
 ///     .layer(IdempotencyLayer::new(InMemoryIdempotencyStore::new()))
 ///     .layer(TracingLayer)

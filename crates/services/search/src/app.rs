@@ -57,9 +57,17 @@ impl App {
         let projection = Arc::new(ProjectionHandler::new(Arc::clone(&index_port)));
 
         // Lazy connect: dials `post` / `profile` on first use, so a cold start does
-        // not require the dependencies to be up at boot.
-        let post = Channel::from_shared(config.post_endpoint)?.connect_lazy();
-        let profile = Channel::from_shared(config.profile_endpoint)?.connect_lazy();
+        // not require the dependencies to be up at boot. Both deadlines are
+        // mandatory — tonic has no default request timeout, and a hung hydration
+        // call would stall the consumer's partition indefinitely.
+        let post = Channel::from_shared(config.post_endpoint)?
+            .timeout(config.hydrate_rpc_timeout)
+            .connect_timeout(config.hydrate_connect_timeout)
+            .connect_lazy();
+        let profile = Channel::from_shared(config.profile_endpoint)?
+            .timeout(config.hydrate_rpc_timeout)
+            .connect_timeout(config.hydrate_connect_timeout)
+            .connect_lazy();
         let hydrator: Arc<dyn SourceHydrator> = Arc::new(GrpcSourceHydrator::new(post, profile));
 
         let handler = App::compose(index_port);

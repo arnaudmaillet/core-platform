@@ -94,7 +94,7 @@ impl QueryBus for InMemoryQueryBus {
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let bus = QueryBusBuilder::new()
 ///     .register::<GetPostByIdQuery, _>(GetPostByIdHandler::new(read_db))?
 ///     .register::<ListUserFeedQuery, _>(ListUserFeedHandler::new(read_db))?

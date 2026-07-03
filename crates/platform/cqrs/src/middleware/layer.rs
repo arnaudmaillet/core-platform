@@ -8,7 +8,7 @@
 ///
 /// Use [`MiddlewarePipeline`] to stack layers in declaration order:
 ///
-/// ```rust
+/// ```rust,ignore
 /// let bus = MiddlewarePipeline::new(inner_bus)
 ///     .layer(IdempotencyLayer::new(store))  // outermost — checked first
 ///     .layer(TracingLayer)

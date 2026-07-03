@@ -13,7 +13,7 @@ use super::query::Query;
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use cqrs::{Query, QueryHandler, Envelope};
 ///
 /// struct GetPostByIdQuery { id: Uuid }

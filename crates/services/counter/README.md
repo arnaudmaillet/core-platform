@@ -217,6 +217,8 @@ async fn main() -> anyhow::Result<()> {
 | `COUNTER_RECONCILE_INTERVAL_S` | No | `3600` | reconciliation sweep cadence (follower/following drift correction) |
 | `COUNTER_DRIFT_TOLERANCE` | No | `5` | absolute drift tolerated before reconciliation corrects an exact counter |
 | `COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT` | No | `http://localhost:50053` | `social-graph` endpoint — authoritative follower/following counts for reconciliation |
+| `COUNTER_SOCIAL_GRAPH_RPC_TIMEOUT_MS` | No | `5000` | per-request deadline on `social-graph` RPCs — a hung call would otherwise stall the reconcile loop |
+| `COUNTER_SOCIAL_GRAPH_CONNECT_TIMEOUT_MS` | No | `2000` | connect deadline when dialing the `social-graph` channel |
 
 ### Inherited infrastructure variables
 

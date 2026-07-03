@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 6550098e9e77f07d169f322b8e46533bb42d16fac77d731a915012d08fd40b8d
-  translated_at: 2026-06-25
+  source_sha256: ec6626c016f9351b54f9fe64d8f69d679953db65c334b317af9f10ef66e0c35e
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -45,7 +45,7 @@ telemetry::init (logs + OTLP traces + metrics; guard kept)
          ├─ health service (driven by S::health_probes)
          └─ S::register(routes)               (service's own gRPC services)
            └─ readiness loop + traffic prune loop
-             └─ serve_with_shutdown (SIGINT-drained)
+             └─ serve_with_shutdown (SIGTERM/SIGINT-drained)
 ```
 
 ---

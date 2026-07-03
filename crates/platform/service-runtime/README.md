@@ -34,7 +34,7 @@ telemetry::init (logs + OTLP traces + metrics; guard kept)
          ├─ health service (driven by S::health_probes)
          └─ S::register(routes)               (service's own gRPC services)
            └─ readiness loop + traffic prune loop
-             └─ serve_with_shutdown (SIGINT-drained)
+             └─ serve_with_shutdown (SIGTERM/SIGINT-drained)
 ```
 
 ---

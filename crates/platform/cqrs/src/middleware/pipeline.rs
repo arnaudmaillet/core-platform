@@ -29,7 +29,7 @@ use super::layer::{CommandLayer, QueryLayer};
 ///
 /// ## Usage with command pipelines
 ///
-/// ```rust
+/// ```rust,ignore
 /// let bus: LoggingCommandBus<TracingCommandBus<InMemoryCommandBus>> =
 ///     MiddlewarePipeline::new(inner_bus)
 ///         .layer(TracingLayer)
@@ -39,7 +39,7 @@ use super::layer::{CommandLayer, QueryLayer};
 ///
 /// ## Usage with query pipelines
 ///
-/// ```rust
+/// ```rust,ignore
 /// let qbus = MiddlewarePipeline::new(inner_query_bus)
 ///     .query_layer(TracingLayer)
 ///     .build();
