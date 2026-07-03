@@ -222,11 +222,11 @@ spec:
         - { protocol: TCP, port: 8000 }
 ---
 # Load-test ingress (STAGING ONLY — deliberately not mirrored to prod): k6
-# runner pods (app=k6-loadtest, spawned by the k6-operator TestRun) may call
+# runner pods (app=k6/runner=true, stamped by the k6-operator) may call
 # the tightened mesh callees on their gRPC ports. Without this, a soak can
 # only exercise the same-namespace-open services and never drives the post →
-# timeline/search/realtime fan-out. The label is the gate: nothing else
-# carries app=k6-loadtest.
+# timeline/search/realtime fan-out. The operator stamps app=k6/runner=true on
+# every runner pod (custom `app` labels are overridden) — that pair is the gate.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -248,7 +248,8 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: k6-loadtest
+              app: k6
+              runner: "true"
       ports:
         - { protocol: TCP, port: 50059 }
         - { protocol: TCP, port: 50053 }
@@ -267,9 +268,13 @@ kind: NetworkPolicy
 metadata:
   name: allow-k6-operator-to-runners
 spec:
+  # The operator stamps its own labels on runner pods (app=k6, runner=true) —
+  # custom runner labels for `app` are overridden, found live: the first soak
+  # stayed paused because this policy keyed on a label the pods never carried.
   podSelector:
     matchLabels:
-      app: k6-loadtest
+      app: k6
+      runner: "true"
   policyTypes: [Ingress]
   ingress:
     - from:
