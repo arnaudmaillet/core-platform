@@ -40,3 +40,15 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      # The overlay carries CRs (ScaledObject/Cluster/ExternalSecret/Scheduled-
+      # Backup) whose CRDs come from the operator appsets. ApplicationSet
+      # sync-waves do NOT order across independent Applications, so on a fresh
+      # bring-up this app can sync before KEDA/CNPG/ESO CRDs exist — skip the
+      # dry-run for missing kinds and retry instead of hard-failing.
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

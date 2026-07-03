@@ -73,9 +73,10 @@ spec:
           resources:
             requests:
               cpu: "100m"
-              memory: "128Mi"
+              memory: "512Mi"
+            # No CPU limit: CFS throttling breaks tokio tail latency under
+            # spikes; memory stays the hard cap.
             limits:
-              cpu: "1000m"
               memory: "512Mi"
       volumes:
         - name: infra-config

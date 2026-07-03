@@ -5,9 +5,13 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  amiFamily: AL2
+  # AL2023, not AL2: Amazon Linux 2 standard support ended 2026-06-30 and EKS
+  # stopped publishing AL2 AMIs for new k8s minors — staying on al2@latest means
+  # unpatched nodes. AL2023 bootstraps via nodeadm (Karpenter handles the user
+  # data); no manifest change needed beyond this alias.
+  amiFamily: AL2023
   amiSelectorTerms:
-    - alias: "al2@latest" 
+    - alias: "al2023@latest"
   role: "{{ .Values.global.clusterName }}-node-role"
   subnetSelectorTerms:
     - tags:

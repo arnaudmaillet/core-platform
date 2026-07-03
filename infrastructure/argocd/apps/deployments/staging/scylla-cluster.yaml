@@ -32,3 +32,13 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      # The ScyllaCluster CRD comes from the scylla-operator app, which syncs
+      # independently (appset sync-waves don't order across Applications) —
+      # tolerate the CRD arriving after this app's first sync attempt.
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

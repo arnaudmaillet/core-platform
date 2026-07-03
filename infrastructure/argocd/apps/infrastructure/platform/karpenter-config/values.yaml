@@ -19,7 +19,11 @@ nodepools:
 
   # (Profile, Auth, etc.)
   apps:
-    capacityType: ["spot"]      # Économies (jusqu'à -70%)
+    # spot-first with on-demand fallback: Karpenter prefers spot when both are
+    # allowed, but (a) a spot capacity crunch no longer stalls the whole fleet,
+    # and (b) TIER-0 pods pin karpenter.sh/capacity-type=on-demand via
+    # nodeSelector — that only schedules if some pool offers on-demand.
+    capacityType: ["spot", "on-demand"]
     categories: ["t", "c", "m"]
     sizes: ["medium", "large"]
     cpuLimit: 64 # 64 vCPUs total for the pool.
