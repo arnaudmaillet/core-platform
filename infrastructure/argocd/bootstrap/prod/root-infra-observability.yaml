@@ -24,6 +24,15 @@ spec:
                 - name: monitoring
                   folder: infrastructure/argocd/apps/infrastructure/observability/monitoring
                   valuesKey: "kube-prometheus-stack"
+                  destNamespace: monitoring
+                # OTLP sink the whole fleet exports to (otel-collector.observability
+                # .svc:4317) — metrics re-exposed to Prometheus, traces to debug
+                # until a traces backend lands.
+                - name: otel-collector
+                  folder: infrastructure/argocd/apps/infrastructure/observability/otel-collector
+                  valuesKey: "opentelemetry-collector"
+                  # MUST be `observability`: the fleet's OTLP endpoint DNS contract.
+                  destNamespace: observability
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: main
@@ -51,7 +60,7 @@ spec:
           ref: values
       destination:
         server: https://kubernetes.default.svc
-        namespace: monitoring
+        namespace: '{{.destNamespace}}'
       syncPolicy:
         automated: 
           prune: true
