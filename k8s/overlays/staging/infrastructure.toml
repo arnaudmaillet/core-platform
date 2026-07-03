@@ -25,6 +25,20 @@ rps   = 1000
 burst = 200
 scope = "per_method"
 
+# ── Cache profiles (consumed by profile's read-through caches) ────────────────
+[cache]
+default_profile = "standard"
+
+[cache.profiles.standard]
+ttl_secs = 300
+
+[cache.profiles.handles]
+ttl_secs = 600
+
+[cache.bindings]
+"profile-view" = "standard"
+"handle-lookup" = "handles"
+
 [telemetry]
 log_filter = "info"
 sampling   = { kind = "trace_id_ratio", ratio = 0.1 }
