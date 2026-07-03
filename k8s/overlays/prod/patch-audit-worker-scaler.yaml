@@ -1,0 +1,17 @@
+# audit-worker ScaledObject: MSK + SASL/SCRAM + TLS + auth ref.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: audit-worker
+spec:
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: ${MSK_BOOTSTRAP_BROKERS_SASL_SCRAM}
+        consumerGroup: audit-worker
+        lagThreshold: "1000"
+        offsetResetPolicy: earliest
+        sasl: scram_sha512
+        tls: enable
+      authenticationRef:
+        name: keda-msk-auth

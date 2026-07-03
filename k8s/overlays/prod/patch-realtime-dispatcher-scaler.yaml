@@ -1,0 +1,17 @@
+# realtime-dispatcher ScaledObject: MSK + SASL/SCRAM + TLS + auth ref.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: realtime-dispatcher
+spec:
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: ${MSK_BOOTSTRAP_BROKERS_SASL_SCRAM}
+        consumerGroup: realtime-dispatcher
+        lagThreshold: "2000"
+        offsetResetPolicy: latest
+        sasl: scram_sha512
+        tls: enable
+      authenticationRef:
+        name: keda-msk-auth
