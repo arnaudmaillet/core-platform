@@ -215,7 +215,11 @@ resource "aws_secretsmanager_secret" "auth_secrets" {
 resource "aws_secretsmanager_secret_version" "auth_secrets" {
   secret_id = aws_secretsmanager_secret.auth_secrets.id
   secret_string = jsonencode({
-    signing_private_pem    = tls_private_key.auth_signing.private_key_pem
+    # PKCS#8, not the default SEC1 ("EC PRIVATE KEY") PEM: auth's jsonwebtoken/
+    # ring EC path only accepts PKCS#8 — with SEC1 the key never loads and the
+    # service fail-closes with "no signing key is currently available" (found
+    # live on the staging bring-up).
+    signing_private_pem    = tls_private_key.auth_signing.private_key_pem_pkcs8
     signing_public_pem     = tls_private_key.auth_signing.public_key_pem
     keycloak_client_secret = random_password.keycloak_client_secret.result
   })
