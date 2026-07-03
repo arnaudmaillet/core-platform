@@ -1,0 +1,37 @@
+# tools/k6/testrun-soak.yaml — run the staging fleet soak via the k6-operator.
+#
+# Applied MANUALLY (a TestRun is a one-shot execution, not GitOps-managed —
+# syncing it would re-run the soak on every ArgoCD sync):
+#
+#   kubectl create configmap k6-fleet-soak -n default --from-file=soak.js=tools/k6/soak.js
+#   kubectl apply -f tools/k6/testrun-soak.yaml
+#   kubectl logs -n default -l k6_cr=fleet-soak -f          # live results
+#
+# Cleanup (also required before re-running — TestRun names are one-shot):
+#   kubectl delete testrun fleet-soak -n default
+#   kubectl delete configmap k6-fleet-soak -n default
+#
+# The runner label app=k6-loadtest is the gate through the staging
+# `allow-loadtest-to-mesh` NetworkPolicy (post/profile/... are tightened mesh
+# callees). ~13 min total: 2m ramp → 10m soak at 10 VUs/runner → 1m down.
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: fleet-soak
+  namespace: default
+spec:
+  parallelism: 2
+  script:
+    configMap:
+      name: k6-fleet-soak
+      file: soak.js
+  runner:
+    metadata:
+      labels:
+        app: k6-loadtest
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
