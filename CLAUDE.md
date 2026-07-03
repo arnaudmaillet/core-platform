@@ -11,8 +11,12 @@ container images. Sync contracts are versioned gRPC (`*-api` crates); async
 contracts are Kafka topics governed by the `event-topology` registry. Infra is
 Terraform/Terragrunt + EKS + Karpenter + ArgoCD (GitOps via Kustomize).
 
-> There is **no separate prod cluster yet** — `staging` is the active GitOps path
-> (`k8s/overlays/staging`, synced by ArgoCD from the `develop` branch).
+> `staging` is the active GitOps path (`k8s/overlays/staging`, synced by ArgoCD
+> from `develop`). **prod is fully scaffolded but NOT applied**: `live/prod` +
+> `k8s/overlays/prod` + `bootstrap/prod` track the `main` branch (merging
+> develop → main is the prod deploy); bring-up prerequisites live in
+> `infrastructure/live/prod/env.hcl` (state bucket, EKS endpoint CIDRs,
+> image-promotion workflow).
 
 ## Repo layout
 
@@ -77,6 +81,9 @@ with `auth` — PR #522.) Each service owns an error-code namespace, e.g. `TML-`
 - **Async contracts go through the `event-topology` registry** — adding a
   producer/consumer edge means editing the registry (a contract test fails on a
   "phantom edge"); then regenerate the catalog (`tools/event-catalog/sync.sh`).
+  The registry is also what provisions the brokers: the `topic-provisioner`
+  PreSync Job creates every stream topic + `.dlq` (MSK runs with topic
+  auto-creation off) — a registry edit is the whole workflow.
 - **Service tiers** are an explicit runtime contract (pod label `tier:`): TIER-0 =
   fail-closed (`auth`, `moderation`, `audit`); TIER-1 = fail-open
   (`counter`, `media`, `search`, `realtime`). Respect the posture when adding code.

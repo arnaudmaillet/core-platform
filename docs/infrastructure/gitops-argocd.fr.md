@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./gitops-argocd.md
-  source_sha256: ca3827740be5672df6ec64d7ef392865f80b93e10d4f6300f16924cb23fa6fde
-  translated_at: 2026-07-01
+  source_sha256: f3f5a1f40b0a216d46fa92bd6198a78793c4a3bd9d568e306c6e4a1b95fb959e
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`gitops-argocd.md`](./gitops-argocd.md) fait foi.
@@ -52,10 +52,14 @@ workloads.
 - **Racine de confiance :** Terraform n'installe qu'une seule chose dans le cluster —
   `root-bootstrap`. Tout le reste est piloté depuis Git à partir de là. C'est
   pourquoi l'ordre de bootstrap (§4) place Terraform *avant* tout workload.
-- **`develop` est la révision suivie.** Chaque AppSet et Application fixe
-  `targetRevision: develop`. ArgoCD réconcilie le cluster vers `develop` avec
-  `selfHeal: true`. **`develop` est protégée — ne poussez jamais dessus directement ;
-  créez une branche, une PR, mergez, et laissez ArgoCD converger.**
+- **La révision suivie est propre à chaque environnement.** Les AppSets et
+  Applications de staging fixent `targetRevision: develop` ; **celles de prod
+  fixent `targetRevision: main`** (`bootstrap/prod`, `deployments/prod`) —
+  merger develop → main *est* le déploiement prod, la branche est donc la porte
+  de promotion. ArgoCD réconcilie chaque cluster vers sa branche avec
+  `selfHeal: true`. **Les deux branches sont protégées — ne poussez jamais
+  dessus directement ; créez une branche, une PR, mergez, et laissez ArgoCD
+  converger.**
 - **Dépôt :** `https://github.com/arnaudmaillet/core-platform` pour toutes les sources.
 
 ---

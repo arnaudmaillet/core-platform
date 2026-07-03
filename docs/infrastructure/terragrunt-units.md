@@ -24,7 +24,7 @@ infrastructure/
     ├── global/{artifacts/ecr, networking/route53}     # account-shared
     ├── dev/us-east-1/…
     ├── staging/us-east-1/…     # ◄── documented here (the live path)
-    └── prod/us-east-1/…        # STUB (eks + networking only)
+    └── prod/us-east-1/…        # full staging mirror, prod posture (not applied)
 ```
 
 - **`root.hcl`** (parent) generates the S3 remote-state backend + lockfile and the
@@ -175,9 +175,15 @@ gotchas that outlive a `destroy`, is documented in the
   ScyllaDB StatefulSet, per-service Redis, account Postgres) rather than managed
   AWS; no MSK/ElastiCache/OpenSearch/KMS/WORM units. Delivery is the legacy Helm
   catalog (`profile-service` only) plus `overlays/dev` for local iteration.
-- **`prod`** — **STUB**: only `eks` + `networking` are authored. No data plane, no
-  GitOps bootstrap yet. There is no separate prod cluster; `staging` is the active
-  path.
+- **`prod`** — a **full mirror of the staging tree** (same 13 units) with the
+  production posture flipped on: 3 AZs + NAT-per-AZ, Graviton node groups (min 3,
+  tainted `database` group), 3-broker MSK (`kafka.m5.large`, RF 3 /
+  `min.insync.replicas` 2 module defaults), 3-node zone-aware OpenSearch,
+  `COMPLIANCE`-mode audit WORM, and nothing disposable (no `force_destroy`,
+  recoverable secret windows). ArgoCD tracks **`main`** via `bootstrap/prod` +
+  `global-params-prod.json`. **Not yet applied** — bring-up prerequisites (state
+  bucket, EKS endpoint CIDRs, image-promotion workflow) are documented in
+  `live/prod/env.hcl`.
 
 ---
 
@@ -187,9 +193,9 @@ gotchas that outlive a `destroy`, is documented in the
 |---|---|
 | `networking/vpc` | `networking/vpc` |
 | `acm-cert` | `networking/acm-cert` |
-| `eks` | `eks` (staging, dev, prod-stub) |
+| `eks` | `eks` (staging, dev, prod) |
 | `msk` / `elasticache` / `opensearch` | `data/msk` · `data/elasticache` · `data/opensearch` |
-| `s3-bucket` (generic) | `data/media-bucket` (Lock off) · `data/audit-worm` (Lock COMPLIANCE) · `data/cnpg-backups` |
+| `s3-bucket` (generic) | `data/media-bucket` (Lock off) · `data/audit-worm` (Lock: GOVERNANCE staging / COMPLIANCE prod) · `data/cnpg-backups` · `data/scylla-backups` |
 | `kms-key` | `data/audit-kms` |
 | `app-secrets` | `data/app-secrets` |
 | `security/irsa-roles` | `security/irsa-roles` |

@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 63028fc90f0f0a0beb50350955d0c60ba8ecfde879facf1ef19c7323534de9b6
-  translated_at: 2026-07-01
+  source_sha256: f697ecfd8c02a6d32eb5b487c9e05315a41fca99681d32e86901105c0ed423c6
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -75,7 +75,7 @@ KEDA est un prérequis ferme (opérateur en sync-wave GitOps −10). Une extensi
 |---|---|---|---|
 | **dev** | En cluster (Redpanda, StatefulSet ScyllaDB, Redis par service, Postgres account) | Catalogue Helm ArgoCD historique (`apps/catalog`), `profile` seul actif ; Kustomize `overlays/dev` en local | Partiel |
 | **staging** | **AWS managé** (MSK, ElastiCache, OpenSearch, S3, KMS) + opérateurs en cluster (scylla-operator, CNPG) | **Application ArgoCD `staging-fleet` → `k8s/overlays/staging`** (Kustomize) | Rédigé, validé, **non appliqué** |
-| **prod** | Terragrunt `eks` + `networking` uniquement | Pas encore amorcé | Ébauche |
+| **prod** | **Miroir AWS managé de staging** avec la posture de production (3 AZ + NAT par AZ, MSK 3 brokers, WORM COMPLIANCE, rien de jetable) | **Application ArgoCD `prod-fleet` → `k8s/overlays/prod`**, qui suit **`main`** (merger develop → main est le déploiement prod) | Échafaudé, **non appliqué** (prérequis : `live/prod/env.hcl`) |
 
 Tous les environnements ciblent le compte AWS `724772065879` / `us-east-1`, partageant un unique registre ECR (un dépôt par binaire, étiqueté par environnement).
 
@@ -110,6 +110,8 @@ Extraite du registre `event-topology` (la source de vérité imposée à la comp
 - **Push temps réel :** `post.v1.events` → **`realtime`** ; `media.v1.events` auto-consommé (transformation Plan-B) ; `moderation.v1.events` → **`media`** (retrait).
 
 Le registre suit aussi formellement les consommateurs **DIFFÉRÉS** (producteurs externes/non construits : `moderation.reports/signals`, `view/impression/click.v1.events`, le décalage de nommage `social-graph.follows`) et les **PRODUCTEURS ORPHELINS** (marge intentionnelle : `post.updated` historique, `social-graph.blocked` imposé sur le chemin de lecture, les topics du plan de livraison de chat). À noter : le registre garantit le **câblage** des topics, pas la **forme** des charges utiles — un écart connu de charge utile `post → geo/notification` demeure une préoccupation distincte et suivie.
+
+Le registre est aussi la **source de provisionnement des brokers** : le binaire `topic-provisioner` (Job hook PreSync ArgoCD dans chaque overlay) crée chaque topic de flux plus son homologue `.dlq` en un seul appel admin idempotent. MSK tourne avec `auto.create.topics.enable=false` (propriété serveur explicite), donc un topic existe **parce qu'il** figure dans le registre — un nom de topic mal orthographié fait échouer la synchronisation au lieu d'engendrer un topic fantôme avec des défauts que personne n'a choisis.
 
 ### 2.5 Frontières de contrôle sécurité et conformité TIER-0
 
