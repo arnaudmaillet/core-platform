@@ -122,6 +122,12 @@ jobs:
         with:
           ref: develop
           fetch-depth: 0
+          # Push over SSH with the repo deploy key: develop's ruleset requires
+          # PRs but grants DeployKey bypass, so this job (and only a holder of
+          # this key) may land the sha-pin commit directly. The default
+          # GITHUB_TOKEN push is rejected by the ruleset — GitHub can't grant
+          # the Actions app a ruleset bypass on user-owned repos.
+          ssh-key: ${{ secrets.FLEET_PIN_DEPLOY_KEY }}
 
       - name: Pin fleet images to the built commit SHA
         env:
