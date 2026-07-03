@@ -220,3 +220,39 @@ spec:
               kubernetes.io/metadata.name: cnpg-system
       ports:
         - { protocol: TCP, port: 8000 }
+---
+# Load-test ingress (STAGING ONLY — deliberately not mirrored to prod): k6
+# runner pods (app=k6-loadtest, spawned by the k6-operator TestRun) may call
+# the tightened mesh callees on their gRPC ports. Without this, a soak can
+# only exercise the same-namespace-open services and never drives the post →
+# timeline/search/realtime fan-out. The label is the gate: nothing else
+# carries app=k6-loadtest.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-loadtest-to-mesh
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - account-server
+          - social-graph-server
+          - post-server
+          - profile-server
+          - moderation-server
+          - auth-server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: k6-loadtest
+      ports:
+        - { protocol: TCP, port: 50059 }
+        - { protocol: TCP, port: 50053 }
+        - { protocol: TCP, port: 50056 }
+        - { protocol: TCP, port: 50052 }
+        - { protocol: TCP, port: 50061 }
+        - { protocol: TCP, port: 50060 }
