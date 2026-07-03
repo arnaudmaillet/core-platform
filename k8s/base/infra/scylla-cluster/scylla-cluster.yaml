@@ -30,9 +30,11 @@ spec:
     name: datacenter1
     racks:
       - name: rack1
-        # Single-node for disposable staging: avoids needing 3 dedicated DB nodes
-        # for anti-affinity, and is sufficient to validate the fleet. (Prod: 3.)
-        members: 1
+        # 3 members, NOT 1: the per-service migrations create every keyspace at
+        # NetworkTopologyStrategy RF 3 and the services write LOCAL_QUORUM —
+        # a single member fails every fleet write (soak finding #15). Three
+        # members also make staging exercise the real quorum paths.
+        members: 3
         # Pin to the database node tier and tolerate its taint, so Scylla lands on
         # the dedicated DB nodes instead of general/spot capacity.
         placement:

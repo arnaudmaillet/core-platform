@@ -28,10 +28,15 @@ locals {
     }
     database = {
       instance_types = ["t3.large"]
-      min_size       = 2
-      max_size       = 5
-      desired_size   = 2
-      labels         = { intent = "database" }
+      # 3 nodes: one per Scylla member — the fleet's keyspaces are created at
+      # NetworkTopologyStrategy RF 3 (per-service migrations) and every write
+      # is LOCAL_QUORUM, so fewer than 2 live members fails ALL writes (found
+      # live: the first soak's 6,850 CreatePost calls all failed on a 1-node
+      # Scylla). CNPG's 12 instances also breathe easier across 3 nodes.
+      min_size     = 3
+      max_size     = 5
+      desired_size = 3
+      labels       = { intent = "database" }
       taints = [{
         key    = "dedicated"
         value  = "database"
