@@ -31,6 +31,21 @@ spec:
         app: audit-worker
         role: worker
     spec:
+      # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
+      # scheduling; the PDB is the hard guard against voluntary co-eviction).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: audit-worker
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: audit-worker
       # IRSA: same audit role as the server — ingest seals PII via the KEK and the
       # checkpoint loop anchors signed Merkle roots to the WORM bucket.
       serviceAccountName: audit-worker

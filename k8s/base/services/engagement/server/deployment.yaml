@@ -19,6 +19,21 @@ spec:
       labels:
         app: engagement-server
     spec:
+      # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
+      # scheduling; the PDB is the hard guard against voluntary co-eviction).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: engagement-server
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: engagement-server
       # Apply this service's schema migrations before the server boots. The
       # migrator is self-contained (migrations embedded) and idempotent, so it is
       # safe to run on every rollout; it exits 0 once schema is up to date.

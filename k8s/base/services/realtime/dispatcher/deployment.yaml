@@ -26,6 +26,21 @@ spec:
         app: realtime-dispatcher
         role: worker
     spec:
+      # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
+      # scheduling; the PDB is the hard guard against voluntary co-eviction).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: realtime-dispatcher
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: realtime-dispatcher
       terminationGracePeriodSeconds: 60
       containers:
         - name: dispatcher

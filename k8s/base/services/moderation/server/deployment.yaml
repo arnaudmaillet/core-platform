@@ -22,6 +22,21 @@ spec:
         app: moderation-server
         role: server
     spec:
+      # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
+      # scheduling; the PDB is the hard guard against voluntary co-eviction).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: moderation-server
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: moderation-server
       # Dual-store, like counter: Postgres decision/enforcement SoR + Scylla
       # append-only history. One idempotent migrator init container per backend
       # (the migrator reads DATABASE_URL / Scylla config from moderation-config).

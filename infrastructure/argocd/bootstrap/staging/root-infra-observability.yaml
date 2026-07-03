@@ -6,6 +6,15 @@ metadata:
   name: root-observability
   namespace: argocd
 spec:
+  # Guard against generator emptiness cascading into an uninstall: these appsets
+  # gate on global-params-staging.json (Terraform-written, absent when the env is
+  # torn down). Without this, a missing/deleted params file makes the matrix yield
+  # zero elements and the appset DELETES every generated Application — and, with
+  # automated prune, its resources (Karpenter/ESO/KEDA/CNPG/LB controller).
+  # With the guard, deleting an Application orphans (keeps) its resources; only an
+  # explicit terraform destroy tears the platform layer down.
+  syncPolicy:
+    preserveResourcesOnDeletion: true
   goTemplate: true
   generators:
     - matrix:
