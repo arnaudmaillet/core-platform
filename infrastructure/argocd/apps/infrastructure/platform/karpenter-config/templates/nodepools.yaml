@@ -14,13 +14,15 @@ spec:
         name: default
       requirements:
         # --- GESTION DE L'ARCHITECTURE ---
+        # amd64 EVERYWHERE for now: the fleet CI builds amd64-only images
+        # (x86 runners, no --platform), so an arm64 node ImagePullBackOffs any
+        # fleet pod scheduled onto it ("no match for platform in manifest" —
+        # exactly what broke the first staging bring-up: Karpenter picked
+        # cheaper Graviton for the system pool). Re-allow arm64 here ONLY
+        # after fleet-images-deploy.yml publishes multi-arch manifests.
         - key: "kubernetes.io/arch"
           operator: In
-          {{- if eq $name "database" }}
-          values: ["amd64"] # Force AMD64 pour la compatibilité PostGIS
-          {{- else }}
-          values: ["amd64", "arm64"] # Mixte pour le reste (Karpenter choisira le moins cher)
-          {{- end }}
+          values: ["amd64"]
         
         - key: "karpenter.sh/capacity-type"
           operator: In
