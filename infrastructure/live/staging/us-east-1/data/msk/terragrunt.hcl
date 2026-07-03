@@ -26,6 +26,13 @@ inputs = {
   number_of_broker_nodes = 2
   allowed_cidr_blocks    = [dependency.vpc.outputs.vpc_cidr_block]
 
+  # 2 brokers => RF is capped at 2, and min.insync must stay 1 or a single
+  # broker outage stops all producing. PROD (3 AZ / 3 brokers) => omit both
+  # (module defaults: RF 3 / min.insync 2). Keep TOPIC_REPLICATION_FACTOR on
+  # the topic-provisioner Job in lockstep with this RF.
+  default_replication_factor = 2
+  min_insync_replicas        = 1
+
   # Disposable staging: drop the secret immediately on destroy so a rebuild
   # doesn't collide with the SCRAM secret name's recovery window. PROD => omit
   # (defaults to the recoverable AWS window).

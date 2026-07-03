@@ -36,7 +36,9 @@ use crate::kafka::producer::handle::KafkaProducerHandle;
 /// Suffix appended to an origin topic to form its dead-letter topic
 /// (e.g. `post.published` → `post.published.dlq`). Per-origin-topic dead-letter
 /// topics preserve each stream's schema and make targeted replay trivial.
-const DLQ_SUFFIX: &str = ".dlq";
+/// Public so provisioning tooling (topic-provisioner) derives the exact same
+/// names the runner publishes to — brokers run with auto-creation disabled.
+pub const DLQ_SUFFIX: &str = ".dlq";
 
 /// Maximum length of the human-readable error string copied into the
 /// `x-dlq-error` header, to keep record headers bounded.

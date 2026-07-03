@@ -1,0 +1,16 @@
+[package]
+name                 = "topic-provisioner"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Creates every Kafka topic in the event-topology registry (plus the consumer runtime's .dlq counterparts) — idempotent PreSync Job so brokers never need auto-creation."
+
+[dependencies]
+event-topology = { workspace = true }
+transport      = { workspace = true }
+
+rdkafka = { workspace = true }
+tokio   = { workspace = true }
+anyhow  = { workspace = true }
