@@ -33,6 +33,17 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: default
+  # ESO's admission webhook defaults remoteRef fields (conversionStrategy /
+  # decodingStrategy / metadataPolicy) on every ExternalSecret; without ignoring
+  # them the live objects diff against Git forever, the app can never reach
+  # Synced, and selfHeal loops — found live on the staging bring-up.
+  ignoreDifferences:
+    - group: external-secrets.io
+      kind: ExternalSecret
+      jqPathExpressions:
+        - .spec.data[].remoteRef.conversionStrategy
+        - .spec.data[].remoteRef.decodingStrategy
+        - .spec.data[].remoteRef.metadataPolicy
   syncPolicy:
     automated:
       prune: true
@@ -46,6 +57,7 @@ spec:
       # bring-up this app can sync before KEDA/CNPG/ESO CRDs exist — skip the
       # dry-run for missing kinds and retry instead of hard-failing.
       - SkipDryRunOnMissingResource=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 10
       backoff:
