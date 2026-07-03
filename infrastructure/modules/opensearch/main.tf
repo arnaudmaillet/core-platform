@@ -114,3 +114,22 @@ resource "aws_opensearch_domain" "this" {
 
   tags = var.tags
 }
+
+# ── Domain access policy ───────────────────────────────────────────────────────
+# REQUIRED with fine-grained access control: without a resource policy the REST
+# layer rejects every request as "User: anonymous is not authorized" BEFORE the
+# FGAC basic-auth ever runs — found live on the staging bring-up (search's
+# health probe). The open principal is the documented FGAC pattern: the domain
+# is VPC-only and FGAC's internal user database does the real authentication.
+resource "aws_opensearch_domain_policy" "this" {
+  domain_name = aws_opensearch_domain.this.domain_name
+  access_policies = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { AWS = "*" }
+      Action    = "es:ESHttp*"
+      Resource  = "${aws_opensearch_domain.this.arn}/*"
+    }]
+  })
+}
