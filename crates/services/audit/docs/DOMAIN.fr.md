@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./DOMAIN.md
-  source_sha256: cc401a87035497686aeb395a03b0ced190a39a52cff4f979e88157065cfb6db4
-  translated_at: 2026-06-28
+  source_sha256: c416cb68d08434812d696e063bcd05e1bf48ca780386c1566b8246a286bfd6ca
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`DOMAIN.md`](./DOMAIN.md) fait foi.
@@ -195,4 +195,4 @@ par le §8 des Domain Cards de ces contextes et consolidés dans `docs/domain/EV
 - **Classification :** Supporting — investir assez pour être juridiquement blindé et infalsifiable ; ne pas sur-dimensionner au-delà du besoin réglementaire.
 - **Volatilité :** faible. Le modèle chaîne/shred/checkpoint est stable ; le changement est piloté par de nouvelles obligations *réglementaires* (nouvelle catégorie d'événement, nouvelle base licite), pas par le churn de features.
 - **Dette de modélisation connue :** le consumer crypto-shred et le balayage d'expiration de rétention existent et sont testés, mais leurs boucles worker pilotes attendent des sources d'entrée (un stream de demandes d'effacement ; des politiques de rétention résolues).
-- **Capacités différées :** authz de lecture + auto-audit des lectures via l'intercepteur d'ingress `auth-context` ; génération de rapports de transparence DSA ; réplication cross-région du registre. Le *provisionnement* KMS/témoin est un engagement IAM/org (le code est en place derrière les ports).
+- **Capacités différées :** auto-audit des lectures (chaque lecture autorisée comme événement `DATA_ACCESS` propre — l'authz de lecture elle-même est câblée via le caller gate `auth-context`, deny-all si non configurée) ; génération de rapports de transparence DSA ; réplication cross-région du registre. Le *provisionnement* KMS/témoin est un engagement IAM/org (le code est en place derrière les ports).

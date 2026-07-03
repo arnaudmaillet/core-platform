@@ -8,11 +8,13 @@
 //! `AUD-4004` so the caller denies the privileged action rather than performing it
 //! unrecorded.
 //!
-//! Authorization (need-to-know + separation of duties → `AUD-3001`/`AUD-3002`) and
-//! the recording of each read as its own `DATA_ACCESS` event are a deployment
-//! concern wired via the `auth-context` ingress interceptor (a documented
-//! requirement, like the realtime edge-token verification) — the handler is the
-//! authorized read behind that gate.
+//! Every RPC runs the [`CallerGate`] first (need-to-know + separation of duties):
+//! the caller's ES256 edge token is verified through `auth-context`, then the
+//! RPC's `audit:*` permission is required — no identity is `AUD-3004`
+//! (`UNAUTHENTICATED`), a missing permission is the RPC's own AUD-3xxx denial
+//! (`PERMISSION_DENIED`). Recording each authorized read as its own
+//! `DATA_ACCESS` event remains a documented deferral; until then the authorized
+//! principal + RPC name are traced as the interim access trail.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,15 +28,18 @@ use crate::application::{ExportHandler, QueryHandler, RecordPrivilegedHandler, V
 use crate::domain::PartitionKey;
 use crate::error::AuditError;
 use crate::infrastructure::codec;
+use crate::infrastructure::grpc::access::{authorize, perm, CallerGate};
 
 pub use audit_api as proto;
 
 /// Hard cap on records returned by a single query/export page.
 const MAX_PAGE: usize = 500;
 
-/// gRPC handler for `audit.v1.AuditService`. Holds the four use-case handlers.
+/// gRPC handler for `audit.v1.AuditService`. Holds the four use-case handlers
+/// behind the caller gate.
 #[derive(Clone)]
 pub struct AuditServiceHandler {
+    gate: Arc<dyn CallerGate>,
     record: Arc<RecordPrivilegedHandler>,
     query: Arc<QueryHandler>,
     export: Arc<ExportHandler>,
@@ -44,6 +49,7 @@ pub struct AuditServiceHandler {
 
 impl AuditServiceHandler {
     pub fn new(
+        gate: Arc<dyn CallerGate>,
         record: Arc<RecordPrivilegedHandler>,
         query: Arc<QueryHandler>,
         export: Arc<ExportHandler>,
@@ -51,6 +57,7 @@ impl AuditServiceHandler {
         record_timeout: Duration,
     ) -> Self {
         Self {
+            gate,
             record,
             query,
             export,
@@ -59,10 +66,29 @@ impl AuditServiceHandler {
         }
     }
 
+    /// Run the gate for one RPC: verify the Bearer token, require `permission`
+    /// (mapping a miss onto `denial`), and trace the authorized principal —
+    /// the interim access trail until reads are recorded as `DATA_ACCESS`.
+    async fn gated<T>(
+        &self,
+        request: &Request<T>,
+        rpc: &'static str,
+        permission: &str,
+        denial: AuditError,
+    ) -> Result<(), Status> {
+        let caller = authorize(self.gate.as_ref(), request.metadata(), permission, denial)
+            .await
+            .map_err(to_status)?;
+        tracing::info!(principal = %caller.principal, rpc, "audit privileged call authorized");
+        Ok(())
+    }
+
     pub async fn record_privileged(
         &self,
         request: Request<proto::RecordPrivilegedRequest>,
     ) -> Result<Response<proto::RecordPrivilegedResponse>, Status> {
+        self.gated(&request, "RecordPrivileged", perm::RECORD, AuditError::RecordForbidden)
+            .await?;
         let req = request.into_inner();
         let event = codec::event_from_pb(req.event.ok_or_else(|| {
             Status::invalid_argument("record_privileged requires an event")
@@ -86,6 +112,8 @@ impl AuditServiceHandler {
         &self,
         request: Request<proto::QueryRequest>,
     ) -> Result<Response<proto::QueryResponse>, Status> {
+        self.gated(&request, "Query", perm::READ, AuditError::QueryForbidden)
+            .await?;
         let spec = codec::query_from_pb(request.into_inner()).map_err(to_status)?;
         let records = self.query.query(&spec).await.map_err(to_status)?;
         Ok(Response::new(proto::QueryResponse {
@@ -99,6 +127,8 @@ impl AuditServiceHandler {
         &self,
         request: Request<proto::ExportRequest>,
     ) -> Result<Response<proto::ExportManifest>, Status> {
+        self.gated(&request, "Export", perm::EXPORT, AuditError::ExportForbidden)
+            .await?;
         let req = request.into_inner();
         let spec = LedgerQuery {
             subject: opt(req.subject_pseudonym)
@@ -123,6 +153,8 @@ impl AuditServiceHandler {
         &self,
         request: Request<proto::VerifyIntegrityRequest>,
     ) -> Result<Response<proto::VerifyIntegrityResponse>, Status> {
+        self.gated(&request, "VerifyIntegrity", perm::VERIFY, AuditError::QueryForbidden)
+            .await?;
         let req = request.into_inner();
         let report = if req.partition_key.trim().is_empty() {
             // Empty partition → the global head-vs-anchor check.
@@ -155,6 +187,7 @@ fn to_status(err: AuditError) -> Status {
     let message = err.to_string();
     match err.http_status().as_u16() {
         400 | 422 => Status::invalid_argument(message),
+        401 => Status::unauthenticated(message),
         403 => Status::permission_denied(message),
         404 | 410 => Status::not_found(message),
         409 => Status::aborted(message),

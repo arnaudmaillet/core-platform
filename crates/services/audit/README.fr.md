@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 405131cc02e8c8945d3a75156955b848181a706719c0a1017c827f9ca255d4a0
-  translated_at: 2026-06-27
+  source_sha256: eaaca7e0202e9ab13d58bb6e130d43fc5cdfd22ea2f63a5ea5d97ba76e72c9ec
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -176,7 +176,7 @@ Bibliothèque uniquement. Implémente [`service_runtime::Service`](../../platfor
 > - **Le *provisionnement* KMS/témoin** reste un engagement IAM / structure organisationnelle — le code est en place derrière les ports, mais l'intégrité ne vaut que par la séparation entre le principal du registre, le principal KMS de signature/chiffrement et le témoin WORM compte-séparé. Le choix d'un horodateur RFC 3161 vs un bucket Object-Lock sur un second compte, et la politique de rotation des clés, sont des décisions ops ; local/dev + CI tournent sur les replis KEK-d'environnement + HMAC (ou LocalStack KMS).
 > - **L'adoption par les producteurs** — **`moderation`, `auth` et `account` sont tous câblés.** les `decision_recorded` + `enforcement_applied` de moderation (motif scellé), les `session_issued` + `session_revoked` de auth (sans PII), et les `account_created` / `email_changed` de account (PII scellée) + les deux événements GDPR sont consommés et chaînés. Un `gdpr_deletion_requested` de account **crypto-efface le sujet**, donc toute sa PII scellée à travers les flux devient illisible tandis que la chaîne vérifie toujours — la boucle d'effacement Art. 17, bouclée de bout en bout.
 > - **Le consommateur de crypto-effacement** (nécessite une source de demandes d'effacement) et **le balayage d'expiration-rétention** (nécessite des politiques de rétention résolues) — les handlers existent et sont testés ; seules les boucles worker qui les pilotent attendent leurs sources.
-> - **L'autorisation des lectures + l'auto-audit des lectures** (`AUD-3001`/`AUD-3002` + l'enregistrement de chaque requête comme événement `DATA_ACCESS`) se câblent via l'intercepteur d'ingress `auth-context` au déploiement.
+> - **L'auto-audit des lectures** — enregistrer chaque requête/export autorisé comme événement `DATA_ACCESS` propre. L'authentification de l'appelant + l'autorisation par RPC (`AUD-3001`/`AUD-3002`/`AUD-3004`/`AUD-3005`) sont **câblées** : chaque RPC vérifie le token edge ES256 via `auth-context` et exige sa permission `audit:*`, deny-all si non configuré (`AUDIT_JWKS_URL` ci-dessous). En attendant les événements `DATA_ACCESS`, le principal autorisé + le RPC sont tracés comme piste d'accès intérimaire.
 > - **La pagination** au-delà d'une page bornée ; **l'ancrage blockchain** (excessif — RFC 3161 + WORM compte-séparé suffit) ; **le streaming SIEM temps réel** ; **la génération automatisée de rapports de transparence DSA** ; **la réplication inter-région du registre**.
 
 ---
@@ -196,6 +196,9 @@ Bibliothèque uniquement. Implémente [`service_runtime::Service`](../../platfor
 | `AUDIT_KMS_SIGNING_ALGORITHM` | Non | `ECDSA_SHA_256` | `SigningAlgorithm` KMS pour la signature du checkpoint |
 | `AUDIT_WITNESS_ENDPOINT` | **Oui (prod)** | — | endpoint du bucket WORM compte-séparé (S3 Object Lock). **Sa présence active** l'ancrage au témoin externe (#483) ; absent ⇒ `PgCheckpointAnchor` Postgres-seul (dev). `AUDIT_WITNESS_{REGION,BUCKET,ACCESS_KEY,SECRET_KEY}` le configurent |
 | `AUDIT_CHECKPOINT_SIGNING_KEY_BASE64` | Non (dev) | clé dev | base64 de la clé HMAC de signature des checkpoints utilisée **uniquement** quand KMS est absent (voie checkpoint-signé dev/CI) |
+| `AUDIT_JWKS_URL` | **Oui (prod)** | — | endpoint JWKS vérifiant les tokens edge ES256 sur la surface privilégiée. **Sa présence active** le caller gate `auth-context` ; absent ⇒ **deny-all** (`AUD-3004`) — la surface ne s'ouvre jamais par omission. Chaque RPC exige sa permission `audit:*` : `audit:record` / `audit:read` / `audit:export` / `audit:verify` |
+| `AUDIT_TOKEN_ISSUER` / `AUDIT_TOKEN_AUDIENCE` | Non (recommandé) | — | claims `iss` / `aud` attendus du token edge (les valeurs que `auth` frappe) |
+| `AUDIT_JWKS_TIMEOUT_MS` | Non | `10000` | timeout par requête du fetch JWKS |
 | `<config registre / archive>` | **Oui** | — | registre Postgres append-only + archive WORM Object-Lock |
 | `<KAFKA_BROKERS>` | **Oui** *(worker)* | — | ingestion amont de conformité + décisions |
 

@@ -22,7 +22,7 @@ use crate::application::{
     RecordPrivilegedHandler, VerifyHandler,
 };
 use crate::config::AuditConfig;
-use crate::infrastructure::grpc::AuditServiceHandler;
+use crate::infrastructure::grpc::{AuditServiceHandler, CallerGate};
 use crate::infrastructure::{
     AesGcmSubjectCipher, AwsKms, KmsSigner, KmsSubjectCipher, LocalCheckpointSigner,
     ObjectLockArchive, ObjectLockWitness, PgCheckpointAnchor, PgKeyVault, PgLedger, SystemClock,
@@ -155,9 +155,11 @@ impl Adapters {
 }
 
 /// Pure read/record composition: the four use-case handlers wrapped in the gRPC
-/// handler. The `key_vault` is retained for the crypto-shred path (wired when an
-/// erasure-request source lands — see the README deferral).
+/// handler, behind the caller `gate`. The `key_vault` is retained for the
+/// crypto-shred path (wired when an erasure-request source lands — see the
+/// README deferral).
 pub fn compose_server(
+    gate: Arc<dyn CallerGate>,
     ledger: Arc<dyn LedgerStore>,
     archive: Arc<dyn WormArchive>,
     anchor: Arc<dyn CheckpointAnchor>,
@@ -176,7 +178,7 @@ pub fn compose_server(
         Arc::clone(&clock),
     ));
     let verify = Arc::new(VerifyHandler::new(Arc::clone(&ledger), Arc::clone(&anchor)));
-    AuditServiceHandler::new(record, query, export, verify, record_timeout)
+    AuditServiceHandler::new(gate, record, query, export, verify, record_timeout)
 }
 
 async fn build_pool(postgres: PostgresConfig) -> anyhow::Result<PgPool> {
@@ -196,10 +198,25 @@ mod tests {
     use crate::infrastructure::codec;
     use crate::infrastructure::grpc::proto;
 
+    use crate::infrastructure::grpc::access::{perm, StaticCallerGate};
+
     /// Compose the gRPC handler over the in-memory fakes — the same wiring the
     /// binary builds over the live adapters, exercised end-to-end through proto.
+    /// The gate authenticates a fully-permissioned operator; the denial paths
+    /// have their own tests below.
     fn handler(fx: &Fixture) -> AuditServiceHandler {
+        handler_with_gate(
+            fx,
+            StaticCallerGate::allowing(
+                "ops-test",
+                &[perm::RECORD, perm::READ, perm::EXPORT, perm::VERIFY],
+            ),
+        )
+    }
+
+    fn handler_with_gate(fx: &Fixture, gate: Arc<StaticCallerGate>) -> AuditServiceHandler {
         compose_server(
+            gate,
             fx.ledger.clone(),
             fx.archive.clone(),
             fx.anchor.clone(),
@@ -282,6 +299,7 @@ mod tests {
         fx.ledger.set_hang(true); // the ledger is wedged
 
         let svc = compose_server(
+            StaticCallerGate::allowing("ops-test", &[perm::RECORD]),
             fx.ledger.clone(),
             fx.archive.clone(),
             fx.anchor.clone(),
@@ -299,5 +317,76 @@ mod tests {
 
         assert_eq!(status.code(), Code::DeadlineExceeded);
         assert_eq!(fx.ledger.record_count(), 0, "nothing may be recorded on a denied break-glass");
+    }
+
+    // ── The caller gate (finding 4): the privileged surface fails CLOSED ──────
+
+    /// An unauthenticated caller is rejected on every RPC with UNAUTHENTICATED
+    /// (AUD-3004) — including the deny-all posture when no verifier is configured.
+    #[tokio::test]
+    async fn an_unauthenticated_caller_is_rejected_on_every_rpc() {
+        let fx = Fixture::new();
+        let svc = handler_with_gate(&fx, StaticCallerGate::denying());
+
+        let record = svc
+            .record_privileged(Request::new(proto::RecordPrivilegedRequest {
+                event: Some(pb_event("bg-1", EventCategory::PrivilegedAction)),
+                privileged_action: proto::PrivilegedActionType::BreakGlassAccess as i32,
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(record.code(), Code::Unauthenticated);
+        assert_eq!(fx.ledger.record_count(), 0, "a denied record must not reach the ledger");
+
+        let query = svc
+            .query(Request::new(proto::QueryRequest::default()))
+            .await
+            .unwrap_err();
+        assert_eq!(query.code(), Code::Unauthenticated);
+
+        let export = svc
+            .export(Request::new(proto::ExportRequest::default()))
+            .await
+            .unwrap_err();
+        assert_eq!(export.code(), Code::Unauthenticated);
+
+        let verify = svc
+            .verify_integrity(Request::new(proto::VerifyIntegrityRequest::default()))
+            .await
+            .unwrap_err();
+        assert_eq!(verify.code(), Code::Unauthenticated);
+    }
+
+    /// An authenticated caller without the RPC's `audit:*` permission gets
+    /// PERMISSION_DENIED — a read grant does not confer export or record.
+    #[tokio::test]
+    async fn a_read_only_caller_cannot_export_or_record() {
+        let fx = Fixture::new();
+        let svc = handler_with_gate(&fx, StaticCallerGate::allowing("ops-read", &[perm::READ]));
+
+        // Read is allowed…
+        let query = svc.query(Request::new(proto::QueryRequest {
+            subject_pseudonym: "7f3a".to_owned(),
+            page_size: 10,
+            ..Default::default()
+        }));
+        assert!(query.await.is_ok());
+
+        // …but export and the privileged record lane are not.
+        let export = svc
+            .export(Request::new(proto::ExportRequest::default()))
+            .await
+            .unwrap_err();
+        assert_eq!(export.code(), Code::PermissionDenied);
+
+        let record = svc
+            .record_privileged(Request::new(proto::RecordPrivilegedRequest {
+                event: Some(pb_event("bg-2", EventCategory::PrivilegedAction)),
+                privileged_action: proto::PrivilegedActionType::BreakGlassAccess as i32,
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(record.code(), Code::PermissionDenied);
+        assert_eq!(fx.ledger.record_count(), 0);
     }
 }

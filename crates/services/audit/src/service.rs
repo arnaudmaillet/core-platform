@@ -31,7 +31,9 @@ use crate::app::{Adapters, compose_server};
 use crate::application::IngestHandler;
 use crate::application::port::SubjectCipher;
 use crate::config::AuditConfig;
-use crate::infrastructure::grpc::{AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET};
+use crate::infrastructure::grpc::{
+    build_gate, AuditServiceHandler, AuditServiceServer, FILE_DESCRIPTOR_SET,
+};
 use crate::application::CryptoShredHandler;
 use crate::infrastructure::account_decode::TOPIC_ACCOUNT_EVENTS;
 use crate::infrastructure::auth_decode::TOPIC_AUTH_EVENTS;
@@ -69,7 +71,11 @@ impl Service for AuditServerService {
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let config = AuditConfig::from_env();
         let adapters = Adapters::build(&config).await.context("build audit adapters")?;
+        // The caller gate for the privileged surface (finding 4): JWKS-verified
+        // ES256 edge tokens when configured, deny-all otherwise — never open.
+        let gate = build_gate(&config.authz);
         let handler = compose_server(
+            gate,
             Arc::clone(&adapters.ledger),
             Arc::clone(&adapters.archive),
             Arc::clone(&adapters.anchor),

@@ -31,6 +31,8 @@ use thiserror::Error;
 /// | AUD-3001 | QueryForbidden                | 403  | **High** | No        |
 /// | AUD-3002 | ExportForbidden               | 403  | **High** | No        |
 /// | AUD-3003 | SubjectScopeViolation         | 403  | **High** | No        |
+/// | AUD-3004 | CallerUnauthenticated         | 401  | **High** | No        |
+/// | AUD-3005 | RecordForbidden               | 403  | **High** | No        |
 /// | AUD-4001 | LedgerStoreUnavailable        | 503  | **High** | **Yes**   |
 /// | AUD-4002 | ArchiveUnavailable            | 503  | **High** | **Yes**   |
 /// | AUD-4003 | KeyVaultUnavailable           | 503  | **High** | **Yes**   |
@@ -130,6 +132,17 @@ pub enum AuditError {
     #[error("audit access crosses a subject/tenant scope it is not authorized for")]
     SubjectScopeViolation,
 
+    /// The caller presented no verifiable identity (missing, malformed, expired,
+    /// or unverifiable Bearer token). The privileged surface fails CLOSED —
+    /// including when the verification backend (JWKS) is not yet configured.
+    #[error("audit caller is not authenticated")]
+    CallerUnauthenticated,
+
+    /// The caller is authenticated but lacks the authority to record on the
+    /// synchronous privileged lane.
+    #[error("recording on the privileged audit lane is forbidden for this caller")]
+    RecordForbidden,
+
     // ── Storage-plane availability · the durability core (AUD-4xxx) ───────────
     /// The append-only ledger store (Postgres, UPDATE/DELETE revoked) is
     /// unreachable — the record cannot be durably committed.
@@ -223,6 +236,8 @@ impl AppError for AuditError {
             AuditError::QueryForbidden => "AUD-3001",
             AuditError::ExportForbidden => "AUD-3002",
             AuditError::SubjectScopeViolation => "AUD-3003",
+            AuditError::CallerUnauthenticated => "AUD-3004",
+            AuditError::RecordForbidden => "AUD-3005",
 
             AuditError::LedgerStoreUnavailable => "AUD-4001",
             AuditError::ArchiveUnavailable => "AUD-4002",
@@ -255,7 +270,10 @@ impl AppError for AuditError {
 
             AuditError::QueryForbidden
             | AuditError::ExportForbidden
-            | AuditError::SubjectScopeViolation => StatusCode::FORBIDDEN,
+            | AuditError::SubjectScopeViolation
+            | AuditError::RecordForbidden => StatusCode::FORBIDDEN,
+
+            AuditError::CallerUnauthenticated => StatusCode::UNAUTHORIZED,
 
             AuditError::DuplicateEvent { .. }
             | AuditError::ChainHeadConflict { .. }
@@ -295,6 +313,8 @@ impl AppError for AuditError {
             | AuditError::QueryForbidden
             | AuditError::ExportForbidden
             | AuditError::SubjectScopeViolation
+            | AuditError::CallerUnauthenticated
+            | AuditError::RecordForbidden
             | AuditError::LedgerStoreUnavailable
             | AuditError::ArchiveUnavailable
             | AuditError::KeyVaultUnavailable
@@ -348,7 +368,9 @@ impl AppError for AuditError {
 
             AuditError::QueryForbidden
             | AuditError::ExportForbidden
-            | AuditError::SubjectScopeViolation => {
+            | AuditError::SubjectScopeViolation
+            | AuditError::CallerUnauthenticated
+            | AuditError::RecordForbidden => {
                 "You are not authorized to access audit records."
             }
 
@@ -415,6 +437,21 @@ mod tests {
         assert_eq!(forbidden.http_status(), StatusCode::FORBIDDEN);
         assert_eq!(forbidden.severity(), Severity::High);
         assert!(!forbidden.is_retryable());
+
+        // No verifiable caller identity → 401, fail-closed, never retried by the
+        // transport (the caller must obtain a token, not hammer the gate).
+        let unauthenticated = AuditError::CallerUnauthenticated;
+        assert_eq!(unauthenticated.error_code(), "AUD-3004");
+        assert_eq!(unauthenticated.http_status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(unauthenticated.severity(), Severity::High);
+        assert!(!unauthenticated.is_retryable());
+
+        // Authenticated but not authorized to record on the privileged lane.
+        let record_denied = AuditError::RecordForbidden;
+        assert_eq!(record_denied.error_code(), "AUD-3005");
+        assert_eq!(record_denied.http_status(), StatusCode::FORBIDDEN);
+        assert_eq!(record_denied.severity(), Severity::High);
+        assert!(!record_denied.is_retryable());
 
         // GDPR erasure vs audit: lawful retention (Art. 17(3)) overrides erasure.
         let held = AuditError::ShredBlockedByLegalHold {
