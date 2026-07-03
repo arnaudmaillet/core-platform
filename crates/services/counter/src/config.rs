@@ -40,6 +40,11 @@ pub struct CounterConfig {
     /// gRPC endpoint of `social-graph` — the authoritative source for
     /// follower/following counts the reconciliation loop queries.
     pub social_graph_endpoint: String,
+    /// Per-request deadline on `social-graph` RPCs — a hung call would stall
+    /// the reconciliation loop forever (tonic has no default timeout).
+    pub social_graph_rpc_timeout: Duration,
+    /// Connect deadline when dialing the `social-graph` channel.
+    pub social_graph_connect_timeout: Duration,
 }
 
 impl CounterConfig {
@@ -76,6 +81,14 @@ impl CounterConfig {
                 .unwrap_or(DEFAULT_DRIFT_TOLERANCE),
             social_graph_endpoint: std::env::var("COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT")
                 .unwrap_or_else(|_| "http://localhost:50053".to_owned()),
+            social_graph_rpc_timeout: Duration::from_millis(env_u64(
+                "COUNTER_SOCIAL_GRAPH_RPC_TIMEOUT_MS",
+                5_000,
+            )),
+            social_graph_connect_timeout: Duration::from_millis(env_u64(
+                "COUNTER_SOCIAL_GRAPH_CONNECT_TIMEOUT_MS",
+                2_000,
+            )),
         }
     }
 }

@@ -147,7 +147,7 @@ service's readiness.
 (**immutable after first deploy** — changing it remaps every key) and `PG_SHARD_<N>_URL` for each `N`
 in `[0, PG_SHARD_COUNT)`.
 
-No cargo features.
+One cargo feature: `integration-postgres` gates the live test suites (see Testing below).
 
 ---
 
@@ -164,10 +164,13 @@ Suggested alerts: `DB-3001` rate > 0 for 30s ⇒ page; `DB-2001` > 5/min ⇒ war
 ## 🧪 Testing
 
 ```bash
-cargo test   -p postgres --lib            # routing/hashing/error-mapping/ShardKey — no DB
+cargo test   -p postgres                  # routing/hashing/error-mapping/ShardKey — no DB
 cargo clippy -p postgres --all-targets
+# Live suites (constraint violations, transaction rollback) are opt-in via the
+# fleet's `integration-<crate>` convention and need a real Postgres:
 docker compose up -d postgres
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test -p postgres
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  cargo test -p postgres --features integration-postgres
 ```
 
 ---

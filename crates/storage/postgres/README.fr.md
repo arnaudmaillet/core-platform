@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 1400e3bb1129f8d2e49c4eb74e176696bcca557fff116b98dc7b783fb9dab25b
-  translated_at: 2026-06-25
+  source_sha256: 0ab508f6a80e04f06d07ea930c952cdf9dfc615aae83628c1b108617d2b92b94
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -160,7 +160,7 @@ readiness du service.
 (**immuable après le premier déploiement** — le changer remappe chaque clé) et `PG_SHARD_<N>_URL` pour
 chaque `N` dans `[0, PG_SHARD_COUNT)`.
 
-Aucune feature cargo.
+Une feature cargo : `integration-postgres` gate les suites de tests live (voir Tests ci-dessous).
 
 ---
 
@@ -177,10 +177,13 @@ page (misconfig) ; p99 latence requête > seuil lent ⇒ warn.
 ## 🧪 Tests
 
 ```bash
-cargo test   -p postgres --lib            # routing/hashing/error-mapping/ShardKey — no DB
+cargo test   -p postgres                  # routing/hashing/error-mapping/ShardKey — no DB
 cargo clippy -p postgres --all-targets
+# Les suites live (violations de contraintes, rollback transactionnel) sont opt-in
+# via la convention `integration-<crate>` de la flotte et exigent un vrai Postgres :
 docker compose up -d postgres
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test -p postgres
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  cargo test -p postgres --features integration-postgres
 ```
 
 ---

@@ -127,11 +127,23 @@ impl App {
         };
 
         // Lazy connect: the channel dials `account` on first use, so a cold start
-        // does not require the dependency to be up at boot.
-        let channel = Channel::from_shared(config.account_endpoint)?.connect_lazy();
+        // does not require the dependency to be up at boot. Both deadlines are
+        // mandatory — tonic has no default request timeout, and this channel sits
+        // on the login hot path.
+        let channel = Channel::from_shared(config.account_endpoint)?
+            .timeout(config.account_rpc_timeout)
+            .connect_timeout(config.account_connect_timeout)
+            .connect_lazy();
+
+        // reqwest's default client has no request timeout; the token exchange
+        // must fail fast when the IdP hangs.
+        let idp_client = reqwest::Client::builder()
+            .timeout(config.idp_http_timeout)
+            .connect_timeout(config.idp_connect_timeout)
+            .build()?;
 
         let deps = AppDeps {
-            idp: Arc::new(KeycloakIdentityProvider::new(reqwest::Client::new(), config.keycloak)),
+            idp: Arc::new(KeycloakIdentityProvider::new(idp_client, config.keycloak)),
             directory: Arc::new(GrpcAccountDirectory::new(channel)),
             links: Arc::new(PgSubjectLinkRepository::new(tx.clone())),
             sessions: Arc::new(PgSessionRepository::new(tx.clone())),

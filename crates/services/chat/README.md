@@ -280,7 +280,7 @@ async fn main() -> anyhow::Result<()> {
         .parse()?;
 
     // Owns telemetry, infrastructure.toml load + hot-reload, the inbound-trace and traffic
-    // layers, dynamic gRPC health, and SIGINT-drained shutdown — then builds `ChatService`
+    // layers, dynamic gRPC health, and SIGTERM/SIGINT-drained shutdown — then builds `ChatService`
     // and serves until shutdown.
     service_runtime::serve::<ChatService>(addr).await
 }

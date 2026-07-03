@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./DOMAIN.md
-  source_sha256: 01aab4383d39a7a33a052b5a2fe577957a3e3ce9a69a5416e158964d079fd8c9
-  translated_at: 2026-06-28
+  source_sha256: 5c6d5f7be7149912a8b7c5f5d683dddf9d074a85fecc96ef4ce0449fd0c84e14
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`DOMAIN.md`](./DOMAIN.md) fait foi.
@@ -120,7 +120,7 @@ parce qu'il a besoin à la fois de `infra-config` et `telemetry`, qui ne doivent
    présent) ; ajouter le service de santé + `S::register(routes)`. *(boot)*
 7. `spawn_readiness` (probes → santé gRPC, écritures uniquement sur transition) + `spawn_traffic_prune` (borne la
    mémoire du limiteur). *(fond)*
-8. `serve_with_shutdown` — servir jusqu'au SIGINT, puis drain les requêtes en vol. *(durée de vie → shutdown)*
+8. `serve_with_shutdown` — servir jusqu’au SIGTERM/SIGINT, puis drain les requêtes en vol. *(durée de vie → shutdown)*
 
 ---
 
@@ -147,7 +147,7 @@ parce qu'il a besoin à la fois de `infra-config` et `telemetry`, qui ne doivent
 | `gRPC health status changed` | `tracing` INFO | une transition de readiness | les readiness probes K8s |
 | `traffic registry pruned` | `tracing` DEBUG | chaque tick de prune | monitoring mémoire du limiteur |
 
-Effets de bord : bind le socket d'écoute, spawn les tâches watcher/readiness/prune, installe le handler SIGINT.
+Effets de bord : bind le socket d'écoute, spawn les tâches watcher/readiness/prune, installe les handlers SIGTERM + SIGINT.
 
 ---
 
@@ -169,5 +169,5 @@ Effets de bord : bind le socket d'écoute, spawn les tâches watcher/readiness/p
 - **Stabilité :** contrat stable — le trait `Service` est stabilisé à travers 17 services.
 - **Volatilité :** faible — les nouvelles préoccupations process (une nouvelle boucle de fond, une nouvelle
   couche) sont ajoutées ici une fois.
-- **Capacités différées :** câblage SIGTERM→drain au-delà de SIGINT ; des hooks de drain/health plus riches pour
-  les services edge avec état (notés dans le travail realtime).
+- **Capacités différées :** des hooks de drain/health plus riches pour les services edge avec état (notés
+  dans le travail realtime) ; SIGTERM est désormais géré aux côtés de SIGINT.

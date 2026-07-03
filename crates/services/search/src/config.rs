@@ -12,6 +12,11 @@ pub struct SearchConfig {
     pub post_endpoint: String,
     /// gRPC endpoint of the `profile` service — same role for `profile.v1.events`.
     pub profile_endpoint: String,
+    /// Per-request deadline on hydration RPCs. Hydration runs inside a Kafka
+    /// consumer, so an unbounded call would stall the partition indefinitely.
+    pub hydrate_rpc_timeout: std::time::Duration,
+    /// Connect deadline when dialing the `post` / `profile` channels.
+    pub hydrate_connect_timeout: std::time::Duration,
 }
 
 impl SearchConfig {
@@ -35,10 +40,18 @@ impl SearchConfig {
             opensearch,
             post_endpoint: env_or("SEARCH_POST_GRPC_ENDPOINT", "http://localhost:50056"),
             profile_endpoint: env_or("SEARCH_PROFILE_GRPC_ENDPOINT", "http://localhost:50052"),
+            hydrate_rpc_timeout: env_ms("SEARCH_HYDRATE_RPC_TIMEOUT_MS", 5_000),
+            hydrate_connect_timeout: env_ms("SEARCH_HYDRATE_CONNECT_TIMEOUT_MS", 2_000),
         }
     }
 }
 
 fn env_or(key: &str, default: impl Into<String>) -> String {
     std::env::var(key).unwrap_or_else(|_| default.into())
+}
+
+fn env_ms(key: &str, default: u64) -> std::time::Duration {
+    std::time::Duration::from_millis(
+        std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default),
+    )
 }

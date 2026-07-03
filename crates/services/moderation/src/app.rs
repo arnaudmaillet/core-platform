@@ -163,8 +163,12 @@ impl App {
             Arc::new(FanoutEventPublisher::new(primary, vec![history]));
 
         // Lazy connect: dials `account` on first use, so a cold start does not
-        // require the dependency to be up at boot.
-        let channel = Channel::from_shared(config.account_endpoint)?.connect_lazy();
+        // require the dependency to be up at boot. Both deadlines are mandatory —
+        // tonic has no default request timeout.
+        let channel = Channel::from_shared(config.account_endpoint)?
+            .timeout(config.account_rpc_timeout)
+            .connect_timeout(config.account_connect_timeout)
+            .connect_lazy();
 
         let deps = AppDeps {
             cases: Arc::new(PgCaseRepository::new(tx.clone())),

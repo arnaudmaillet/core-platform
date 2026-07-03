@@ -140,6 +140,8 @@ impl Service for CounterWorkerService {
             reconcile_interval,
             drift_tolerance,
             social_graph_endpoint,
+            social_graph_rpc_timeout,
+            social_graph_connect_timeout,
             ..
         } = CounterConfig::from_env();
 
@@ -196,8 +198,12 @@ impl Service for CounterWorkerService {
 
         // The reconciliation sweep: heal exact-counter drift against social-graph.
         // Lazy connect — a cold start does not require the dependency to be up.
+        // Both deadlines are mandatory: tonic has no default request timeout, and
+        // a hung call would stall the reconcile loop forever.
         let social_graph = Channel::from_shared(social_graph_endpoint)
             .context("invalid social-graph endpoint")?
+            .timeout(social_graph_rpc_timeout)
+            .connect_timeout(social_graph_connect_timeout)
             .connect_lazy();
         let source: Arc<dyn ReconciliationSource> =
             Arc::new(GrpcReconciliationSource::new(social_graph));

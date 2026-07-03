@@ -19,6 +19,15 @@ pub struct AuthConfig {
     pub keycloak: KeycloakConfig,
     /// gRPC endpoint of the `account` service, e.g. `http://account:50059`.
     pub account_endpoint: String,
+    /// Per-request deadline on `account` RPCs. This sits on the login hot path,
+    /// so a hung dependency must fail fast rather than pile up requests.
+    pub account_rpc_timeout: std::time::Duration,
+    /// Connect deadline when dialing the `account` channel.
+    pub account_connect_timeout: std::time::Duration,
+    /// Total request deadline for Keycloak HTTP calls (token exchange).
+    pub idp_http_timeout: std::time::Duration,
+    /// Connect deadline for Keycloak HTTP calls.
+    pub idp_connect_timeout: std::time::Duration,
 }
 
 impl AuthConfig {
@@ -66,6 +75,10 @@ impl AuthConfig {
             retiring_keys,
             keycloak,
             account_endpoint: env_or("AUTH_ACCOUNT_GRPC_ENDPOINT", "http://localhost:50059"),
+            account_rpc_timeout: env_ms("AUTH_ACCOUNT_RPC_TIMEOUT_MS", 2_000),
+            account_connect_timeout: env_ms("AUTH_ACCOUNT_CONNECT_TIMEOUT_MS", 2_000),
+            idp_http_timeout: env_ms("AUTH_IDP_HTTP_TIMEOUT_MS", 5_000),
+            idp_connect_timeout: env_ms("AUTH_IDP_CONNECT_TIMEOUT_MS", 2_000),
         })
     }
 }
@@ -76,6 +89,12 @@ fn env_or(key: &str, default: impl Into<String>) -> String {
 
 fn env_secs(key: &str, default: i64) -> i64 {
     std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
+fn env_ms(key: &str, default: u64) -> std::time::Duration {
+    std::time::Duration::from_millis(
+        std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default),
+    )
 }
 
 fn env_required(key: &str) -> anyhow::Result<String> {

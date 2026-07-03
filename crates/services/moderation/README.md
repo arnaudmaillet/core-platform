@@ -229,6 +229,8 @@ async fn main() -> anyhow::Result<()> {
 |---|---|---|---|
 | `MODERATION_GRPC_ADDR` | No | `0.0.0.0:50061` | gRPC bind address |
 | `MODERATION_ACCOUNT_GRPC_ENDPOINT` | No | `http://localhost:50059` | `account` service endpoint (suspension execution) |
+| `MODERATION_ACCOUNT_RPC_TIMEOUT_MS` | No | `2000` | per-request deadline on `account` RPCs (tonic has no default timeout) |
+| `MODERATION_ACCOUNT_CONNECT_TIMEOUT_MS` | No | `2000` | connect deadline when dialing the `account` channel |
 | `MODERATION_SCREEN_TIMEOUT_MS` | No | `200` | hard timeout for the Plane C gate; on elapse the gate returns `MOD-7002` and the caller fails closed for catastrophic categories |
 
 ### Inherited infrastructure variables

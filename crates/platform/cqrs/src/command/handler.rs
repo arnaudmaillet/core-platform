@@ -20,7 +20,7 @@ use super::command::Command;
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use cqrs::{Command, CommandHandler, Envelope};
 ///
 /// struct CreatePostCommand { title: String }

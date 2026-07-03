@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: f88ba161dbeb9f4f620cb17197ee8933b5375043d899629788f8fb6be2f70dc6
-  translated_at: 2026-06-26
+  source_sha256: 8f9e694a9be1216e452d712b98f1bc8d9f7cb07095ef591b54b5fe9afbbd6806
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -228,6 +228,8 @@ async fn main() -> anyhow::Result<()> {
 | `COUNTER_RECONCILE_INTERVAL_S` | Non | `3600` | cadence du balayage de réconciliation (correction de dérive follower/following) |
 | `COUNTER_DRIFT_TOLERANCE` | Non | `5` | dérive absolue tolérée avant correction d'un compteur exact par la réconciliation |
 | `COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT` | Non | `http://localhost:50053` | endpoint `social-graph` — comptes follower/following autoritaires pour la réconciliation |
+| `COUNTER_SOCIAL_GRAPH_RPC_TIMEOUT_MS` | Non | `5000` | deadline par requête des RPC `social-graph` — un appel suspendu bloquerait sinon la boucle de réconciliation |
+| `COUNTER_SOCIAL_GRAPH_CONNECT_TIMEOUT_MS` | Non | `2000` | deadline de connexion à l'ouverture du canal `social-graph` |
 
 ### Variables d'infrastructure héritées
 

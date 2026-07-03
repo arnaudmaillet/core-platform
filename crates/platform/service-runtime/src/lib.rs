@@ -279,14 +279,55 @@ fn interval_from_env(env_var: &str, default_secs: u64) -> Duration {
     )
 }
 
-/// Resolves when the process receives SIGINT (Ctrl-C). The tonic server drains
-/// in-flight requests before returning. If the handler cannot be installed we
+/// Resolves when the process receives SIGINT (Ctrl-C) or, on Unix, SIGTERM —
+/// the signal Kubernetes sends on pod termination. The tonic server drains
+/// in-flight requests before returning. If neither handler can be installed we
 /// park forever rather than shutting down spuriously.
 async fn shutdown_signal() {
-    if tokio::signal::ctrl_c().await.is_err() {
-        tracing::error!("failed to install Ctrl-C handler; shutdown signalling disabled");
-        std::future::pending::<()>().await;
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(stream) => Some(stream),
+            Err(error) => {
+                tracing::error!(%error, "failed to install SIGTERM handler");
+                None
+            }
+        };
+
+        match sigterm {
+            Some(ref mut sigterm) => {
+                tokio::select! {
+                    result = tokio::signal::ctrl_c() => {
+                        if result.is_err() {
+                            // SIGTERM remains armed; wait for it instead.
+                            tracing::error!("failed to install Ctrl-C handler");
+                            sigterm.recv().await;
+                        }
+                    }
+                    _ = sigterm.recv() => {}
+                }
+            }
+            None => {
+                if tokio::signal::ctrl_c().await.is_err() {
+                    tracing::error!(
+                        "failed to install Ctrl-C handler; shutdown signalling disabled"
+                    );
+                    std::future::pending::<()>().await;
+                }
+            }
+        }
     }
+
+    #[cfg(not(unix))]
+    {
+        if tokio::signal::ctrl_c().await.is_err() {
+            tracing::error!("failed to install Ctrl-C handler; shutdown signalling disabled");
+            std::future::pending::<()>().await;
+        }
+    }
+
     tracing::info!("shutdown signal received; draining in-flight requests");
 }
 

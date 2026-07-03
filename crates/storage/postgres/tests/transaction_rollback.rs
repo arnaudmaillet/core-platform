@@ -1,3 +1,8 @@
+//! Requires a reachable PostgreSQL instance via `DATABASE_URL`. Opt-in via
+//! `cargo test -p postgres --features integration-postgres`, matching the
+//! fleet's `integration-<crate>` convention.
+#![cfg(feature = "integration-postgres")]
+
 mod common;
 
 use common::setup::test_pool;
