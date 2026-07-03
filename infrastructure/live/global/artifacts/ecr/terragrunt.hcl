@@ -21,6 +21,8 @@ inputs = {
     "profile-command-server",
     # ── Shared tooling ───────────────────────────────────────────────────────
     "migrator",
+    # Kafka topic provisioning from the event-topology registry (PreSync Job).
+    "topic-provisioner",
     # BuildKit registry cache sink for the CI image builds (tag = BIN name).
     "buildcache",
     # ── Existing fleet (servers) ─────────────────────────────────────────────
