@@ -40,6 +40,12 @@ async fn main() -> Result<()> {
         Ok(v) => v.parse().context("TOPIC_PARTITIONS must be an integer")?,
         Err(_) => 12,
     };
+    // Creating the full registry (53 topics × partitions × RF) on small managed
+    // brokers takes real time; 30s timed out live on 2× kafka.t3.small.
+    let admin_timeout: u64 = match std::env::var("TOPIC_ADMIN_TIMEOUT_SECS") {
+        Ok(v) => v.parse().context("TOPIC_ADMIN_TIMEOUT_SECS must be an integer")?,
+        Err(_) => 180,
+    };
 
     let names = topic_names();
     println!(
@@ -60,7 +66,7 @@ async fn main() -> Result<()> {
     let results = admin
         .create_topics(
             new_topics.iter(),
-            &AdminOptions::new().operation_timeout(Some(Duration::from_secs(30))),
+            &AdminOptions::new().operation_timeout(Some(Duration::from_secs(admin_timeout))),
         )
         .await
         .context("create_topics admin call")?;

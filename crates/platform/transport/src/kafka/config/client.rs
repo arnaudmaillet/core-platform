@@ -21,7 +21,25 @@ pub struct KafkaClientConfig {
     /// Log-level forwarded to rdkafka's internal debug logger.
     /// Useful values: `"all"`, `"consumer"`, `"producer"`, `"topic"`.
     pub rdkafka_debug: Option<String>,
+
+    /// CA bundle path for TLS broker connections (`ssl.ca.location`).
+    ///
+    /// REQUIRED KNOWLEDGE for this workspace: librdkafka links a VENDORED,
+    /// statically-built OpenSSL (`rdkafka/ssl-vendored`), which has no baked-in
+    /// system CA path — without an explicit location every TLS handshake fails
+    /// certificate verification and surfaces only as a generic timeout (found
+    /// live on the staging bring-up: create_topics OperationTimedOut while a
+    /// dynamically-linked kcat from the same pod network succeeded). Defaults
+    /// to the Debian bundle the runtime image installs
+    /// (`/etc/ssl/certs/ca-certificates.crt`); override with
+    /// `KAFKA_SSL_CA_LOCATION` (e.g. macOS local dev against a cloud broker).
+    /// Only applied when `security_protocol` uses SSL.
+    pub ssl_ca_location: Option<String>,
 }
+
+/// Debian/Ubuntu CA bundle path — what `deploy/Dockerfile`'s runtime stage
+/// provides via `ca-certificates`.
+const DEFAULT_SSL_CA_LOCATION: &str = "/etc/ssl/certs/ca-certificates.crt";
 
 impl Default for KafkaClientConfig {
     fn default() -> Self {
@@ -32,6 +50,7 @@ impl Default for KafkaClientConfig {
             sasl_username: None,
             sasl_password: None,
             rdkafka_debug: None,
+            ssl_ca_location: None,
         }
     }
 }
@@ -56,6 +75,7 @@ impl KafkaClientConfig {
             sasl_username: std::env::var("KAFKA_SASL_USERNAME").ok(),
             sasl_password: std::env::var("KAFKA_SASL_PASSWORD").ok(),
             rdkafka_debug: std::env::var("KAFKA_DEBUG").ok(),
+            ssl_ca_location: std::env::var("KAFKA_SSL_CA_LOCATION").ok(),
         }
     }
 
@@ -80,6 +100,15 @@ impl KafkaClientConfig {
         }
         if let Some(d) = &self.rdkafka_debug {
             cfg.set("debug", d);
+        }
+
+        // Vendored OpenSSL has no system CA path — point it at the runtime
+        // image's bundle whenever the connection uses TLS (see field docs).
+        if self.security_protocol.to_ascii_uppercase().contains("SSL") {
+            cfg.set(
+                "ssl.ca.location",
+                self.ssl_ca_location.as_deref().unwrap_or(DEFAULT_SSL_CA_LOCATION),
+            );
         }
 
         cfg
