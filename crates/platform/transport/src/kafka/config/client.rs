@@ -60,7 +60,11 @@ impl KafkaClientConfig {
     }
 
     /// Materialises these settings into an [`rdkafka::ClientConfig`].
-    pub(crate) fn to_rdkafka(&self) -> rdkafka::config::ClientConfig {
+    ///
+    /// Public (not `pub(crate)`) so admin tooling outside this crate — the
+    /// topic-provisioner — connects with the exact same broker/SASL settings
+    /// the fleet's producers and consumers use.
+    pub fn to_rdkafka(&self) -> rdkafka::config::ClientConfig {
         let mut cfg = rdkafka::config::ClientConfig::new();
         cfg.set("bootstrap.servers", &self.brokers)
             .set("security.protocol", &self.security_protocol);

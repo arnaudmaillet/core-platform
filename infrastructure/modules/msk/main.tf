@@ -88,6 +88,22 @@ module "msk" {
     ebs_storage_info = { volume_size = var.broker_ebs_volume_size }
   }
 
+  # ── Server properties (explicit, not broker defaults) ────────────────────────
+  # Topics are provisioned by the topic-provisioner PreSync Job from the
+  # event-topology registry; auto-creation stays OFF (MSK's own default — made
+  # explicit here as policy) so a typo'd topic name fails loudly instead of
+  # spawning a phantom topic with defaults nobody chose. The replication settings
+  # below apply to broker-side topic creation paths; the provisioner sets RF
+  # explicitly per topic (TOPIC_REPLICATION_FACTOR).
+  configuration_name        = "${var.name}-server-properties"
+  configuration_description = "${var.name} fleet server properties"
+  configuration_server_properties = {
+    "auto.create.topics.enable"  = "false"
+    "default.replication.factor" = tostring(var.default_replication_factor)
+    "min.insync.replicas"        = tostring(var.min_insync_replicas)
+    "log.retention.hours"        = tostring(var.log_retention_hours)
+  }
+
   encryption_in_transit_client_broker = "TLS"
 
   client_authentication = {

@@ -44,6 +44,24 @@ variable "broker_ebs_volume_size" {
   default     = 50
 }
 
+variable "default_replication_factor" {
+  description = "Broker-side default.replication.factor. Defaults match a 3-broker/3-AZ prod posture; a 2-broker env MUST lower it to 2 (RF cannot exceed broker count)."
+  type        = number
+  default     = 3
+}
+
+variable "min_insync_replicas" {
+  description = "Broker-side min.insync.replicas. Prod (RF3): 2 — one broker can be down and acks=all still commits. A 2-broker env MUST use 1, or a single broker outage stops all producing."
+  type        = number
+  default     = 2
+}
+
+variable "log_retention_hours" {
+  description = "Default topic retention (hours). 168 = 7 days."
+  type        = number
+  default     = 168
+}
+
 variable "tags" {
   description = "Tags applied to all resources."
   type        = map(string)

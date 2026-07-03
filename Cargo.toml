@@ -57,6 +57,7 @@ members = [
     "crates/apps/audit-server",
     "crates/apps/audit-worker",
     "crates/apps/migrator",
+    "crates/apps/topic-provisioner",
     "crates/contracts/social-graph-api",
     "crates/contracts/account-api",
     "crates/contracts/chat-api",
@@ -110,6 +111,7 @@ scylla-storage   = { path = "crates/storage/scylla" }
 redis-storage    = { path = "crates/storage/redis" }
 test-support     = { path = "crates/platform/test-support" }
 service-runtime  = { path = "crates/platform/service-runtime" }
+event-topology   = { path = "crates/contracts/event-topology" }
 
 # Contracts tier — generated gRPC stub crates (server + client + descriptor)
 social-graph-api = { path = "crates/contracts/social-graph-api" }

@@ -326,6 +326,42 @@ pub fn extract_catalog_block(doc: &str) -> Option<&str> {
     Some(&doc[start..end])
 }
 
+// ---------------------------------------------------------------------------------------------
+// Broker provisioning views
+//
+// Brokers run with auto.create.topics.enable=false (MSK policy — auto-created topics inherit
+// broker defaults nobody chose), so every topic must exist before the fleet produces or
+// subscribes. The topic-provisioner app derives the broker's topic set from these views; the
+// registry stays the single source of truth for what exists on the wire.
+// ---------------------------------------------------------------------------------------------
+
+/// Every stream topic the brokers must have: the deduplicated union of produced and consumed
+/// topics. DEFERRED subscriptions are included on purpose — their producers are external or
+/// roadmap, but the consumer's subscription needs the topic to exist once auto-creation is off.
+///
+/// Dead-letter counterparts are NOT listed here; derive them from
+/// [`consumed_stream_topics`] with the consumer runtime's `<topic>.dlq` convention
+/// (`transport::kafka::DLQ_SUFFIX`) — only consumed topics can dead-letter.
+pub fn all_stream_topics() -> Vec<&'static str> {
+    let mut topics: Vec<&'static str> = PRODUCERS
+        .iter()
+        .chain(CONSUMERS.iter())
+        .map(|(topic, _)| *topic)
+        .collect();
+    topics.sort_unstable();
+    topics.dedup();
+    topics
+}
+
+/// Deduplicated set of consumed topics — the subscriptions whose `run_consumer` loops can
+/// dead-letter, i.e. the topics that need a `<topic>.dlq` counterpart on the broker.
+pub fn consumed_stream_topics() -> Vec<&'static str> {
+    let mut topics: Vec<&'static str> = CONSUMERS.iter().map(|(topic, _)| *topic).collect();
+    topics.sort_unstable();
+    topics.dedup();
+    topics
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,6 +378,30 @@ mod tests {
     }
     fn orphan_topics() -> HashSet<&'static str> {
         ORPHAN_PRODUCERS.iter().map(|(t, _)| *t).collect()
+    }
+
+    /// The provisioning view must cover every wired topic exactly once — the
+    /// broker set the topic-provisioner creates is complete and duplicate-free.
+    #[test]
+    fn all_stream_topics_is_the_deduplicated_union_of_the_registry() {
+        let all = all_stream_topics();
+
+        let mut expected: HashSet<&str> = produced_topics();
+        expected.extend(consumed_topics());
+        assert_eq!(all.iter().copied().collect::<HashSet<_>>(), expected);
+
+        let mut deduped = all.clone();
+        deduped.dedup();
+        assert_eq!(all, deduped, "provisioning view contains duplicates");
+    }
+
+    /// Only consumed topics dead-letter; the DLQ view must match CONSUMERS.
+    #[test]
+    fn consumed_stream_topics_matches_the_consumer_table() {
+        assert_eq!(
+            consumed_stream_topics().into_iter().collect::<HashSet<_>>(),
+            consumed_topics()
+        );
     }
 
     /// The headline guard: nothing may consume a topic that no producer emits,

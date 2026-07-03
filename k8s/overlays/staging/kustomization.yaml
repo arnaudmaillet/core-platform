@@ -59,6 +59,8 @@ resources:
   # KEDA SASL auth for the MSK lag scalers (counter/realtime/audit workers).
   - keda-trigger-auth.yaml
   - external-secrets.yaml
+  # PreSync hook: creates all registry topics (+ .dlq) — MSK auto-create is off.
+  - topic-provisioner-job.yaml
   # Baseline namespace isolation (default-deny ingress + same-ns allow + public WSS).
   - networkpolicies.yaml
 configMapGenerator:
@@ -132,6 +134,9 @@ images:
     newTag: staging
   - name: core-platform-migrator
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-migrator
+    newTag: staging
+  - name: core-platform-topic-provisioner
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-topic-provisioner
     newTag: staging
   # ── New fleet (one image per binary) ─────────────────────────────────────────
   - name: core-platform-counter-server

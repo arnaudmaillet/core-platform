@@ -6307,6 +6307,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "topic-provisioner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "event-topology",
+ "rdkafka",
+ "tokio",
+ "transport",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"

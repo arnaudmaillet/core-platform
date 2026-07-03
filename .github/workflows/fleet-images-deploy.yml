@@ -69,6 +69,7 @@ jobs:
           - timeline-server
           # ── Shared ──
           - migrator
+          - topic-provisioner
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -135,7 +136,7 @@ jobs:
             account-server chat-server comment-server engagement-server \
             geo-discovery-server notification-server post-server profile-server \
             social-graph-server timeline-server \
-            migrator; do
+            migrator topic-provisioner; do
             NAME="core-platform-$bin" NEWTAG="$TAG" \
               yq -i '(.images[] | select(.name == strenv(NAME)).newTag) = strenv(NEWTAG)' \
               k8s/overlays/staging/kustomization.yaml
