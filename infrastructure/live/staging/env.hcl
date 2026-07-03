@@ -10,7 +10,10 @@ locals {
   # --- EKS node groups (same shape as dev/env.hcl, consumed by modules/eks) ---
   # `system` for platform workloads; `database` (t3.large) for the stateful
   # in-cluster backends staging runs (ScyllaDB operator, CNPG) — pinned via the
-  # `intent=database` label (nodeSelector), no taint to keep scheduling simple.
+  # `intent=database` label (nodeSelector) AND tainted dedicated=database, same
+  # as the Karpenter database pool: without the taint, untargeted fleet pods can
+  # spill onto these nodes and starve Scylla/CNPG. All 6 CNPG clusters + the
+  # ScyllaCluster already tolerate it.
   node_groups = {
     system = {
       instance_types = ["t3.medium"]
@@ -29,7 +32,11 @@ locals {
       max_size       = 5
       desired_size   = 2
       labels         = { intent = "database" }
-      taints         = []
+      taints = [{
+        key    = "dedicated"
+        value  = "database"
+        effect = "NO_SCHEDULE"
+      }]
 
       iam_role_use_name_prefix = false
       iam_role_name            = "core-platform-staging-db-node-role"

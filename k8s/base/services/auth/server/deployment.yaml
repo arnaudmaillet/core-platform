@@ -22,6 +22,11 @@ spec:
         app: auth-server
         role: server
     spec:
+      # TIER-0 fail-closed — never on spot. Requires a pool that offers
+      # on-demand (the Karpenter apps pool allows both since this change);
+      # a spot reclaim wave must not take out the fail-closed set.
+      nodeSelector:
+        karpenter.sh/capacity-type: on-demand
       # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
       # scheduling; the PDB is the hard guard against voluntary co-eviction).
       topologySpreadConstraints:
@@ -83,9 +88,10 @@ spec:
           resources:
             requests:
               cpu: "50m"
-              memory: "128Mi"
+              memory: "512Mi"
+            # No CPU limit: CFS throttling breaks tokio tail latency under
+            # spikes; memory stays the hard cap.
             limits:
-              cpu: "1000m"
               memory: "512Mi"
       volumes:
         - name: infra-config
