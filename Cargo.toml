@@ -199,7 +199,13 @@ sqlx = { version = "0.8.6", features = [
     "ipnetwork",
 ] }
 fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool"] }
-rdkafka = "0.38.0"
+# ssl-vendored: statically link a vendored OpenSSL into librdkafka. Without it
+# librdkafka is built WITHOUT SSL and rejects security.protocol=SASL_SSL at
+# client-config time ("OpenSSL not available at build time") — every managed-MSK
+# env (SASL/SCRAM over TLS) needs this; first hit live by the topic-provisioner
+# on the staging bring-up. SCRAM-SHA-512 is implemented inside librdkafka and
+# needs only OpenSSL (no libsasl2/gssapi).
+rdkafka = { version = "0.38.0", features = ["ssl-vendored"] }
 dashmap = "7.0.0-rc2"
 elasticsearch = "9.1.0-alpha.1"
 scylla = "1.4.1"
