@@ -11,7 +11,7 @@
 // and the gRPC connection-recycling behavior under sustained load.
 //
 // NETWORK: post/profile/etc. are tightened mesh callees — the runner pods must
-// carry the `app: k6-loadtest` label (see testrun-soak.yaml) to pass the
+// carry the operator-stamped app=k6/runner=true labels to pass the
 // staging `allow-loadtest-to-mesh` NetworkPolicy.
 //
 // IDs are UUIDv7 (the fleet's id convention) generated inline — the script is

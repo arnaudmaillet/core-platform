@@ -11,9 +11,10 @@
 #   kubectl delete testrun fleet-soak -n default
 #   kubectl delete configmap k6-fleet-soak -n default
 #
-# The runner label app=k6-loadtest is the gate through the staging
-# `allow-loadtest-to-mesh` NetworkPolicy (post/profile/... are tightened mesh
-# callees). ~13 min total: 2m ramp → 10m soak at 10 VUs/runner → 1m down.
+# Runner pods are admitted through the staging `allow-loadtest-to-mesh` /
+# `allow-k6-operator-to-runners` NetworkPolicies by the labels the OPERATOR
+# stamps (app=k6, runner=true) — custom `app` labels are overridden, so don't
+# bother setting one. ~13 min: 2m ramp → 10m soak at 10 VUs/runner → 1m down.
 apiVersion: k6.io/v1alpha1
 kind: TestRun
 metadata:
@@ -26,9 +27,6 @@ spec:
       name: k6-fleet-soak
       file: soak.js
   runner:
-    metadata:
-      labels:
-        app: k6-loadtest
     resources:
       requests:
         cpu: 250m
