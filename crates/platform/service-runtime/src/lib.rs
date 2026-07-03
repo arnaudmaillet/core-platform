@@ -69,6 +69,16 @@ const DEFAULT_HEALTH_INTERVAL_SECS: u64 = 10;
 const TRAFFIC_PRUNE_INTERVAL_ENV: &str = "TRAFFIC_PRUNE_INTERVAL_SECS";
 /// Default traffic-registry prune cadence.
 const DEFAULT_TRAFFIC_PRUNE_INTERVAL_SECS: u64 = 60;
+/// Environment variable overriding the server-side connection-recycling window
+/// (seconds; `0` disables recycling entirely).
+const MAX_CONNECTION_AGE_ENV: &str = "GRPC_MAX_CONNECTION_AGE_SECS";
+/// Default connection-recycling window. Bounds how long a caller's HTTP/2
+/// channel can stay pinned to this replica: on kube-proxy ClusterIP Services,
+/// scale-out only rebalances traffic when connections are re-established.
+const DEFAULT_MAX_CONNECTION_AGE_SECS: u64 = 300;
+/// Environment variable enabling forced close of streams that outlive the age
+/// deadline (seconds; unset/`0` = never sever in-flight streams).
+const MAX_CONNECTION_AGE_GRACE_ENV: &str = "GRPC_MAX_CONNECTION_AGE_GRACE_SECS";
 
 /// Backend health probes now live in the `health` foundation crate, so storage
 /// crates can expose ready-made probes (`<storage>::health::probe(...)`) without
@@ -162,8 +172,18 @@ pub async fn serve<S: Service>(addr: SocketAddr) -> anyhow::Result<()> {
         .context("register grpc routes")?;
 
     // ── gRPC server: inbound-trace (outer) + traffic (inner) layers ────────────
+    // Connection recycling (GOAWAY after max_connection_age) is on by default:
+    // it is what re-spreads long-lived HTTP/2 channels across replicas after a
+    // scale-out. In-flight streams are never severed unless the grace env is set.
+    let mut grpc_config = GrpcServerConfig::default();
+    if let Some(age) = max_connection_age_from_env() {
+        grpc_config = grpc_config.with_max_connection_age(age);
+    }
+    if let Some(grace) = max_connection_age_grace_from_env() {
+        grpc_config = grpc_config.with_max_connection_age_grace(grace);
+    }
     let traffic = infra.traffic();
-    let mut server_builder = GrpcServerBuilder::new(GrpcServerConfig::default());
+    let mut server_builder = GrpcServerBuilder::new(grpc_config);
     if let Some(registry) = &traffic {
         server_builder = server_builder.with_traffic(Arc::clone(registry));
     }
@@ -279,6 +299,46 @@ fn interval_from_env(env_var: &str, default_secs: u64) -> Duration {
     )
 }
 
+/// Resolves the connection-recycling window from [`MAX_CONNECTION_AGE_ENV`]
+/// (default [`DEFAULT_MAX_CONNECTION_AGE_SECS`], `0` disables).
+fn max_connection_age_from_env() -> Option<Duration> {
+    let raw = std::env::var(MAX_CONNECTION_AGE_ENV).ok();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::from(d.subsec_nanos()))
+        .unwrap_or(0);
+    resolve_connection_age(raw.as_deref(), nanos)
+}
+
+/// Pure core of [`max_connection_age_from_env`]: parses the override and applies
+/// a ±10% per-process jitter (seeded by `entropy`) so replicas started together —
+/// a rollout — don't GOAWAY every caller at the same instant.
+fn resolve_connection_age(raw: Option<&str>, entropy: u64) -> Option<Duration> {
+    let secs: u64 = match raw {
+        Some(v) => v.parse().ok().unwrap_or(DEFAULT_MAX_CONNECTION_AGE_SECS),
+        None => DEFAULT_MAX_CONNECTION_AGE_SECS,
+    };
+    if secs == 0 {
+        return None;
+    }
+    let base_ms = secs.saturating_mul(1000);
+    let span_ms = (base_ms / 5).max(1); // 20% wide band centred on base
+    Some(Duration::from_millis(
+        base_ms - span_ms / 2 + entropy % span_ms,
+    ))
+}
+
+/// Grace is opt-in: only servers whose in-flight streams are safe to sever
+/// should set [`MAX_CONNECTION_AGE_GRACE_ENV`] (chat/notification hold
+/// long-lived server streams that must outlive the GOAWAY).
+fn max_connection_age_grace_from_env() -> Option<Duration> {
+    let secs: u64 = std::env::var(MAX_CONNECTION_AGE_GRACE_ENV)
+        .ok()?
+        .parse()
+        .ok()?;
+    (secs > 0).then(|| Duration::from_secs(secs))
+}
+
 /// Resolves when the process receives SIGINT (Ctrl-C) or, on Unix, SIGTERM —
 /// the signal Kubernetes sends on pod termination. The tonic server drains
 /// in-flight requests before returning. If neither handler can be installed we
@@ -358,5 +418,48 @@ impl TelemetrySink for TelemetryControlSink {
                 .map_err(|e| ConfigError::validation(format!("telemetry sampling: {e}")))?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_age_defaults_to_five_minutes_within_the_jitter_band() {
+        for entropy in [0, 1, 59_999, 1_000_000_007] {
+            let age = resolve_connection_age(None, entropy).expect("default is enabled");
+            let ms = age.as_millis() as u64;
+            // 300s ±10% ⇒ [270_000, 330_000)
+            assert!((270_000..330_000).contains(&ms), "out of band: {ms}ms");
+        }
+    }
+
+    #[test]
+    fn connection_age_zero_disables_recycling() {
+        assert_eq!(resolve_connection_age(Some("0"), 42), None);
+    }
+
+    #[test]
+    fn connection_age_override_recentres_the_band() {
+        let age = resolve_connection_age(Some("60"), 12_345).expect("enabled");
+        let ms = age.as_millis() as u64;
+        assert!((54_000..66_000).contains(&ms), "out of band: {ms}ms");
+    }
+
+    #[test]
+    fn connection_age_garbage_falls_back_to_the_default() {
+        let age = resolve_connection_age(Some("not-a-number"), 7).expect("enabled");
+        let ms = age.as_millis() as u64;
+        assert!((270_000..330_000).contains(&ms), "out of band: {ms}ms");
+    }
+
+    #[test]
+    fn jitter_is_deterministic_per_entropy_and_varies_across_it() {
+        let a = resolve_connection_age(None, 1000).unwrap();
+        let b = resolve_connection_age(None, 1000).unwrap();
+        let c = resolve_connection_age(None, 999_999).unwrap();
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 }

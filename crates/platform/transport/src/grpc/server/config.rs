@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use http::header::HeaderName;
 
@@ -24,6 +25,24 @@ pub struct GrpcServerConfig {
     /// Inbound header the edge mesh injects with the caller identity. Read by the traffic
     /// layer for `per_caller` rate-limit keying. Defaults to [`DEFAULT_IDENTITY_HEADER`].
     pub identity_header: HeaderName,
+
+    /// Maximum lifetime of an accepted connection. At the deadline the server GOAWAYs it:
+    /// in-flight streams keep running (never severed unless [`max_connection_age_grace`]
+    /// is also set) but the caller's *next* stream goes over a fresh connection — which
+    /// re-traverses the ClusterIP and lands on a current backend. This is what re-balances
+    /// long-lived HTTP/2 channels after a scale-out; without it a tonic channel stays
+    /// pinned to one pod for its whole life. `None` (default) = connections live forever.
+    ///
+    /// [`max_connection_age_grace`]: Self::max_connection_age_grace
+    pub max_connection_age: Option<Duration>,
+
+    /// How long in-flight streams may continue after [`max_connection_age`] before the
+    /// connection is forcibly closed. `None` (default) = never force-close, so long-lived
+    /// server streams (chat/notification) outlive the GOAWAY untouched. Only set this on
+    /// servers whose streams are safe to sever.
+    ///
+    /// [`max_connection_age`]: Self::max_connection_age
+    pub max_connection_age_grace: Option<Duration>,
 }
 
 impl Default for GrpcServerConfig {
@@ -33,6 +52,8 @@ impl Default for GrpcServerConfig {
             tls: None,
             enable_reflection: false,
             identity_header: HeaderName::from_static(DEFAULT_IDENTITY_HEADER),
+            max_connection_age: None,
+            max_connection_age_grace: None,
         }
     }
 }
@@ -56,6 +77,18 @@ impl GrpcServerConfig {
     /// Overrides the edge-mesh identity header used for `per_caller` keying.
     pub fn with_identity_header(mut self, header: HeaderName) -> Self {
         self.identity_header = header;
+        self
+    }
+
+    /// Bounds connection lifetime (GOAWAY-based recycling; see the field docs).
+    pub fn with_max_connection_age(mut self, age: Duration) -> Self {
+        self.max_connection_age = Some(age);
+        self
+    }
+
+    /// Force-closes connections whose streams outlive the age deadline by `grace`.
+    pub fn with_max_connection_age_grace(mut self, grace: Duration) -> Self {
+        self.max_connection_age_grace = Some(grace);
         self
     }
 }
