@@ -95,6 +95,7 @@ impl RedisPoolBuilder {
         let pool = self
             .config
             .into_fred_builder()
+            .map_err(RedisStorageError::from)?
             .build_pool(pool_size)
             .map_err(RedisStorageError::from)?;
 

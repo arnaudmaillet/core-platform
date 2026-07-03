@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use fred::prelude::{Builder, Config, ConnectionConfig, PerformanceConfig, ReconnectPolicy};
+use fred::types::config::{TlsConfig, TlsConnector};
 
 use crate::config::topology::TopologyKind;
 
@@ -40,6 +41,14 @@ pub struct RedisConfig {
     /// Password for the data-plane connection.
     /// `REDIS_PASSWORD` (optional)
     pub password: Option<String>,
+
+    /// Enable TLS for the connection (rustls, system CA roots).
+    ///
+    /// Managed Redis (ElastiCache) enforces transit encryption — without this
+    /// flag fred speaks plaintext to a TLS listener and every command times out
+    /// with no useful error (found live on the staging bring-up).
+    /// `REDIS_TLS` (`true`/`false`, default: `false`)
+    pub tls: bool,
 
     /// Database index for standalone and sentinel deployments (0–15).
     /// When `0`, no `SELECT` is sent after connecting.
@@ -135,6 +144,7 @@ impl Default for RedisConfig {
             hosts: vec!["127.0.0.1:6379".to_string()],
             username: None,
             password: None,
+            tls: false,
             database: 0,
             sentinel_service_name: None,
             connection_timeout: Duration::from_secs(10),
@@ -173,6 +183,7 @@ impl RedisConfig {
             hosts,
             username:              std::env::var("REDIS_USERNAME").ok(),
             password:              std::env::var("REDIS_PASSWORD").ok(),
+            tls:                   parse_env("REDIS_TLS", false),
             database:              parse_env("REDIS_DATABASE", 0u8),
             sentinel_service_name: std::env::var("REDIS_SENTINEL_SERVICE_NAME").ok(),
             connection_timeout:    Duration::from_secs_f64(
@@ -202,11 +213,19 @@ impl RedisConfig {
     /// a concrete fred `ServerConfig` variant, and where performance/connection
     /// tuning is wired into the driver. Kept `pub(crate)` so callers interact
     /// only with our `RedisConfig`, not fred types directly.
-    pub(crate) fn into_fred_builder(self) -> Builder {
+    pub(crate) fn into_fred_builder(self) -> Result<Builder, fred::error::Error> {
         let server = self.topology.into_server_config(
             &self.hosts,
             self.sentinel_service_name.as_deref(),
         );
+
+        // System CA roots via rustls-native-certs; failure to load them is an
+        // environment defect worth failing the build() for, not hiding.
+        let tls: Option<TlsConfig> = if self.tls {
+            Some(TlsConnector::default_rustls()?.into())
+        } else {
+            None
+        };
 
         let fred_config = Config {
             server,
@@ -214,6 +233,7 @@ impl RedisConfig {
             password:  self.password,
             database:  if self.database > 0 { Some(self.database) } else { None },
             fail_fast: self.fail_fast,
+            tls,
             ..Default::default()
         };
 
@@ -245,7 +265,7 @@ impl RedisConfig {
                 cc.unresponsive.max_timeout = unresponsive_timeout;
             });
 
-        builder
+        Ok(builder)
     }
 }
 

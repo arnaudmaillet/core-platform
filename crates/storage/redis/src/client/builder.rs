@@ -88,7 +88,7 @@ impl RedisClientBuilder {
         fields(topology = ?self.config.topology)
     )]
     pub async fn build(self) -> Result<RedisClient, RedisStorageError> {
-        let builder = self.config.into_fred_builder();
+        let builder = self.config.into_fred_builder().map_err(RedisStorageError::from)?;
 
         let client = builder
             .build()

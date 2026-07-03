@@ -145,9 +145,21 @@ impl S3Client {
         self.object_size("__healthcheck__").await.map(|_| ())
     }
 
-    /// Idempotently creates the bucket (for local/test environments where it does
-    /// not pre-exist). A 409 (already owned) is treated as success.
+    /// Verifies the bucket is reachable, creating it only when absent.
+    ///
+    /// PROBE FIRST (HeadBucket — `s3:ListBucket` is granted to the media static
+    /// keys), CreateBucket only on 404 (local/test path). Against provisioned
+    /// AWS the keys deliberately lack s3:CreateBucket, so the old create-first
+    /// probe 403'd at boot — found live on the staging bring-up.
     pub async fn ensure_bucket(&self) -> Result<(), MediaError> {
+        let head = self.bucket.head_bucket(Some(&self.credentials)).sign(self.presign_ttl);
+        let resp = self.http.head(head).send().await.map_err(reqwest_err)?;
+        if resp.status().is_success() {
+            return Ok(());
+        }
+        if resp.status() != StatusCode::NOT_FOUND {
+            return Err(MediaError::ObjectStoreUnavailable);
+        }
         let url = self.bucket.create_bucket(&self.credentials).sign(self.presign_ttl);
         let resp = self.http.put(url).send().await.map_err(reqwest_err)?;
         let status = resp.status();

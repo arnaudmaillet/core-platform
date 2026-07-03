@@ -198,7 +198,11 @@ sqlx = { version = "0.8.6", features = [
     "migrate",
     "ipnetwork",
 ] }
-fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool"] }
+# enable-rustls-ring: TLS for managed Redis (ElastiCache runs transit encryption;
+# without a TLS feature fred speaks plaintext to a TLS listener and every command
+# times out — found live on the staging bring-up). Certs come from the system
+# store via rustls-native-certs (deploy/Dockerfile installs ca-certificates).
+fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool", "enable-rustls-ring"] }
 # ssl-vendored: statically link a vendored OpenSSL into librdkafka. Without it
 # librdkafka is built WITHOUT SSL and rejects security.protocol=SASL_SSL at
 # client-config time ("OpenSSL not available at build time") — every managed-MSK

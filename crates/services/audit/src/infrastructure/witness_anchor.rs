@@ -123,9 +123,26 @@ impl ObjectLockWitness {
         })
     }
 
-    /// Idempotently create the witness bucket (local/test; in production ops
-    /// provisions a cross-account bucket with Object Lock enabled). 409 = success.
+    /// Verify the witness bucket is reachable, creating it only when absent.
+    ///
+    /// PROBE FIRST (HeadBucket — `s3:ListBucket` is granted), CreateBucket only
+    /// on 404 (local/test). The witness keys deliberately have NO
+    /// s3:CreateBucket against provisioned AWS, so the old create-first probe
+    /// 403'd and fail-closed the service — found live on the staging bring-up.
     pub async fn ensure_bucket(&self) -> Result<(), AuditError> {
+        let head = self.bucket.head_bucket(Some(&self.credentials)).sign(self.presign_ttl);
+        let resp = self
+            .http
+            .head(head)
+            .send()
+            .await
+            .map_err(|_| AuditError::AnchorWitnessUnavailable)?;
+        if resp.status().is_success() {
+            return Ok(());
+        }
+        if resp.status() != reqwest::StatusCode::NOT_FOUND {
+            return Err(AuditError::AnchorWitnessUnavailable);
+        }
         let url = self.bucket.create_bucket(&self.credentials).sign(self.presign_ttl);
         let resp = self
             .http
