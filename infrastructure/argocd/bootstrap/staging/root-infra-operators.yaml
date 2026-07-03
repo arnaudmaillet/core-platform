@@ -38,6 +38,12 @@ spec:
                 - name: scylla-operator
                   folder: infrastructure/argocd/apps/infrastructure/operators/scylla-operator
                   destNamespace: scylla-operator
+                # Executes ScyllaCluster spec.backups/spec.repairs (inert without
+                # it). destNamespace MUST be scylla-manager — the chart hardcodes
+                # that namespace in its ConfigMap.
+                - name: scylla-manager
+                  folder: infrastructure/argocd/apps/infrastructure/operators/scylla-manager
+                  destNamespace: scylla-manager
                 - name: external-secrets
                   folder: infrastructure/argocd/apps/infrastructure/operators/external-secrets
                   destNamespace: external-secrets
