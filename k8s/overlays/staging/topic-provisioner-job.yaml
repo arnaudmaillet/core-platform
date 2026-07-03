@@ -6,11 +6,17 @@
 # Job producers fail UNKNOWN_TOPIC_OR_PART and consumers idle forever — nothing
 # else in the platform creates topics.
 #
-# ArgoCD PreSync hook: runs on every sync, so a topic added to the registry is
-# created by the same sync that rolls the code consuming it. Idempotent —
-# TOPIC_ALREADY_EXISTS is success. BeforeHookCreation replaces the (immutable)
-# finished Job on the next sync. If the Job fails, the sync fails: the fleet is
-# not rolled onto a broker missing its topics.
+# Ordered by SYNC-WAVE, deliberately NOT a PreSync hook: on a fresh cluster the
+# Job needs the ESO-synced backend-creds Secret, but a PreSync hook runs before
+# the sync that applies the ClusterSecretStore/ExternalSecret — a deadlock that
+# broke the first staging bring-up. Waves keep everything in one sync:
+#   -3 ClusterSecretStore → -2 backend-creds ExternalSecret → -1 this Job →
+#    0 the fleet. Replace=true re-applies the (immutable) finished Job on every
+# sync, so a topic added to the registry is created by the same sync that rolls
+# the code consuming it. Idempotent — TOPIC_ALREADY_EXISTS is success. If the
+# Job fails, the sync stops: the fleet is not rolled onto a broker missing its
+# topics. (If ESO is slow, the pod waits in CreateContainerConfigError and the
+# kubelet retries until the Secret lands — activeDeadlineSeconds bounds it.)
 #
 # TOPIC_REPLICATION_FACTOR is required by the binary (no default on purpose) and
 # MUST track the env's broker count / MSK default.replication.factor — staging
@@ -23,8 +29,8 @@ metadata:
   labels:
     app: topic-provisioner
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 spec:
   backoffLimit: 6
   activeDeadlineSeconds: 600
