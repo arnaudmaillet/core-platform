@@ -63,7 +63,7 @@ KEDA is a hard prerequisite (operator at GitOps sync-wave −10). A Kustomize `n
 |---|---|---|---|
 | **dev** | In-cluster (Redpanda, ScyllaDB StatefulSet, per-service Redis, account Postgres) | Legacy ArgoCD Helm catalog (`apps/catalog`), `profile` only live; Kustomize `overlays/dev` for local | Partial |
 | **staging** | **Managed AWS** (MSK, ElastiCache, OpenSearch, S3, KMS) + in-cluster operators (scylla-operator, CNPG) | **`staging-fleet` ArgoCD Application → `k8s/overlays/staging`** (Kustomize) | Authored, validated, **not applied** |
-| **prod** | Terragrunt `eks` + `networking` only | Not yet bootstrapped | Stub |
+| **prod** | **Managed AWS mirror of staging** with the production posture (3 AZ + NAT-per-AZ, 3-broker MSK, COMPLIANCE WORM, nothing disposable) | **`prod-fleet` ArgoCD Application → `k8s/overlays/prod`**, tracking **`main`** (merging develop → main is the prod deploy) | Scaffolded, **not applied** (prereqs: `live/prod/env.hcl`) |
 
 All environments target AWS account `724772065879` / `us-east-1`, sharing one ECR registry (one repo per binary, env-tagged).
 
@@ -98,6 +98,8 @@ Extracted from the `event-topology` registry (the build-enforced source of truth
 - **Live push:** `post.v1.events` → **`realtime`**; `media.v1.events` self-consumed (Plane-B transform); `moderation.v1.events` → **`media`** (takedown).
 
 The registry also formally tracks **DEFERRED** consumers (external/un-built producers: `moderation.reports/signals`, `view/impression/click.v1.events`, the `social-graph.follows` naming mismatch) and **ORPHAN_PRODUCERS** (intentional headroom: legacy `post.updated`, `social-graph.blocked` enforced on the read path, the chat delivery-plane topics). Note: the registry guards topic **wiring**, not payload **shape** — a known `post → geo/notification` payload gap remains a separate, tracked concern.
+
+The registry is also the **broker provisioning source**: the `topic-provisioner` binary (ArgoCD PreSync hook Job in each overlay) creates every stream topic plus its `.dlq` counterpart in one idempotent admin call. MSK runs with `auto.create.topics.enable=false` (explicit server property), so a topic exists **because** it is in the registry — a typo'd topic name fails the sync instead of spawning a phantom topic with defaults nobody chose.
 
 ### 2.5 TIER-0 security & compliance control boundaries
 

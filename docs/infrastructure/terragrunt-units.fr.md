@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./terragrunt-units.md
-  source_sha256: 69698e4055418ff6e3170d666bfd8cd544965a1046fd5818be3b98b8497e8f90
-  translated_at: 2026-07-01
+  source_sha256: ac0b3bdd5352469af7e653877b1f211a57a7cce062a3b59ede0be9dcb2b7d3ad
+  translated_at: 2026-07-03
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`terragrunt-units.md`](./terragrunt-units.md) fait foi.
@@ -36,7 +36,7 @@ infrastructure/
     ├── global/{artifacts/ecr, networking/route53}     # account-shared
     ├── dev/us-east-1/…
     ├── staging/us-east-1/…     # ◄── documented here (the live path)
-    └── prod/us-east-1/…        # STUB (eks + networking only)
+    └── prod/us-east-1/…        # full staging mirror, prod posture (not applied)
 ```
 
 - **`root.hcl`** (parent) génère centralement le backend d'état distant S3 + lockfile
@@ -192,9 +192,15 @@ le [runbook de reconstruction du staging jetable](../runbooks/staging-disposable
   des services AWS managés ; pas d'unités MSK/ElastiCache/OpenSearch/KMS/WORM. La
   livraison est le catalogue Helm legacy (`profile-service` seulement) plus
   `overlays/dev` pour l'itération locale.
-- **`prod`** — **STUB** : seuls `eks` + `networking` sont rédigés. Pas de plan de
-  données, pas de bootstrap GitOps encore. Il n'y a pas de cluster prod séparé ;
-  `staging` est le chemin actif.
+- **`prod`** — un **miroir complet de l'arbre staging** (mêmes 13 unités) avec la
+  posture de production activée : 3 AZ + NAT par AZ, groupes de nœuds Graviton
+  (min 3, groupe `database` avec taint), MSK 3 brokers (`kafka.m5.large`, RF 3 /
+  `min.insync.replicas` 2 par défaut du module), OpenSearch 3 nœuds réparti par
+  zone, WORM d'audit en mode `COMPLIANCE`, et rien de jetable (pas de
+  `force_destroy`, fenêtres de récupération des secrets conservées). ArgoCD suit
+  **`main`** via `bootstrap/prod` + `global-params-prod.json`. **Pas encore
+  appliqué** — les prérequis de mise en route (bucket d'état, CIDR du endpoint
+  EKS, workflow de promotion d'images) sont documentés dans `live/prod/env.hcl`.
 
 ---
 
@@ -204,9 +210,9 @@ le [runbook de reconstruction du staging jetable](../runbooks/staging-disposable
 |---|---|
 | `networking/vpc` | `networking/vpc` |
 | `acm-cert` | `networking/acm-cert` |
-| `eks` | `eks` (staging, dev, prod-stub) |
+| `eks` | `eks` (staging, dev, prod) |
 | `msk` / `elasticache` / `opensearch` | `data/msk` · `data/elasticache` · `data/opensearch` |
-| `s3-bucket` (générique) | `data/media-bucket` (Lock off) · `data/audit-worm` (Lock COMPLIANCE) · `data/cnpg-backups` |
+| `s3-bucket` (générique) | `data/media-bucket` (Lock off) · `data/audit-worm` (Lock : GOVERNANCE staging / COMPLIANCE prod) · `data/cnpg-backups` · `data/scylla-backups` |
 | `kms-key` | `data/audit-kms` |
 | `app-secrets` | `data/app-secrets` |
 | `security/irsa-roles` | `security/irsa-roles` |

@@ -38,10 +38,12 @@ Applications and the workload fleet.
 - **Root-of-trust:** Terraform installs exactly one thing in-cluster —
   `root-bootstrap`. Everything else is Git-driven from there. This is why the
   bootstrap order (§4) has Terraform *before* any workload.
-- **`develop` is the tracked revision.** Every AppSet and Application sets
-  `targetRevision: develop`. ArgoCD reconciles the cluster to `develop` with
-  `selfHeal: true`. **`develop` is protected — never push to it directly; branch,
-  PR, merge, and let ArgoCD converge.**
+- **The tracked revision is per environment.** staging's AppSets and
+  Applications set `targetRevision: develop`; **prod's set `targetRevision:
+  main`** (`bootstrap/prod`, `deployments/prod`) — merging develop → main *is*
+  the prod deploy, so the branch is the promotion gate. ArgoCD reconciles each
+  cluster to its branch with `selfHeal: true`. **Both branches are protected —
+  never push directly; branch, PR, merge, and let ArgoCD converge.**
 - **Repo:** `https://github.com/arnaudmaillet/core-platform` for every source.
 
 ---
