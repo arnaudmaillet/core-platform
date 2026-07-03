@@ -256,3 +256,25 @@ spec:
         - { protocol: TCP, port: 50052 }
         - { protocol: TCP, port: 50061 }
         - { protocol: TCP, port: 50060 }
+---
+# The k6-operator (ns k6-operator-system) drives its runner pods over their
+# REST API (:6565) — readiness check, start, teardown. Cross-namespace, so the
+# default-deny blocks it and a TestRun hangs at stage=created with paused
+# runners (same class as the CNPG operator rule above; found live launching
+# the first soak).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-k6-operator-to-runners
+spec:
+  podSelector:
+    matchLabels:
+      app: k6-loadtest
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: k6-operator-system
+      ports:
+        - { protocol: TCP, port: 6565 }
