@@ -22,6 +22,21 @@ spec:
         app: auth-server
         role: server
     spec:
+      # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
+      # scheduling; the PDB is the hard guard against voluntary co-eviction).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: auth-server
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: auth-server
       # Owns the auth Postgres schema via an idempotent migrator init container
       # (reads DATABASE_URL from auth-config).
       initContainers:

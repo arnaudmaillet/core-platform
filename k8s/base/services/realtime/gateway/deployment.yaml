@@ -33,6 +33,21 @@ spec:
         app: realtime-gateway
         role: edge
     spec:
+      # Spread replicas across AZs and nodes (ScheduleAnyway: never blocks
+      # scheduling; the PDB is the hard guard against voluntary co-eviction).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: realtime-gateway
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: realtime-gateway
       # Generous drain window for jittered client reconnect on rollout/scale-down.
       terminationGracePeriodSeconds: 120
       containers:
