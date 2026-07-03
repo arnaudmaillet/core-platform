@@ -164,7 +164,7 @@ Library-only. Implements [`service_runtime::Service`](../../platform/service-run
 > - **KMS/witness *provisioning*** remains an IAM / org-structure commitment — the code is in place behind the ports, but the integrity story is only as strong as the separation between the ledger principal, the KMS signing/encryption principal, and the cross-account WORM witness. Choosing an RFC 3161 TSA vs a second-account Object-Lock bucket, and the key-rotation policy, are ops decisions; local/dev + CI run on the env-KEK + HMAC fallbacks (or LocalStack KMS).
 > - **Producer adoption** — **`moderation`, `auth` and `account` are all wired.** moderation's `decision_recorded` + `enforcement_applied` (rationale sealed), auth's `session_issued` + `session_revoked` (no PII), and account's `account_created` / `email_changed` (PII sealed) + the two GDPR events are consumed and chained. An account `gdpr_deletion_requested` **crypto-shreds the subject**, so all their sealed PII across feeds becomes unreadable while the chain still verifies — the Art. 17 erasure loop, closed end to end.
 > - **The crypto-shred consumer** (needs an erasure-request source) and **the retention-expiry sweep** (needs resolved retention policies) — the handlers exist and are tested; only the worker loops that drive them await their input sources.
-> - **Read authorization + read-self-auditing** (`AUD-3001`/`AUD-3002` + recording each query as a `DATA_ACCESS` event) wire via the `auth-context` ingress interceptor at deployment.
+> - **Read-self-auditing** — recording each authorized query/export as its own `DATA_ACCESS` ledger event. Caller authentication + per-RPC authorization (`AUD-3001`/`AUD-3002`/`AUD-3004`/`AUD-3005`) are **wired**: every RPC verifies the ES256 edge token via `auth-context` and requires its `audit:*` permission, deny-all when unconfigured (`AUDIT_JWKS_URL` below). Until the `DATA_ACCESS` events land, the authorized principal + RPC are traced as the interim access trail.
 > - **Forward pagination** beyond a single capped page; **blockchain anchoring** (overkill — RFC 3161 + cross-account WORM suffices); **real-time SIEM streaming**; **automated DSA transparency-report generation**; **cross-region ledger replication**.
 
 ---
@@ -184,6 +184,9 @@ Library-only. Implements [`service_runtime::Service`](../../platform/service-run
 | `AUDIT_KMS_SIGNING_ALGORITHM` | No | `ECDSA_SHA_256` | KMS `SigningAlgorithm` for the checkpoint signature |
 | `AUDIT_WITNESS_ENDPOINT` | **Yes (prod)** | — | cross-account WORM-bucket (S3 Object Lock) endpoint. **Presence switches on** the external-witness anchor (#483); absent ⇒ Postgres-only `PgCheckpointAnchor` (dev). `AUDIT_WITNESS_{REGION,BUCKET,ACCESS_KEY,SECRET_KEY}` configure it |
 | `AUDIT_CHECKPOINT_SIGNING_KEY_BASE64` | No (dev) | dev key | base64 of the 32-byte HMAC checkpoint-signing key used **only** when KMS is unset (dev/CI signed-checkpoint path) |
+| `AUDIT_JWKS_URL` | **Yes (prod)** | — | JWKS endpoint verifying the ES256 edge tokens on the privileged surface. **Presence switches on** the `auth-context` caller gate; absent ⇒ **deny-all** (`AUD-3004`) — the surface never opens by omission. Every RPC requires its `audit:*` permission: `audit:record` / `audit:read` / `audit:export` / `audit:verify` |
+| `AUDIT_TOKEN_ISSUER` / `AUDIT_TOKEN_AUDIENCE` | No (recommended) | — | expected `iss` / `aud` claims of the edge token (set to the values `auth` mints) |
+| `AUDIT_JWKS_TIMEOUT_MS` | No | `10000` | per-request JWKS fetch timeout |
 | `<ledger / archive config>` | **Yes** | — | append-only Postgres ledger + Object-Lock WORM archive |
 | `<KAFKA_BROKERS>` | **Yes** *(worker)* | — | upstream compliance + decision ingestion |
 

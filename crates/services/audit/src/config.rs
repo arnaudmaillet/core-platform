@@ -48,6 +48,11 @@ pub struct AuditConfig {
     /// set. Keeps the signed-checkpoint path exercised in dev without a real KMS
     /// asymmetric key (not operator-proof — see the README).
     pub checkpoint_signing_key: [u8; 32],
+    /// Caller verification for the privileged gRPC surface. `Some` when
+    /// `AUDIT_JWKS_URL` is set (the ES256 edge-token JWKS, i.e. `auth`'s);
+    /// `None` selects the fail-closed deny-all gate — the surface never opens
+    /// by omission.
+    pub authz: Option<auth_context::AuthContextConfig>,
 }
 
 impl AuditConfig {
@@ -68,8 +73,24 @@ impl AuditConfig {
             kms: kms_from_env(),
             witness: witness_from_env(),
             checkpoint_signing_key: signing_key_from_env(),
+            authz: authz_from_env(),
         }
     }
+}
+
+/// Resolve caller verification — `Some` only when `AUDIT_JWKS_URL` is set.
+/// Issuer/audience validation are individually opt-in (recommended on: set
+/// `AUDIT_TOKEN_ISSUER` / `AUDIT_TOKEN_AUDIENCE` to the values `auth` mints).
+fn authz_from_env() -> Option<auth_context::AuthContextConfig> {
+    let jwks_url = std::env::var("AUDIT_JWKS_URL").ok()?;
+    let mut cfg = auth_context::AuthContextConfig {
+        jwks_url,
+        ..auth_context::AuthContextConfig::default()
+    };
+    cfg.expected_issuer = std::env::var("AUDIT_TOKEN_ISSUER").ok();
+    cfg.expected_audience = std::env::var("AUDIT_TOKEN_AUDIENCE").ok();
+    cfg.fetch_timeout = Duration::from_millis(env_u64("AUDIT_JWKS_TIMEOUT_MS", 10_000));
+    Some(cfg)
 }
 
 /// Resolve the KMS config — `Some` only when `AUDIT_KMS_ENDPOINT` is set (production

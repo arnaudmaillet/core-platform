@@ -52,6 +52,10 @@ anyhow          = { workspace = true }
 tonic            = { workspace = true }
 tonic-reflection = { workspace = true }
 uuid             = { workspace = true }
+# ── Caller gate (finding 4): ES256 edge-token verification on the privileged
+# surface — JWKS decoder + normalized permissions from the shared crate.
+auth-context = { workspace = true }
+jsonwebtoken = { workspace = true }
 
 # ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
 # Contract: the audit.v1 proto types (the codec maps them ⇄ the domain for the
