@@ -88,4 +88,27 @@ echo "Draining Karpenter nodes (EC2)..."
 kubectl delete nodeclaims --all --timeout=300s || true
 kubectl delete nodes -l karpenter.sh/nodepool --timeout=180s || true
 
+# 5b. Fallback: force-terminate any Karpenter instance the graceful drain left
+#     behind. The kubectl delete above times out when many nodes exist (e.g. a
+#     load-test scale-up) or Karpenter is already partway gone; the orphaned
+#     instances then hold ENIs in the EKS node security group and hang
+#     `aws_security_group.node` destroy for 10min+ (seen live 2026-07-04, 18
+#     nodes). Karpenter tags every instance `karpenter.sh/managed-by=<cluster>`
+#     (cluster-scoped + Karpenter-specific), so terminating by that tag can't
+#     touch another cluster's nodes and guarantees no leak regardless of the
+#     drain outcome above.
+echo "Force-terminating any leftover Karpenter instances..."
+LEFTOVER="$(aws ec2 describe-instances --region "${AWS_REGION}" \
+  --filters "Name=tag:karpenter.sh/managed-by,Values=${CLUSTER_NAME}" \
+            "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+  --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null || true)"
+if [ -n "${LEFTOVER}" ]; then
+  echo "  terminating: ${LEFTOVER}"
+  # shellcheck disable=SC2086
+  aws ec2 terminate-instances --region "${AWS_REGION}" --instance-ids ${LEFTOVER} >/dev/null 2>&1 || true
+  aws ec2 wait instance-terminated --region "${AWS_REGION}" --instance-ids ${LEFTOVER} 2>/dev/null || true
+else
+  echo "  none left."
+fi
+
 echo "--- Cleanup finished, proceeding to Terraform Destroy ---"
