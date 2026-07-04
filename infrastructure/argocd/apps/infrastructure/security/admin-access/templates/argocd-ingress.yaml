@@ -12,6 +12,12 @@ metadata:
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.certificateArn | quote }}
     alb.ingress.kubernetes.io/backend-protocol: HTTP
+    {{- if .Values.inboundCidrs }}
+    # Restrict this internet-facing admin ALB to the env's admin/CI ranges
+    # (Terraform-written global param adminCidrs → .Values.inboundCidrs). Empty
+    # (e.g. staging until it sets admin_cidrs) omits the annotation = open.
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ .Values.inboundCidrs | quote }}
+    {{- end }}
     external-dns.alpha.kubernetes.io/hostname: "argocd.core-platform.click"
 spec:
   ingressClassName: alb

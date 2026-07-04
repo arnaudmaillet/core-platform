@@ -14,6 +14,11 @@ variable "cluster_ca_certificate" { type = string }
 variable "vpc_id" { type = string }
 variable "addons_iam_roles" { type = map(string) }
 variable "ssl_certificate_arn" { type = string }
+variable "admin_cidrs" {
+  type        = list(string)
+  description = "Admin/CI CIDRs for the ArgoCD/Grafana ALB inbound-cidrs lockdown. Empty = ALB open (staging default); prod passes live/prod/env.hcl admin_cidrs."
+  default     = []
+}
 variable "addons" { type = any }
 variable "tags" { type = map(string) }
 

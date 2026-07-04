@@ -13,6 +13,7 @@ include "root" {
 locals {
   region_vars = read_terragrunt_config(find_in_parent_folders("region.hcl"))
   aws_region  = local.region_vars.locals.aws_region
+  env_vars    = read_terragrunt_config(find_in_parent_folders("env.hcl"))
 }
 
 dependency "vpc" {
@@ -101,6 +102,9 @@ inputs = {
 
   # --- Security & Certificates ---
   ssl_certificate_arn = dependency.acm_cert.outputs.certificate_arn
+  # Locks the internet-facing ArgoCD + Grafana admin ALBs to the admin/CI ranges
+  # (same REPLACE.ME sentinel as the EKS endpoint — fill before first apply).
+  admin_cidrs = local.env_vars.locals.admin_cidrs
 
   # --- CMP envsubst values (data-store endpoints for the workload overlay) ---
   msk_bootstrap_brokers = dependency.msk.outputs.bootstrap_brokers_sasl_scram
