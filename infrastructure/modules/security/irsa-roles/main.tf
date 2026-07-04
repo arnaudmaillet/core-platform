@@ -205,16 +205,20 @@ module "k6_irsa_role" {
 
 
 
-# --- 7. AWS SERVICE-LINKED ROLE FOR SPOT ---
-# Ce rôle est obligatoire pour que Karpenter (ou tout service EC2) 
-# puisse demander des instances Spot sur ce compte AWS.
-resource "aws_iam_service_linked_role" "spot" {
-  aws_service_name = "spot.amazonaws.com"
-
-  # On ajoute un cycle de vie pour éviter les erreurs si le rôle existe déjà 
-  # sur le compte AWS (car ce rôle est global au compte).
+# --- 7. AWS SERVICE-LINKED ROLE FOR SPOT (moved to the global tree) ---
+# The EC2 Spot SLR is account-global and must OUTLIVE any single env's teardown.
+# Managing it here (per-env) meant `terragrunt destroy` tried to DELETE it —
+# which fails "unexpected state" while spot drains AND would break Karpenter spot
+# in every other env sharing the account (seen live 2026-07-04). It now lives in
+# live/global/security/ec2-spot-slr (created once, destroy-safe).
+#
+# `removed { destroy = false }` migrates any env whose state still holds the old
+# resource: Terraform forgets it WITHOUT deleting the real account-global role.
+# (No live env holds it as of the move, so this is belt-and-suspenders.)
+removed {
+  from = aws_iam_service_linked_role.spot
   lifecycle {
-    ignore_changes = all
+    destroy = false
   }
 }
 # --- 7. EXTERNAL SECRETS OPERATOR (staging/prod only) ---
