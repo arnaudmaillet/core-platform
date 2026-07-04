@@ -11,6 +11,15 @@ terraform {
 
 dependency "vpc" {
   config_path = "../networking/vpc"
+
+  # Destroy-only mocks — same rationale as irsa-roles' eks dependency: a partial
+  # teardown can leave the vpc unit without outputs, bricking this unit's destroy.
+  mock_outputs_allowed_terraform_commands = ["destroy"]
+  mock_outputs = {
+    vpc_id                 = "vpc-00000000000000000"
+    private_app_subnet_ids = ["subnet-00000000000000000"]
+    vpc_cidr_block         = "10.0.0.0/16"
+  }
 }
 
 locals {

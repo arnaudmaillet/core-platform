@@ -7,31 +7,43 @@ include "root" {
 
 dependency "eks" {
   config_path = "../../eks"
+
+  # Destroy-only mocks: after a partial teardown the eks unit's outputs are gone
+  # from state and this unit's destroy dies at HCL evaluation ("no variable named
+  # dependency") — seen live on the 2026-07-04 staging teardown. Inputs are not
+  # consulted when destroying from state, so mocks are safe here.
+  mock_outputs_allowed_terraform_commands = ["destroy"]
+  mock_outputs = {
+    cluster_name       = "mock-cluster"
+    oidc_provider_arn  = "arn:aws:iam::000000000000:oidc-provider/mock"
+    oidc_provider_url  = "oidc.eks.us-east-1.amazonaws.com/id/MOCK"
+    node_iam_role_arns = ["arn:aws:iam::000000000000:role/mock"]
+  }
 }
 
 # App IRSA scopes its policies to the exact Block 3 data-store ARNs.
 dependency "audit_kms" {
   config_path                             = "../../data/audit-kms"
   mock_outputs                            = { key_arn = "arn:aws:kms:us-east-1:000000000000:key/mock" }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "audit_worm" {
   config_path                             = "../../data/audit-worm"
   mock_outputs                            = { bucket_arn = "arn:aws:s3:::mock-audit-worm" }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "media_bucket" {
   config_path                             = "../../data/media-bucket"
   mock_outputs                            = { bucket_arn = "arn:aws:s3:::mock-media" }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "cnpg_backups" {
   config_path                             = "../../data/cnpg-backups"
   mock_outputs                            = { bucket_arn = "arn:aws:s3:::mock-cnpg-backups" }
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 terraform {
