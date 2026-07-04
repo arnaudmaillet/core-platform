@@ -8,6 +8,11 @@ variable "vpc_id" { type = string }
 variable "cluster_name" { type = string }
 variable "cluster_endpoint" { type = string }
 variable "ssl_certificate_arn" { type = string }
+variable "admin_cidrs" {
+  type        = list(string)
+  description = "Admin/CI CIDRs allowed to reach the internet-facing ArgoCD/Grafana ALBs. Empty = no inbound-cidrs annotation (ALB open) — set per-env (prod: required)."
+  default     = []
+}
 variable "addons_iam_roles" { type = map(string) }
 
 # --- CMP envsubst values (runtime data-store endpoints) ----------------------

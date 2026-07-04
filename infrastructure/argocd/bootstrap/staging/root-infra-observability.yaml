@@ -55,6 +55,10 @@ spec:
             parameters:
               - name: "certificateArn"
                 value: "{{ .global.certificateArn }}"
+              # Admin/CI CIDR allow-list for the internet-facing Grafana ALB
+              # (empty → open; harmless no-op param for otel-collector).
+              - name: "inboundCidrs"
+                value: "{{ .global.adminCidrs }}"
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: develop
           ref: values

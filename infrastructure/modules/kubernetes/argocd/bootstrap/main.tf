@@ -86,14 +86,18 @@ resource "github_repository_file" "argocd_params" {
 
   content = jsonencode({
     global = {
-      region              = var.region
-      env                 = var.env
-      repository_url      = var.repository_url
-      target_revision     = var.target_revision
-      clusterName         = var.cluster_name
-      clusterEndpoint     = var.cluster_endpoint
-      vpcId               = var.vpc_id
-      certificateArn      = var.ssl_certificate_arn
+      region          = var.region
+      env             = var.env
+      repository_url  = var.repository_url
+      target_revision = var.target_revision
+      clusterName     = var.cluster_name
+      clusterEndpoint = var.cluster_endpoint
+      vpcId           = var.vpc_id
+      certificateArn  = var.ssl_certificate_arn
+      # ALB inbound-cidrs allow-list for the admin planes (ArgoCD/Grafana),
+      # comma-joined for the annotation. Empty string when admin_cidrs is unset
+      # (staging today) → the ingress templates omit the annotation (ALB open).
+      adminCidrs          = join(",", var.admin_cidrs)
       certManagerRoleArn  = var.addons_iam_roles["cert_manager"]
       karpenterRoleArn    = var.addons_iam_roles["karpenter"]
       lbControllerRoleArn = var.addons_iam_roles["lb_controller"]

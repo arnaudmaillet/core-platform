@@ -86,6 +86,10 @@ spec:
               # {{ if eq .name "admin-access" }}
               - name: "certificateArn"
                 value: "{{ .global.certificateArn }}"
+              # Admin/CI CIDR allow-list for the internet-facing ArgoCD ALB
+              # (empty on envs that haven't set admin_cidrs → ALB stays open).
+              - name: "inboundCidrs"
+                value: "{{ .global.adminCidrs }}"
               # {{ end }}
         - repoURL: https://github.com/arnaudmaillet/core-platform
           targetRevision: main

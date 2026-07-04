@@ -26,6 +26,7 @@ module "bootstrap" {
   cluster_endpoint    = var.cluster_endpoint
   vpc_id              = var.vpc_id
   ssl_certificate_arn = var.ssl_certificate_arn
+  admin_cidrs         = var.admin_cidrs
   addons_iam_roles    = var.addons_iam_roles
   bootstrap_path      = var.bootstrap_path
   global_params_file  = var.global_params_file
