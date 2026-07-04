@@ -19,9 +19,9 @@ infrastructure/
 ├── modules/                    # reusable Terraform modules (the "how")
 │   ├── networking/{vpc,route53}   eks   acm-cert   artifacts/ecr
 │   ├── elasticache   msk   opensearch   s3-bucket (generic; Object-Lock param)
-│   ├── kms-key   app-secrets   security/irsa-roles   kubernetes/argocd
+│   ├── kms-key   app-secrets   security/{irsa-roles,account-slr}   kubernetes/argocd
 └── live/                       # Terragrunt instantiations (the "where/which")
-    ├── global/{artifacts/ecr, networking/route53}     # account-shared
+    ├── global/{artifacts/ecr, networking/route53, security/ec2-spot-slr}  # account-shared
     ├── dev/us-east-1/…
     ├── staging/us-east-1/…     # ◄── documented here (the live path)
     └── prod/us-east-1/…        # full staging mirror, prod posture (not applied)
@@ -202,3 +202,4 @@ gotchas that outlive a `destroy`, is documented in the
 | `kubernetes/argocd` | `kubernetes/argocd` |
 | `artifacts/ecr` | `global/artifacts/ecr` (account-shared) |
 | `networking/route53` | `global/networking/route53` (account-shared) |
+| `security/account-slr` | `global/security/ec2-spot-slr` (account-shared; EC2 Spot service-linked role — account-global, destroy-safe, formerly per-env in `irsa-roles`) |
