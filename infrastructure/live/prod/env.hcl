@@ -32,6 +32,15 @@ locals {
   vpc_cidr           = "10.10.0.0/16"
   single_nat_gateway = false
 
+  # --- Admin / CI ingress allow-list ---
+  # ⚠ REQUIRED BEFORE FIRST APPLY. Locks the public EKS API endpoint (eks unit)
+  # and — once wired — the ArgoCD/Grafana admin ALBs to these ranges. The
+  # "REPLACE.ME/32" sentinel is an invalid CIDR that makes `terragrunt apply`
+  # fail loudly rather than silently opening the API to 0.0.0.0/0 (fail-closed).
+  # Replace with your admin egress + the CI runner egress, e.g.:
+  #   admin_cidrs = ["203.0.113.4/32", "198.51.100.0/24"]
+  admin_cidrs = ["REPLACE.ME/32"]
+
   # --- EKS managed node groups (consumed by modules/eks) ---
   # Graviton for price/perf (ami_type selects the ARM AL2023 AMI — required, the
   # module default is x86); min 3 so losing an AZ leaves quorum for system

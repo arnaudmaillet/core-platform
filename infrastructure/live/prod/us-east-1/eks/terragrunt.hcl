@@ -24,9 +24,11 @@ inputs = {
   vpc_cidr           = dependency.vpc.outputs.vpc_cidr_block
   node_groups        = local.env_vars.locals.node_groups
 
-  # ⚠ REQUIRED BEFORE FIRST APPLY: prod must never expose the API to 0.0.0.0/0
-  # (the module default). Set the admin/CI ranges:
-  # endpoint_public_access_cidrs = ["<admin-cidr>", "<ci-cidr>"]
+  # Locks the public EKS API to the admin/CI ranges in env.hcl. This is NOT the
+  # module default (0.0.0.0/0) — prod must never expose the API to the world.
+  # env.hcl ships a REPLACE.ME placeholder that fails the apply on purpose until
+  # you set real CIDRs (fail-closed beats fail-open for prod).
+  endpoint_public_access_cidrs = local.env_vars.locals.admin_cidrs
 
   project_name = "core-platform"
   env          = local.env_vars.locals.env
