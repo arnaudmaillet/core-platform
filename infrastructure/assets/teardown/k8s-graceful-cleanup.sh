@@ -93,13 +93,18 @@ kubectl delete nodes -l karpenter.sh/nodepool --timeout=180s || true
 #     load-test scale-up) or Karpenter is already partway gone; the orphaned
 #     instances then hold ENIs in the EKS node security group and hang
 #     `aws_security_group.node` destroy for 10min+ (seen live 2026-07-04, 18
-#     nodes). Karpenter tags every instance `karpenter.sh/managed-by=<cluster>`
-#     (cluster-scoped + Karpenter-specific), so terminating by that tag can't
-#     touch another cluster's nodes and guarantees no leak regardless of the
-#     drain outcome above.
+#     nodes). Karpenter (v1) tags every instance `karpenter.sh/nodepool` plus
+#     `kubernetes.io/cluster/<cluster>=owned` — NOT `karpenter.sh/managed-by`,
+#     which this filter originally used and which matches nothing: on the
+#     2026-07-04 staging teardown 8 system-pool instances sailed past it and
+#     wedged the node SG + subnets. Filtering nodepool-tag-present AND
+#     cluster-owned is Karpenter-specific and cluster-scoped, so it can't touch
+#     another cluster's nodes (MNG nodes carry the cluster tag but never the
+#     nodepool tag).
 echo "Force-terminating any leftover Karpenter instances..."
 LEFTOVER="$(aws ec2 describe-instances --region "${AWS_REGION}" \
-  --filters "Name=tag:karpenter.sh/managed-by,Values=${CLUSTER_NAME}" \
+  --filters "Name=tag-key,Values=karpenter.sh/nodepool" \
+            "Name=tag:kubernetes.io/cluster/${CLUSTER_NAME},Values=owned" \
             "Name=instance-state-name,Values=pending,running,stopping,stopped" \
   --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null || true)"
 if [ -n "${LEFTOVER}" ]; then
