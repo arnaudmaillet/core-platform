@@ -33,13 +33,16 @@ locals {
   single_nat_gateway = false
 
   # --- Admin / CI ingress allow-list ---
-  # ⚠ REQUIRED BEFORE FIRST APPLY. Locks the public EKS API endpoint (eks unit)
-  # and — once wired — the ArgoCD/Grafana admin ALBs to these ranges. The
-  # "REPLACE.ME/32" sentinel is an invalid CIDR that makes `terragrunt apply`
-  # fail loudly rather than silently opening the API to 0.0.0.0/0 (fail-closed).
-  # Replace with your admin egress + the CI runner egress, e.g.:
-  #   admin_cidrs = ["203.0.113.4/32", "198.51.100.0/24"]
-  admin_cidrs = ["REPLACE.ME/32"]
+  # Locks the public EKS API endpoint (eks unit) and the ArgoCD/Grafana admin
+  # ALBs to these ranges. Currently the admin workstation's egress IP
+  # (2026-07-04). CI runner egress is deliberately NOT listed: the GitHub
+  # workflows only push to git (fleet pin, prod-promote) and never touch the
+  # EKS API or admin ALBs; Terraform applies run from the workstation. Add a
+  # CIDR here if either of those facts changes, and update this entry when the
+  # workstation IP rotates (a wrong value locks kubectl/ArgoCD out, not
+  # Terraform — the AWS API is unaffected, so it is always recoverable by
+  # editing this list and re-applying the eks unit).
+  admin_cidrs = ["86.208.218.34/32"]
 
   # --- EKS managed node groups (consumed by modules/eks) ---
   # Graviton for price/perf (ami_type selects the ARM AL2023 AMI — required, the
