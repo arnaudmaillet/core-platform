@@ -78,9 +78,12 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
+            # Soak-calibrated (2026-07-04): sized from observed throughput +
+            # stability (p95 34ms I/O-bound, 0 OOM/restart at 2 replicas), NOT
+            # measured utilization. Refine with `kubectl top` on next bring-up.
             requests:
-              cpu: "50m"
-              memory: "128Mi"
+              cpu: "150m"
+              memory: "256Mi"
             # No CPU limit: CFS throttling breaks tokio tail latency under
             # spikes; memory stays the hard cap.
             limits:
