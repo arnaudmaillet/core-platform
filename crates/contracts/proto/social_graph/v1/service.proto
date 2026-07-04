@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package social_graph.v1;
+
+import "social_graph/v1/messages.proto";
+
+option java_package = "com.coreplatform.socialgraph.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/social-graph/v1;socialgraphv1";
+
+// SocialGraphService owns all directional relationships between profiles.
+//
+// SRP guarantee: this service operates exclusively on opaque ProfileId (UUIDv7)
+// primitives. It has no knowledge of profile metadata (handles, bios, avatars).
+// Social graph concerns must never bleed into services/profile or services/account.
+//
+// Supported relation kinds: Follow, Unfollow, Block, Unblock.
+//
+// Graph invariants enforced by this service:
+//   1. Self-interaction is rejected (a profile cannot follow or block itself).
+//   2. A block bi-directionally severs any existing follow and prevents future follows.
+//   3. Mutual follows (A→B and B→A) are implicitly "friends" — no dedicated table.
+//
+// All mutating RPCs (commands) return CommandResponse.
+// All read RPCs (queries) return typed view or paginated response messages.
+service SocialGraphService {
+
+    // ── Commands ──────────────────────────────────────────────────────────────
+
+    // Record that actor follows target.
+    // Rejected if a block exists in either direction, or if actor == target.
+    rpc Follow(FollowRequest) returns (CommandResponse);
+
+    // Remove an existing follow from actor to target.
+    // Rejected if no follow exists.
+    rpc Unfollow(UnfollowRequest) returns (CommandResponse);
+
+    // Record that actor blocks target.
+    // Severs any existing follow between them (in both directions).
+    // Rejected if actor == target or if actor already blocks target.
+    rpc Block(BlockRequest) returns (CommandResponse);
+
+    // Remove an existing block issued by actor against target.
+    // Does not restore severed follows.
+    rpc Unblock(UnblockRequest) returns (CommandResponse);
+
+    // ── Queries ───────────────────────────────────────────────────────────────
+
+    // Returns the full bidirectional relationship context between actor and target,
+    // plus the target's follower/following counts.
+    rpc GetRelationStatus(GetRelationStatusRequest) returns (RelationStatusView);
+
+    // Paginated list of profiles that follow the given profile (fan-in).
+    rpc ListFollowers(ListFollowersRequest) returns (ListFollowersResponse);
+
+    // Paginated list of profiles that the given profile follows (fan-out).
+    rpc ListFollowing(ListFollowingRequest) returns (ListFollowingResponse);
+
+    // Paginated list of profiles blocked by the given profile.
+    rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse);
+}

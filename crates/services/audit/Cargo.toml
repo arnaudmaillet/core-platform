@@ -1,0 +1,105 @@
+[package]
+name                 = "audit"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Audit & compliance microservice — the platform's tamper-evident System of Record for security-, privacy- and regulatory-relevant events (who did what, to whom, when, under what authority, with what outcome). An append-only, hash-chained, WORM-archived evidence plane — never a log aggregator, never a content store."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# Only the canonical error namespace (AUD-XXXX) and the two health-only Service
+# stubs live here today. Subsequent phases add: the audit.v1 event/query contract
+# (Phase 1: audit-api crate + proto — the sync RecordPrivileged RPC + Query/Export
+# /VerifyIntegrity reads + the audit.v1.events Kafka envelope); the pure domain
+# (Phase 2: AuditRecord + ChainLink/HashChain + MerkleCheckpoint + SubjectKeyRef
+# crypto-shred VO + RetentionPolicy/LegalHold + the per-partition sequence/gap
+# invariants); the application layer + ports (Phase 3: LedgerStore / WormArchive /
+# KeyVault+Shredder / CheckpointAnchor / EventSource + the ingest, record-
+# privileged [sync, fail-closed], crypto-shred, verify-chain and query/export
+# handlers + in-memory fakes); the infrastructure adapters (Phase 4: the append-
+# only Postgres ledger with revoked UPDATE/DELETE grants, the S3/MinIO Object-Lock
+# WORM archive, the KMS/HSM signer + per-subject DEK vault, the external anchor/
+# witness, and the run_consumer ingestion lane); and the TWO composition roots —
+# the read/record server (:50068) and the ingest/verify/retention/shred worker
+# (Phase 5). Dependencies grow per phase — kept minimal here.
+[dependencies]
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error      = { workspace = true }
+validation = { workspace = true }
+
+# ── Domain types (Phase 2): pure, clock-injected evidence model ───────────────
+# `serde` for value-object (de)serialization across later tier boundaries;
+# `chrono` for the injected wall clock (event-time, retention floors, hold expiry);
+# `sha2` for the tamper-evidence core — the per-partition hash chain + the Merkle
+# checkpoint root (pure, deterministic computation; no I/O).
+serde  = { workspace = true }
+chrono = { workspace = true }
+sha2   = { workspace = true }
+
+# ── Application layer (Phase 3): async ports held as Arc<dyn …> ────────────────
+async-trait = { workspace = true }
+
+# ── Runtime + composition (Phase 5) ───────────────────────────────────────────
+# Two deployables share this domain crate: the read/record server and the
+# ingest/verify worker. tokio drives both; both serve the internal gRPC health
+# plane via service-runtime.
+service-runtime = { workspace = true }
+tokio           = { workspace = true }
+anyhow          = { workspace = true }
+# `tonic` carries the `AuditService` gRPC handler (Phase 5); `tonic-reflection`
+# serves the audit.v1 descriptor; `uuid` mints export ids.
+tonic            = { workspace = true }
+tonic-reflection = { workspace = true }
+uuid             = { workspace = true }
+# ── Caller gate (finding 4): ES256 edge-token verification on the privileged
+# surface — JWKS decoder + normalized permissions from the shared crate.
+auth-context = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
+# Contract: the audit.v1 proto types (the codec maps them ⇄ the domain for the
+# gRPC sync/read surface). Canonical ledger = append-only Postgres (sqlx). WORM
+# archive + checkpoint anchor = an S3/MinIO Object-Lock bucket (rusty-s3 mints
+# signed URLs, reqwest executes; bytes never touch the mesh). Async ingest lane =
+# the Kafka run_consumer runtime over an audit-owned JSON wire schema (serde_json;
+# base64 for the binary PII envelope on that lane). Key vault = Postgres for v1
+# (a separate trust domain in production — see the README deferral).
+audit-api        = { workspace = true }
+postgres-storage = { workspace = true }
+sqlx             = { workspace = true }
+transport        = { workspace = true }
+serde_json       = { workspace = true }
+base64           = { workspace = true }
+rusty-s3         = { workspace = true }
+reqwest          = { workspace = true }
+url              = { workspace = true }
+prost-types      = { workspace = true }
+tracing          = { workspace = true }
+# Rationale-sealing (Phase 3, audit-adoption): AES-256-GCM envelope encryption —
+# a random per-subject DEK encrypts the PII, wrapped under a service KEK and stored
+# in subject_keys (crypto-shred = delete the wrapped DEK). KMS later takes over KEK
+# custody. `rand`/`OsRng` mints the DEK + nonces.
+aes-gcm          = { workspace = true }
+rand             = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = { workspace = true }
+http      = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (Phase 6, tests/integration.rs).
+# Off by default so `cargo test -p audit` stays a fast, infra-free unit run; the
+# live suite boots a real Postgres + MinIO (Object Lock) + Kafka and drives the
+# append→chain→archive→verify path and the crypto-shred lifecycle over the real
+# adapters. Opt-in via `cargo test -p audit --features integration-audit`.
+integration-audit = []
+
+[dev-dependencies]
+# Live integration suite (Phase 6): shared container orchestration (Postgres +
+# MinIO) + await_until.
+test-support = { workspace = true }
+tokio        = { workspace = true }
+chrono       = { workspace = true }
+uuid         = { workspace = true }
+sqlx         = { workspace = true }

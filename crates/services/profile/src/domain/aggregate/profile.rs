@@ -1,0 +1,498 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::domain::entity::ProfileLink;
+use crate::domain::event::{
+    DomainEvent, HandleChanged, ProfileCreated, ProfileDeleted, ProfileHidden, ProfileRestored,
+    ProfileUpdated, ProfileVerified, TierChanged,
+};
+use crate::domain::value_object::{
+    AccountId, AvatarUrl, BannerUrl, Bio, DisplayName, Handle, Locale, MaskingReason, ProfileId,
+    ProfileKind, ProfileStatus, ProfileVisibility, VerificationKind, WebsiteUrl,
+};
+use crate::error::ProfileError;
+
+pub struct ProfileCreateParams {
+    pub account_id: AccountId,
+    pub handle: Handle,
+    pub display_name: DisplayName,
+    pub bio: Option<Bio>,
+    pub avatar_url: Option<AvatarUrl>,
+    pub banner_url: Option<BannerUrl>,
+    pub profile_kind: ProfileKind,
+    pub locale: Locale,
+    pub correlation_id: Uuid,
+}
+
+/// The Profile aggregate root.
+///
+/// Owns all public-facing identity metadata for a single public identity.
+/// One AccountId may own multiple Profile instances (1-to-N relationship).
+/// Social graph state (followers, friends) is strictly out of scope.
+///
+/// # Invariants
+///
+/// - `profile_kind` is immutable after creation.
+/// - Status transitions are gated by [`ProfileStatus::can_transition_to`].
+/// - `version` is incremented on every write cycle.
+/// - `verified = false` implies `verification_kind = None`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Profile {
+    id: ProfileId,
+    account_id: AccountId,
+    version: i64,
+    handle: Handle,
+    display_name: DisplayName,
+    bio: Option<Bio>,
+    avatar_url: Option<AvatarUrl>,
+    banner_url: Option<BannerUrl>,
+    website_url: Option<WebsiteUrl>,
+    custom_links: Vec<ProfileLink>,
+    profile_kind: ProfileKind,
+    visibility: ProfileVisibility,
+    verified: bool,
+    verification_kind: Option<VerificationKind>,
+    /// Author tier (0=Standard, 1=Premium, 2=Vip), denormalized from
+    /// `social-graph.author_tier_changed`. Profile is the tier owner: it persists
+    /// it and re-emits it on `profile.v1.events` for `post` to stamp onto posts.
+    tier: u8,
+    locale: Locale,
+    timezone: Option<String>,
+    status: ProfileStatus,
+    suspension_reason: Option<String>,
+    masked_at: Option<DateTime<Utc>>,
+    masking_reason: Option<MaskingReason>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    #[serde(skip)]
+    pending_events: Vec<DomainEvent>,
+}
+
+impl Profile {
+    // ─── Constructors ───────────────────────────────────────────────────────
+
+    pub fn create(params: ProfileCreateParams) -> Self {
+        let id = ProfileId::new();
+        let now = Utc::now();
+
+        let event = DomainEvent::ProfileCreated(ProfileCreated {
+            profile_id: id,
+            account_id: params.account_id,
+            handle: params.handle.clone(),
+            profile_kind: params.profile_kind,
+            occurred_at: now,
+            correlation_id: params.correlation_id,
+        });
+
+        let mut profile = Self {
+            id,
+            account_id: params.account_id,
+            version: 0,
+            handle: params.handle,
+            display_name: params.display_name,
+            bio: params.bio,
+            avatar_url: params.avatar_url,
+            banner_url: params.banner_url,
+            website_url: None,
+            custom_links: Vec::new(),
+            profile_kind: params.profile_kind,
+            visibility: ProfileVisibility::Public,
+            verified: false,
+            verification_kind: None,
+            tier: 0,
+            locale: params.locale,
+            timezone: None,
+            status: ProfileStatus::Active,
+            suspension_reason: None,
+            masked_at: None,
+            masking_reason: None,
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            pending_events: Vec::new(),
+        };
+        profile.pending_events.push(event);
+        profile
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn reconstitute(
+        id: ProfileId,
+        account_id: AccountId,
+        version: i64,
+        handle: Handle,
+        display_name: DisplayName,
+        bio: Option<Bio>,
+        avatar_url: Option<AvatarUrl>,
+        banner_url: Option<BannerUrl>,
+        website_url: Option<WebsiteUrl>,
+        custom_links: Vec<ProfileLink>,
+        profile_kind: ProfileKind,
+        visibility: ProfileVisibility,
+        verified: bool,
+        verification_kind: Option<VerificationKind>,
+        tier: u8,
+        locale: Locale,
+        timezone: Option<String>,
+        status: ProfileStatus,
+        suspension_reason: Option<String>,
+        masked_at: Option<DateTime<Utc>>,
+        masking_reason: Option<MaskingReason>,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        deleted_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            id,
+            account_id,
+            version,
+            handle,
+            display_name,
+            bio,
+            avatar_url,
+            banner_url,
+            website_url,
+            custom_links,
+            profile_kind,
+            visibility,
+            verified,
+            verification_kind,
+            tier,
+            locale,
+            timezone,
+            status,
+            suspension_reason,
+            masked_at,
+            masking_reason,
+            created_at,
+            updated_at,
+            deleted_at,
+            pending_events: Vec::new(),
+        }
+    }
+
+    // ─── Domain Mutations ───────────────────────────────────────────────────
+
+    pub fn update(
+        &mut self,
+        display_name: Option<DisplayName>,
+        bio: Option<Bio>,
+        website_url: Option<Option<WebsiteUrl>>,
+        locale: Option<Locale>,
+        custom_links: Vec<ProfileLink>,
+        correlation_id: Uuid,
+    ) -> Result<(), ProfileError> {
+        self.require_active()?;
+        if custom_links.len() > 5 {
+            return Err(ProfileError::TooManyCustomLinks { count: custom_links.len() });
+        }
+        if let Some(dn) = display_name {
+            self.display_name = dn;
+        }
+        if let Some(b) = bio {
+            self.bio = if b.is_empty() { None } else { Some(b) };
+        }
+        if let Some(wu) = website_url {
+            self.website_url = wu;
+        }
+        if let Some(l) = locale {
+            self.locale = l;
+        }
+        self.custom_links = custom_links;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::ProfileUpdated(ProfileUpdated {
+            profile_id: self.id,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    /// Returns the old handle so the command handler can tombstone the index entry.
+    pub fn change_handle(
+        &mut self,
+        new_handle: Handle,
+        correlation_id: Uuid,
+    ) -> Result<Handle, ProfileError> {
+        self.require_active()?;
+        let old_handle = self.handle.clone();
+        self.handle = new_handle.clone();
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::HandleChanged(HandleChanged {
+            profile_id: self.id,
+            old_handle: old_handle.clone(),
+            new_handle,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(old_handle)
+    }
+
+    pub fn update_avatar(
+        &mut self,
+        url: Option<AvatarUrl>,
+        correlation_id: Uuid,
+    ) -> Result<(), ProfileError> {
+        self.require_active()?;
+        self.avatar_url = url;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::ProfileUpdated(ProfileUpdated {
+            profile_id: self.id,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    pub fn update_banner(
+        &mut self,
+        url: Option<BannerUrl>,
+        correlation_id: Uuid,
+    ) -> Result<(), ProfileError> {
+        self.require_active()?;
+        self.banner_url = url;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::ProfileUpdated(ProfileUpdated {
+            profile_id: self.id,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    pub fn set_visibility(
+        &mut self,
+        v: ProfileVisibility,
+        correlation_id: Uuid,
+    ) -> Result<(), ProfileError> {
+        if self.status == ProfileStatus::Deleted {
+            return Err(ProfileError::ProfileNotActive {
+                current: self.status.as_str().to_owned(),
+            });
+        }
+        self.visibility = v;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::ProfileUpdated(ProfileUpdated {
+            profile_id: self.id,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    pub fn verify(
+        &mut self,
+        kind: VerificationKind,
+        correlation_id: Uuid,
+    ) -> Result<(), ProfileError> {
+        if self.verified {
+            return Err(ProfileError::ProfileAlreadyVerified);
+        }
+        self.verified = true;
+        self.verification_kind = Some(kind);
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::ProfileVerified(ProfileVerified {
+            profile_id: self.id,
+            verification_kind: kind,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    pub fn hide(
+        &mut self,
+        reason: MaskingReason,
+        suspension_reason: Option<String>,
+        correlation_id: Uuid,
+    ) -> Result<(), ProfileError> {
+        self.transition_status(ProfileStatus::Hidden)?;
+        let now = Utc::now();
+        self.masked_at = Some(now);
+        self.masking_reason = Some(reason);
+        self.suspension_reason = suspension_reason;
+        self.touch(now);
+        self.pending_events.push(DomainEvent::ProfileHidden(ProfileHidden {
+            profile_id: self.id,
+            masking_reason: reason,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    pub fn restore(&mut self, correlation_id: Uuid) -> Result<(), ProfileError> {
+        self.transition_status(ProfileStatus::Active)?;
+        self.masked_at = None;
+        self.masking_reason = None;
+        self.suspension_reason = None;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::ProfileRestored(ProfileRestored {
+            profile_id: self.id,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    pub fn delete(&mut self, correlation_id: Uuid) -> Result<(), ProfileError> {
+        self.transition_status(ProfileStatus::Deleted)?;
+        let now = Utc::now();
+        self.deleted_at = Some(now);
+        self.touch(now);
+        self.pending_events.push(DomainEvent::ProfileDeleted(ProfileDeleted {
+            profile_id: self.id,
+            handle: self.handle.clone(),
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    /// Set the author tier (denormalized from `social-graph.author_tier_changed`).
+    /// Idempotent: an unchanged tier is a no-op that emits nothing. A new tier is
+    /// persisted and re-emitted on `profile.v1.events` (`TierChanged`). Values
+    /// above the known taxonomy (`> 2`) are a contract fault.
+    pub fn set_tier(&mut self, new_tier: u8, correlation_id: Uuid) -> Result<(), ProfileError> {
+        if new_tier > 2 {
+            return Err(ProfileError::DomainViolation {
+                field: "tier".to_owned(),
+                message: format!("unknown author tier {new_tier}"),
+            });
+        }
+        if new_tier == self.tier {
+            return Ok(());
+        }
+        self.tier = new_tier;
+        let now = self.touch_now();
+        self.pending_events.push(DomainEvent::TierChanged(TierChanged {
+            profile_id: self.id,
+            tier: new_tier,
+            occurred_at: now,
+            correlation_id,
+        }));
+        Ok(())
+    }
+
+    // ─── Event Drain ────────────────────────────────────────────────────────
+
+    pub fn drain_events(&mut self) -> Vec<DomainEvent> {
+        std::mem::take(&mut self.pending_events)
+    }
+
+    // ─── Getters ────────────────────────────────────────────────────────────
+
+    pub fn id(&self) -> ProfileId { self.id }
+    pub fn account_id(&self) -> AccountId { self.account_id }
+    pub fn version(&self) -> i64 { self.version }
+    pub fn tier(&self) -> u8 { self.tier }
+    pub fn handle(&self) -> &Handle { &self.handle }
+    pub fn display_name(&self) -> &DisplayName { &self.display_name }
+    pub fn bio(&self) -> Option<&Bio> { self.bio.as_ref() }
+    pub fn avatar_url(&self) -> Option<&AvatarUrl> { self.avatar_url.as_ref() }
+    pub fn banner_url(&self) -> Option<&BannerUrl> { self.banner_url.as_ref() }
+    pub fn website_url(&self) -> Option<&WebsiteUrl> { self.website_url.as_ref() }
+    pub fn custom_links(&self) -> &[ProfileLink] { &self.custom_links }
+    pub fn profile_kind(&self) -> ProfileKind { self.profile_kind }
+    pub fn visibility(&self) -> ProfileVisibility { self.visibility }
+    pub fn verified(&self) -> bool { self.verified }
+    pub fn verification_kind(&self) -> Option<VerificationKind> { self.verification_kind }
+    pub fn locale(&self) -> &Locale { &self.locale }
+    pub fn timezone(&self) -> Option<&str> { self.timezone.as_deref() }
+    pub fn status(&self) -> ProfileStatus { self.status }
+    pub fn suspension_reason(&self) -> Option<&str> { self.suspension_reason.as_deref() }
+    pub fn masked_at(&self) -> Option<DateTime<Utc>> { self.masked_at }
+    pub fn masking_reason(&self) -> Option<MaskingReason> { self.masking_reason }
+    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn deleted_at(&self) -> Option<DateTime<Utc>> { self.deleted_at }
+
+    // ─── Private Helpers ────────────────────────────────────────────────────
+
+    fn require_active(&self) -> Result<(), ProfileError> {
+        if self.status != ProfileStatus::Active {
+            return Err(ProfileError::ProfileNotActive {
+                current: self.status.as_str().to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    fn transition_status(&mut self, next: ProfileStatus) -> Result<(), ProfileError> {
+        if !self.status.can_transition_to(next) {
+            return Err(ProfileError::InvalidStatusTransition {
+                from: self.status.as_str().to_owned(),
+                to: next.as_str().to_owned(),
+            });
+        }
+        self.status = next;
+        Ok(())
+    }
+
+    fn touch(&mut self, now: DateTime<Utc>) {
+        self.version += 1;
+        self.updated_at = now;
+    }
+
+    fn touch_now(&mut self) -> DateTime<Utc> {
+        let now = Utc::now();
+        self.touch(now);
+        now
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::event::DomainEvent;
+    use crate::domain::value_object::{AccountId, Handle, Locale, ProfileKind};
+
+    fn sample_profile() -> Profile {
+        let mut p = Profile::create(ProfileCreateParams {
+            account_id: AccountId::try_from(uuid::Uuid::now_v7().to_string().as_str()).unwrap(),
+            handle: Handle::new("alicehandle").unwrap(),
+            display_name: DisplayName::new("Alice").unwrap(),
+            bio: None,
+            avatar_url: None,
+            banner_url: None,
+            profile_kind: ProfileKind::try_from("personal").unwrap(),
+            locale: Locale::new("en-US").unwrap(),
+            correlation_id: Uuid::now_v7(),
+        });
+        p.drain_events(); // discard the ProfileCreated event
+        p
+    }
+
+    #[test]
+    fn set_tier_emits_on_change_and_updates_state() {
+        let mut p = sample_profile();
+        assert_eq!(p.tier(), 0);
+
+        p.set_tier(2, Uuid::now_v7()).unwrap();
+        assert_eq!(p.tier(), 2);
+        let events = p.drain_events();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], DomainEvent::TierChanged(_)));
+    }
+
+    #[test]
+    fn set_tier_is_idempotent_when_unchanged() {
+        let mut p = sample_profile();
+        p.set_tier(1, Uuid::now_v7()).unwrap();
+        p.drain_events();
+
+        // Same tier again → no event, no version bump.
+        let version_before = p.version();
+        p.set_tier(1, Uuid::now_v7()).unwrap();
+        assert!(p.drain_events().is_empty());
+        assert_eq!(p.version(), version_before);
+    }
+
+    #[test]
+    fn set_tier_rejects_unknown_tier() {
+        let mut p = sample_profile();
+        assert!(p.set_tier(5, Uuid::now_v7()).is_err());
+    }
+}

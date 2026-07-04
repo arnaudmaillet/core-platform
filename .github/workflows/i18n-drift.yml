@@ -1,0 +1,28 @@
+name: i18n-drift
+
+# Guards documentation translations against silent drift: if a canonical doc (<name>.md —
+# README.md, DOMAIN.md, CONTEXT_MAP.md, an ADR, …) changes but its sibling translation
+# (<name>.<lang>.md) still records the old source hash, the build fails — forcing
+# "retranslate and re-stamp, or mark status: stale".
+# The gate (tools/i18n/i18n-drift.sh) scans every <name>.<lang>.md repo-wide, so the triggers
+# below cover any markdown change, not just READMEs. See docs/i18n/TRANSLATION.md.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'tools/i18n/**'
+      - '.github/workflows/i18n-drift.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - '**/*.md'
+      - 'tools/i18n/**'
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check translation freshness
+        run: bash tools/i18n/i18n-drift.sh check

@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package timeline.v1;
+
+// A single slot in a user's following feed.
+//
+// Intentionally minimal: only the identifiers needed for BFF hydration.
+// The BFF fetches rendering metadata (title, thumbnail, author handle,
+// avatar) from services/post and services/profile using these identifiers.
+// The timeline service never stores or forwards post content.
+message FeedItem {
+    // UUID v7 of the post. Used by BFF to call services/post for metadata.
+    string post_id       = 1;
+    // UUID of the post's author. Used by BFF to call services/profile.
+    string author_id     = 2;
+    // Unix epoch milliseconds of publication. Drives client-side sort order.
+    int64  published_at_ms = 3;
+}
+
+// Request for a page of the caller's following feed.
+message GetFollowingFeedRequest {
+    // UUID of the authenticated profile requesting their feed.
+    string profile_id  = 1;
+    // Maximum number of items to return. Server clamps to TIMELINE_MAX_PAGE_SIZE.
+    int32  limit       = 2;
+    // Opaque cursor from the previous response's next_page_token.
+    // Omit or send empty string for the first page.
+    string page_token  = 3;
+}
+
+// Response containing one page of the following feed.
+message GetFollowingFeedResponse {
+    repeated FeedItem items           = 1;
+    // Opaque cursor for the next page. Empty when no more items exist.
+    string            next_page_token = 2;
+    // True when the feed was served from ScyllaDB cold storage rather than
+    // Redis. The client may use this to show a loading indicator on subsequent
+    // requests while the Redis cache is warming asynchronously.
+    bool              is_cold         = 3;
+}
+
+// Generic command acknowledgement.
+message CommandResponse {
+    bool   success = 1;
+    string message = 2;
+}
+
+// A single slot in an audio-scoped feed.
+message AudioFeedItem {
+    string post_id         = 1;
+    string author_id       = 2;
+    int64  published_at_ms = 3;
+}
+
+// Request for a page of posts that use a given audio track.
+message GetAudioFeedRequest {
+    string audio_id   = 1;
+    int32  limit      = 2;
+    // Opaque cursor from the previous response's next_token.
+    // Omit or send empty string for the first page.
+    string page_token = 3;
+}
+
+// Response containing one page of the audio feed.
+message GetAudioFeedResponse {
+    repeated AudioFeedItem items      = 1;
+    // Opaque cursor for the next page. Empty when no more items exist.
+    string                 next_token = 2;
+}

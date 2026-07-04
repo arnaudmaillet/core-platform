@@ -1,0 +1,19 @@
+[package]
+name = "cqrs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+error         = { workspace = true }
+validate-core = { workspace = true }
+
+uuid     = { workspace = true }
+chrono   = { workspace = true }
+tracing  = { workspace = true }
+futures  = { workspace = true }
+dashmap  = { workspace = true }
+http     = { workspace = true }

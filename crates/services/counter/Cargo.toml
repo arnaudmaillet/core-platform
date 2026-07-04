@@ -1,0 +1,75 @@
+[package]
+name        = "counter"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Counter-analytics microservice — the platform's real-time counter aggregator and analytics System-of-Reference: absorbs the engagement/view firehose, serves coarse magnitudes, owns no entity."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# Only the canonical error namespace (CTR-XXXX) lives here today. Subsequent
+# phases add: domain/ (Phase 2: CounterDelta + MetricKind[exact-vs-approx] + the
+# pure windowed-fold aggregator + HLL/CMS abstractions + popularity derivation),
+# application/ + ports (Phase 3: CounterStore / CounterLedger / TimeSeriesStore /
+# SignalPublisher + ingestion & query handlers + in-memory fakes), infrastructure/
+# adapters (Phase 4: Redis hot / Postgres warm-ledger / Scylla TWCS cold / Kafka
+# popularity publisher + the inbound event-decode layer), and the TWO composition
+# roots — the low-latency read server and the heavy stream worker (Phase 5).
+# Dependencies grow per phase — kept minimal here.
+[dependencies]
+# ── Contracts ─────────────────────────────────────────────────────────────────
+counter-api      = { workspace = true }
+# social-graph is the authoritative SoR for follower/following counts — the
+# reconciliation source queries it over gRPC.
+social-graph-api = { workspace = true }
+anyhow           = { workspace = true }
+
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error      = { workspace = true }
+validation = { workspace = true }
+
+# ── Domain types (Phase 2): pure, clock-injected aggregation model ────────────
+serde  = { workspace = true }
+chrono = { workspace = true }
+
+# ── Application layer (Phase 3): CQRS query bus + async ports ──────────────────
+cqrs        = { workspace = true }
+async-trait = { workspace = true }
+
+# ── Infrastructure adapters (Phase 4): the three storage tiers + Kafka ─────────
+# Hot tier = Redis via fred (HLL/sorted-set ops issued through Lua `eval`, the
+# fleet pattern, so no reliance on fred's typed HLL methods). Warm tier = Postgres
+# via sqlx (idempotent window-keyed UPSERT). Cold tier = Scylla TWCS. Outbound =
+# Kafka via the shared transport producer.
+redis-storage    = { workspace = true }
+postgres-storage = { workspace = true }
+scylla-storage   = { workspace = true }
+transport        = { workspace = true }
+fred             = { workspace = true, features = ["partial-tracing", "i-scripts"] }
+sqlx             = { workspace = true }
+scylla           = { workspace = true }
+tracing          = { workspace = true }
+
+# ── Server + worker wiring (Phase 5): runtime, tonic ingress, consumers ───────
+service-runtime  = { workspace = true }
+tonic            = { workspace = true }
+tonic-reflection = { workspace = true }
+prost-types      = { workspace = true }
+tokio            = { workspace = true }
+uuid             = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = { workspace = true }
+http      = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (Phase 6, tests/integration.rs).
+# Off by default so `cargo test -p counter` stays a fast, infra-free unit run; the
+# live suite boots real Redis + Postgres + Scylla containers (the full hot/warm/cold
+# tiering) and is opt-in via `cargo test -p counter --features integration-counter`.
+integration-counter = []
+
+[dev-dependencies]
+# Live integration suite: shared container orchestration + await_until (Phase 6).
+test-support = { workspace = true }

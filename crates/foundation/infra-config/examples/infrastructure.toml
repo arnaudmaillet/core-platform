@@ -1,0 +1,115 @@
+# Fleet-wide infrastructure configuration.
+#
+# Each section is a *catalog* of named class-of-service profiles plus *bindings* that map a
+# dependency/namespace to a profile by name. Change a profile once and every binding bound
+# to it moves together. Section contents hot-reload; the profile set + bindings are
+# boot-time topology.
+
+[resilience]
+default_profile = "standard"
+
+# ── Standard: general internal RPC ────────────────────────────────────────────
+[resilience.profiles.standard]
+timeout = { duration_ms = 10_000 }
+circuit_breaker = { failure_threshold = 5, success_threshold = 2, open_duration_ms = 30_000, half_open_max_calls = 1 }
+retry = { max_attempts = 3, backoff = { kind = "exponential", base_ms = 50, max_ms = 10_000, jitter = "full" } }
+
+# ── Critical: tight deadlines, fail fast, don't amplify load ──────────────────
+[resilience.profiles.critical]
+timeout = { duration_ms = 2_000 }
+circuit_breaker = { failure_threshold = 5, success_threshold = 2, open_duration_ms = 30_000, half_open_max_calls = 1 }
+retry = { max_attempts = 1, backoff = { kind = "exponential", base_ms = 20, max_ms = 500, jitter = "full" } }
+
+# ── Aggressive: background / batch work, retry hard ───────────────────────────
+[resilience.profiles.aggressive]
+timeout = { duration_ms = 30_000 }
+circuit_breaker = { failure_threshold = 10, success_threshold = 3, open_duration_ms = 15_000, half_open_max_calls = 2 }
+retry = { max_attempts = 6, backoff = { kind = "exponential", base_ms = 100, max_ms = 20_000, jitter = "full" } }
+
+# ── Bindings: dependency name -> profile ──────────────────────────────────────
+[resilience.bindings]
+"post-command"  = "critical"
+"timeline-read" = "standard"
+"notification"  = "aggressive"
+# timeline -> social-graph (fan-out + cold-rebuild reads): tolerant of latency,
+# so it rides the standard profile. An unbound dependency falls back to
+# `default_profile`, so this line is documentation as much as configuration.
+"social-graph"  = "standard"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cache-TTL profiles. Same catalog+bindings shape as [resilience]. Widening a TTL
+# here (e.g. to ride out a cache stampede) takes effect with no redeploy.
+# ══════════════════════════════════════════════════════════════════════════════
+[cache]
+default_profile = "standard"
+
+# ── Standard: ordinary read-through cache entries ─────────────────────────────
+[cache.profiles.standard]
+ttl_secs = 300
+
+# ── Hot: short TTL for fast-moving data, with brief negative caching ──────────
+[cache.profiles.hot]
+ttl_secs          = 60
+negative_ttl_secs = 10
+
+# ── Long: slow-moving reference data ──────────────────────────────────────────
+[cache.profiles.long]
+ttl_secs = 86_400
+
+# ── Bindings: cache namespace -> profile ──────────────────────────────────────
+[cache.bindings]
+"profile-view"  = "standard"
+"handle-lookup" = "long"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Ingress rate-limit profiles — the server-side mirror of [resilience]. Bindings
+# map an inbound gRPC method to a profile. Installing the layer means EVERY method
+# is limited (unbound -> default_profile; unbound is not unlimited).
+#
+# mode = "local" (default): per-replica governor — fleet limit ≈ rps × replicas.
+# mode = "distributed": fleet-global budget via the traffic-redis lease backend; the
+#   serving binary must wire it (GrpcServerBuilder::with_traffic_backend), else the
+#   profile degrades to local per-replica limiting.
+#
+# Rollout: ship a pilot with `enforce = false` (shadow — would-throttles are
+# observed, requests admitted), watch the signal, then flip `enforce = true` here.
+# The change hot-reloads; no redeploy, and reverting is just as fast.
+# ══════════════════════════════════════════════════════════════════════════════
+[traffic]
+default_profile = "standard"
+
+# ── Standard: general read traffic, fleet-coarse, per-replica ─────────────────
+[traffic.profiles.standard]
+rps   = 1_000
+burst = 200
+scope = "per_method"
+
+# ── Write-tight: expensive mutations. Piloting in SHADOW first (enforce=false). ─
+# `per_caller` keys on the edge-mesh-injected identity header (transport's
+# `identity_header`, default `x-edge-user`); requests without it fall back to
+# per-method keying.
+[traffic.profiles.write-tight]
+rps     = 50
+burst   = 10
+scope   = "per_caller"
+enforce = false
+
+# ── Tenant-quota: a precise fleet-global per-caller budget (distributed) ───────
+# `lease_ms` is the global budget window; `burst` doubles as the per-replica lease
+# chunk (larger = fewer Redis claims, coarser cross-replica fairness). If Redis is
+# unreachable, `on_backend_error` decides: fail_open degrades to the local governor,
+# fail_closed rejects.
+[traffic.profiles.tenant-quota]
+rps              = 100
+burst            = 10
+scope            = "per_caller"
+mode             = "distributed"
+lease_ms         = 1_000
+on_backend_error = "fail_open"
+
+# ── Bindings: gRPC method path -> profile ─────────────────────────────────────
+[traffic.bindings]
+"/post.PostService/CreatePost"      = "write-tight"
+"/timeline.TimelineService/GetFeed" = "standard"

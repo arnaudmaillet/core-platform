@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package media.v1;
+
+import "media/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.media.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/media/v1;mediav1";
+
+// ── Core asset projections ────────────────────────────────────────────────────
+
+// The metadata view of an asset. The contract (LOCKED): this carries metadata and
+// content-addressed storage keys ONLY — never bytes. Bytes are uploaded direct to
+// object storage (Plane A) and delivered via CDN / signed URLs (Plane C). `media`
+// is the System-of-Record for everything in this message; object storage is the
+// SoR for the bytes those keys point at.
+message Asset {
+    string                      id           = 1;
+    // The owning actor (edge-authenticated; the asset's authorization principal).
+    string                      owner_id     = 2;
+    MediaKind                   kind         = 3;
+    AssetState                  state        = 4;
+    // The VERIFIED MIME type (from magic-byte probe on finalize), not the
+    // client-declared one.
+    string                      mime_type    = 5;
+    uint64                      byte_size    = 6;
+    uint32                      width        = 7;
+    uint32                      height       = 8;
+    // Lowercase-hex SHA-256 of the original bytes. Drives content-addressing and
+    // (when enabled) cross-owner dedup. Empty until the upload is finalized.
+    string                      content_hash = 9;
+    // A tiny BlurHash placeholder string for progressive render while PROCESSING.
+    // Empty until computed.
+    string                      blurhash     = 10;
+    // The derivative catalog. Empty until the pipeline produces them.
+    repeated Rendition          renditions   = 11;
+    google.protobuf.Timestamp   created_at   = 12;
+    google.protobuf.Timestamp   updated_at   = 13;
+}
+
+// One derivative in an asset's catalog. `storage_key` is an object-store key, not a
+// URL and not bytes — the caller resolves a delivery URL for it via Plane C.
+message Rendition {
+    RenditionKind  kind        = 1;
+    string         mime_type   = 2;
+    // Content-addressed object-store key for this rendition.
+    string         storage_key = 3;
+    uint32         width       = 4;
+    uint32         height      = 5;
+    uint64         byte_size   = 6;
+}
+
+// ── Plane A · Upload brokerage (no bytes — pre-signed direct-to-store) ─────────
+
+message IssueUploadTicketRequest {
+    // The uploading actor (edge-resolved). The service self-authorizes nothing.
+    string     owner_id            = 1;
+    MediaKind  kind                = 2;
+    // The client's claimed content type. VERIFIED server-side on finalize against
+    // the actual magic bytes; a mismatch fails the asset (MED-6001).
+    string     declared_mime_type  = 3;
+    uint64     declared_size_bytes = 4;
+    // Optional lowercase-hex SHA-256 the client intends to upload. When dedup is
+    // enabled this may short-circuit to an existing asset; otherwise it is recorded
+    // for integrity verification on finalize.
+    string     content_sha256      = 5;
+    // Optional caller idempotency key so a retried ticket request returns the same
+    // asset/ticket rather than reserving a new one.
+    string     idempotency_key     = 6;
+}
+
+message IssueUploadTicketResponse {
+    string        asset_id = 1;
+    UploadTicket  ticket   = 2;
+    // True when content-addressed dedup matched existing bytes: `asset_id` already
+    // refers to a READY asset and no upload is needed (the `ticket` is then unset).
+    // Always false when dedup is disabled (the default — it is gated behind a
+    // flag). See the blueprint's open-fork B.
+    bool          deduplicated = 3;
+}
+
+// A pre-signed upload plan. Carries the URL the client PUTs the bytes to and the
+// constraints the signature enforces — never bytes themselves. v1 is a single
+// pre-signed PUT (images); a multipart plan for large video is a fast-follow.
+message UploadTicket {
+    // The pre-signed object-store URL to PUT the bytes to (direct, off-mesh).
+    string                      upload_url       = 1;
+    // The HTTP method the pre-signed URL expects (e.g. "PUT").
+    string                      method           = 2;
+    // Headers the client MUST send with the upload for the signature to validate
+    // (e.g. Content-Type, content-length range, server-side-encryption headers).
+    map<string, string>         required_headers = 3;
+    // The hard byte ceiling the signed policy enforces.
+    uint64                      max_size_bytes   = 4;
+    // After this instant the ticket is dead; request a fresh one (MED-1004).
+    google.protobuf.Timestamp   expires_at       = 5;
+}
+
+message CommitUploadRequest {
+    string  asset_id       = 1;
+    // The object ETag returned by the store on PUT, for an integrity cross-check.
+    string  etag           = 2;
+    // Optional client-computed lowercase-hex SHA-256, verified against the stored
+    // object on finalize.
+    string  content_sha256 = 3;
+}
+
+message CommitUploadResponse {
+    // The asset after finalize — typically UPLOADED or already PROCESSING. The S3
+    // event notification is the authoritative finalize trigger; this RPC is the
+    // low-latency nudge, and the two converge idempotently.
+    Asset  asset = 1;
+}
+
+message AbortUploadRequest {
+    string  asset_id = 1;
+    string  owner_id = 2;
+}
+
+message AbortUploadResponse {}
+
+// ── Asset metadata ────────────────────────────────────────────────────────────
+
+message GetAssetRequest {
+    string  asset_id = 1;
+}
+
+message GetAssetResponse {
+    Asset  asset = 1;
+}
+
+message DeleteAssetRequest {
+    string  asset_id = 1;
+    // The requesting actor (edge-resolved); must own the asset.
+    string  owner_id = 2;
+}
+
+// Hard-delete is refused with PERMISSION_DENIED (MED-7003) while a legal hold is
+// active — compliance preservation overrides owner/GDPR erasure.
+message DeleteAssetResponse {}
+
+// ── Plane C · Delivery resolution (hot read; CDN / signed URLs, no bytes) ─────
+
+message ResolveDeliveryRequest {
+    string              asset_id   = 1;
+    // Preferred rendition; UNSPECIFIED ⇒ a sensible default for the asset's kind.
+    RenditionKind       preferred  = 2;
+    // Requested visibility; UNSPECIFIED ⇒ the asset's default delivery policy.
+    DeliveryVisibility  visibility = 3;
+}
+
+message ResolveDeliveryResponse {
+    DeliveredMedia  media = 1;
+}
+
+// The resolved delivery view for one asset — URLs only, never bytes. Fails OPEN:
+// when the asset is still PROCESSING (or resolution is partial) it carries the
+// blurhash placeholder and `degraded = true` rather than erroring the read path.
+message DeliveredMedia {
+    string                       asset_id   = 1;
+    // So the caller can choose to render a placeholder for a not-yet-READY asset.
+    AssetState                   state      = 2;
+    // Progressive-render placeholder; present even before renditions resolve.
+    string                       blurhash   = 3;
+    repeated DeliveredRendition  renditions = 4;
+    // Fail-open marker: media could not fully resolve (engine/CDN partial); the
+    // caller renders what it can.
+    bool                         degraded   = 5;
+}
+
+message DeliveredRendition {
+    RenditionKind               kind           = 1;
+    // A CDN URL — content-addressed-immutable (PUBLIC) or short-lived signed
+    // (SIGNED). Never bytes.
+    string                      url            = 2;
+    DeliveryVisibility          visibility     = 3;
+    // Set for SIGNED URLs (their expiry); unset for PUBLIC immutable URLs.
+    google.protobuf.Timestamp   url_expires_at = 4;
+    uint32                      width          = 5;
+    uint32                      height         = 6;
+}
+
+message BatchResolveDeliveryRequest {
+    repeated string     asset_ids  = 1;
+    RenditionKind       preferred  = 2;
+    DeliveryVisibility  visibility = 3;
+}
+
+message BatchResolveDeliveryResponse {
+    // One entry per resolvable asset (keyed by `DeliveredMedia.asset_id`). An asset
+    // that cannot be resolved (missing/quarantined) is OMITTED rather than failing
+    // the batch — the boundary fails open for feed hydration.
+    repeated DeliveredMedia  media = 1;
+}
+
+// ── Ops ───────────────────────────────────────────────────────────────────────
+
+message ReprocessRequest {
+    string  asset_id = 1;
+    // Why (e.g. a new rendition-ladder version). Audit-only.
+    string  reason   = 2;
+}
+
+message ReprocessResponse {
+    // The asset, moved back to PROCESSING.
+    Asset  asset = 1;
+}

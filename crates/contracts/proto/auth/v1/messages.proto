@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package auth.v1;
+
+import "auth/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.auth.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/auth/v1;authv1";
+
+// ── Shared value objects ──────────────────────────────────────────────────────
+
+// Client/device context captured for session tracking and anomaly detection.
+// All fields are best-effort metadata; none are security-bearing on their own.
+message DeviceContext {
+    string  user_agent  = 1;
+    string  ip_address  = 2;
+    // Client-provided stable device identifier (optional); enables "this device"
+    // labelling and targeted revocation in ListSessions.
+    string  device_id   = 3;
+}
+
+// The pair of tokens returned on a successful Login/Refresh.
+//
+// `access_token` is the short-lived, locally-verifiable EDGE token (ES256 JWT in
+// the current phase; PASETO v4.public is a forward-compatible swap). Downstream
+// services verify it in pure CPU via the `auth-context` library — they do NOT
+// call this service on the hot path.
+//
+// `refresh_token` is a long-lived, opaque, single-use server-side handle. It is
+// rotated on every use; presenting a rotated token triggers reuse-detection and
+// revokes the whole session generation.
+message TokenPair {
+    string  access_token   = 1;
+    string  refresh_token  = 2;
+    // Always "Bearer"; present for OAuth2 client familiarity.
+    string  token_type     = 3;
+    // Lifetime of `access_token` in seconds (always ⊆ remaining session TTL).
+    int64   expires_in     = 4;
+    // The session this pair belongs to (normalized identifier).
+    string  session_id     = 5;
+}
+
+// A single session as seen by the account owner (device-management view).
+message SessionView {
+    string                          session_id       = 1;
+    SessionStatus                   status           = 2;
+    // Monotonic revocation epoch; a mass-logout bumps it.
+    int64                           generation       = 3;
+    DeviceContext                   device           = 4;
+    google.protobuf.Timestamp       issued_at        = 5;
+    // Sliding expiry of the session.
+    google.protobuf.Timestamp       expires_at       = 6;
+    // Hard cap beyond which the session cannot be extended.
+    google.protobuf.Timestamp       absolute_expiry  = 7;
+    // True for the session that issued the calling principal's token.
+    bool                            current          = 8;
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+
+// OIDC authorization-code grant (with PKCE). The code is obtained by the client
+// from the IdP's authorize endpoint; this service exchanges it via the broker.
+message AuthorizationCodeGrant {
+    string  code           = 1;
+    string  redirect_uri   = 2;
+    // PKCE verifier matching the challenge sent to the authorize endpoint.
+    string  code_verifier  = 3;
+}
+
+// Resource-owner password grant (first-party trusted clients only).
+message PasswordGrant {
+    string  username  = 1;
+    // Transits TLS to the IdP broker; never persisted by this service.
+    string  password  = 2;
+}
+
+message LoginRequest {
+    DeviceContext   device  = 1;
+    GrantType       grant_type = 2;
+    // Exactly one credential variant must be set, matching `grant_type`.
+    oneof credential {
+        AuthorizationCodeGrant  authorization_code  = 3;
+        PasswordGrant           password            = 4;
+    }
+}
+
+message LoginResponse {
+    // Internal account identifier (NOT the IdP subject) the session is bound to.
+    string      account_id  = 1;
+    TokenPair   tokens      = 2;
+    // True when this login established the IdP-subject → account link for the
+    // first time (a SubjectLinked event was emitted).
+    bool        first_link  = 3;
+}
+
+// ── Refresh ───────────────────────────────────────────────────────────────────
+
+message RefreshRequest {
+    string          refresh_token  = 1;
+    // Optional; re-validated against the session's bound device when present.
+    DeviceContext   device         = 2;
+}
+
+message RefreshResponse {
+    TokenPair   tokens  = 1;
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+
+message LogoutRequest {
+    // Session to revoke. Empty ⇒ the calling principal's current session
+    // (resolved from the authenticated edge token).
+    string  session_id  = 1;
+}
+
+message LogoutResponse {
+    bool    success  = 1;
+}
+
+// ── Logout all sessions (global sign-out / generation bump) ───────────────────
+
+message LogoutAllSessionsRequest {
+    // Target account. Empty ⇒ the calling principal's account.
+    string  account_id  = 1;
+}
+
+message LogoutAllSessionsResponse {
+    bool    success           = 1;
+    // The new session generation after the bump; every token below it is dead.
+    int64   generation        = 2;
+    int32   sessions_revoked  = 3;
+}
+
+// ── Introspect (internal) ─────────────────────────────────────────────────────
+
+message IntrospectRequest {
+    string  access_token  = 1;
+}
+
+// Normalized principal — the same shape `auth-context` produces on the inbound
+// path, exposed here for callers that need server-side introspection rather than
+// local verification (e.g. opaque-token gateways or audit tooling).
+message IntrospectResponse {
+    bool                            active       = 1;
+    string                          account_id   = 2;
+    string                          session_id   = 3;
+    int64                           generation   = 4;
+    // Normalized permissions, e.g. "posts:write" / "ROLE_ADMIN".
+    repeated string                 permissions  = 5;
+    google.protobuf.Timestamp       expires_at   = 6;
+}
+
+// ── List sessions ─────────────────────────────────────────────────────────────
+
+message ListSessionsRequest {
+    // Target account. Empty ⇒ the calling principal's account.
+    string  account_id  = 1;
+}
+
+message ListSessionsResponse {
+    repeated SessionView  sessions  = 1;
+}

@@ -1,0 +1,23 @@
+[package]
+name                 = "counter-worker"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the counter-analytics WRITE path — the heavy stream worker: firehose aggregation, durable write-behind, reconciliation, and the popularity-signal publisher."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# No-op entrypoint today. Phase 5 wires this as the stream processor: supervised
+# `run_consumer` loops over the firehose (view/impression/click) + domain topics
+# (engagement.reactions, social-graph follows), the in-process windowed
+# pre-aggregation (N events → 1 delta), the batched idempotent write-behind to
+# the Postgres ledger + Scylla time-series, the reconciliation loop, and the
+# `counter.v1.popularity` publisher. CPU/memory heavy; scaled independently of
+# `counter-server`. This binary exposes NO read RPC.
+[dependencies]
+counter         = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

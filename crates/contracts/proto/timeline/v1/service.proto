@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package timeline.v1;
+
+import "timeline/v1/messages.proto";
+
+service TimelineService {
+    // Returns the authenticated user's following feed.
+    //
+    // Hot path: Redis merge of the materialized regular feed (timeline:feed:{id})
+    // plus per-VIP-author ZSET slices (timeline:vip:{author_id}).
+    //
+    // Cold path: triggered when timeline:warm:{profile_id} is absent. The
+    // service reads from ScyllaDB feed_items_by_profile and posts_by_author,
+    // writes to Redis in the background, and returns is_cold=true on the first
+    // response. Subsequent requests within the warm window are served from Redis.
+    //
+    // The response contains only (post_id, author_id, published_at_ms) tuples.
+    // The BFF is responsible for hydrating all rendering metadata from
+    // services/post and services/profile. This service never stores content.
+    //
+    // Pagination: cursor-based via page_token. The cursor encodes the
+    // published_at_ms of the last returned item. Pass next_page_token from
+    // the previous response to retrieve the next page.
+    rpc GetFollowingFeed (GetFollowingFeedRequest) returns (GetFollowingFeedResponse);
+
+    // Returns a chronological feed of all posts that use a specific audio track.
+    //
+    // Partition key: audio_id (UUID of the originating post for original sounds,
+    // or the original post's ID for reused sounds).
+    //
+    // Hot path: Redis ZSET audio:feed:{audio_id} served via ZREVRANGEBYSCORE.
+    // Cold path: ScyllaDB timeline.posts_by_audio partition scan (no ALLOW FILTERING).
+    //
+    // Pagination: cursor-based via page_token encoding published_at_ms of
+    // the last returned item.
+    rpc GetAudioFeed (GetAudioFeedRequest) returns (GetAudioFeedResponse);
+}

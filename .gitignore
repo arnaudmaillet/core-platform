@@ -1,6 +1,8 @@
 # Environnement
 .env
+local-dev/.env
 infra.env
+settings.json
 
 # Rust / Build
 target/
@@ -20,9 +22,16 @@ MODULE.bazel.lock
 .vscode/
 *.swp
 intellij.bazelproject
+rust-project.json
 
+# Structurizr
+.structurizr/
+**/structurizr-*-key.json
+# Workspace state Lite regenerates from workspace.dsl (derived, not source)
+docs/architecture/workspace.json
 
 # Fichiers et dossiers générés par Terraform
+.terraform.lock.hcl
 .terraform/
 *.tfstate
 *.tfstate.backup
@@ -41,3 +50,10 @@ intellij.bazelproject
 
 # Fichiers de crash
 crash.log
+
+
+
+public-key.cert
+.aider*
+
+infrastructure/argocd-old

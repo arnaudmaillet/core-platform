@@ -1,0 +1,23 @@
+//! Outbound ports — the only contracts the application layer holds against the
+//! outside world. Concrete adapters (Keycloak, Postgres, Redis, the `account`
+//! gRPC client, the token minter) live in `infrastructure` (Phase 4) and are
+//! injected at the composition root. Each is an `async_trait` so it can be held
+//! as `Arc<dyn …>`.
+
+pub mod account_directory;
+pub mod event_publisher;
+pub mod identity_provider;
+pub mod refresh_token_repository;
+pub mod session_cache;
+pub mod session_repository;
+pub mod subject_link_repository;
+pub mod token_minter;
+
+pub use account_directory::{AccountActivation, AccountDirectory, AccountSnapshot};
+pub use event_publisher::EventPublisher;
+pub use identity_provider::{AuthnGrant, IdentityProvider, NormalizedClaims};
+pub use refresh_token_repository::RefreshTokenRepository;
+pub use session_cache::SessionCache;
+pub use session_repository::SessionRepository;
+pub use subject_link_repository::SubjectLinkRepository;
+pub use token_minter::{GeneratedRefresh, TokenMinter};

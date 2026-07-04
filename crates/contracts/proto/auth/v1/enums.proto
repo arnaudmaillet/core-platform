@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option java_package = "com.coreplatform.auth.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/auth/v1;authv1";
+
+// Lifecycle status of a Session aggregate.
+enum SessionStatus {
+    SESSION_STATUS_UNSPECIFIED = 0;
+    // Live; can mint edge access tokens until its sliding/absolute expiry.
+    ACTIVE                     = 1;
+    // Explicitly revoked (logout, reuse-detection, or admin). Terminal.
+    REVOKED                    = 2;
+    // Reached its absolute expiry. Terminal.
+    EXPIRED                    = 3;
+}
+
+// How the caller authenticates at OUR boundary. Deliberately IdP-agnostic: the
+// concrete IdP protocol (Keycloak/Cognito/Okta) is brokered behind the
+// infrastructure adapter and never named in this contract.
+enum GrantType {
+    GRANT_TYPE_UNSPECIFIED = 0;
+    // OIDC authorization-code flow with PKCE (primary, browser/native clients).
+    AUTHORIZATION_CODE     = 1;
+    // Resource-owner password grant — first-party trusted clients only. The
+    // password transits TLS to the IdP broker and is NEVER stored by this service
+    // (credentials are owned by the IdP under the federated model).
+    PASSWORD               = 2;
+}

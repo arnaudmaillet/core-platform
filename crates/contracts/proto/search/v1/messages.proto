@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package search.v1;
+
+import "search/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.search.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/search/v1;searchv1";
+
+// ── Result hit + per-entity display projections ───────────────────────────────
+
+// A single ranked result. The contract (LOCKED): a hit is a REFERENCE, not a
+// hydrated entity. It carries the id, the engine score, a highlighted snippet,
+// and the MINIMAL indexed display fields needed to render a result row. Callers
+// MUST hydrate volatile/authoritative fields (live counts, signed media URLs,
+// follow-state, current bio) from `post`/`profile`. Search resolves nothing on
+// the fly.
+message SearchHit {
+    SearchEntityType  entity_type = 1;
+    // The authoritative id (profile id / post id / the tag itself for hashtags).
+    string            id          = 2;
+    // Engine relevance score for this hit under the request's sort strategy.
+    float             score       = 3;
+    // Engine-generated highlighted snippet (the matched span), for the result row.
+    string            snippet     = 4;
+    // The minimal display projection, by kind. Exactly one is set, matching
+    // `entity_type`.
+    oneof display {
+        ProfileHit  profile = 5;
+        PostHit     post    = 6;
+        HashtagHit  hashtag = 7;
+    }
+}
+
+// Minimal indexed display fields for a profile result.
+message ProfileHit {
+    string  handle       = 1;
+    string  display_name = 2;
+    // Object-store key for the avatar; the caller signs/resolves the URL.
+    string  avatar_key   = 3;
+    bool    verified     = 4;
+}
+
+// Minimal indexed display fields for a post result. No engagement counts here —
+// those are volatile and resolved by the caller from `engagement`.
+message PostHit {
+    string                      author_id     = 1;
+    string                      author_handle = 2;
+    // Object-store key for the post thumbnail; the caller signs/resolves the URL.
+    string                      thumbnail_key = 3;
+    google.protobuf.Timestamp   created_at    = 4;
+}
+
+// Minimal indexed display fields for a hashtag result.
+message HashtagHit {
+    string  tag        = 1;
+    // Coarse, periodically-refreshed post count for ranking/display — NOT a
+    // real-time counter.
+    int64   post_count = 2;
+}
+
+// ── Search (federated, paginated) ─────────────────────────────────────────────
+
+message SearchRequest {
+    string                      query        = 1;
+    // Restrict the search to these entity kinds; empty ⇒ all (federated).
+    repeated SearchEntityType   entity_types = 2;
+    SearchSort                  sort         = 3;
+    int32                       page_size    = 4;
+    string                      page_token   = 5;
+    // Caller-supplied exclusions (e.g. author ids the viewer has blocked/muted).
+    // The EDGE resolves the viewer's social-graph block/mute set and passes the
+    // ids here — search never indexes nor stores per-viewer exclusions. This is
+    // the boundary that keeps personal block/mute OUT of the shared index.
+    repeated string             exclude_author_ids = 6;
+}
+
+message SearchResponse {
+    repeated SearchHit  hits            = 1;
+    string              next_page_token = 2;
+    // Engine estimate of total matches, for UI affordances (not exact).
+    int64               estimated_total = 3;
+    // True when results are degraded — the engine was partial/unavailable and
+    // search failed OPEN (returned what it could) rather than erroring. Callers
+    // may surface a "results may be incomplete" hint.
+    bool                degraded        = 4;
+}
+
+// ── Suggest / autocomplete (prefix) ───────────────────────────────────────────
+
+message SuggestRequest {
+    string                      prefix       = 1;
+    repeated SearchEntityType   entity_types = 2;
+    int32                       limit        = 3;
+}
+
+message SuggestResponse {
+    repeated Suggestion  suggestions = 1;
+}
+
+message Suggestion {
+    SearchEntityType  entity_type = 1;
+    // The completion text (a handle, a hashtag, …).
+    string            text        = 2;
+    // The resolvable id when applicable (e.g. profile id); empty for hashtags.
+    string            id          = 3;
+    float             score       = 4;
+}
+
+// ── MultiSearch (batch of independent queries in one round-trip) ──────────────
+
+// Runs several independent searches in a single call (e.g. a page issuing a
+// people search and a posts search at once). Distinct from a single federated
+// SearchRequest: each inner search has its own query, kinds, sort, and paging.
+message MultiSearchRequest {
+    repeated SearchRequest  searches = 1;
+}
+
+message MultiSearchResponse {
+    // Positional, 1:1 with `MultiSearchRequest.searches`.
+    repeated SearchResponse  responses = 1;
+}

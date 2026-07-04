@@ -1,0 +1,74 @@
+//! The query path against the live engine: typo-tolerant federated match across
+//! kinds, entity-type filtering, block-author exclusion, and deep GDPR purge.
+
+use crate::search_it::harness::{HASHTAG, Harness, POST, PROFILE, ids};
+
+#[tokio::test]
+async fn federated_typo_tolerant_match_and_kind_filter() {
+    let h = Harness::start().await;
+    h.index_profile("prof-1", "alice", "Alice A.", "distributed systems nerd", 1)
+        .await;
+    h.index_post("post-1", "acct-9", "scaling distributed systems", 1)
+        .await;
+    h.index_hashtag("distributed", 42, 1).await;
+    h.refresh().await;
+
+    // Typo tolerance: "systen" fuzzily matches "systems" (fuzziness AUTO).
+    let typo = ids(&h.search("systen").await);
+    assert!(
+        typo.contains(&"post-1".to_owned()) && typo.contains(&"prof-1".to_owned()),
+        "a one-edit typo should still match across kinds, got {typo:?}"
+    );
+
+    // Federated: all three kinds match "distributed".
+    let federated = ids(&h.search("distributed").await);
+    assert_eq!(
+        federated,
+        vec!["distributed".to_owned(), "post-1".to_owned(), "prof-1".to_owned()]
+    );
+
+    // Entity-type filter narrows to one index.
+    let only_hashtags = ids(&h.search_opts("distributed", vec![HASHTAG], vec![]).await);
+    assert_eq!(only_hashtags, vec!["distributed".to_owned()]);
+
+    let only_people = ids(&h.search_opts("distributed", vec![PROFILE, POST], vec![]).await);
+    assert_eq!(only_people, vec!["post-1".to_owned(), "prof-1".to_owned()]);
+}
+
+#[tokio::test]
+async fn excludes_blocked_authors() {
+    let h = Harness::start().await;
+    h.index_post("p-blocked", "blocked-acct", "shared keyword here", 1)
+        .await;
+    h.index_post("p-ok", "ok-acct", "shared keyword here", 1).await;
+    h.refresh().await;
+
+    let all = ids(&h.search("keyword").await);
+    assert_eq!(all, vec!["p-blocked".to_owned(), "p-ok".to_owned()]);
+
+    let filtered = ids(&h.search_opts("keyword", vec![], vec!["blocked-acct"]).await);
+    assert_eq!(
+        filtered,
+        vec!["p-ok".to_owned()],
+        "the blocked author's post is excluded at query time"
+    );
+}
+
+#[tokio::test]
+async fn gdpr_purge_removes_all_of_an_authors_documents() {
+    let h = Harness::start().await;
+    h.index_post("a-1", "acct-A", "widget review", 1).await;
+    h.index_post("a-2", "acct-A", "widget unboxing", 1).await;
+    h.index_post("b-1", "acct-B", "widget teardown", 1).await;
+    assert_eq!(
+        h.search_ids("widget").await,
+        vec!["a-1".to_owned(), "a-2".to_owned(), "b-1".to_owned()]
+    );
+
+    h.purge("acct-A").await;
+    assert_eq!(
+        h.search_ids("widget").await,
+        vec!["b-1".to_owned()],
+        "every document authored by the purged actor is gone; others remain"
+    );
+}

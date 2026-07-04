@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package social_graph.v1;
+
+import "social_graph/v1/enums.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.coreplatform.socialgraph.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/social-graph/v1;socialgraphv1";
+
+// ── Read models ───────────────────────────────────────────────────────────────
+
+// The full relationship context between actor and target.
+// Returned by GetRelationStatus.
+message RelationStatusView {
+    string         actor_id               = 1;
+    string         target_id              = 2;
+    RelationStatus status                 = 3;
+    // Follower and following counts are for the target profile.
+    int64          target_followers_count = 4;
+    int64          target_following_count = 5;
+}
+
+// A lightweight summary of one edge in an adjacency list.
+// Used in paginated follower/following list responses.
+message EdgeSummary {
+    // The profile on the other end of the edge.
+    // In ListFollowers responses: the follower_id.
+    // In ListFollowing responses: the followee_id.
+    string                    profile_id  = 1;
+    google.protobuf.Timestamp followed_at = 2;
+}
+
+// A lightweight summary of one block edge.
+message BlockSummary {
+    string                    blockee_id  = 1;
+    google.protobuf.Timestamp blocked_at  = 2;
+}
+
+// Generic acknowledge response for all mutating RPCs.
+message CommandResponse {
+    bool   success   = 1;
+    string actor_id  = 2;
+    string target_id = 3;
+}
+
+// ── Command request messages ──────────────────────────────────────────────────
+
+message FollowRequest {
+    string actor_id  = 1;
+    string target_id = 2;
+}
+
+message UnfollowRequest {
+    string actor_id  = 1;
+    string target_id = 2;
+}
+
+message BlockRequest {
+    string actor_id  = 1;
+    string target_id = 2;
+}
+
+message UnblockRequest {
+    string actor_id  = 1;
+    string target_id = 2;
+}
+
+// ── Query request / response messages ────────────────────────────────────────
+
+message GetRelationStatusRequest {
+    string actor_id  = 1;
+    string target_id = 2;
+}
+
+message ListFollowersRequest {
+    string followee_id = 1;
+    int32  limit       = 2;
+    string page_token  = 3;
+}
+
+message ListFollowersResponse {
+    repeated EdgeSummary followers        = 1;
+    string               next_page_token  = 2;
+}
+
+message ListFollowingRequest {
+    string follower_id = 1;
+    int32  limit       = 2;
+    string page_token  = 3;
+}
+
+message ListFollowingResponse {
+    repeated EdgeSummary following        = 1;
+    string               next_page_token  = 2;
+}
+
+message ListBlocksRequest {
+    string blocker_id  = 1;
+    int32  limit       = 2;
+    string page_token  = 3;
+}
+
+message ListBlocksResponse {
+    repeated BlockSummary blocks          = 1;
+    string                next_page_token = 2;
+}

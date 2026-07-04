@@ -1,0 +1,67 @@
+[package]
+name        = "timeline"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Timeline microservice — hybrid fan-out-on-write / fan-out-on-read home feed engine with Redis-backed hot caches and ScyllaDB cold-start recovery."
+
+[dependencies]
+timeline-api = { workspace = true }
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error          = { workspace = true }
+validate-core  = { workspace = true }
+validation     = { workspace = true }
+scylla-storage = { workspace = true }
+redis-storage  = { workspace = true }
+cqrs           = { workspace = true }
+transport      = { workspace = true }
+service-runtime = { workspace = true }
+anyhow         = { workspace = true }
+
+# ── Async runtime & utilities ─────────────────────────────────────────────────
+tokio        = { workspace = true }
+futures      = { workspace = true }
+async-trait  = { workspace = true }
+
+# ── Serialisation ─────────────────────────────────────────────────────────────
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+
+# ── Domain utilities ──────────────────────────────────────────────────────────
+uuid    = { workspace = true }
+base64  = { workspace = true }
+
+# ── Error handling & observability ───────────────────────────────────────────
+thiserror = { workspace = true }
+tracing   = { workspace = true }
+
+# ── gRPC / proto ─────────────────────────────────────────────────────────────
+social-graph-api = { workspace = true }   # cross-service client stubs (contracts tier)
+tonic            = { workspace = true }
+tonic-reflection = { workspace = true }
+http             = { workspace = true }
+
+# ── Storage drivers ───────────────────────────────────────────────────────────
+scylla = { workspace = true }
+fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p timeline` stays a fast, infra-free unit run;
+# the live suite is opt-in via `cargo test -p timeline --features integration-timeline`.
+integration-timeline = []
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-timeline") ─────────────────────
+# Container orchestration, the RF=1 migration runner, and `await_until` come from
+# the shared `test-support` crate; the suite code is wholly behind
+# `#[cfg(feature = "integration-timeline")]`.
+test-support = { workspace = true }
+async-trait  = { workspace = true }
+futures      = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }

@@ -1,0 +1,70 @@
+[package]
+name        = "profile"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Profile microservice — public identity metadata layer for hyperscale read traffic."
+
+[dependencies]
+profile-api = { workspace = true }
+# ── Shared platform infrastructure ───────────────────────────────────────────
+error            = { workspace = true }
+validate-core    = { workspace = true }
+validation       = { workspace = true }
+scylla-storage   = { workspace = true }
+redis-storage    = { workspace = true }
+
+# ── Shared platform crates ────────────────────────────────────────────────────
+cqrs              = { workspace = true }
+transport         = { workspace = true }
+infra-config      = { workspace = true }
+service-runtime   = { workspace = true }
+anyhow            = { workspace = true }
+
+# ── Async runtime & utilities ─────────────────────────────────────────────────
+tokio        = { workspace = true }
+async-trait  = { workspace = true }
+
+# ── Serialisation ─────────────────────────────────────────────────────────────
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+base64       = { workspace = true }
+
+# ── Domain types ──────────────────────────────────────────────────────────────
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+regex        = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror    = { workspace = true }
+
+# ── Observability ─────────────────────────────────────────────────────────────
+tracing      = { workspace = true }
+
+# ── gRPC / Protobuf ───────────────────────────────────────────────────────────
+tonic             = { workspace = true }
+prost-types       = { workspace = true }
+tonic-reflection  = { workspace = true }
+http              = { workspace = true }
+
+# ── Storage drivers (direct access for advanced query patterns) ───────────────
+scylla = { workspace = true }
+fred   = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p profile` stays a fast, infra-free unit run; the
+# live suite is opt-in via `cargo test -p profile --features integration-profile`.
+integration-profile = []
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-profile") ──────────────────────
+# Container orchestration, the RF=1 migration runner, and `await_until` come from
+# the shared `test-support` crate; the suite code is wholly behind
+# `#[cfg(feature = "integration-profile")]`.
+test-support = { workspace = true }
+uuid         = { workspace = true }

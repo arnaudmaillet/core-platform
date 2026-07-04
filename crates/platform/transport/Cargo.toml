@@ -1,0 +1,66 @@
+[package]
+name = "transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+# Internal crates
+error = { workspace = true }
+resilience = { workspace = true }
+infra-config      = { workspace = true }
+traffic           = { workspace = true }
+
+# gRPC — Tonic + Tower
+tonic = { workspace = true }
+tower = { workspace = true }
+
+# Kafka
+rdkafka = { workspace = true }
+
+# HTTP primitives (used in Tower layer signatures)
+http = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+prost = { workspace = true }
+
+# Async runtime and utilities
+tokio = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
+rand = { workspace = true }
+
+# Observability
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+# OpenTelemetry — pinned to the same versions as the `telemetry` crate
+# so context propagation is wire-compatible across the platform.
+opentelemetry = { version = "0.27", features = ["trace", "metrics"] }
+tracing-opentelemetry = "0.28"
+
+# Byte utilities (used in protobuf codec and tonic body handling)
+bytes = "1"
+
+[features]
+# Gates the live-broker integration tests (single-node Kafka via testcontainers) so the
+# default `cargo test` stays hermetic and Docker-free. The suite is run explicitly with:
+#   cargo test -p transport --features integration-kafka
+integration-kafka = []
+
+[dev-dependencies]
+# Ephemeral single-node broker for the consumer-runtime integration tests.
+# testcontainers-modules 0.14 ships no Redpanda module, so we use its `kafka` module,
+# which defaults to the `apache/kafka-native` image: a GraalVM-native, KRaft single-node
+# broker that boots in ~1-2s with no ZooKeeper — the same fast-boot / isolation profile.
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["kafka"] }
+# Unique per-test topic / consumer-group namespacing (v7 = time-ordered, collision-free).
+uuid = { workspace = true }
+# Implementing a fake QuotaBackend in the traffic-layer tests.
+async-trait = { workspace = true }

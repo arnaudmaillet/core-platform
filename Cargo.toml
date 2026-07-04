@@ -2,16 +2,81 @@
 
 [workspace]
 members = [
-    "backend/services/account/outbox-processor",
-    "backend/services/account/cache-invalidator",
-    "backend/services/profile/workers/outbox-processor",
-    "backend/services/profile/workers/cache-invalidator",
-    "backend/services/profile/api/command-server",
-    "crates/account",
-    "crates/profile",
-    "crates/shared-kernel",
-    "crates/gamification",
-    "backend/gateway/graphql-bff"]
+    "crates/foundation/error",
+    "crates/foundation/health",
+    "crates/foundation/resilience",
+    "crates/foundation/infra-config",
+    "crates/foundation/traffic",
+    "crates/platform/traffic-redis",
+    "crates/platform/telemetry",
+    "crates/platform/transport",
+    "crates/platform/cqrs",
+    "crates/storage/postgres",
+    "crates/storage/scylla",
+    "crates/storage/redis",
+    "crates/platform/auth-context",
+    "crates/foundation/validate-core",
+    "crates/platform/validation",
+    "crates/platform/test-support",
+    "crates/platform/service-runtime",
+    "crates/services/account",
+    "crates/services/profile",
+    "crates/services/social-graph",
+    "crates/services/post",
+    "crates/services/engagement",
+    "crates/services/comment",
+    "crates/services/geo-discovery",
+    "crates/services/notification",
+    "crates/services/timeline",
+    "crates/services/chat",
+    "crates/services/auth",
+    "crates/services/moderation",
+    "crates/services/search",
+    "crates/services/media",
+    "crates/services/counter",
+    "crates/services/realtime",
+    "crates/services/audit",
+    "crates/apps/chat-server",
+    "crates/apps/profile-server",
+    "crates/apps/social-graph-server",
+    "crates/apps/geo-discovery-server",
+    "crates/apps/notification-server",
+    "crates/apps/post-server",
+    "crates/apps/comment-server",
+    "crates/apps/engagement-server",
+    "crates/apps/account-server",
+    "crates/apps/timeline-server",
+    "crates/apps/auth-server",
+    "crates/apps/moderation-server",
+    "crates/apps/search-server",
+    "crates/apps/media-server",
+    "crates/apps/counter-server",
+    "crates/apps/counter-worker",
+    "crates/apps/realtime-gateway",
+    "crates/apps/realtime-dispatcher",
+    "crates/apps/audit-server",
+    "crates/apps/audit-worker",
+    "crates/apps/migrator",
+    "crates/apps/topic-provisioner",
+    "crates/contracts/social-graph-api",
+    "crates/contracts/account-api",
+    "crates/contracts/chat-api",
+    "crates/contracts/comment-api",
+    "crates/contracts/engagement-api",
+    "crates/contracts/geo-discovery-api",
+    "crates/contracts/notification-api",
+    "crates/contracts/post-api",
+    "crates/contracts/profile-api",
+    "crates/contracts/timeline-api",
+    "crates/contracts/auth-api",
+    "crates/contracts/moderation-api",
+    "crates/contracts/search-api",
+    "crates/contracts/media-api",
+    "crates/contracts/counter-api",
+    "crates/contracts/realtime-api",
+    "crates/contracts/audit-api",
+    "crates/contracts/event-topology",
+]
 resolver = "2"
 
 [workspace.package]
@@ -23,65 +88,186 @@ repository = "https://github.com/ton-repo/projet"
 description = "core-platform repo"
 
 [workspace.dependencies]
-# Internes
-shared-kernel = { path = "crates/shared-kernel" }
-account = { path = "crates/account" }
-profile = { path = "crates/profile" }
+# ── Internal shared crates ────────────────────────────────────────────────────
+# Single source of truth for every intra-workspace path. Member crates reference
+# these with `{ workspace = true }` so paths live in exactly one place.
+# NB: the `postgres` crate is exposed under the `postgres-storage` key (via
+# `package`) to avoid colliding with the crates.io `postgres` crate and to keep
+# the naming symmetric with `scylla-storage` / `redis-storage`.
+error             = { path = "crates/foundation/error" }
+health            = { path = "crates/foundation/health" }
+resilience        = { path = "crates/foundation/resilience" }
+infra-config      = { path = "crates/foundation/infra-config" }
+traffic           = { path = "crates/foundation/traffic" }
+traffic-redis     = { path = "crates/platform/traffic-redis" }
+telemetry        = { path = "crates/platform/telemetry" }
+transport        = { path = "crates/platform/transport" }
+cqrs             = { path = "crates/platform/cqrs" }
+auth-context     = { path = "crates/platform/auth-context" }
+validate-core    = { path = "crates/foundation/validate-core" }
+validation       = { path = "crates/platform/validation" }
+postgres-storage = { path = "crates/storage/postgres", package = "postgres" }
+scylla-storage   = { path = "crates/storage/scylla" }
+redis-storage    = { path = "crates/storage/redis" }
+test-support     = { path = "crates/platform/test-support" }
+service-runtime  = { path = "crates/platform/service-runtime" }
+event-topology   = { path = "crates/contracts/event-topology" }
+
+# Contracts tier — generated gRPC stub crates (server + client + descriptor)
+social-graph-api = { path = "crates/contracts/social-graph-api" }
+account-api = { path = "crates/contracts/account-api" }
+chat-api = { path = "crates/contracts/chat-api" }
+comment-api = { path = "crates/contracts/comment-api" }
+engagement-api = { path = "crates/contracts/engagement-api" }
+geo-discovery-api = { path = "crates/contracts/geo-discovery-api" }
+notification-api = { path = "crates/contracts/notification-api" }
+post-api = { path = "crates/contracts/post-api" }
+profile-api = { path = "crates/contracts/profile-api" }
+timeline-api = { path = "crates/contracts/timeline-api" }
+auth-api = { path = "crates/contracts/auth-api" }
+moderation-api = { path = "crates/contracts/moderation-api" }
+search-api = { path = "crates/contracts/search-api" }
+media-api = { path = "crates/contracts/media-api" }
+counter-api = { path = "crates/contracts/counter-api" }
+realtime-api = { path = "crates/contracts/realtime-api" }
+audit-api = { path = "crates/contracts/audit-api" }
+account          = { path = "crates/services/account" }
+chat             = { path = "crates/services/chat" }
+profile          = { path = "crates/services/profile" }
+social-graph     = { path = "crates/services/social-graph" }
+post             = { path = "crates/services/post" }
+engagement       = { path = "crates/services/engagement" }
+comment          = { path = "crates/services/comment" }
+geo-discovery    = { path = "crates/services/geo-discovery" }
+notification     = { path = "crates/services/notification" }
+timeline         = { path = "crates/services/timeline" }
+auth             = { path = "crates/services/auth" }
+moderation       = { path = "crates/services/moderation" }
+search           = { path = "crates/services/search" }
+media            = { path = "crates/services/media" }
+counter          = { path = "crates/services/counter" }
+realtime         = { path = "crates/services/realtime" }
+audit            = { path = "crates/services/audit" }
+
 
 # Communs
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
+tokio = { version = "1.40", features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "sync",
+    "net",
+    "signal",
+] }
 tokio-util = { version = "0.7.18" }
+tokio-stream = { version = "0.1", features = ["net"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10.4"
-uuid = { version = "1.19", features = ["v7", "serde"] }
+uuid = { version = "1.19", features = ["v5", "v7", "serde"] }
 async-trait = "0.1.89"
 thiserror = "2.0.17"
 anyhow = "1.0"
 futures = "0.3.31"
 futures-util = "0.3"
 rand = "0.9.2"
+arc-swap = "1.7"
+governor = "0.10"
+notify = "6.1"
+toml = "0.8"
 url = "2.5.7"
 dyn-clone = "1.0.17"
-
+dotenvy = "0.15.7"
+sha2 = "0.11.0"
+aes-gcm = "0.10"
+include_dir = "0.7"
 
 # Observabilité
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-log = "0.4"
 
 # Infrastructure
-sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "macros", "migrate"] }
-fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool"] }
-rdkafka = "0.38.0"
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+    "macros",
+    "migrate",
+    "ipnetwork",
+] }
+# enable-rustls-ring: TLS for managed Redis (ElastiCache runs transit encryption;
+# without a TLS feature fred speaks plaintext to a TLS listener and every command
+# times out — found live on the staging bring-up). Certs come from the system
+# store via rustls-native-certs (deploy/Dockerfile installs ca-certificates).
+fred = { version = "10.1.0", features = ["serde-json", "dynamic-pool", "enable-rustls-ring"] }
+# ssl-vendored: statically link a vendored OpenSSL into librdkafka. Without it
+# librdkafka is built WITHOUT SSL and rejects security.protocol=SASL_SSL at
+# client-config time ("OpenSSL not available at build time") — every managed-MSK
+# env (SASL/SCRAM over TLS) needs this; first hit live by the topic-provisioner
+# on the staging bring-up. SCRAM-SHA-512 is implemented inside librdkafka and
+# needs only OpenSSL (no libsasl2/gssapi).
+rdkafka = { version = "0.38.0", features = ["ssl-vendored"] }
 dashmap = "7.0.0-rc2"
 elasticsearch = "9.1.0-alpha.1"
 scylla = "1.4.1"
+scylla-macros = "1.4.1"
+once_cell = "1.21.3"
 
 # Utils
 regex = { version = "1.12", features = ["unicode", "unicode-perl"] }
-lazy_static = "1.5"
 seahash = "4.1"
 unicode-normalization = { version = "0.1", features = ["std"] }
 idna = "1.1.0"
+openssl = "0.10"
+base64 = "0.22.1"
+phf = "0.13"
+phf_codegen = "0.13"
 
 # Proto / gRPC
-tonic = { version = "0.14.2", features = ["codegen", "transport", "tls-webpki-roots"] }
+tonic-health = "0.14.3"
+tonic = { version = "0.14.2", features = [
+    "codegen",
+    "transport",
+    "tls-webpki-roots",
+] }
 tonic-prost = "0.14.2"
 tonic-build = "0.14.2"
+tonic-reflection = "0.14.3"
 tonic-prost-build = "0.14.2"
 prost = "0.14.3"
 prost-types = "0.14.3"
+prost-build = "0.14.3"
+pbjson = "0.9"
+pbjson-types = "0.9"
+pbjson-build = "0.9"
+
 
 # Graphql
+tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "=0.5.2", features = ["cors", "trace"] }
-async-graphql = { version = "8.0.0-rc.1", features = ["dataloader", "dynamic-schema", "tracing", "uuid", "chrono"] }
+async-graphql = { version = "8.0.0-rc.1", features = [
+    "dataloader",
+    "dynamic-schema",
+    "tracing",
+    "uuid",
+    "chrono",
+] }
 async-graphql-axum = "8.0.0-rc.1"
 axum = "0.8.8"
 
+# Http
+http = "1"
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+reqwest = { version = "0.12.28", features = ["json", "rustls-tls"] }
 
 # Tests
 testcontainers = "0.26"
-testcontainers-modules = { version = "0.14", features = ["postgres"] }
-mockall = "0.14.0"
+testcontainers-modules = { version = "0.14" }
+
+# Media — object storage (presigned URLs; bytes go client↔S3 direct) + image pipeline
+rusty-s3 = "0.5"
+image = "0.25"
+blurhash = "0.2"

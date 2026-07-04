@@ -1,3 +1,3 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tools/workspace_status.sh
 echo "STABLE_GIT_SHA $(git rev-parse --short HEAD)"

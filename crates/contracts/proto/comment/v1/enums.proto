@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package comment.v1;
+
+// Lifecycle states for a comment.
+// DELETED is a terminal state — once set it cannot be reversed.
+enum CommentStatus {
+    COMMENT_STATUS_UNSPECIFIED = 0;
+    COMMENT_STATUS_PUBLISHED   = 1;
+    COMMENT_STATUS_DELETED     = 2;
+}

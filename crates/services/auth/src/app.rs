@@ -1,0 +1,235 @@
+//! The auth service's composition root.
+//!
+//! [`App::compose`] is *pure* wiring: eight port handles in, a fully-assembled
+//! gRPC handler out — it binds no socket and reads no environment, so the live
+//! integration harness and the binary entrypoint build the exact same graph.
+//! [`App::build`] is the I/O variant that constructs the concrete adapters from
+//! config + backend connections, then defers to `compose`.
+
+use std::sync::Arc;
+
+use postgres_storage::{PgPoolBuilder, PostgresConfig, TransactionManager};
+use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
+use sqlx::PgPool;
+use tonic::transport::Channel;
+use transport::kafka::config::client::KafkaClientConfig;
+use transport::kafka::config::producer::ProducerConfig;
+use transport::kafka::producer::KafkaProducerBuilder;
+
+use crate::application::command::{
+    LoginHandler, LogoutAllSessionsHandler, LogoutHandler, RefreshHandler,
+};
+use crate::application::port::{
+    AccountDirectory, EventPublisher, IdentityProvider, RefreshTokenRepository, SessionCache,
+    SessionRepository, SubjectLinkRepository, TokenMinter,
+};
+use crate::application::query::{IntrospectHandler, ListSessionsHandler};
+use crate::application::SessionPolicy;
+use crate::config::AuthConfig;
+use crate::infrastructure::cache::RedisSessionCache;
+use crate::infrastructure::directory::GrpcAccountDirectory;
+use crate::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
+use crate::infrastructure::grpc::handler::AuthServiceHandler;
+use crate::infrastructure::idp::KeycloakIdentityProvider;
+use crate::infrastructure::persistence::{
+    PgRefreshTokenRepository, PgSessionRepository, PgSubjectLinkRepository,
+};
+use crate::infrastructure::token::Es256TokenMinter;
+
+/// The eight ports the application layer depends on, plus the token policy.
+pub struct AppDeps {
+    pub idp: Arc<dyn IdentityProvider>,
+    pub directory: Arc<dyn AccountDirectory>,
+    pub links: Arc<dyn SubjectLinkRepository>,
+    pub sessions: Arc<dyn SessionRepository>,
+    pub refresh_tokens: Arc<dyn RefreshTokenRepository>,
+    pub cache: Arc<dyn SessionCache>,
+    pub minter: Arc<dyn TokenMinter>,
+    pub publisher: Arc<dyn EventPublisher>,
+    pub policy: SessionPolicy,
+}
+
+/// Backend connection configs. `kafka` is optional: absent ⇒ the log publisher.
+pub struct Backends {
+    pub postgres: PostgresConfig,
+    pub redis: RedisConfig,
+    pub kafka: Option<KafkaClientConfig>,
+}
+
+/// A fully-wired auth service. Retains the Postgres pool and Redis client so the
+/// runtime can build liveness probes over the same connections.
+pub struct App {
+    pub handler: AuthServiceHandler,
+    pub pool: PgPool,
+    pub redis: RedisClient,
+}
+
+impl App {
+    /// Pure composition: assemble the six application handlers from the ports and
+    /// wrap them in the gRPC handler. No I/O — drives the unit/integration graph.
+    pub fn compose(deps: AppDeps) -> AuthServiceHandler {
+        let login = Arc::new(LoginHandler::new(
+            Arc::clone(&deps.idp),
+            Arc::clone(&deps.directory),
+            Arc::clone(&deps.links),
+            Arc::clone(&deps.sessions),
+            Arc::clone(&deps.refresh_tokens),
+            Arc::clone(&deps.cache),
+            Arc::clone(&deps.minter),
+            Arc::clone(&deps.publisher),
+            deps.policy.clone(),
+        ));
+        let refresh = Arc::new(RefreshHandler::new(
+            Arc::clone(&deps.directory),
+            Arc::clone(&deps.sessions),
+            Arc::clone(&deps.refresh_tokens),
+            Arc::clone(&deps.cache),
+            Arc::clone(&deps.minter),
+            Arc::clone(&deps.publisher),
+            deps.policy.clone(),
+        ));
+        let logout = Arc::new(LogoutHandler::new(
+            Arc::clone(&deps.sessions),
+            Arc::clone(&deps.refresh_tokens),
+            Arc::clone(&deps.cache),
+            Arc::clone(&deps.publisher),
+            deps.policy.clone(),
+        ));
+        let logout_all = Arc::new(LogoutAllSessionsHandler::new(
+            Arc::clone(&deps.sessions),
+            Arc::clone(&deps.refresh_tokens),
+            Arc::clone(&deps.cache),
+            Arc::clone(&deps.publisher),
+            deps.policy.clone(),
+        ));
+        let introspect =
+            Arc::new(IntrospectHandler::new(Arc::clone(&deps.minter), Arc::clone(&deps.cache)));
+        let list_sessions = Arc::new(ListSessionsHandler::new(Arc::clone(&deps.sessions)));
+
+        AuthServiceHandler::new(login, refresh, logout, logout_all, introspect, list_sessions)
+    }
+
+    /// Builds the concrete adapter graph from config + backend connections.
+    pub async fn build(
+        config: AuthConfig,
+        backends: Backends,
+    ) -> Result<App, Box<dyn std::error::Error>> {
+        let pool = PgPoolBuilder::build(backends.postgres).await?;
+        let tx = TransactionManager::new(pool.clone());
+        let redis = RedisClientBuilder::new(backends.redis).build().await?;
+
+        let publisher: Arc<dyn EventPublisher> = match backends.kafka {
+            Some(cfg) => {
+                let producer = KafkaProducerBuilder::new(ProducerConfig::new(cfg)).build()?;
+                Arc::new(KafkaEventPublisher::new(producer))
+            }
+            None => Arc::new(LogEventPublisher),
+        };
+
+        // Lazy connect: the channel dials `account` on first use, so a cold start
+        // does not require the dependency to be up at boot. Both deadlines are
+        // mandatory — tonic has no default request timeout, and this channel sits
+        // on the login hot path.
+        let channel = Channel::from_shared(config.account_endpoint)?
+            .timeout(config.account_rpc_timeout)
+            .connect_timeout(config.account_connect_timeout)
+            .connect_lazy();
+
+        // reqwest's default client has no request timeout; the token exchange
+        // must fail fast when the IdP hangs.
+        let idp_client = reqwest::Client::builder()
+            .timeout(config.idp_http_timeout)
+            .connect_timeout(config.idp_connect_timeout)
+            .build()?;
+
+        let deps = AppDeps {
+            idp: Arc::new(KeycloakIdentityProvider::new(idp_client, config.keycloak)),
+            directory: Arc::new(GrpcAccountDirectory::new(channel)),
+            links: Arc::new(PgSubjectLinkRepository::new(tx.clone())),
+            sessions: Arc::new(PgSessionRepository::new(tx.clone())),
+            refresh_tokens: Arc::new(PgRefreshTokenRepository::new(tx.clone())),
+            cache: Arc::new(RedisSessionCache::new(redis.clone())),
+            minter: Arc::new(Es256TokenMinter::from_key_ring(config.signing, config.retiring_keys)?),
+            publisher,
+            policy: config.policy,
+        };
+
+        Ok(App { handler: App::compose(deps), pool, redis })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::fakes::Fixture;
+    use crate::infrastructure::grpc::handler::proto;
+    use tonic::{Code, Request};
+
+    /// Composes the gRPC handler over the in-memory fakes — the exact graph
+    /// `App::build` produces, minus the real backends.
+    fn handler_from_fakes(fx: &Fixture) -> AuthServiceHandler {
+        App::compose(AppDeps {
+            idp: fx.idp.clone(),
+            directory: fx.directory.clone(),
+            links: fx.links.clone(),
+            sessions: fx.sessions.clone(),
+            refresh_tokens: fx.refresh_tokens.clone(),
+            cache: fx.cache.clone(),
+            minter: fx.minter.clone(),
+            publisher: fx.publisher.clone(),
+            policy: fx.policy.clone(),
+        })
+    }
+
+    #[tokio::test]
+    async fn login_rpc_maps_request_and_response() {
+        let fx = Fixture::new();
+        let handler = handler_from_fakes(&fx);
+
+        let request = Request::new(proto::LoginRequest {
+            device: Some(proto::DeviceContext {
+                user_agent: "agent".into(),
+                ip_address: String::new(),
+                device_id: "dev-1".into(),
+            }),
+            grant_type: proto::GrantType::Password as i32,
+            credential: Some(proto::login_request::Credential::Password(proto::PasswordGrant {
+                username: "user".into(),
+                password: "secret".into(),
+            })),
+        });
+
+        let response = handler.login(request).await.unwrap().into_inner();
+        assert!(!response.account_id.is_empty());
+        assert!(response.first_link);
+        let tokens = response.tokens.expect("token pair present");
+        assert_eq!(tokens.token_type, "Bearer");
+        assert!(!tokens.access_token.is_empty());
+        assert!(!tokens.refresh_token.is_empty());
+        assert_eq!(tokens.expires_in, 600);
+    }
+
+    #[tokio::test]
+    async fn login_without_credential_is_invalid_argument() {
+        let fx = Fixture::new();
+        let handler = handler_from_fakes(&fx);
+        let request = Request::new(proto::LoginRequest {
+            device: None,
+            grant_type: proto::GrantType::Unspecified as i32,
+            credential: None,
+        });
+        let status = handler.login(request).await.unwrap_err();
+        assert_eq!(status.code(), Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn logout_unknown_session_maps_to_not_found() {
+        let fx = Fixture::new();
+        let handler = handler_from_fakes(&fx);
+        let request = Request::new(proto::LogoutRequest {
+            session_id: crate::domain::value_object::SessionId::new().as_str(),
+        });
+        let status = handler.logout(request).await.unwrap_err();
+        assert_eq!(status.code(), Code::NotFound);
+    }
+}

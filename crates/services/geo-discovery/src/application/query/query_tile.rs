@@ -1,0 +1,130 @@
+use std::sync::Arc;
+
+use cqrs::{Envelope, Query, QueryHandler};
+use validate_core::{FieldViolation, Validate};
+
+use crate::application::port::{PinStore, SpatialIndex};
+use crate::domain::entity::RadarPin;
+use crate::domain::value_object::{GeoCoordinate, zoom_to_resolution};
+use crate::error::GeoDiscoveryError;
+use crate::infrastructure::h3::h3_codec;
+
+/// Radar path: resolves the lightweight pins visible within a viewport.
+///
+/// Hot path, Redis-only: 2 round-trips (ZRANGEBYSCORE × N tiles → pin GET × M).
+/// There is deliberately NO ScyllaDB fallback — a pin absent from Redis is
+/// silently dropped (fail-open). Card hydration (author metadata, caption) is
+/// the Focus path's job ([`super::get_geo_timeline`]), reached on pin tap.
+pub struct QueryTileQuery {
+    pub sw_lat:     f64,
+    pub sw_lng:     f64,
+    pub ne_lat:     f64,
+    pub ne_lng:     f64,
+    pub zoom_level: i32,
+}
+
+pub struct QueryTileResult {
+    pub pins:       Vec<RadarPin>,
+    pub tile_count: i32,
+}
+
+impl Query for QueryTileQuery {
+    type Response = QueryTileResult;
+}
+
+impl Validate for QueryTileQuery {
+    fn validate(&self) -> Result<(), Vec<FieldViolation>> {
+        let mut v = Vec::new();
+        if !self.sw_lat.is_finite() || self.sw_lat < -90.0 || self.sw_lat > 90.0 {
+            v.push(FieldViolation::new("sw_lat", "GEO-VAL-030", "sw_lat must be in [-90, 90]"));
+        }
+        if !self.sw_lng.is_finite() || self.sw_lng < -180.0 || self.sw_lng > 180.0 {
+            v.push(FieldViolation::new("sw_lng", "GEO-VAL-031", "sw_lng must be in [-180, 180]"));
+        }
+        if !self.ne_lat.is_finite() || self.ne_lat < -90.0 || self.ne_lat > 90.0 {
+            v.push(FieldViolation::new("ne_lat", "GEO-VAL-032", "ne_lat must be in [-90, 90]"));
+        }
+        if !self.ne_lng.is_finite() || self.ne_lng < -180.0 || self.ne_lng > 180.0 {
+            v.push(FieldViolation::new("ne_lng", "GEO-VAL-033", "ne_lng must be in [-180, 180]"));
+        }
+        if self.sw_lat >= self.ne_lat {
+            v.push(FieldViolation::new("viewport", "GEO-VAL-034", "sw_lat must be less than ne_lat"));
+        }
+        if self.zoom_level < 0 || self.zoom_level > 15 {
+            v.push(FieldViolation::new("zoom_level", "GEO-VAL-035", "zoom_level must be in [0, 15]"));
+        }
+        if v.is_empty() { Ok(()) } else { Err(v) }
+    }
+}
+
+pub struct QueryTileHandler<SI, PS> {
+    pub spatial_index: Arc<SI>,
+    pub pin_store:     Arc<PS>,
+}
+
+impl<SI, PS> QueryHandler<QueryTileQuery> for QueryTileHandler<SI, PS>
+where
+    SI: SpatialIndex + 'static,
+    PS: PinStore + 'static,
+{
+    type Error = GeoDiscoveryError;
+
+    async fn handle(&self, envelope: Envelope<QueryTileQuery>) -> Result<QueryTileResult, GeoDiscoveryError> {
+        let q = &envelope.payload;
+
+        let sw = GeoCoordinate::new(q.sw_lat, q.sw_lng)?;
+        let ne = GeoCoordinate::new(q.ne_lat, q.ne_lng)?;
+
+        if sw.lat >= ne.lat {
+            return Err(GeoDiscoveryError::InvalidViewport {
+                sw_lat: q.sw_lat, sw_lng: q.sw_lng,
+                ne_lat: q.ne_lat, ne_lng: q.ne_lng,
+            });
+        }
+
+        let resolution  = zoom_to_resolution(q.zoom_level);
+        let min_score   = resolution.virality_floor(q.zoom_level);
+        let tiles       = h3_codec::viewport_cells(&sw, &ne, resolution);
+        let tile_count  = tiles.len() as i32;
+
+        // ── Phase 1: ZRANGEBYSCORE for all tiles (concurrent, one RTT per tile
+        //   through fred's lock-free command queue → effectively pipelined) ────
+        let tile_futures: Vec<_> = tiles.iter()
+            .map(|tile| {
+                let tile   = *tile;
+                let si     = Arc::clone(&self.spatial_index);
+                async move { si.query(tile, resolution, min_score).await }
+            })
+            .collect();
+
+        let tile_results = futures::future::try_join_all(tile_futures).await?;
+
+        // Deduplicate across tile boundaries (posts near hexagon edges appear in
+        // multiple grid_disk results).
+        let mut seen = std::collections::HashSet::new();
+        let post_ids: Vec<uuid::Uuid> = tile_results
+            .into_iter()
+            .flatten()
+            .filter(|id| seen.insert(*id))
+            .collect();
+
+        if post_ids.is_empty() {
+            // Touch hot tiles even for empty results (keeps active-area tiles warm).
+            let touch_pairs: Vec<_> = tiles.iter().map(|t| (*t, resolution)).collect();
+            let _ = self.spatial_index.touch_hot_tiles(&touch_pairs).await;
+            return Ok(QueryTileResult { pins: vec![], tile_count });
+        }
+
+        // ── Phase 2: pin lookup (Redis-only, single fan-out round-trip) ───────
+        // No ScyllaDB fallback: the Radar pan path is fail-open. A pin absent from
+        // Redis is silently dropped — the user pans again, or taps a neighbour.
+        let cached = self.pin_store.mget(&post_ids).await?;
+        let pins: Vec<RadarPin> = cached.into_iter().flatten().collect();
+
+        // Fire-and-forget: update hot_tiles scores for the queried tiles.
+        let touch_pairs: Vec<_> = tiles.iter().map(|t| (*t, resolution)).collect();
+        let _ = self.spatial_index.touch_hot_tiles(&touch_pairs).await;
+
+        Ok(QueryTileResult { pins, tile_count })
+    }
+}

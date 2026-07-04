@@ -1,0 +1,68 @@
+[package]
+name        = "search"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Search microservice — the platform's discovery read-model: a derived, typo-tolerant inverted index over profiles, posts, and hashtags."
+
+# ── Phase 0 scaffold ──────────────────────────────────────────────────────────
+# Only the canonical error namespace (SCH-XXXX) lives here today. Subsequent
+# phases add: domain/ (Phase 2: IndexDocument + per-entity projections + the pure
+# DomainEvent→IndexDocument projector), application/ + ports (Phase 3: SearchIndex
+# / IndexAdmin + projection & query handlers + in-memory fakes), infrastructure/
+# adapters (Phase 4: the OpenSearch adapter with external versioning + the inbound
+# event-decode layer), and the composition root + tonic/service-runtime wiring
+# with the self-spawned ingestion consumers (Phase 5). Dependencies grow per
+# phase — kept minimal here.
+[dependencies]
+# ── Contracts ─────────────────────────────────────────────────────────────────
+search-api = { workspace = true }
+anyhow     = { workspace = true }
+
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error      = { workspace = true }
+validation = { workspace = true }
+
+# ── Domain types (Phase 2): pure, clock-injected projection model ─────────────
+serde  = { workspace = true }
+chrono = { workspace = true }
+
+# ── Application layer (Phase 3): CQRS query bus + async ports ──────────────────
+cqrs        = { workspace = true }
+async-trait = { workspace = true }
+
+# ── Infrastructure adapters (Phase 4) ─────────────────────────────────────────
+# The OpenSearch adapter speaks the REST API directly via reqwest + serde_json
+# (precise control over the version-guard Painless scripts; no heavy typed client).
+# The decode layer deserializes the thin wire events search consumes.
+reqwest    = { workspace = true }
+serde_json = { workspace = true }
+tracing    = { workspace = true }
+
+# ── Server wiring (Phase 5): runtime, tonic ingress, ingestion consumers ──────
+service-runtime  = { workspace = true }
+transport        = { workspace = true }
+tonic            = { workspace = true }
+tonic-reflection = { workspace = true }
+prost-types      = { workspace = true }
+post-api         = { workspace = true }
+profile-api      = { workspace = true }
+tokio            = { workspace = true }
+uuid             = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror = { workspace = true }
+http      = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (Phase 6, tests/integration.rs).
+# Off by default so `cargo test -p search` stays a fast, infra-free unit run; the
+# live suite boots a real single-node OpenSearch container (semantic parity with
+# production) and is opt-in via `cargo test -p search --features integration-search`.
+integration-search = []
+
+[dev-dependencies]
+# Live integration suite: shared OpenSearch container orchestration + await_until.
+test-support = { workspace = true }

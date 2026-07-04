@@ -1,0 +1,34 @@
+# infrastructure/argocd/apps/catalog/profile-service/templates/databases/postgres.yaml
+
+{{- if eq .Values.componentType "storage" }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.persistence.postgresql.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  instances: 1
+  imageName: {{ .Values.persistence.postgresql.version | printf "ghcr.io/cloudnative-pg/postgis:%s" | default "ghcr.io/cloudnative-pg/postgis:16-3.5" }}
+  
+  affinity:
+    nodeSelector:
+      intent: database
+    tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "database"
+        effect: "NoSchedule"
+        
+  bootstrap:
+    initdb:
+      database: "profile"
+      owner: "app"
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis;
+        - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        
+  storage:
+    size: {{ .Values.persistence.postgresql.storage }}
+    storageClass: gp2
+{{- end }}

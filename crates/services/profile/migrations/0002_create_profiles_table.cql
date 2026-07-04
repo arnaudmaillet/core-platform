@@ -1,0 +1,27 @@
+CREATE TABLE IF NOT EXISTS profile.profiles (
+    profile_id        uuid,
+    account_id        uuid,
+    handle            text,
+    display_name      text,
+    bio               text,
+    avatar_url        text,
+    banner_url        text,
+    website_url       text,
+    custom_links      text,
+    profile_kind      text,
+    visibility        text,
+    verified          boolean,
+    verification_kind text,
+    locale            text,
+    timezone          text,
+    status            text,
+    suspension_reason text,
+    masked_at         timestamp,
+    masking_reason    text,
+    created_at        timestamp,
+    updated_at        timestamp,
+    deleted_at        timestamp,
+    version           bigint,
+    PRIMARY KEY (profile_id)
+) WITH compression = {'sstable_compression': 'LZ4Compressor'}
+  AND caching = {'keys': 'ALL', 'rows_per_partition': '1'};

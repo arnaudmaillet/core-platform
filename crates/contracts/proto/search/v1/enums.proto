@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package search.v1;
+
+option java_package = "com.coreplatform.search.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/search/v1;searchv1";
+
+// The kind of entity a search document / result row refers to. Each kind lives in
+// its own physical index (its own analyzer chain); a federated query fans out
+// across the requested kinds and merges by score. Search never stores the entity
+// itself — it holds only a minimal projection, referencing the authoritative
+// record by (entity_type, id) owned by the originating service.
+enum SearchEntityType {
+    SEARCH_ENTITY_TYPE_UNSPECIFIED = 0;
+    SEARCH_ENTITY_TYPE_PROFILE     = 1;
+    SEARCH_ENTITY_TYPE_POST        = 2;
+    SEARCH_ENTITY_TYPE_HASHTAG     = 3;
+}
+
+// Result ordering strategy. Default (UNSPECIFIED) is relevance. RECENCY and
+// POPULARITY trade text-relevance for freshness / coarse engagement; POPULARITY
+// reads the periodically-refreshed popularity signal, never a real-time count.
+enum SearchSort {
+    SEARCH_SORT_UNSPECIFIED = 0;
+    SEARCH_SORT_RELEVANCE   = 1;
+    SEARCH_SORT_RECENCY     = 2;
+    SEARCH_SORT_POPULARITY  = 3;
+}

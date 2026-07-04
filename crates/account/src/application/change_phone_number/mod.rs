@@ -1,3 +1,0 @@
-mod change_phone_number_command;
-mod change_phone_number_dto;
-mod change_phone_number_use_case;

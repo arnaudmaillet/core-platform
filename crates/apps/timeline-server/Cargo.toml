@@ -1,0 +1,15 @@
+[package]
+name                 = "timeline-server"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the timeline service — a thin entrypoint over the shared fleet runtime."
+
+[dependencies]
+timeline        = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

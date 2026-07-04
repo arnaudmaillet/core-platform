@@ -1,0 +1,12 @@
+# infrastructure/argocd/apps/infrastructure/platform/aws-lb-controller/values.yaml
+
+aws-load-balancer-controller:
+  clusterName: ""
+  region: ""
+  vpcId: ""
+
+  serviceAccount:
+    create: true
+    name: aws-load-balancer-controller
+    annotations:
+      eks.amazonaws.com/role-arn: ""

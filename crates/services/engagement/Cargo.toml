@@ -1,0 +1,55 @@
+[package]
+name        = "engagement"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Engagement microservice — weighted reaction scoring engine with Redis-primary Lua atomicity and Kafka-backed ScyllaDB durability."
+
+[dependencies]
+engagement-api = { workspace = true }
+error          = { workspace = true }
+validate-core  = { workspace = true }
+validation     = { workspace = true }
+scylla-storage = { workspace = true }
+redis-storage  = { workspace = true }
+cqrs           = { workspace = true }
+transport      = { workspace = true }
+service-runtime = { workspace = true }
+anyhow         = { workspace = true }
+
+tokio        = { workspace = true }
+async-trait  = { workspace = true }
+serde        = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+thiserror    = { workspace = true }
+tracing      = { workspace = true }
+dashmap      = { workspace = true }
+
+tonic            = { workspace = true }
+tonic-health     = { workspace = true }
+tonic-reflection = { workspace = true }
+http             = { workspace = true }
+
+scylla = { workspace = true }
+fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p engagement` stays a fast, infra-free unit run;
+# the live suite is opt-in via
+# `cargo test -p engagement --features integration-engagement`.
+integration-engagement = []
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-engagement") ───────────────────
+# Container orchestration and `await_until` come from the shared `test-support`
+# crate; the Redis-primary hot path needs only Redis (no ScyllaDB/Kafka). The
+# suite code is wholly behind `#[cfg(feature = "integration-engagement")]`.
+test-support = { workspace = true }
+async-trait  = { workspace = true }
+uuid         = { workspace = true }

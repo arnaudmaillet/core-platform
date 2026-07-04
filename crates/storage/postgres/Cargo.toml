@@ -1,0 +1,31 @@
+[package]
+name = "postgres"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production-grade PostgreSQL connection pool, transaction manager, and error mapping for the core-platform workspace."
+
+[dependencies]
+error     = { workspace = true }
+health      = { workspace = true }
+async-trait = { workspace = true }
+anyhow      = { workspace = true }
+sqlx      = { workspace = true }
+tracing   = { workspace = true }
+thiserror = { workspace = true }
+futures   = { workspace = true }
+http      = { workspace = true }
+uuid      = { workspace = true }
+seahash   = { workspace = true }
+log       = "0.4"
+
+[features]
+# Live integration suites (require a real PostgreSQL via DATABASE_URL).
+# Opt-in via `cargo test -p postgres --features integration-postgres`.
+integration-postgres = []
+
+[dev-dependencies]
+tokio              = { workspace = true }
+tracing-subscriber = { workspace = true }

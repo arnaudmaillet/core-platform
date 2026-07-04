@@ -1,9 +1,7 @@
-# On ignore les caches lourds
 **/.terragrunt-cache/**
 **/.terraform/**
 **/target/**
 **/bazel-*/**
 
-# On ignore les logs et fichiers système
 .git
 .DS_Store

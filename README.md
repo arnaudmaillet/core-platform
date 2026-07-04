@@ -1,24 +1,96 @@
 # Core Platform
 
-Monorepo for the core backend services of our social network.
+## Introduction
+
+**Core Platform** is a high-performance backend architecture designed for massive horizontal scalability. This project implements the technical foundation of a modern social network based on a distributed microservices architecture, leveraging data **sharding** and an **Event-Driven** approach.
+
+The architecture is strictly structured according to **Domain-Driven Design (DDD)** and **Clean Architecture** (Ports & Adapters) principles to ensure optimal maintainability and testability.
+
+## Technical Architecture
+
+The system is built on four fundamental pillars:
+
+- **API Gateway (BFF):** A unified GraphQL layer (`graphql-bff`) that orchestrates calls to underlying microservices.
+- **Microservices:** Autonomous services (Account, Profile, Social, Post) communicating via gRPC (Tonic).
+- **Data Consistency:** Implementation of the **Transactional Outbox** pattern (via `outbox-producer` workers) to guarantee reliable inter-service events via Kafka.
+- **Polyglot Persistence:**
+  - **PostgreSQL (`infra-sqlx`):** Transactional data.
+  - **ScyllaDB (`infra-scylla`):** High-volume data (posts, social graph).
+  - **Redis (`infra-fred`):** Distributed caching and fast state management.
 
 ## Tech Stack
-- **Build System:** Bazel
-- **Language:** Rust
-- **API:** gRPC / Protocol Buffers
-- **Local Infrastructure:** Docker
+
+- **Languages:** Rust (Edition 2024, Tokio stack).
+- **Communication:** gRPC (Tonic), Protocol Buffers, GraphQL (Async-graphql).
+- **Infrastructure:**
+  - **Cloud:** AWS (EKS).
+  - **IaC:** Terraform, Terragrunt.
+  - **CD/GitOps:** ArgoCD.
+- **Messaging:** Apache Kafka (rdkafka).
+
+## System Architecture & Documentation
+
+The platform's documentation is layered by concern, each layer derived from the code as ground truth:
+
+- **What each service does (domain / functional):** [`docs/domain/`](docs/domain/README.md) for
+  cross-context maps, and each service's `crates/services/<svc>/docs/DOMAIN.md` for its bounded
+  context, invariants, and data ownership.
+- **How the platform deploys & operates:** [`docs/infrastructure/`](docs/infrastructure/README.md)
+  (AWS EKS, VPC, managed services; diagram generated from `aws_production.py`).
+- **How to build & run each service:** the per-crate `README.md`, following
+  [`docs/templates/SERVICE_README.template.md`](docs/templates/SERVICE_README.template.md).
+- **System architecture (C4 Model):** [`docs/architecture/`](docs/architecture/README.md) —
+  a Structurizr workspace **regenerated from** `docs/domain/CONTEXT_MAP.md` as a derived artifact.
+
+> [!NOTE]
+> The C4 model in [`docs/architecture/`](docs/architecture/README.md) is regenerated from the
+> functional documentation. The previous, pre-fleet Structurizr diagrams (which described an
+> architecture that never shipped) have been **removed**.
+
+## Development & Build
+
+### Prerequisites
+
+- Rust (Edition 2024)
+- Docker & Docker Compose
+- Protoc (Protobuf Compiler)
+
+### Build
+
+> [!IMPORTANT]
+> **Note on Bazel:** While Bazel configuration files are present in the repository, **Bazel is not yet functional** and should not be used at this stage.
+
+**Please use Cargo exclusively for current development:**
+
+```bash
+# Build the entire workspace
+cargo build
+
+# Run tests (unit and integration via testcontainers)
+cargo test
+```
+
+### Local Infrastructure
+
+To start the necessary dependencies (Postgres, Redis, ScyllaDB, Kafka) for local development:
+
+```bash
+docker-compose up -d
+```
 
 ## Repository Structure
 
-- `backend/services/`: Contains the binary applications for our microservices (e.g., `account/outbox-processor`).
-- `crates/`: Contains the shared Rust libraries (crates) that make up the business logic of our services.
-    - `shared-kernel`: Common libraries for all services.
-    - `account`: Crate for account management.
-    - `profile`: Crate for user profiles.
-    - `gamification`: Crate for gamification logic.
-- `proto/`: API contract definitions (Protobuf). The single source of truth for our APIs.
-- `docker-compose.yml`: Defines the local development environment (databases, etc.).
+The workspace lives under `crates/`, organised by role:
 
-## Prerequisites
-- Bazel >= 7.0.0 (see `.bazelversion`)
-- Docker & Docker Compose
+- **`crates/services/<svc>/`** — domain microservices (DDD + CQRS), **library-only**. Each exposes a composition root (`App::build`) and implements `service_runtime::Service` (`crate::service::<Svc>Service`).
+- **`crates/apps/<svc>-server/`** — thin deployable binaries (one per service). Each `main` is a `service_runtime::serve::<…>(addr)` one-liner.
+- **`crates/platform/service-runtime/`** — the unified fleet bootstrap: telemetry, `infrastructure.toml` load + hot-reload, ingress trace + rate-limit layers, dynamic gRPC health, and graceful shutdown. See its [README](crates/platform/service-runtime/README.md).
+- **`crates/shared/`** — reusable building blocks: `error`, `cqrs`, `auth-context`, `validation`/`validate-core`, the externalized-config stack (`infra-config`, `resilience`, `traffic`, `telemetry`), `transport` (gRPC + Kafka), and storage clients under `crates/shared/storage/{postgres,scylla,redis}`.
+- **`infrastructure/`** — Terraform/Terragrunt modules, EKS configuration, and ArgoCD manifests.
+
+## Roadmap
+
+- [ ] Stabilization of the Bazel build chain (role-tiered crate layout + a shared `contracts/` tier).
+- [ ] Schema-migration runner (`apps/migrator`).
+- [ ] Implementation of Sharding at the SQLx layer.
+- [x] Distributed monitoring with OpenTelemetry — live log-filter and trace-sampling dials via the `[telemetry]` config section.

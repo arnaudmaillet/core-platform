@@ -1,0 +1,64 @@
+[package]
+name        = "account"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Account microservice — complete lifecycle management for physical persons on the platform."
+
+[dependencies]
+account-api = { workspace = true }
+# ── Shared platform infrastructure ────────────────────────────────────────────
+error            = { workspace = true }
+validate-core    = { workspace = true }
+validation       = { workspace = true }
+postgres-storage = { workspace = true }
+
+# ── Shared platform crates ────────────────────────────────────────────────────
+cqrs         = { workspace = true }
+transport    = { workspace = true }
+service-runtime = { workspace = true }
+anyhow       = { workspace = true }
+
+# ── Async runtime & utilities ─────────────────────────────────────────────────
+tokio        = { workspace = true }
+async-trait  = { workspace = true }
+
+# ── Serialisation ─────────────────────────────────────────────────────────────
+serde        = { workspace = true }
+
+# ── Domain types ──────────────────────────────────────────────────────────────
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+
+# ── Error handling ────────────────────────────────────────────────────────────
+thiserror    = { workspace = true }
+
+# ── Observability ─────────────────────────────────────────────────────────────
+tracing      = { workspace = true }
+
+# ── gRPC / Protobuf ───────────────────────────────────────────────────────────
+tonic             = { workspace = true }
+prost-types       = { workspace = true }
+tonic-reflection  = { workspace = true }
+http              = { workspace = true }
+sqlx              = { workspace = true }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p account` stays a fast, infra-free unit run; the
+# live suite is opt-in via `cargo test -p account --features integration-account`.
+# Account is the Postgres outlier: the suite boots a real Postgres container, not
+# ScyllaDB, and runs the `.sql` migrations via the shared runner.
+integration-account = []
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-account") ──────────────────────
+# Container orchestration (incl. Postgres), the `.sql` migration runner, and
+# `await_until` come from the shared `test-support` crate; the suite code is
+# wholly behind `#[cfg(feature = "integration-account")]`.
+test-support = { workspace = true }
+uuid         = { workspace = true }

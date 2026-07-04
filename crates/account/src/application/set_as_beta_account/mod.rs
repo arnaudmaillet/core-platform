@@ -1,5 +1,0 @@
-mod set_as_beta_user_command;
-mod set_as_beta_user_use_case;
-
-pub use set_as_beta_user_command::SetAsBetaAccountCommand;
-pub use set_as_beta_user_use_case::SetAsBetaAccountUseCase;

@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "Note: Bazel is currently disabled. Please use Cargo."
+exit 1

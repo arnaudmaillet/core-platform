@@ -1,2 +1,0 @@
-mod update_timezone_command;
-mod update_timezone_use_case;

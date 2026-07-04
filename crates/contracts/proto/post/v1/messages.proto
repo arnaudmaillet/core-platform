@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package post.v1;
+
+import "post/v1/enums.proto";
+
+message AudioReference {
+    string    audio_id   = 1;
+    AudioKind audio_kind = 2;
+}
+
+// Client-supplied post location (WGS-84 decimal degrees). Optional on a post.
+// Denormalized onto post.published so geo-discovery can spatially index the post.
+message GeoPoint {
+    double lat = 1; // [-90, 90]
+    double lng = 2; // [-180, 180]
+}
+
+message MediaAttachmentInput {
+    string cdn_url          = 1;
+    string mime_type        = 2;
+    uint32 width            = 3;
+    uint32 height           = 4;
+    string thumbnail_url    = 5;
+    float  duration_seconds = 6;
+}
+
+message MediaAttachmentView {
+    string cdn_url          = 1;
+    string mime_type        = 2;
+    uint32 width            = 3;
+    uint32 height           = 4;
+    string thumbnail_url    = 5;
+    float  duration_seconds = 6;
+}
+
+message PostView {
+    string     post_id                          = 1;
+    string     profile_id                       = 2;
+    PostKind   kind                             = 3;
+    PostStatus status                           = 4;
+    string     caption                          = 5;
+    repeated MediaAttachmentView attachments    = 6;
+    string     parent_id                        = 7;
+    string     root_id                          = 8;
+    int64      created_at_ms                    = 9;
+    int64      updated_at_ms                    = 10;
+    int64      published_at_ms                  = 11;
+    int64      deleted_at_ms                    = 12;
+    optional AudioReference audio_ref           = 13;
+    optional GeoPoint       location            = 14;
+}
+
+message PostSummary {
+    string     post_id      = 1;
+    PostKind   kind         = 2;
+    PostStatus status       = 3;
+    int64      created_at_ms = 4;
+}
+
+message CommandResponse {
+    bool   success = 1;
+    string message = 2;
+}
+
+message CreatePostRequest {
+    string     profile_id                    = 1;
+    PostKind   kind                          = 2;
+    string     caption                       = 3;
+    repeated MediaAttachmentInput attachments = 4;
+    string     parent_id                     = 5;
+    string     root_id                       = 6;
+    optional AudioReference audio_ref        = 7;
+    optional GeoPoint       location         = 8;
+}
+
+message CreatePostResponse {
+    string post_id    = 1;
+    string profile_id = 2;
+}
+
+message PublishPostRequest {
+    string post_id    = 1;
+    string profile_id = 2;
+}
+
+message UpdatePostRequest {
+    string post_id                           = 1;
+    string profile_id                        = 2;
+    string caption                           = 3;
+    repeated MediaAttachmentInput attachments = 4;
+}
+
+message DeletePostRequest {
+    string post_id    = 1;
+    string profile_id = 2;
+}
+
+message GetPostRequest {
+    string post_id = 1;
+}
+
+message ListPostsByProfileRequest {
+    string profile_id  = 1;
+    int32  limit       = 2;
+    string page_token  = 3;
+}
+
+message ListPostsByProfileResponse {
+    repeated PostSummary posts      = 1;
+    string               next_token = 2;
+}

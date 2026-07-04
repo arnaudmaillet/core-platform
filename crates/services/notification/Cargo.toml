@@ -1,0 +1,60 @@
+[package]
+name        = "notification"
+version.workspace   = true
+edition.workspace   = true
+license.workspace   = true
+authors.workspace   = true
+repository.workspace = true
+description = "Notification microservice — semantic event ingestion, ScyllaDB activity feed, gRPC server-streaming, and layered write-collapse fan-out mitigation."
+
+[dependencies]
+notification-api = { workspace = true }
+error          = { workspace = true }
+validate-core  = { workspace = true }
+validation     = { workspace = true }
+scylla-storage = { workspace = true }
+redis-storage  = { workspace = true }
+cqrs           = { workspace = true }
+transport      = { workspace = true }
+service-runtime = { workspace = true }
+anyhow         = { workspace = true }
+
+tokio        = { workspace = true }
+tokio-stream = { workspace = true }
+futures      = { workspace = true }
+async-trait  = { workspace = true }
+serde        = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+thiserror    = { workspace = true }
+tracing      = { workspace = true }
+dashmap      = { workspace = true }
+once_cell    = { workspace = true }
+regex        = { workspace = true }
+
+tonic            = { workspace = true }
+tonic-health     = { workspace = true }
+tonic-reflection = { workspace = true }
+http             = { workspace = true }
+
+scylla = { workspace = true }
+fred   = { workspace = true, features = ["partial-tracing", "i-scripts"] }
+
+[features]
+# Gates the live, container-backed integration suite (tests/integration.rs).
+# Off by default so `cargo test -p notification` stays a fast, infra-free unit
+# run; the live suite is opt-in via
+# `cargo test -p notification --features integration-notification`.
+integration-notification = []
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+# ── Integration suite (feature = "integration-notification") ─────────────────
+# Container orchestration, the RF=1 migration runner, and `await_until` come from
+# the shared `test-support` crate; the suite code is wholly behind
+# `#[cfg(feature = "integration-notification")]`.
+test-support = { workspace = true }
+futures      = { workspace = true }
+uuid         = { workspace = true }
+tonic        = { workspace = true }

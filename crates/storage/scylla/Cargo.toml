@@ -1,0 +1,23 @@
+[package]
+name        = "scylla-storage"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+authors.workspace     = true
+repository.workspace  = true
+description = "Production-grade ScyllaDB session management, execution profiles, telemetry integration, and error mapping for the core-platform workspace."
+
+[dependencies]
+error     = { workspace = true }
+health      = { workspace = true }
+async-trait = { workspace = true }
+anyhow      = { workspace = true }
+thiserror = { workspace = true }
+tracing   = { workspace = true }
+http      = { workspace = true }
+dashmap   = { workspace = true }
+scylla    = { workspace = true }
+
+[dev-dependencies]
+tokio              = { workspace = true }
+tracing-subscriber = { workspace = true }

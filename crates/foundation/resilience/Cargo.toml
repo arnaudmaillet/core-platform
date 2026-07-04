@@ -1,0 +1,31 @@
+[package]
+name = "resilience"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+error = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+rand = { workspace = true }
+tower = { workspace = true }
+arc-swap = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[features]
+# Opt-in (de)serialization for the config/wire types. The core middleware stays
+# pure: with this flag off, `resilience` pulls in no serde and no derive code.
+serde = ["dep:serde"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+serde_json = { workspace = true }
+# buffer: regression tests drive the middleware over a Buffer-backed inner —
+# the readiness contract violation these layers once had only manifests there
+# (tonic's Channel is Buffer-backed; see the clone-in-call comments).
+tower = { workspace = true, features = ["buffer", "util"] }

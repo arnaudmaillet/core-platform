@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package geo_discovery.v1;
+
+// Map zoom level bands that control which H3 resolution and virality threshold
+// the server applies. The client sends a raw zoom integer (0–15); the server
+// maps it to one of these bands internally and applies the corresponding
+// score floor.
+//
+// Band  → H3 resolution  → Tile area  → Virality floor
+// LOW   → R5             → ~87 km²    → 500  (continental, viral only)
+// MID   → R7             → ~5 km²     → 50   (metro, high-traffic)
+// HIGH  → R7             → ~5 km²     → 5    (neighborhood, broad)
+// MICRO → R9             → ~0.1 km²   → 0    (street level, all posts)
+enum ZoomBand {
+    ZOOM_BAND_UNSPECIFIED = 0;
+    ZOOM_BAND_LOW         = 1; // Zoom 1–4:  continental
+    ZOOM_BAND_MID         = 2; // Zoom 5–8:  metro
+    ZOOM_BAND_HIGH        = 3; // Zoom 9–12: neighborhood
+    ZOOM_BAND_MICRO       = 4; // Zoom 13–15: street level
+}
+
+// Tier classification for a post's author.
+//
+// Denormalized from services/profile into the MapPostCard projection so that
+// the BFF can render static badge decorations (border colour, badge icon) on
+// map pins without a secondary service call.
+//
+// Design note: dynamic viewer-relational state (is_friend, is_following) is
+// intentionally ABSENT from this enum and from MapPostCard. Those signals are
+// resolved client-side by comparing author_id against the user's session-cached
+// social graph (fetched once at login from services/social-graph). This avoids
+// O(users × posts) Redis variants and preserves the shared-card cache model.
+enum AuthorTier {
+    AUTHOR_TIER_UNSPECIFIED = 0; // Alias for Standard; safe zero-value default
+    AUTHOR_TIER_STANDARD    = 1;
+    AUTHOR_TIER_PREMIUM     = 2;
+    AUTHOR_TIER_VIP         = 3;
+}

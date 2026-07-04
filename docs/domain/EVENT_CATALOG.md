@@ -1,0 +1,183 @@
+# Event Catalog (semantic)
+
+> Populated from each producer's Domain Card §8 (`crates/services/<svc>/docs/DOMAIN.md`). Records the
+> **business meaning** of every domain event — *what does it mean that this happened, and who
+> reacts?* It does **not** restate the wire/proto schema (owned by each producer's contract).
+
+## Source of truth & maintenance
+
+This catalog has two halves:
+
+- **Topic wiring** (which service produces/consumes which topic) is **generated** from the
+  event-topology registry (`crates/contracts/event-topology`) into the block below — it is the
+  authority on *which* edges exist and cannot drift (a golden test + `tools/event-catalog/sync.sh`
+  enforce it). Don't hand-edit it; change the registry and regenerate.
+- **Event semantics** (what each event *means*, when it fires, who reacts and *why*) are authored by
+  humans in the per-domain sections that follow.
+
+Cross-reference each edge in [`CONTEXT_MAP.md`](./CONTEXT_MAP.md), and the per-event detail in each
+producer's `DOMAIN.md §8`.
+
+## Topic wiring (generated)
+
+<!-- BEGIN GENERATED: topic-wiring · source crates/contracts/event-topology · do not edit by hand -->
+> ⚙️ Generated from the event-topology registry (`crates/contracts/event-topology`). Do not edit by hand — change the registry and run `cargo run -p event-topology --bin gen-event-catalog` (or `tools/event-catalog/sync.sh --write`). The *meaning* of each event is authored in the semantic sections below.
+
+### Produced topics → consumers
+
+| Topic | Producer | Consumers |
+|---|---|---|
+| `account.v1.events` | `account` | `audit`, `profile` |
+| `profile.v1.events` | `profile` | `search`, `post` |
+| `post.published` | `post` | `notification`, `geo-discovery` |
+| `post.updated` | `post` | — *(orphan — see below)* |
+| `post.deleted` | `post` | `timeline` |
+| `post.v1.events` | `post` | `timeline`, `search`, `realtime` |
+| `comment.created` | `comment` | `notification`, `engagement` |
+| `comment.deleted` | `comment` | `engagement` |
+| `engagement.reactions` | `engagement` | `counter`, `notification`, `engagement` |
+| `social-graph.followed` | `social-graph` | `timeline` |
+| `social-graph.unfollowed` | `social-graph` | `timeline` |
+| `social-graph.blocked` | `social-graph` | — *(orphan — see below)* |
+| `social-graph.author_tier_changed` | `social-graph` | `profile` |
+| `chat.conversation.created` | `chat` | — *(orphan — see below)* |
+| `chat.conversation.published` | `chat` | — *(orphan — see below)* |
+| `chat.conversation.unpublished` | `chat` | `chat` |
+| `chat.member.joined` | `chat` | — *(orphan — see below)* |
+| `chat.member.left` | `chat` | — *(orphan — see below)* |
+| `chat.message.sent` | `chat` | — *(orphan — see below)* |
+| `counter.v1.popularity` | `counter` | `realtime`, `geo-discovery` |
+| `moderation.v1.events` | `moderation` | `audit`, `search`, `media` |
+| `auth.v1.events` | `auth` | `audit` |
+| `media.v1.events` | `media` | `media` |
+
+### Deferred — consumed, producer intentionally not in-repo
+
+| Topic | Consumer(s) | Why |
+|---|---|---|
+| `audit.v1.events` | `audit` | Generic privileged-record ingest lane. Domain producers emit their own topics (account/auth/moderation .v1.events) which audit consumes directly; this lane is fed by the sync gRPC RecordPrivileged path and future generic producers. |
+| `moderation.reports` | `moderation` | External user-report intake — produced by the client/edge, not a fleet service. |
+| `moderation.signals` | `moderation` | External ML-classifier signals — produced off-fleet. |
+| `view.v1.events` | `counter` | Upstream view telemetry producer not yet built (counter-analytics blueprint deferral). |
+| `impression.v1.events` | `counter` | Upstream impression telemetry producer not yet built (counter deferral). |
+| `click.v1.events` | `counter` | Upstream click telemetry producer not yet built (counter deferral). |
+| `social-graph.follows` | `counter` | Counter wants a single combined follow stream; social-graph emits the split past-tense social-graph.followed/.unfollowed instead. Combined producer is deferred — TRACKED NAMING MISMATCH, not just a missing emitter. |
+
+### Orphan producers — produced, no in-repo consumer
+
+| Topic | Producer | Why |
+|---|---|---|
+| `post.updated` | `post` | No stream consumer — search/timeline/realtime act on post.v1.events PostUpdated; the legacy per-type topic is emitted for completeness. |
+| `social-graph.blocked` | `social-graph` | Block is enforced on the gRPC read path; no stream consumer yet. |
+| `chat.conversation.created` | `chat` | Chat owns its own delivery plane; reserved for future fan-out. |
+| `chat.conversation.published` | `chat` | Chat delivery-plane headroom. |
+| `chat.member.joined` | `chat` | Chat delivery-plane headroom. |
+| `chat.member.left` | `chat` | Chat delivery-plane headroom. |
+| `chat.message.sent` | `chat` | Future realtime/notification consolidation; chat streams to clients directly today. |
+
+<!-- END GENERATED: topic-wiring -->
+
+## Identity & Account — `account.v1.events` (producer: `account`)
+
+| Event | Means (past-tense business fact) | Emitted when | Consumers & why |
+|---|---|---|---|
+| `account_created` / `email_changed` / `email_verified` / `phone_changed` | a PII-bearing account lifecycle fact occurred | the matching command commits | `audit` (PII sealed in crypto-shred envelope), `profile` (persona) |
+| `password_changed` / `mfa_enrolled` / `mfa_revoked` | a security/credential fact (no PII) | credential change | `audit` (Authentication category) |
+| `activated` / `deactivated` / `suspended` / `deleted` / `kyc_status_changed` | an identity-lifecycle transition | lifecycle change | `audit` (Identity), `profile` |
+| `role_assigned` / `role_revoked` | an authorization grant changed | role grant/revoke | `audit` (Authorization) |
+| `gdpr_deletion_requested` | the right to erasure (Art. 17) was invoked | user/DPO request | `audit` → **crypto-shreds the subject** (closes the Art. 17 loop) |
+| `gdpr_data_export_requested` | the right to access/portability was invoked | user/DPO request | export fulfilment (downstream) |
+
+## Authentication — `auth.v1.events` (producer: `auth`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `session_issued` | an authenticated session was established | login / token issuance | `audit` (Authentication) |
+| `session_revoked` | a session was invalidated | logout / revoke / generation bump | `audit` (Authentication) |
+| `subject_linked` | an IdP subject was bound to an account | account-link flow | internal |
+
+## Profile — `profile.v1.events` (producer: `profile`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `profile_created` / `profile_updated` | the public persona was created/edited | command commits | `post`/`search` (snapshots, indexing) |
+| `handle_changed` | the @handle changed | handle claim | `search` (re-index), embeds |
+| `profile_verified` | the verification badge changed | verification | `search`, embeds |
+| `tier_changed` | the author tier changed | tier recompute (from `social-graph`) | `geo-discovery` (weight), `timeline` (push/pull) |
+| `profile_hidden` / `profile_restored` / `profile_deleted` | a visibility/lifecycle transition | owner or moderation action | read models (teardown/restore) |
+
+## Content — `post.v1.events` (producer: `post`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `post.published` | new content went live | publish commits | `timeline` (fan-out), `search`/`geo-discovery` (index), `counter`, `realtime` (broadcast) |
+| `post.updated` | content was edited | update commits | `search`/`geo-discovery` (re-index) |
+| `post.deleted` | content was removed | delete commits | `timeline`/`search`/`geo-discovery` (teardown) |
+
+## Comments — `comment.created` / `comment.deleted` (producer: `comment`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `comment.created` | a comment was posted on a post | create commits | `notification` (notify author), `counter`/`engagement` (count++) |
+| `comment.deleted` | a comment was tombstoned or purged | delete commits | `counter`/`engagement` (count--), feeds |
+
+## Engagement — `engagement.*` (producer: `engagement`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `engagement.reactions` (`ReactionUpserted`/`Removed`) | a reaction edge was set/cleared | react/unreact commits | `notification`, `counter` |
+| `engagement.score_updated` | the weighted engagement score changed | score recompute | `geo-discovery` (virality), `counter` |
+| `engagement.post_reactions` / `engagement.post_interaction_counters` | per-post reaction/interaction rollups | aggregation | downstream consumers |
+
+## Magnitudes — `counter.v1.popularity` (producer: `counter`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `counter.v1.popularity` | an entity's popularity magnitude changed | a window flush updates a popularity score | `search` (ranking), `realtime` (live broadcast) |
+
+## Trust & Safety — `moderation.v1.events` (producer: `moderation`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `decision_recorded` | an authoritative integrity ruling was made — carries *who decided* + *why* (DSA SoR) | a decision is recorded (auto-screen / human review / appeal reversal) | `audit` (seals rationale in crypto-shred envelope) |
+| `enforcement_applied` / `enforcement_reversed` | a consequence was applied/lifted against an actor (versioned) | enforcement commits | `timeline`, `chat`, `account` (Plane-B denorm); `audit` |
+| `case_opened` / `case_resolved` | a review unit opened/closed | ingestion threshold / reviewer action | Plane-B consumers |
+| `appeal_resolved` | an appeal was decided | appeal resolution | Plane-B consumers |
+
+> Keyed by `actor_id` for per-actor ordering. `decision_recorded` is the compliance-evidence variant
+> (offender-centric consumers ignore it; `audit` consumes it + `enforcement_applied`).
+
+## Conversations — `chat.*` (producer: `chat`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `chat.conversation.created` / `chat.conversation.published` / `chat.conversation.unpublished` | conversation lifecycle facts | create / publish / unpublish | `VisibilityWorker` (audience-plane teardown), consumers |
+| `chat.member.joined` / `chat.member.left` | membership changed | join/leave | consumers |
+| `chat.message.sent` | a message was committed to the log | send commits | chat's own live plane (**not** consumed by `realtime` — Separate Ways) |
+
+## Media — `media.v1.events` (producer: `media`)
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `asset_uploaded` | bytes landed in the object store | finalize | the transform pipeline (Plane B) |
+| `asset_ready` / `asset_variant_ready` | the asset (or a variant) is safe to deliver | CSAM Screen passes / rendition done | `post`, `profile`, `search` |
+| `asset_quarantined` / `asset_deleted` / `asset_restored` | a safety/lifecycle transition | Screen fail / takedown / restore | embeds, delivery |
+| `asset_failed` | processing failed | timeout/error | upload UX |
+
+## Social Graph — relation events (producer: `social-graph`)
+
+> The split, past-tense topics below **are** produced and consumed (see the wiring block). Only the
+> *combined* `social-graph.follows` stream `counter` would prefer is deferred (a tracked naming
+> mismatch); `counter` reconciles via gRPC meanwhile.
+
+| Event | Means | Emitted when | Consumers & why |
+|---|---|---|---|
+| `ProfileFollowed` / `ProfileUnfollowed` | a follow edge was created/removed | follow/unfollow commits | `timeline`/`counter` (consume **via gRPC today**; the `social-graph.follows` stream is deferred) |
+| `ProfileBlocked` / `ProfileUnblocked` | a block edge changed (severs follows) | block/unblock commits | feeds |
+| `AuthorTierChanged` | the author's tier changed | follower count crosses a threshold | `profile` (owns + re-emits as `tier_changed`) |
+
+## Terminal sinks — publish nothing of record
+
+`audit`, `search`, `timeline`, `geo-discovery`, `realtime` consume the above and assert no durable
+business facts outward. `notification`'s `NotificationCreated`/`Read` are internal feed state, not a
+System-of-Record stream.

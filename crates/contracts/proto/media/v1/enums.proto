@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package media.v1;
+
+option java_package = "com.coreplatform.media.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/media/v1;mediav1";
+
+// The kind of media an asset holds. `kind` drives the validation policy (MIME
+// allowlist, size ceiling), the rendition ladder generated for it, and the
+// content-addressed storage path. v1 is IMAGES-FIRST; video transcoding is a
+// planned fast-follow phase and will be added as a new, additive enum value
+// (MEDIA_KIND_VIDEO) — never by renumbering these.
+enum MediaKind {
+    MEDIA_KIND_UNSPECIFIED = 0;
+    // A profile/account avatar — square-cropped rendition ladder.
+    MEDIA_KIND_AVATAR      = 1;
+    // An image attached to a post — feed-sized rendition ladder.
+    MEDIA_KIND_POST_IMAGE  = 2;
+}
+
+// The asset lifecycle state machine. An asset is created PENDING at ticket time,
+// advances through UPLOADED → PROCESSING as the pipeline runs, and lands in one of
+// the terminal-ish states READY / FAILED / QUARANTINED / DELETED. The publish path
+// of `post`/`profile` never waits on this — a post may reference a PENDING/
+// PROCESSING asset and render the blurhash placeholder until it reaches READY.
+enum AssetState {
+    MEDIA_ASSET_STATE_UNSPECIFIED = 0;
+    // Ticket issued; awaiting the client's direct-to-object-store upload.
+    MEDIA_ASSET_STATE_PENDING     = 1;
+    // Bytes landed and finalize was accepted; pre-processing.
+    MEDIA_ASSET_STATE_UPLOADED    = 2;
+    // The async transformation pipeline is running (validate → screen → derive).
+    MEDIA_ASSET_STATE_PROCESSING  = 3;
+    // All renditions are available; the asset is deliverable.
+    MEDIA_ASSET_STATE_READY       = 4;
+    // Processing failed terminally (corrupt media, unsupported codec, etc.).
+    MEDIA_ASSET_STATE_FAILED      = 5;
+    // A moderation takedown / compliance hold revoked delivery. Bytes may be
+    // preserved (legal hold) even though the asset is undeliverable.
+    MEDIA_ASSET_STATE_QUARANTINED = 6;
+    // Hard-deleted (bytes purged, honoring the dedup refcount). Absent a legal hold.
+    MEDIA_ASSET_STATE_DELETED     = 7;
+}
+
+// A derivative of an asset. Each rendition is a separately-stored, content-
+// addressed object; the caller receives a URL to it via the delivery plane, never
+// the bytes. v1 renditions are image size buckets; the concrete format (WebP/AVIF/
+// JPEG) is carried per-rendition by its mime_type, not by this enum.
+enum RenditionKind {
+    MEDIA_RENDITION_KIND_UNSPECIFIED = 0;
+    // The validated master (post-probe, pre-derivation source of truth).
+    MEDIA_RENDITION_KIND_ORIGINAL    = 1;
+    MEDIA_RENDITION_KIND_THUMBNAIL   = 2;
+    MEDIA_RENDITION_KIND_SMALL       = 3;
+    MEDIA_RENDITION_KIND_MEDIUM      = 4;
+    MEDIA_RENDITION_KIND_LARGE       = 5;
+}
+
+// How a delivery URL is brokered. PUBLIC media gets a content-addressed, immutable
+// CDN URL (cacheable forever — an edit is a new asset = a new hash = a new URL).
+// SIGNED media gets a short-lived signed URL minted per request, only after the
+// edge has authorized the viewer.
+enum DeliveryVisibility {
+    MEDIA_DELIVERY_VISIBILITY_UNSPECIFIED = 0;
+    MEDIA_DELIVERY_VISIBILITY_PUBLIC      = 1;
+    MEDIA_DELIVERY_VISIBILITY_SIGNED      = 2;
+}

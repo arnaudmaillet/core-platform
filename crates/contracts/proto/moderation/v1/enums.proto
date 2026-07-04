@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package moderation.v1;
+
+option java_package = "com.coreplatform.moderation.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/moderation/v1;moderationv1";
+
+// What kind of entity a moderation subject points at. Moderation never stores the
+// content itself — it references it by (entity_type, entity_id) owned by the
+// originating content service.
+enum EntityType {
+    ENTITY_TYPE_UNSPECIFIED = 0;
+    ENTITY_TYPE_POST         = 1;
+    ENTITY_TYPE_COMMENT      = 2;
+    ENTITY_TYPE_CHAT_MESSAGE = 3;
+    ENTITY_TYPE_MEDIA        = 4;
+    // Actor-level subject (the account itself), e.g. for graduated penalties.
+    ENTITY_TYPE_ACCOUNT      = 5;
+    ENTITY_TYPE_PROFILE      = 6;
+}
+
+// Normalized integrity taxonomy. Deliberately policy-version-agnostic at the wire
+// level: the *thresholds and consequences* for each category live in the pinned
+// policy version, never in this contract. Catastrophic-harm categories (CSAM,
+// NCII, VIOLENT_EXTREMISM) are the only ones eligible for the synchronous,
+// fail-closed Screen gate.
+enum PolicyCategory {
+    POLICY_CATEGORY_UNSPECIFIED = 0;
+    POLICY_CATEGORY_SPAM               = 1;
+    POLICY_CATEGORY_HARASSMENT         = 2;
+    POLICY_CATEGORY_HATE               = 3;
+    POLICY_CATEGORY_VIOLENT_EXTREMISM  = 4; // TVEC
+    POLICY_CATEGORY_CSAM               = 5;
+    POLICY_CATEGORY_NCII               = 6; // non-consensual intimate imagery
+    POLICY_CATEGORY_SELF_HARM          = 7;
+    POLICY_CATEGORY_MISINFORMATION     = 8;
+    POLICY_CATEGORY_OTHER              = 9;
+}
+
+// The executable consequence of a decision. Graduated from least to most severe.
+// Moderation DECIDES the action; the owning service EXECUTES it (content services
+// flip visibility; `account` runs suspension/ban lifecycle).
+enum ActionType {
+    ACTION_TYPE_UNSPECIFIED = 0;
+    // No enforcement — the case is dismissed as non-violating.
+    ACTION_TYPE_NO_ACTION        = 1;
+    ACTION_TYPE_WARN             = 2;
+    ACTION_TYPE_REMOVE_CONTENT   = 3;
+    ACTION_TYPE_AGE_GATE         = 4;
+    // Shadow-reduce: content stays but its reach/visibility is limited.
+    ACTION_TYPE_VISIBILITY_LIMIT = 5;
+    // Actor-level: restrict the actor's ability to post/interact for a window.
+    ACTION_TYPE_RESTRICT_ACTOR   = 6;
+    ACTION_TYPE_SUSPEND          = 7;
+    ACTION_TYPE_BAN              = 8;
+}
+
+// Lifecycle of a review Case.
+enum CaseStatus {
+    CASE_STATUS_UNSPECIFIED = 0;
+    CASE_STATUS_OPEN      = 1;
+    CASE_STATUS_TRIAGED   = 2;
+    CASE_STATUS_ACTIONED  = 3;
+    CASE_STATUS_DISMISSED = 4;
+    CASE_STATUS_APPEALED  = 5;
+}
+
+// Lifecycle of an EnforcementAction. Carries a monotonic per-subject version so a
+// reversal can never race ahead of a re-application.
+enum EnforcementStatus {
+    ENFORCEMENT_STATUS_UNSPECIFIED = 0;
+    ENFORCEMENT_STATUS_ACTIVE   = 1;
+    ENFORCEMENT_STATUS_EXPIRED  = 2;
+    ENFORCEMENT_STATUS_REVERSED = 3;
+}
+
+// The result of a synchronous Screen (Plane C). For catastrophic-harm categories
+// the CALLER's per-category fail policy converts BLOCK — and an unavailable gate —
+// into a hard pre-publish block; ALLOW never means "approved", only "no known-bad
+// match" (asynchronous review still applies on Plane A).
+enum ScreenVerdict {
+    SCREEN_VERDICT_UNSPECIFIED = 0;
+    SCREEN_VERDICT_ALLOW  = 1;
+    SCREEN_VERDICT_BLOCK  = 2;
+    // Ambiguous match — route to expedited human review; caller holds visibility.
+    SCREEN_VERDICT_REVIEW = 3;
+}
+
+// Lifecycle of an Appeal against a decision.
+enum AppealStatus {
+    APPEAL_STATUS_UNSPECIFIED = 0;
+    APPEAL_STATUS_FILED        = 1;
+    APPEAL_STATUS_UNDER_REVIEW = 2;
+    APPEAL_STATUS_UPHELD       = 3; // original decision stands
+    APPEAL_STATUS_OVERTURNED   = 4; // a reversal decision is recorded
+}

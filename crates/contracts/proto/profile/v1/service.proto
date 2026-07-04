@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package profile.v1;
+
+import "profile/v1/messages.proto";
+
+option java_package = "com.coreplatform.profile.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/profile/v1;profilev1";
+
+// ProfileService manages public-facing identity metadata.
+//
+// SRP guarantee: this service owns only profile metadata (handles, bios,
+// avatars). Social graph concerns (followers, friends) belong to a separate
+// bounded context and must never be added here.
+//
+// All mutating RPCs (commands) return CommandResponse.
+// All read RPCs (queries) return the typed view message.
+service ProfileService {
+
+    // ── Profile lifecycle ─────────────────────────────────────────────────────
+
+    // Create a new public profile linked to an account.
+    // One account can own multiple profiles (1-to-N relationship).
+    rpc CreateProfile(CreateProfileRequest) returns (CommandResponse);
+
+    // Update mutable profile metadata: bio, display_name, website, links, locale.
+    rpc UpdateProfile(UpdateProfileRequest) returns (CommandResponse);
+
+    // Atomically swap the public @handle using ScyllaDB LWT.
+    // The old handle enters a 30-day tombstone reservation period.
+    rpc ChangeHandle(ChangeHandleRequest) returns (CommandResponse);
+
+    // Replace the avatar CDN URL.
+    rpc UpdateAvatar(UpdateAvatarRequest) returns (CommandResponse);
+
+    // Replace the banner CDN URL.
+    rpc UpdateBanner(UpdateBannerRequest) returns (CommandResponse);
+
+    // Toggle profile visibility between Public and Private.
+    rpc SetVisibility(SetVisibilityRequest) returns (CommandResponse);
+
+    // Grant a platform verification badge (admin only).
+    rpc VerifyProfile(VerifyProfileRequest) returns (CommandResponse);
+
+    // Reactively mask a profile in response to an account lifecycle event.
+    // Called internally by the Kafka account event consumer.
+    rpc HideProfile(HideProfileRequest) returns (CommandResponse);
+
+    // Restore a previously hidden or suspended profile to Active.
+    rpc RestoreProfile(RestoreProfileRequest) returns (CommandResponse);
+
+    // Soft-delete a profile. The handle enters the tombstone reservation period.
+    rpc DeleteProfile(DeleteProfileRequest) returns (CommandResponse);
+
+    // ── Queries ───────────────────────────────────────────────────────────────
+
+    // Fetch the full profile view by primary key (cache-aside).
+    rpc GetProfileById(GetProfileByIdRequest) returns (ProfileView);
+
+    // Resolve a @handle to its full profile view (cache-aside, two hops).
+    rpc GetProfileByHandle(GetProfileByHandleRequest) returns (ProfileView);
+
+    // Paginated list of all profiles owned by an account.
+    rpc ListProfilesByAccount(ListProfilesByAccountRequest) returns (ListProfilesByAccountResponse);
+}

@@ -1,0 +1,23 @@
+[package]
+name        = "redis-storage"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Production-grade Redis client management, topology configuration, telemetry integration, and error mapping for the core-platform workspace."
+
+[dependencies]
+error     = { workspace = true }
+health      = { workspace = true }
+async-trait = { workspace = true }
+anyhow      = { workspace = true }
+thiserror = { workspace = true }
+tracing   = { workspace = true }
+http      = { workspace = true }
+tokio     = { workspace = true }
+fred      = { workspace = true, features = ["partial-tracing", "subscriber-client"] }
+
+[dev-dependencies]
+tokio              = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing-subscriber = { workspace = true }

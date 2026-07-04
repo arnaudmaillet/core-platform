@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package notification.v1;
+
+import "notification/v1/messages.proto";
+
+service NotificationService {
+    // Paginates the recipient's activity feed (bell icon), newest-first.
+    // Cursor-based via page_token; no ALLOW FILTERING on ScyllaDB.
+    rpc ListNotifications (ListNotificationsRequest) returns (ListNotificationsResponse);
+
+    // Returns the fast unread badge count for the bell icon dot.
+    // Redis-first; ScyllaDB counter fallback on cache miss.
+    rpc GetUnreadCount (GetUnreadCountRequest) returns (GetUnreadCountResponse);
+
+    // Marks a single notification as read. Decrements the unread counter.
+    rpc MarkRead (MarkReadRequest) returns (CommandResponse);
+
+    // Resets the unread counter to 0 and sets a read_horizon timestamp.
+    // Does not touch individual is_read flags in ScyllaDB.
+    rpc MarkAllRead (MarkAllReadRequest) returns (CommandResponse);
+
+    // Long-lived server-streaming push channel for real-time notifications.
+    // The BFF opens this stream per authenticated client session.
+    // On RecvError::Lagged the client must re-poll ListNotifications.
+    rpc StreamNotifications (StreamNotificationsRequest) returns (stream StreamNotificationsResponse);
+}

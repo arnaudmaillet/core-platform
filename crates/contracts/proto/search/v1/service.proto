@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package search.v1;
+
+import "search/v1/messages.proto";
+
+option java_package = "com.coreplatform.search.v1";
+option java_multiple_files = true;
+option go_package = "github.com/coreplatform/search/v1;searchv1";
+
+// SearchService is the platform's discovery read-model: a derived, typo-tolerant
+// inverted index over profiles, posts, and hashtags.
+//
+// This surface is deliberately READ-ONLY. There is no write/index RPC: indexing
+// happens entirely off the synchronous path via Kafka consumers (`post.v1.events`,
+// `profile.v1.events`, `moderation.v1.events`), and search publishes no events of
+// its own (it is a terminal read-model). The query path is self-contained — it
+// reads only the engine and makes no inter-service call — and fail-OPEN: on a
+// partial/unavailable engine it returns degraded results (see
+// SearchResponse.degraded), never an upstream block.
+//
+// Boundary: results are REFERENCES — (entity_type, id, score, snippet) plus a
+// minimal indexed display projection. The caller hydrates authoritative/volatile
+// fields from `post`/`profile`; search resolves nothing on the fly. Personal
+// block/mute is applied by the caller via SearchRequest.exclude_author_ids, never
+// indexed.
+service SearchService {
+
+    // Federated, paginated search across the requested entity kinds (empty ⇒ all).
+    rpc Search(SearchRequest) returns (SearchResponse);
+
+    // Prefix autocomplete / type-ahead suggestions.
+    rpc Suggest(SuggestRequest) returns (SuggestResponse);
+
+    // Batch of independent searches in a single round-trip (responses are
+    // positional, 1:1 with the requests).
+    rpc MultiSearch(MultiSearchRequest) returns (MultiSearchResponse);
+}
