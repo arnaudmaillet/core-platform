@@ -1,7 +1,13 @@
 # infrastructure/argocd/bootstrap/prod/root-infra-operators.yaml
 #
-# Prod operators — same set as staging (cnpg, k6, scylla-operator, scylla-manager,
-# external-secrets, keda), each in its own namespace. The ESO ServiceAccount
+# Prod operators — staging's set MINUS k6-operator (cnpg, scylla-operator,
+# scylla-manager, external-secrets, keda), each in its own namespace. k6 is
+# load-test tooling: prod deliberately ships no k6 NetworkPolicies (the k6 pods
+# couldn't reach the mesh anyway), and the operator was dead weight that also
+# CrashLooped on the first bring-up — the grafana manager image is amd64-only
+# and landed on a Graviton MNG node ("exec format error"; Helm catalog apps are
+# not covered by the fleet overlay's amd64 pin). Load tests run against staging.
+# The ESO ServiceAccount
 # receives its IRSA role-arn injected from global-params-prod
 # (externalSecretsRoleArn), the same pattern the platform
 # appset uses for lb-controller/karpenter. KEDA owns the keda.sh CRDs the
@@ -32,9 +38,6 @@ spec:
                 - name: cnpg-operator
                   folder: infrastructure/argocd/apps/infrastructure/operators/cnpg-operator
                   destNamespace: cnpg-system
-                - name: k6-operator
-                  folder: infrastructure/argocd/apps/infrastructure/operators/k6-operator
-                  destNamespace: k6-operator-system
                 - name: scylla-operator
                   folder: infrastructure/argocd/apps/infrastructure/operators/scylla-operator
                   destNamespace: scylla-operator
