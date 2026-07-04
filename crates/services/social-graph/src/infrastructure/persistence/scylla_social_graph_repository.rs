@@ -356,7 +356,10 @@ impl SocialGraphRepository for ScyllaSocialGraphRepository {
         limit:       i32,
         page_token:  Option<&str>,
     ) -> Result<(Vec<FollowEdge>, Option<String>), SocialGraphError> {
-        let limit = limit.clamp(1, 100) as i64;
+        // LIMIT binds as CQL `int` (32-bit); the old `as i64` cast made Scylla
+        // reject every query (SerializationError i64 vs Native(Int)) — the
+        // timeline feed cold-rebuild failed 100% under the staging soak.
+        let limit = limit.clamp(1, 100);
         let token = decode_follow_token(page_token)?;
 
         let rows: Vec<FollowRow> = if let Some(ref tok) = token {
@@ -407,7 +410,10 @@ impl SocialGraphRepository for ScyllaSocialGraphRepository {
         limit:       i32,
         page_token:  Option<&str>,
     ) -> Result<(Vec<FollowEdge>, Option<String>), SocialGraphError> {
-        let limit = limit.clamp(1, 100) as i64;
+        // LIMIT binds as CQL `int` (32-bit); the old `as i64` cast made Scylla
+        // reject every query (SerializationError i64 vs Native(Int)) — the
+        // timeline feed cold-rebuild failed 100% under the staging soak.
+        let limit = limit.clamp(1, 100);
         let token = decode_follow_token(page_token)?;
 
         let rows: Vec<FollowRow> = if let Some(ref tok) = token {
@@ -458,7 +464,10 @@ impl SocialGraphRepository for ScyllaSocialGraphRepository {
         limit:      i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<BlockEdge>, Option<String>), SocialGraphError> {
-        let limit = limit.clamp(1, 100) as i64;
+        // LIMIT binds as CQL `int` (32-bit); the old `as i64` cast made Scylla
+        // reject every query (SerializationError i64 vs Native(Int)) — the
+        // timeline feed cold-rebuild failed 100% under the staging soak.
+        let limit = limit.clamp(1, 100);
 
         let token: Option<BlockPageToken> = page_token
             .map(|t| {
@@ -554,7 +563,7 @@ fn decode_follow_token(
 
 fn build_follow_page(
     rows:  Vec<FollowRow>,
-    limit: i64,
+    limit: i32,
 ) -> Result<(Vec<FollowEdge>, Option<String>), SocialGraphError> {
     let total = rows.len();
     let mut edges = Vec::with_capacity(total);
