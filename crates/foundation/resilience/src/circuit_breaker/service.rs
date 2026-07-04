@@ -50,7 +50,14 @@ where
 
     fn call(&mut self, req: Req) -> Self::Future {
         let sm = Arc::clone(&self.state_machine);
-        let mut svc = self.inner.clone();
+        // Tower's clone-in-call rule: readiness belongs to the INSTANCE the
+        // caller just polled. Take that instance and leave the fresh clone
+        // behind for the next poll_ready — calling a fresh clone of a
+        // Buffer-backed service (tonic's Channel) panics with "`send_item`
+        // called without first calling `poll_reserve`" (found live: 100% of
+        // timeline→social-graph calls died under the first staging soak).
+        let clone = self.inner.clone();
+        let mut svc = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
             // 1. Gate the request on the current circuit state.
@@ -132,5 +139,28 @@ mod tests {
         // Now Open: the request is rejected without touching the inner service.
         let rejected = svc.ready().await.unwrap().call(()).await.unwrap_err();
         assert!(matches!(rejected, ResilienceError::CircuitOpen));
+    }
+
+    /// Regression (staging soak finding #16): a Buffer-backed inner (tonic's
+    /// Channel is one) panics "`send_item` called without first calling
+    /// `poll_reserve`" if `call` runs on a fresh clone instead of the polled
+    /// instance. Drives the breaker over a real `tower::buffer::Buffer` and
+    /// makes many sequential calls; the clone-in-call fix keeps it from
+    /// panicking.
+    #[tokio::test]
+    async fn survives_buffer_backed_inner_across_many_calls() {
+        use tower::buffer::Buffer;
+
+        let inner = service_fn(|_: ()| async { Ok::<_, &str>("ok") });
+        let buffered = Buffer::new(inner, 8);
+        let mut svc = CircuitBreakerService::new(
+            buffered,
+            machine(CircuitBreakerConfig::default()),
+        );
+
+        for _ in 0..25 {
+            let out = svc.ready().await.unwrap().call(()).await.unwrap();
+            assert_eq!(out, "ok");
+        }
     }
 }
