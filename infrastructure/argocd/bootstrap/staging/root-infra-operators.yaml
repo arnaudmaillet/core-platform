@@ -80,6 +80,22 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.destNamespace}}'
+      # scylla-manager's chart ships a ScyllaCluster CR whose unset fields the
+      # scylla-operator defaulting webhook fills on admission — perpetual
+      # OutOfSync otherwise. Matches only ScyllaCluster resources, so this is
+      # inert for every other operator app this template generates.
+      ignoreDifferences:
+        - group: scylla.scylladb.com
+          kind: ScyllaCluster
+          jqPathExpressions:
+            - .spec.repository
+            - .spec.agentRepository
+            - .spec.backups[].numRetries
+            - .spec.repairs[].numRetries
+            - .spec.repairs[].intensity
+            - .spec.repairs[].parallel
+            - .spec.repairs[].smallTableThreshold
+            - .spec.datacenter.racks[].agentResources
       syncPolicy:
         automated:
           prune: true
@@ -87,3 +103,4 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          - RespectIgnoreDifferences=true
