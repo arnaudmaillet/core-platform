@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./terragrunt-units.md
-  source_sha256: ac0b3bdd5352469af7e653877b1f211a57a7cce062a3b59ede0be9dcb2b7d3ad
-  translated_at: 2026-07-03
+  source_sha256: 4b2addb34a854c781de7915bd3abb4dc7eb87b593fa25819c357b6d4fda764fe
+  translated_at: 2026-07-04
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`terragrunt-units.md`](./terragrunt-units.md) fait foi.
@@ -31,9 +31,9 @@ infrastructure/
 ├── modules/                    # reusable Terraform modules (the "how")
 │   ├── networking/{vpc,route53}   eks   acm-cert   artifacts/ecr
 │   ├── elasticache   msk   opensearch   s3-bucket (generic; Object-Lock param)
-│   ├── kms-key   app-secrets   security/irsa-roles   kubernetes/argocd
+│   ├── kms-key   app-secrets   security/{irsa-roles,account-slr}   kubernetes/argocd
 └── live/                       # Terragrunt instantiations (the "where/which")
-    ├── global/{artifacts/ecr, networking/route53}     # account-shared
+    ├── global/{artifacts/ecr, networking/route53, security/ec2-spot-slr}  # account-shared
     ├── dev/us-east-1/…
     ├── staging/us-east-1/…     # ◄── documented here (the live path)
     └── prod/us-east-1/…        # full staging mirror, prod posture (not applied)
@@ -219,3 +219,4 @@ le [runbook de reconstruction du staging jetable](../runbooks/staging-disposable
 | `kubernetes/argocd` | `kubernetes/argocd` |
 | `artifacts/ecr` | `global/artifacts/ecr` (partagé au compte) |
 | `networking/route53` | `global/networking/route53` (partagé au compte) |
+| `security/account-slr` | `global/security/ec2-spot-slr` (partagé au compte ; rôle lié au service EC2 Spot — global au compte, sûr à la destruction, autrefois par-env dans `irsa-roles`) |
