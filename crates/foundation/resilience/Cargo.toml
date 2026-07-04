@@ -25,3 +25,7 @@ serde = ["dep:serde"]
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 serde_json = { workspace = true }
+# buffer: regression tests drive the middleware over a Buffer-backed inner —
+# the readiness contract violation these layers once had only manifests there
+# (tonic's Channel is Buffer-backed; see the clone-in-call comments).
+tower = { workspace = true, features = ["buffer", "util"] }
