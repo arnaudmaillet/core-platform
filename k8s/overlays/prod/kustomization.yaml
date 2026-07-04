@@ -182,6 +182,15 @@ images:
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-realtime-dispatcher
     newTag: prod
 patches:
+  # amd64 pin on every fleet workload: images are amd64-only but the prod system
+  # MNG is Graviton and untainted (see patch-arch-amd64.yaml). Remove with the
+  # multi-arch follow-up.
+  - path: patch-arch-amd64.yaml
+    target:
+      kind: Deployment
+  - path: patch-arch-amd64-job.yaml
+    target:
+      kind: Job
   # Baseline pod-security hardening (non-root, seccomp, drop caps) on every Deployment.
   - path: patch-securitycontext.yaml
     target:

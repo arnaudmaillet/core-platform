@@ -1,0 +1,23 @@
+# k8s/overlays/prod/patch-arch-amd64.yaml
+#
+# Pin every fleet Deployment to amd64 nodes. The fleet CI builds amd64-only
+# images (x86 runners, no --platform), and unlike staging (t3.* x86 MNGs) the
+# prod system managed node group is Graviton and UNTAINTED — without this pin
+# the scheduler can place a fleet pod there and it ImagePullBackOffs ("no match
+# for platform in manifest"), the same failure mode that broke the first staging
+# bring-up via the Karpenter system pool.
+#
+# Strategic merge (not JSON6902 like patch-securitycontext.yaml) on purpose:
+# nodeSelector maps MERGE, so the TIER-0 karpenter.sh/capacity-type=on-demand
+# selector survives. Covers the migrator init containers via the pod spec.
+# Remove once fleet-images-deploy.yml publishes multi-arch manifests (the same
+# gate as re-allowing arm64 in the Karpenter nodepools).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ignored-by-target-selector
+spec:
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
