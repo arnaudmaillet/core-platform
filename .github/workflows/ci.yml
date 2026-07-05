@@ -1,0 +1,91 @@
+# .github/workflows/ci.yml
+#
+# The workspace-wide test + lint gate. Until this existed, NO workflow ran
+# `cargo test --workspace` — PR CI covered only protos (buf), the event
+# topology, and i18n drift, all path-filtered; the fleet image build was the
+# sole (post-merge) compile proof. Found in the 2026-07-04 production-readiness
+# audit.
+#
+# Integration tests are feature-gated (`integration-<svc>`, need Docker
+# backends) and deliberately NOT run here — the default feature set is
+# unit-only. See docs: the k6 staging soak is the live-backend exercise.
+#
+# Build deps mirror deploy/Dockerfile: protoc + well-known types for the
+# `*-api` crates' tonic codegen; cmake/zlib for the bundled librdkafka.
+# Debuginfo is disabled to keep the build inside the runner's disk budget
+# (the full-debug workspace target tree exceeds it).
+name: ci
+
+on:
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deps (protoc, librdkafka toolchain)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev cmake zlib1g-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test --workspace
+        run: cargo test --workspace --quiet
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deps (protoc, librdkafka toolchain)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev cmake zlib1g-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # -D warnings with a RATCHET: the -A list below is exactly the lint kinds
+      # firing on the tree today (~35 mild style hits, audited 2026-07-05) so the
+      # gate lands green while every OTHER clippy lint becomes a hard error from
+      # day one. Shrink this list as cleanup lands; never grow it.
+      - name: cargo clippy --workspace --all-targets
+        run: >
+          cargo clippy --workspace --all-targets -- -D warnings
+          -A clippy::clone_on_copy
+          -A clippy::cloned_ref_to_slice_refs
+          -A clippy::collapsible_if
+          -A clippy::field_reassign_with_default
+          -A clippy::items_after_test_module
+          -A clippy::let_underscore_future
+          -A clippy::manual_async_fn
+          -A clippy::manual_clamp
+          -A clippy::manual_is_multiple_of
+          -A clippy::manual_range_contains
+          -A clippy::module_inception
+          -A clippy::new_without_default
+          -A clippy::too_many_arguments
+          -A clippy::type_complexity
+          -A clippy::unnecessary_map_or
