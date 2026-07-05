@@ -20,8 +20,10 @@ locals {
       # on platform pods alone — on the 2026-07-04 rebuild both system nodes hit
       # the cap and the node-exporter DaemonSet pods were unschedulable ("Too many
       # pods") until pods were manually evicted. t3.large lifts the cap to 35.
-      # Deeper fix (tracked): VPC CNI prefix delegation decouples max-pods from
-      # instance size entirely.
+      # Prefix delegation is now enabled cluster-wide (modules/eks vpc-cni
+      # addon, before_compute) so max-pods no longer binds at 17 even on
+      # mediums; t3.large is kept anyway — the saturation was also a CPU/mem
+      # headroom signal, not just a pod-slot one.
       instance_types = ["t3.large"]
       min_size       = 2
       max_size       = 3
