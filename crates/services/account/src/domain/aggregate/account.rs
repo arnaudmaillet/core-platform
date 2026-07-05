@@ -651,7 +651,7 @@ impl Account {
     pub fn locked_until(&self) -> Option<DateTime<Utc>> { self.locked_until }
 
     pub fn is_locked(&self) -> bool {
-        self.locked_until.map_or(false, |until| until > Utc::now())
+        self.locked_until.is_some_and(|until| until > Utc::now())
     }
 
     pub fn last_login_at(&self) -> Option<DateTime<Utc>> { self.last_login_at }

@@ -34,7 +34,7 @@ impl PhoneNumber {
         }
 
         let len = s.len();
-        if len < Self::MIN_LEN || len > Self::MAX_LEN {
+        if !(Self::MIN_LEN..=Self::MAX_LEN).contains(&len) {
             return Err(AccountError::InvalidPhone(format!(
                 "phone number length must be between {} and {} characters (got {})",
                 Self::MIN_LEN,

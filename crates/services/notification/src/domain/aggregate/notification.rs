@@ -56,6 +56,7 @@ impl Notification {
 
     /// Reconstitutes a collapsed notification produced by the CollapseFlushWorker.
     /// `sender_profile_id` is the most-recent sender in the window.
+    #[allow(clippy::too_many_arguments)] // aggregate/worker constructor — same precedent as chat
     pub fn create_collapsed(
         id:                NotificationId,
         target_profile_id: ProfileId,
@@ -82,6 +83,7 @@ impl Notification {
     }
 
     /// Reconstitutes an aggregate from a ScyllaDB row (for query projections).
+    #[allow(clippy::too_many_arguments)] // aggregate/worker constructor — same precedent as chat
     pub fn reconstitute(
         id:                NotificationId,
         target_profile_id: ProfileId,

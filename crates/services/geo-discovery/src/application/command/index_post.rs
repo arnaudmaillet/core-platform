@@ -140,11 +140,10 @@ where
         }
 
         // ── 4. Redis card cache (Focus path — conditional on score threshold) ──
-        if score.exceeds_threshold(self.card_cache_threshold) {
-            if let Err(e) = self.card_store.set(&card, ttl).await {
+        if score.exceeds_threshold(self.card_cache_threshold)
+            && let Err(e) = self.card_store.set(&card, ttl).await {
                 tracing::warn!(post_id = %post_id, error = %e, "card cache write failed — ScyllaDB is durable");
             }
-        }
 
         tracing::debug!(
             post_id  = %post_id,

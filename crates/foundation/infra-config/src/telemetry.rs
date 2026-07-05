@@ -50,13 +50,12 @@ impl TelemetrySection {
     /// validated here without a tracing dependency; it is checked at apply time
     /// by the sink (a bad directive is rejected, leaving the previous filter).
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if let Some(TelemetrySamplingSpec::TraceIdRatio { ratio }) = &self.sampling {
-            if !(0.0..=1.0).contains(ratio) {
+        if let Some(TelemetrySamplingSpec::TraceIdRatio { ratio }) = &self.sampling
+            && !(0.0..=1.0).contains(ratio) {
                 return Err(ConfigError::validation(format!(
                     "[telemetry] sampling ratio {ratio} must be in [0.0, 1.0]"
                 )));
             }
-        }
         Ok(())
     }
 }

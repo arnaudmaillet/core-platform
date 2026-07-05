@@ -152,8 +152,8 @@ impl RefreshHandler {
     ) -> Result<(), AuthError> {
         self.cache.bump_generation(&account_id).await?;
         self.refresh_tokens.revoke_all_for_session(&session_id).await?;
-        if let Some(mut session) = self.sessions.find_by_id(&session_id).await? {
-            if session.status() == SessionStatus::Active {
+        if let Some(mut session) = self.sessions.find_by_id(&session_id).await?
+            && session.status() == SessionStatus::Active {
                 session.revoke(now, RevocationReason::RefreshReuse, correlation_id)?;
                 self.sessions.save(&session).await?;
                 self.cache.blacklist_session(&session_id, self.policy.access_ttl).await?;
@@ -161,7 +161,6 @@ impl RefreshHandler {
                     self.publisher.publish(event).await?;
                 }
             }
-        }
         Ok(())
     }
 }

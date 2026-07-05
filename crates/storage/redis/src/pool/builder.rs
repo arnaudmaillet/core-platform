@@ -102,7 +102,7 @@ impl RedisPoolBuilder {
         // init() connects all pool members concurrently and waits until every
         // member has established its initial connection. Dropping the returned
         // ConnectHandle does NOT cancel the background I/O tasks.
-        let _ = pool
+        let _connect_handle = pool
             .init()
             .await
             .map_err(RedisStorageError::from)?;

@@ -99,8 +99,8 @@ impl Es256TokenMinter {
         }
 
         let mut validation = Validation::new(Algorithm::ES256);
-        validation.set_issuer(&[active.issuer.clone()]);
-        validation.set_audience(&[active.audience.clone()]);
+        validation.set_issuer(std::slice::from_ref(&active.issuer));
+        validation.set_audience(std::slice::from_ref(&active.audience));
         validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
 
         let mut header = Header::new(Algorithm::ES256);

@@ -49,25 +49,23 @@ impl Validate for CreateAccountCommand {
             violations.push(FieldViolation::new("email", "VAL-2003", "email format is invalid"));
         }
 
-        if let Some(phone) = &self.phone {
-            if !phone.starts_with('+') || phone.len() < 7 {
+        if let Some(phone) = &self.phone
+            && (!phone.starts_with('+') || phone.len() < 7) {
                 violations.push(FieldViolation::new(
                     "phone",
                     "VAL-2004",
                     "phone must be in E.164 format (e.g. +12025551234)",
                 ));
             }
-        }
 
-        if let Some(country) = &self.country_of_residence {
-            if country.len() != 2 || !country.chars().all(|c| c.is_ascii_alphabetic()) {
+        if let Some(country) = &self.country_of_residence
+            && (country.len() != 2 || !country.chars().all(|c| c.is_ascii_alphabetic())) {
                 violations.push(FieldViolation::new(
                     "country_of_residence",
                     "VAL-2005",
                     "country_of_residence must be an ISO 3166-1 alpha-2 code",
                 ));
             }
-        }
 
         if violations.is_empty() { Ok(()) } else { Err(violations) }
     }
