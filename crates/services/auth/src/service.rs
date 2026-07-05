@@ -66,6 +66,17 @@ impl Service for AuthService {
             }
         });
 
+        // Outbox relay: the only path from committed auth events to the
+        // broker. Interval is env-tunable; 1s keeps worst-case event latency
+        // well under the audit plane's freshness expectations.
+        let relay_interval = std::time::Duration::from_millis(
+            std::env::var("AUTH_OUTBOX_RELAY_INTERVAL_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1_000),
+        );
+        tokio::spawn(app.relay.clone().run(relay_interval));
+
         Ok(Self { app })
     }
 

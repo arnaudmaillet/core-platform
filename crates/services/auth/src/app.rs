@@ -28,6 +28,8 @@ use crate::application::SessionPolicy;
 use crate::config::AuthConfig;
 use crate::infrastructure::cache::RedisSessionCache;
 use crate::infrastructure::directory::GrpcAccountDirectory;
+use crate::infrastructure::event::outbox_relay::OutboxRelay;
+use crate::infrastructure::event::pg_outbox_publisher::PgOutboxPublisher;
 use crate::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
 use crate::infrastructure::grpc::handler::AuthServiceHandler;
 use crate::infrastructure::idp::KeycloakIdentityProvider;
@@ -67,6 +69,9 @@ pub struct App {
     /// runtime host (see `infrastructure::http::jwks`) for downstream
     /// verifiers (realtime, audit) that fetch `AUTH_JWKS_URL`.
     pub jwks_json: String,
+    /// Drains the auth_outbox table to the broker; spawned by the runtime
+    /// adapter. Handlers never touch the broker directly anymore.
+    pub relay: OutboxRelay,
 }
 
 impl App {
@@ -123,13 +128,20 @@ impl App {
         let tx = TransactionManager::new(pool.clone());
         let redis = RedisClientBuilder::new(backends.redis).build().await?;
 
-        let publisher: Arc<dyn EventPublisher> = match backends.kafka {
+        // The broker publisher is now the RELAY's sink, not the handlers':
+        // handlers enqueue to the Postgres outbox (same fault domain as their
+        // session writes) and the relay drains it in the background — TIER-0
+        // login no longer hangs or fails on broker trouble, and a committed
+        // session can't lose its compliance event (audit consumes these).
+        let sink: Arc<dyn EventPublisher> = match backends.kafka {
             Some(cfg) => {
                 let producer = KafkaProducerBuilder::new(ProducerConfig::new(cfg)).build()?;
                 Arc::new(KafkaEventPublisher::new(producer))
             }
             None => Arc::new(LogEventPublisher),
         };
+        let relay = OutboxRelay::new(pool.clone(), sink);
+        let publisher: Arc<dyn EventPublisher> = Arc::new(PgOutboxPublisher::new(pool.clone()));
 
         // Lazy connect: the channel dials `account` on first use, so a cold start
         // does not require the dependency to be up at boot. Both deadlines are
@@ -165,7 +177,7 @@ impl App {
             policy: config.policy,
         };
 
-        Ok(App { handler: App::compose(deps), pool, redis, jwks_json })
+        Ok(App { handler: App::compose(deps), pool, redis, jwks_json, relay })
     }
 }
 
