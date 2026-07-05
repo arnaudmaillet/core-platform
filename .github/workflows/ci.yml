@@ -89,3 +89,4 @@ jobs:
           -A clippy::too_many_arguments
           -A clippy::type_complexity
           -A clippy::unnecessary_map_or
+          -A clippy::unnecessary_sort_by
