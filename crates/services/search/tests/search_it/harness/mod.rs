@@ -51,7 +51,20 @@ impl Harness {
             })
             .await;
         }
-        index.ensure_indices().await.expect("it: ensure_indices");
+        // Retried, not expected: all 13 scenarios boot in parallel and each
+        // creates its own namespaced index set — the creation stampede against
+        // one single-node OpenSearch times out sporadically under load
+        // (EngineTimeout — the suite's only observed flake, on the CI matrix
+        // and locally at 4-way parallelism). Creation is idempotent, so
+        // retrying to a deadline is exactly right.
+        {
+            let index = Arc::clone(&index);
+            test_support::await_until("opensearch indices created", Duration::from_secs(90), move || {
+                let index = Arc::clone(&index);
+                async move { index.ensure_indices().await.is_ok() }
+            })
+            .await;
+        }
 
         let port: Arc<dyn SearchIndex> = Arc::clone(&index) as Arc<dyn SearchIndex>;
         let projection = ProjectionHandler::new(Arc::clone(&port));
