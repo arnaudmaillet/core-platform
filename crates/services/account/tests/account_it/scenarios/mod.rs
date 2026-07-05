@@ -3,3 +3,4 @@
 
 mod persistence_roundtrip;
 mod uniqueness_race;
+mod mutation_roundtrip;
