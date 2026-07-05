@@ -124,5 +124,14 @@ jobs:
           # One cache shared across the matrix (first finisher saves; the rest
           # restore) — the compiled dep graph is common to every suite.
           shared-key: integration
+      # The postgres storage suite predates test-support's containers: it
+      # expects an externally supplied DATABASE_URL (the #545 gating). Give it
+      # one; every other suite boots its own backends.
+      - name: Provide DATABASE_URL for the raw postgres suite
+        if: matrix.suite.pkg == 'postgres'
+        run: |
+          docker run -d --name ci-pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+          for i in $(seq 1 30); do docker exec ci-pg pg_isready -U postgres && break; sleep 1; done
+          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres" >> "$GITHUB_ENV"
       - name: cargo test -p ${{ matrix.suite.pkg }} --features ${{ matrix.suite.feature }}
         run: cargo test -p ${{ matrix.suite.pkg }} --features ${{ matrix.suite.feature }}
