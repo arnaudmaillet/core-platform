@@ -184,13 +184,12 @@ impl ClaimsExtractor<OidcClaims> for OidcClaimsExtractor {
                 }
 
                 RoleSource::RealmAccessRoles => {
-                    if let Some(ref realm) = raw.realm_access {
-                        if let Some(ref roles) = realm.roles {
+                    if let Some(ref realm) = raw.realm_access
+                        && let Some(ref roles) = realm.roles {
                             for role in roles {
                                 push(role);
                             }
                         }
-                    }
                 }
 
                 RoleSource::PermissionsClaim => {
@@ -210,13 +209,12 @@ impl ClaimsExtractor<OidcClaims> for OidcClaimsExtractor {
                 }
 
                 RoleSource::Custom(key) => {
-                    if let Some(val) = raw.extra.get(key) {
-                        if let Some(arr) = val.as_array() {
+                    if let Some(val) = raw.extra.get(key)
+                        && let Some(arr) = val.as_array() {
                             for item in arr.iter().filter_map(|v| v.as_str()) {
                                 push(item);
                             }
                         }
-                    }
                 }
             }
         }

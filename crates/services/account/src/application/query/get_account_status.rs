@@ -55,7 +55,7 @@ impl QueryHandler<GetAccountStatusQuery> for GetAccountStatusHandler {
 
         Ok(AccountStatusView {
             account_id: id_str.clone(),
-            status: account.status().clone(),
+            status: account.status(),
             suspension_reason: account.suspension_reason().map(str::to_owned),
             is_locked: account.is_locked(),
         })

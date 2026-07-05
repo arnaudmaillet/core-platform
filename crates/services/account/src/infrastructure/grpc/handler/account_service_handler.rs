@@ -423,7 +423,7 @@ where
             .ok_or_else(|| Status::invalid_argument("invalid status value"))?;
         let query = ListAccountsByStatusQuery {
             status: status.to_owned(),
-            limit: req.limit.max(1).min(1000) as i64,
+            limit: req.limit.clamp(1, 1000) as i64,
             offset: req.offset.max(0) as i64,
         };
         let view: AccountListView = self

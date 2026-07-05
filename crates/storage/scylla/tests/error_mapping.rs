@@ -264,9 +264,11 @@ async fn bad_contact_point_produces_bootstrap_error() {
     use scylla_storage::{ScyllaSessionBuilder, config::ScyllaConfig};
 
     common::init_tracing();
-    let mut config = ScyllaConfig::default();
-    config.contact_points = vec!["192.0.2.1:9042".into()]; // TEST-NET — never routable
-    config.connect_timeout = std::time::Duration::from_secs(2);
+    let config = ScyllaConfig {
+        contact_points:  vec!["192.0.2.1:9042".into()], // TEST-NET — never routable
+        connect_timeout: std::time::Duration::from_secs(2),
+        ..ScyllaConfig::default()
+    };
 
     let result = ScyllaSessionBuilder::new(config).build().await;
     assert!(result.is_err());

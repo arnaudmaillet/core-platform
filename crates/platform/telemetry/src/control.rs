@@ -20,16 +20,18 @@ pub struct TelemetryControl {
     inner: Arc<ControlInner>,
 }
 
+/// Reloads the global `EnvFilter` from a directive string. Boxed so the
+/// subscriber type parameter of the underlying reload handle stays erased.
+pub(crate) type SetFilterFn = Box<dyn Fn(&str) -> Result<(), TelemetryError> + Send + Sync>;
+
 struct ControlInner {
-    /// Reloads the global `EnvFilter` from a directive string. Boxed so the
-    /// subscriber type parameter of the underlying reload handle stays erased.
-    set_filter: Box<dyn Fn(&str) -> Result<(), TelemetryError> + Send + Sync>,
+    set_filter: SetFilterFn,
     sampler: DynamicSampler,
 }
 
 impl TelemetryControl {
     pub(crate) fn new(
-        set_filter: Box<dyn Fn(&str) -> Result<(), TelemetryError> + Send + Sync>,
+        set_filter: SetFilterFn,
         sampler: DynamicSampler,
     ) -> Self {
         Self { inner: Arc::new(ControlInner { set_filter, sampler }) }

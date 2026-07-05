@@ -33,11 +33,10 @@ impl QueryHandler<GetProfileByHandleQuery> for GetProfileByHandleHandler {
         let handle = Handle::new(&envelope.payload.handle)?;
 
         // Two-hop cache path: handle → profile_id → full view.
-        if let Some(profile_id) = self.cache.get_profile_id_by_handle(handle.as_str()).await? {
-            if let Some(view) = self.cache.get_by_id(&profile_id).await? {
+        if let Some(profile_id) = self.cache.get_profile_id_by_handle(handle.as_str()).await?
+            && let Some(view) = self.cache.get_by_id(&profile_id).await? {
                 return Ok(Some(view));
             }
-        }
 
         let profile = match self.repo.find_by_handle(&handle).await? {
             Some(p) => p,

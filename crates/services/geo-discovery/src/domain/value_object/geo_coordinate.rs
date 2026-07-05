@@ -14,8 +14,8 @@ pub struct GeoCoordinate {
 
 impl GeoCoordinate {
     pub fn new(lat: f64, lng: f64) -> Result<Self, GeoDiscoveryError> {
-        if !lat.is_finite() || lat < -90.0 || lat > 90.0
-            || !lng.is_finite() || lng < -180.0 || lng > 180.0
+        if !lat.is_finite() || !(-90.0..=90.0).contains(&lat)
+            || !lng.is_finite() || !(-180.0..=180.0).contains(&lng)
         {
             return Err(GeoDiscoveryError::InvalidCoordinate { lat, lng });
         }

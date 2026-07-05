@@ -244,7 +244,7 @@ return removed
 
 /// Parses interleaved [member, score, member, score, ...] Lua output.
 fn parse_interleaved(raw: Vec<String>) -> Result<Vec<FeedEntry>, TimelineError> {
-    if raw.len() % 2 != 0 {
+    if !raw.len().is_multiple_of(2) {
         return Err(TimelineError::ScriptReturnInvalid { context: "range_desc interleaved parse" });
     }
     raw.chunks_exact(2)

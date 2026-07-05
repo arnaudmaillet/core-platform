@@ -26,11 +26,10 @@ impl MetricsPipeline {
     }
 
     pub(crate) fn shutdown(&self) {
-        if let Some(provider) = &self.meter_provider {
-            if let Err(e) = provider.shutdown() {
+        if let Some(provider) = &self.meter_provider
+            && let Err(e) = provider.shutdown() {
                 eprintln!("[telemetry] meter provider shutdown error: {e}");
             }
-        }
     }
 }
 

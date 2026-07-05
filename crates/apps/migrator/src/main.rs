@@ -306,6 +306,19 @@ fn split_statements(content: &str) -> Vec<String> {
     statements
 }
 
+/// Whether a Scylla error is a benign "this DDL target already exists" — used to
+/// keep non-`IF NOT EXISTS` statements (notably `ALTER TABLE ... ADD`) idempotent
+/// on a fresh cluster.
+fn is_already_exists(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("already exists") || m.contains("conflicts with an existing column")
+}
+
+/// First non-empty line of a statement, for error context.
+fn first_line(stmt: &str) -> &str {
+    stmt.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(stmt)
+}
+
 #[cfg(test)]
 mod tests {
     use super::split_statements;
@@ -327,17 +340,4 @@ mod tests {
         assert_eq!(stmts.len(), 1);
         assert!(stmts[0].starts_with("CREATE KEYSPACE ks"));
     }
-}
-
-/// Whether a Scylla error is a benign "this DDL target already exists" — used to
-/// keep non-`IF NOT EXISTS` statements (notably `ALTER TABLE ... ADD`) idempotent
-/// on a fresh cluster.
-fn is_already_exists(msg: &str) -> bool {
-    let m = msg.to_ascii_lowercase();
-    m.contains("already exists") || m.contains("conflicts with an existing column")
-}
-
-/// First non-empty line of a statement, for error context.
-fn first_line(stmt: &str) -> &str {
-    stmt.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(stmt)
 }

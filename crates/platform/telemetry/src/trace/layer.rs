@@ -28,11 +28,15 @@ use crate::error::TelemetryError;
 ///           └─ Resource { service.name, service.version }
 ///           └─ DynamicSampler  → swappable { AlwaysOn | AlwaysOff | ParentBased(ratio) }
 /// ```
+/// Everything a subscriber needs from the trace plane: the erased layer, the
+/// provider (kept for shutdown flush), and the sampler control handle.
+pub type BuiltTraceLayer<S> = (Box<dyn Layer<S> + Send + Sync>, TracerProvider, DynamicSampler);
+
 pub fn build_trace_layer<S>(
     config: &TraceConfig,
     service_name: &str,
     service_version: &str,
-) -> Result<(Box<dyn Layer<S> + Send + Sync>, TracerProvider, DynamicSampler), TelemetryError>
+) -> Result<BuiltTraceLayer<S>, TelemetryError>
 where
     S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span> + Send + Sync,
 {

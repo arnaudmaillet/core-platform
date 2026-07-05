@@ -30,6 +30,7 @@ pub struct Post {
 }
 
 impl Post {
+    #[allow(clippy::too_many_arguments)] // aggregate/worker constructor — same precedent as chat
     pub fn create(
         id:          PostId,
         profile_id:  ProfileId,
@@ -64,6 +65,7 @@ impl Post {
         })
     }
 
+    #[allow(clippy::too_many_arguments)] // aggregate/worker constructor — same precedent as chat
     pub fn reconstitute(
         id:           PostId,
         profile_id:   ProfileId,
@@ -229,11 +231,10 @@ fn validate_attachments(kind: PostKind, attachments: &[MediaAttachment]) -> Resu
                     if a.thumbnail_url.is_none() {
                         return Err(PostError::MissingVideoThumbnail { index: i });
                     }
-                    if let Some(d) = a.duration_seconds {
-                        if d > MAX_CAROUSEL_VIDEO_SECS {
+                    if let Some(d) = a.duration_seconds
+                        && d > MAX_CAROUSEL_VIDEO_SECS {
                             return Err(PostError::CarouselVideoTooLong { index: i, duration: d });
                         }
-                    }
                 }
                 if a.width == 0 || a.height == 0 {
                     return Err(PostError::InvalidDimensions {

@@ -165,6 +165,7 @@ where
     U: UnreadCounter,
     S: StreamRegistry,
 {
+    #[allow(clippy::too_many_arguments)] // aggregate/worker constructor — same precedent as chat
     pub fn new(
         kafka_config: KafkaClientConfig,
         redis:        RedisClient,

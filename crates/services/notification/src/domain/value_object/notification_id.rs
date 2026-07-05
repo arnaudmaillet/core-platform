@@ -12,6 +12,12 @@ pub struct NotificationId(Uuid);
 /// notification and break idempotency across a deployment boundary.
 const NOTIFICATION_NAMESPACE: Uuid = Uuid::from_u128(0x9d2f7e54_4b1c_4f6a_9c3d_2a7b8e0f1c63);
 
+impl Default for NotificationId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NotificationId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())

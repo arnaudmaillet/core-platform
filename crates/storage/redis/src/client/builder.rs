@@ -97,7 +97,7 @@ impl RedisClientBuilder {
         // init() connects the client and waits until the initial connection is
         // established. The returned ConnectHandle drives the background I/O
         // loop; dropping it does NOT cancel the task.
-        let _ = client
+        let _connect_handle = client
             .init()
             .await
             .map_err(RedisStorageError::from)?;

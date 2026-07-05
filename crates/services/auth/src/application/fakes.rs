@@ -68,6 +68,12 @@ pub struct StubAccountDirectory {
     snapshots: Mutex<HashMap<AccountId, AccountSnapshot>>,
 }
 
+impl Default for StubAccountDirectory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StubAccountDirectory {
     pub fn new() -> Self {
         Self { subjects: Mutex::new(HashMap::new()), snapshots: Mutex::new(HashMap::new()) }
@@ -119,6 +125,12 @@ pub struct InMemorySubjectLinkRepository {
     links: Mutex<HashMap<IdpSubject, SubjectLink>>,
 }
 
+impl Default for InMemorySubjectLinkRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemorySubjectLinkRepository {
     pub fn new() -> Self {
         Self { links: Mutex::new(HashMap::new()) }
@@ -154,6 +166,12 @@ impl SubjectLinkRepository for InMemorySubjectLinkRepository {
 
 pub struct InMemorySessionRepository {
     sessions: Mutex<HashMap<SessionId, Session>>,
+}
+
+impl Default for InMemorySessionRepository {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InMemorySessionRepository {
@@ -200,6 +218,12 @@ pub struct InMemoryRefreshTokenRepository {
     tokens: Mutex<HashMap<RefreshTokenHash, RefreshToken>>,
 }
 
+impl Default for InMemoryRefreshTokenRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryRefreshTokenRepository {
     pub fn new() -> Self {
         Self { tokens: Mutex::new(HashMap::new()) }
@@ -232,6 +256,12 @@ impl RefreshTokenRepository for InMemoryRefreshTokenRepository {
 pub struct InMemorySessionCache {
     generations: Mutex<HashMap<AccountId, Generation>>,
     blacklist: Mutex<HashSet<SessionId>>,
+}
+
+impl Default for InMemorySessionCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InMemorySessionCache {
@@ -271,6 +301,12 @@ impl SessionCache for InMemorySessionCache {
 
 pub struct StubTokenMinter {
     issued: Mutex<HashMap<String, AccessTokenClaims>>,
+}
+
+impl Default for StubTokenMinter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StubTokenMinter {
@@ -314,6 +350,12 @@ pub struct RecordingEventPublisher {
     events: Mutex<Vec<DomainEvent>>,
 }
 
+impl Default for RecordingEventPublisher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RecordingEventPublisher {
     pub fn new() -> Self {
         Self { events: Mutex::new(Vec::new()) }
@@ -351,6 +393,12 @@ pub struct Fixture {
     pub minter: Arc<StubTokenMinter>,
     pub publisher: Arc<RecordingEventPublisher>,
     pub policy: SessionPolicy,
+}
+
+impl Default for Fixture {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Fixture {
