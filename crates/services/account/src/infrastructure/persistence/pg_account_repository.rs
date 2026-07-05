@@ -188,7 +188,14 @@ impl AccountRepository for PgAccountRepository {
                 .await
         } else {
             // Existing aggregate — UPDATE with optimistic CAS on version.
-            let expected_version = account.version();
+            // `version()` was ALREADY incremented by the aggregate's `touch()`
+            // (every mutation bumps it in memory), so the row still holds the
+            // pre-mutation value: CAS on version() - 1 — the same convention as
+            // auth's session/refresh repos and profile's LWT. Binding version()
+            // itself made EVERY mutation on EVERY account abort with
+            // ConcurrentModification (found by the prod Keycloak E2E drill:
+            // VerifyEmail could never activate an account).
+            let expected_version = account.version() - 1;
 
             self.tx_manager
                 .run_on_shard(&id, |tx| {

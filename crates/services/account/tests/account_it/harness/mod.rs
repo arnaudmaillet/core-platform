@@ -20,7 +20,7 @@ use postgres_storage::config::StatementLogLevel;
 use postgres_storage::{PgPoolBuilder, PostgresConfig};
 
 use account::app::App;
-use account::application::command::CreateAccountCommand;
+use account::application::command::{CreateAccountCommand, RecordLoginCommand, VerifyEmailCommand};
 use account::application::query::{AccountView, GetAccountByIdentityIdQuery};
 
 pub use test_support::await_until;
@@ -69,6 +69,29 @@ impl TestHarness {
         dispatch_create(Arc::clone(&self.command_bus), identity_id.to_owned(), email.to_owned())
             .await
             .expect("create_account");
+    }
+
+    /// Dispatches VerifyEmail — the canonical first MUTATION of an account's
+    /// life (PendingVerification → Active). Exists because the optimistic-CAS
+    /// regression made every mutation abort while create+read stayed green.
+    pub async fn verify_email(&self, account_id: &str) -> Result<(), CqrsError> {
+        self.command_bus
+            .dispatch(Envelope::new(
+                Uuid::now_v7(),
+                VerifyEmailCommand { account_id: account_id.to_owned() },
+            ))
+            .await
+    }
+
+    /// Dispatches RecordLogin — a second, distinct mutation to prove the CAS
+    /// survives reload cycles (not just the first bump).
+    pub async fn record_login(&self, account_id: &str) -> Result<(), CqrsError> {
+        self.command_bus
+            .dispatch(Envelope::new(
+                Uuid::now_v7(),
+                RecordLoginCommand { account_id: account_id.to_owned() },
+            ))
+            .await
     }
 
     /// Resolves an account by its IdP identity id (`Err` when absent).
