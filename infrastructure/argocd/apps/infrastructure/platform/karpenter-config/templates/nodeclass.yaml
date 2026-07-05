@@ -19,6 +19,13 @@ spec:
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: "{{ .Values.global.clusterName }}"
+  # Karpenter does NOT infer pod capacity from the CNI's prefix-delegation
+  # setting — without an explicit override it applies the per-ENI-IP formula
+  # and small instances stay pod-starved. 110 is the upstream kubelet default
+  # ceiling and is safely below prefix-delegation capacity for every size the
+  # pools allow.
+  kubelet:
+    maxPods: 110
   tags:
     Intent: apps
     ManagedBy: Karpenter

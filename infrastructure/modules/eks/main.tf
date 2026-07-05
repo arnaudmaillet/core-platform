@@ -28,8 +28,26 @@ module "eks" {
   # default-deny ingress does not break liveness/readiness probes.
   cluster_addons = {
     vpc-cni = {
+      # before_compute: the addon (and its config below) must exist BEFORE the
+      # managed node groups are created — EKS computes each nodegroup's
+      # max-pods at launch-template creation time, and only accounts for
+      # prefix delegation if it is already enabled. Without this, fresh
+      # nodegroups get the per-ENI-IP limit (t3.medium = 17), which saturated
+      # on platform pods alone during the 2026-07-04 staging rebuild and left
+      # node-exporter DaemonSet pods unschedulable.
+      before_compute = true
       configuration_values = jsonencode({
         enableNetworkPolicy = "true"
+        env = {
+          # /28 prefixes per ENI slot instead of individual secondary IPs —
+          # decouples max-pods from instance size. Existing nodes keep their
+          # boot-time max-pods until recycled; only NEW launch templates and
+          # Karpenter nodes (kubelet.maxPods in the nodeclass) benefit.
+          ENABLE_PREFIX_DELEGATION = "true"
+          # Keep one whole warm prefix (16 IPs) per node — the recommended
+          # default; raising it trades subnet IPs for faster pod-start bursts.
+          WARM_PREFIX_TARGET = "1"
+        }
       })
     }
   }
