@@ -64,7 +64,12 @@ struct ProfileInsert {
 ///
 /// Field order matches the SET clause then WHERE + IF clause.
 #[derive(SerializeRow)]
-#[scylla(flavor = "enforce_order")]
+// skip_name_checks is REQUIRED with enforce_order here: binding is positional
+// but the driver still name-checks by default, and these field names diverge
+// from the bind markers on purpose (`version` appears twice in the statement —
+// SET's new value vs IF's expected value — so the fields are new_version /
+// expected_version). Same class as the soak's social-graph FollowRow finding.
+#[scylla(flavor = "enforce_order", skip_name_checks)]
 struct ProfileUpdate {
     handle:            String,
     display_name:      String,
@@ -91,6 +96,26 @@ struct ProfileUpdate {
 }
 
 // ── Error helpers ─────────────────────────────────────────────────────────────
+
+
+/// Extracts the `[applied]` flag from an LWT result. The row's SHAPE varies:
+/// bare `(bool)` when applied, `[applied]` + the existing row's columns on
+/// conflict — and Scylla 5.4 returns the full column list even on success.
+/// Strict tuple typing (`(bool,)`) type-checks the WHOLE row and fails on
+/// column count (found by the suites' first CI run; prod runs the same 5.4 —
+/// profile creation had never been exercised live). Read column 0 untyped.
+fn lwt_applied(
+    rows: scylla::response::query_result::QueryRowsResult,
+    ctx: &'static str,
+) -> Result<bool, ProfileError> {
+    let row = rows
+        .maybe_first_row::<scylla::value::Row>()
+        .map_err(|e| row_err(ctx, e))?;
+    Ok(matches!(
+        row.and_then(|r| r.columns.into_iter().next().flatten()),
+        Some(scylla::value::CqlValue::Boolean(true))
+    ))
+}
 
 fn scylla_err(e: scylla::errors::ExecutionError) -> ProfileError {
     ProfileError::Storage(ScyllaStorageError::from(e))
@@ -232,11 +257,10 @@ impl ProfileRepository for ScyllaProfileRepository {
             };
             let result = self.client.session
                 .execute_unpaged(stmt, values).await.map_err(scylla_err)?;
-            let applied = result
-                .into_rows_result().map_err(|e| row_err("save_ltw_rows", e))?
-                .maybe_first_row::<(bool,)>().map_err(|e| row_err("save_ltw_deser", e))?
-                .map(|(b,)| b)
-                .unwrap_or(false);
+            let applied = lwt_applied(
+                result.into_rows_result().map_err(|e| row_err("save_ltw_rows", e))?,
+                "save_ltw_deser",
+            )?;
             if !applied {
                 return Err(ProfileError::ConcurrentModification);
             }
@@ -402,12 +426,10 @@ impl ProfileRepository for ScyllaProfileRepository {
             .execute_unpaged(stmt, (handle.as_str().to_owned(), profile_id.as_uuid(), account_id.as_uuid(), now))
             .await.map_err(scylla_err)?;
 
-        let applied = result
-            .into_rows_result().map_err(|e| row_err("claim_ltw_rows", e))?
-            .maybe_first_row::<(bool,)>().map_err(|e| row_err("claim_ltw_deser", e))?
-            .map(|(b,)| b)
-            .unwrap_or(false);
-        Ok(applied)
+        lwt_applied(
+            result.into_rows_result().map_err(|e| row_err("claim_ltw_rows", e))?,
+            "claim_ltw_deser",
+        )
     }
 
     async fn tombstone_handle(&self, handle: &Handle) -> Result<(), ProfileError> {

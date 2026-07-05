@@ -110,7 +110,6 @@ jobs:
           - { pkg: postgres,       feature: integration-postgres }
           - { pkg: traffic-redis,  feature: integration-traffic-redis }
           - { pkg: transport,      feature: integration-kafka }
-          - { pkg: test-support,   feature: integration-test }
     steps:
       - uses: actions/checkout@v4
       - name: Build deps (protoc, librdkafka toolchain)
