@@ -1,0 +1,13 @@
+# Single source of truth for the workspace toolchain. Why pinned: CI's floating
+# `stable` flapped the clippy gate the day it launched (1.96 flags lints 1.91
+# doesn't — unnecessary_sort_by, found within hours of adding the gate). The
+# rustup shim honors this file everywhere it exists: dev machines, CI (the
+# dtolnay/rust-toolchain@stable install is overridden at cargo-invocation time),
+# and the deploy/Dockerfile builder (whose base tag is aligned manually — keep
+# `rust:<minor>-bookworm` in lockstep when bumping this).
+#
+# Bumping: update channel here + the Dockerfile FROM tag in ONE PR; the CI run
+# on that PR revalidates test + clippy -D warnings under the new lint set.
+[toolchain]
+channel    = "1.96.0"
+components = ["clippy", "rustfmt"]

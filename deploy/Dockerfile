@@ -38,7 +38,11 @@
 #     -t <ecr>/core-platform-$BIN:$TAG --push .
 
 # ── Chef base ─────────────────────────────────────────────────────────────────
-FROM rust:1-bookworm AS chef
+# Minor pinned in lockstep with rust-toolchain.toml (see its bump procedure) —
+# the floating `rust:1` tag is the same drift class that flapped the CI clippy
+# gate on launch day. NB: the toolchain file also reaches this stage via the
+# image's rustup, so a mismatched tag would trigger a redundant download.
+FROM rust:1.96-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
