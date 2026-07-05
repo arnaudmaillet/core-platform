@@ -16,8 +16,16 @@ type TestError = StorageError;
 // ─────────────────────────────────────────────────────────────────────────────
 
 async fn create_rollback_table(pool: &sqlx::PgPool, table: &str) {
+    // Regular table, not TEMP: temp tables are session-scoped and the manager
+    // executes each statement on whatever connection the pool hands out —
+    // green locally only by reuse luck, flaky the moment CI parallelised the
+    // suite. Names are unique per test; drop-first keeps reruns idempotent.
+    sqlx::query(&format!("DROP TABLE IF EXISTS {table}"))
+        .execute(pool)
+        .await
+        .unwrap_or_else(|e| panic!("failed to drop '{table}': {e}"));
     sqlx::query(&format!(
-        "CREATE TEMP TABLE IF NOT EXISTS {table} (
+        "CREATE TABLE {table} (
              id   SERIAL PRIMARY KEY,
              val  TEXT NOT NULL
          )"

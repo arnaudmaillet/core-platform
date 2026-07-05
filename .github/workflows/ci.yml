@@ -74,3 +74,63 @@ jobs:
       # structural lints). Keep it clean; add targeted allows in code, not here.
       - name: cargo clippy --workspace --all-targets
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # ── Live-backend integration suites ──────────────────────────────────────────
+  # Every feature-gated `integration-<name>` suite, against real containers
+  # (test-support boots Postgres/Scylla/Redis/Kafka/OpenSearch/MinIO via
+  # testcontainers). These NOT running in CI hid three production bugs that the
+  # 2026-07-05 Keycloak E2E drill had to find the hard way (account INT2 decode,
+  # inverted optimistic CAS, auth's missing Kafka env) — and earlier, six of the
+  # staging soak's eighteen findings. Public repo ⇒ runner minutes are free; the
+  # matrix parallelizes so wall time ≈ the slowest (Scylla-backed) suite.
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - { pkg: account,        feature: integration-account }
+          - { pkg: audit,          feature: integration-audit }
+          - { pkg: auth,           feature: integration-auth }
+          - { pkg: chat,           feature: integration-chat }
+          - { pkg: comment,        feature: integration-comment }
+          - { pkg: counter,        feature: integration-counter }
+          - { pkg: engagement,     feature: integration-engagement }
+          - { pkg: geo-discovery,  feature: integration-geo-discovery }
+          - { pkg: media,          feature: integration-media }
+          - { pkg: moderation,     feature: integration-moderation }
+          - { pkg: notification,   feature: integration-notification }
+          - { pkg: post,           feature: integration-post }
+          - { pkg: profile,        feature: integration-profile }
+          - { pkg: realtime,       feature: integration-realtime }
+          - { pkg: search,         feature: integration-search }
+          - { pkg: social-graph,   feature: integration-social-graph }
+          - { pkg: timeline,       feature: integration-timeline }
+          - { pkg: postgres,       feature: integration-postgres }
+          - { pkg: traffic-redis,  feature: integration-traffic-redis }
+          - { pkg: transport,      feature: integration-kafka }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deps (protoc, librdkafka toolchain)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev cmake zlib1g-dev
+      # OpenSearch containers refuse to start below this (search/media suites).
+      - name: Raise vm.max_map_count for OpenSearch
+        run: sudo sysctl -w vm.max_map_count=262144
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # One cache shared across the matrix (first finisher saves; the rest
+          # restore) — the compiled dep graph is common to every suite.
+          shared-key: integration
+      # The postgres storage suite predates test-support's containers: it
+      # expects an externally supplied DATABASE_URL (the #545 gating). Give it
+      # one; every other suite boots its own backends.
+      - name: Provide DATABASE_URL for the raw postgres suite
+        if: matrix.suite.pkg == 'postgres'
+        run: |
+          docker run -d --name ci-pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+          for i in $(seq 1 30); do docker exec ci-pg pg_isready -U postgres && break; sleep 1; done
+          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres" >> "$GITHUB_ENV"
+      - name: cargo test -p ${{ matrix.suite.pkg }} --features ${{ matrix.suite.feature }}
+        run: cargo test -p ${{ matrix.suite.pkg }} --features ${{ matrix.suite.feature }}
