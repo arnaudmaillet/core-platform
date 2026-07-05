@@ -460,6 +460,7 @@ fn account_view_to_proto(v: AccountView) -> proto::AccountView {
         kyc_status: kyc_status_str_to_i32(&v.kyc_status),
         country_of_residence: v.country_of_residence.unwrap_or_default(),
         roles: v.roles,
+        permissions: v.permissions,
         version: v.version,
         created_at: Some(dt_to_ts(v.created_at)),
         updated_at: Some(dt_to_ts(v.updated_at)),

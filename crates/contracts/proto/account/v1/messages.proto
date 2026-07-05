@@ -27,6 +27,10 @@ message AccountView {
     int64                           version              = 12;
     google.protobuf.Timestamp       created_at           = 13;
     google.protobuf.Timestamp       updated_at           = 14;
+    // Effective fine-grained grants (role expansion ∪ permission_overrides),
+    // e.g. audit:read — minted verbatim into edge tokens by auth. Additive:
+    // absent on old servers, in which case callers fall back to roles only.
+    repeated string                 permissions          = 15;
 }
 
 // GDPR compliance record — returned only to authorised compliance officers.
