@@ -1,0 +1,11 @@
+-- failed_login_attempts was SMALLINT while every Rust layer (domain aggregate,
+-- persistence row, proto mapping) uses i32: sqlx's strict decode rejects
+-- INT2→i32, so EVERY full-row read (GetAccountById / GetAccountByIdentityId —
+-- and therefore auth's directory lookup, i.e. login) failed with "mismatched
+-- types" the moment a row existed. Writes worked (parameter coercion), which
+-- is why creation succeeded and the bug only surfaced on the first live read
+-- (found by the prod Keycloak E2E login drill, 2026-07-05; the feature-gated
+-- integration-account suite exercises this read and passes with this
+-- migration — but it never runs in CI, which is the real gap and the tracked
+-- follow-up).
+ALTER TABLE accounts ALTER COLUMN failed_login_attempts TYPE INTEGER;
