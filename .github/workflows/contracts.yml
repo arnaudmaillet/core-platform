@@ -1,9 +1,17 @@
 name: contracts
 
-# Guards the centralized gRPC IDL (crates/contracts/proto):
+# Guards and publishes the centralized gRPC IDL (crates/contracts/proto):
 #   - `buf lint`     on every change (BASIC rules — see buf.yaml)
 #   - `buf breaking` against the base branch on PRs (WIRE_JSON — blocks wire/JSON
 #     incompatible changes to already-deployed contracts)
+#   - `buf push`     to the Buf Schema Registry (buf.build/arnaudmaillet/core-platform)
+#     on merges to develop/main, so the frontend repos consume versioned contracts
+#     instead of copying .proto files. buf-action attaches git metadata, so the
+#     branch name becomes the BSR label: `develop` = staging contracts, `main` = prod.
+#
+# Publishing requires the BUF_TOKEN repo secret (a BSR API token). Until it is
+# set, the push is skipped and this workflow is validation-only — it never fails
+# for lack of registry credentials.
 #
 # Only runs when proto (or this workflow) changes, so it stays cheap.
 
@@ -13,9 +21,10 @@ on:
       - "crates/contracts/proto/**"
       - ".github/workflows/contracts.yml"
   push:
-    branches: [develop]
+    branches: [develop, main]
     paths:
       - "crates/contracts/proto/**"
+      - ".github/workflows/contracts.yml"
 
 permissions:
   contents: read
@@ -39,6 +48,9 @@ jobs:
           breaking: true
           # `buf format` style rules aren't enforced here; lint (BASIC) is.
           format: false
-          # No Buf Schema Registry in use — don't attempt to push.
-          push: false
+          # Publish to the BSR on develop/main pushes only (never from PRs).
+          # Self-skips while the BUF_TOKEN secret is absent so validation stays
+          # green pre-BSR-setup.
+          push: ${{ github.event_name == 'push' && secrets.BUF_TOKEN != '' }}
+          token: ${{ secrets.BUF_TOKEN }}
           github_token: ${{ github.token }}

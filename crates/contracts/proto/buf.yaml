@@ -16,6 +16,11 @@
 version: v2
 modules:
   - path: .
+    # BSR coordinates — where CI publishes this module so frontend repos (iOS /
+    # Kotlin) can consume generated SDKs. Labels: `develop` (staging) / `main`
+    # (prod). Publishing needs the BUF_TOKEN repo secret; without it CI skips
+    # the push and only validates.
+    name: buf.build/arnaudmaillet/core-platform
 lint:
   use:
     - BASIC
