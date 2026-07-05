@@ -16,7 +16,13 @@ locals {
   # ScyllaCluster already tolerate it.
   node_groups = {
     system = {
-      instance_types = ["t3.medium"]
+      # t3.large, not t3.medium: the medium's kubelet max-pods cap (17) saturates
+      # on platform pods alone — on the 2026-07-04 rebuild both system nodes hit
+      # the cap and the node-exporter DaemonSet pods were unschedulable ("Too many
+      # pods") until pods were manually evicted. t3.large lifts the cap to 35.
+      # Deeper fix (tracked): VPC CNI prefix delegation decouples max-pods from
+      # instance size entirely.
+      instance_types = ["t3.large"]
       min_size       = 2
       max_size       = 3
       desired_size   = 2
