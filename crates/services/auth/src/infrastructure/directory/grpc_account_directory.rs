@@ -70,7 +70,15 @@ impl AccountDirectory for GrpcAccountDirectory {
             AccountStatus::Active => AccountActivation::Active,
             other => AccountActivation::Inactive { reason: status_name(other) },
         };
-        let permissions = view.roles.into_iter().map(Permission::new).collect();
+        // Union of coarse role names (pre-existing behaviour — downstream gates
+        // may match on them) and account's effective fine-grained grants (the
+        // `permissions` field, e.g. `audit:read`; empty from servers predating
+        // it, which degrades to exactly the old roles-only token).
+        let mut grants = view.roles;
+        grants.extend(view.permissions);
+        grants.sort_unstable();
+        grants.dedup();
+        let permissions = grants.into_iter().map(Permission::new).collect();
 
         Ok(AccountSnapshot { activation, permissions })
     }

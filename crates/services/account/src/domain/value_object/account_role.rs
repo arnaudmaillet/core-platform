@@ -39,6 +39,34 @@ impl AccountRole {
         }
     }
 
+    /// Fine-grained permission grants this role carries into the edge token.
+    ///
+    /// `account` is authoritative for RBAC: `auth` re-reads these on every
+    /// login/refresh and mints them verbatim (opaque strings by contract —
+    /// see `auth-context::Permission`). Today the only fine-grained consumers
+    /// are the audit ledger's read-side gates (`audit-service
+    /// infrastructure/grpc/access.rs`), which fail closed on absence:
+    ///
+    /// * `audit:read`   — query ledger records (need-to-know read)
+    /// * `audit:verify` — integrity verification (chain reports, no payloads)
+    /// * `audit:export` — evidence-bundle egress (stricter than read)
+    /// * `audit:record` — the synchronous break-glass record lane
+    ///
+    /// Admin gets read+verify (operate and prove the ledger, no bulk egress);
+    /// SuperAdmin adds export and the break-glass lane. Per-account exceptions
+    /// (e.g. a compliance officer needing export without SuperAdmin) belong in
+    /// `permission_overrides` on the aggregate, not here.
+    pub fn granted_permissions(&self) -> &'static [&'static str] {
+        match self {
+            Self::User             => &[],
+            Self::ContentModerator => &[],
+            Self::SupportAgent     => &[],
+            Self::FinanceOperator  => &[],
+            Self::Admin            => &["audit:read", "audit:verify"],
+            Self::SuperAdmin       => &["audit:read", "audit:verify", "audit:export", "audit:record"],
+        }
+    }
+
     /// Numeric privilege level for ordering and audit comparisons.
     ///
     /// Higher values indicate broader access. Roles at the same level have
@@ -82,5 +110,34 @@ impl TryFrom<String> for AccountRole {
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         Self::try_from(s.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The audit gate contract (audit access.rs `perm` module) — baseline roles
+    /// carry no audit grants; Admin can operate/prove the ledger but not bulk-
+    /// export; only SuperAdmin holds the egress + break-glass grants.
+    #[test]
+    fn audit_grants_follow_privilege_boundaries() {
+        for role in [
+            AccountRole::User,
+            AccountRole::ContentModerator,
+            AccountRole::SupportAgent,
+            AccountRole::FinanceOperator,
+        ] {
+            assert!(role.granted_permissions().is_empty(), "{role} must grant nothing");
+        }
+
+        let admin = AccountRole::Admin.granted_permissions();
+        assert!(admin.contains(&"audit:read") && admin.contains(&"audit:verify"));
+        assert!(!admin.contains(&"audit:export") && !admin.contains(&"audit:record"));
+
+        let sa = AccountRole::SuperAdmin.granted_permissions();
+        for p in ["audit:read", "audit:verify", "audit:export", "audit:record"] {
+            assert!(sa.contains(&p), "SuperAdmin must grant {p}");
+        }
     }
 }
