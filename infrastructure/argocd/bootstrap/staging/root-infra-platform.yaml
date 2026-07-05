@@ -91,6 +91,17 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{.destNamespace}}"
+      # ESO's admission webhook defaults remoteRef fields on ExternalSecrets
+      # (keycloak-secrets) — without ignoring them the app diffs against Git
+      # forever (fleet finding #9 class). Matches only ExternalSecret kinds;
+      # inert for every other platform app.
+      ignoreDifferences:
+        - group: external-secrets.io
+          kind: ExternalSecret
+          jqPathExpressions:
+            - .spec.data[].remoteRef.conversionStrategy
+            - .spec.data[].remoteRef.decodingStrategy
+            - .spec.data[].remoteRef.metadataPolicy
       syncPolicy:
         automated:
           prune: true
@@ -98,3 +109,4 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          - RespectIgnoreDifferences=true
