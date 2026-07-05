@@ -1,9 +1,8 @@
 # .github/workflows/fleet-images-deploy.yml
 #
 # Build + push every fleet binary (20 services + the shared migrator) to ECR,
-# one image per binary via the generic deploy/Dockerfile (`--build-arg BIN`). This
-# replaces the legacy per-service Bazel deploy workflows for the Rust crates/ fleet
-# (those target the old backend/ tree). Add a BIN to the matrix to ship a new one.
+# one image per binary via the generic deploy/Dockerfile (`--build-arg BIN`).
+# Add a BIN to the matrix to ship a new one.
 #
 # Auth + region come from the same repo secrets the existing deploy workflows use
 # (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION). Each binary is built in
@@ -178,8 +177,8 @@ jobs:
   # ── Pin the staging overlay to the immutable tag we just built ────────────────
   # Runs once after ALL matrix builds succeed; if any binary fails, the fleet is
   # not pinned (a partial rollout is never promoted). Rewrites ONLY the images this
-  # workflow builds — the legacy Bazel-built services keep their own tags — then
-  # commits back to develop so ArgoCD rolls out the new revision.
+  # workflow builds, then commits back to develop so ArgoCD rolls out the new
+  # revision.
   pin-staging-images:
     name: Pin staging overlay to immutable tags
     needs: stitch-manifests

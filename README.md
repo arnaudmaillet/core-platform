@@ -57,10 +57,7 @@ The platform's documentation is layered by concern, each layer derived from the 
 
 ### Build
 
-> [!IMPORTANT]
-> **Note on Bazel:** While Bazel configuration files are present in the repository, **Bazel is not yet functional** and should not be used at this stage.
-
-**Please use Cargo exclusively for current development:**
+The workspace builds with standard Cargo:
 
 ```bash
 # Build the entire workspace
@@ -72,10 +69,10 @@ cargo test
 
 ### Local Infrastructure
 
-To start the necessary dependencies (Postgres, Redis, ScyllaDB, Kafka) for local development:
+To start the necessary dependencies (Postgres, Redis, ScyllaDB, Kafka) for local development, use the compose files under `local-dev/`:
 
 ```bash
-docker-compose up -d
+docker compose -f local-dev/docker-compose.yml -f local-dev/docker-compose.db.yml up -d
 ```
 
 ## Repository Structure
@@ -90,7 +87,6 @@ The workspace lives under `crates/`, organised by role:
 
 ## Roadmap
 
-- [ ] Stabilization of the Bazel build chain (role-tiered crate layout + a shared `contracts/` tier).
 - [ ] Schema-migration runner (`apps/migrator`).
 - [ ] Implementation of Sharding at the SQLx layer.
 - [x] Distributed monitoring with OpenTelemetry — live log-filter and trace-sampling dials via the `[telemetry]` config section.
