@@ -139,6 +139,22 @@ jobs:
           TAG: ${{ github.event.inputs.tag || 'staging' }}
         run: |
           set -euo pipefail
+          # imagetools has failed twice with a bare exit-255 immediately AFTER a
+          # successful manifest push (runs 28727067443, 28728911748) — transient
+          # registry/transport flake, both times fixed by a plain rerun. Bounded
+          # retries beat re-running a 44-job workflow to re-execute one command.
+          retry() {
+            local attempt=1
+            until "$@"; do
+              attempt=$((attempt + 1))
+              if [ "$attempt" -gt 3 ]; then
+                echo "FAILED after 3 attempts: $*" >&2
+                return 1
+              fi
+              echo "attempt $attempt/3 after transient failure: $*" >&2
+              sleep 10
+            done
+          }
           # Keep in sync with the build matrix above.
           for bin in \
             counter-server counter-worker audit-server audit-worker \
@@ -148,16 +164,14 @@ jobs:
             geo-discovery-server notification-server post-server profile-server \
             social-graph-server timeline-server \
             migrator topic-provisioner; do
-            docker buildx imagetools create \
+            retry docker buildx imagetools create \
               -t "$REG/core-platform-$bin:${{ github.sha }}" \
               -t "$REG/core-platform-$bin:$TAG" \
               "$REG/core-platform-$bin:${{ github.sha }}-amd64" \
               "$REG/core-platform-$bin:${{ github.sha }}-arm64"
             # Fail loudly if the stitched manifest is missing either platform.
-            docker buildx imagetools inspect "$REG/core-platform-$bin:${{ github.sha }}" \
-              | grep -q 'linux/amd64'
-            docker buildx imagetools inspect "$REG/core-platform-$bin:${{ github.sha }}" \
-              | grep -q 'linux/arm64'
+            retry sh -c "docker buildx imagetools inspect '$REG/core-platform-$bin:${{ github.sha }}' | grep -q 'linux/amd64'"
+            retry sh -c "docker buildx imagetools inspect '$REG/core-platform-$bin:${{ github.sha }}' | grep -q 'linux/arm64'"
             echo "stitched: $bin"
           done
 
