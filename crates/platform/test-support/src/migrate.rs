@@ -79,7 +79,8 @@ fn load_cql_statements(migrations_dir: &str, keyspace: &str) -> Vec<String> {
 
         let code: String = raw
             .lines()
-            .filter(|line| !line.trim_start().starts_with("--"))
+            .map(strip_inline_comment)
+            .filter(|line| !line.trim().is_empty())
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -92,6 +93,28 @@ fn load_cql_statements(migrations_dir: &str, keyspace: &str) -> Vec<String> {
         }
     }
     statements
+}
+
+/// Truncates a line at the first `--` that sits OUTSIDE a single-quoted CQL
+/// string literal. The naive full-line filter left inline comments in place,
+/// and a `;` inside one (e.g. "-- watermark (UUID v7); NULL while private")
+/// split the surrounding CREATE TABLE mid-definition — six services' suites
+/// failed on their first-ever CI run because of exactly that.
+fn strip_inline_comment(line: &str) -> &str {
+    let bytes = line.as_bytes();
+    let mut in_string = false;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => in_string = !in_string,
+            b'-' if !in_string && i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                return &line[..i];
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    line
 }
 
 /// Rewrites a `CREATE KEYSPACE` statement to single-node `SimpleStrategy RF=1`;
