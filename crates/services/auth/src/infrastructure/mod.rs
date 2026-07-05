@@ -7,6 +7,7 @@ pub mod cache;
 pub mod directory;
 pub mod event;
 pub mod grpc;
+pub mod http;
 pub mod idp;
 pub mod persistence;
 pub mod token;

@@ -62,6 +62,11 @@ pub struct App {
     pub handler: AuthServiceHandler,
     pub pool: PgPool,
     pub redis: RedisClient,
+    /// The key ring's JWKS, serialized once at build (the ring is fixed for the
+    /// process lifetime — rotation is a redeploy). Served over HTTP by the
+    /// runtime host (see `infrastructure::http::jwks`) for downstream
+    /// verifiers (realtime, audit) that fetch `AUTH_JWKS_URL`.
+    pub jwks_json: String,
 }
 
 impl App {
@@ -142,6 +147,12 @@ impl App {
             .connect_timeout(config.idp_connect_timeout)
             .build()?;
 
+        // Build the concrete minter first: the JWKS is published from the same
+        // ring, and only the concrete type can serialize it (the port stays
+        // JWKS-agnostic — a PASETO minter would distribute keys differently).
+        let minter = Es256TokenMinter::from_key_ring(config.signing, config.retiring_keys)?;
+        let jwks_json = minter.jwks_json()?;
+
         let deps = AppDeps {
             idp: Arc::new(KeycloakIdentityProvider::new(idp_client, config.keycloak)),
             directory: Arc::new(GrpcAccountDirectory::new(channel)),
@@ -149,12 +160,12 @@ impl App {
             sessions: Arc::new(PgSessionRepository::new(tx.clone())),
             refresh_tokens: Arc::new(PgRefreshTokenRepository::new(tx.clone())),
             cache: Arc::new(RedisSessionCache::new(redis.clone())),
-            minter: Arc::new(Es256TokenMinter::from_key_ring(config.signing, config.retiring_keys)?),
+            minter: Arc::new(minter),
             publisher,
             policy: config.policy,
         };
 
-        Ok(App { handler: App::compose(deps), pool, redis })
+        Ok(App { handler: App::compose(deps), pool, redis, jwks_json })
     }
 }
 

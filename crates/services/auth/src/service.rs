@@ -47,6 +47,25 @@ impl Service for AuthService {
             .await
             .map_err(|e| anyhow::anyhow!("auth app build: {e}"))?;
 
+        // JWKS over plain HTTP, next to the gRPC server: downstream verifiers
+        // (realtime, audit via auth-context) fetch AUTH_JWKS_URL with ordinary
+        // JWKS clients. Bind failures abort boot — a mesh whose verifiers
+        // can't fetch keys is fail-closed everywhere downstream, so
+        // crash-looping visibly here beats serving logins nobody can verify.
+        let jwks_addr: std::net::SocketAddr = std::env::var("AUTH_JWKS_HTTP_ADDR")
+            .unwrap_or_else(|_| "0.0.0.0:8081".to_owned())
+            .parse()?;
+        let jwks_json = app.jwks_json.clone();
+        let listener = tokio::net::TcpListener::bind(jwks_addr).await?;
+        tracing::info!(%jwks_addr, "auth.jwks http listener bound");
+        tokio::spawn(async move {
+            if let Err(error) =
+                axum::serve(listener, crate::infrastructure::http::jwks::router(jwks_json)).await
+            {
+                tracing::error!(%error, "auth.jwks http listener exited");
+            }
+        });
+
         Ok(Self { app })
     }
 

@@ -66,6 +66,10 @@ spec:
           ports:
             - name: grpc
               containerPort: 50060
+            # Well-known JWKS over plain HTTP (AUTH_JWKS_HTTP_ADDR default) —
+            # fetched by realtime/audit via AUTH_JWKS_URL.
+            - name: jwks
+              containerPort: 8081
           volumeMounts:
             - name: infra-config
               mountPath: /etc/infra
