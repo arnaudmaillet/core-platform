@@ -199,5 +199,11 @@ pub fn random_account_id() -> String {
 /// A fresh random handle: `u` + 12 hex chars — valid (2–30 chars, starts/ends
 /// alphanumeric, no disallowed characters).
 pub fn random_handle() -> String {
-    format!("u{}", &Uuid::now_v7().simple().to_string()[..12])
+    // The first 12 hex of a UUID v7 are just the unix-millis timestamp — two
+    // scenarios starting in the same millisecond generated IDENTICAL handles,
+    // and the resulting cross-test LWT conflicts produced "fresh handle
+    // already taken" and zero-winner claim races under parallel execution
+    // (deterministic-looking flakes on the suites' first CI runs). Use the
+    // RANDOM tail of a v4 instead.
+    format!("u{}", &Uuid::new_v4().simple().to_string()[..12])
 }
