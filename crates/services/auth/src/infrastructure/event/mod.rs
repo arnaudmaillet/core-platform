@@ -5,6 +5,8 @@
 //! carries the dotted routing key.
 
 pub mod kafka_event_publisher;
+pub mod outbox_relay;
+pub mod pg_outbox_publisher;
 pub mod log_event_publisher;
 
 pub use kafka_event_publisher::KafkaEventPublisher;
