@@ -1,0 +1,34 @@
+# infrastructure/argocd/apps/deployments/dev/fleet.yaml
+#
+# Phase A of the dev -> Kustomize GitOps migration (see infrastructure/argocd/DEV-MIGRATION.md).
+#
+# ⚠️ GATED: this file must NOT reach `develop` until the staging Kustomize fleet
+# has been applied + proven live. Once on develop, the dev root-workloads appset
+# (directory recurse) creates this Application and ArgoCD deploys the 10-service
+# fleet to the live dev cluster. The migration PR is held as a DRAFT for exactly
+# this reason.
+#
+# `prune: false` so this comes up ALONGSIDE the legacy profile (domain-appset +
+# catalog/profile-service) without pruning it — the parallel-deploy step. At
+# Phase C (cut the ingress, retire the legacy), flip prune to true.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-fleet
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arnaudmaillet/core-platform
+    targetRevision: develop
+    path: k8s/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
