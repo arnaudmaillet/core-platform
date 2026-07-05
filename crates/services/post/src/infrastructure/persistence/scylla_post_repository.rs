@@ -358,7 +358,11 @@ impl PostRepository for ScyllaPostRepository {
         limit:      i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<PostSummary>, Option<String>), PostError> {
-        let limit = limit.clamp(1, 100) as i64;
+        // i32, NOT i64: CQL `LIMIT ?` type-checks against int32 and the i64 bind
+        // fails serialization — the soak's social-graph finding (#17), same class,
+        // never swept here (these list paths had no live traffic until the suites
+        // ran in CI).
+        let limit = limit.clamp(1, 100);
         let token = decode_profile_token(page_token)?;
 
         let rows: Vec<PostProfileRow> = if let Some(ref tok) = token {

@@ -17,23 +17,28 @@ use postgres::StorageError;
 #[tokio::test]
 async fn unique_violation_maps_to_db_1001_low_not_retryable() {
     let pool = test_pool().await;
+    // TEMP tables are session-scoped: every statement must ride ONE connection.
+    // Executing on the pool checked out different connections per statement and
+    // the suite flaked the moment CI ran tests in parallel (passed locally only
+    // by connection-reuse luck).
+    let mut conn = pool.acquire().await.expect("acquire test connection");
 
     sqlx::query(
         "CREATE TEMP TABLE IF NOT EXISTS em_unique (
              id INTEGER PRIMARY KEY
          )",
     )
-    .execute(&pool)
+    .execute(&mut *conn)
     .await
     .unwrap();
 
     sqlx::query("INSERT INTO em_unique VALUES (1)")
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .unwrap();
 
     let raw = sqlx::query("INSERT INTO em_unique VALUES (1)")
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect_err("second insert must fail with unique violation");
 
@@ -53,11 +58,16 @@ async fn unique_violation_maps_to_db_1001_low_not_retryable() {
 #[tokio::test]
 async fn foreign_key_violation_maps_to_db_1002_medium_not_retryable() {
     let pool = test_pool().await;
+    // TEMP tables are session-scoped: every statement must ride ONE connection.
+    // Executing on the pool checked out different connections per statement and
+    // the suite flaked the moment CI ran tests in parallel (passed locally only
+    // by connection-reuse luck).
+    let mut conn = pool.acquire().await.expect("acquire test connection");
 
     sqlx::query(
         "CREATE TEMP TABLE IF NOT EXISTS em_parent (id INTEGER PRIMARY KEY)",
     )
-    .execute(&pool)
+    .execute(&mut *conn)
     .await
     .unwrap();
 
@@ -67,12 +77,12 @@ async fn foreign_key_violation_maps_to_db_1002_medium_not_retryable() {
              parent_id INTEGER NOT NULL REFERENCES em_parent(id)
          )",
     )
-    .execute(&pool)
+    .execute(&mut *conn)
     .await
     .unwrap();
 
     let raw = sqlx::query("INSERT INTO em_child VALUES (1, 999)")
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect_err("insert with non-existent parent must fail");
 
@@ -92,6 +102,11 @@ async fn foreign_key_violation_maps_to_db_1002_medium_not_retryable() {
 #[tokio::test]
 async fn not_null_violation_maps_to_db_1003() {
     let pool = test_pool().await;
+    // TEMP tables are session-scoped: every statement must ride ONE connection.
+    // Executing on the pool checked out different connections per statement and
+    // the suite flaked the moment CI ran tests in parallel (passed locally only
+    // by connection-reuse luck).
+    let mut conn = pool.acquire().await.expect("acquire test connection");
 
     sqlx::query(
         "CREATE TEMP TABLE IF NOT EXISTS em_nn (
@@ -99,12 +114,12 @@ async fn not_null_violation_maps_to_db_1003() {
              val TEXT NOT NULL
          )",
     )
-    .execute(&pool)
+    .execute(&mut *conn)
     .await
     .unwrap();
 
     let raw = sqlx::query("INSERT INTO em_nn (id) VALUES (1)")
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect_err("insert with NULL in NOT NULL column must fail");
 

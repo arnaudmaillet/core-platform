@@ -57,7 +57,14 @@ static POSTGRES_MIGRATED: OnceCell<()> = OnceCell::const_new();
 pub async fn scylla_contact_point() -> String {
     let container = SCYLLA
         .get_or_init(|| async {
+            // Tag pinned to the version PROD runs (k8s/base/infra/
+            // scylla-cluster-prod → 5.4.0) — bump in lockstep. The module's
+            // floating default drifted to a release whose CQL parser rejects
+            // six services' migrations: local runs kept passing on cached old
+            // images while fresh CI pulls failed (first-ever CI execution of
+            // these suites, 2026-07-05).
             ScyllaDB::default()
+                .with_tag("5.4.0")
                 .with_cmd(["--developer-mode", "1", "--smp", "1"])
                 .start()
                 .await
@@ -233,7 +240,10 @@ pub async fn ensure_topics(brokers: &str, topics: &[&str]) {
 pub async fn postgres_ready(migrations_dir: &str) -> String {
     let container = POSTGRES
         .get_or_init(|| async {
+            // Pinned to prod's major (CNPG ghcr postgresql:16) — same
+            // lockstep rule as the Scylla tag above.
             Postgres::default()
+                .with_tag("16")
                 .start()
                 .await
                 .expect("failed to start the Postgres test container")

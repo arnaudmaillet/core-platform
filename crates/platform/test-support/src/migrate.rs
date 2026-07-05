@@ -62,14 +62,38 @@ pub async fn scylla_apply(contact_point: &str, keyspace: &str, migrations_dir: &
         .expect("integration: schema did not converge after migrations");
 }
 
+
+/// Collects migration files with `ext` under `dir`, recursing one level: most
+/// services keep a flat `migrations/`, but dual-store services (moderation)
+/// split into `migrations/{postgres,scylla}` — the old non-recursive read_dir
+/// silently loaded NOTHING for those, so their suites ran against an empty
+/// schema (found on the suites' first CI run: relation "cases" did not exist).
+fn collect_migration_files(dir: &str, ext: &str) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let entries = fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("cannot read migrations dir '{dir}': {e}"));
+    for entry in entries {
+        let path = entry.expect("bad dir entry").path();
+        if path.is_dir() {
+            let nested = fs::read_dir(&path)
+                .unwrap_or_else(|e| panic!("cannot read migrations dir '{}': {e}", path.display()));
+            for nested_entry in nested {
+                let nested_path = nested_entry.expect("bad dir entry").path();
+                if nested_path.extension().is_some_and(|x| x == ext) {
+                    out.push(nested_path);
+                }
+            }
+        } else if path.extension().is_some_and(|x| x == ext) {
+            out.push(path);
+        }
+    }
+    out
+}
+
 /// Reads `migrations_dir`, strips `--` line comments, splits on `;`, and adapts
 /// the keyspace replication for a single node.
 fn load_cql_statements(migrations_dir: &str, keyspace: &str) -> Vec<String> {
-    let mut files: Vec<_> = fs::read_dir(migrations_dir)
-        .unwrap_or_else(|e| panic!("cannot read migrations dir '{migrations_dir}': {e}"))
-        .map(|entry| entry.expect("bad dir entry").path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "cql"))
-        .collect();
+    let mut files = collect_migration_files(migrations_dir, "cql");
     files.sort();
 
     let mut statements = Vec::new();
@@ -79,7 +103,8 @@ fn load_cql_statements(migrations_dir: &str, keyspace: &str) -> Vec<String> {
 
         let code: String = raw
             .lines()
-            .filter(|line| !line.trim_start().starts_with("--"))
+            .map(strip_inline_comment)
+            .filter(|line| !line.trim().is_empty())
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -92,6 +117,28 @@ fn load_cql_statements(migrations_dir: &str, keyspace: &str) -> Vec<String> {
         }
     }
     statements
+}
+
+/// Truncates a line at the first `--` that sits OUTSIDE a single-quoted CQL
+/// string literal. The naive full-line filter left inline comments in place,
+/// and a `;` inside one (e.g. "-- watermark (UUID v7); NULL while private")
+/// split the surrounding CREATE TABLE mid-definition — six services' suites
+/// failed on their first-ever CI run because of exactly that.
+fn strip_inline_comment(line: &str) -> &str {
+    let bytes = line.as_bytes();
+    let mut in_string = false;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => in_string = !in_string,
+            b'-' if !in_string && i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                return &line[..i];
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    line
 }
 
 /// Rewrites a `CREATE KEYSPACE` statement to single-node `SimpleStrategy RF=1`;
@@ -121,11 +168,7 @@ pub async fn postgres_apply(url: &str, migrations_dir: &str) {
         .await
         .expect("integration: failed to connect to Postgres for migration");
 
-    let mut files: Vec<_> = fs::read_dir(migrations_dir)
-        .unwrap_or_else(|e| panic!("cannot read migrations dir '{migrations_dir}': {e}"))
-        .map(|entry| entry.expect("bad dir entry").path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "sql"))
-        .collect();
+    let mut files = collect_migration_files(migrations_dir, "sql");
     files.sort();
 
     for path in files {
