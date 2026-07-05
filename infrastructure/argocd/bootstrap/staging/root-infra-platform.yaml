@@ -35,6 +35,12 @@ spec:
                 - name: storage-class
                   folder: infrastructure/argocd/apps/infrastructure/platform/storage-class
                   destNamespace: "kube-system"
+                # The platform IdP (in-cluster only; auth brokers all grants).
+                # Depends on cnpg-operator + external-secrets from the operators
+                # appset (wave -10 < this wave -5) for its Cluster/ExternalSecret.
+                - name: keycloak
+                  folder: infrastructure/argocd/apps/infrastructure/platform/keycloak
+                  destNamespace: "keycloak"
           - git:
               repoURL: https://github.com/arnaudmaillet/core-platform
               revision: develop

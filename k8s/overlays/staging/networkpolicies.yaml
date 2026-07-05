@@ -198,6 +198,16 @@ spec:
               app: realtime-gateway
       ports:
         - { protocol: TCP, port: 50060 }
+    # Well-known JWKS (:8081, plain HTTP): every edge-token verifier fetches it
+    # via AUTH_JWKS_URL. Server + worker of each verifying service — the env
+    # var is shared per-service, and a worker that eagerly builds its verifier
+    # at boot must not be blocked by policy.
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: In, values: [realtime-gateway, realtime-dispatcher, audit-server, audit-worker] }
+      ports:
+        - { protocol: TCP, port: 8081 }
 ---
 # The CNPG operator (ns cnpg-system) must reach every instance pod's status/
 # management API (:8000) — status extraction, ScheduledBackup orchestration and
