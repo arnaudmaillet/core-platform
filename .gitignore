@@ -6,23 +6,16 @@ settings.json
 
 # Rust / Build
 target/
-bazel-*
 
 # Fichiers système
-$HOME
 Thumbs.db
 .DS_Store
 **/.DS_Store
-
-# Dépendances & Locks
-MODULE.bazel.lock
 
 # IDEs
 .idea/
 .vscode/
 *.swp
-intellij.bazelproject
-rust-project.json
 
 # Structurizr
 .structurizr/

@@ -211,8 +211,8 @@ These were deliberately deferred in the PRs:
   (commented example in each `eks/terragrunt.hcl`). Today it's still `0.0.0.0/0`.
 - **W8 v2:** per-service ingress (isolate TIER-0 audit/auth; workers take no mesh
   ingress) + egress lockdown — needs the **code-level gRPC call graph**.
-- **C4 (legacy):** the 10 Bazel-built services still use mutable `:staging`; give them
-  the same SHA-pin treatment in their own pipeline.
+- **C4 (legacy): resolved** — the legacy Bazel build pipeline is gone; the whole
+  fleet is built and SHA-pinned by `fleet-images-deploy.yml`.
 - **C6:** CNPG storage still 10Gi (size for prod, esp. the 7-yr audit ledger); wire
   real KMS/HSM + the cross-account WORM witness.
 - **W7:** `readOnlyRootFilesystem` per-service (needs scratch-write validation);

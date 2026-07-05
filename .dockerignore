@@ -1,7 +1,6 @@
 **/.terragrunt-cache/**
 **/.terraform/**
 **/target/**
-**/bazel-*/**
 
 .git
 .DS_Store

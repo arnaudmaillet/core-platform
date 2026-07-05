@@ -13,8 +13,8 @@ include "root" {
 
 terraform {
   # 4 levels up reaches infrastructure/ (this unit lives at
-  # live/global/networking/route53). A get_repo_root()//… source would try to
-  # copy the whole repo and trips over the broken bazel-* symlinks at the root.
+  # live/global/networking/route53). Relative paths keep terragrunt from copying
+  # the whole repo as the module source (a get_repo_root()//… source would).
   source = "../../../../modules/networking/route53"
 }
 

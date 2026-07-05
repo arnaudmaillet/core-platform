@@ -94,9 +94,9 @@ gateway/BFF, **not** by other fleet services. Evidence as of this decision:
 - **No client edge is deployed to staging** — no ALB Ingress (only the realtime
   NLB), and no in-cluster BFF. So these services have **no real in-cluster inbound**
   beyond health probes today.
-- The GraphQL BFF (`backend/gateway/graphql-bff`) exists but in the **legacy Bazel
-  `backend/` tree** — built/pushed to ECR, but no k8s manifest in this repo and not
-  wired to the staging overlay.
+- The GraphQL BFF (`backend/gateway/graphql-bff`) lived only in the **legacy Bazel
+  `backend/` tree** (since deleted) — its image was built/pushed to ECR, but it has
+  no k8s manifest in this repo and is not wired to the staging overlay.
 - `dev` exposes services via an **ALB → service directly** (per-service
   `api-<svc>.core-platform.click`, gRPC backend, `target-type: ip` — see
   `k8s/overlays/dev/ingress.yaml`), i.e. NOT fronted by the BFF.
