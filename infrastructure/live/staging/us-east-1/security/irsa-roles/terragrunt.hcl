@@ -88,6 +88,9 @@ inputs = {
     # bootstrap can't read the backup bucket (barman exit 4, found live on the
     # first prod drill 2026-07-05). Read path only in practice; same policy.
     "default:staging-restore-drill-account",
+    # Keycloak's credential store (ns keycloak, platform appset) backs up to the
+    # same bucket under /keycloak.
+    "keycloak:staging-keycloak-postgres",
   ]
 
   tags = {

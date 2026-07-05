@@ -13,6 +13,10 @@ description = "Auth microservice — issuance, session lifecycle, and IdP broker
 # adapters incl. Keycloak/Postgres/Redis (Phase 4), and the service composition
 # root + tonic wiring (Phase 5). Dependencies grow per phase — kept minimal here
 [dependencies]
+# JWKS well-known endpoint (infrastructure/http) — plain HTTP beside the gRPC server.
+axum = { workspace = true }
+# TcpListener bind + task spawn for the JWKS listener (service adapter).
+tokio = { workspace = true }
 # ── Contracts & runtime ───────────────────────────────────────────────────────
 auth-api        = { workspace = true }
 service-runtime = { workspace = true }
@@ -68,6 +72,8 @@ http      = { workspace = true }
 integration-auth = []
 
 [dev-dependencies]
+# `Router::oneshot` in the JWKS endpoint tests.
+tower = { workspace = true }
 # Async runtime for the application-layer handler tests (#[tokio::test]).
 tokio        = { workspace = true }
 # Ephemeral P-256 keypair generation for tests — no key material is ever

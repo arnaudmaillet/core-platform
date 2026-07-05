@@ -212,6 +212,29 @@ resource "aws_secretsmanager_secret" "auth_secrets" {
   tags                    = var.tags
 }
 
+# ── keycloak: bootstrap admin credential ─────────────────────────────────────
+# Consumed by the keycloak platform app's ExternalSecret (ns keycloak) as
+# KC_BOOTSTRAP_ADMIN_PASSWORD. The client secret Keycloak's imported realm
+# expects is the SAME keycloak_client_secret published in <name>-auth-secrets
+# below — one generated value, two consumers, zero drift.
+resource "random_password" "keycloak_admin_password" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "keycloak" {
+  name                    = "${var.name}-keycloak"
+  recovery_window_in_days = var.secret_recovery_window_days
+  tags                    = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "keycloak" {
+  secret_id = aws_secretsmanager_secret.keycloak.id
+  secret_string = jsonencode({
+    admin_password = random_password.keycloak_admin_password.result
+  })
+}
+
 resource "aws_secretsmanager_secret_version" "auth_secrets" {
   secret_id = aws_secretsmanager_secret.auth_secrets.id
   secret_string = jsonencode({

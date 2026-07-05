@@ -105,7 +105,11 @@ inputs = {
   msk_bootstrap_brokers = dependency.msk.outputs.bootstrap_brokers_sasl_scram
   elasticache_endpoint  = dependency.elasticache.outputs.configuration_endpoint
   opensearch_endpoint   = dependency.opensearch.outputs.endpoint
-  # auth_jwks_url / keycloak_token_endpoint stay empty until auth/Keycloak lands.
+  # In-cluster, static per env — no Terraform dependency: auth-server serves the
+  # well-known JWKS on :8081 (fleet Service, staging- namePrefix), Keycloak's token
+  # endpoint lives behind its ClusterIP Service in ns keycloak (platform appset).
+  auth_jwks_url           = "http://staging-auth-server.default.svc.cluster.local:8081/.well-known/jwks.json"
+  keycloak_token_endpoint = "http://keycloak.keycloak.svc.cluster.local:8080/realms/core-platform/protocol/openid-connect/token"
 
   addons_iam_roles = {
     karpenter        = dependency.security.outputs.karpenter_role_arn
