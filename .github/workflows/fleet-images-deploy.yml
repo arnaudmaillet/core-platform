@@ -41,10 +41,17 @@ permissions:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # Native runner per arch — no QEMU: emulated rustc on a 22-binary workspace
+    # is hours-per-binary territory, while ubuntu-24.04-arm is free on public
+    # repos and compiles at full speed. Each (bin, arch) pushes an arch-suffixed
+    # tag; the stitch job below merges them into one multi-arch manifest.
+    runs-on: ${{ matrix.arch.runner }}
     strategy:
       fail-fast: false
       matrix:
+        arch:
+          - { platform: linux/amd64, runner: ubuntu-latest,     suffix: amd64 }
+          - { platform: linux/arm64, runner: ubuntu-24.04-arm,  suffix: arm64 }
         bin:
           - counter-server
           - counter-worker
@@ -88,20 +95,71 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push ${{ matrix.bin }}
+      - name: Build and push ${{ matrix.bin }} (${{ matrix.arch.suffix }})
         env:
           REG: ${{ steps.ecr.outputs.registry }}
           BIN: ${{ matrix.bin }}
-          TAG: ${{ github.event.inputs.tag || 'staging' }}
+          ARCH: ${{ matrix.arch.suffix }}
+          PLATFORM: ${{ matrix.arch.platform }}
         run: |
           docker buildx build \
             -f deploy/Dockerfile \
+            --platform "$PLATFORM" \
             --build-arg BIN="$BIN" \
-            --cache-from type=registry,ref="$REG/core-platform-buildcache:$BIN" \
-            --cache-to   type=registry,ref="$REG/core-platform-buildcache:$BIN",mode=max \
-            -t "$REG/core-platform-$BIN:$TAG" \
-            -t "$REG/core-platform-$BIN:${{ github.sha }}" \
+            --cache-from type=registry,ref="$REG/core-platform-buildcache:$BIN-$ARCH" \
+            --cache-to   type=registry,ref="$REG/core-platform-buildcache:$BIN-$ARCH",mode=max \
+            -t "$REG/core-platform-$BIN:${{ github.sha }}-$ARCH" \
             --push .
+
+  # ── Stitch per-arch images into one multi-arch manifest per binary ───────────
+  # The :<git-sha> and floating tags only exist once BOTH arch builds succeeded
+  # (needs: gates on the full matrix) — a half-arch fleet is never addressable
+  # by the tags the overlays and the promote workflow use. This is what lets
+  # the Karpenter pools re-allow arm64: kubelet resolves the right arch from
+  # the manifest list.
+  stitch-manifests:
+    name: Create multi-arch manifests
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Stitch and verify every binary
+        env:
+          REG: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.event.inputs.tag || 'staging' }}
+        run: |
+          set -euo pipefail
+          # Keep in sync with the build matrix above.
+          for bin in \
+            counter-server counter-worker audit-server audit-worker \
+            auth-server media-server moderation-server search-server \
+            realtime-gateway realtime-dispatcher \
+            account-server chat-server comment-server engagement-server \
+            geo-discovery-server notification-server post-server profile-server \
+            social-graph-server timeline-server \
+            migrator topic-provisioner; do
+            docker buildx imagetools create \
+              -t "$REG/core-platform-$bin:${{ github.sha }}" \
+              -t "$REG/core-platform-$bin:$TAG" \
+              "$REG/core-platform-$bin:${{ github.sha }}-amd64" \
+              "$REG/core-platform-$bin:${{ github.sha }}-arm64"
+            # Fail loudly if the stitched manifest is missing either platform.
+            docker buildx imagetools inspect "$REG/core-platform-$bin:${{ github.sha }}" \
+              | grep -q 'linux/amd64'
+            docker buildx imagetools inspect "$REG/core-platform-$bin:${{ github.sha }}" \
+              | grep -q 'linux/arm64'
+            echo "stitched: $bin"
+          done
 
   # ── Pin the staging overlay to the immutable tag we just built ────────────────
   # Runs once after ALL matrix builds succeed; if any binary fails, the fleet is
@@ -110,7 +168,7 @@ jobs:
   # commits back to develop so ArgoCD rolls out the new revision.
   pin-staging-images:
     name: Pin staging overlay to immutable tags
-    needs: build-and-push
+    needs: stitch-manifests
     runs-on: ubuntu-latest
     # Only auto-pin for the standard staging build (skip manual one-off tags).
     if: ${{ github.event_name == 'push' || (github.event.inputs.tag || 'staging') == 'staging' }}
