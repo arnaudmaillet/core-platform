@@ -62,6 +62,10 @@ pub struct ValidationCommandBus<S> {
 }
 
 impl<S: CommandBus> CommandBus for ValidationCommandBus<S> {
+    // Explicit RPIT (not `async fn`) on purpose: it keeps the `+ Send` bound
+    // visible at the impl and matches the trait's declared signature — the
+    // crate-wide no-async_trait idiom.
+    #[allow(clippy::manual_async_fn)]
     fn dispatch<C: Command>(
         &self,
         envelope: Envelope<C>,

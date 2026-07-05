@@ -318,11 +318,13 @@ fn fred_not_found_converts_to_rds_4004() {
 async fn unreachable_host_produces_disconnected_or_timeout_error() {
     common::setup::init_tracing();
 
-    let mut config = RedisConfig::default();
-    config.hosts              = vec!["192.0.2.1:6379".into()]; // TEST-NET — never routable
-    config.connection_timeout = Duration::from_secs(2);
-    config.command_timeout    = Duration::from_millis(2_000);
-    config.fail_fast          = true;
+    let config = RedisConfig {
+        hosts:              vec!["192.0.2.1:6379".into()], // TEST-NET — never routable
+        connection_timeout: Duration::from_secs(2),
+        command_timeout:    Duration::from_millis(2_000),
+        fail_fast:          true,
+        ..RedisConfig::default()
+    };
 
     let result = RedisClientBuilder::new(config).build().await;
     assert!(result.is_err());

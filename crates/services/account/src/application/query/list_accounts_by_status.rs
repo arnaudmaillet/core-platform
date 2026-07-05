@@ -46,7 +46,7 @@ impl QueryHandler<ListAccountsByStatusQuery> for ListAccountsByStatusHandler {
         let status = AccountStatus::try_from(cmd.status.as_str())
             .map_err(|_| AccountError::InvalidAccountStatus(cmd.status.clone()))?;
 
-        let limit = cmd.limit.max(1).min(1000);
+        let limit = cmd.limit.clamp(1, 1000);
         let offset = cmd.offset.max(0);
 
         let (accounts, total) = tokio::try_join!(

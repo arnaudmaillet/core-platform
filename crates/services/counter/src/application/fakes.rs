@@ -182,7 +182,7 @@ impl CounterStore for InMemoryHotStore {
             .get(metric.as_str())
             .map(|b| b.values().cloned().collect())
             .unwrap_or_default();
-        ranked.sort_by(|a, b| b.1.cmp(&a.1));
+        ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         Ok(ranked
             .into_iter()
             .take(limit)

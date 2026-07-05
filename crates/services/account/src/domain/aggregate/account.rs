@@ -651,7 +651,7 @@ impl Account {
     pub fn locked_until(&self) -> Option<DateTime<Utc>> { self.locked_until }
 
     pub fn is_locked(&self) -> bool {
-        self.locked_until.map_or(false, |until| until > Utc::now())
+        self.locked_until.is_some_and(|until| until > Utc::now())
     }
 
     pub fn last_login_at(&self) -> Option<DateTime<Utc>> { self.last_login_at }
@@ -679,6 +679,22 @@ impl Account {
     pub fn has_role(&self, role: AccountRole) -> bool { self.roles.contains(&role) }
 
     pub fn permission_overrides(&self) -> &[String] { &self.permission_overrides }
+
+    /// The effective fine-grained permission set: the union of every assigned
+    /// role's grants and the per-account `permission_overrides`, deduplicated
+    /// and sorted (deterministic output — these are minted into edge tokens by
+    /// `auth` and compared in tests/audit trails).
+    pub fn effective_permissions(&self) -> Vec<String> {
+        let mut permissions: Vec<String> = self
+            .roles
+            .iter()
+            .flat_map(|role| role.granted_permissions().iter().map(|p| (*p).to_owned()))
+            .chain(self.permission_overrides.iter().cloned())
+            .collect();
+        permissions.sort_unstable();
+        permissions.dedup();
+        permissions
+    }
 
     pub fn created_by(&self) -> Option<AccountId> { self.created_by }
 
@@ -717,5 +733,103 @@ impl Account {
         let now = Utc::now();
         self.touch(now);
         now
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn admin_account_with_overrides(overrides: Vec<String>) -> Account {
+        Account::reconstitute(
+            AccountId::new(),
+            IdentityId::new("idp|test-subject").expect("identity id"),
+            AccountStatus::Active,
+            None,
+            None,
+            EmailAddress::new("ops@example.com").expect("email"),
+            true,
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            0,
+            None,
+            None,
+            MfaState::default(),
+            KycStatus::NotStarted,
+            None,
+            None,
+            None,
+            None,
+            GdprRecord::default(),
+            vec![AccountRole::Admin, AccountRole::SuperAdmin],
+            overrides,
+            1,
+            Utc::now(),
+            Utc::now(),
+            None,
+        )
+    }
+
+    /// Union semantics: overlapping role grants (Admin ⊂ SuperAdmin) collapse,
+    /// overrides join the set, duplicates against role grants disappear, and
+    /// the result is sorted — the exact string set auth mints into the token.
+    #[test]
+    fn effective_permissions_union_roles_and_overrides_deduped_sorted() {
+        let account = admin_account_with_overrides(vec![
+            "audit:read".to_owned(),      // duplicate of a role grant
+            "compliance:hold".to_owned(), // pure override
+        ]);
+
+        assert_eq!(
+            account.effective_permissions(),
+            vec![
+                "audit:export".to_owned(),
+                "audit:read".to_owned(),
+                "audit:record".to_owned(),
+                "audit:verify".to_owned(),
+                "compliance:hold".to_owned(),
+            ]
+        );
+    }
+
+    /// A plain user's token must carry no fine-grained grants at all.
+    #[test]
+    fn baseline_account_has_no_effective_permissions() {
+        let account = Account::reconstitute(
+            AccountId::new(),
+            IdentityId::new("idp|plain-user").expect("identity id"),
+            AccountStatus::Active,
+            None,
+            None,
+            EmailAddress::new("user@example.com").expect("email"),
+            true,
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            0,
+            None,
+            None,
+            MfaState::default(),
+            KycStatus::NotStarted,
+            None,
+            None,
+            None,
+            None,
+            GdprRecord::default(),
+            vec![AccountRole::User],
+            Vec::new(),
+            1,
+            Utc::now(),
+            Utc::now(),
+            None,
+        );
+        assert!(account.effective_permissions().is_empty());
     }
 }

@@ -28,6 +28,9 @@ pub struct AccountView {
     pub kyc_status: String,
     pub roles: Vec<String>,
     pub permission_overrides: Vec<String>,
+    /// Effective fine-grained grants (role expansion ∪ overrides) — what auth
+    /// mints into edge tokens alongside the role names.
+    pub permissions: Vec<String>,
     pub country_of_residence: Option<String>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub is_locked: bool,
@@ -53,6 +56,7 @@ impl From<&Account> for AccountView {
             phone_verified: a.phone_verified(),
             kyc_status: a.kyc_status().to_string(),
             roles: a.roles().iter().map(|r| r.to_string()).collect(),
+            permissions: a.effective_permissions(),
             permission_overrides: a
                 .permission_overrides()
                 .iter()

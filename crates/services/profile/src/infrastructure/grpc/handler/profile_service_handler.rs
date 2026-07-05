@@ -283,7 +283,7 @@ where
         request: Request<proto::ListProfilesByAccountRequest>,
     ) -> Result<Response<proto::ListProfilesByAccountResponse>, Status> {
         let req = request.into_inner();
-        let limit = req.limit.max(1).min(100) as u32;
+        let limit = req.limit.clamp(1, 100) as u32;
         let query = ListProfilesByAccountQuery {
             account_id:  req.account_id,
             limit,

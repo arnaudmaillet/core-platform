@@ -23,6 +23,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/ci.yml'
+      - 'rust-toolchain.toml'
   push:
     branches: [develop]
     paths:
@@ -30,6 +31,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/ci.yml'
+      - 'rust-toolchain.toml'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -67,25 +69,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # -D warnings with a RATCHET: the -A list below is exactly the lint kinds
-      # firing on the tree today (~35 mild style hits, audited 2026-07-05) so the
-      # gate lands green while every OTHER clippy lint becomes a hard error from
-      # day one. Shrink this list as cleanup lands; never grow it.
+      # Bare -D warnings: the tree was clippy-cleaned 2026-07-05 (53 sites —
+      # auto-fixes, real refactors, and documented targeted #[allow]s for the
+      # structural lints). Keep it clean; add targeted allows in code, not here.
       - name: cargo clippy --workspace --all-targets
-        run: >
-          cargo clippy --workspace --all-targets -- -D warnings
-          -A clippy::clone_on_copy
-          -A clippy::cloned_ref_to_slice_refs
-          -A clippy::collapsible_if
-          -A clippy::field_reassign_with_default
-          -A clippy::items_after_test_module
-          -A clippy::let_underscore_future
-          -A clippy::manual_async_fn
-          -A clippy::manual_clamp
-          -A clippy::manual_is_multiple_of
-          -A clippy::manual_range_contains
-          -A clippy::module_inception
-          -A clippy::new_without_default
-          -A clippy::too_many_arguments
-          -A clippy::type_complexity
-          -A clippy::unnecessary_map_or
+        run: cargo clippy --workspace --all-targets -- -D warnings

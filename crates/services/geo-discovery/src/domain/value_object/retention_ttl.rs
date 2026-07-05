@@ -20,7 +20,7 @@ impl RetentionTtl {
     }
 
     pub fn from_secs(secs: u64) -> Self {
-        let clamped = secs.min(Self::MAX_SECS).max(1);
+        let clamped = secs.clamp(1, Self::MAX_SECS);
         Self(Duration::from_secs(clamped))
     }
 

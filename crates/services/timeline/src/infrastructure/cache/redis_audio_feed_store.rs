@@ -141,7 +141,7 @@ impl AudioFeedStore for RedisAudioFeedStore {
             .await
             .map_err(fred_err)?;
 
-        if raw.len() % 2 != 0 {
+        if !raw.len().is_multiple_of(2) {
             return Err(TimelineError::ScriptReturnInvalid {
                 context: "audio_range_desc interleaved parse",
             });
