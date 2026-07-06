@@ -42,7 +42,9 @@ cargo test  --workspace                 # unit tests; integration tests are feat
 cargo test -p <svc> --features integration-<svc>   # needs Docker (Scylla/Redis/Kafka/PG containers)
 
 # Contracts
-( cd crates/contracts/proto && buf lint )          # buf breaking runs in CI on PRs
+( cd crates/contracts/proto && buf lint )          # buf breaking runs in CI on PRs;
+                                                   # merges to develop/main publish to
+                                                   # buf.build/arnaudmaillet/core-platform (needs BUF_TOKEN)
 
 # Build a service image (one image per binary)
 docker build -f deploy/Dockerfile --build-arg BIN=<svc>-server -t <repo>/<svc>-server:<tag> .
