@@ -44,7 +44,7 @@ cargo test -p <svc> --features integration-<svc>   # needs Docker (Scylla/Redis/
 # Contracts
 ( cd crates/contracts/proto && buf lint )          # buf breaking runs in CI on PRs;
                                                    # merges to develop/main publish to
-                                                   # buf.build/arnaudmaillet/core-platform (needs BUF_TOKEN)
+                                                   # buf.build/core-platform/contracts (needs BUF_TOKEN)
 
 # Build a service image (one image per binary)
 docker build -f deploy/Dockerfile --build-arg BIN=<svc>-server -t <repo>/<svc>-server:<tag> .

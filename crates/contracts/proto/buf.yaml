@@ -20,7 +20,7 @@ modules:
     # Kotlin) can consume generated SDKs. Labels: `develop` (staging) / `main`
     # (prod). Publishing needs the BUF_TOKEN repo secret; without it CI skips
     # the push and only validates.
-    name: buf.build/arnaudmaillet/core-platform
+    name: buf.build/core-platform/contracts
 lint:
   use:
     - BASIC
