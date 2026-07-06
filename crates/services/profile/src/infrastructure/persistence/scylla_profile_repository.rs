@@ -332,7 +332,9 @@ impl ProfileRepository for ScyllaProfileRepository {
             created_at:   CqlTimestamp,
         }
 
-        let limit = limit.clamp(1, 100) as i64;
+        // CQL `LIMIT` is a native `int` (i32); binding an i64 makes the driver
+        // serialize it as BigInt and the query fails type-checking. Keep it i32.
+        let limit = limit.clamp(1, 100);
 
         let token = page_token
             .map(|t| -> Result<PageToken, ProfileError> {
