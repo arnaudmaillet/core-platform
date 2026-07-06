@@ -1,0 +1,796 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local "core social path" fleet — run the backend end-to-end on your laptop so a
+# native/mobile gRPC client can hit it directly.
+#
+#   docker compose -f local-dev/docker-compose.fleet.yml up --build -d
+#
+# Brings up: ScyllaDB, Redis, Redpanda (Kafka API), PostgreSQL, an OTLP sink, then
+# provisions schema (migrator) + Kafka topics (topic-provisioner), then starts the
+# 10 services. gRPC ports are published on localhost 1:1 (see the port registry in
+# CLAUDE.md). Kafka is reachable from the host on :19092 (containers use :9092).
+#
+# This is a dev/smoke stack: single-node datastores, one shared Redis, developer
+# mode — NO persistence or replication guarantees. The infra-only smoke stack is
+# docker-compose.backends.yml; this file supersedes it by also running the fleet.
+# ─────────────────────────────────────────────────────────────────────────────
+name: core-platform-fleet
+
+x-svc: &svc
+  restart: unless-stopped
+  volumes:
+    - ./infrastructure.local.toml:/etc/infra/infrastructure.toml:ro
+
+x-base-env: &base-env
+  RUST_LOG: info
+  INFRA_CONFIG_PATH: /etc/infra/infrastructure.toml
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+# depends_on fragment reused by every gRPC service: schema + topics must exist,
+# and the OTLP sink should be up first so early spans have somewhere to go.
+x-needs-bootstrap: &needs-bootstrap
+  migrator:
+    condition: service_completed_successfully
+  scylla-rf1:
+    condition: service_completed_successfully
+  topic-provisioner:
+    condition: service_completed_successfully
+  otel-collector:
+    condition: service_started
+
+volumes:
+  scylla_data:
+  postgres_data:
+  minio_data:
+  opensearch_data:
+
+services:
+  # ── Datastores ──────────────────────────────────────────────────────────────
+  scylla:
+    # 5.4 (pre-tablets): vnode keyspaces tolerate the migrations' RF=3 on a single
+    # node (under-replicated — fine for dev). Default DC is `datacenter1`, which
+    # matches SCYLLA_LOCAL_DC and the keyspaces' hardcoded replication map.
+    image: scylladb/scylla:5.4
+    command: --smp 1 --developer-mode 1 --overprovisioned 1
+    volumes:
+      - scylla_data:/var/lib/scylla
+    ports:
+      - "9042:9042"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  redis:
+    # One shared standalone Redis for all services (k8s runs one per service).
+    # Services namespace their own keys, so collisions are not a concern for dev.
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    # Dual listener: INTERNAL (advertised as redpanda:9092) is what the in-network
+    # containers use; EXTERNAL (advertised as 127.0.0.1:19092) is for host tools.
+    # The single-advertised-127.0.0.1 setup in backends.yml only works host-side —
+    # container-to-container Kafka needs a name the other containers can resolve.
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --overprovisioned
+      - --node-id=0
+      - --kafka-addr=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092
+      - --advertise-kafka-addr=INTERNAL://redpanda:9092,EXTERNAL://127.0.0.1:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: core
+      POSTGRES_PASSWORD: core
+      POSTGRES_DB: core_platform
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U core -d core_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.109.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector.local.yaml:/etc/otel/config.yaml:ro
+
+  # ── One-shot bootstrap: create per-service Postgres DBs ─────────────────────
+  db-init:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: core
+    # CREATE DATABASE has no IF NOT EXISTS — guard each with a catalog check so the
+    # step is idempotent across re-runs.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        for db in account auth counter moderation media keycloak; do
+          psql -h postgres -U core -d core_platform -tc "SELECT 1 FROM pg_database WHERE datname='$$db'" | grep -q 1 \
+            || psql -h postgres -U core -d core_platform -c "CREATE DATABASE $$db"
+        done
+        echo "postgres databases ready: account, auth, counter, moderation, media, keycloak"
+    restart: "no"
+
+  # ── One-shot bootstrap: schema migrations ───────────────────────────────────
+  # Single migrator image (embedded migrations). Scylla services share one
+  # SCYLLA_* connection; the Postgres services each get their own DATABASE_URL.
+  migrator:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: migrator
+    depends_on:
+      scylla:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        for s in chat profile social-graph post engagement comment notification timeline \
+                 geo-discovery counter-timeseries moderation-history; do
+          echo "== migrating $$s (scylla) =="
+          /usr/local/bin/app "$$s"
+        done
+        for s in account auth counter moderation media; do
+          echo "== migrating $$s (postgres) =="
+          DATABASE_URL=postgres://core:core@postgres:5432/$$s /usr/local/bin/app "$$s"
+        done
+    restart: "no"
+
+  # ── One-shot: downshift keyspaces to RF=1 for the single-node dev Scylla ─────
+  # The migrations create keyspaces at RF=3 (prod topology). Single-node Scylla
+  # can CREATE them but can't satisfy LOCAL_QUORUM writes (needs 2 of 3 replicas
+  # alive). Services hardcode LOCAL_QUORUM, so we ALTER each keyspace to RF=1 —
+  # quorum then = 1, which one node satisfies. Runs after the migrator.
+  scylla-rf1:
+    image: scylladb/scylla:5.4
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        for ks in chat profile social_graph post engagement comment notification \
+                  timeline geo_discovery counter moderation; do
+          cqlsh scylla -e "ALTER KEYSPACE $$ks WITH replication = {'class':'NetworkTopologyStrategy','datacenter1':1};"
+          echo "  RF=1 $$ks"
+        done
+        echo "scylla keyspaces downshifted to RF=1"
+    restart: "no"
+
+  # ── One-shot bootstrap: Kafka topics (MSK-style, auto-create off in prod) ───
+  # Redpanda auto-creates topics, but we provision explicitly to match prod and to
+  # create the `.dlq` companions the consumer runtime expects. RF=1 (single node).
+  topic-provisioner:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: topic-provisioner
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: redpanda:9092
+      TOPIC_REPLICATION_FACTOR: "1"
+      TOPIC_PARTITIONS: "1"
+    restart: "no"
+
+  # ── Services (core social path) ─────────────────────────────────────────────
+  account-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: account-server
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/account
+    ports:
+      - "50059:50059"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+
+  profile-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: profile-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: profile
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50052:50052"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  social-graph-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: social-graph-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: social_graph
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50053:50053"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  post-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: post-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: post
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50056:50056"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+
+  comment-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: comment-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: comment
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50057:50057"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+
+  engagement-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: engagement-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: engagement
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50058:50058"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  timeline-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: timeline-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: timeline
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      TIMELINE_SOCIAL_GRAPH_ENDPOINT: http://social-graph-server:50053
+    ports:
+      - "50070:50070"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notification-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: notification-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: notification
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50055:50055"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  chat-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: chat-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: chat
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50051:50051"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # auth is TIER-0 fail-closed. It serves its JWKS on :8081 and brokers the password
+  # grant to the local Keycloak realm (core-platform) — auth calls keycloak:8080, so
+  # the token issuer it sees matches what the seed sees (identity_id = iss#sub).
+  # The ES256 signing key is generated locally into ./secrets (gitignored) by
+  # ./generate-secrets.sh and injected from those files by the entrypoint below —
+  # nothing sensitive is committed. The Keycloak client is public (no secret).
+  auth-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: auth-server
+    # Read the mounted PEM files into the env vars auth requires, then exec the binary.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export AUTH_SIGNING_PRIVATE_PEM="$$(cat /run/secrets/auth-signing-private.pem)"
+        export AUTH_SIGNING_PUBLIC_PEM="$$(cat /run/secrets/auth-signing-public.pem)"
+        exec /usr/local/bin/app
+    volumes:
+      - ./infrastructure.local.toml:/etc/infra/infrastructure.toml:ro
+      - ./secrets/auth-signing-private.pem:/run/secrets/auth-signing-private.pem:ro
+      - ./secrets/auth-signing-public.pem:/run/secrets/auth-signing-public.pem:ro
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/auth
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      REDIS_TLS: "false"
+      KAFKA_BROKERS: redpanda:9092
+      AUTH_TOKEN_ISSUER: http://localhost:50060
+      AUTH_TOKEN_AUDIENCE: core-platform
+      AUTH_SIGNING_KID: local-es256-1
+      AUTH_JWKS_HTTP_ADDR: 0.0.0.0:8081
+      AUTH_ACCOUNT_GRPC_ENDPOINT: http://account-server:50059
+      # Keycloak login broker (password grant) — public client, no secret needed.
+      AUTH_KEYCLOAK_TOKEN_ENDPOINT: http://keycloak:8080/realms/core-platform/protocol/openid-connect/token
+      AUTH_KEYCLOAK_CLIENT_ID: core-platform-auth
+      AUTH_KEYCLOAK_SCOPE: openid
+    ports:
+      - "50060:50060"
+      - "8081:8081"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  # ── Additional infra: Keycloak (IdP), MinIO (S3), OpenSearch ────────────────
+  # Keycloak stores its own schema in the `keycloak` Postgres DB (created by
+  # db-init). start-dev + --import-realm loads local-dev/keycloak/*.json on boot.
+  # No healthcheck: auth only calls it at login time, and the seed polls its
+  # well-known endpoint before running.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: core
+      KC_DB_PASSWORD: core
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    volumes:
+      - ./keycloak/realm-core-platform.json:/opt/keycloak/data/import/realm-core-platform.json:ro
+    # Host port 8085 (8080 is taken by another container here); in-network callers
+    # (auth, seed) use keycloak:8080 regardless, so this only affects host/admin access.
+    ports:
+      - "8085:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  minio:
+    image: minio/minio:RELEASE.2024-09-13T20-26-02Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # console
+    healthcheck:
+      test: ["CMD-SHELL", "mc --version >/dev/null 2>&1 || exit 0; exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: create the media bucket (retries until MinIO answers).
+  minio-init:
+    image: minio/mc:RELEASE.2024-09-16T17-43-14Z
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint:
+      - sh
+      - -c
+      - |
+        for i in $$(seq 1 30); do
+          mc alias set local http://minio:9000 minioadmin minioadmin && break
+          echo "waiting for minio…"; sleep 2
+        done
+        mc mb --ignore-existing local/media
+        mc anonymous set download local/media
+        echo "minio bucket ready: media"
+    restart: "no"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # ── Additional services ─────────────────────────────────────────────────────
+  geo-discovery-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: geo-discovery-server
+    environment:
+      <<: *base-env
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: geo_discovery
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50054:50054"
+    depends_on:
+      <<: *needs-bootstrap
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  counter-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: counter-server
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/counter
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: counter
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT: http://social-graph-server:50053
+    ports:
+      - "50064:50064"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  counter-worker:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: counter-worker
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/counter
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: counter
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      COUNTER_SOCIAL_GRAPH_GRPC_ENDPOINT: http://social-graph-server:50053
+    ports:
+      - "50065:50065"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  moderation-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: moderation-server
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/moderation
+      SCYLLA_CONTACT_POINTS: scylla:9042
+      SCYLLA_LOCAL_DC: datacenter1
+      SCYLLA_KEYSPACE: moderation
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      MODERATION_ACCOUNT_GRPC_ENDPOINT: http://account-server:50059
+    ports:
+      - "50061:50061"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  media-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: media-server
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/media
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      # media reaches MinIO in-network for health + server-side byte I/O.
+      MEDIA_OBJECT_STORE_ENDPOINT: http://minio:9000
+      MEDIA_OBJECT_STORE_REGION: us-east-1
+      MEDIA_OBJECT_STORE_BUCKET: media
+      MEDIA_S3_ACCESS_KEY: minioadmin
+      MEDIA_S3_SECRET_KEY: minioadmin
+      # NOTE: presigned upload/download URLs sign the minio:9000 host, which an
+      # on-device client can't resolve — device-reachable presign is a follow-up.
+      MEDIA_CDN_BASE_URL: http://localhost:9000/media
+      MEDIA_SCREEN_GRPC_ENDPOINT: http://moderation-server:50061
+      MEDIA_DEDUP_ENABLED: "false"
+    ports:
+      - "50063:50063"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  search-server:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: search-server
+    environment:
+      <<: *base-env
+      SEARCH_OPENSEARCH_URL: http://opensearch:9200
+      SEARCH_INDEX_PREFIX: dev
+      KAFKA_BROKERS: redpanda:9092
+      SEARCH_POST_GRPC_ENDPOINT: http://post-server:50056
+      SEARCH_PROFILE_GRPC_ENDPOINT: http://profile-server:50052
+    ports:
+      - "50062:50062"
+    depends_on:
+      <<: *needs-bootstrap
+      opensearch:
+        condition: service_healthy
+
+  realtime-dispatcher:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: realtime-dispatcher
+    environment:
+      <<: *base-env
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "50067:50067"
+    depends_on:
+      <<: *needs-bootstrap
+      redis:
+        condition: service_healthy
+
+  # Gateway serves plaintext WS on :8443 (TLS terminated by the LB in prod). iOS
+  # connects to ws://localhost:8443 with an auth-minted token (verified via auth JWKS).
+  realtime-gateway:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: realtime-gateway
+    environment:
+      <<: *base-env
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      REALTIME_GATEWAY_WS_ADDR: 0.0.0.0:8443
+      REALTIME_JWKS_URL: http://auth-server:8081/.well-known/jwks.json
+      REALTIME_TOKEN_ISSUER: http://localhost:50060
+      REALTIME_TOKEN_AUDIENCE: core-platform
+    ports:
+      - "50066:50066"
+      - "8443:8443"
+    depends_on:
+      <<: *needs-bootstrap
+      redis:
+        condition: service_healthy
+
+  # ── One-shot: seed dev data (3 users, mutual follows, ~5 posts each) ─────────
+  # Runs in-network so the Keycloak issuer matches auth's view. Self-waits for the
+  # services it needs; safe to re-run (idempotent).
+  seed:
+    build:
+      context: ./seed
+      dockerfile: Dockerfile
+    depends_on:
+      keycloak:
+        condition: service_started
+      account-server:
+        condition: service_started
+      profile-server:
+        condition: service_started
+      social-graph-server:
+        condition: service_started
+      post-server:
+        condition: service_started
+    restart: "no"

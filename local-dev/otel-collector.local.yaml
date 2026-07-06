@@ -1,0 +1,24 @@
+# Minimal OTLP sink for the local fleet. Every service exports traces/metrics to
+# otel-collector:4317; here we simply discard them so the services' background
+# exporters have a healthy endpoint and don't spam connection-refused warnings.
+# Swap `nop` for `debug` (verbosity: detailed) if you want to eyeball spans.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+exporters:
+  nop: {}
+
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [nop]
+    metrics:
+      receivers: [otlp]
+      exporters: [nop]
