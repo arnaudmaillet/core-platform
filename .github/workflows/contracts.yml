@@ -4,7 +4,7 @@ name: contracts
 #   - `buf lint`     on every change (BASIC rules — see buf.yaml)
 #   - `buf breaking` against the base branch on PRs (WIRE_JSON — blocks wire/JSON
 #     incompatible changes to already-deployed contracts)
-#   - `buf push`     to the Buf Schema Registry (buf.build/arnaudmaillet/core-platform)
+#   - `buf push`     to the Buf Schema Registry (buf.build/core-platform/contracts)
 #     on merges to develop/main, so the frontend repos consume versioned contracts
 #     instead of copying .proto files. buf-action attaches git metadata, so the
 #     branch name becomes the BSR label: `develop` = staging contracts, `main` = prod.
