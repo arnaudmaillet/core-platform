@@ -742,6 +742,9 @@ services:
       REDIS_HOSTS: redis:6379
       REDIS_TOPOLOGY: standalone
       KAFKA_BROKERS: redpanda:9092
+      # Point the shared JWKS refresher at auth's key set (same as the gateway) so
+      # it fetches successfully instead of warn-looping on an empty URL.
+      REALTIME_JWKS_URL: http://auth-server:8081/.well-known/jwks.json
     ports:
       - "50067:50067"
     depends_on:
