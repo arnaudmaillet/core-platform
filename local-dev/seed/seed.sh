@@ -92,17 +92,17 @@ for u in "${USERS[@]}"; do
   call "$ACCOUNT" account.v1.AccountService/VerifyEmail \
     "$(jq -nc --arg a "$aid" '{account_id:$a}')" >/dev/null
 
-  # profile_id is generated server-side; CreateProfile's response echoes account_id
-  # (not the real id) and ListProfilesByAccount has a CQL LIMIT bug — so resolve the
-  # real profile_id via handle, which works whether the profile pre-exists or not.
-  pid="$(call "$PROFILE" profile.v1.ProfileService/GetProfileByHandle \
-        "$(jq -nc --arg h "${HANDLE[$u]}" '{handle:$h}')" | jq -r '.profileId // empty')"
+  # profile_id is generated server-side and CreateProfile's response echoes
+  # account_id (not the real id), so resolve the real profile_id by listing the
+  # account's profiles — works whether the profile pre-exists or was just created.
+  pid="$(call "$PROFILE" profile.v1.ProfileService/ListProfilesByAccount \
+        "$(jq -nc --arg a "$aid" '{account_id:$a, limit:1}')" | jq -r '.profiles[0].profileId // empty')"
   if [ -z "$pid" ]; then
     call "$PROFILE" profile.v1.ProfileService/CreateProfile \
       "$(jq -nc --arg a "$aid" --arg h "${HANDLE[$u]}" --arg d "${DISPLAY[$u]}" \
          '{account_id:$a, handle:$h, display_name:$d, bio:"seeded dev user", profile_kind:1, locale:"en"}')" >/dev/null
-    pid="$(call "$PROFILE" profile.v1.ProfileService/GetProfileByHandle \
-          "$(jq -nc --arg h "${HANDLE[$u]}" '{handle:$h}')" | jq -r '.profileId // empty')"
+    pid="$(call "$PROFILE" profile.v1.ProfileService/ListProfilesByAccount \
+          "$(jq -nc --arg a "$aid" '{account_id:$a, limit:1}')" | jq -r '.profiles[0].profileId // empty')"
     log "$u: created profile ${pid}"
   else
     log "$u: profile exists ${pid}"
