@@ -24,6 +24,8 @@ use cqrs::query::{InMemoryQueryBus, QueryBusBuilder};
 use redis_storage::{RedisClient, RedisClientBuilder, RedisConfig};
 use scylla_storage::{ScyllaClient, ScyllaConfig, ScyllaSessionBuilder};
 use transport::kafka::config::client::KafkaClientConfig;
+use transport::kafka::config::ProducerConfig;
+use transport::kafka::producer::KafkaProducerBuilder;
 
 use crate::application::command::create_notification::{
     CreateNotificationCommand, CreateNotificationHandler,
@@ -31,7 +33,9 @@ use crate::application::command::create_notification::{
 use crate::application::command::mark_read::{
     MarkAllReadCommand, MarkAllReadHandler, MarkReadCommand, MarkReadHandler,
 };
-use crate::application::port::{BlockCache, NotificationRepository, UnreadCounter};
+use crate::application::port::{
+    BlockCache, NotificationEventPublisher, NotificationRepository, UnreadCounter,
+};
 use crate::application::query::get_unread_count::{GetUnreadCountHandler, GetUnreadCountQuery};
 use crate::application::query::list_notifications::{
     ListNotificationsHandler, ListNotificationsQuery,
@@ -39,6 +43,7 @@ use crate::application::query::list_notifications::{
 use crate::config::NotificationConfig;
 use crate::infrastructure::cache::{RedisBlockCache, RedisUnreadCounter};
 use crate::infrastructure::persistence::ScyllaNotificationRepository;
+use crate::infrastructure::publisher::{KafkaNotificationPublisher, NoopNotificationPublisher};
 use crate::infrastructure::streaming::BroadcastRegistry;
 use crate::infrastructure::worker::{
     collapse_flush_worker::CollapseFlushWorker, comment_worker::CommentNotificationWorker,
@@ -95,6 +100,19 @@ impl App {
         ));
         let stream_registry = Arc::new(BroadcastRegistry::new(config.stream_buffer_size));
 
+        // ── Realtime push publisher (notification.v1.events) ─────────────────
+        // Kafka-backed when a broker is configured; a no-op otherwise so the
+        // harness drives the command path without a broker. Built before the bus
+        // because the create handler holds it.
+        let publisher: Arc<dyn NotificationEventPublisher> = match kafka.as_ref() {
+            Some(cfg) => {
+                let producer =
+                    KafkaProducerBuilder::new(ProducerConfig::new(cfg.clone())).build()?;
+                Arc::new(KafkaNotificationPublisher::new(producer))
+            }
+            None => Arc::new(NoopNotificationPublisher),
+        };
+
         // ── CQRS buses ───────────────────────────────────────────────────────
         let command_bus = Arc::new(
             CommandBusBuilder::new()
@@ -103,6 +121,7 @@ impl App {
                     block_cache:     Arc::clone(&block_cache),
                     counter:         Arc::clone(&counter),
                     stream_registry: Arc::clone(&stream_registry),
+                    publisher:       Arc::clone(&publisher),
                 })?
                 .register::<MarkReadCommand, _>(MarkReadHandler {
                     repository: Arc::clone(&repository),

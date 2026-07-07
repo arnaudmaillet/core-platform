@@ -29,6 +29,7 @@ producer's `DOMAIN.md §8`.
 |---|---|---|
 | `account.v1.events` | `account` | `audit`, `profile` |
 | `profile.v1.events` | `profile` | `search`, `post` |
+| `notification.v1.events` | `notification` | `realtime` |
 | `post.published` | `post` | `notification`, `geo-discovery` |
 | `post.updated` | `post` | — *(orphan — see below)* |
 | `post.deleted` | `post` | `timeline` |

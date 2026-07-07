@@ -3,7 +3,10 @@ use std::sync::Arc;
 use cqrs::{Command, CommandHandler, Envelope};
 use validate_core::{FieldViolation, Validate};
 
-use crate::application::port::{BlockCache, NotificationRepository, StreamRegistry, UnreadCounter};
+use crate::application::port::{
+    BlockCache, NotificationEventPublisher, NotificationRepository, NotificationStreamEvent,
+    StreamRegistry, UnreadCounter,
+};
 use crate::application::port::stream_registry::NotificationPayload;
 use crate::domain::aggregate::Notification;
 use crate::domain::value_object::{
@@ -52,6 +55,9 @@ pub struct CreateNotificationHandler<R, C, U, S> {
     pub block_cache:  Arc<C>,
     pub counter:      Arc<U>,
     pub stream_registry: Arc<S>,
+    /// Realtime push stream (`notification.v1.events`). A trait object so the
+    /// harness injects a no-op without a broker.
+    pub publisher:    Arc<dyn NotificationEventPublisher>,
 }
 
 impl<R, C, U, S> CommandHandler<CreateNotificationCommand>
@@ -122,6 +128,28 @@ where
             created_at_ms:     notification.created_at().timestamp_millis(),
         });
         self.stream_registry.broadcast(&target_id, payload);
+
+        // Best-effort publish to notification.v1.events for out-of-process realtime
+        // push. The record is already durable, so a publish failure must not fail
+        // the command — mirrors the in-process broadcast above.
+        let stream_event = NotificationStreamEvent {
+            recipient_id:    target_id.as_str(),
+            notification_id: ntf_id.as_str(),
+            kind:            kind.as_str().to_owned(),
+            created_at_ms:   notification.created_at().timestamp_millis(),
+            payload:         serde_json::json!({
+                "kind":         kind.as_str(),
+                "sender_count": notification.sender_count(),
+                "subject_id":   notification.subject_id().as_uuid().to_string(),
+            }),
+        };
+        if let Err(error) = self.publisher.publish(&stream_event).await {
+            tracing::warn!(
+                %error,
+                notification_id = %ntf_id,
+                "notification.v1.events publish failed (best-effort; record is durable)"
+            );
+        }
 
         tracing::debug!(
             notification_id   = %ntf_id,

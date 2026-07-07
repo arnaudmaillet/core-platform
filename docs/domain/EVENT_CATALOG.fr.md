@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./EVENT_CATALOG.md
-  source_sha256: fb20e6a0d6d8151278ad094f920a9588aa20f0f78e4cbaa49d751f15c308a509
-  translated_at: 2026-06-28
+  source_sha256: 318af7ec1e58aeac41718a7a3f611b5221c3886450f6ac456ce21bec78a310a8
+  translated_at: 2026-07-07
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`EVENT_CATALOG.md`](./EVENT_CATALOG.md) fait foi.
@@ -42,6 +42,7 @@ Croiser chaque arête dans [`CONTEXT_MAP.md`](./CONTEXT_MAP.md), et le détail p
 |---|---|---|
 | `account.v1.events` | `account` | `audit`, `profile` |
 | `profile.v1.events` | `profile` | `search`, `post` |
+| `notification.v1.events` | `notification` | `realtime` |
 | `post.published` | `post` | `notification`, `geo-discovery` |
 | `post.updated` | `post` | — *(orphan — see below)* |
 | `post.deleted` | `post` | `timeline` |

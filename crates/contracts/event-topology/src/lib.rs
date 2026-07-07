@@ -44,6 +44,8 @@ pub const PRODUCERS: &[(&str, &str)] = &[
     ("account.v1.events", "account"),
     // profile
     ("profile.v1.events", "profile"),
+    // notification — per-recipient realtime push stream (consumed by realtime)
+    ("notification.v1.events", "notification"),
     // post — legacy per-type topics + the unified v1 stream (mid-migration)
     ("post.published", "post"),
     ("post.updated", "post"),
@@ -93,6 +95,8 @@ pub const CONSUMERS: &[(&str, &str)] = &[
     ("post.v1.events", "timeline"),
     ("post.v1.events", "search"),
     ("post.v1.events", "realtime"),
+    // notification → realtime device push
+    ("notification.v1.events", "realtime"),
     // comment
     ("comment.created", "notification"),
     ("comment.created", "engagement"),
