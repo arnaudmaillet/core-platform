@@ -3255,6 +3255,7 @@ dependencies = [
  "scylla",
  "scylla-storage",
  "serde",
+ "serde_json",
  "service-runtime",
  "test-support",
  "thiserror 2.0.18",
