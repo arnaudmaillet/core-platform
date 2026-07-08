@@ -32,7 +32,8 @@ impl ObjectStore for S3ObjectStore {
         expires_in: Duration,
     ) -> Result<PresignedUpload, MediaError> {
         let ttl = expires_in.to_std().unwrap_or(StdDuration::from_secs(900));
-        let url = self.client.presign_put(key.as_str(), ttl);
+        // Handed to the client for a direct upload — sign against the public host.
+        let url = self.client.presign_put_public(key.as_str(), ttl);
         let mut required_headers = HashMap::new();
         required_headers.insert("Content-Type".to_owned(), content_type.as_str().to_owned());
         Ok(PresignedUpload {

@@ -131,6 +131,7 @@ impl Harness {
 
         let store = Arc::new(
             S3Client::new(S3Config {
+                public_endpoint: minio_endpoint.clone(),
                 endpoint: minio_endpoint,
                 region: "us-east-1".into(),
                 bucket: "media".into(),
