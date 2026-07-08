@@ -232,6 +232,8 @@ fn rendition_from_proto(value: i32) -> Option<RenditionKind> {
         3 => Some(RenditionKind::Small),
         4 => Some(RenditionKind::Medium),
         5 => Some(RenditionKind::Large),
+        6 => Some(RenditionKind::Manifest),
+        7 => Some(RenditionKind::Poster),
         _ => None,
     }
 }
@@ -274,6 +276,8 @@ fn rendition_kind_to_proto(kind: RenditionKind) -> i32 {
         RenditionKind::Small => 3,
         RenditionKind::Medium => 4,
         RenditionKind::Large => 5,
+        RenditionKind::Manifest => 6,
+        RenditionKind::Poster => 7,
     }
 }
 

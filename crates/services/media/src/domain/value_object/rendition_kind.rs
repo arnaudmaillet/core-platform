@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::MediaError;
 
-/// A derivative variant in an asset's catalog. v1 variants are image size buckets;
-/// the concrete output format (WebP/AVIF/JPEG) is carried by each rendition's MIME
-/// type, not by this enum. `Original` is the validated master that every other
-/// rendition is derived from.
+/// A derivative variant in an asset's catalog. Image variants are size buckets;
+/// video variants are the adaptive-streaming `Manifest` (playback entry point) and
+/// a still `Poster`. The concrete output format (image WebP/AVIF/JPEG, or streaming
+/// HLS/DASH) is carried by each rendition's MIME type, not by this enum. `Original`
+/// is the validated master that image renditions are derived from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RenditionKind {
@@ -16,6 +17,10 @@ pub enum RenditionKind {
     Small,
     Medium,
     Large,
+    /// A video's adaptive-streaming playback manifest (the master playlist).
+    Manifest,
+    /// A still poster frame for feed first-paint before playback starts.
+    Poster,
 }
 
 impl RenditionKind {
@@ -26,6 +31,8 @@ impl RenditionKind {
             Self::Small => "small",
             Self::Medium => "medium",
             Self::Large => "large",
+            Self::Manifest => "manifest",
+            Self::Poster => "poster",
         }
     }
 
@@ -57,6 +64,8 @@ impl TryFrom<&str> for RenditionKind {
             "small" => Ok(Self::Small),
             "medium" => Ok(Self::Medium),
             "large" => Ok(Self::Large),
+            "manifest" => Ok(Self::Manifest),
+            "poster" => Ok(Self::Poster),
             other => Err(MediaError::DomainViolation {
                 field: "rendition_kind".into(),
                 message: format!("unknown rendition kind: '{other}'"),
@@ -77,6 +86,8 @@ mod tests {
             RenditionKind::Small,
             RenditionKind::Medium,
             RenditionKind::Large,
+            RenditionKind::Manifest,
+            RenditionKind::Poster,
         ] {
             assert_eq!(RenditionKind::try_from(k.as_str()).unwrap(), k);
         }
