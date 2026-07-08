@@ -7,7 +7,7 @@ use moderation_api::{
 use tonic::transport::Channel;
 
 use crate::application::port::{ModerationScreen, ScreenDecision};
-use crate::domain::value_object::{AssetId, ContentHash, MediaKind};
+use crate::domain::value_object::{AssetId, ContentHash, MediaKind, OwnerId};
 use crate::error::MediaError;
 
 /// gRPC implementation of [`ModerationScreen`], backed by the `moderation` service's
@@ -33,6 +33,7 @@ impl ModerationScreen for GrpcModerationScreen {
     async fn screen(
         &self,
         asset_id: &AssetId,
+        owner_id: &OwnerId,
         content_hash: &ContentHash,
         _kind: MediaKind,
     ) -> Result<ScreenDecision, MediaError> {
@@ -41,8 +42,9 @@ impl ModerationScreen for GrpcModerationScreen {
             subject: Some(SubjectRef {
                 entity_type: EntityType::Media as i32,
                 entity_id: asset_id.as_str(),
-                // A hash match is about content, not the actor; left empty here.
-                actor_id: String::new(),
+                // The uploader — moderation requires a valid actor identifier and
+                // attributes the screen (and any enforcement) to them.
+                actor_id: owner_id.as_str(),
                 surface: "upload".to_owned(),
             }),
             hashes: vec![ModContentHash {

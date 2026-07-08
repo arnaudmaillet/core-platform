@@ -10,7 +10,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::value_object::{AssetId, ContentHash, MediaKind};
+use crate::domain::value_object::{AssetId, ContentHash, MediaKind, OwnerId};
 use crate::error::MediaError;
 
 /// The screen result. `blocked` means a known-bad match; `csam` flags a
@@ -39,6 +39,7 @@ pub trait ModerationScreen: Send + Sync + 'static {
     async fn screen(
         &self,
         asset_id: &AssetId,
+        owner_id: &OwnerId,
         content_hash: &ContentHash,
         kind: MediaKind,
     ) -> Result<ScreenDecision, MediaError>;
