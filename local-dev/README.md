@@ -98,10 +98,16 @@ grpcurl -plaintext -d '{"device":{"user_agent":"cli","ip_address":"127.0.0.1","d
   a single node can't satisfy `LOCAL_QUORUM` writes, so `scylla-rf1` downshifts every
   service keyspace to RF=1 after migration. (If you add a Scylla-backed service, add
   its keyspace to that one-shot's list.)
-- **Media presigned URLs.** `media-server` reaches MinIO in-network (`minio:9000`) for
-  its health probe + byte I/O, so presigned upload/download URLs sign that host — an
-  on-device client can't resolve it. Text posts (the seed) need no media; device-
-  reachable presign is a follow-up (needs host/signature alignment).
+- **Media (images + video).** `media-server` (`:50063`) reaches MinIO in-network
+  (`minio:9000`) for byte I/O, but presigns upload/download URLs against
+  `localhost:9000` (`MEDIA_OBJECT_STORE_PUBLIC_ENDPOINT`) so a host/browser client can
+  resolve them. Flow: `IssueUploadTicket` → PUT the bytes to the presigned URL →
+  `CommitUpload` → the asset reaches `READY` (images) or, for video, `media-worker`
+  (`:50071`) transcodes it with ffmpeg to a 3-rung HLS ladder + poster and marks it
+  `READY`. `ResolveDelivery` then returns the playback URL — for video, an HLS
+  `master.m3u8` under `http://localhost:9000/media/post-videos/<hash>/` (MinIO serves
+  the bucket with anonymous read, so hls.js can play it directly). Video kinds:
+  `MEDIA_KIND_VIDEO`, `video/mp4` + `video/quicktime`, 200 MiB cap.
 - **Counters reconcile async.** counter-server/worker are up and respond, but the
   FOLLOWER magnitude reads 0 — follower/following counts are a window onto social-graph's
   set and the reconcile path isn't populating in this stack.

@@ -712,6 +712,46 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  # Dedicated video transcode worker. Consumes media.v1.events (its own consumer
+  # group), and on a video AssetUploaded runs ffmpeg → the HLS ladder + poster,
+  # writing them to MinIO and marking the asset READY. Serves no domain RPC — only
+  # health/reflection on :50071. Same env as media-server (it does the same byte
+  # I/O, moderation screen, and DB writes); the image bundles ffmpeg.
+  media-worker:
+    <<: *svc
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BIN: media-worker
+    environment:
+      <<: *base-env
+      PG_TOPOLOGY: single
+      DATABASE_URL: postgres://core:core@postgres:5432/media
+      REDIS_HOSTS: redis:6379
+      REDIS_TOPOLOGY: standalone
+      KAFKA_BROKERS: redpanda:9092
+      MEDIA_WORKER_GRPC_ADDR: "0.0.0.0:50071"
+      MEDIA_OBJECT_STORE_ENDPOINT: http://minio:9000
+      MEDIA_OBJECT_STORE_PUBLIC_ENDPOINT: http://localhost:9000
+      MEDIA_OBJECT_STORE_REGION: us-east-1
+      MEDIA_OBJECT_STORE_BUCKET: media
+      MEDIA_S3_ACCESS_KEY: minioadmin
+      MEDIA_S3_SECRET_KEY: minioadmin
+      MEDIA_CDN_BASE_URL: http://localhost:9000/media
+      MEDIA_SCREEN_GRPC_ENDPOINT: http://moderation-server:50061
+      MEDIA_DEDUP_ENABLED: "false"
+    ports:
+      - "50071:50071"
+    depends_on:
+      <<: *needs-bootstrap
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
   search-server:
     <<: *svc
     build:
