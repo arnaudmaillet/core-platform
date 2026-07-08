@@ -29,8 +29,13 @@ impl MediaConfig {
             dedup_enabled: env_bool("MEDIA_DEDUP_ENABLED", false),
             screen_timeout: StdDuration::from_millis(env_u64("MEDIA_SCREEN_TIMEOUT_MS", 200)),
         };
+        let endpoint = env_or("MEDIA_OBJECT_STORE_ENDPOINT", "http://localhost:9000");
         let s3 = S3Config {
-            endpoint: env_or("MEDIA_OBJECT_STORE_ENDPOINT", "http://localhost:9000"),
+            // Client-facing presign host; defaults to the internal endpoint (prod,
+            // where both are the public S3/CDN host). The local fleet overrides it
+            // to a device-reachable host so uploads/delivery URLs actually resolve.
+            public_endpoint: env_or("MEDIA_OBJECT_STORE_PUBLIC_ENDPOINT", endpoint.clone()),
+            endpoint,
             region: env_or("MEDIA_OBJECT_STORE_REGION", "us-east-1"),
             bucket: env_or("MEDIA_OBJECT_STORE_BUCKET", "media"),
             access_key: env_or("MEDIA_S3_ACCESS_KEY", "minioadmin"),

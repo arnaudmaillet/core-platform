@@ -41,7 +41,9 @@ impl CdnGateway for CloudFrontCdnGateway {
             }),
             DeliveryVisibility::Signed => {
                 let ttl = self.signed_ttl.to_std().unwrap_or(StdDuration::from_secs(300));
-                let url = self.store.presign_get(key.as_str(), ttl);
+                // Handed to the viewer for signed delivery — sign against the
+                // public host.
+                let url = self.store.presign_get_public(key.as_str(), ttl);
                 Ok(ResolvedUrl {
                     url: url.to_string(),
                     expires_at: Some(now + self.signed_ttl),

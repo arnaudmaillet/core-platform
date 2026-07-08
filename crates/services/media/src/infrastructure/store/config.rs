@@ -4,8 +4,16 @@ use std::time::Duration;
 /// composition root (Phase 5).
 #[derive(Debug, Clone)]
 pub struct S3Config {
-    /// Endpoint URL (e.g. `https://s3.amazonaws.com` or a MinIO `http://…:9000`).
+    /// Endpoint URL for the server-side byte I/O this service performs itself
+    /// (probe download, rendition upload, HEAD) — an in-network host the pods can
+    /// reach, e.g. a MinIO `http://minio:9000` or `https://s3.amazonaws.com`.
     pub endpoint: String,
+    /// Endpoint URL used to *sign the URLs handed back to clients* (the direct
+    /// upload PUT and signed delivery GET). Must be resolvable from the caller's
+    /// network, which the internal `endpoint` often is not: in the local fleet the
+    /// pods reach MinIO at `http://minio:9000` while a device signs against
+    /// `http://localhost:9000`. In prod both are usually the public S3/CDN host.
+    pub public_endpoint: String,
     pub region: String,
     pub bucket: String,
     pub access_key: String,

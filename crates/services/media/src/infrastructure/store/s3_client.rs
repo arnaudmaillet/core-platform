@@ -13,6 +13,10 @@ use crate::error::MediaError;
 /// Bytes only ever flow store ⇄ this worker — never through the gRPC/Kafka mesh.
 pub struct S3Client {
     bucket: Bucket,
+    /// Same bucket signed against the client-reachable host — used only for the
+    /// URLs handed back to callers (upload PUT, signed delivery GET), never for
+    /// this service's own byte I/O.
+    public_bucket: Bucket,
     credentials: Credentials,
     http: reqwest::Client,
     presign_ttl: Duration,
@@ -23,9 +27,19 @@ impl S3Client {
         let endpoint = Url::parse(&config.endpoint).map_err(|e| MediaError::PresignFailed {
             reason: format!("invalid object-store endpoint: {e}"),
         })?;
-        let bucket = Bucket::new(endpoint, UrlStyle::Path, config.bucket, config.region).map_err(
-            |e| MediaError::PresignFailed { reason: format!("invalid bucket: {e}") },
-        )?;
+        let public_endpoint =
+            Url::parse(&config.public_endpoint).map_err(|e| MediaError::PresignFailed {
+                reason: format!("invalid object-store public endpoint: {e}"),
+            })?;
+        let bucket =
+            Bucket::new(endpoint, UrlStyle::Path, config.bucket.clone(), config.region.clone())
+                .map_err(|e| MediaError::PresignFailed {
+                    reason: format!("invalid bucket: {e}"),
+                })?;
+        let public_bucket =
+            Bucket::new(public_endpoint, UrlStyle::Path, config.bucket, config.region).map_err(
+                |e| MediaError::PresignFailed { reason: format!("invalid public bucket: {e}") },
+            )?;
         let credentials = Credentials::new(config.access_key, config.secret_key);
         // The HTTP client carries the hard request timeout: a stuck object-store
         // call elapses into `ObjectStoreTimeout` (retryable) rather than hanging.
@@ -35,17 +49,31 @@ impl S3Client {
             .map_err(|e| MediaError::PresignFailed {
                 reason: format!("failed to build the object-store HTTP client: {e}"),
             })?;
-        Ok(Self { bucket, credentials, http, presign_ttl: config.presign_ttl })
+        Ok(Self { bucket, public_bucket, credentials, http, presign_ttl: config.presign_ttl })
     }
 
-    /// Presigned PUT URL the client uploads to directly.
+    /// Presigned PUT URL for this service's own server-side byte I/O (rendition
+    /// upload). Signed against the internal endpoint — not for handing to clients.
     pub fn presign_put(&self, key: &str, ttl: Duration) -> Url {
         self.bucket.put_object(Some(&self.credentials), key).sign(ttl)
     }
 
-    /// Presigned GET URL (server-side reads + signed delivery).
+    /// Presigned GET URL for this service's own server-side byte I/O (probe
+    /// download, ranged HEAD). Signed against the internal endpoint.
     pub fn presign_get(&self, key: &str, ttl: Duration) -> Url {
         self.bucket.get_object(Some(&self.credentials), key).sign(ttl)
+    }
+
+    /// Presigned PUT URL handed to a client for its direct upload. Signed against
+    /// the client-reachable public endpoint.
+    pub fn presign_put_public(&self, key: &str, ttl: Duration) -> Url {
+        self.public_bucket.put_object(Some(&self.credentials), key).sign(ttl)
+    }
+
+    /// Presigned GET URL handed to a client for signed delivery. Signed against
+    /// the client-reachable public endpoint.
+    pub fn presign_get_public(&self, key: &str, ttl: Duration) -> Url {
+        self.public_bucket.get_object(Some(&self.credentials), key).sign(ttl)
     }
 
     fn presign_delete(&self, key: &str, ttl: Duration) -> Url {
@@ -176,5 +204,50 @@ fn reqwest_err(e: reqwest::Error) -> MediaError {
         MediaError::ObjectStoreTimeout
     } else {
         MediaError::ObjectStoreUnavailable
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn client() -> S3Client {
+        S3Client::new(S3Config {
+            // The fleet shape: pods reach the store in-network, clients don't.
+            endpoint: "http://minio:9000".into(),
+            public_endpoint: "http://localhost:9000".into(),
+            region: "us-east-1".into(),
+            bucket: "media".into(),
+            access_key: "minioadmin".into(),
+            secret_key: "minioadmin".into(),
+            presign_ttl: Duration::from_secs(900),
+            request_timeout: Duration::from_secs(10),
+        })
+        .expect("client")
+    }
+
+    #[test]
+    fn client_facing_presign_signs_the_public_host() {
+        let c = client();
+        let ttl = Duration::from_secs(300);
+        // The URLs handed to callers must resolve from the caller's network.
+        assert_eq!(c.presign_put_public("staging/a", ttl).host_str(), Some("localhost"));
+        assert_eq!(c.presign_get_public("staging/a", ttl).host_str(), Some("localhost"));
+    }
+
+    #[test]
+    fn server_side_presign_signs_the_internal_host() {
+        let c = client();
+        let ttl = Duration::from_secs(300);
+        // This service's own byte I/O stays on the in-network endpoint.
+        assert_eq!(c.presign_put("staging/a", ttl).host_str(), Some("minio"));
+        assert_eq!(c.presign_get("staging/a", ttl).host_str(), Some("minio"));
+    }
+
+    #[test]
+    fn a_signed_url_still_carries_the_sigv4_query() {
+        // Splitting the host must not drop the signature — the URL is still signed.
+        let url = client().presign_put_public("staging/a", Duration::from_secs(300));
+        assert!(url.query().unwrap_or_default().contains("X-Amz-Signature"));
     }
 }

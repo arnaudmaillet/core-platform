@@ -689,12 +689,15 @@ services:
       KAFKA_BROKERS: redpanda:9092
       # media reaches MinIO in-network for health + server-side byte I/O.
       MEDIA_OBJECT_STORE_ENDPOINT: http://minio:9000
+      # Presigned upload/download URLs are signed against this host instead, so an
+      # on-device / host client can actually resolve them (server I/O stays on the
+      # in-network minio:9000 above). Without this, uploads never land and assets
+      # stall in PENDING.
+      MEDIA_OBJECT_STORE_PUBLIC_ENDPOINT: http://localhost:9000
       MEDIA_OBJECT_STORE_REGION: us-east-1
       MEDIA_OBJECT_STORE_BUCKET: media
       MEDIA_S3_ACCESS_KEY: minioadmin
       MEDIA_S3_SECRET_KEY: minioadmin
-      # NOTE: presigned upload/download URLs sign the minio:9000 host, which an
-      # on-device client can't resolve — device-reachable presign is a follow-up.
       MEDIA_CDN_BASE_URL: http://localhost:9000/media
       MEDIA_SCREEN_GRPC_ENDPOINT: http://moderation-server:50061
       MEDIA_DEDUP_ENABLED: "false"
