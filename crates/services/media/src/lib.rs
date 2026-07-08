@@ -52,3 +52,4 @@ pub mod infrastructure;
 pub mod service;
 
 pub use error::MediaError;
+pub use service::{MediaService, MediaWorkerService};

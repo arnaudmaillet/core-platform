@@ -50,6 +50,7 @@ members = [
     "crates/apps/moderation-server",
     "crates/apps/search-server",
     "crates/apps/media-server",
+    "crates/apps/media-worker",
     "crates/apps/counter-server",
     "crates/apps/counter-worker",
     "crates/apps/realtime-gateway",

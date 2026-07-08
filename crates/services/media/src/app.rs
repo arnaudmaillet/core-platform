@@ -20,11 +20,11 @@ use transport::kafka::producer::KafkaProducerBuilder;
 
 use crate::application::command::{
     ApplyModerationHandler, CommitUploadHandler, DeleteAssetHandler, IssueUploadTicketHandler,
-    ProcessAssetHandler,
+    ProcessAssetHandler, TranscodeAssetHandler,
 };
 use crate::application::port::{
     AssetRepository, CdnGateway, DeliveryCache, EventPublisher, ImageProcessor, MalwareScanner,
-    MediaProbe, ModerationScreen, ObjectStore,
+    MediaProbe, ModerationScreen, ObjectStore, VideoTranscoder,
 };
 use crate::application::query::{GetAssetHandler, ResolveDeliveryHandler};
 use crate::application::MediaPolicy;
@@ -35,7 +35,7 @@ use crate::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
 use crate::infrastructure::grpc::MediaServiceHandler;
 use crate::infrastructure::persistence::PgAssetRepository;
 use crate::infrastructure::probe::{DispatchingMediaProbe, ImageMediaProbe, VideoMediaProbe};
-use crate::infrastructure::processor::ImageRenditionProcessor;
+use crate::infrastructure::processor::{FfmpegVideoTranscoder, ImageRenditionProcessor};
 use crate::infrastructure::scanner::LogMalwareScanner;
 use crate::infrastructure::screen::GrpcModerationScreen;
 use crate::infrastructure::store::{S3Client, S3ObjectStore};
@@ -48,6 +48,7 @@ pub struct AppDeps {
     pub cdn: Arc<dyn CdnGateway>,
     pub probe: Arc<dyn MediaProbe>,
     pub processor: Arc<dyn ImageProcessor>,
+    pub transcoder: Arc<dyn VideoTranscoder>,
     pub scanner: Arc<dyn MalwareScanner>,
     pub screen: Arc<dyn ModerationScreen>,
     pub publisher: Arc<dyn EventPublisher>,
@@ -66,6 +67,7 @@ pub struct Backends {
 pub struct App {
     pub handler: MediaServiceHandler,
     pub process: Arc<ProcessAssetHandler>,
+    pub transcode: Arc<TranscodeAssetHandler>,
     pub apply_moderation: Arc<ApplyModerationHandler>,
     pub pool: PgPool,
     pub redis: RedisClient,
@@ -105,14 +107,24 @@ impl App {
 
     /// Builds the process + moderation handlers shared between the gRPC handler and
     /// the consumers (a single instance of each, over the same ports).
+    #[allow(clippy::type_complexity)]
     fn build_workers(
         deps: &AppDeps,
-    ) -> (Arc<ProcessAssetHandler>, Arc<ApplyModerationHandler>) {
+    ) -> (Arc<ProcessAssetHandler>, Arc<TranscodeAssetHandler>, Arc<ApplyModerationHandler>) {
         let process = Arc::new(ProcessAssetHandler::new(
             Arc::clone(&deps.assets),
             Arc::clone(&deps.scanner),
             Arc::clone(&deps.screen),
             Arc::clone(&deps.processor),
+            Arc::clone(&deps.cache),
+            Arc::clone(&deps.publisher),
+            deps.policy.clone(),
+        ));
+        let transcode = Arc::new(TranscodeAssetHandler::new(
+            Arc::clone(&deps.assets),
+            Arc::clone(&deps.scanner),
+            Arc::clone(&deps.screen),
+            Arc::clone(&deps.transcoder),
             Arc::clone(&deps.cache),
             Arc::clone(&deps.publisher),
             deps.policy.clone(),
@@ -123,7 +135,7 @@ impl App {
             Arc::clone(&deps.cache),
             Arc::clone(&deps.publisher),
         ));
-        (process, apply_moderation)
+        (process, transcode, apply_moderation)
     }
 
     /// Builds the concrete adapter graph from config + backend connections.
@@ -165,15 +177,16 @@ impl App {
                 Arc::new(VideoMediaProbe::new(Arc::clone(&store))),
             )),
             processor: Arc::new(ImageRenditionProcessor::new(Arc::clone(&store))),
+            transcoder: Arc::new(FfmpegVideoTranscoder::new(Arc::clone(&store))),
             scanner: Arc::new(LogMalwareScanner),
             screen: Arc::new(GrpcModerationScreen::new(screen_channel)),
             publisher,
             policy: config.policy,
         };
 
-        let (process, apply_moderation) = App::build_workers(&deps);
+        let (process, transcode, apply_moderation) = App::build_workers(&deps);
         let handler = App::compose(deps, Arc::clone(&process));
-        Ok(App { handler, process, apply_moderation, pool, redis, store })
+        Ok(App { handler, process, transcode, apply_moderation, pool, redis, store })
     }
 }
 
@@ -193,13 +206,14 @@ mod tests {
             store: fx.store.clone(),
             cdn: fx.cdn.clone(),
             probe: fx.probe.clone(),
+            transcoder: fx.transcoder.clone(),
             processor: fx.processor.clone(),
             scanner: fx.scanner.clone(),
             screen: fx.screen.clone(),
             publisher: fx.publisher.clone(),
             policy: fx.policy.clone(),
         };
-        let (process, _apply) = App::build_workers(&deps);
+        let (process, _transcode, _apply) = App::build_workers(&deps);
         App::compose(deps, process)
     }
 

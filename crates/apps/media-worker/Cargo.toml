@@ -1,0 +1,15 @@
+[package]
+name                 = "media-worker"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+description = "Deployable binary for the media video transcode path — the CPU-heavy ffmpeg worker (HLS ladder + poster), scaled independently of media-server. Serves no domain RPC."
+
+[dependencies]
+media           = { workspace = true }
+service-runtime = { workspace = true }
+
+tokio  = { workspace = true }
+anyhow = { workspace = true }

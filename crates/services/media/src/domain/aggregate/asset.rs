@@ -329,10 +329,16 @@ impl Asset {
                 message: "cannot mark ready without a finalized content hash".into(),
             });
         }
-        if self.rendition(RenditionKind::Original).is_none() {
+        // The master rendition a READY asset must carry: images keep the validated
+        // Original; video carries the playback Manifest (its HLS entry point).
+        let master = match self.kind {
+            MediaKind::Video => RenditionKind::Manifest,
+            _ => RenditionKind::Original,
+        };
+        if self.rendition(master).is_none() {
             return Err(MediaError::DomainViolation {
                 field: "renditions".into(),
-                message: "cannot mark ready without the original rendition".into(),
+                message: format!("cannot mark ready without the {master} rendition"),
             });
         }
         self.transition(AssetState::Ready, now);

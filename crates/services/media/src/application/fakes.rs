@@ -23,7 +23,7 @@ use super::policy::MediaPolicy;
 use super::port::{
     AssetRepository, CdnGateway, DeliveryCache, DerivedRenditions, EventPublisher, ImageProcessor,
     MalwareScanner, MediaProbe, MediaProbeReport, ModerationScreen, ObjectHead, ObjectStore,
-    PresignedUpload, ResolvedUrl, ScanVerdict, ScreenDecision,
+    PresignedUpload, ResolvedUrl, ScanVerdict, ScreenDecision, TranscodeOutput, VideoTranscoder,
 };
 use crate::domain::aggregate::{Asset, AssetSnapshot, Rendition};
 use crate::domain::event::DomainEvent;
@@ -50,6 +50,14 @@ fn owner() -> OwnerId {
 
 fn jpeg() -> MimeType {
     MimeType::new("image/jpeg").unwrap()
+}
+
+/// A declared MIME accepted by the kind's allowlist (video kinds reject images).
+fn mime_for_kind(kind: MediaKind) -> MimeType {
+    match kind {
+        MediaKind::Video => MimeType::new("video/mp4").unwrap(),
+        _ => jpeg(),
+    }
 }
 
 // ─── AssetRepository ─────────────────────────────────────────────────────────────
@@ -238,9 +246,13 @@ impl MediaProbe for StubMediaProbe {
     async fn probe(
         &self,
         _key: &StorageKey,
-        _declared_mime: &MimeType,
+        declared_mime: &MimeType,
     ) -> Result<MediaProbeReport, MediaError> {
-        Ok(self.report.lock().unwrap().clone())
+        // Echo the declared type so a video asset yields a video report (the stub
+        // reports fixed dimensions/size/hash); real probes derive it from bytes.
+        let mut report = self.report.lock().unwrap().clone();
+        report.mime_type = declared_mime.clone();
+        Ok(report)
     }
 }
 
@@ -278,6 +290,44 @@ impl ImageProcessor for StubImageProcessor {
         );
         Ok(DerivedRenditions {
             renditions: vec![original, thumbnail],
+            blurhash: Blurhash::new("LEHV6nWB2yk8pyo0adR*").unwrap(),
+        })
+    }
+}
+
+// ─── VideoTranscoder ─────────────────────────────────────────────────────────────
+
+pub struct StubVideoTranscoder;
+
+impl StubVideoTranscoder {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl VideoTranscoder for StubVideoTranscoder {
+    async fn transcode(
+        &self,
+        _source: &StorageKey,
+        hash: &ContentHash,
+    ) -> Result<TranscodeOutput, MediaError> {
+        let manifest = Rendition::new(
+            RenditionKind::Manifest,
+            MimeType::new("application/vnd.apple.mpegurl").unwrap(),
+            StorageKey::video_object(MediaKind::Video, hash, "master.m3u8"),
+            Dimensions::new(1080, 1920).unwrap(),
+            1_200,
+        );
+        let poster = Rendition::new(
+            RenditionKind::Poster,
+            jpeg(),
+            StorageKey::video_object(MediaKind::Video, hash, "poster.jpg"),
+            Dimensions::new(1080, 1920).unwrap(),
+            40_000,
+        );
+        Ok(TranscodeOutput {
+            renditions: vec![manifest, poster],
             blurhash: Blurhash::new("LEHV6nWB2yk8pyo0adR*").unwrap(),
         })
     }
@@ -416,6 +466,7 @@ pub struct Fixture {
     pub cdn: Arc<RecordingCdnGateway>,
     pub probe: Arc<StubMediaProbe>,
     pub processor: Arc<StubImageProcessor>,
+    pub transcoder: Arc<StubVideoTranscoder>,
     pub scanner: Arc<StubMalwareScanner>,
     pub screen: Arc<StubModerationScreen>,
     pub publisher: Arc<RecordingEventPublisher>,
@@ -431,6 +482,7 @@ impl Fixture {
             cdn: Arc::new(RecordingCdnGateway::new()),
             probe: Arc::new(StubMediaProbe::new()),
             processor: Arc::new(StubImageProcessor::new()),
+            transcoder: Arc::new(StubVideoTranscoder::new()),
             scanner: Arc::new(StubMalwareScanner::new()),
             screen: Arc::new(StubModerationScreen::new()),
             publisher: Arc::new(RecordingEventPublisher::new()),
@@ -463,6 +515,18 @@ impl Fixture {
             Arc::clone(&self.scanner) as _,
             Arc::clone(&self.screen) as _,
             Arc::clone(&self.processor) as _,
+            Arc::clone(&self.cache) as _,
+            Arc::clone(&self.publisher) as _,
+            self.policy.clone(),
+        )
+    }
+
+    pub fn transcode_handler(&self) -> super::command::TranscodeAssetHandler {
+        super::command::TranscodeAssetHandler::new(
+            Arc::clone(&self.assets) as _,
+            Arc::clone(&self.scanner) as _,
+            Arc::clone(&self.screen) as _,
+            Arc::clone(&self.transcoder) as _,
             Arc::clone(&self.cache) as _,
             Arc::clone(&self.publisher) as _,
             self.policy.clone(),
@@ -507,7 +571,7 @@ impl Fixture {
         let cmd = IssueUploadTicketCommand {
             owner_id: owner(),
             kind,
-            declared_mime: jpeg(),
+            declared_mime: mime_for_kind(kind),
             declared_size: 2_000_000,
             content_sha256: None,
             idempotency_key: None,

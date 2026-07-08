@@ -91,11 +91,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 10001 -g nogroup app
 
-# media-server shells out to `ffprobe` (bundled with ffmpeg) to validate uploaded
-# video at finalize. Installed only for this image so the other ~16 fleet images
-# stay lean. `BIN` is re-declared here to be visible in the runtime stage.
+# The media binaries shell out to ffmpeg/ffprobe: media-server validates uploaded
+# video at finalize (ffprobe), media-worker transcodes it to the HLS ladder
+# (ffmpeg). Installed only for these images so the other ~15 fleet images stay
+# lean. `BIN` is re-declared here to be visible in the runtime stage.
 ARG BIN=chat-server
-RUN if [ "$BIN" = "media-server" ]; then \
+RUN if [ "$BIN" = "media-server" ] || [ "$BIN" = "media-worker" ]; then \
         apt-get update && apt-get install -y --no-install-recommends ffmpeg \
         && rm -rf /var/lib/apt/lists/*; \
     fi

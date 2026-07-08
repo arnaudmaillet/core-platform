@@ -66,7 +66,8 @@ terragrunt run-all plan
 `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 ·
 `account` 50059 · `auth` 50060 · `moderation` 50061 · `search` 50062 · `media` 50063 ·
 `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + **8443** (public WSS) ·
-`realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `timeline` **50070**
+`realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `timeline` **50070** ·
+`media-worker` 50071 (health/reflection only — video transcode consumer, no domain RPC)
 
 One port per service. (`timeline` was 50060, moved to 50070 to clear a collision
 with `auth` — PR #522.) Each service owns an error-code namespace, e.g. `TML-`

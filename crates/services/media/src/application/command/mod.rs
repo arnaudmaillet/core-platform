@@ -8,6 +8,7 @@ pub mod commit_upload;
 pub mod delete_asset;
 pub mod issue_ticket;
 pub mod process_asset;
+pub mod transcode_asset;
 
 pub use apply_moderation::{
     ApplyModerationCommand, ApplyModerationHandler, ApplyModerationOutcome, ModerationAction,
@@ -18,3 +19,4 @@ pub use issue_ticket::{
     IssueUploadTicketCommand, IssueUploadTicketHandler, IssueUploadTicketOutcome, PreparedUpload,
 };
 pub use process_asset::{ProcessAssetCommand, ProcessAssetHandler, ProcessOutcome};
+pub use transcode_asset::{TranscodeAssetCommand, TranscodeAssetHandler};
