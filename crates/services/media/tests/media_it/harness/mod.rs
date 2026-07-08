@@ -69,6 +69,7 @@ impl ModerationScreen for ConfigurableScreen {
     async fn screen(
         &self,
         _asset_id: &AssetId,
+        _owner_id: &OwnerId,
         _content_hash: &ContentHash,
         _kind: MediaKind,
     ) -> Result<ScreenDecision, MediaError> {
