@@ -8,9 +8,10 @@ use crate::error::MediaError;
 /// the MIME allowlist, the size ceiling, the rendition ladder, and the leading
 /// segment of the content-addressed storage path.
 ///
-/// v1 is **images-first**. Video is a planned fast-follow and will be added as a
-/// new variant (`Video`) — additively, never by re-numbering — at which point the
-/// allowlist/ceiling/ladder methods grow a video arm.
+/// Images (`Avatar`, `PostImage`) are fully served. `Video` carries the ingest
+/// policy (allowlist / ceiling / storage path) but its transformation pipeline is
+/// still being built — the gRPC surface rejects video upload tickets as
+/// UNIMPLEMENTED until the probe + transcode adapters land.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaKind {
@@ -18,6 +19,8 @@ pub enum MediaKind {
     Avatar,
     /// An image attached to a post — feed-sized ladder.
     PostImage,
+    /// A video attached to a post — adaptive-streaming ladder (manifest + poster).
+    Video,
 }
 
 impl MediaKind {
@@ -25,6 +28,7 @@ impl MediaKind {
         match self {
             Self::Avatar => "avatar",
             Self::PostImage => "post_image",
+            Self::Video => "video",
         }
     }
 
@@ -33,22 +37,31 @@ impl MediaKind {
         match self {
             Self::Avatar => "avatars",
             Self::PostImage => "post-images",
+            Self::Video => "post-videos",
         }
     }
 
-    /// The MIME types accepted for this kind (canonical, lowercase). v1 is the
-    /// modern still-image set; the concrete rendition output format is chosen by
-    /// the pipeline, independent of what was uploaded.
+    /// The MIME types accepted for this kind (canonical, lowercase). Images share
+    /// the modern still-image set; video accepts the interop container baseline
+    /// (MP4 + QuickTime). The concrete rendition output format is chosen by the
+    /// pipeline, independent of what was uploaded.
     pub fn allowed_mime_types(&self) -> &'static [&'static str] {
-        // Same still-image allowlist for both image kinds today.
-        &["image/jpeg", "image/png", "image/webp", "image/avif"]
+        match self {
+            Self::Avatar | Self::PostImage => {
+                &["image/jpeg", "image/png", "image/webp", "image/avif"]
+            }
+            Self::Video => &["video/mp4", "video/quicktime"],
+        }
     }
 
-    /// Hard byte ceiling enforced at ticket time and re-checked on finalize.
+    /// Hard byte ceiling enforced at ticket time and re-checked on finalize. The
+    /// video ceiling is a provisional short-form cap pending the product decision
+    /// on max duration/size.
     pub fn max_bytes(&self) -> u64 {
         match self {
-            Self::Avatar => 10 * 1024 * 1024,     // 10 MiB
-            Self::PostImage => 25 * 1024 * 1024,  // 25 MiB
+            Self::Avatar => 10 * 1024 * 1024,      // 10 MiB
+            Self::PostImage => 25 * 1024 * 1024,   // 25 MiB
+            Self::Video => 200 * 1024 * 1024,      // 200 MiB (short-form cap)
         }
     }
 }
@@ -66,6 +79,7 @@ impl TryFrom<&str> for MediaKind {
         match s {
             "avatar" => Ok(Self::Avatar),
             "post_image" => Ok(Self::PostImage),
+            "video" => Ok(Self::Video),
             other => Err(MediaError::InvalidMediaKind {
                 kind: other.to_owned(),
             }),
@@ -79,7 +93,7 @@ mod tests {
 
     #[test]
     fn string_round_trip() {
-        for k in [MediaKind::Avatar, MediaKind::PostImage] {
+        for k in [MediaKind::Avatar, MediaKind::PostImage, MediaKind::Video] {
             assert_eq!(MediaKind::try_from(k.as_str()).unwrap(), k);
         }
     }
@@ -101,5 +115,19 @@ mod tests {
     fn allowlist_is_the_modern_still_image_set() {
         assert!(MediaKind::Avatar.allowed_mime_types().contains(&"image/webp"));
         assert!(!MediaKind::Avatar.allowed_mime_types().contains(&"video/mp4"));
+    }
+
+    #[test]
+    fn video_accepts_the_container_baseline_not_images() {
+        let allowed = MediaKind::Video.allowed_mime_types();
+        assert!(allowed.contains(&"video/mp4"));
+        assert!(allowed.contains(&"video/quicktime"));
+        assert!(!allowed.contains(&"image/jpeg"));
+    }
+
+    #[test]
+    fn video_has_a_larger_ceiling_and_its_own_storage_segment() {
+        assert!(MediaKind::Video.max_bytes() > MediaKind::PostImage.max_bytes());
+        assert_eq!(MediaKind::Video.path_segment(), "post-videos");
     }
 }

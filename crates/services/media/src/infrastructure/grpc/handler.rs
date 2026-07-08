@@ -251,6 +251,7 @@ fn kind_to_proto(kind: MediaKind) -> i32 {
     match kind {
         MediaKind::Avatar => 1,
         MediaKind::PostImage => 2,
+        MediaKind::Video => 3,
     }
 }
 
