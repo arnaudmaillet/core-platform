@@ -34,7 +34,7 @@ use crate::infrastructure::cdn::CloudFrontCdnGateway;
 use crate::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
 use crate::infrastructure::grpc::MediaServiceHandler;
 use crate::infrastructure::persistence::PgAssetRepository;
-use crate::infrastructure::probe::ImageMediaProbe;
+use crate::infrastructure::probe::{DispatchingMediaProbe, ImageMediaProbe, VideoMediaProbe};
 use crate::infrastructure::processor::ImageRenditionProcessor;
 use crate::infrastructure::scanner::LogMalwareScanner;
 use crate::infrastructure::screen::GrpcModerationScreen;
@@ -160,7 +160,10 @@ impl App {
                 Arc::clone(&store),
                 config.policy.signed_url_ttl,
             )),
-            probe: Arc::new(ImageMediaProbe::new(Arc::clone(&store))),
+            probe: Arc::new(DispatchingMediaProbe::new(
+                Arc::new(ImageMediaProbe::new(Arc::clone(&store))),
+                Arc::new(VideoMediaProbe::new(Arc::clone(&store))),
+            )),
             processor: Arc::new(ImageRenditionProcessor::new(Arc::clone(&store))),
             scanner: Arc::new(LogMalwareScanner),
             screen: Arc::new(GrpcModerationScreen::new(screen_channel)),

@@ -35,6 +35,10 @@ impl MimeType {
         self.0.starts_with("image/")
     }
 
+    pub fn is_video(&self) -> bool {
+        self.0.starts_with("video/")
+    }
+
     /// The conventional file extension for this type, used when building a
     /// content-addressed rendition key. Falls back to the subtype.
     pub fn extension(&self) -> &str {
