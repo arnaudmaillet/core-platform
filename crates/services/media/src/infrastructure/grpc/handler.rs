@@ -216,6 +216,10 @@ fn kind_from_proto(value: i32) -> Result<MediaKind, Status> {
     match value {
         1 => Ok(MediaKind::Avatar),
         2 => Ok(MediaKind::PostImage),
+        // MEDIA_KIND_VIDEO — a defined contract value whose ingest/transcode
+        // pipeline is a staged fast-follow. Reject as UNIMPLEMENTED (not a client
+        // error) so callers can tell "not yet built" from "bad request".
+        3 => Err(Status::unimplemented("video upload is not yet supported")),
         other => Err(Status::invalid_argument(format!("unsupported media kind: {other}"))),
     }
 }
@@ -361,5 +365,31 @@ fn to_status(err: MediaError) -> Status {
         503 => Status::unavailable(message),
         504 => Status::deadline_exceeded(message),
         _ => Status::internal(message),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tonic::Code;
+
+    #[test]
+    fn image_kinds_map_to_their_domain_variants() {
+        assert_eq!(kind_from_proto(1).unwrap(), MediaKind::Avatar);
+        assert_eq!(kind_from_proto(2).unwrap(), MediaKind::PostImage);
+    }
+
+    #[test]
+    fn video_kind_is_unimplemented_not_a_bad_request() {
+        // Contract-first: VIDEO is a defined enum value whose pipeline isn't built.
+        // Callers must be able to tell "not yet supported" from a malformed kind.
+        let status = kind_from_proto(3).unwrap_err();
+        assert_eq!(status.code(), Code::Unimplemented);
+    }
+
+    #[test]
+    fn unknown_kinds_are_invalid_argument() {
+        assert_eq!(kind_from_proto(0).unwrap_err().code(), Code::InvalidArgument);
+        assert_eq!(kind_from_proto(99).unwrap_err().code(), Code::InvalidArgument);
     }
 }
