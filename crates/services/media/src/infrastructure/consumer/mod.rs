@@ -11,9 +11,11 @@
 
 pub mod moderation_consumer;
 pub mod process_consumer;
+pub mod transcode_consumer;
 
 pub use moderation_consumer::run_moderation_consumer;
 pub use process_consumer::run_process_consumer;
+pub use transcode_consumer::run_transcode_consumer;
 
 use crate::error::MediaError;
 
