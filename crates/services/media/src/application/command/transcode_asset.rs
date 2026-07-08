@@ -82,7 +82,8 @@ impl TranscodeAssetHandler {
 
         // 2. Pre-publish moderation screen (fail-closed, hard timeout).
         let asset_id = asset.id();
-        let lookup = self.screen.screen(&asset_id, &hash, asset.kind());
+        let owner_id = asset.owner_id();
+        let lookup = self.screen.screen(&asset_id, &owner_id, &hash, asset.kind());
         let decision = match tokio::time::timeout(self.policy.screen_timeout, lookup).await {
             Ok(result) => result?,
             Err(_elapsed) => return Err(MediaError::ScreenUnavailable),
