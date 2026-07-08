@@ -8,15 +8,20 @@ option go_package = "github.com/coreplatform/media/v1;mediav1";
 
 // The kind of media an asset holds. `kind` drives the validation policy (MIME
 // allowlist, size ceiling), the rendition ladder generated for it, and the
-// content-addressed storage path. v1 is IMAGES-FIRST; video transcoding is a
-// planned fast-follow phase and will be added as a new, additive enum value
-// (MEDIA_KIND_VIDEO) — never by renumbering these.
+// content-addressed storage path. Images (AVATAR, POST_IMAGE) are fully served.
+// VIDEO is contract-first: the enum value is defined so clients can model it and
+// generate types, but the ingest/transcode pipeline is a staged fast-follow — the
+// service rejects video upload tickets as UNIMPLEMENTED until it lands. Grow this
+// enum additively; never renumber.
 enum MediaKind {
     MEDIA_KIND_UNSPECIFIED = 0;
     // A profile/account avatar — square-cropped rendition ladder.
     MEDIA_KIND_AVATAR      = 1;
     // An image attached to a post — feed-sized rendition ladder.
     MEDIA_KIND_POST_IMAGE  = 2;
+    // A video attached to a post — adaptive-streaming ladder (manifest + poster).
+    // Contract-first: not yet accepted for upload (see the enum note above).
+    MEDIA_KIND_VIDEO       = 3;
 }
 
 // The asset lifecycle state machine. An asset is created PENDING at ticket time,
@@ -45,8 +50,11 @@ enum AssetState {
 
 // A derivative of an asset. Each rendition is a separately-stored, content-
 // addressed object; the caller receives a URL to it via the delivery plane, never
-// the bytes. v1 renditions are image size buckets; the concrete format (WebP/AVIF/
-// JPEG) is carried per-rendition by its mime_type, not by this enum.
+// the bytes. Image renditions are size buckets; video renditions are the playback
+// manifest and a poster. In both cases the concrete format (image WebP/AVIF/JPEG,
+// or streaming HLS/DASH) is carried per-rendition by its mime_type, not by this
+// enum. Video renditions are contract-first — populated once the transcode
+// pipeline lands.
 enum RenditionKind {
     MEDIA_RENDITION_KIND_UNSPECIFIED = 0;
     // The validated master (post-probe, pre-derivation source of truth).
@@ -55,6 +63,11 @@ enum RenditionKind {
     MEDIA_RENDITION_KIND_SMALL       = 3;
     MEDIA_RENDITION_KIND_MEDIUM      = 4;
     MEDIA_RENDITION_KIND_LARGE       = 5;
+    // The adaptive-streaming playback manifest — a video's playback entry point.
+    // Concrete packaging (HLS m3u8 / DASH mpd) rides in its mime_type.
+    MEDIA_RENDITION_KIND_MANIFEST    = 6;
+    // A still poster frame for feed first-paint before playback starts.
+    MEDIA_RENDITION_KIND_POSTER      = 7;
 }
 
 // How a delivery URL is brokered. PUBLIC media gets a content-addressed, immutable
