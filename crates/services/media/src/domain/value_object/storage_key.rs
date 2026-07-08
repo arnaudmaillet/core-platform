@@ -46,6 +46,14 @@ impl StorageKey {
         ))
     }
 
+    /// A named object within a video asset's content-addressed HLS output tree
+    /// (`{kind}/{content_hash}/{relative}`), e.g. `master.m3u8`, `poster.jpg`, or a
+    /// rung segment `1080w/seg_001.m4s`. Same content-addressing guarantee as
+    /// [`rendition`](Self::rendition): the whole tree is immutable per content hash.
+    pub fn video_object(kind: MediaKind, hash: &ContentHash, relative: &str) -> Self {
+        Self(format!("{}/{}/{}", kind.path_segment(), hash.as_str(), relative.trim_start_matches('/')))
+    }
+
     /// Wraps a key read back from storage.
     pub fn from_raw(value: impl Into<String>) -> Self {
         Self(value.into())
@@ -100,5 +108,19 @@ mod tests {
         let a = StorageKey::rendition(MediaKind::Avatar, &hash(), RenditionKind::Original, "jpg");
         let b = StorageKey::rendition(MediaKind::Avatar, &hash(), RenditionKind::Original, "jpg");
         assert_eq!(a, b, "content-addressing must be deterministic");
+    }
+
+    #[test]
+    fn video_object_keys_live_under_the_content_addressed_tree() {
+        let h = hash();
+        assert_eq!(
+            StorageKey::video_object(MediaKind::Video, &h, "master.m3u8").as_str(),
+            format!("post-videos/{}/master.m3u8", h.as_str())
+        );
+        // A leading slash in the relative path is normalized (no double slash).
+        assert_eq!(
+            StorageKey::video_object(MediaKind::Video, &h, "/1080w/seg_001.m4s").as_str(),
+            format!("post-videos/{}/1080w/seg_001.m4s", h.as_str())
+        );
     }
 }

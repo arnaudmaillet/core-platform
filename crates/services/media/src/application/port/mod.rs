@@ -19,6 +19,7 @@ pub mod malware_scanner;
 pub mod media_probe;
 pub mod moderation_screen;
 pub mod object_store;
+pub mod video_transcoder;
 
 pub use asset_repository::AssetRepository;
 pub use cdn_gateway::{CdnGateway, ResolvedUrl};
@@ -29,3 +30,4 @@ pub use malware_scanner::{MalwareScanner, ScanVerdict};
 pub use media_probe::{MediaProbe, MediaProbeReport};
 pub use moderation_screen::{ModerationScreen, ScreenDecision};
 pub use object_store::{ObjectHead, ObjectStore, PresignedUpload};
+pub use video_transcoder::{TranscodeOutput, VideoTranscoder};
