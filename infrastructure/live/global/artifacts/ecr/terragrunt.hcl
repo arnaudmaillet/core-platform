@@ -23,8 +23,12 @@ inputs = {
     "migrator",
     # Kafka topic provisioning from the event-topology registry (PreSync Job).
     "topic-provisioner",
-    # BuildKit registry cache sink for the CI image builds (tag = BIN name).
-    "buildcache",
+    # NB: no "buildcache" repo. The BuildKit cook cache lives on GHCR, not ECR —
+    # the runners are on GitHub, so an ECR-hosted cache billed egress on every
+    # pull (1,028 GB / 83.55 USD in July 2026, the account's largest line). It was
+    # also the one repo the shared `imageCountMoreThan: 30` lifecycle rule broke:
+    # 44 cache tags in a single repo meant 14 were always expiring in rotation.
+    # See .github/workflows/fleet-images-deploy.yml.
     # ── Existing fleet (servers) ─────────────────────────────────────────────
     "chat-server",
     "social-graph-server",

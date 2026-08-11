@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: f697ecfd8c02a6d32eb5b487c9e05315a41fca99681d32e86901105c0ed423c6
-  translated_at: 2026-07-03
+  source_sha256: 32b27bb158632cfb9cf3bdd94a4b36da7dc371de5b10f3196025241c5846d288
+  translated_at: 2026-08-11
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -83,7 +83,7 @@ Tous les environnements ciblent le compte AWS `724772065879` / `us-east-1`, part
 
 **Modules** (`infrastructure/modules/`) : `networking/{vpc,route53}`, `eks`, `artifacts/ecr`, `security/irsa-roles`, `kubernetes/argocd`, `elasticache`, `msk`, `opensearch`, `s3-bucket` (générique ; paramètre Object-Lock), `kms-key`.
 
-**Arbre Terragrunt live** (`infrastructure/live/<env>/us-east-1/`) : `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. L'état distant (S3 + fichier de verrou) et les providers sont générés centralement par `root.hcl`. `global/artifacts/ecr` est la liste de registre faisant autorité, partagée au niveau du compte (tous les binaires de la flotte + `migrator` + `buildcache`).
+**Arbre Terragrunt live** (`infrastructure/live/<env>/us-east-1/`) : `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. L'état distant (S3 + fichier de verrou) et les providers sont générés centralement par `root.hcl`. `global/artifacts/ecr` est la liste de registre faisant autorité, partagée au niveau du compte (tous les binaires de la flotte + `migrator` + `topic-provisioner`). Le cache BuildKit de la couche `cook` de la CI n'y est délibérément *pas* : il vit sur GHCR, où l'egress vers les runners GitHub est gratuit.
 
 ### 2.3 Magasins de données managés (staging)
 

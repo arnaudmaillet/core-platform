@@ -30,11 +30,18 @@
 #                only this layer, never the third-party cook layer.
 #
 # Caching is layer-based (no `target` cache mount) so it is portable and
-# deterministic across ephemeral CI runners via a registry-backed BuildKit cache:
+# deterministic across ephemeral CI runners via a registry-backed BuildKit cache.
+#
+# NB the cache ref is keyed on the ARCH ONLY, never on BIN: `cargo chef cook`
+# below runs *before* `ARG BIN`, so the cooked layer is byte-identical for all 22
+# binaries and one ref per arch serves the whole matrix. Keying it per-BIN stored
+# 22 redundant copies per arch and cost 1 TB/month of registry egress (see
+# .github/workflows/fleet-images-deploy.yml). The per-BIN *build* layer is not
+# cacheable across a push either — `COPY . .` sits above `cargo build -p $BIN`,
+# so any source edit invalidates it for every binary.
 #
 #   docker buildx build -f deploy/Dockerfile --build-arg BIN=$BIN \
-#     --cache-to   type=registry,ref=<ecr>/buildcache:$BIN,mode=max \
-#     --cache-from type=registry,ref=<ecr>/buildcache:$BIN \
+#     --cache-from type=registry,ref=ghcr.io/<owner>/core-platform-buildcache:cook-$ARCH \
 #     -t <ecr>/core-platform-$BIN:$TAG --push .
 
 # ── Chef base ─────────────────────────────────────────────────────────────────
