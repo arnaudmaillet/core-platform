@@ -71,7 +71,7 @@ All environments target AWS account `724772065879` / `us-east-1`, sharing one EC
 
 **Modules** (`infrastructure/modules/`): `networking/{vpc,route53}`, `eks`, `artifacts/ecr`, `security/irsa-roles`, `kubernetes/argocd`, `elasticache`, `msk`, `opensearch`, `s3-bucket` (generic; Object-Lock parameter), `kms-key`.
 
-**Terragrunt live tree** (`infrastructure/live/<env>/us-east-1/`): `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. Remote state (S3 + lockfile) and providers are generated centrally by `root.hcl`. `global/artifacts/ecr` is the account-shared, authoritative registry list (all fleet binaries + `migrator` + `buildcache`).
+**Terragrunt live tree** (`infrastructure/live/<env>/us-east-1/`): `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. Remote state (S3 + lockfile) and providers are generated centrally by `root.hcl`. `global/artifacts/ecr` is the account-shared, authoritative registry list (all fleet binaries + `migrator` + `topic-provisioner`). The CI's BuildKit cook cache is deliberately *not* here — it lives on GHCR, where egress to the GitHub runners is free.
 
 ### 2.3 Managed data stores (staging)
 

@@ -6,9 +6,37 @@
 #
 # Auth + region come from the same repo secrets the existing deploy workflows use
 # (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION). Each binary is built in
-# parallel with a per-BIN BuildKit registry cache (core-platform-buildcache:<bin>),
-# so a source edit only rebuilds the workspace+build layer — the cargo-chef cook
-# layer (librdkafka, tonic, scylla, sqlx…) is reused.
+# parallel, reusing a shared BuildKit registry cache of the cargo-chef cook layer
+# (librdkafka, tonic, scylla, sqlx…) so a source edit only rebuilds the workspace+
+# build layer.
+#
+# ── Why the cache lives on GHCR, keyed per-ARCH ────────────────────────────────
+# It used to be an ECR ref keyed per (BIN, ARCH). Both halves of that were wrong
+# and cost real money — July 2026 billed 83.55 USD for 1,028 GB of ECR
+# DataTransfer-Out, the single largest line on the account:
+#
+#   1. WRONG REGISTRY. The runners are on GitHub, so every cache pull/push
+#      crossed the AWS egress boundary at ~0.09 USD/GB. 44 jobs × a multi-GB
+#      mode=max Rust cache ≈ 8–15 USD *per push to develop*. GHCR sits on the
+#      same network as the runners: that traffic is free.
+#   2. WRONG KEY. `cargo chef cook` runs BEFORE `ARG BIN` in deploy/Dockerfile,
+#      so the cooked layer is byte-identical for all 22 binaries — the per-BIN
+#      key stored 22 redundant copies of it per arch. And the per-BIN *build*
+#      layer it seemed to protect is worthless anyway: `COPY . .` sits above
+#      `cargo build -p $BIN`, so any source edit busts it for every binary.
+#      Only the cook layer is cacheable across a push, and it is arch-scoped.
+#      44 refs → 2.
+#
+# Aggravating factor now removed: all 44 tags lived in ONE ECR repo, and the ECR
+# module applies `imageCountMoreThan: 30 → expire` to every repo — so 14 cache
+# entries were permanently expiring in rotation. We paid egress for a cache that
+# could not, by construction, ever be complete. The buildcache repo is dropped
+# from the ECR repo list in the same change.
+#
+# Only ONE job per arch writes the cache (CACHE_WRITER_BIN) — otherwise 22
+# concurrent jobs would each upload the full mode=max export to the same ref,
+# last-writer-wins, for no benefit. Every job reads it. If the writer job fails,
+# the previous cache stays readable: the next run is warm-but-stale, never cold.
 #
 # Each image is tagged with the immutable :<git-sha> (the deployment handle) and a
 # floating :staging (convenience only). After the matrix succeeds, the
@@ -45,6 +73,12 @@ jobs:
     # repos and compiles at full speed. Each (bin, arch) pushes an arch-suffixed
     # tag; the stitch job below merges them into one multi-arch manifest.
     runs-on: ${{ matrix.arch.runner }}
+    # packages: write — push/pull the BuildKit cook cache on GHCR with GITHUB_TOKEN.
+    # Job-level `permissions` replaces the workflow default wholesale, so
+    # contents: read is restated here.
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -91,6 +125,16 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Cache registry. Images stay on ECR (the overlays and Karpenter pull from
+      # there); only the BuildKit cache moves to GHCR, where egress to these
+      # runners is free. GITHUB_TOKEN is enough — no new secret.
+      - name: Login to GHCR (BuildKit cache)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -100,13 +144,35 @@ jobs:
           BIN: ${{ matrix.bin }}
           ARCH: ${{ matrix.arch.suffix }}
           PLATFORM: ${{ matrix.arch.platform }}
+          # Arch-scoped, NOT bin-scoped: the cook layer is identical across all
+          # 22 binaries (see the header). Lowercased — GHCR rejects uppercase
+          # path segments, and github.repository_owner preserves the account's case.
+          CACHE_REF: ghcr.io/${{ github.repository_owner }}/core-platform-buildcache
+          # The single designated cache writer for this arch. Any binary produces
+          # the same cook layer, so the choice is arbitrary and stable.
+          CACHE_WRITER_BIN: migrator
         run: |
+          set -euo pipefail
+          ref="$(echo "$CACHE_REF" | tr '[:upper:]' '[:lower:]'):cook-$ARCH"
+
+          # Every job reads the shared cook cache; exactly one writes it back.
+          #   image-manifest+oci-mediatypes: GHCR stores the cache as a normal OCI
+          #     manifest. Without them BuildKit exports its own cache-manifest
+          #     media type, which GHCR rejects.
+          #   ignore-error: the cache is an optimization, never a deliverable — a
+          #     failed export must not fail a fleet image build.
+          cache_to=""
+          if [ "$BIN" = "$CACHE_WRITER_BIN" ]; then
+            cache_to="--cache-to=type=registry,ref=$ref,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
+            echo "::notice::$BIN is the cook-cache writer for $ARCH ($ref)"
+          fi
+
           docker buildx build \
             -f deploy/Dockerfile \
             --platform "$PLATFORM" \
             --build-arg BIN="$BIN" \
-            --cache-from type=registry,ref="$REG/core-platform-buildcache:$BIN-$ARCH" \
-            --cache-to   type=registry,ref="$REG/core-platform-buildcache:$BIN-$ARCH",mode=max \
+            --cache-from="type=registry,ref=$ref" \
+            $cache_to \
             -t "$REG/core-platform-$BIN:${{ github.sha }}-$ARCH" \
             --push .
 
