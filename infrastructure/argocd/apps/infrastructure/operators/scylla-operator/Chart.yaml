@@ -8,5 +8,5 @@ name: scylla-operator-wrapper
 version: 1.0.0
 dependencies:
   - name: scylla-operator
-    version: "1.14.0"
+    version: "v1.22.0"
     repository: https://storage.googleapis.com/scylla-operator-charts/stable

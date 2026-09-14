@@ -6,7 +6,18 @@ module "eks" {
   version = "~> 20.0"
 
   cluster_name    = var.cluster_name
-  cluster_version = "1.31"
+  cluster_version = var.cluster_version
+
+  # Upgrade policy. EXTENDED (the AWS default) lets a cluster sit on a version
+  # past its 14 months of standard support, billed 0.60 USD/h instead of 0.10 —
+  # July 2026's bill was 6x the base control-plane rate for exactly that reason
+  # (1.31 had been in extended support since 2025-11). STANDARD auto-upgrades
+  # the control plane at end of standard support instead, so extended-support
+  # fees can never accrue; the price is an unscheduled forced upgrade. Staging
+  # (disposable) runs STANDARD; prod keeps EXTENDED so its upgrades stay piloted.
+  cluster_upgrade_policy = {
+    support_type = var.cluster_support_type
+  }
 
   # Private access is always on (in-VPC/node traffic stays off the public path).
   # Public access stays on so kubectl/Terraform reach the API, but the allow-list

@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 65d858eb1f382d6c15eea644364318f6c407f45663ede1524750978dd32c7ca4
+  source_sha256: b43934690563b6a2f7cef6534e00abc370a2fb9e7a59a97228bcaa6768869a16
   translated_at: 2026-09-15
   status: complete
 ---
@@ -82,6 +82,8 @@ Tous les environnements ciblent le compte AWS `724772065879` / `us-east-1`, part
 ### 2.2 Modules Terraform et structure Terragrunt
 
 **Modules** (`infrastructure/modules/`) : `networking/{vpc,route53}`, `eks`, `artifacts/ecr`, `security/irsa-roles`, `kubernetes/argocd`, `elasticache`, `msk`, `opensearch`, `s3-bucket` (générique ; paramètre Object-Lock), `kms-key`.
+
+**Politique de version Kubernetes.** Le control plane est épinglé dans `modules/eks` (`cluster_version`, actuellement **1.36**) et doit rester sur une version en support *standard* EKS : une version en support étendu est facturée 0,60 USD/h au lieu de 0,10 (6x — juillet 2026 a payé exactement cela sur 1.31), et à la fin du support étendu AWS met à jour le control plane de force, à un moment non annoncé. Vérifier `aws eks describe-cluster-versions` avant la date de fin de support standard de la version épinglée (1.36 : 2027-08-02) et monter de version en même temps que les pins de la plateforme qui conditionnent une mineure (version minimale de Karpenter par mineure k8s, KEDA, CNPG, ESO, cert-manager). Staging fixe la politique de mise à jour du cluster à `STANDARD` (mise à jour automatique en fin de support standard, les frais de support étendu ne peuvent jamais courir sur un environnement jetable) ; prod garde `EXTENDED` pour que ses mises à jour restent pilotées.
 
 **Arbre Terragrunt live** (`infrastructure/live/<env>/us-east-1/`) : `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. L'état distant (S3 + fichier de verrou) et les providers sont générés centralement par `root.hcl`. `global/artifacts/ecr` est la liste de registre faisant autorité, partagée au niveau du compte (tous les binaires de la flotte + `migrator` + `topic-provisioner`). La CI ne conserve *aucun* cache de build côté registre (les artefacts compilés sont mis en cache côté runner, sur le cache GitHub Actions), ECR ne reçoit donc que des push d'images — la ligne d'egress de juillet 2026 (83,55 USD de `DataTransfer-Out` ECR dus à un cache BuildKit par binaire) ne peut pas se reproduire.
 

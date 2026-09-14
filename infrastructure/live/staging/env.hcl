@@ -25,6 +25,9 @@ locals {
       # mediums; t3.large is kept anyway — the saturation was also a CPU/mem
       # headroom signal, not just a pod-slot one.
       instance_types = ["t3.large"]
+      # Explicit: EKS publishes no AL2 AMI for 1.33+, and the module leaves
+      # ami_type to the API default. Prod pins the ARM flavour the same way.
+      ami_type       = "AL2023_x86_64_STANDARD"
       min_size       = 2
       max_size       = 3
       desired_size   = 2
@@ -36,6 +39,7 @@ locals {
     }
     database = {
       instance_types = ["t3.large"]
+      ami_type       = "AL2023_x86_64_STANDARD"
       # 3 nodes: one per Scylla member — the fleet's keyspaces are created at
       # NetworkTopologyStrategy RF 3 (per-service migrations) and every write
       # is LOCAL_QUORUM, so fewer than 2 live members fails ALL writes (found

@@ -113,7 +113,16 @@ resource "aws_iam_role_policy" "karpenter_controller_extra" {
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeImages",
           "ec2:DescribeSpotPriceHistory",
-          "ssm:GetParameter"
+          "ssm:GetParameter",
+          # Karpenter >= 1.7: instance profiles live under a per-cluster path
+          # ("/karpenter/<region>/<cluster>/<nodeclass-uid>/") and are listed.
+          "iam:ListInstanceProfiles",
+          # Karpenter >= 1.11: placement-group aware launches.
+          "ec2:DescribePlacementGroups",
+          # Karpenter >= 1.12: interruption handling reads instance status.
+          "ec2:DescribeInstanceStatus",
+          # Live on-demand/spot pricing (falls back to a stale static table when denied).
+          "pricing:GetProducts"
         ]
         Effect   = "Allow"
         Resource = "*"

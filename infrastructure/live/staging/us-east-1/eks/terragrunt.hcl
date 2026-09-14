@@ -33,6 +33,10 @@ inputs = {
   vpc_cidr           = dependency.vpc.outputs.vpc_cidr_block
   node_groups        = local.env_vars.locals.node_groups
 
+  # Disposable env: never pay EKS extended support. AWS auto-upgrades the
+  # control plane at end of standard support instead (see modules/eks).
+  cluster_support_type = "STANDARD"
+
   # Tighten the public API endpoint to your admin/CI ranges when ready, e.g.:
   # endpoint_public_access_cidrs = ["203.0.113.4/32"]
 
