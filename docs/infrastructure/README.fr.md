@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 32b27bb158632cfb9cf3bdd94a4b36da7dc371de5b10f3196025241c5846d288
-  translated_at: 2026-08-11
+  source_sha256: 65d858eb1f382d6c15eea644364318f6c407f45663ede1524750978dd32c7ca4
+  translated_at: 2026-09-15
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`README.md`](./README.md) fait foi.
@@ -27,7 +27,7 @@ i18n:
 
 ### 1.1 Modèle de composition
 
-La plateforme est un unique espace de travail Rust (`crates/`) compilé en **images de conteneur par binaire** via un `deploy/Dockerfile` générique et optimisé pour le cache (`--build-arg BIN=<package>`). Chaque service est un crate hexagonal orienté domaine (DDD : `domain → application(ports) → infrastructure(adaptateurs)`), exposé par un ou plusieurs binaires déployables. Les préoccupations transverses sont des crates de fondation partagés (`service-runtime`, `transport` (Kafka + gRPC), `cqrs`, adaptateurs de stockage Postgres/Scylla/Redis, `auth-context`, `telemetry`).
+La plateforme est un unique espace de travail Rust (`crates/`) compilé en **images de conteneur par binaire** via un `deploy/Dockerfile` générique (`--build-arg BIN=<package>`, la route cargo-chef pour les builds locaux/compose). La CI compile les 23 binaires en **un seul `cargo build` par architecture** sur le runner (cache de compilation côté runner) et empaquette chacun dans le stage `runtime` du Dockerfile via `deploy/docker-bake.hcl` — aucune compilation dans Docker, aucun cache de build côté registre. Chaque service est un crate hexagonal orienté domaine (DDD : `domain → application(ports) → infrastructure(adaptateurs)`), exposé par un ou plusieurs binaires déployables. Les préoccupations transverses sont des crates de fondation partagés (`service-runtime`, `transport` (Kafka + gRPC), `cqrs`, adaptateurs de stockage Postgres/Scylla/Redis, `auth-context`, `telemetry`).
 
 Deux plans de contrats régissent l'intégration, tous deux contrôlés à la compilation :
 
@@ -41,7 +41,7 @@ Le niveau (« tier ») est un contrat d'exécution explicite (label de pod `tier
 | Niveau | Posture | Services | Signification |
 |---|---|---|---|
 | **TIER-0** | **Fail-closed** | `auth` (50060), `moderation` (50061), `audit-server` (50068), `audit-worker` (50069) | Identité, confiance/sécurité, conformité infalsifiable. Exactitude prioritaire sur disponibilité — p. ex. audit refuse une écriture privilégiée non enregistrable (« break-glass »). |
-| **TIER-1** | **Fail-open** | `counter-server/worker` (50064/50065), `media` (50063), `search` (50062), `realtime-gateway` (8443/50066), `realtime-dispatcher` (50067) | Systèmes-de-Référence / -de-Connexion / -de-Livraison. Disponibilité prioritaire — dégradation gracieuse, re-dérivation depuis les SoR amont. |
+| **TIER-1** | **Fail-open** | `counter-server/worker` (50064/50065), `media` (50063), `media-worker` (50071), `search` (50062), `realtime-gateway` (8443/50066), `realtime-dispatcher` (50067) | Systèmes-de-Référence / -de-Connexion / -de-Livraison. Disponibilité prioritaire — dégradation gracieuse, re-dérivation depuis les SoR amont. |
 | **Cœur (implicite)** | Mixte | `account` (50059), `profile` (50052), `social-graph` (50053), `post` (50056), `comment` (50057), `engagement` (50058), `geo-discovery` (50054), `notification` (50055), `timeline` (50070), `chat` (50051) | Les Systèmes-d'Enregistrement du graphe social et les modèles de lecture. |
 
 Les ports internes sont des ClusterIP par service ; chaque service possède désormais un port distinct (`timeline` déplacé de 50060 → 50070 pour lever sa réutilisation du port d'`auth`).
@@ -51,7 +51,7 @@ Les ports internes sont des ClusterIP par service ; chaque service possède dés
 La flotte se résout en **quatre** archétypes réutilisables, distingués par caractéristique d'exécution plutôt que par domaine :
 
 1. **Serveur RPC** — lié aux requêtes, gRPC, mis à l'échelle sur le CPU. La disponibilité (« readiness ») dépend du health gRPC typé (`SERVING` uniquement après succès des sondes backend) ; la vivacité (« liveness ») ne vérifie que le processus, de sorte qu'une interruption backend transitoire retire le pod de la rotation sans boucle de redémarrage. *(tous les binaires `*-server`)*
-2. **Worker de flux** — lié à la consommation Kafka, sans RPC métier (plan health/reflection uniquement), mis à l'échelle sur le **retard du groupe de consommateurs**. *(`counter-worker`, `audit-worker`, `realtime-dispatcher`)*
+2. **Worker de flux** — lié à la consommation Kafka, sans RPC métier (plan health/reflection uniquement), mis à l'échelle sur le **retard du groupe de consommateurs**. *(`counter-worker`, `audit-worker`, `realtime-dispatcher`, `media-worker`)*
 3. **Périphérie à état** — `realtime-gateway` : détient une table de connexions longue durée (un socket en « future parquée » par appareil, conception C10M), mis à l'échelle sur connexions/mémoire, protégé par un **PodDisruptionBudget** pour des drainages progressifs, exposé publiquement via un **NLB L4** (jamais un ALB — cf. §2.5).
 4. **Init-container de migration** — chaque service adossé à Postgres/Scylla exécute le `migrator` partagé en init-container idempotent (`args: [<service>]`) avant le conteneur d'exécution ; les services bi-stores (`counter`, `moderation`) en exécutent un par backend.
 
@@ -60,7 +60,7 @@ La flotte se résout en **quatre** archétypes réutilisables, distingués par c
 | Mécanisme | Déclencheur | Charges de travail |
 |---|---|---|
 | **HPA** | CPU | `auth`, `moderation`, `counter-server`, `media`, `search`, `realtime-gateway`, `audit-server` |
-| **KEDA ScaledObject** | Retard du groupe de consommateurs Kafka | `counter-worker` (max 12), `realtime-dispatcher` (max 8), `audit-worker` (max 4) |
+| **KEDA ScaledObject** | Retard du groupe de consommateurs Kafka | `counter-worker` (max 12), `realtime-dispatcher` (max 8), `audit-worker` (max 4), `media-worker` (max 6) |
 | **PDB** | Plancher en cas de perturbation volontaire | `realtime-gateway` (minAvailable 1) |
 
 KEDA est un prérequis ferme (opérateur en sync-wave GitOps −10). Une extension `nameReference` de Kustomize propage le `namePrefix` d'environnement dans `ScaledObject.scaleTargetRef` et `TriggerAuthentication.authenticationRef` (le transformateur intégré couvre l'HPA mais pas les CRD `keda.sh`) — sans elle, un scaler préfixé cible silencieusement un Deployment inexistant. **Le maxReplicaCount d'un scaler sur retard ne doit jamais excéder le nombre de partitions du topic** (un groupe de consommateurs ne peut pas se paralléliser au-delà de ses partitions).
@@ -83,7 +83,7 @@ Tous les environnements ciblent le compte AWS `724772065879` / `us-east-1`, part
 
 **Modules** (`infrastructure/modules/`) : `networking/{vpc,route53}`, `eks`, `artifacts/ecr`, `security/irsa-roles`, `kubernetes/argocd`, `elasticache`, `msk`, `opensearch`, `s3-bucket` (générique ; paramètre Object-Lock), `kms-key`.
 
-**Arbre Terragrunt live** (`infrastructure/live/<env>/us-east-1/`) : `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. L'état distant (S3 + fichier de verrou) et les providers sont générés centralement par `root.hcl`. `global/artifacts/ecr` est la liste de registre faisant autorité, partagée au niveau du compte (tous les binaires de la flotte + `migrator` + `topic-provisioner`). Le cache BuildKit de la couche `cook` de la CI n'y est délibérément *pas* : il vit sur GHCR, où l'egress vers les runners GitHub est gratuit.
+**Arbre Terragrunt live** (`infrastructure/live/<env>/us-east-1/`) : `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. L'état distant (S3 + fichier de verrou) et les providers sont générés centralement par `root.hcl`. `global/artifacts/ecr` est la liste de registre faisant autorité, partagée au niveau du compte (tous les binaires de la flotte + `migrator` + `topic-provisioner`). La CI ne conserve *aucun* cache de build côté registre (les artefacts compilés sont mis en cache côté runner, sur le cache GitHub Actions), ECR ne reçoit donc que des push d'images — la ligne d'egress de juillet 2026 (83,55 USD de `DataTransfer-Out` ECR dus à un cache BuildKit par binaire) ne peut pas se reproduire.
 
 ### 2.3 Magasins de données managés (staging)
 
@@ -162,7 +162,7 @@ Terragrunt résout le DAG via `run-all apply` ; l'ordre explicite (chacun consom
 
 ### 3.3 Étapes manuelles et substituts (placeholders)
 
-Les substituts d'endpoint (`<<…>>`) sont remplacés à partir des sorties Terragrunt au moment du déploiement (dans les fichiers `.env` et les patches de scaler KEDA) : `<<MSK_BOOTSTRAP_BROKERS_SASL_SCRAM>>`, `<<ELASTICACHE_CONFIG_ENDPOINT>>`, `<<OPENSEARCH_ENDPOINT>>`, `<<ACM_CERTIFICATE_ARN>>` (TLS du NLB), `<<KEYCLOAK_TOKEN_ENDPOINT>>`, `<<AUTH_JWKS_URL>>`. De plus : provisionner les secrets du §3.2 ; vérifier que chaque topic mis à l'échelle sur retard dispose de **≥ maxReplicaCount partitions** (`counter`=12, `realtime`=8, `audit`=4) ; construire/pousser les images via la CI matricielle `fleet-images-deploy` vers `:staging`.
+Les substituts d'endpoint (`<<…>>`) sont remplacés à partir des sorties Terragrunt au moment du déploiement (dans les fichiers `.env` et les patches de scaler KEDA) : `<<MSK_BOOTSTRAP_BROKERS_SASL_SCRAM>>`, `<<ELASTICACHE_CONFIG_ENDPOINT>>`, `<<OPENSEARCH_ENDPOINT>>`, `<<ACM_CERTIFICATE_ARN>>` (TLS du NLB), `<<KEYCLOAK_TOKEN_ENDPOINT>>`, `<<AUTH_JWKS_URL>>`. De plus : provisionner les secrets du §3.2 ; vérifier que chaque topic mis à l'échelle sur retard dispose de **≥ maxReplicaCount partitions** (`counter`=12, `realtime`=8, `audit`=4, `media`=6) ; construire/pousser les images via la CI `fleet-images-deploy` vers `:staging`.
 
 ### 3.4 Mises en garde Jour-1 et reports connus
 
@@ -176,7 +176,7 @@ Les substituts d'endpoint (`<<…>>`) sont remplacés à partir des sorties Terr
 
 ## Annexe A — Allocation des ports
 
-`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069.
+`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `media-worker` 50071 (health/reflection uniquement).
 
 ## Annexe B — Catalogue des topics
 

@@ -15,7 +15,7 @@
 
 ### 1.1 Composition model
 
-The platform is a single Rust workspace (`crates/`) compiled into **per-binary container images** via one generic, cache-optimized `deploy/Dockerfile` (`--build-arg BIN=<package>`). Each service is a Domain-Driven, hexagonal crate (`domain → application(ports) → infrastructure(adapters)`) fronted by one or more deployable binaries. Cross-cutting concerns are shared foundation crates (`service-runtime`, `transport` (Kafka + gRPC), `cqrs`, storage adapters for Postgres/Scylla/Redis, `auth-context`, `telemetry`).
+The platform is a single Rust workspace (`crates/`) compiled into **per-binary container images** via one generic `deploy/Dockerfile` (`--build-arg BIN=<package>`, the cargo-chef route for local/compose builds). CI compiles all 23 binaries in **one `cargo build` per architecture** on the runner (runner-side compile cache) and bakes each into the Dockerfile's `runtime` stage via `deploy/docker-bake.hcl` — no compilation inside Docker, no registry-side build cache. Each service is a Domain-Driven, hexagonal crate (`domain → application(ports) → infrastructure(adapters)`) fronted by one or more deployable binaries. Cross-cutting concerns are shared foundation crates (`service-runtime`, `transport` (Kafka + gRPC), `cqrs`, storage adapters for Postgres/Scylla/Redis, `auth-context`, `telemetry`).
 
 Two contract planes govern integration and are both build-gated:
 
@@ -29,7 +29,7 @@ Tier is an explicit runtime contract (`tier:` pod label) that dictates failure p
 | Tier | Posture | Services | Meaning |
 |---|---|---|---|
 | **TIER-0** | **Fail-closed** | `auth` (50060), `moderation` (50061), `audit-server` (50068), `audit-worker` (50069) | Identity, trust/safety, and tamper-evident compliance. Correctness over availability — e.g. audit denies an unrecordable privileged write (break-glass). |
-| **TIER-1** | **Fail-open** | `counter-server/worker` (50064/50065), `media` (50063), `search` (50062), `realtime-gateway` (8443/50066), `realtime-dispatcher` (50067) | Systems-of-Reference / -Connection / -Delivery. Availability over completeness — degrade gracefully, re-derive from upstream SoRs. |
+| **TIER-1** | **Fail-open** | `counter-server/worker` (50064/50065), `media` (50063), `media-worker` (50071), `search` (50062), `realtime-gateway` (8443/50066), `realtime-dispatcher` (50067) | Systems-of-Reference / -Connection / -Delivery. Availability over completeness — degrade gracefully, re-derive from upstream SoRs. |
 | **Core (implicit)** | Mixed | `account` (50059), `profile` (50052), `social-graph` (50053), `post` (50056), `comment` (50057), `engagement` (50058), `geo-discovery` (50054), `notification` (50055), `timeline` (50070), `chat` (50051) | The social-graph Systems-of-Record and read-models. |
 
 Internal ports are per-service ClusterIPs; each service now owns a distinct port (`timeline` moved 50060 → 50070 to clear its reuse of `auth`'s port).
@@ -39,7 +39,7 @@ Internal ports are per-service ClusterIPs; each service now owns a distinct port
 The fleet resolves to **four** reusable archetypes, distinguished by runtime characteristic rather than domain:
 
 1. **RPC Server** — request-bound, gRPC, CPU-scaled. Readiness gates on typed gRPC health (`SERVING` only once backend probes pass); liveness checks process liveness only, so a transient backend blip drops a pod from rotation without a restart loop. *(all `*-server` binaries)*
-2. **Stream Worker** — Kafka-consumer-bound, no domain RPC (health/reflection plane only), scaled on **consumer-group lag**. *(`counter-worker`, `audit-worker`, `realtime-dispatcher`)*
+2. **Stream Worker** — Kafka-consumer-bound, no domain RPC (health/reflection plane only), scaled on **consumer-group lag**. *(`counter-worker`, `audit-worker`, `realtime-dispatcher`, `media-worker`)*
 3. **Stateful Edge** — `realtime-gateway`: owns a long-lived connection table (one parked-future socket per device, C10M design), scaled on connections/memory, protected by a **PodDisruptionBudget** to make drains gradual, exposed publicly via an **L4 NLB** (never an ALB — see §2.5).
 4. **Migration init-container** — every Postgres/Scylla-backed service runs the shared `migrator` as an idempotent init container (`args: [<service>]`) before the runtime container boots; dual-store services (`counter`, `moderation`) run one per backend.
 
@@ -48,7 +48,7 @@ The fleet resolves to **four** reusable archetypes, distinguished by runtime cha
 | Mechanism | Trigger | Workloads |
 |---|---|---|
 | **HPA** | CPU | `auth`, `moderation`, `counter-server`, `media`, `search`, `realtime-gateway`, `audit-server` |
-| **KEDA ScaledObject** | Kafka consumer-group lag | `counter-worker` (max 12), `realtime-dispatcher` (max 8), `audit-worker` (max 4) |
+| **KEDA ScaledObject** | Kafka consumer-group lag | `counter-worker` (max 12), `realtime-dispatcher` (max 8), `audit-worker` (max 4), `media-worker` (max 6) |
 | **PDB** | voluntary-disruption floor | `realtime-gateway` (minAvailable 1) |
 
 KEDA is a hard prerequisite (operator at GitOps sync-wave −10). A Kustomize `nameReference` extension propagates the env `namePrefix` into the `ScaledObject.scaleTargetRef` and `TriggerAuthentication.authenticationRef` (the built-in transformer covers HPA but not the `keda.sh` CRDs) — without it a prefixed scaler silently targets a non-existent Deployment. **Lag-scaler maxReplicaCount must never exceed the topic partition count** (a consumer group cannot parallelize beyond its partitions).
@@ -71,7 +71,7 @@ All environments target AWS account `724772065879` / `us-east-1`, sharing one EC
 
 **Modules** (`infrastructure/modules/`): `networking/{vpc,route53}`, `eks`, `artifacts/ecr`, `security/irsa-roles`, `kubernetes/argocd`, `elasticache`, `msk`, `opensearch`, `s3-bucket` (generic; Object-Lock parameter), `kms-key`.
 
-**Terragrunt live tree** (`infrastructure/live/<env>/us-east-1/`): `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. Remote state (S3 + lockfile) and providers are generated centrally by `root.hcl`. `global/artifacts/ecr` is the account-shared, authoritative registry list (all fleet binaries + `migrator` + `topic-provisioner`). The CI's BuildKit cook cache is deliberately *not* here — it lives on GHCR, where egress to the GitHub runners is free.
+**Terragrunt live tree** (`infrastructure/live/<env>/us-east-1/`): `networking/vpc → eks → data/{msk,elasticache,opensearch,media-bucket,audit-kms,audit-worm} → security/irsa-roles → kubernetes/argocd`. Remote state (S3 + lockfile) and providers are generated centrally by `root.hcl`. `global/artifacts/ecr` is the account-shared, authoritative registry list (all fleet binaries + `migrator` + `topic-provisioner`). CI keeps *no* registry-side build cache at all (compiled artifacts are cached runner-side, on the GitHub Actions cache), so ECR only ever receives image pushes — the July 2026 egress line (83.55 USD of ECR `DataTransfer-Out` from a per-binary BuildKit cache) cannot recur.
 
 ### 2.3 Managed data stores (staging)
 
@@ -150,7 +150,7 @@ Terragrunt resolves the DAG with `run-all apply`; the explicit order (each consu
 
 ### 3.3 Manual steps & placeholders
 
-Endpoint placeholders (`<<…>>`) are substituted from Terragrunt outputs at deploy time (in `.env` files and the KEDA scaler patches): `<<MSK_BOOTSTRAP_BROKERS_SASL_SCRAM>>`, `<<ELASTICACHE_CONFIG_ENDPOINT>>`, `<<OPENSEARCH_ENDPOINT>>`, `<<ACM_CERTIFICATE_ARN>>` (NLB TLS), `<<KEYCLOAK_TOKEN_ENDPOINT>>`, `<<AUTH_JWKS_URL>>`. Additionally: seed the §3.2 secrets; verify each lag-scaled topic has **≥ maxReplicaCount partitions** (`counter`=12, `realtime`=8, `audit`=4); build/push images via the `fleet-images-deploy` matrix CI to `:staging`.
+Endpoint placeholders (`<<…>>`) are substituted from Terragrunt outputs at deploy time (in `.env` files and the KEDA scaler patches): `<<MSK_BOOTSTRAP_BROKERS_SASL_SCRAM>>`, `<<ELASTICACHE_CONFIG_ENDPOINT>>`, `<<OPENSEARCH_ENDPOINT>>`, `<<ACM_CERTIFICATE_ARN>>` (NLB TLS), `<<KEYCLOAK_TOKEN_ENDPOINT>>`, `<<AUTH_JWKS_URL>>`. Additionally: seed the §3.2 secrets; verify each lag-scaled topic has **≥ maxReplicaCount partitions** (`counter`=12, `realtime`=8, `audit`=4, `media`=6); build/push images via the `fleet-images-deploy` CI to `:staging`.
 
 ### 3.4 Day-1 caveats & known deferrals
 
@@ -164,7 +164,7 @@ Endpoint placeholders (`<<…>>`) are substituted from Terragrunt outputs at dep
 
 ## Appendix A — Port allocation
 
-`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069.
+`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `media-worker` 50071 (health/reflection only).
 
 ## Appendix B — Topic catalog
 

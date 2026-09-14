@@ -48,6 +48,7 @@ cargo test -p <svc> --features integration-<svc>   # needs Docker (Scylla/Redis/
 
 # Build a service image (one image per binary)
 docker build -f deploy/Dockerfile --build-arg BIN=<svc>-server -t <repo>/<svc>-server:<tag> .
+# (CI instead compiles all binaries once per arch and bakes runtime images: deploy/docker-bake.hcl)
 
 # Render manifests (validate before pushing)
 kubectl kustomize k8s/overlays/staging
