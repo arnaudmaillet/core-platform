@@ -1,51 +1,39 @@
 # .github/workflows/fleet-images-deploy.yml
 #
-# Build + push every fleet binary (20 services + the shared migrator) to ECR,
-# one image per binary via the generic deploy/Dockerfile (`--build-arg BIN`).
-# Add a BIN to the matrix to ship a new one.
+# Build + push every fleet binary (21 services/workers + migrator +
+# topic-provisioner) to ECR — one image per binary, one multi-arch manifest per
+# binary. Add a binary to FLEET_BINS below to ship a new one (see its comment).
 #
-# Auth + region come from the same repo secrets the existing deploy workflows use
-# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION). Each binary is built in
-# parallel, reusing a shared BuildKit registry cache of the cargo-chef cook layer
-# (librdkafka, tonic, scylla, sqlx…) so a source edit only rebuilds the workspace+
-# build layer.
+# ── Shape: ONE build job per architecture, not one per (binary, arch) ─────────
+# The 23 binaries share almost the whole dependency graph AND the workspace
+# crates (foundation / platform / storage / service). Compiling them in one
+# `cargo build` per arch compiles that shared graph ONCE instead of 23 times,
+# and keeps the run under GitHub's 20-concurrent-job cap (the previous 44-job
+# matrix ran in three waves). Compiled artifacts are cached runner-side with
+# Swatinem/rust-cache (GitHub Actions cache, free on this public repo), so a
+# push only recompiles the crates it touched and their dependents.
 #
-# ── Why the cache lives on GHCR, keyed per-ARCH ────────────────────────────────
-# It used to be an ECR ref keyed per (BIN, ARCH). Both halves of that were wrong
-# and cost real money — July 2026 billed 83.55 USD for 1,028 GB of ECR
-# DataTransfer-Out, the single largest line on the account:
+# Images are produced WITHOUT compiling inside Docker: deploy/docker-bake.hcl
+# builds only the Dockerfile's `runtime` stage for each binary, overriding the
+# `builder` stage with a local dir holding the prebuilt binary (a BuildKit named
+# context). The Dockerfile's own cargo-chef route is unchanged and stays the
+# local / docker-compose path (`docker build --build-arg BIN=…`).
 #
-#   1. WRONG REGISTRY. The runners are on GitHub, so every cache pull/push
-#      crossed the AWS egress boundary at ~0.09 USD/GB. 44 jobs × a multi-GB
-#      mode=max Rust cache ≈ 8–15 USD *per push to develop*. GHCR sits on the
-#      same network as the runners: that traffic is free.
-#   2. WRONG KEY. `cargo chef cook` runs BEFORE `ARG BIN` in deploy/Dockerfile,
-#      so the cooked layer is byte-identical for all 22 binaries — the per-BIN
-#      key stored 22 redundant copies of it per arch. And the per-BIN *build*
-#      layer it seemed to protect is worthless anyway: `COPY . .` sits above
-#      `cargo build -p $BIN`, so any source edit busts it for every binary.
-#      Only the cook layer is cacheable across a push, and it is arch-scoped.
-#      44 refs → 2.
+# Why no registry-side build cache: the previous per-(bin,arch) BuildKit cache
+# on ECR cost 83.55 USD of DataTransfer-Out in July 2026 (1,028 GB — ~40 GB and
+# ~4 USD per push to develop), and even moved to GHCR (#638) it could only cache
+# third-party crates. This layout needs no registry cache at all: ECR only ever
+# receives image pushes (ingress is free).
 #
-# Aggravating factor now removed: all 44 tags lived in ONE ECR repo, and the ECR
-# module applies `imageCountMoreThan: 30 → expire` to every repo — so 14 cache
-# entries were permanently expiring in rotation. We paid egress for a cache that
-# could not, by construction, ever be complete. The buildcache repo is dropped
-# from the ECR repo list in the same change.
-#
-# Only ONE job per arch writes the cache (CACHE_WRITER_BIN) — otherwise 22
-# concurrent jobs would each upload the full mode=max export to the same ref,
-# last-writer-wins, for no benefit. Every job reads it. If the writer job fails,
-# the previous cache stays readable: the next run is warm-but-stale, never cold.
+# Auth + region come from the same repo secrets the other deploy workflows use
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION).
 #
 # Each image is tagged with the immutable :<git-sha> (the deployment handle) and a
-# floating :staging (convenience only). After the matrix succeeds, the
+# floating :staging (convenience only). After BOTH arches succeed, the
 # `pin-staging-images` job rewrites the staging overlay's fleet image tags to that
 # :<git-sha> and commits back to develop — so ArgoCD sees a real manifest diff and
 # rolls out, deploys are content-addressed (IfNotPresent is correct for an
-# immutable tag), and a rollback is just `git revert`. Previously the overlay
-# pinned a MUTABLE :staging tag, so new builds never landed on reschedule and there
-# was no record of what was running.
+# immutable tag), and a rollback is just `git revert`.
 name: Build & Push Fleet Images
 
 on:
@@ -55,7 +43,9 @@ on:
       - 'crates/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'rust-toolchain.toml'
       - 'deploy/Dockerfile'
+      - 'deploy/docker-bake.hcl'
       - '.github/workflows/fleet-images-deploy.yml'
   workflow_dispatch:
     inputs:
@@ -66,53 +56,84 @@ on:
 permissions:
   contents: read
 
+env:
+  # THE list of fleet binaries this workflow ships. Package name == binary name
+  # == crates/apps/<name> == ECR repo core-platform-<name>. Consumed by the cargo
+  # build, the bake matrix, the stitch loop and the staging pin — one source.
+  # Adding a binary: add it here, to infrastructure/live/global/artifacts/ecr
+  # (and APPLY it before merging — ECR does not auto-create repos, the push would
+  # fail), and to the overlays' `images:` so the pin job can rewrite its tag.
+  FLEET_BINS: >-
+    counter-server counter-worker audit-server audit-worker
+    auth-server media-server media-worker moderation-server search-server
+    realtime-gateway realtime-dispatcher
+    account-server chat-server comment-server engagement-server
+    geo-discovery-server notification-server post-server profile-server
+    social-graph-server timeline-server
+    migrator topic-provisioner
+
 jobs:
   build-and-push:
-    # Native runner per arch — no QEMU: emulated rustc on a 22-binary workspace
-    # is hours-per-binary territory, while ubuntu-24.04-arm is free on public
-    # repos and compiles at full speed. Each (bin, arch) pushes an arch-suffixed
-    # tag; the stitch job below merges them into one multi-arch manifest.
+    name: Build fleet (${{ matrix.arch.suffix }})
+    # Native runner per arch — no QEMU: emulated rustc on this workspace is
+    # hours territory, while ubuntu-24.04-arm is free on public repos and
+    # compiles at full speed. Each arch pushes arch-suffixed tags; the stitch
+    # job below merges them into one multi-arch manifest per binary.
     runs-on: ${{ matrix.arch.runner }}
-    # packages: write — push/pull the BuildKit cook cache on GHCR with GITHUB_TOKEN.
-    # Job-level `permissions` replaces the workflow default wholesale, so
-    # contents: read is restated here.
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         arch:
           - { platform: linux/amd64, runner: ubuntu-latest,     suffix: amd64 }
           - { platform: linux/arm64, runner: ubuntu-24.04-arm,  suffix: arm64 }
-        bin:
-          - counter-server
-          - counter-worker
-          - audit-server
-          - audit-worker
-          - auth-server
-          - media-server
-          - moderation-server
-          - search-server
-          - realtime-gateway
-          - realtime-dispatcher
-          # ── Core services (same Rust workspace; the staging overlay deploys these too) ──
-          - account-server
-          - chat-server
-          - comment-server
-          - engagement-server
-          - geo-discovery-server
-          - notification-server
-          - post-server
-          - profile-server
-          - social-graph-server
-          - timeline-server
-          # ── Shared ──
-          - migrator
-          - topic-provisioner
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Same system deps as deploy/Dockerfile's builder stage and ci.yml: protoc
+      # + the well-known types for the *-api build.rs (tonic-prost-build), cmake
+      # + zlib for the bundled librdkafka.
+      - name: Build deps (protoc, librdkafka toolchain)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev cmake zlib1g-dev
+
+      # rust-toolchain.toml pins the workspace toolchain (1.96.0); the rustup
+      # shim honors it at cargo-invocation time, exactly as in ci.yml.
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Runner-side compile cache (GitHub Actions cache). One key per arch —
+      # artifacts are not portable across targets. cache-workspace-crates keeps
+      # OUR crates' artifacts too (not only third-party), so a push recompiles
+      # just the crates it touched and their dependents. Saved only from develop
+      # so a manual dispatch on a branch cannot poison it. Budget: the repo cache
+      # cap is 10 GB shared with ci.yml — watch `gh cache list`; if the two
+      # release caches crowd it out, flip cache-workspace-crates to false
+      # (deps-only, the cargo-chef `cook` equivalent).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fleet-release-${{ matrix.arch.suffix }}
+          cache-workspace-crates: true
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
+      - name: Build every fleet binary (release)
+        env:
+          # Well-known .proto types live in /usr/include (libprotobuf-dev).
+          PROTOC_INCLUDE: /usr/include
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          cargo build --release --locked $(printf -- '-p %s ' $FLEET_BINS)
+
+      # One named-context dir per binary, laid out as the Dockerfile's builder
+      # stage would have left it (/usr/local/bin/app) so `COPY --from=builder`
+      # resolves unchanged. Only the binaries reach BuildKit — never target/.
+      - name: Stage binaries for packaging
+        run: |
+          set -euo pipefail
+          for bin in $FLEET_BINS; do
+            install -D -m 0755 "target/release/$bin" "dist/$bin/usr/local/bin/app"
+          done
+          du -sh dist
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -125,56 +146,19 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Cache registry. Images stay on ECR (the overlays and Karpenter pull from
-      # there); only the BuildKit cache moves to GHCR, where egress to these
-      # runners is free. GITHUB_TOKEN is enough — no new secret.
-      - name: Login to GHCR (BuildKit cache)
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push ${{ matrix.bin }} (${{ matrix.arch.suffix }})
+      # All fleet images in ONE BuildKit session (see deploy/docker-bake.hcl):
+      # the shared runtime layers are built once; each image is a COPY of its
+      # binary, then pushed as :<sha>-<arch>.
+      - name: Package and push images (${{ matrix.arch.suffix }})
         env:
           REG: ${{ steps.ecr.outputs.registry }}
-          BIN: ${{ matrix.bin }}
+          SHA: ${{ github.sha }}
           ARCH: ${{ matrix.arch.suffix }}
           PLATFORM: ${{ matrix.arch.platform }}
-          # Arch-scoped, NOT bin-scoped: the cook layer is identical across all
-          # 22 binaries (see the header). Lowercased — GHCR rejects uppercase
-          # path segments, and github.repository_owner preserves the account's case.
-          CACHE_REF: ghcr.io/${{ github.repository_owner }}/core-platform-buildcache
-          # The single designated cache writer for this arch. Any binary produces
-          # the same cook layer, so the choice is arbitrary and stable.
-          CACHE_WRITER_BIN: migrator
-        run: |
-          set -euo pipefail
-          ref="$(echo "$CACHE_REF" | tr '[:upper:]' '[:lower:]'):cook-$ARCH"
-
-          # Every job reads the shared cook cache; exactly one writes it back.
-          #   image-manifest+oci-mediatypes: GHCR stores the cache as a normal OCI
-          #     manifest. Without them BuildKit exports its own cache-manifest
-          #     media type, which GHCR rejects.
-          #   ignore-error: the cache is an optimization, never a deliverable — a
-          #     failed export must not fail a fleet image build.
-          cache_to=""
-          if [ "$BIN" = "$CACHE_WRITER_BIN" ]; then
-            cache_to="--cache-to=type=registry,ref=$ref,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
-            echo "::notice::$BIN is the cook-cache writer for $ARCH ($ref)"
-          fi
-
-          docker buildx build \
-            -f deploy/Dockerfile \
-            --platform "$PLATFORM" \
-            --build-arg BIN="$BIN" \
-            --cache-from="type=registry,ref=$ref" \
-            $cache_to \
-            -t "$REG/core-platform-$BIN:${{ github.sha }}-$ARCH" \
-            --push .
+        run: docker buildx bake -f deploy/docker-bake.hcl --push
 
   # ── Stitch per-arch images into one multi-arch manifest per binary ───────────
   # The :<git-sha> and floating tags only exist once BOTH arch builds succeeded
@@ -207,7 +191,7 @@ jobs:
           # imagetools has failed twice with a bare exit-255 immediately AFTER a
           # successful manifest push (runs 28727067443, 28728911748) — transient
           # registry/transport flake, both times fixed by a plain rerun. Bounded
-          # retries beat re-running a 44-job workflow to re-execute one command.
+          # retries beat re-running the whole workflow to re-execute one command.
           retry() {
             local attempt=1
             until "$@"; do
@@ -220,15 +204,7 @@ jobs:
               sleep 10
             done
           }
-          # Keep in sync with the build matrix above.
-          for bin in \
-            counter-server counter-worker audit-server audit-worker \
-            auth-server media-server moderation-server search-server \
-            realtime-gateway realtime-dispatcher \
-            account-server chat-server comment-server engagement-server \
-            geo-discovery-server notification-server post-server profile-server \
-            social-graph-server timeline-server \
-            migrator topic-provisioner; do
+          for bin in $FLEET_BINS; do
             retry docker buildx imagetools create \
               -t "$REG/core-platform-$bin:${{ github.sha }}" \
               -t "$REG/core-platform-$bin:$TAG" \
@@ -241,10 +217,10 @@ jobs:
           done
 
   # ── Pin the staging overlay to the immutable tag we just built ────────────────
-  # Runs once after ALL matrix builds succeed; if any binary fails, the fleet is
-  # not pinned (a partial rollout is never promoted). Rewrites ONLY the images this
-  # workflow builds, then commits back to develop so ArgoCD rolls out the new
-  # revision.
+  # Runs once after BOTH arch builds + the stitch succeed; if anything fails, the
+  # fleet is not pinned (a partial rollout is never promoted). Rewrites ONLY the
+  # images this workflow builds, then commits back to develop so ArgoCD rolls
+  # out the new revision.
   pin-staging-images:
     name: Pin staging overlay to immutable tags
     needs: stitch-manifests
@@ -271,15 +247,7 @@ jobs:
           TAG: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # Keep in sync with the build matrix above (the images this workflow ships).
-          for bin in \
-            counter-server counter-worker audit-server audit-worker \
-            auth-server media-server moderation-server search-server \
-            realtime-gateway realtime-dispatcher \
-            account-server chat-server comment-server engagement-server \
-            geo-discovery-server notification-server post-server profile-server \
-            social-graph-server timeline-server \
-            migrator topic-provisioner; do
+          for bin in $FLEET_BINS; do
             NAME="core-platform-$bin" NEWTAG="$TAG" \
               yq -i '(.images[] | select(.name == strenv(NAME)).newTag) = strenv(NEWTAG)' \
               k8s/overlays/staging/kustomization.yaml
@@ -298,6 +266,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add k8s/overlays/staging/kustomization.yaml
           git commit -m "chore(deploy): pin staging fleet images to ${TAG} [skip ci]"
-          # Rebase in case develop advanced while the matrix was building.
+          # Rebase in case develop advanced while the fleet was building.
           git pull --rebase origin develop
           git push origin develop

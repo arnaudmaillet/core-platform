@@ -42,13 +42,14 @@ resources:
   - ../../base/services/engagement/server
   - ../../base/services/account/server
   - ../../base/services/timeline/server
-  # ── New fleet (10 binaries) ──────────────────────────────────────────────────
+  # ── New fleet (11 binaries) ──────────────────────────────────────────────────
   - ../../base/services/counter/server
   - ../../base/services/counter/worker
   - ../../base/services/audit/server
   - ../../base/services/audit/worker
   - ../../base/services/auth/server
   - ../../base/services/media/server
+  - ../../base/services/media/worker
   - ../../base/services/moderation/server
   - ../../base/services/search/server
   - ../../base/services/realtime/gateway
@@ -169,6 +170,11 @@ images:
   - name: core-platform-media-server
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-media-server
     newTag: 8a7c94881dad720351f66ac98a0b97210deb2cdb
+  - name: core-platform-media-worker
+    newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-media-worker
+    # media-worker first ships with the fleet build that follows its wiring; this
+    # pin is inherited from media-server and is overwritten by the next promote.
+    newTag: 8a7c94881dad720351f66ac98a0b97210deb2cdb
   - name: core-platform-moderation-server
     newName: 724772065879.dkr.ecr.us-east-1.amazonaws.com/core-platform-moderation-server
     newTag: 8a7c94881dad720351f66ac98a0b97210deb2cdb
@@ -199,10 +205,12 @@ patches:
   - path: patch-moderation-db.yaml
   - path: patch-auth-db.yaml
   - path: patch-media-db.yaml
+  - path: patch-media-worker-db.yaml
   # MSK SASL/SCRAM + TLS + TriggerAuthentication for the KEDA lag scalers.
   - path: patch-counter-worker-scaler.yaml
   - path: patch-realtime-dispatcher-scaler.yaml
   - path: patch-audit-worker-scaler.yaml
+  - path: patch-media-worker-scaler.yaml
   # Per-service sensitive creds via dedicated ExternalSecrets (envFrom).
   - path: patch-search-secrets.yaml
     target:
@@ -212,6 +220,10 @@ patches:
     target:
       kind: Deployment
       name: media-server
+  - path: patch-media-secrets.yaml
+    target:
+      kind: Deployment
+      name: media-worker
   - path: patch-auth-secrets.yaml
     target:
       kind: Deployment

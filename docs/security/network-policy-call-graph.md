@@ -141,7 +141,7 @@ allows; they inform the **egress** policy (who needs MSK :9096).
 | `chat.*` | chat | chat (rest orphan) |
 
 **MSK producers/consumers** (need egress :9096): account, profile, post, comment,
-engagement, social-graph, counter (+worker), moderation, auth, media, chat,
+engagement, social-graph, counter (+worker), moderation, auth, media (+worker), chat,
 geo-discovery, notification, timeline, search, realtime (+dispatcher), audit (+worker).
 (≈ everyone except the pure read paths.)
 
@@ -168,6 +168,7 @@ Every pod also needs: **DNS** → `kube-system` CoreDNS :53 (UDP/TCP), and **OTe
 | chat | CNPG, Redis, Scylla | — | producer |
 | moderation | CNPG, Redis, Scylla | account:50059 | both |
 | media (server) | CNPG, Redis, **S3** (asset + object-store) | moderation:50061 | both |
+| media (worker) | CNPG, Redis, **S3** (renditions) | — | consumer |
 | search | **OpenSearch** | post:50056, profile:50052 | consumer |
 | audit (server+worker) | CNPG, **S3** (WORM/witness), KMS | — | consumer |
 | realtime (gateway+dispatcher) | Redis | auth:50060 (JWKS) | consumer |

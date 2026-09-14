@@ -47,6 +47,7 @@ inputs = {
     "audit-worker",
     "auth-server",
     "media-server",
+    "media-worker",
     "moderation-server",
     "search-server",
     "realtime-gateway",
