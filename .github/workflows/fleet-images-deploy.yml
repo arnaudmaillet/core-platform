@@ -150,7 +150,18 @@ jobs:
         run: |
           set -euo pipefail
           runtime_base=$(grep -oE '^FROM [^ ]+ AS runtime' deploy/Dockerfile | awk '{print $2}')
-          runtime_glibc=$(docker run --rm "$runtime_base" ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$')
+          # Capture the whole `ldd --version` output BEFORE parsing it. Piping the
+          # streaming `docker run` straight into `head -1` closed the pipe while
+          # docker was still writing ("write /dev/stdout: broken pipe"), which under
+          # pipefail failed this step at random — the amd64 build of 2026-09-15
+          # (arm64 passed the very same step). sed reads all of its input, so the
+          # writer never sees EPIPE.
+          runtime_ldd=$(docker run --rm "$runtime_base" ldd --version)
+          runtime_glibc=$(printf '%s\n' "$runtime_ldd" | sed -n '1s/.*[[:space:]]\([0-9][0-9]*\.[0-9][0-9]*\)$/\1/p')
+          if [ -z "$runtime_glibc" ]; then
+            echo "::error::could not read the runtime image's glibc version from: $runtime_ldd"
+            exit 1
+          fi
           echo "runtime base $runtime_base -> glibc $runtime_glibc"
           fail=0
           for bin in $FLEET_BINS; do
