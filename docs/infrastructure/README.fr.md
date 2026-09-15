@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: 31e39e9d517e78ea61a35f9f0cc9f9ef6edf484e9430b668f5eaad15968b2d00
+  source_sha256: 157ce1c2bc8234d9c929f19a1aec42cd7f6688b45ef54c8cd562f9d3320ac1f9
   translated_at: 2026-09-15
   status: complete
 ---
@@ -52,7 +52,7 @@ La flotte se résout en **quatre** archétypes réutilisables, distingués par c
 
 1. **Serveur RPC** — lié aux requêtes, gRPC, mis à l'échelle sur le CPU. La disponibilité (« readiness ») dépend du health gRPC typé (`SERVING` uniquement après succès des sondes backend) ; la vivacité (« liveness ») ne vérifie que le processus, de sorte qu'une interruption backend transitoire retire le pod de la rotation sans boucle de redémarrage. *(tous les binaires `*-server`)*
 2. **Worker de flux** — lié à la consommation Kafka, sans RPC métier (plan health/reflection uniquement), mis à l'échelle sur le **retard du groupe de consommateurs**. *(`counter-worker`, `audit-worker`, `realtime-dispatcher`, `media-worker`)*
-3. **Périphérie à état** — `realtime-gateway` : détient une table de connexions longue durée (un socket en « future parquée » par appareil, conception C10M), mis à l'échelle sur connexions/mémoire, protégé par un **PodDisruptionBudget** pour des drainages progressifs, exposé publiquement via un **NLB L4** (jamais un ALB — cf. §2.5).
+3. **Périphérie à état** — `realtime-gateway` : détient une table de connexions longue durée (un socket en « future parquée » par appareil, conception C10M), mis à l'échelle sur connexions/mémoire, protégé par un **PodDisruptionBudget** pour des drainages progressifs, exposé publiquement via un **NLB L4** (jamais un ALB — cf. §2.5). Tout autre service client-facing est atteint via la **périphérie client** : un second écouteur gRPC authentifié (`:9443`) derrière un unique ALB internet-facing (§2.5).
 4. **Init-container de migration** — chaque service adossé à Postgres/Scylla exécute le `migrator` partagé en init-container idempotent (`args: [<service>]`) avant le conteneur d'exécution ; les services bi-stores (`counter`, `moderation`) en exécutent un par backend.
 
 ### 1.4 Modèle de mise à l'échelle
@@ -121,7 +121,7 @@ Le registre est aussi la **source de provisionnement des brokers** : le binaire 
 - **Garde au moindre privilège (IRSA) :** le rôle `audit` est le *principal unique* habilité à `kms:Decrypt/GenerateDataKey` sur la KEK et en **écriture seule (pas de `DeleteObject`)** sur le bucket WORM ; le rôle `media` est restreint à la lecture/écriture d'objets sur son seul bucket. Les rôles ne sont créés que si les ARN de ressource existent (dev non affecté).
 - **RGPD Art. 17 :** crypto-effacement — détruire la DEK par sujet ; la chaîne (sur le chiffré) reste vérifiable, la preuve survit, la conservation légale prévaut.
 - **Posture fail-closed :** les services TIER-0 refusent plutôt que de se dégrader (p. ex. break-glass refusé si l'écriture n'est pas enregistrée).
-- **Isolation de la périphérie :** la seule entrée publique est le plan WSS temps réel via un **NLB L4** (TLS terminé en périphérie, la poignée de main WS brute atteint le pod) — délibérément *pas* un ALB L7, afin que la passerelle, et non un proxy, détienne la table de connexions.
+- **Isolation de la périphérie — deux portes publiques, toutes deux authentifiées dans le processus :** (1) le plan WSS temps réel via un **NLB L4** (TLS terminé en périphérie, la poignée de main WS brute atteint le pod — délibérément *pas* un ALB L7, afin que la passerelle, et non un proxy, détienne la table de connexions ; le token de périphérie ES256 est vérifié à la poignée de main) ; (2) la **périphérie client** — un unique **ALB** internet-facing (`k8s/overlays/<env>/client-edge-ingress.yaml`, gRPC de bout en bout, `api-<svc>-<env>.core-platform.click`) routé par hôte vers un second écouteur dédié (`GRPC_EDGE_ADDR`, `:9443`) sur chaque serveur client-facing. Cet écouteur ne sert **que** les RPC que le service déclare dans `Service::EDGE_POLICY` (tout le reste répond `UNIMPLEMENTED` : RPC internes, consoles staff et réflexion ne quittent jamais le mesh) et exige le token de périphérie émis par `auth` (vérifié via JWKS, issuer/audience épinglés) sauf pour `auth.Login`/`Refresh` ; les handlers lient le champ acteur de la requête au token (`require_account` / `require_profile` sur le claim `pids` du token — les profils que possède le compte, lus depuis `profile` à chaque émission). L'écouteur mesh (`<SVC>_GRPC_ADDR`) est inchangé et la NetworkPolicy n'ouvre que `:9443`, donc les ports mesh ne sont jamais joignables depuis l'ALB. Cf. `docs/security/network-policy-call-graph.md` §3.
 
 ### 2.6 Livraison GitOps
 
@@ -173,12 +173,13 @@ Les substituts d'endpoint (`<<…>>`) sont remplacés à partir des sorties Terr
 3. **Keycloak non provisionné :** l'IdP fédéré d'`auth` est externe et pas encore mis en place ; ses identifiants de courtage sont des substituts. Le plan WSS de `realtime` est fail-closed (`RTM-1001`) jusqu'à ce que le JWKS d'auth soit joignable — son plan health gRPC n'est pas affecté, le pod devient donc tout de même Ready.
 4. **Étiquette `:staging` mutable :** ArgoCD ne redéploiera pas automatiquement sur un re-push d'étiquette sans Argo Image Updater ou un changement de digest ; l'étiquette `:<git-sha>` est disponible pour l'épinglage.
 5. **Écart de charge utile en streaming :** le décalage de forme `post → geo-discovery/notification` (post n'émet ni lat/lng ni légende) reste une décision produit ouverte et suivie — le câblage est correct, la forme ne l'est pas.
+6. **Périphérie client, premier cycle :** l'ALB est un terrain nouveau (premier groupe d'Ingress du dépôt ; les noms d'hôte doivent rester à un seul niveau sous le wildcard `*.core-platform.click` ; external-dns partage une seule zone entre environnements avec `policy: upsert-only`, donc des enregistrements `api-*` périmés survivent à un démontage ; le SG des nœuds n'a pas de règle pour les ports gRPC — ALB→pod repose sur l'automatisation backend-SG du LB controller, comme le faisait déjà l'ALB profile de dev). La **révocation** des tokens de périphérie est **bornée par le TTL** (TTL d'accès de 10 min) : le claim `gen` n'est pas revérifié par les services (le « petit lookup » de l'ADR-0005 reste à faire), et un profil créé après une émission devient actionnable au prochain refresh. L'inscription (`account.CreateAccount`) et les RPC staff/conformité ne sont délibérément **pas** sur la périphérie tant qu'un catalogue de permissions n'existe pas.
 
 ---
 
 ## Annexe A — Allocation des ports
 
-`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `media-worker` 50071 (health/reflection uniquement).
+`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `media-worker` 50071 (health/reflection uniquement) · **périphérie client `9443`** sur chaque serveur client-facing (second écouteur, côté ALB, filtré par `EDGE_POLICY`).
 
 ## Annexe B — Catalogue des topics
 

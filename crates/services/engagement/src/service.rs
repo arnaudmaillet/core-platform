@@ -14,6 +14,8 @@ use cqrs::query::InMemoryQueryBus;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{KafkaClientConfig, ProducerConfig};
@@ -40,6 +42,18 @@ impl Service for EngagementService {
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str =
         <EngagementServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // RecordView/RecordShare carry no actor by design (fire-and-forget counters);
+    // requiring a token still keeps them off the anonymous internet.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/engagement.v1.EngagementService/UpsertReaction"),
+        authenticated("/engagement.v1.EngagementService/RemoveReaction"),
+        authenticated("/engagement.v1.EngagementService/RecordView"),
+        authenticated("/engagement.v1.EngagementService/RecordShare"),
+        authenticated("/engagement.v1.EngagementService/GetPostEngagement"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let backends = Backends {

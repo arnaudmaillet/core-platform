@@ -11,6 +11,7 @@ use error::AppError;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
+use transport::grpc::edge;
 use crate::application::command::{
     CommitUploadCommand, CommitUploadHandler, DeleteAssetCommand, DeleteAssetHandler,
     IssueUploadTicketCommand, IssueUploadTicketHandler, IssueUploadTicketOutcome,
@@ -55,6 +56,7 @@ impl MediaServiceHandler {
         &self,
         request: Request<proto::IssueUploadTicketRequest>,
     ) -> Result<Response<proto::IssueUploadTicketResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().owner_id)?;
         let req = request.into_inner();
         let cmd = IssueUploadTicketCommand {
             owner_id: OwnerId::try_from(req.owner_id.as_str()).map_err(to_status)?,
@@ -94,6 +96,7 @@ impl MediaServiceHandler {
         &self,
         request: Request<proto::AbortUploadRequest>,
     ) -> Result<Response<proto::AbortUploadResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().owner_id)?;
         let req = request.into_inner();
         // Abort = delete the (still-pending) reservation: purges staging + tombstones.
         let cmd = DeleteAssetCommand {
@@ -127,6 +130,7 @@ impl MediaServiceHandler {
         &self,
         request: Request<proto::DeleteAssetRequest>,
     ) -> Result<Response<proto::DeleteAssetResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().owner_id)?;
         let req = request.into_inner();
         let cmd = DeleteAssetCommand {
             asset_id: AssetId::try_from(req.asset_id.as_str()).map_err(to_status)?,

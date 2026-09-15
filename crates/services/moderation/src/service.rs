@@ -13,6 +13,8 @@ use postgres_storage::PostgresConfig;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{ConsumerConfig, KafkaClientConfig, ProducerConfig};
@@ -48,6 +50,15 @@ impl Service for ModerationService {
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str =
         <ModerationServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // The reviewer console (assign/decide/queue/resolve) and the compliance reads
+    // stay mesh-only until a staff permission catalogue exists; Screen is a mesh
+    // callee (media).
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/moderation.v1.ModerationService/FileAppeal"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let config = ModerationConfig::from_env()?;

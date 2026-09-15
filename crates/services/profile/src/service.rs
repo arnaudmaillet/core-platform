@@ -19,6 +19,8 @@ use infra_config::InfraRegistry;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{HealthProbe, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{ConsumerConfig, KafkaClientConfig, ProducerConfig};
@@ -59,6 +61,23 @@ impl Service for ProfileService {
     const NAME: &'static str = "profile";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <ProfileServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // VerifyProfile (admin) and Hide/RestoreProfile (moderation axis, event-driven)
+    // stay mesh-only.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/profile.v1.ProfileService/CreateProfile"),
+        authenticated("/profile.v1.ProfileService/UpdateProfile"),
+        authenticated("/profile.v1.ProfileService/ChangeHandle"),
+        authenticated("/profile.v1.ProfileService/UpdateAvatar"),
+        authenticated("/profile.v1.ProfileService/UpdateBanner"),
+        authenticated("/profile.v1.ProfileService/SetVisibility"),
+        authenticated("/profile.v1.ProfileService/DeleteProfile"),
+        authenticated("/profile.v1.ProfileService/GetProfileById"),
+        authenticated("/profile.v1.ProfileService/GetProfileByHandle"),
+        authenticated("/profile.v1.ProfileService/ListProfilesByAccount"),
+    ];
 
     async fn build(infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let backends = Backends {

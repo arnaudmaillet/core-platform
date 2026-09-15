@@ -7,8 +7,9 @@ use validate_core::{FieldViolation, Validate};
 use crate::application::ensure_valid;
 use crate::application::policy::SessionPolicy;
 use crate::application::port::{
-    AccountDirectory, AuthnGrant, EventPublisher, IdentityProvider, RefreshTokenRepository,
-    SessionCache, SessionRepository, SubjectLinkRepository, TokenMinter,
+    profile_ids_or_empty, AccountDirectory, AuthnGrant, EventPublisher, IdentityProvider,
+    ProfileDirectory, RefreshTokenRepository, SessionCache, SessionRepository,
+    SubjectLinkRepository, TokenMinter,
 };
 use crate::domain::aggregate::{
     RefreshToken, RefreshTokenIssueParams, Session, SessionIssueParams, SubjectLink,
@@ -78,6 +79,7 @@ pub struct IssuedSession {
 pub struct LoginHandler {
     idp: Arc<dyn IdentityProvider>,
     directory: Arc<dyn AccountDirectory>,
+    profiles: Arc<dyn ProfileDirectory>,
     links: Arc<dyn SubjectLinkRepository>,
     sessions: Arc<dyn SessionRepository>,
     refresh_tokens: Arc<dyn RefreshTokenRepository>,
@@ -92,6 +94,7 @@ impl LoginHandler {
     pub fn new(
         idp: Arc<dyn IdentityProvider>,
         directory: Arc<dyn AccountDirectory>,
+        profiles: Arc<dyn ProfileDirectory>,
         links: Arc<dyn SubjectLinkRepository>,
         sessions: Arc<dyn SessionRepository>,
         refresh_tokens: Arc<dyn RefreshTokenRepository>,
@@ -103,6 +106,7 @@ impl LoginHandler {
         Self {
             idp,
             directory,
+            profiles,
             links,
             sessions,
             refresh_tokens,
@@ -178,7 +182,12 @@ impl LoginHandler {
         })?;
         self.refresh_tokens.save(&refresh).await?;
 
-        let claims = session.mint_access_token(now, self.policy.access_ttl, permissions)?;
+        // The profiles the account owns ride in the token (`pids`) so client-facing
+        // services can bind profile-keyed actors to the caller. Fail-safe: an
+        // outage mints a token with no profile grants, never a failed login.
+        let profile_ids = profile_ids_or_empty(&self.profiles, &account_id).await;
+        let claims =
+            session.mint_access_token(now, self.policy.access_ttl, permissions, profile_ids)?;
         let access_token = self.minter.mint_access(&claims).await?;
 
         Ok(IssuedSession {
@@ -295,6 +304,33 @@ mod tests {
         );
         let err = fx.login_handler().handle(env, t0()).await.unwrap_err();
         assert!(matches!(err, AuthError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn login_mints_the_owned_profiles_into_the_token() {
+        use crate::domain::value_object::ProfileId;
+        let fx = Fixture::new();
+        let subject = IdpSubject::new("https://idp.test", "sub-123").unwrap();
+        let account = AccountId::from_uuid(Uuid::now_v7());
+        let profiles = vec![ProfileId::from_uuid(Uuid::now_v7()), ProfileId::from_uuid(Uuid::now_v7())];
+        fx.directory.with_account(&subject, account, AccountActivation::Active, vec![]);
+        fx.profiles.with_profiles(account, profiles.clone());
+
+        let issued = fx.login_handler().handle(password_login(), t0()).await.unwrap();
+        let claims = fx.minter.verify_access(&issued.access_token).await.unwrap();
+        assert_eq!(claims.account_id, account);
+        assert_eq!(claims.profile_ids, profiles);
+    }
+
+    #[tokio::test]
+    async fn login_survives_a_profile_directory_outage_with_no_profile_grants() {
+        let mut fx = Fixture::new();
+        fx.profiles = std::sync::Arc::new(crate::application::fakes::StubProfileDirectory::failing());
+
+        let issued = fx.login_handler().handle(password_login(), t0()).await.unwrap();
+        let claims = fx.minter.verify_access(&issued.access_token).await.unwrap();
+        assert!(claims.profile_ids.is_empty(), "outage degrades to no profile grants");
+        assert_eq!(fx.sessions.count(), 1, "the session is still issued");
     }
 
     #[tokio::test]

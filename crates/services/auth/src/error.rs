@@ -31,6 +31,7 @@ use thiserror::Error;
 /// | AUT-5004 | ClaimsNormalizationFailed    | 502  | Medium   | No        |
 /// | AUT-6001 | AccountNotActive             | 403  | Medium   | No        |
 /// | AUT-6002 | AccountDirectoryUnavailable  | 503  | High     | **Yes**   |
+/// | AUT-6003 | ProfileDirectoryUnavailable  | 503  | Medium   | **Yes**   |
 /// | AUT-9001 | DomainViolation              | 422  | Medium   | No        |
 /// | AUT-9002 | InvalidSessionId             | 422  | Low      | No        |
 /// | AUT-9003 | InvalidAccountId             | 422  | Low      | No        |
@@ -125,6 +126,11 @@ pub enum AuthError {
     #[error("account directory service is unavailable")]
     AccountDirectoryUnavailable,
 
+    /// The `profile` service could not list the account's profiles. Handlers
+    /// degrade to an empty `pids` claim rather than failing the mint.
+    #[error("profile directory service is unavailable")]
+    ProfileDirectoryUnavailable,
+
     // ── Domain invariants & parse errors (AUT-9xxx) ───────────────────────────
     #[error("domain invariant violated on '{field}': {message}")]
     DomainViolation { field: String, message: String },
@@ -170,6 +176,7 @@ impl AppError for AuthError {
 
             AuthError::AccountNotActive { .. } => "AUT-6001",
             AuthError::AccountDirectoryUnavailable => "AUT-6002",
+            AuthError::ProfileDirectoryUnavailable => "AUT-6003",
 
             AuthError::DomainViolation { .. } => "AUT-9001",
             AuthError::InvalidSessionId(_) => "AUT-9002",
@@ -210,7 +217,8 @@ impl AppError for AuthError {
 
             AuthError::SigningKeyUnavailable
             | AuthError::IdpUnavailable
-            | AuthError::AccountDirectoryUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            | AuthError::AccountDirectoryUnavailable
+            | AuthError::ProfileDirectoryUnavailable => StatusCode::SERVICE_UNAVAILABLE,
 
             _ => StatusCode::UNPROCESSABLE_ENTITY,
         }
@@ -234,6 +242,7 @@ impl AppError for AuthError {
             AuthError::InvalidSessionTransition { .. }
             | AuthError::RefreshTokenAlreadyRotated
             | AuthError::ClaimsNormalizationFailed(_)
+            | AuthError::ProfileDirectoryUnavailable
             | AuthError::AccountNotActive { .. }
             | AuthError::DomainViolation { .. } => Severity::Medium,
 
@@ -248,7 +257,8 @@ impl AppError for AuthError {
             AuthError::ConcurrentModification
             | AuthError::SigningKeyUnavailable
             | AuthError::IdpUnavailable
-            | AuthError::AccountDirectoryUnavailable => true,
+            | AuthError::AccountDirectoryUnavailable
+            | AuthError::ProfileDirectoryUnavailable => true,
             _ => false,
         }
     }
@@ -288,6 +298,7 @@ impl AppError for AuthError {
             AuthError::ClaimsNormalizationFailed(_) => "We could not complete sign-in. Please try again.",
             AuthError::AccountNotActive { .. } => "This account cannot sign in at this time.",
             AuthError::AccountDirectoryUnavailable => "The account service is temporarily unavailable.",
+            AuthError::ProfileDirectoryUnavailable => "The profile service is temporarily unavailable.",
             _ => "A domain constraint was violated.",
         }
     }

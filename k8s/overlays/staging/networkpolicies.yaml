@@ -14,14 +14,19 @@
 #   * the TIER-0 audit + the three Kafka-consumer workers (audit/counter/realtime-
 #     dispatcher) get NO mesh ingress at all (default-deny; health probes are
 #     node->pod, permitted by the CNI) — a compromised peer can no longer reach them;
-#   * the realtime gateway's public WSS port (8443) is internet-facing via the NLB.
+#   * the realtime gateway's public WSS port (8443) is internet-facing via the NLB;
+#   * the CLIENT EDGE port (9443) of every client-facing server is reachable from
+#     the ALB (ipBlock — the ALB ENIs are not pods). It is the authenticated,
+#     allow-listed listener (transport::grpc::edge); the mesh ports stay closed
+#     to it.
 #
 # Egress is deliberately NOT restricted yet: locking it down needs the managed
 # data-store CIDRs (MSK/ElastiCache/OpenSearch ENIs), CoreDNS, the OTel collector
 # and S3 endpoints mapped first — doing it blind would break the fleet.
 #
-# DEFERRED: client-facing services stay on same-ns until the BFF/ALB entry point is
-# decided; egress lockdown. See docs/security/network-policy-call-graph.md.
+# DECIDED (2026-09-15): the client entry point is the ALB → per-service EDGE
+# LISTENER (:9443), see `allow-client-edge` below and
+# docs/security/network-policy-call-graph.md §3. DEFERRED: egress lockdown.
 #
 # PREREQUISITE: NetworkPolicy enforcement. The AWS VPC CNI ignores these objects
 # unless enableNetworkPolicy=true (set on the vpc-cni addon in modules/eks). The
@@ -86,6 +91,45 @@ spec:
       ports:
         - protocol: TCP
           port: 8443
+---
+# The CLIENT EDGE: the ALB (target-type ip → its ENIs, which no podSelector can
+# name) reaches each client-facing server's edge listener on :9443. Open to any
+# source on that port, like the WSS rule above: the listener itself allow-lists
+# methods and verifies the edge token, and the pods have private IPs, so only
+# the ALB reaches it from outside. The mesh gRPC ports are NOT in this rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-edge
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - account-server
+          - auth-server
+          - chat-server
+          - comment-server
+          - counter-server
+          - engagement-server
+          - geo-discovery-server
+          - media-server
+          - moderation-server
+          - notification-server
+          - post-server
+          - profile-server
+          - search-server
+          - social-graph-server
+          - timeline-server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 9443
 ---
 # ── Per-service mesh ingress (caller-scoped) ─────────────────────────────────
 # The 6 services that receive intra-fleet gRPC. Each accepts ONLY its known
@@ -157,9 +201,11 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
+        # search hydrates profile docs; auth lists the profiles an account owns
+        # at every token mint (the edge token's `pids` claim).
         - podSelector:
-            matchLabels:
-              app: search-server
+            matchExpressions:
+              - { key: app, operator: In, values: [search-server, auth-server] }
       ports:
         - { protocol: TCP, port: 50052 }
 ---
@@ -199,13 +245,11 @@ spec:
       ports:
         - { protocol: TCP, port: 50060 }
     # Well-known JWKS (:8081, plain HTTP): every edge-token verifier fetches it
-    # via AUTH_JWKS_URL. Server + worker of each verifying service — the env
-    # var is shared per-service, and a worker that eagerly builds its verifier
-    # at boot must not be blocked by policy.
+    # via AUTH_JWKS_URL / EDGE_JWKS_URL. Since the client edge, that is every
+    # server in the fleet (plus realtime and audit, which verified already), so
+    # the whole namespace may read it — it is public key material.
     - from:
-        - podSelector:
-            matchExpressions:
-              - { key: app, operator: In, values: [realtime-gateway, realtime-dispatcher, audit-server, audit-worker] }
+        - podSelector: {}
       ports:
         - { protocol: TCP, port: 8081 }
 ---

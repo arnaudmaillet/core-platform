@@ -44,6 +44,10 @@ resources:
   - ../../base/services/realtime/dispatcher
   # Public WSS entrypoint for the gateway (internet-facing NLB, L4, TLS at edge).
   - realtime-gateway-public.yaml
+  # ── Client edge ──────────────────────────────────────────────────────────────
+  # One internet-facing ALB, host-routed to the client-facing servers' edge
+  # listeners (:9443, edge-token authn). The realtime NLB above is separate.
+  - client-edge-ingress.yaml
   # ── In-cluster stateful backends + secrets sync ──────────────────────────────
   # CNPG Postgres clusters (one per Postgres-backed service). Each exposes a
   # <cluster>-app Secret with the connection `uri`, injected via a per-svc DB patch.
@@ -178,6 +182,16 @@ patches:
   - path: patch-securitycontext.yaml
     target:
       kind: Deployment
+  # Client edge: enable the :9443 edge listener (+ verifier config) on the
+  # client-facing servers only, and expose it on their Services for the ALB.
+  - path: patch-client-edge-env.yaml
+    target:
+      kind: Deployment
+      labelSelector: "app in (account-server,auth-server,chat-server,comment-server,counter-server,engagement-server,geo-discovery-server,media-server,moderation-server,notification-server,post-server,profile-server,search-server,social-graph-server,timeline-server)"
+  - path: patch-client-edge-service-port.yaml
+    target:
+      kind: Service
+      labelSelector: "app in (account-server,auth-server,chat-server,comment-server,counter-server,engagement-server,geo-discovery-server,media-server,moderation-server,notification-server,post-server,profile-server,search-server,social-graph-server,timeline-server)"
   # Inject the synced MSK/Redis creds into every service container.
   - path: patch-backend-creds.yaml
     target:

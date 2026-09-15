@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::mark_read::{MarkAllReadCommand, MarkReadCommand};
 use crate::application::port::{NotificationSummary, StreamRegistry};
 use crate::application::query::{
@@ -59,6 +60,7 @@ where
         &self,
         request: Request<proto::ListNotificationsRequest>,
     ) -> Result<Response<proto::ListNotificationsResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let query = ListNotificationsQuery {
             profile_id: req.profile_id,
@@ -83,6 +85,7 @@ where
         &self,
         request: Request<proto::GetUnreadCountRequest>,
     ) -> Result<Response<proto::GetUnreadCountResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let query = GetUnreadCountQuery { profile_id: request.into_inner().profile_id };
 
         let count: i64 = self
@@ -98,6 +101,7 @@ where
         &self,
         request: Request<proto::MarkReadRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = MarkReadCommand {
             profile_id:      req.profile_id,
@@ -115,6 +119,7 @@ where
         &self,
         request: Request<proto::MarkAllReadRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let cmd = MarkAllReadCommand { profile_id: request.into_inner().profile_id };
         self.command_bus
             .dispatch(Envelope::new(Uuid::now_v7(), cmd))
@@ -130,6 +135,7 @@ where
         Response<Pin<Box<dyn Stream<Item = Result<proto::StreamNotificationsResponse, Status>> + Send + 'static>>>,
         Status,
     > {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let profile_id = ProfileId::try_from(request.into_inner().profile_id.as_str())
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 

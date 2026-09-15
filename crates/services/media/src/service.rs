@@ -16,6 +16,8 @@ use async_trait::async_trait;
 use postgres_storage::PostgresConfig;
 use redis_storage::RedisConfig;
 use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{ConsumerConfig, KafkaClientConfig, ProducerConfig};
@@ -54,6 +56,19 @@ impl Service for MediaService {
     const NAME: &'static str = "media";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <MediaServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // Reprocess is an ops RPC and stays mesh-only.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/media.v1.MediaService/IssueUploadTicket"),
+        authenticated("/media.v1.MediaService/CommitUpload"),
+        authenticated("/media.v1.MediaService/AbortUpload"),
+        authenticated("/media.v1.MediaService/GetAsset"),
+        authenticated("/media.v1.MediaService/DeleteAsset"),
+        authenticated("/media.v1.MediaService/ResolveDelivery"),
+        authenticated("/media.v1.MediaService/BatchResolveDelivery"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let config = MediaConfig::from_env();

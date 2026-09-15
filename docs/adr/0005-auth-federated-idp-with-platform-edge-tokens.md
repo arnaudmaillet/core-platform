@@ -31,6 +31,22 @@ single-use (rotation invalidates the prior).
   against verification cost.
 - **Closes:** the conflation of account/verify/issuance; the stateless-vs-revocable tension.
 
+## Amendment 2026-09-15 — the `pids` claim and the client edge
+
+The client-facing surface is keyed by **profile** id while `sub` is the **account** id, and
+one account owns N profiles. Rather than a per-request lookup (a hop the decision above
+rules out) or an acting-profile switch flow, `auth` mints the profiles the account owns
+into a `pids` claim at every login and refresh (read from `profile` via
+`ListProfilesByAccount`; **fail-safe** — an outage mints an empty claim, never a failed
+login). Services bind a request's profile-keyed actor with `require_profile` (must be in
+`pids`) and an account-keyed one with `require_account` (must equal `sub`), all in-process
+(`transport::grpc::edge`). Verification itself moved from two services (realtime, audit)
+to every client-facing server's **edge listener** (`:9443`), via the shared
+`auth-context::spawn_edge_decoder` and the `platform_edge` extractor (which reads `perms`;
+the default OIDC extractor silently dropped it). Still open from the consequences above:
+the **generation lookup** at verify time — revocation remains bounded by the 10-minute
+access TTL.
+
 ## Alternatives rejected
 
 | Option | Why rejected |

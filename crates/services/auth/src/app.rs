@@ -20,14 +20,14 @@ use crate::application::command::{
     LoginHandler, LogoutAllSessionsHandler, LogoutHandler, RefreshHandler,
 };
 use crate::application::port::{
-    AccountDirectory, EventPublisher, IdentityProvider, RefreshTokenRepository, SessionCache,
-    SessionRepository, SubjectLinkRepository, TokenMinter,
+    AccountDirectory, EventPublisher, IdentityProvider, ProfileDirectory, RefreshTokenRepository,
+    SessionCache, SessionRepository, SubjectLinkRepository, TokenMinter,
 };
 use crate::application::query::{IntrospectHandler, ListSessionsHandler};
 use crate::application::SessionPolicy;
 use crate::config::AuthConfig;
 use crate::infrastructure::cache::RedisSessionCache;
-use crate::infrastructure::directory::GrpcAccountDirectory;
+use crate::infrastructure::directory::{GrpcAccountDirectory, GrpcProfileDirectory};
 use crate::infrastructure::event::outbox_relay::OutboxRelay;
 use crate::infrastructure::event::pg_outbox_publisher::PgOutboxPublisher;
 use crate::infrastructure::event::{KafkaEventPublisher, LogEventPublisher};
@@ -38,10 +38,11 @@ use crate::infrastructure::persistence::{
 };
 use crate::infrastructure::token::Es256TokenMinter;
 
-/// The eight ports the application layer depends on, plus the token policy.
+/// The nine ports the application layer depends on, plus the token policy.
 pub struct AppDeps {
     pub idp: Arc<dyn IdentityProvider>,
     pub directory: Arc<dyn AccountDirectory>,
+    pub profiles: Arc<dyn ProfileDirectory>,
     pub links: Arc<dyn SubjectLinkRepository>,
     pub sessions: Arc<dyn SessionRepository>,
     pub refresh_tokens: Arc<dyn RefreshTokenRepository>,
@@ -81,6 +82,7 @@ impl App {
         let login = Arc::new(LoginHandler::new(
             Arc::clone(&deps.idp),
             Arc::clone(&deps.directory),
+            Arc::clone(&deps.profiles),
             Arc::clone(&deps.links),
             Arc::clone(&deps.sessions),
             Arc::clone(&deps.refresh_tokens),
@@ -91,6 +93,7 @@ impl App {
         ));
         let refresh = Arc::new(RefreshHandler::new(
             Arc::clone(&deps.directory),
+            Arc::clone(&deps.profiles),
             Arc::clone(&deps.sessions),
             Arc::clone(&deps.refresh_tokens),
             Arc::clone(&deps.cache),
@@ -151,6 +154,12 @@ impl App {
             .timeout(config.account_rpc_timeout)
             .connect_timeout(config.account_connect_timeout)
             .connect_lazy();
+        // Same shape for `profile` (the `pids` claim). Failures here are
+        // fail-safe in the handlers, but a hung call must still bound the mint.
+        let profile_channel = Channel::from_shared(config.profile_endpoint)?
+            .timeout(config.profile_rpc_timeout)
+            .connect_timeout(config.profile_connect_timeout)
+            .connect_lazy();
 
         // reqwest's default client has no request timeout; the token exchange
         // must fail fast when the IdP hangs.
@@ -168,6 +177,7 @@ impl App {
         let deps = AppDeps {
             idp: Arc::new(KeycloakIdentityProvider::new(idp_client, config.keycloak)),
             directory: Arc::new(GrpcAccountDirectory::new(channel)),
+            profiles: Arc::new(GrpcProfileDirectory::new(profile_channel)),
             links: Arc::new(PgSubjectLinkRepository::new(tx.clone())),
             sessions: Arc::new(PgSessionRepository::new(tx.clone())),
             refresh_tokens: Arc::new(PgRefreshTokenRepository::new(tx.clone())),
@@ -194,6 +204,7 @@ mod tests {
         App::compose(AppDeps {
             idp: fx.idp.clone(),
             directory: fx.directory.clone(),
+            profiles: fx.profiles.clone(),
             links: fx.links.clone(),
             sessions: fx.sessions.clone(),
             refresh_tokens: fx.refresh_tokens.clone(),

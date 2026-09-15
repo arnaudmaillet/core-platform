@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./0005-auth-federated-idp-with-platform-edge-tokens.md
-  source_sha256: 1c8d06299212ce64736e03ba23385a9ca17c2253842bec77622cbce2e8cf2dc5
-  translated_at: 2026-06-28
+  source_sha256: 528e8f77969013ae96f82a6ee7693f005583f528774ef4bef0653d075ba53e1a
+  translated_at: 2026-09-15
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`0005-auth-federated-idp-with-platform-edge-tokens.md`](./0005-auth-federated-idp-with-platform-edge-tokens.md) fait foi.
@@ -41,6 +41,22 @@ tokens ; les refresh tokens sont à usage unique (la rotation invalide le préc�
   vérif (un petit lookup) pour que la révocation soit rapide ; le réglage de durée de vie des tokens
   arbitre entre latence de révocation et coût de vérification.
 - **Clôt :** la confusion compte/vérif/émission ; la tension stateless-vs-révocable.
+
+## Amendement 2026-09-15 — le claim `pids` et la périphérie client
+
+La surface client-facing est indexée par id de **profil** alors que `sub` est l'id de
+**compte**, et un compte possède N profils. Plutôt qu'un lookup par requête (le saut que la
+décision ci-dessus exclut) ou un flux de bascule de profil actif, `auth` émet les profils que
+possède le compte dans un claim `pids` à chaque login et refresh (lus depuis `profile` via
+`ListProfilesByAccount` ; **fail-safe** — une panne émet un claim vide, jamais un login en
+échec). Les services lient l'acteur indexé par profil d'une requête avec `require_profile`
+(doit figurer dans `pids`) et un acteur indexé par compte avec `require_account` (doit égaler
+`sub`), le tout dans le processus (`transport::grpc::edge`). La vérification elle-même est
+passée de deux services (realtime, audit) à l'**écouteur de périphérie** (`:9443`) de chaque
+serveur client-facing, via `auth-context::spawn_edge_decoder` partagé et l'extracteur
+`platform_edge` (qui lit `perms` ; l'extracteur OIDC par défaut l'ignorait silencieusement).
+Reste ouvert parmi les conséquences ci-dessus : le **lookup de génération** à la vérification
+— la révocation reste bornée par le TTL d'accès de 10 minutes.
 
 ## Alternatives rejetées
 

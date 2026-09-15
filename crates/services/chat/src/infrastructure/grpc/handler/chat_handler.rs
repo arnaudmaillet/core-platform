@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     CreateConversationCommand, JoinAsMemberCommand, MarkReadCommand, SendMessageCommand,
     SubscribeCommand, ToggleVisibilityCommand, UnsubscribeCommand,
@@ -105,6 +106,7 @@ where
         &self,
         request: Request<proto::CreateConversationRequest>,
     ) -> Result<Response<proto::CreateConversationResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().owner_id)?;
         let req = request.into_inner();
         let conversation_id = Uuid::now_v7().to_string();
 
@@ -125,6 +127,7 @@ where
         &self,
         request: Request<proto::ToggleVisibilityRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let cmd = ToggleVisibilityCommand {
             conversation_id: req.conversation_id,
@@ -138,6 +141,7 @@ where
         &self,
         request: Request<proto::JoinAsMemberRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = JoinAsMemberCommand {
             conversation_id: req.conversation_id,
@@ -150,6 +154,7 @@ where
         &self,
         request: Request<proto::SubscribeRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().subscriber_id)?;
         let req = request.into_inner();
         let cmd = SubscribeCommand {
             conversation_id: req.conversation_id,
@@ -162,6 +167,7 @@ where
         &self,
         request: Request<proto::UnsubscribeRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().subscriber_id)?;
         let req = request.into_inner();
         let cmd = UnsubscribeCommand {
             conversation_id: req.conversation_id,
@@ -174,6 +180,7 @@ where
         &self,
         request: Request<proto::SendMessageRequest>,
     ) -> Result<Response<proto::SendMessageResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().sender_id)?;
         let req = request.into_inner();
         let message_id = Uuid::now_v7().to_string();
 
@@ -231,6 +238,7 @@ where
         &self,
         request: Request<proto::MarkReadRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().member_id)?;
         let req = request.into_inner();
 
         let cmd = MarkReadCommand {
@@ -264,6 +272,7 @@ where
         &self,
         request: Request<proto::SendTypingRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().member_id)?;
         let req = request.into_inner();
         let conversation_id = parse_conversation(&req.conversation_id)?;
         let member_id       = parse_profile(&req.member_id)?;
@@ -283,6 +292,7 @@ where
         &self,
         request: Request<proto::HeartbeatRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().member_id)?;
         let req = request.into_inner();
         let conversation_id = parse_conversation(&req.conversation_id)?;
         let member_id       = parse_profile(&req.member_id)?;
@@ -304,6 +314,7 @@ where
         &self,
         request: Request<proto::GetHistoryRequest>,
     ) -> Result<Response<proto::GetHistoryResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().requester_id)?;
         let req = request.into_inner();
         let query = GetHistoryQuery {
             conversation_id: req.conversation_id,
@@ -328,6 +339,7 @@ where
         &self,
         request: Request<proto::ListMembersRequest>,
     ) -> Result<Response<proto::ListMembersResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().requester_id)?;
         let req = request.into_inner();
         let query = ListMembersQuery {
             conversation_id: req.conversation_id,
@@ -349,6 +361,7 @@ where
         &self,
         request: Request<proto::ListSubscriptionsRequest>,
     ) -> Result<Response<proto::ListSubscriptionsResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().subscriber_id)?;
         let req = request.into_inner();
         let query = ListSubscriptionsQuery {
             subscriber_id: req.subscriber_id,
@@ -374,6 +387,7 @@ where
         &self,
         request: Request<proto::StreamConversationRequest>,
     ) -> Result<Response<StreamConversationStream>, Status> {
+        edge::require_profile(&request, &request.get_ref().member_id)?;
         let req = request.into_inner();
         let conversation_id = parse_conversation(&req.conversation_id)?;
         let member_id       = parse_profile(&req.member_id)?;

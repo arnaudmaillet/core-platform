@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     create_comment::CreateCommentCommand,
     delete_comment::DeleteCommentCommand,
@@ -52,6 +53,7 @@ where
         &self,
         request: Request<proto::CreateCommentRequest>,
     ) -> Result<Response<proto::CreateCommentResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().author_id)?;
         let req = request.into_inner();
 
         let comment_id = if req.comment_id.is_empty() {
@@ -86,6 +88,7 @@ where
         &self,
         request: Request<proto::DeleteCommentRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().author_id)?;
         let req = request.into_inner();
         let cmd = DeleteCommentCommand {
             comment_id: req.comment_id,

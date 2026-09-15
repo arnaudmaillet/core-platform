@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     create_post::CreatePostCommand,
     delete_post::DeletePostCommand,
@@ -55,6 +56,7 @@ where
         &self,
         request: Request<proto::CreatePostRequest>,
     ) -> Result<Response<proto::CreatePostResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req         = request.into_inner();
         let post_id     = PostId::new_v7();
         let post_id_str = post_id.as_str();
@@ -88,6 +90,7 @@ where
         &self,
         request: Request<proto::PublishPostRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = PublishPostCommand {
             post_id:    req.post_id,
@@ -104,6 +107,7 @@ where
         &self,
         request: Request<proto::UpdatePostRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = UpdatePostCommand {
             post_id:     req.post_id,
@@ -122,6 +126,7 @@ where
         &self,
         request: Request<proto::DeletePostRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = DeletePostCommand {
             post_id:    req.post_id,

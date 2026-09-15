@@ -17,6 +17,10 @@ use crate::error::AuthError;
 #[derive(Debug, Clone)]
 pub struct LogoutCommand {
     pub session_id: String,
+    /// The authenticated account when dispatched from the client edge: the
+    /// session must belong to it (a foreign session reads as not found, so the
+    /// surface leaks no session ids). `None` over the mesh.
+    pub actor: Option<String>,
 }
 
 impl Validate for LogoutCommand {
@@ -73,6 +77,12 @@ impl LogoutHandler {
             .await?
             .ok_or(AuthError::SessionNotFound { id: session_id.as_str() })?;
 
+        if let Some(actor) = &envelope.payload.actor
+            && session.account_id().as_str() != *actor
+        {
+            return Err(AuthError::SessionNotFound { id: session_id.as_str() });
+        }
+
         // Already terminal ⇒ idempotent success, nothing to do.
         if session.status() != SessionStatus::Active {
             return Ok(LogoutOutcome { success: true });
@@ -112,7 +122,7 @@ mod tests {
     }
 
     fn logout_env(session_id: &str) -> Envelope<LogoutCommand> {
-        Envelope::new(Uuid::now_v7(), LogoutCommand { session_id: session_id.to_owned() })
+        Envelope::new(Uuid::now_v7(), LogoutCommand { session_id: session_id.to_owned(), actor: None })
     }
 
     #[tokio::test]

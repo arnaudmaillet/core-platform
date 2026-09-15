@@ -102,6 +102,7 @@ async fn minted_edge_token_is_verified_by_auth_context() {
         session_id: session,
         generation: Generation::from_i64(7),
         permissions: vec![Permission::new("posts:write"), Permission::new("ROLE_ADMIN")],
+        profile_ids: Vec::new(),
         issued_at: Utc::now(),
         expires_at: Utc::now() + Duration::minutes(10),
     };
@@ -128,6 +129,7 @@ async fn auth_context_rejects_a_token_for_a_different_audience() {
         session_id: SessionId::new(),
         generation: Generation::INITIAL,
         permissions: vec![],
+        profile_ids: Vec::new(),
         issued_at: Utc::now(),
         expires_at: Utc::now() + Duration::minutes(10),
     };

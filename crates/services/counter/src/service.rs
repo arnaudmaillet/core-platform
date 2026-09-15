@@ -19,6 +19,8 @@ use async_trait::async_trait;
 use fred::interfaces::LuaInterface;
 use redis_storage::RedisClient;
 use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tokio::sync::Mutex;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
@@ -75,6 +77,14 @@ impl Service for CounterReadService {
     const NAME: &'static str = "counter";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <CounterServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // GetTimeSeries is an analytics surface and stays mesh-only.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/counter.v1.CounterService/BatchGetCounters"),
+        authenticated("/counter.v1.CounterService/GetTrending"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let CounterConfig {

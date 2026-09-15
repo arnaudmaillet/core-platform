@@ -118,6 +118,29 @@ impl Default for OidcExtractorConfig {
     }
 }
 
+/// The claim the platform's `auth` service mints its normalised permissions into
+/// (`EdgeClaims::perms` in `crates/services/auth`). Not a standard OIDC claim, so
+/// the [`Default`] extractor config never reads it — use
+/// [`OidcExtractorConfig::platform_edge`] for edge tokens.
+pub const EDGE_PERMISSIONS_CLAIM: &str = "perms";
+
+impl OidcExtractorConfig {
+    /// Extractor config for the platform's own ES256 **edge tokens** (minted by
+    /// `auth`, ADR-0005): `sub` is the internal account id and permissions live in
+    /// the [`EDGE_PERMISSIONS_CLAIM`] array. The standard sources are kept after it
+    /// so a token from a federated IdP still yields its scopes.
+    pub fn platform_edge() -> Self {
+        Self {
+            tenant_id_claim: "tid".to_owned(),
+            role_sources: vec![
+                RoleSource::Custom(EDGE_PERMISSIONS_CLAIM.to_owned()),
+                RoleSource::Scope,
+                RoleSource::PermissionsClaim,
+            ],
+        }
+    }
+}
+
 // ── Extractor implementation ─────────────────────────────────────────────────
 
 /// Default [`ClaimsExtractor`] for standard OIDC-compliant providers.
@@ -144,6 +167,14 @@ impl OidcClaimsExtractor {
 impl Default for OidcClaimsExtractor {
     fn default() -> Self {
         Self::new(OidcExtractorConfig::default())
+    }
+}
+
+impl OidcClaimsExtractor {
+    /// The extractor for the platform's edge tokens — see
+    /// [`OidcExtractorConfig::platform_edge`].
+    pub fn platform_edge() -> Self {
+        Self::new(OidcExtractorConfig::platform_edge())
     }
 }
 

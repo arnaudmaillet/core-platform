@@ -9,24 +9,30 @@ use traffic::QuotaBackend;
 use crate::{
     error::TransportError,
     grpc::{
-        layer::{inbound::InboundTraceLayer, traffic::TrafficLayer},
+        layer::{edge::EdgeLayer, inbound::InboundTraceLayer, traffic::TrafficLayer},
         server::config::GrpcServerConfig,
     },
 };
 
 /// Concrete server type produced by [`GrpcServerBuilder::build`].
 ///
-/// The tonic type after applying [`InboundTraceLayer`] then [`TrafficLayer`]: trace is the
-/// outer layer (so throttled requests are still traced), rate-limiting the inner. The
-/// [`TrafficLayer`] is always present in the type — it's a transparent pass-through unless a
-/// registry was supplied via [`GrpcServerBuilder::with_traffic`], keeping the return type
-/// stable regardless of whether limiting is enabled.
-pub type TracedGrpcServer = Server<Stack<TrafficLayer, Stack<InboundTraceLayer, Identity>>>;
+/// The tonic type after applying [`InboundTraceLayer`], then [`EdgeLayer`], then
+/// [`TrafficLayer`]: trace is the outer layer (so rejected and throttled requests are still
+/// traced), the edge guard sits in the middle (so the identity it verifies is what
+/// `per_caller` rate-limiting keys on), rate-limiting the inner. Both the [`EdgeLayer`]
+/// and the [`TrafficLayer`] are always present in the type — each is a transparent
+/// pass-through unless enabled via [`GrpcServerBuilder::with_edge`] /
+/// [`GrpcServerBuilder::with_traffic`], keeping the return type stable.
+pub type TracedGrpcServer =
+    Server<Stack<TrafficLayer, Stack<EdgeLayer, Stack<InboundTraceLayer, Identity>>>>;
 
-/// Builds a Tonic gRPC server with [`InboundTraceLayer`] and [`TrafficLayer`] pre-installed.
+/// Builds a Tonic gRPC server with [`InboundTraceLayer`], [`EdgeLayer`] and [`TrafficLayer`]
+/// pre-installed.
 ///
-/// Every request has its W3C TraceContext extracted and linked as the parent span; if a
-/// traffic registry was supplied, it is also rate-limited per the bound `[traffic]` profile.
+/// Every request has its W3C TraceContext extracted and linked as the parent span; if an
+/// edge guard was supplied the listener is a client edge (allow-listed methods, edge-token
+/// authentication); if a traffic registry was supplied, it is also rate-limited per the
+/// bound `[traffic]` profile.
 ///
 /// # Example
 ///
@@ -40,13 +46,22 @@ pub type TracedGrpcServer = Server<Stack<TrafficLayer, Stack<InboundTraceLayer, 
 /// ```
 pub struct GrpcServerBuilder {
     config: GrpcServerConfig,
+    edge: Option<EdgeLayer>,
     traffic: Option<Arc<TrafficRegistry>>,
     traffic_backend: Option<Arc<dyn QuotaBackend>>,
 }
 
 impl GrpcServerBuilder {
     pub fn new(config: GrpcServerConfig) -> Self {
-        Self { config, traffic: None, traffic_backend: None }
+        Self { config, edge: None, traffic: None, traffic_backend: None }
+    }
+
+    /// Makes this server a **client edge**: only the guard's allow-listed methods are
+    /// served, and (unless a rule is public) callers must present a valid edge token.
+    /// Without this call the edge layer is a transparent pass-through (a mesh listener).
+    pub fn with_edge(mut self, guard: Arc<crate::grpc::layer::edge::EdgeGuard>) -> Self {
+        self.edge = Some(EdgeLayer::new(guard, self.config.identity_header.clone()));
+        self
     }
 
     /// Enables ingress rate limiting from the given registry. Without this call the server
@@ -79,9 +94,14 @@ impl GrpcServerBuilder {
             }
             None => TrafficLayer::disabled(),
         };
-        // `.layer(InboundTraceLayer)` first makes trace the outer layer; `.layer(traffic)`
-        // nests rate-limiting inside the span.
-        let mut server = Server::builder().layer(InboundTraceLayer).layer(traffic_layer);
+        let edge_layer = self.edge.unwrap_or_else(EdgeLayer::disabled);
+        // `.layer(InboundTraceLayer)` first makes trace the outer layer; `.layer(edge)` nests
+        // the edge guard inside the span; `.layer(traffic)` nests rate-limiting innermost so
+        // `per_caller` keys see the identity header the edge guard wrote.
+        let mut server = Server::builder()
+            .layer(InboundTraceLayer)
+            .layer(edge_layer)
+            .layer(traffic_layer);
 
         if let Some(age) = self.config.max_connection_age {
             server = server.max_connection_age(age);

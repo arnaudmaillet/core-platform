@@ -30,6 +30,18 @@
 //! keyspaces. With no `[traffic]` section the layer is a transparent pass-through
 //! and no prune loop runs.
 //!
+//! ## The client edge (second listener)
+//!
+//! A service always serves its **mesh** listener on `addr` (in-cluster callers,
+//! guarded by NetworkPolicy, no token check). When [`GRPC_EDGE_ADDR_ENV`] is set
+//! it *also* serves a **client edge** listener — the one the public load balancer
+//! targets — guarded by transport's `EdgeLayer`: only the RPCs the service
+//! declares in [`Service::EDGE_POLICY`] are reachable, and unless a rule is public
+//! the caller must present a valid ES256 edge token minted by `auth`, verified
+//! in-process against the JWKS at [`EDGE_JWKS_URL_ENV`]. The edge is fail-closed
+//! by construction: enabling it without a verifier config is a boot error, and an
+//! empty policy exposes nothing but health.
+//!
 //! ## Dynamic health
 //!
 //! The gRPC `grpc.health.v1.Health` status is **not** pinned to `SERVING` at
@@ -44,6 +56,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use auth_context::{spawn_edge_decoder, AuthContextConfig};
+use futures::FutureExt;
 use infra_config::{
     load_from_path, spawn_watcher, ConfigError, TelemetrySamplingSpec, TelemetrySettings,
     TelemetrySink, TrafficRegistry,
@@ -55,6 +69,8 @@ use telemetry::{SamplingStrategy, TelemetryConfig, TelemetryControl};
 use tonic::service::RoutesBuilder;
 use tonic_health::server::{health_reporter, HealthReporter};
 use tonic_health::ServingStatus;
+pub use transport::grpc::edge::{self as edge, EdgePolicy};
+use transport::grpc::layer::edge::EdgeGuard;
 use transport::grpc::server::{GrpcServerBuilder, GrpcServerConfig};
 
 /// Environment variable naming the externalized-config document.
@@ -79,6 +95,21 @@ const DEFAULT_MAX_CONNECTION_AGE_SECS: u64 = 300;
 /// Environment variable enabling forced close of streams that outlive the age
 /// deadline (seconds; unset/`0` = never sever in-flight streams).
 const MAX_CONNECTION_AGE_GRACE_ENV: &str = "GRPC_MAX_CONNECTION_AGE_GRACE_SECS";
+/// Environment variable binding the **client edge** listener (e.g. `0.0.0.0:9443`).
+/// Unset ⇒ no edge listener: the service is mesh-only (local dev, workers, TIER-0
+/// planes that are not client-facing).
+pub const GRPC_EDGE_ADDR_ENV: &str = "GRPC_EDGE_ADDR";
+/// JWKS URL of the `auth` service's edge-token keys. Required when the edge
+/// listener is enabled.
+pub const EDGE_JWKS_URL_ENV: &str = "EDGE_JWKS_URL";
+/// Expected `iss` of edge tokens. Required when the edge listener is enabled.
+pub const EDGE_TOKEN_ISSUER_ENV: &str = "EDGE_TOKEN_ISSUER";
+/// Expected `aud` of edge tokens. Required when the edge listener is enabled.
+pub const EDGE_TOKEN_AUDIENCE_ENV: &str = "EDGE_TOKEN_AUDIENCE";
+/// Optional JWKS refresh cadence override (seconds; default 300).
+const EDGE_JWKS_REFRESH_ENV: &str = "EDGE_JWKS_REFRESH_SECS";
+/// Optional per-fetch JWKS timeout override (milliseconds; default 10 000).
+const EDGE_JWKS_TIMEOUT_ENV: &str = "EDGE_JWKS_TIMEOUT_MS";
 
 /// Backend health probes now live in the `health` foundation crate, so storage
 /// crates can expose ready-made probes (`<storage>::health::probe(...)`) without
@@ -102,6 +133,13 @@ pub trait Service: Sized + Send + 'static {
     /// Fully-qualified gRPC service name used as the health-reporting key,
     /// i.e. `<ConcreteServer as tonic::server::NamedService>::NAME`.
     const GRPC_SERVICE_NAME: &'static str;
+
+    /// The RPCs this service exposes on the **client edge** listener, and what each
+    /// requires (see [`edge`]). Default: none — a service with no policy serves
+    /// health only on the edge, so nothing is public until it is reviewed and
+    /// listed here. Handlers of listed methods must bind their actor field to the
+    /// verified caller with [`edge::require_account`] / [`edge::require_profile`].
+    const EDGE_POLICY: EdgePolicy = &[];
 
     /// Pure composition root: build the fully-wired service graph.
     ///
@@ -171,7 +209,7 @@ pub async fn serve<S: Service>(addr: SocketAddr) -> anyhow::Result<()> {
         .register(&mut routes)
         .context("register grpc routes")?;
 
-    // ── gRPC server: inbound-trace (outer) + traffic (inner) layers ────────────
+    // ── gRPC servers: inbound-trace (outer) + edge + traffic (inner) layers ────
     // Connection recycling (GOAWAY after max_connection_age) is on by default:
     // it is what re-spreads long-lived HTTP/2 channels across replicas after a
     // scale-out. In-flight streams are never severed unless the grace env is set.
@@ -183,12 +221,38 @@ pub async fn serve<S: Service>(addr: SocketAddr) -> anyhow::Result<()> {
         grpc_config = grpc_config.with_max_connection_age_grace(grace);
     }
     let traffic = infra.traffic();
-    let mut server_builder = GrpcServerBuilder::new(grpc_config);
+    let routes = routes.routes();
+
+    // The mesh listener: no edge guard (in-cluster callers, NetworkPolicy-scoped).
+    let mut mesh_builder = GrpcServerBuilder::new(grpc_config.clone());
     if let Some(registry) = &traffic {
-        server_builder = server_builder.with_traffic(Arc::clone(registry));
+        mesh_builder = mesh_builder.with_traffic(Arc::clone(registry));
     }
-    let mut server = server_builder.build().context("build gRPC server")?;
-    let router = server.add_routes(routes.routes());
+    let mut mesh_server = mesh_builder.build().context("build mesh gRPC server")?;
+    let mesh_router = mesh_server.add_routes(routes.clone());
+
+    // The client edge listener (optional): allow-listed methods + edge-token authn.
+    // Fail-closed: enabling it without a verifier config is a boot error.
+    let edge_router = match EdgeConfig::from_env()? {
+        None => None,
+        Some(cfg) => {
+            edge::validate_policy(S::EDGE_POLICY).map_err(anyhow::Error::msg)?;
+            let guard = Arc::new(EdgeGuard::new(spawn_edge_decoder(&cfg.auth), S::EDGE_POLICY));
+            let mut edge_builder = GrpcServerBuilder::new(grpc_config).with_edge(Arc::clone(&guard));
+            if let Some(registry) = &traffic {
+                edge_builder = edge_builder.with_traffic(Arc::clone(registry));
+            }
+            let mut edge_server = edge_builder.build().context("build edge gRPC server")?;
+            tracing::info!(
+                service = S::NAME,
+                addr = %cfg.addr,
+                exposed_methods = guard.exposed_methods(),
+                jwks_url = %cfg.auth.jwks_url,
+                "client edge listener enabled"
+            );
+            Some((cfg.addr, edge_server.add_routes(routes)))
+        }
+    };
 
     // ── Background loops: readiness health + traffic-memory bounding ────────────
     spawn_readiness(S::GRPC_SERVICE_NAME, health, probes);
@@ -198,13 +262,80 @@ pub async fn serve<S: Service>(addr: SocketAddr) -> anyhow::Result<()> {
 
     tracing::info!(service = S::NAME, version = S::VERSION, %addr, "gRPC server listening");
 
-    router
-        .serve_with_shutdown(addr, shutdown_signal())
-        .await
-        .context("grpc server terminated")?;
+    // One shutdown signal fans out to every listener.
+    let shutdown = shutdown_signal().shared();
+    match edge_router {
+        None => mesh_router
+            .serve_with_shutdown(addr, shutdown)
+            .await
+            .context("grpc server terminated")?,
+        Some((edge_addr, edge_router)) => {
+            tokio::try_join!(
+                async {
+                    mesh_router
+                        .serve_with_shutdown(addr, shutdown.clone())
+                        .await
+                        .context("mesh grpc server terminated")
+                },
+                async {
+                    edge_router
+                        .serve_with_shutdown(edge_addr, shutdown.clone())
+                        .await
+                        .context("edge grpc server terminated")
+                },
+            )?;
+        }
+    }
 
     tracing::info!(service = S::NAME, "shutdown complete");
     Ok(())
+}
+
+/// Resolved client-edge settings — `None` when [`GRPC_EDGE_ADDR_ENV`] is unset.
+struct EdgeConfig {
+    addr: SocketAddr,
+    auth: AuthContextConfig,
+}
+
+impl EdgeConfig {
+    /// Reads the edge settings. Enabling the listener without the verifier
+    /// triple (JWKS URL, issuer, audience) is an error: an edge that cannot verify
+    /// tokens must not come up at all.
+    fn from_env() -> anyhow::Result<Option<Self>> {
+        let Some(raw_addr) = std::env::var(GRPC_EDGE_ADDR_ENV).ok().filter(|v| !v.is_empty())
+        else {
+            return Ok(None);
+        };
+        let addr: SocketAddr = raw_addr
+            .parse()
+            .with_context(|| format!("{GRPC_EDGE_ADDR_ENV}={raw_addr} is not a socket address"))?;
+
+        let required = |key: &str| -> anyhow::Result<String> {
+            std::env::var(key)
+                .ok()
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "{GRPC_EDGE_ADDR_ENV} is set but {key} is not — the client edge \
+                         cannot verify tokens without it (fail-closed)"
+                    )
+                })
+        };
+        let auth = AuthContextConfig {
+            jwks_url: required(EDGE_JWKS_URL_ENV)?,
+            expected_issuer: Some(required(EDGE_TOKEN_ISSUER_ENV)?),
+            expected_audience: Some(required(EDGE_TOKEN_AUDIENCE_ENV)?),
+            refresh_interval: interval_from_env(EDGE_JWKS_REFRESH_ENV, 300),
+            fetch_timeout: Duration::from_millis(
+                std::env::var(EDGE_JWKS_TIMEOUT_ENV)
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(10_000),
+            ),
+            ..AuthContextConfig::default()
+        };
+        Ok(Some(Self { addr, auth }))
+    }
 }
 
 /// Spawns the background loop that maps backend [`HealthProbe`] results onto the

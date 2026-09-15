@@ -13,6 +13,8 @@ use cqrs::query::InMemoryQueryBus;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::KafkaClientConfig;
@@ -38,6 +40,16 @@ impl Service for NotificationService {
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str =
         <NotificationServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/notification.v1.NotificationService/ListNotifications"),
+        authenticated("/notification.v1.NotificationService/GetUnreadCount"),
+        authenticated("/notification.v1.NotificationService/MarkRead"),
+        authenticated("/notification.v1.NotificationService/MarkAllRead"),
+        authenticated("/notification.v1.NotificationService/StreamNotifications"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let config = Arc::new(NotificationConfig::from_env());

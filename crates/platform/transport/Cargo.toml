@@ -13,6 +13,7 @@ error = { workspace = true }
 resilience = { workspace = true }
 infra-config      = { workspace = true }
 traffic           = { workspace = true }
+auth-context      = { workspace = true }
 
 # gRPC — Tonic + Tower
 tonic = { workspace = true }
@@ -64,3 +65,9 @@ testcontainers-modules = { workspace = true, features = ["kafka"] }
 uuid = { workspace = true }
 # Implementing a fake QuotaBackend in the traffic-layer tests.
 async-trait = { workspace = true }
+# Minting ES256 edge tokens in the edge-layer tests (same key stack as the `auth`
+# service's minter; keys are generated per test, never hardcoded).
+jsonwebtoken = { workspace = true }
+p256         = { version = "0.13", features = ["pem", "pkcs8", "ecdsa"] }
+rand_core    = { version = "0.6", features = ["getrandom"] }
+serde_json   = { workspace = true }

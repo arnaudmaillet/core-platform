@@ -459,6 +459,7 @@ services:
       AUTH_SIGNING_KID: local-es256-1
       AUTH_JWKS_HTTP_ADDR: 0.0.0.0:8081
       AUTH_ACCOUNT_GRPC_ENDPOINT: http://account-server:50059
+      AUTH_PROFILE_GRPC_ENDPOINT: http://profile-server:50052
       # Keycloak login broker (password grant) — public client, no secret needed.
       AUTH_KEYCLOAK_TOKEN_ENDPOINT: http://keycloak:8080/realms/core-platform/protocol/openid-connect/token
       AUTH_KEYCLOAK_CLIENT_ID: core-platform-auth

@@ -6,6 +6,7 @@ use error::AppError;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
+use transport::grpc::edge;
 use crate::application::command::{
     IssuedSession, LoginCommand, LoginHandler, LogoutAllSessionsCommand, LogoutAllSessionsHandler,
     LogoutCommand, LogoutHandler, RefreshCommand, RefreshHandler,
@@ -93,7 +94,19 @@ impl AuthServiceHandler {
         &self,
         request: Request<proto::LogoutRequest>,
     ) -> Result<Response<proto::LogoutResponse>, Status> {
-        let cmd = LogoutCommand { session_id: request.into_inner().session_id };
+        // Edge: an empty session_id means "my current session" (the token's
+        // `sid`), and the session must belong to the caller. Mesh: as supplied.
+        let principal = edge::principal(&request);
+        let supplied = &request.get_ref().session_id;
+        let session_id = if supplied.is_empty() {
+            principal.and_then(|p| p.session_id()).map(str::to_owned).unwrap_or_default()
+        } else {
+            supplied.clone()
+        };
+        let cmd = LogoutCommand {
+            session_id,
+            actor: principal.map(|p| p.account_id().to_owned()),
+        };
         let out = self
             .logout
             .handle(Envelope::new(Uuid::now_v7(), cmd), Utc::now())
@@ -106,7 +119,8 @@ impl AuthServiceHandler {
         &self,
         request: Request<proto::LogoutAllSessionsRequest>,
     ) -> Result<Response<proto::LogoutAllSessionsResponse>, Status> {
-        let cmd = LogoutAllSessionsCommand { account_id: request.into_inner().account_id };
+        let account_id = edge_account(&request, &request.get_ref().account_id)?;
+        let cmd = LogoutAllSessionsCommand { account_id };
         let out = self
             .logout_all
             .handle(Envelope::new(Uuid::now_v7(), cmd), Utc::now())
@@ -146,8 +160,11 @@ impl AuthServiceHandler {
     ) -> Result<Response<proto::ListSessionsResponse>, Status> {
         use cqrs::QueryHandler;
         let query = ListSessionsQuery {
-            account_id: request.into_inner().account_id,
-            current_session_id: None,
+            account_id: edge_account(&request, &request.get_ref().account_id)?,
+            // Lets the view flag the caller's own session.
+            current_session_id: edge::principal(&request)
+                .and_then(|p| p.session_id())
+                .map(str::to_owned),
         };
         let sessions = self
             .list_sessions
@@ -162,6 +179,20 @@ impl AuthServiceHandler {
 }
 
 // ── Mapping helpers ───────────────────────────────────────────────────────────
+
+/// Resolves an account-scoped request's `account_id`: on the edge an empty value
+/// means "the calling principal's account", a non-empty one must be the caller's
+/// own; over the mesh it is taken as supplied (validation rejects empty later).
+fn edge_account<T>(request: &Request<T>, supplied: &str) -> Result<String, Status> {
+    match edge::principal(request) {
+        Some(p) if supplied.is_empty() => Ok(p.account_id().to_owned()),
+        Some(_) => {
+            edge::require_account(request, supplied)?;
+            Ok(supplied.to_owned())
+        }
+        None => Ok(supplied.to_owned()),
+    }
+}
 
 fn grant_from_proto(
     credential: Option<proto::login_request::Credential>,

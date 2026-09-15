@@ -5,8 +5,7 @@ use uuid::Uuid;
 use crate::domain::event::{DomainEvent, SessionIssued, SessionRevoked};
 use crate::domain::value_object::{
     AccessTokenClaims, AccountId, DeviceFingerprint, Generation, IdpSubject, Permission,
-    RevocationReason, SessionId, SessionStatus,
-};
+    RevocationReason, SessionId, SessionStatus, ProfileId};
 use crate::error::AuthError;
 
 /// Parameters to establish a new [`Session`].
@@ -209,6 +208,7 @@ impl Session {
         now: DateTime<Utc>,
         requested_ttl: Duration,
         permissions: Vec<Permission>,
+        profile_ids: Vec<ProfileId>,
     ) -> Result<AccessTokenClaims, AuthError> {
         self.ensure_mintable(now)?;
 
@@ -224,6 +224,7 @@ impl Session {
             self.id,
             self.generation,
             permissions,
+            profile_ids,
             now,
             expires_at,
         ))
@@ -366,7 +367,7 @@ mod tests {
         let s = active_session();
         let now = t0();
         // Ask for 2h, but sliding expiry is 30m away ⇒ clamp to 30m.
-        let claims = s.mint_access_token(now, Duration::hours(2), vec![]).unwrap();
+        let claims = s.mint_access_token(now, Duration::hours(2), vec![], vec![]).unwrap();
         assert_eq!(claims.expires_at, now + Duration::minutes(30));
         assert_eq!(claims.generation, s.generation());
         assert_eq!(claims.session_id, s.id());
@@ -376,7 +377,7 @@ mod tests {
     fn mint_shorter_ttl_is_not_extended() {
         let s = active_session();
         let now = t0();
-        let claims = s.mint_access_token(now, Duration::minutes(5), vec![]).unwrap();
+        let claims = s.mint_access_token(now, Duration::minutes(5), vec![], vec![]).unwrap();
         assert_eq!(claims.expires_at, now + Duration::minutes(5));
         assert_eq!(claims.expires_in_secs(now), 300);
     }
@@ -385,7 +386,7 @@ mod tests {
     fn mint_carries_permissions() {
         let s = active_session();
         let perms = vec![Permission::new("posts:write"), Permission::new("ROLE_ADMIN")];
-        let claims = s.mint_access_token(t0(), Duration::minutes(5), perms.clone()).unwrap();
+        let claims = s.mint_access_token(t0(), Duration::minutes(5), perms.clone(), vec![]).unwrap();
         assert_eq!(claims.permissions, perms);
     }
 
@@ -394,7 +395,7 @@ mod tests {
         let s = active_session();
         let later = t0() + Duration::minutes(31);
         assert!(matches!(
-            s.mint_access_token(later, Duration::minutes(5), vec![]).unwrap_err(),
+            s.mint_access_token(later, Duration::minutes(5), vec![], vec![]).unwrap_err(),
             AuthError::SessionExpired
         ));
     }
@@ -404,7 +405,7 @@ mod tests {
         let mut s = active_session();
         s.revoke(t0(), RevocationReason::Logout, Uuid::now_v7()).unwrap();
         assert!(matches!(
-            s.mint_access_token(t0(), Duration::minutes(5), vec![]).unwrap_err(),
+            s.mint_access_token(t0(), Duration::minutes(5), vec![], vec![]).unwrap_err(),
             AuthError::SessionRevoked
         ));
     }
