@@ -161,17 +161,28 @@ automatically — you just run the normal destroy:
 Because `destroy` walks the DAG in reverse, `kubernetes/argocd` tears down first,
 firing the hook **before** `eks`/`vpc` are touched. The hook, in order:
 
-1. **Stops ArgoCD self-heal** (`patch app root-bootstrap … syncPolicy:null`; delete
-   appsets) so it can't recreate what's being deleted.
-2. **Deletes Ingresses (ALBs) and `type=LoadBalancer` Services (NLBs)**, then
+0. **Stops every reconciler first**: scales the Argo CD application and
+   ApplicationSet controllers to 0 (deleting appsets alone is not enough — the
+   fleet and ScyllaCluster apps are app-of-apps children and kept self-healing),
+   deletes appsets/apps without waiting, then scales **Karpenter to 0** so nothing
+   re-provisions nodes for the pods orphaned below. (Learned live 2026-09-15: with
+   the old order, selfHeal recreated the ScyllaCluster, 12 PVCs and the public NLB
+   inside a 3-minute window, and Karpenter re-provisioned 4 nodes while the hook
+   waited on the old ones.)
+1. **Deletes Ingresses (ALBs) and `type=LoadBalancer` Services (NLBs)**, then
    **waits (~5 min) for AWS to actually deprovision them** — `kubectl delete svc`
    returns before the LB controller has removed the real NLB/ENIs. This wait is what
-   prevents the ACM-cert `ResourceInUseException` race and the VPC ENI leak.
-3. **Deletes CNPG/Scylla CRs then PVCs**, so `ebs-csi` issues `DeleteVolume` (the
-   `reclaimPolicy=Delete` only fires on orderly PVC deletion).
-4. **Deletes remaining ArgoCD apps except Karpenter.**
-5. **Drains Karpenter NodeClaims/nodes while Karpenter still runs**, so it
-   terminates the EC2 instances (and their ENIs/EBS) via the EC2 API.
+   prevents the ACM-cert `ResourceInUseException` race and the VPC ENI leak. Then
+   deletes any LB-controller security group left in the VPC (tag
+   `elbv2.k8s.aws/cluster`) — an orphan one is a guaranteed `DependencyViolation`.
+2. **Deletes CNPG/Scylla CRs then PVCs**, so `ebs-csi` issues `DeleteVolume` (the
+   `reclaimPolicy=Delete` only fires on orderly PVC deletion), **waits for the PVs
+   to be reclaimed** (the CSI driver leaves with the cluster), and deletes any
+   cluster-tagged EBS volume still `available`.
+3. **Terminates Karpenter instances by tag** (`karpenter.sh/nodepool` +
+   `kubernetes.io/cluster/<cluster>=owned`, never MNG nodes) and waits for them,
+   then removes the per-nodeclass IAM instance profiles Karpenter ≥ 1.7 creates.
+4. **Second pass on the LB-controller security groups**, once the LB ENIs are gone.
 
 Every step is best-effort (`|| true`) and idempotent — a partially-broken cluster
 must never block the destroy.
