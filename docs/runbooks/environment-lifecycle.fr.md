@@ -1,8 +1,8 @@
 ---
 i18n:
   source: ./environment-lifecycle.md
-  source_sha256: 4d907ea03116574895f4b01eff4b299256e45cd838a5ed6ef562fb5c9e8eebd3
-  translated_at: 2026-07-01
+  source_sha256: 72a1d154e8a50bb4f894855cb33e6b0ce5f87c6e3ea8d49918aee398a006b6b2
+  translated_at: 2026-09-15
   status: complete
 ---
 > 🇫🇷 Traduction française — la version **anglaise** [`environment-lifecycle.md`](./environment-lifecycle.md) fait foi.
@@ -182,18 +182,29 @@ Parce que `destroy` parcourt le DAG en sens inverse, `kubernetes/argocd` est dé
 premier, déclenchant le hook **avant** que `eks`/`vpc` ne soient touchés. Le hook, dans
 l'ordre :
 
-1. **Arrête le self-heal d'ArgoCD** (`patch app root-bootstrap … syncPolicy:null` ;
-   supprime les appsets) pour qu'il ne puisse pas recréer ce qui est supprimé.
-2. **Supprime les Ingress (ALB) et les Services `type=LoadBalancer` (NLB)**, puis
+0. **Arrête d'abord tous les réconciliateurs** : met à 0 les contrôleurs application et
+   ApplicationSet d'Argo CD (supprimer les appsets ne suffit pas — les apps fleet et
+   ScyllaCluster sont des enfants d'app-of-apps et continuaient à s'auto-réparer),
+   supprime appsets/apps sans attendre, puis met **Karpenter à 0** pour que rien ne
+   re-provisionne de nœuds pour les pods orphelins des étapes suivantes. (Constaté en
+   live le 2026-09-15 : avec l'ancien ordre, le selfHeal a recréé le ScyllaCluster,
+   12 PVC et le NLB public dans une fenêtre de 3 minutes, et Karpenter a re-provisionné
+   4 nœuds pendant que le hook attendait les anciens.)
+1. **Supprime les Ingress (ALB) et les Services `type=LoadBalancer` (NLB)**, puis
    **attend (~5 min) qu'AWS les déprovisionne réellement** — `kubectl delete svc`
    retourne avant que le LB controller ait supprimé le vrai NLB/les ENI. Cette attente
    est ce qui prévient la course au `ResourceInUseException` du cert ACM et la fuite
-   d'ENI du VPC.
-3. **Supprime les CR CNPG/Scylla puis les PVC**, pour qu'`ebs-csi` émette `DeleteVolume`
-   (le `reclaimPolicy=Delete` ne se déclenche que sur une suppression ordonnée de PVC).
-4. **Supprime les apps ArgoCD restantes sauf Karpenter.**
-5. **Draine les NodeClaims/nœuds Karpenter pendant que Karpenter tourne encore**, pour
-   qu'il termine les instances EC2 (et leurs ENI/EBS) via l'API EC2.
+   d'ENI du VPC. Puis supprime tout security group du LB controller resté dans le VPC
+   (tag `elbv2.k8s.aws/cluster`) — un orphelin garantit un `DependencyViolation`.
+2. **Supprime les CR CNPG/Scylla puis les PVC**, pour qu'`ebs-csi` émette `DeleteVolume`
+   (le `reclaimPolicy=Delete` ne se déclenche que sur une suppression ordonnée de PVC),
+   **attend que les PV soient récupérés** (le driver CSI part avec le cluster), et
+   supprime tout volume EBS taggé au cluster encore `available`.
+3. **Termine les instances Karpenter par tag** (`karpenter.sh/nodepool` +
+   `kubernetes.io/cluster/<cluster>=owned`, jamais les nœuds MNG) et les attend, puis
+   retire les instance profiles IAM par nodeclass que Karpenter ≥ 1.7 crée.
+4. **Seconde passe sur les security groups du LB controller**, une fois les ENI des LB
+   disparues.
 
 Chaque étape est best-effort (`|| true`) et idempotente — un cluster partiellement cassé
 ne doit jamais bloquer le destroy.
