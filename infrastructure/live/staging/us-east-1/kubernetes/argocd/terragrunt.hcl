@@ -84,7 +84,11 @@ terraform {
 inputs = {
   region          = local.aws_region
   env             = "staging"
-  argocd_version  = "7.7.0"
+  # argo-cd chart 10.9.1 = Argo CD v3.5.3, tested upstream on Kubernetes 1.33–1.36.
+  # (7.7.0 = v2.13.0 was tested up to 1.31 and cannot diff Deployments on 1.33+:
+  # "structured merge diff ... .status.terminatingReplicas" — found live 2026-09-15.)
+  # The CMP sidecar image is derived from this pin in modules/kubernetes/argocd/server.
+  argocd_version  = "10.9.1"
   repository_url  = "https://github.com/arnaudmaillet/core-platform"
   target_revision = "develop"
 
