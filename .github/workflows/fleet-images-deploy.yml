@@ -13,7 +13,14 @@
 # Swatinem/rust-cache (GitHub Actions cache, free on this public repo), so a
 # push only recompiles the crates it touched and their dependents.
 #
-# Images are produced WITHOUT compiling inside Docker: deploy/docker-bake.hcl
+# The compile runs INSIDE the Dockerfile's `toolchain` stage (rust + protoc +
+# cmake on Debian bookworm), with the checkout and the cargo cache bind-mounted
+# — not on the runner's own userland. A binary needs at runtime a glibc at least
+# as new as the one it was BUILT against; the runner (Ubuntu 24.04, glibc 2.39)
+# produced binaries that died in the bookworm runtime image (glibc 2.36) with
+# "GLIBC_2.38 not found" (2026-09-15 staging cycle). A gate below re-checks it.
+#
+# Images are then produced WITHOUT compiling inside Docker: deploy/docker-bake.hcl
 # builds only the Dockerfile's `runtime` stage for each binary, overriding the
 # `builder` stage with a local dir holding the prebuilt binary (a BuildKit named
 # context). The Dockerfile's own cargo-chef route is unchanged and stays the
@@ -91,16 +98,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Same system deps as deploy/Dockerfile's builder stage and ci.yml: protoc
-      # + the well-known types for the *-api build.rs (tonic-prost-build), cmake
-      # + zlib for the bundled librdkafka.
-      - name: Build deps (protoc, librdkafka toolchain)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev cmake zlib1g-dev
-
-      # rust-toolchain.toml pins the workspace toolchain (1.96.0); the rustup
-      # shim honors it at cargo-invocation time, exactly as in ci.yml.
-      - uses: dtolnay/rust-toolchain@stable
-
       # Runner-side compile cache (GitHub Actions cache). One key per arch —
       # artifacts are not portable across targets. cache-workspace-crates keeps
       # OUR crates' artifacts too (not only third-party), so a push recompiles
@@ -108,21 +105,64 @@ jobs:
       # so a manual dispatch on a branch cannot poison it. Budget: the repo cache
       # cap is 10 GB shared with ci.yml — watch `gh cache list`; if the two
       # release caches crowd it out, flip cache-workspace-crates to false
-      # (deps-only, the cargo-chef `cook` equivalent).
+      # (deps-only, the cargo-chef `cook` equivalent). The key names the build
+      # environment: artifacts compiled on the runner's own userland must never
+      # be reused by the bookworm toolchain (native objects embed glibc symbols).
+      # rust-cache needs a host rustc for its cache key (the compile itself runs
+      # in the container). RUSTUP_TOOLCHAIN=stable keeps the rustup shim from
+      # honoring rust-toolchain.toml here, which would download the pinned
+      # toolchain on the host on every run just to print a version.
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        env:
+          RUSTUP_TOOLCHAIN: stable
         with:
-          key: fleet-release-${{ matrix.arch.suffix }}
+          key: fleet-release-bookworm-${{ matrix.arch.suffix }}
           cache-workspace-crates: true
           save-if: ${{ github.ref == 'refs/heads/develop' }}
 
-      - name: Build every fleet binary (release)
-        env:
-          # Well-known .proto types live in /usr/include (libprotobuf-dev).
-          PROTOC_INCLUDE: /usr/include
+      # The compile environment IS the Dockerfile's `toolchain` stage: same Debian
+      # release (glibc) as the `runtime` stage, same protoc/cmake, same rust pin.
+      # The stage copies nothing from the context, so `deploy/` (tiny) is enough.
+      - name: Build the toolchain image (deploy/Dockerfile --target toolchain)
+        run: docker build -f deploy/Dockerfile --target toolchain -t fleet-toolchain deploy
+
+      # Checkout + cargo registry/git caches are bind-mounted so rust-cache keeps
+      # working on the host; the container runs as root, hence the chown below
+      # (rust-cache's post step prunes target/ as the runner user).
+      - name: Build every fleet binary (release, inside the toolchain image)
         run: |
           set -euo pipefail
+          mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
           # shellcheck disable=SC2086
-          cargo build --release --locked $(printf -- '-p %s ' $FLEET_BINS)
+          docker run --rm \
+            -v "$PWD:/app" \
+            -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+            -v "$HOME/.cargo/git:/usr/local/cargo/git" \
+            -w /app fleet-toolchain \
+            cargo build --release --locked $(printf -- '-p %s ' $FLEET_BINS)
+          sudo chown -R "$(id -u):$(id -g)" target "$HOME/.cargo"
+
+      # Gate: the newest GLIBC_x.y symbol a binary references must not exceed the
+      # runtime base's glibc, or the image dies at exec. Reads the runtime base
+      # from the Dockerfile so the two never drift apart silently.
+      - name: Gate — binaries must run on the runtime image's glibc
+        run: |
+          set -euo pipefail
+          runtime_base=$(grep -oE '^FROM [^ ]+ AS runtime' deploy/Dockerfile | awk '{print $2}')
+          runtime_glibc=$(docker run --rm "$runtime_base" ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$')
+          echo "runtime base $runtime_base -> glibc $runtime_glibc"
+          fail=0
+          for bin in $FLEET_BINS; do
+            need=$(strings -a "target/release/$bin" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -V | tail -1)
+            newest=$(printf '%s\n%s\n' "$need" "$runtime_glibc" | sort -V | tail -1)
+            if [ "$newest" != "$runtime_glibc" ]; then
+              echo "::error::$bin references GLIBC_$need but the runtime image only has glibc $runtime_glibc"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ]
+          echo "all binaries need glibc <= $runtime_glibc"
 
       # One named-context dir per binary, laid out as the Dockerfile's builder
       # stage would have left it (/usr/local/bin/app) so `COPY --from=builder`

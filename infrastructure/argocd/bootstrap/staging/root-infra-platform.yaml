@@ -106,6 +106,18 @@ spec:
         automated:
           prune: true
           selfHeal: true
+        # Argo CD does NOT re-attempt a failed automated sync of the same revision
+        # on its own. These apps have cross-appset dependencies at first install
+        # (aws-load-balancer-controller's cert-manager Certificate/Issuer needs
+        # cert-manager's CRDs from the security appset; keycloak's CNPG Cluster
+        # needs the operator) — retry with backoff instead of stalling until the
+        # next commit.
+        retry:
+          limit: 10
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
