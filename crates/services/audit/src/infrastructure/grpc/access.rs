@@ -159,7 +159,11 @@ pub fn build_gate(authz: &Option<AuthContextConfig>) -> Arc<dyn CallerGate> {
             let decoder = Arc::new(JwtDecoder::with_algorithms(
                 auth,
                 cache,
-                OidcClaimsExtractor::default(),
+                // The edge token carries its grants in `perms` (not the standard
+                // OIDC sources) — the platform extractor reads that claim. The
+                // default extractor silently yielded an empty permission set, so
+                // every real token was PERMISSION_DENIED.
+                OidcClaimsExtractor::platform_edge(),
                 // The edge token is ES256; accept RS256 too in case the JWKS
                 // mixes key types (mirrors the realtime gateway).
                 vec![Algorithm::ES256, Algorithm::RS256],

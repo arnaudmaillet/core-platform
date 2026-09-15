@@ -37,6 +37,8 @@ const POSTGRES_PORT: u16 = 5432;
 const OPENSEARCH_PORT: u16 = 9200;
 /// Internal MinIO S3 API port.
 const MINIO_PORT: u16 = 9000;
+/// MinIO image, on quay.io: Docker Hub's `minio/minio` no longer exists.
+const MINIO_IMAGE: &str = "quay.io/minio/minio";
 
 static SCYLLA: OnceCell<ContainerAsync<ScyllaDB>> = OnceCell::const_new();
 static REDIS: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
@@ -163,7 +165,12 @@ pub async fn opensearch_ready() -> String {
 pub async fn minio_ready() -> String {
     let container = MINIO
         .get_or_init(|| async {
+            // The `minio/minio` repository was removed from Docker Hub (the whole
+            // repo 404s as of 2026-09-16, which broke every MinIO-backed suite);
+            // MinIO publishes the same tags on quay.io, so keep the module's
+            // pinned tag and only switch the registry.
             MinIO::default()
+                .with_name(MINIO_IMAGE)
                 .start()
                 .await
                 .expect("failed to start the MinIO test container")

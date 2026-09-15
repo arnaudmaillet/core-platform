@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     anonymize_account::AnonymizeAccountCommand,
     assign_role::AssignRoleCommand,
@@ -100,6 +101,7 @@ where
         &self,
         request: Request<proto::VerifyEmailRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = VerifyEmailCommand { account_id: req.account_id.clone() };
         self.command_bus
@@ -113,6 +115,7 @@ where
         &self,
         request: Request<proto::VerifyPhoneRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = VerifyPhoneCommand { account_id: req.account_id.clone() };
         self.command_bus
@@ -126,6 +129,7 @@ where
         &self,
         request: Request<proto::ChangePasswordRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = ChangePasswordCommand {
             account_id: req.account_id.clone(),
@@ -142,6 +146,7 @@ where
         &self,
         request: Request<proto::EnrollMfaRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = EnrollMfaCommand {
             account_id: req.account_id.clone(),
@@ -160,6 +165,7 @@ where
         &self,
         request: Request<proto::RevokeMfaRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = RevokeMfaCommand { account_id: req.account_id.clone() };
         self.command_bus
@@ -221,6 +227,7 @@ where
         &self,
         request: Request<proto::DeactivateAccountRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = DeactivateAccountCommand { account_id: req.account_id.clone() };
         self.command_bus
@@ -264,6 +271,7 @@ where
         &self,
         request: Request<proto::RequestGdprDeletionRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = RequestGdprDeletionCommand {
             account_id: req.account_id.clone(),
@@ -293,6 +301,7 @@ where
         &self,
         request: Request<proto::RequestDataExportRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let cmd = RequestDataExportCommand { account_id: req.account_id.clone() };
         self.command_bus
@@ -350,6 +359,7 @@ where
         &self,
         request: Request<proto::GetAccountByIdRequest>,
     ) -> Result<Response<proto::AccountView>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let query = GetAccountByIdQuery { account_id: req.account_id };
         let view: AccountView = self
@@ -378,6 +388,7 @@ where
         &self,
         request: Request<proto::GetAccountStatusRequest>,
     ) -> Result<Response<proto::AccountStatusView>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let query = GetAccountStatusQuery { account_id: req.account_id };
         let view: AccountStatusView = self

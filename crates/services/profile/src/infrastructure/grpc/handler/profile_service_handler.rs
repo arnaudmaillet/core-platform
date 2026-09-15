@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     ChangeHandleCommand, CreateProfileCommand, DeleteProfileCommand, HideProfileCommand,
     RestoreProfileCommand, SetVisibilityCommand, UpdateAvatarCommand, UpdateBannerCommand,
@@ -60,6 +61,7 @@ where
         &self,
         request: Request<proto::CreateProfileRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let kind = profile_kind_i32_to_str(req.profile_kind)
             .ok_or_else(|| Status::invalid_argument("unknown profile_kind"))?;
@@ -84,6 +86,7 @@ where
         &self,
         request: Request<proto::UpdateProfileRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let profile_id = req.profile_id.clone();  // saved before req is consumed
         let links = req.custom_links
@@ -109,6 +112,7 @@ where
         &self,
         request: Request<proto::ChangeHandleRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = ChangeHandleCommand {
             profile_id: req.profile_id.clone(),
@@ -125,6 +129,7 @@ where
         &self,
         request: Request<proto::UpdateAvatarRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = UpdateAvatarCommand {
             profile_id: req.profile_id.clone(),
@@ -141,6 +146,7 @@ where
         &self,
         request: Request<proto::UpdateBannerRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = UpdateBannerCommand {
             profile_id: req.profile_id.clone(),
@@ -157,6 +163,7 @@ where
         &self,
         request: Request<proto::SetVisibilityRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let visibility = profile_visibility_i32_to_str(req.visibility)
             .ok_or_else(|| Status::invalid_argument("unknown visibility value"))?;
@@ -227,6 +234,7 @@ where
         &self,
         request: Request<proto::DeleteProfileRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = DeleteProfileCommand {
             profile_id: req.profile_id.clone(),
@@ -282,6 +290,7 @@ where
         &self,
         request: Request<proto::ListProfilesByAccountRequest>,
     ) -> Result<Response<proto::ListProfilesByAccountResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().account_id)?;
         let req = request.into_inner();
         let limit = req.limit.clamp(1, 100) as u32;
         let query = ListProfilesByAccountQuery {

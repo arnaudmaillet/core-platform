@@ -33,6 +33,7 @@ cqrs          = { workspace = true }
 transport     = { workspace = true }
 redis-storage = { workspace = true }
 account-api   = { workspace = true }
+profile-api   = { workspace = true }
 async-trait   = { workspace = true }
 
 # ── Domain types ──────────────────────────────────────────────────────────────

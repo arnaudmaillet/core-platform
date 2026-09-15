@@ -12,9 +12,11 @@ health       = { workspace = true }
 telemetry    = { workspace = true }
 infra-config = { workspace = true }
 transport    = { workspace = true }
+auth-context = { workspace = true }
 
 tokio       = { workspace = true }
 async-trait = { workspace = true }
+futures     = { workspace = true }
 anyhow      = { workspace = true }
 tracing     = { workspace = true }
 

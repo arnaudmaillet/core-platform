@@ -20,10 +20,10 @@ use uuid::Uuid;
 use auth::app::{App, AppDeps};
 use auth::application::port::{
     AccountActivation, AccountDirectory, AccountSnapshot, AuthnGrant, EventPublisher,
-    IdentityProvider, NormalizedClaims,
+    IdentityProvider, NormalizedClaims, ProfileDirectory,
 };
 use auth::application::SessionPolicy;
-use auth::domain::value_object::{AccountId, IdpSubject, Permission};
+use auth::domain::value_object::{AccountId, IdpSubject, Permission, ProfileId};
 use auth::error::AuthError;
 use auth::infrastructure::cache::RedisSessionCache;
 use auth::infrastructure::event::LogEventPublisher;
@@ -90,6 +90,19 @@ impl AccountDirectory for StubDirectory {
     }
 }
 
+/// `profile` stub: every account owns exactly one profile, derived
+/// deterministically from the account id (UUIDv5), so a token's `pids` claim is
+/// stable across login and refresh within a test.
+struct StubProfiles;
+
+#[async_trait]
+impl ProfileDirectory for StubProfiles {
+    async fn list_profile_ids(&self, account_id: &AccountId) -> Result<Vec<ProfileId>, AuthError> {
+        let derived = Uuid::new_v5(&Uuid::NAMESPACE_OID, account_id.as_uuid().as_bytes());
+        Ok(vec![ProfileId::from_uuid(derived)])
+    }
+}
+
 // ── Harness ──────────────────────────────────────────────────────────────────
 
 pub struct Harness {
@@ -136,6 +149,7 @@ impl Harness {
         let deps = AppDeps {
             idp: Arc::new(StubIdp),
             directory: Arc::new(StubDirectory { accounts: Mutex::new(HashMap::new()) }),
+            profiles: Arc::new(StubProfiles),
             links: Arc::new(PgSubjectLinkRepository::new(tx.clone())),
             sessions: Arc::new(PgSessionRepository::new(tx.clone())),
             refresh_tokens: Arc::new(PgRefreshTokenRepository::new(tx.clone())),

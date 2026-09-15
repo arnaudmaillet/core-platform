@@ -40,7 +40,7 @@ The fleet resolves to **four** reusable archetypes, distinguished by runtime cha
 
 1. **RPC Server** — request-bound, gRPC, CPU-scaled. Readiness gates on typed gRPC health (`SERVING` only once backend probes pass); liveness checks process liveness only, so a transient backend blip drops a pod from rotation without a restart loop. *(all `*-server` binaries)*
 2. **Stream Worker** — Kafka-consumer-bound, no domain RPC (health/reflection plane only), scaled on **consumer-group lag**. *(`counter-worker`, `audit-worker`, `realtime-dispatcher`, `media-worker`)*
-3. **Stateful Edge** — `realtime-gateway`: owns a long-lived connection table (one parked-future socket per device, C10M design), scaled on connections/memory, protected by a **PodDisruptionBudget** to make drains gradual, exposed publicly via an **L4 NLB** (never an ALB — see §2.5).
+3. **Stateful Edge** — `realtime-gateway`: owns a long-lived connection table (one parked-future socket per device, C10M design), scaled on connections/memory, protected by a **PodDisruptionBudget** to make drains gradual, exposed publicly via an **L4 NLB** (never an ALB — see §2.5). Every other client-facing service is reached through the **client edge** instead: a second, authenticated gRPC listener (`:9443`) behind one internet-facing ALB (§2.5).
 4. **Migration init-container** — every Postgres/Scylla-backed service runs the shared `migrator` as an idempotent init container (`args: [<service>]`) before the runtime container boots; dual-store services (`counter`, `moderation`) run one per backend.
 
 ### 1.4 Scaling model
@@ -109,7 +109,7 @@ The registry is also the **broker provisioning source**: the `topic-provisioner`
 - **Least-privilege custody (IRSA):** the `audit` role is the *sole principal* granted `kms:Decrypt/GenerateDataKey` on the KEK and **write-only (no `DeleteObject`)** on the WORM bucket; the `media` role is scoped to object RW on its bucket only. Roles are created only when their resource ARNs exist (dev unaffected).
 - **GDPR Art. 17:** crypto-shred — destroy a subject's per-subject DEK; the chain (over ciphertext) still verifies, the evidence and its proof survive, legal-hold overrides.
 - **Fail-closed posture:** TIER-0 services deny rather than degrade (e.g. break-glass refused if the write is unrecorded).
-- **Edge isolation:** the only public ingress is the realtime WSS plane via an **L4 NLB** (TLS terminated at the edge, raw WS handshake reaches the pod) — deliberately *not* an L7 ALB, so the gateway, not a proxy, owns the connection table.
+- **Edge isolation — two public doors, both authenticated in-process:** (1) the realtime WSS plane via an **L4 NLB** (TLS terminated at the edge, raw WS handshake reaches the pod — deliberately *not* an L7 ALB, so the gateway, not a proxy, owns the connection table; the ES256 edge token is verified at the handshake); (2) the **client edge** — one internet-facing **ALB** (`k8s/overlays/<env>/client-edge-ingress.yaml`, gRPC end to end, `api-<svc>-<env>.core-platform.click`) host-routed to a dedicated second listener (`GRPC_EDGE_ADDR`, `:9443`) on each client-facing server. That listener serves **only** the RPCs the service declares in `Service::EDGE_POLICY` (everything else is `UNIMPLEMENTED`: internal RPCs, staff consoles and reflection never leave the mesh) and requires the `auth`-minted edge token (JWKS-verified, issuer/audience pinned) except for `auth.Login`/`Refresh`; handlers bind the request's actor field to the token (`require_account` / `require_profile` over the token's `pids` claim — the profiles the account owns, read from `profile` at every mint). The mesh listener (`<SVC>_GRPC_ADDR`) is unchanged and NetworkPolicy opens `:9443` only, so the mesh ports are never reachable from the ALB. See `docs/security/network-policy-call-graph.md` §3.
 
 ### 2.6 GitOps delivery
 
@@ -161,12 +161,13 @@ Endpoint placeholders (`<<…>>`) are substituted from Terragrunt outputs at dep
 3. **Keycloak not provisioned:** `auth`'s federated IdP is external and not yet stood up; its broker creds are placeholders. `realtime`'s WSS plane fails closed (`RTM-1001`) until auth's JWKS is reachable — its gRPC health plane is unaffected, so the pod still becomes Ready.
 4. **Mutable `:staging` tag:** ArgoCD will not auto-redeploy on a tag re-push without Argo Image Updater or a digest bump; the `:<git-sha>` tag is available for pinning.
 5. **Streaming payload gap:** the `post → geo-discovery/notification` payload-shape mismatch (post emits no lat/lng/caption) remains an open, tracked product decision — wiring is correct, shape is not.
+6. **Client edge, first cycle:** the ALB is new ground (first Ingress group in the repo; hostnames must stay single-label under the `*.core-platform.click` wildcard; external-dns shares one zone across envs with `policy: upsert-only`, so stale `api-*` records outlive a teardown; the node SG has no gRPC-port rule — ALB→pod relies on the LB controller's backend-SG automation, as dev's profile ALB already did). Edge-token **revocation is TTL-bound** (10 min access TTL): the `gen` claim is not re-checked by the services (ADR-0005's "small lookup" is still a follow-up), and a profile created after a mint becomes actionable at the next refresh. Signup (`account.CreateAccount`) and the staff/compliance RPCs are deliberately **not** on the edge until a permission catalogue exists.
 
 ---
 
 ## Appendix A — Port allocation
 
-`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `media-worker` 50071 (health/reflection only).
+`chat` 50051 · `profile` 50052 · `social-graph` 50053 · `geo-discovery` 50054 · `notification` 50055 · `post` 50056 · `comment` 50057 · `engagement` 50058 · `account` 50059 · `auth` 50060 · `timeline` 50070 · `moderation` 50061 · `search` 50062 · `media` 50063 · `counter-server` 50064 · `counter-worker` 50065 · `realtime-gateway` 50066 (gRPC) + 8443 (WSS) · `realtime-dispatcher` 50067 · `audit-server` 50068 · `audit-worker` 50069 · `media-worker` 50071 (health/reflection only) · **client edge `9443`** on every client-facing server (second listener, ALB-facing, `EDGE_POLICY`-gated).
 
 ## Appendix B — Topic catalog
 

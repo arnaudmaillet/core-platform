@@ -13,14 +13,14 @@ use uuid::Uuid;
 use super::policy::SessionPolicy;
 use super::port::{
     AccountActivation, AccountDirectory, AccountSnapshot, AuthnGrant, EventPublisher,
-    GeneratedRefresh, IdentityProvider, NormalizedClaims, RefreshTokenRepository, SessionCache,
-    SessionRepository, SubjectLinkRepository, TokenMinter,
+    GeneratedRefresh, IdentityProvider, NormalizedClaims, ProfileDirectory,
+    RefreshTokenRepository, SessionCache, SessionRepository, SubjectLinkRepository, TokenMinter,
 };
 use crate::domain::aggregate::{RefreshToken, Session, SubjectLink};
 use crate::domain::event::DomainEvent;
 use crate::domain::value_object::{
-    AccessTokenClaims, AccountId, Generation, IdpSubject, Permission, RefreshTokenHash, SessionId,
-    SessionStatus,
+    AccessTokenClaims, AccountId, Generation, IdpSubject, Permission, ProfileId,
+    RefreshTokenHash, SessionId, SessionStatus,
 };
 use crate::error::AuthError;
 
@@ -116,6 +116,45 @@ impl AccountDirectory for StubAccountDirectory {
             activation: AccountActivation::Active,
             permissions: Vec::new(),
         }))
+    }
+}
+
+// ─── ProfileDirectory ────────────────────────────────────────────────────────
+
+/// Profiles per account; `failing()` simulates a `profile` outage (the handlers
+/// must degrade to an empty `pids` claim, never fail the mint).
+pub struct StubProfileDirectory {
+    profiles: Mutex<HashMap<AccountId, Vec<ProfileId>>>,
+    failing: bool,
+}
+
+impl Default for StubProfileDirectory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StubProfileDirectory {
+    pub fn new() -> Self {
+        Self { profiles: Mutex::new(HashMap::new()), failing: false }
+    }
+
+    pub fn failing() -> Self {
+        Self { profiles: Mutex::new(HashMap::new()), failing: true }
+    }
+
+    pub fn with_profiles(&self, account_id: AccountId, ids: Vec<ProfileId>) {
+        self.profiles.lock().unwrap().insert(account_id, ids);
+    }
+}
+
+#[async_trait]
+impl ProfileDirectory for StubProfileDirectory {
+    async fn list_profile_ids(&self, account_id: &AccountId) -> Result<Vec<ProfileId>, AuthError> {
+        if self.failing {
+            return Err(AuthError::ProfileDirectoryUnavailable);
+        }
+        Ok(self.profiles.lock().unwrap().get(account_id).cloned().unwrap_or_default())
     }
 }
 
@@ -386,6 +425,7 @@ impl EventPublisher for RecordingEventPublisher {
 pub struct Fixture {
     pub idp: Arc<StubIdentityProvider>,
     pub directory: Arc<StubAccountDirectory>,
+    pub profiles: Arc<StubProfileDirectory>,
     pub links: Arc<InMemorySubjectLinkRepository>,
     pub sessions: Arc<InMemorySessionRepository>,
     pub refresh_tokens: Arc<InMemoryRefreshTokenRepository>,
@@ -407,6 +447,7 @@ impl Fixture {
         Self {
             idp: Arc::new(StubIdentityProvider::returning("https://idp.test", "sub-123")),
             directory: Arc::new(StubAccountDirectory::new()),
+            profiles: Arc::new(StubProfileDirectory::new()),
             links: Arc::new(InMemorySubjectLinkRepository::new()),
             sessions: Arc::new(InMemorySessionRepository::new()),
             refresh_tokens: Arc::new(InMemoryRefreshTokenRepository::new()),
@@ -421,6 +462,7 @@ impl Fixture {
         super::command::LoginHandler::new(
             Arc::clone(&self.idp) as _,
             Arc::clone(&self.directory) as _,
+            Arc::clone(&self.profiles) as _,
             Arc::clone(&self.links) as _,
             Arc::clone(&self.sessions) as _,
             Arc::clone(&self.refresh_tokens) as _,
@@ -434,6 +476,7 @@ impl Fixture {
     pub fn refresh_handler(&self) -> super::command::RefreshHandler {
         super::command::RefreshHandler::new(
             Arc::clone(&self.directory) as _,
+            Arc::clone(&self.profiles) as _,
             Arc::clone(&self.sessions) as _,
             Arc::clone(&self.refresh_tokens) as _,
             Arc::clone(&self.cache) as _,

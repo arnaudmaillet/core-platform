@@ -8,8 +8,8 @@ use crate::application::command::IssuedSession;
 use crate::application::ensure_valid;
 use crate::application::policy::SessionPolicy;
 use crate::application::port::{
-    AccountActivation, AccountDirectory, EventPublisher, RefreshTokenRepository, SessionCache,
-    SessionRepository, TokenMinter,
+    profile_ids_or_empty, AccountActivation, AccountDirectory, EventPublisher, ProfileDirectory,
+    RefreshTokenRepository, SessionCache, SessionRepository, TokenMinter,
 };
 use crate::domain::value_object::{AccountId, DeviceFingerprint, RevocationReason, SessionId, SessionStatus};
 use crate::error::AuthError;
@@ -39,6 +39,7 @@ impl Validate for RefreshCommand {
 /// (already-rotated) token triggers a full session-generation revocation.
 pub struct RefreshHandler {
     directory: Arc<dyn AccountDirectory>,
+    profiles: Arc<dyn ProfileDirectory>,
     sessions: Arc<dyn SessionRepository>,
     refresh_tokens: Arc<dyn RefreshTokenRepository>,
     cache: Arc<dyn SessionCache>,
@@ -48,8 +49,10 @@ pub struct RefreshHandler {
 }
 
 impl RefreshHandler {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         directory: Arc<dyn AccountDirectory>,
+        profiles: Arc<dyn ProfileDirectory>,
         sessions: Arc<dyn SessionRepository>,
         refresh_tokens: Arc<dyn RefreshTokenRepository>,
         cache: Arc<dyn SessionCache>,
@@ -57,7 +60,7 @@ impl RefreshHandler {
         publisher: Arc<dyn EventPublisher>,
         policy: SessionPolicy,
     ) -> Self {
-        Self { directory, sessions, refresh_tokens, cache, minter, publisher, policy }
+        Self { directory, profiles, sessions, refresh_tokens, cache, minter, publisher, policy }
     }
 
     pub async fn handle(
@@ -128,7 +131,11 @@ impl RefreshHandler {
         session.extend(now, self.policy.session_ttl)?;
         self.sessions.save(&session).await?;
 
-        let claims = session.mint_access_token(now, self.policy.access_ttl, permissions)?;
+        // Re-read the owned profiles too: a profile created since the last mint
+        // becomes actionable at the next refresh (fail-safe, see login).
+        let profile_ids = profile_ids_or_empty(&self.profiles, &account_id).await;
+        let claims =
+            session.mint_access_token(now, self.policy.access_ttl, permissions, profile_ids)?;
         let access_token = self.minter.mint_access(&claims).await?;
 
         Ok(IssuedSession {

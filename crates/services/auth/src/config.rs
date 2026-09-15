@@ -24,6 +24,14 @@ pub struct AuthConfig {
     pub account_rpc_timeout: std::time::Duration,
     /// Connect deadline when dialing the `account` channel.
     pub account_connect_timeout: std::time::Duration,
+    /// gRPC endpoint of the `profile` service, e.g. `http://profile:50052` —
+    /// read at every mint for the edge token's `pids` claim.
+    pub profile_endpoint: String,
+    /// Per-request deadline on `profile` RPCs (the lookup is fail-safe, but a
+    /// hung dependency must not stall the login hot path).
+    pub profile_rpc_timeout: std::time::Duration,
+    /// Connect deadline when dialing the `profile` channel.
+    pub profile_connect_timeout: std::time::Duration,
     /// Total request deadline for Keycloak HTTP calls (token exchange).
     pub idp_http_timeout: std::time::Duration,
     /// Connect deadline for Keycloak HTTP calls.
@@ -77,6 +85,9 @@ impl AuthConfig {
             account_endpoint: env_or("AUTH_ACCOUNT_GRPC_ENDPOINT", "http://localhost:50059"),
             account_rpc_timeout: env_ms("AUTH_ACCOUNT_RPC_TIMEOUT_MS", 2_000),
             account_connect_timeout: env_ms("AUTH_ACCOUNT_CONNECT_TIMEOUT_MS", 2_000),
+            profile_endpoint: env_or("AUTH_PROFILE_GRPC_ENDPOINT", "http://localhost:50052"),
+            profile_rpc_timeout: env_ms("AUTH_PROFILE_RPC_TIMEOUT_MS", 2_000),
+            profile_connect_timeout: env_ms("AUTH_PROFILE_CONNECT_TIMEOUT_MS", 2_000),
             idp_http_timeout: env_ms("AUTH_IDP_HTTP_TIMEOUT_MS", 5_000),
             idp_connect_timeout: env_ms("AUTH_IDP_CONNECT_TIMEOUT_MS", 2_000),
         })

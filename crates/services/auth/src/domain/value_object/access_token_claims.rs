@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{AccountId, Generation, Permission, SessionId};
+use super::{AccountId, Generation, Permission, ProfileId, SessionId};
 
 /// The normalized claim set for an edge access token, produced by
 /// [`Session::mint_access_token`](crate::domain::aggregate::Session::mint_access_token).
@@ -21,6 +21,10 @@ pub struct AccessTokenClaims {
     pub generation: Generation,
     /// Normalized authorization grants.
     pub permissions: Vec<Permission>,
+    /// `pids` — the profiles the account owns at mint time. Client-facing
+    /// services bind profile-keyed actors to this set (see `transport::grpc::edge`).
+    /// A profile created after the mint appears at the next refresh.
+    pub profile_ids: Vec<ProfileId>,
     pub issued_at: DateTime<Utc>,
     /// Always ≤ the session's sliding and absolute expiry.
     pub expires_at: DateTime<Utc>,
@@ -32,10 +36,11 @@ impl AccessTokenClaims {
         session_id: SessionId,
         generation: Generation,
         permissions: Vec<Permission>,
+        profile_ids: Vec<ProfileId>,
         issued_at: DateTime<Utc>,
         expires_at: DateTime<Utc>,
     ) -> Self {
-        Self { account_id, session_id, generation, permissions, issued_at, expires_at }
+        Self { account_id, session_id, generation, permissions, profile_ids, issued_at, expires_at }
     }
 
     /// Remaining lifetime in whole seconds at `now` (saturating at zero).

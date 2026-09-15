@@ -194,7 +194,7 @@ mod tests {
             .handle(
                 Envelope::new(
                     Uuid::now_v7(),
-                    LogoutCommand { session_id: issued.session_id.as_str() },
+                    LogoutCommand { session_id: issued.session_id.as_str(), actor: None },
                 ),
                 t0(),
             )

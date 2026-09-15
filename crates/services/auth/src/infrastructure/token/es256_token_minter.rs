@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::application::port::{GeneratedRefresh, TokenMinter};
 use crate::domain::value_object::{
-    AccessTokenClaims, AccountId, Generation, Permission, RefreshTokenHash, SessionId,
+    AccessTokenClaims, AccountId, Generation, Permission, ProfileId, RefreshTokenHash, SessionId,
 };
 use crate::error::AuthError;
 
@@ -54,6 +54,10 @@ struct EdgeClaims {
     exp: i64,
     /// Normalized permissions.
     perms: Vec<String>,
+    /// Profiles the account owns (see `AccessTokenClaims::profile_ids`). Defaults
+    /// to empty so tokens minted before the claim existed still verify.
+    #[serde(default)]
+    pids: Vec<String>,
 }
 
 /// A verifying key plus the SPKI PEM it was built from (retained so the JWKS can
@@ -197,6 +201,7 @@ impl TokenMinter for Es256TokenMinter {
             iat: claims.issued_at.timestamp(),
             exp: claims.expires_at.timestamp(),
             perms: claims.permissions.iter().map(|p| p.as_str().to_owned()).collect(),
+            pids: claims.profile_ids.iter().map(ProfileId::as_str).collect(),
         };
         encode(&self.header, &edge, &self.encoding_key).map_err(|_| AuthError::TokenSigningFailed)
     }
@@ -222,12 +227,19 @@ impl TokenMinter for Es256TokenMinter {
         let issued_at: DateTime<Utc> = to_utc(c.iat)?;
         let expires_at: DateTime<Utc> = to_utc(c.exp)?;
         let permissions = c.perms.into_iter().map(Permission::new).collect();
+        let profile_ids = c
+            .pids
+            .iter()
+            .map(|s| ProfileId::try_from(s.as_str()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| AuthError::IdpTokenRejected)?;
 
         Ok(AccessTokenClaims {
             account_id,
             session_id,
             generation: Generation::from_i64(c.generation),
             permissions,
+            profile_ids,
             issued_at,
             expires_at,
         })
@@ -286,6 +298,7 @@ mod tests {
             session_id: SessionId::new(),
             generation: Generation::from_i64(3),
             permissions: vec![Permission::new("posts:write")],
+            profile_ids: vec![ProfileId::from_uuid(Uuid::now_v7())],
             issued_at: now,
             expires_at: now + ttl,
         }
@@ -302,6 +315,19 @@ mod tests {
         assert_eq!(back.session_id, claims.session_id);
         assert_eq!(back.generation, claims.generation);
         assert_eq!(back.permissions, claims.permissions);
+        assert_eq!(back.profile_ids, claims.profile_ids);
+    }
+
+    #[tokio::test]
+    async fn pids_ride_the_wire_as_a_json_array_of_uuids() {
+        let minter = single_key_minter();
+        let claims = claims_at(Utc::now(), Duration::minutes(10));
+        let token = minter.mint_access(&claims).await.unwrap();
+        let payload = token.split('.').nth(1).unwrap();
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["pids"], serde_json::json!([claims.profile_ids[0].as_str()]));
+        assert_eq!(json["perms"], serde_json::json!(["posts:write"]));
     }
 
     #[tokio::test]

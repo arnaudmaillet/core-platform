@@ -71,7 +71,9 @@ terragrunt run-all plan
 `media-worker` 50071 (health/reflection only — video transcode consumer, no domain RPC)
 
 One port per service. (`timeline` was 50060, moved to 50070 to clear a collision
-with `auth` — PR #522.) Each service owns an error-code namespace, e.g. `TML-`
+with `auth` — PR #522.) Every client-facing server also runs the **client edge**
+listener on **9443** (`GRPC_EDGE_ADDR`): the ALB-facing, token-authenticated,
+allow-listed listener (see the edge rule below). Each service owns an error-code namespace, e.g. `TML-`
 (timeline), `SCH-` (search), `MED-` (media), `CTR-` (counter), `AUD-` (audit),
 `RTM-` (realtime), `SGR-`, `PST-`, etc.
 
@@ -91,6 +93,15 @@ with `auth` — PR #522.) Each service owns an error-code namespace, e.g. `TML-`
 - **Service tiers** are an explicit runtime contract (pod label `tier:`): TIER-0 =
   fail-closed (`auth`, `moderation`, `audit`); TIER-1 = fail-open
   (`counter`, `media`, `search`, `realtime`). Respect the posture when adding code.
+- **Client edge (public gRPC):** the mesh port trusts the network; the **edge
+  listener** (`:9443`, behind the ALB) trusts only the `auth` edge token. A
+  service exposes an RPC publicly by listing it in `Service::EDGE_POLICY`
+  (`service.rs`; unlisted = `UNIMPLEMENTED` on the edge) **and** binding the
+  request's actor field in the handler: `edge::require_account` (account-id
+  field must equal the token `sub`) or `edge::require_profile` (profile-id field
+  must be in the token's `pids`). Never read the actor from the request alone on
+  an edge-exposed RPC. Only `auth.Login`/`Refresh` are `public`; staff/admin RPCs
+  stay off the edge until a permission catalogue exists.
 - **Kustomize CRD references:** the built-in nameReference transformer doesn't know
   KEDA `ScaledObject.scaleTargetRef` or CNPG `ScheduledBackup.spec.cluster.name` —
   overlays add `configurations:` entries (`*-refs-config.yaml`) so `namePrefix`

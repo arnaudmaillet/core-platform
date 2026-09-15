@@ -9,6 +9,8 @@ use cqrs::command::InMemoryCommandBus;
 use cqrs::query::InMemoryQueryBus;
 use postgres_storage::{PgPoolBuilder, PostgresConfig};
 use service_runtime::{HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use sqlx::PgPool;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
@@ -36,6 +38,25 @@ impl Service for AccountService {
     const NAME: &'static str = "account";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <AccountServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // Self-service only: every listed RPC binds `account_id` to the token subject.
+    // Admin/compliance RPCs (KYC, suspend, roles, GDPR record, listing) and the
+    // auth-plane writes (RecordLogin, Anonymize, CreateAccount) stay mesh-only
+    // until a staff permission catalogue exists.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/account.v1.AccountService/VerifyEmail"),
+        authenticated("/account.v1.AccountService/VerifyPhone"),
+        authenticated("/account.v1.AccountService/ChangePassword"),
+        authenticated("/account.v1.AccountService/EnrollMfa"),
+        authenticated("/account.v1.AccountService/RevokeMfa"),
+        authenticated("/account.v1.AccountService/DeactivateAccount"),
+        authenticated("/account.v1.AccountService/RequestGdprDeletion"),
+        authenticated("/account.v1.AccountService/RequestDataExport"),
+        authenticated("/account.v1.AccountService/GetAccountById"),
+        authenticated("/account.v1.AccountService/GetAccountStatus"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let pool = PgPoolBuilder::build(PostgresConfig::from_env())

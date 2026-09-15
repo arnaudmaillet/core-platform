@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use cqrs::{Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::query::get_audio_feed::GetAudioFeedQuery;
 use crate::application::query::get_following_feed::GetFollowingFeedQuery;
 
@@ -38,6 +39,7 @@ where
         &self,
         request: Request<proto::GetFollowingFeedRequest>,
     ) -> Result<Response<proto::GetFollowingFeedResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
 
         let query = GetFollowingFeedQuery {

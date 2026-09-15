@@ -6,6 +6,7 @@ use error::AppError;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
+use transport::grpc::edge;
 use crate::application::command::{
     AssignCaseCommand, AssignCaseHandler, DecideCaseCommand, DecideCaseHandler, DecideOutcome,
     FileAppealCommand, FileAppealHandler, OpenCaseCommand, OpenCaseHandler, OpenedCase,
@@ -179,6 +180,7 @@ impl ModerationServiceHandler {
         &self,
         request: Request<proto::FileAppealRequest>,
     ) -> Result<Response<proto::FileAppealResponse>, Status> {
+        edge::require_account(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let cmd = FileAppealCommand {
             decision_id: DecisionId::try_from(req.decision_id.as_str()).map_err(status)?,

@@ -22,6 +22,8 @@ use infra_config::InfraRegistry;
 use redis_storage::RedisConfig;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{HealthProbe, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::client::KafkaClientConfig;
@@ -46,6 +48,27 @@ impl Service for ChatService {
     const NAME: &'static str = "chat";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <ChatServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // StreamPublic's `subscriber_id` is an ephemeral guest shard key, not an
+    // identity, so it is authenticated but not actor-bound.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/chat.v1.ChatService/CreateConversation"),
+        authenticated("/chat.v1.ChatService/ToggleVisibility"),
+        authenticated("/chat.v1.ChatService/JoinAsMember"),
+        authenticated("/chat.v1.ChatService/Subscribe"),
+        authenticated("/chat.v1.ChatService/Unsubscribe"),
+        authenticated("/chat.v1.ChatService/SendMessage"),
+        authenticated("/chat.v1.ChatService/MarkRead"),
+        authenticated("/chat.v1.ChatService/SendTyping"),
+        authenticated("/chat.v1.ChatService/Heartbeat"),
+        authenticated("/chat.v1.ChatService/GetHistory"),
+        authenticated("/chat.v1.ChatService/ListMembers"),
+        authenticated("/chat.v1.ChatService/ListSubscriptions"),
+        authenticated("/chat.v1.ChatService/StreamConversation"),
+        authenticated("/chat.v1.ChatService/StreamPublic"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         // chat reads its tuning from the environment today; `_infra` is the seam

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     BlockProfileCommand, FollowProfileCommand, UnblockProfileCommand, UnfollowProfileCommand,
 };
@@ -66,6 +67,7 @@ where
         &self,
         request: Request<proto::FollowRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let cmd = FollowProfileCommand {
             actor_id:  req.actor_id.clone(),
@@ -82,6 +84,7 @@ where
         &self,
         request: Request<proto::UnfollowRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let cmd = UnfollowProfileCommand {
             actor_id:  req.actor_id.clone(),
@@ -98,6 +101,7 @@ where
         &self,
         request: Request<proto::BlockRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let cmd = BlockProfileCommand {
             actor_id:  req.actor_id.clone(),
@@ -114,6 +118,7 @@ where
         &self,
         request: Request<proto::UnblockRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let cmd = UnblockProfileCommand {
             actor_id:  req.actor_id.clone(),
@@ -138,6 +143,7 @@ where
         &self,
         request: Request<proto::GetRelationStatusRequest>,
     ) -> Result<Response<proto::RelationStatusView>, Status> {
+        edge::require_profile(&request, &request.get_ref().actor_id)?;
         let req = request.into_inner();
         let query = GetRelationStatusQuery {
             actor_id:  req.actor_id,
@@ -202,6 +208,7 @@ where
         &self,
         request: Request<proto::ListBlocksRequest>,
     ) -> Result<Response<proto::ListBlocksResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().blocker_id)?;
         let req   = request.into_inner();
         let limit = req.limit.clamp(1, 100) as u32;
         let query = ListBlocksQuery {

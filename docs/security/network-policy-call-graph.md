@@ -73,12 +73,13 @@ The only `*Client` types instantiated anywhere in `crates/services/*`:
 | `account` | `auth`, `moderation` | 50059 |
 | `social-graph` | `counter`, `timeline` | 50053 |
 | `post` | `search` | 50056 |
-| `profile` | `search` | 50052 |
+| `profile` | `search`, `auth` (owned profiles → the edge token's `pids` claim) | 50052 |
 | `moderation` | `media` | 50061 |
 | `auth` | `realtime` | 50060 |
+| `auth` (JWKS, HTTP) | **every server pod** — all edge-token verifiers | 8081 |
 
-**No in-mesh inbound at all** (→ ingress = health probe only, + the client entry
-point if/when one exists): `chat`, `geo-discovery`, `notification`, `comment`,
+**No in-mesh inbound at all** (→ ingress = health probe only, + the **client
+edge** on :9443, §3): `chat`, `geo-discovery`, `notification`, `comment`,
 `engagement`, `timeline`, `search`, `media`, `counter-server`, and the workers
 `counter-worker`, `realtime-dispatcher`, `audit-worker`. `audit-server` takes only
 the break-glass `RecordPrivileged`/`Query` path (no normal-flow mesh caller).
@@ -86,7 +87,41 @@ the break-glass `RecordPrivileged`/`Query` path (no normal-flow mesh caller).
 
 ---
 
-## 3. ✅ Decision (2026-06-29) — client-facing entry point: keep same-ns for now
+## 3. ✅ Decision — client entry point: ALB → per-service **edge listener** (:9443)
+
+**Implemented 2026-09-15.** Every client-facing server runs a second, dedicated
+gRPC listener — the **client edge** (`GRPC_EDGE_ADDR`, `:9443` fleet-wide) — that
+one internet-facing ALB host-routes to (`api-<svc>-<env>.core-platform.click`,
+`k8s/overlays/<env>/client-edge-ingress.yaml`). The listener is guarded in-process
+by `transport::grpc::edge`:
+
+- **allow-list** — only the RPCs the service declares in `Service::EDGE_POLICY`
+  exist on the edge (anything else is `UNIMPLEMENTED`); internal RPCs, staff
+  consoles and reflection are mesh-only by construction;
+- **authentication** — unless a rule is `public` (only `auth.Login`/`Refresh`),
+  the caller presents the ES256 edge token minted by `auth`, verified against
+  `auth`'s JWKS (`EDGE_JWKS_URL`, issuer + audience pinned); the client-supplied
+  `x-edge-user` header is stripped and re-set from the verified subject, so
+  `per_caller` rate limits key on real identities;
+- **actor binding** — handlers bind their identity field to the token with
+  `require_account` (field is an account id ⇒ must equal `sub`) or
+  `require_profile` (field is a profile id ⇒ must be in the token's `pids`, the
+  profiles the account owns, read from `profile` at every mint).
+
+The **mesh listener** (`<SVC>_GRPC_ADDR`) is unchanged: no token, NetworkPolicy
+scoped as before. NetworkPolicy opens **:9443 only** to the ALB (`allow-client-edge`,
+`ipBlock 0.0.0.0/0` like the WSS rule — the ALB ENIs are not pods); the mesh ports
+are not reachable from it.
+
+Why a second listener rather than one port with a "trusted internal caller"
+bypass: the six mesh edges carry no user token (`search → post`, `timeline →
+social-graph`, …), so a single authenticated port would have needed either a
+workload identity for every caller (SA tokens / mTLS) or a fail-open IP-based
+exemption. A dedicated port makes the property structural — whatever reaches
+:9443 is authenticated — with zero change to the mesh callers.
+
+<details>
+<summary>Superseded decision (2026-06-29) — keep same-ns until an edge exists</summary>
 
 The "client-facing" services above are read/command APIs meant to be called by a
 gateway/BFF, **not** by other fleet services. Evidence as of this decision:
@@ -116,6 +151,8 @@ ingress source and tighten:
 
 The **6 mesh callees** + **TIER-0/worker** services are already tightened (§2, #521);
 this decision only concerns the remaining client-facing set.
+
+</details>
 
 ---
 
@@ -192,7 +229,8 @@ Layered on top of the #519 baseline:
 - Workers (`counter-worker`, `realtime-dispatcher`, `audit-worker`) and `audit-server`:
   deny all mesh ingress (health probes are node→pod, permitted by the VPC CNI).
 - `realtime-gateway`: keep the public-WSS allow (#519); 50066 health only.
-- Client-facing set: **hold at same-ns** until §3 is decided.
+- Client-facing set: same-ns on the mesh port, plus the **client edge** (:9443)
+  from the ALB (`allow-client-edge`, §3).
 
 **Egress (do after ingress proves stable — riskier):**
 - Namespace-wide allow: DNS (kube-system :53), OTel (observability :4317).
@@ -204,16 +242,16 @@ Layered on top of the #519 baseline:
 
 ## 7. Decisions
 
-1. ~~**Client entry point**~~ ✅ Decided 2026-06-29 (§3) — **keep same-ns** until a
-   client edge is deployed to staging; revisit with the table in §3 when it lands.
+1. ~~**Client entry point**~~ ✅ Implemented 2026-09-15 (§3) — ALB → per-service
+   **edge listener** (:9443) with in-process allow-list + edge-token authn.
 2. **Egress scope** — *OPEN.* Full egress lockdown now, or ingress-only first?
    (Egress needs the live data-subnet CIDRs + S3 handling; higher breakage risk.)
    This is the only remaining open decision.
 3. ~~**Port collision** — fix `auth`/`timeline` both on 50060.~~ ✅ Done — `timeline` → 50070.
-4. **CNI** — confirm `enableNetworkPolicy=true` (shipped in #519) is live before any
-   of this enforces.
+4. ~~**CNI** — confirm `enableNetworkPolicy=true` (shipped in #519) is live before any
+   of this enforces.~~ ✅ Confirmed: `modules/eks/main.tf` sets it on the vpc-cni addon.
 
 Ingress micro-segmentation is now as tight as the known graph allows (mesh callees
-+ TIER-0/workers in #521; client-facing intentionally on same-ns per #1). The only
-remaining policy work is **egress** (#2). Rollout slots into Phase 3c of
++ TIER-0/workers in #521; the client edge on its own authenticated port per #1).
+The only remaining policy work is **egress** (#2). Rollout slots into Phase 3c of
 `docs/runbooks/audit-remediation-rollout.md` (apply allows first, deny last, watch).

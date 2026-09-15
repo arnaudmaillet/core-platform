@@ -3,5 +3,7 @@
 //! it never writes it.
 
 pub mod grpc_account_directory;
+pub mod grpc_profile_directory;
 
 pub use grpc_account_directory::GrpcAccountDirectory;
+pub use grpc_profile_directory::GrpcProfileDirectory;

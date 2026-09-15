@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use cqrs::{CommandBus, Envelope, QueryBus};
 
+use transport::grpc::edge;
 use crate::application::command::{
     record_share::RecordShareCommand,
     record_view::RecordViewCommand,
@@ -49,6 +50,7 @@ where
         &self,
         request: Request<proto::UpsertReactionRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = UpsertReactionCommand {
             post_id:    req.post_id,
@@ -66,6 +68,7 @@ where
         &self,
         request: Request<proto::RemoveReactionRequest>,
     ) -> Result<Response<proto::CommandResponse>, Status> {
+        edge::require_profile(&request, &request.get_ref().profile_id)?;
         let req = request.into_inner();
         let cmd = RemoveReactionCommand {
             post_id:    req.post_id,

@@ -9,6 +9,8 @@ use std::time::Duration;
 use anyhow::Context;
 use async_trait::async_trait;
 use service_runtime::{FnProbe, HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{ConsumerConfig, KafkaClientConfig, ProducerConfig};
@@ -45,6 +47,14 @@ impl Service for SearchService {
     const NAME: &'static str = "search";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <SearchServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/search.v1.SearchService/Search"),
+        authenticated("/search.v1.SearchService/Suggest"),
+        authenticated("/search.v1.SearchService/MultiSearch"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let config = SearchConfig::from_env();

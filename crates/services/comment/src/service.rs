@@ -9,6 +9,8 @@ use cqrs::command::InMemoryCommandBus;
 use cqrs::query::InMemoryQueryBus;
 use scylla_storage::ScyllaConfig;
 use service_runtime::{HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::authenticated;
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::{KafkaClientConfig, ProducerConfig};
@@ -34,6 +36,16 @@ impl Service for CommentService {
     const NAME: &'static str = "comment";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <CommentServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    const EDGE_POLICY: EdgePolicy = &[
+        authenticated("/comment.v1.CommentService/CreateComment"),
+        authenticated("/comment.v1.CommentService/DeleteComment"),
+        authenticated("/comment.v1.CommentService/GetComment"),
+        authenticated("/comment.v1.CommentService/ListTopLevel"),
+        authenticated("/comment.v1.CommentService/ListReplies"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let backends = Backends {

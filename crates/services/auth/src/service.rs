@@ -9,6 +9,8 @@ use async_trait::async_trait;
 use postgres_storage::PostgresConfig;
 use redis_storage::RedisConfig;
 use service_runtime::{HealthProbe, InfraRegistry, Service};
+use service_runtime::edge::{authenticated, public};
+use service_runtime::EdgePolicy;
 use tonic::service::RoutesBuilder;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 use transport::kafka::config::client::KafkaClientConfig;
@@ -32,6 +34,18 @@ impl Service for AuthService {
     const NAME: &'static str = "auth";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
     const GRPC_SERVICE_NAME: &'static str = <AuthServer as tonic::server::NamedService>::NAME;
+
+    /// The RPCs exposed on the client edge listener (`GRPC_EDGE_ADDR`); anything
+    /// else on this service is mesh-only. See `transport::grpc::edge`.
+    // Login/Refresh are the only anonymous RPCs in the fleet (they *produce* the
+    // session). Introspect is INTERNAL and stays mesh-only.
+    const EDGE_POLICY: EdgePolicy = &[
+        public("/auth.v1.AuthService/Login"),
+        public("/auth.v1.AuthService/Refresh"),
+        authenticated("/auth.v1.AuthService/Logout"),
+        authenticated("/auth.v1.AuthService/LogoutAllSessions"),
+        authenticated("/auth.v1.AuthService/ListSessions"),
+    ];
 
     async fn build(_infra: Arc<InfraRegistry>) -> anyhow::Result<Self> {
         let config = AuthConfig::from_env()?;

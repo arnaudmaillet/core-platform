@@ -7,6 +7,7 @@
 pub mod account_directory;
 pub mod event_publisher;
 pub mod identity_provider;
+pub mod profile_directory;
 pub mod refresh_token_repository;
 pub mod session_cache;
 pub mod session_repository;
@@ -16,6 +17,7 @@ pub mod token_minter;
 pub use account_directory::{AccountActivation, AccountDirectory, AccountSnapshot};
 pub use event_publisher::EventPublisher;
 pub use identity_provider::{AuthnGrant, IdentityProvider, NormalizedClaims};
+pub use profile_directory::{profile_ids_or_empty, ProfileDirectory};
 pub use refresh_token_repository::RefreshTokenRepository;
 pub use session_cache::SessionCache;
 pub use session_repository::SessionRepository;
