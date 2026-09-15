@@ -106,6 +106,10 @@ with `auth` — PR #522.) Each service owns an error-code namespace, e.g. `TML-`
   CNPG backups / Karpenter graceful-drain / NetworkPolicies all depend on AWS
   resources Terraform creates. Order: `vpc → eks → data → security → argocd`, then
   let ArgoCD sync. Full sequence: **`docs/runbooks/audit-remediation-rollout.md`**.
+- **EKS version:** `modules/eks` pins the Kubernetes minor (1.36). Keep it in EKS
+  *standard* support — extended support bills the control plane 6x and ends in a
+  forced upgrade. Bumping it means bumping Karpenter (min version per k8s minor)
+  and the operator charts with it; see `docs/infrastructure/README.md` §2.2.
 - **Image tags:** the staging overlay is pinned to immutable `:<git-sha>` tags by
   the fleet CI job (not a mutable `:staging`). Don't reintroduce floating tags.
 

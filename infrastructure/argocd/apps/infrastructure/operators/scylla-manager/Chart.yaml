@@ -13,5 +13,5 @@ name: scylla-manager-wrapper
 version: 1.0.0
 dependencies:
   - name: scylla-manager
-    version: "1.14.0"
+    version: "v1.22.0"
     repository: https://storage.googleapis.com/scylla-operator-charts/stable

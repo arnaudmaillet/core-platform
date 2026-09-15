@@ -5,5 +5,5 @@ name: external-dns-wrapper
 version: 1.0.0
 dependencies:
   - name: external-dns
-    version: "1.15.0"
+    version: "1.22.0"
     repository: https://kubernetes-sigs.github.io/external-dns/
