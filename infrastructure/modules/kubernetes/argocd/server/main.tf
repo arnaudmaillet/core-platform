@@ -70,7 +70,24 @@ locals {
   }
 }
 
+# The argo-cd chart version -> Argo CD app version the sidecar below must match.
+# Bumping `argocd_version` without adding its entry here fails the plan on the
+# precondition instead of silently running a mismatched cmp-server.
+locals {
+  argocd_chart_app_version = {
+    "7.7.0"  = "v2.13.0"
+    "10.9.1" = "v3.5.3"
+  }
+}
+
 resource "helm_release" "argocd" {
+  lifecycle {
+    precondition {
+      condition     = contains(keys(local.argocd_chart_app_version), var.argocd_version)
+      error_message = "argocd_version ${var.argocd_version} has no app-version entry in local.argocd_chart_app_version (modules/kubernetes/argocd/server/main.tf); add it (chart appVersion) so the cmp-envsubst sidecar image stays in lockstep."
+    }
+  }
+
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
@@ -87,11 +104,24 @@ resource "helm_release" "argocd" {
         "argocd.argoproj.io/managed-by" = "helm"
       }
       server = {
+        # TLS terminates at the ALB; the server speaks plain HTTP behind it.
         extraArgs = ["--insecure"]
-        config = {
-          "server.insecure" = "true"
+        service   = { type = "ClusterIP" }
+      }
+      # Canonical home of the flag (argocd-cmd-params-cm). Chart >= 9 ships no
+      # default params any more, so it is stated explicitly.
+      configs = {
+        params = {
+          "server.insecure" = true
         }
-        service = { type = "ClusterIP" }
+      }
+      global = {
+        # Chart >= 10 creates NetworkPolicies in the argocd namespace by default.
+        # The ALB reaches argocd-server pods from OUTSIDE the pod network (IP
+        # targets) and the VPC CNI enforces NetworkPolicy, so that default would
+        # black-hole the UI/API. Ingress isolation for the fleet lives in the
+        # workload overlays, not here.
+        networkPolicy = { create = false }
       }
       redis = { enabled = true }
 
@@ -106,9 +136,9 @@ resource "helm_release" "argocd" {
         extraContainers = [
           {
             name = "cmp-envsubst"
-            # MUST track the argo-cd chart's appVersion (chart ${var.argocd_version}
-            # -> ArgoCD v2.13.x). The sidecar ships argocd-cmp-server + kustomize.
-            image   = "quay.io/argoproj/argocd:v2.13.0"
+            # Tracks the argo-cd chart's appVersion via local.argocd_chart_app_version
+            # (precondition-guarded). The sidecar ships argocd-cmp-server + kustomize.
+            image   = "quay.io/argoproj/argocd:${local.argocd_chart_app_version[var.argocd_version]}"
             command = ["/var/run/argocd/argocd-cmp-server"]
             securityContext = {
               runAsNonRoot             = true
