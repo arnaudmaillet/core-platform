@@ -21,7 +21,10 @@ metadata:
   namespace: scylla
 spec:
   version: 5.4.0
-  agentVersion: 3.2.6
+  # Manager agent in lockstep with scylla-manager 3.12 (operator/manager charts
+  # 1.22). 3.2.6 lacks `curl`, which the 1.22 operator's agent sidecar script
+  # calls: the container never became Ready (2026-09-15 staging cycle).
+  agentVersion: 3.12.0
   # Scylla Manager tasks (registered by the manager-controller; inert until the
   # scylla-manager app is up). Daily 03:00 UTC, offset from CNPG's 02:00.
   backups:

@@ -1,7 +1,7 @@
 ---
 i18n:
   source: ./README.md
-  source_sha256: b43934690563b6a2f7cef6534e00abc370a2fb9e7a59a97228bcaa6768869a16
+  source_sha256: 31e39e9d517e78ea61a35f9f0cc9f9ef6edf484e9430b668f5eaad15968b2d00
   translated_at: 2026-09-15
   status: complete
 ---
@@ -27,7 +27,7 @@ i18n:
 
 ### 1.1 Modèle de composition
 
-La plateforme est un unique espace de travail Rust (`crates/`) compilé en **images de conteneur par binaire** via un `deploy/Dockerfile` générique (`--build-arg BIN=<package>`, la route cargo-chef pour les builds locaux/compose). La CI compile les 23 binaires en **un seul `cargo build` par architecture** sur le runner (cache de compilation côté runner) et empaquette chacun dans le stage `runtime` du Dockerfile via `deploy/docker-bake.hcl` — aucune compilation dans Docker, aucun cache de build côté registre. Chaque service est un crate hexagonal orienté domaine (DDD : `domain → application(ports) → infrastructure(adaptateurs)`), exposé par un ou plusieurs binaires déployables. Les préoccupations transverses sont des crates de fondation partagés (`service-runtime`, `transport` (Kafka + gRPC), `cqrs`, adaptateurs de stockage Postgres/Scylla/Redis, `auth-context`, `telemetry`).
+La plateforme est un unique espace de travail Rust (`crates/`) compilé en **images de conteneur par binaire** via un `deploy/Dockerfile` générique (`--build-arg BIN=<package>`, la route cargo-chef pour les builds locaux/compose). La CI compile les 23 binaires en **un seul `cargo build` par architecture**, à l'intérieur du stage `toolchain` du Dockerfile (même version de Debian que `runtime` : un binaire exige à l'exécution une glibc au moins aussi récente que celle contre laquelle il a été compilé, et le workflow le vérifie), avec le cache de compilation conservé côté runner, puis empaquette chaque binaire dans le stage `runtime` via `deploy/docker-bake.hcl` — aucun cache de build côté registre. Chaque service est un crate hexagonal orienté domaine (DDD : `domain → application(ports) → infrastructure(adaptateurs)`), exposé par un ou plusieurs binaires déployables. Les préoccupations transverses sont des crates de fondation partagés (`service-runtime`, `transport` (Kafka + gRPC), `cqrs`, adaptateurs de stockage Postgres/Scylla/Redis, `auth-context`, `telemetry`).
 
 Deux plans de contrats régissent l'intégration, tous deux contrôlés à la compilation :
 
