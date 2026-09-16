@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use auth_context::{AuthContextConfig, JwksCache, JwtDecoder, OidcClaimsExtractor};
+use auth_context::{edge_decoder, AuthContextConfig, JwksCache, JwtDecoder, OidcClaimsExtractor};
 use http::header::HeaderName;
 use jsonwebtoken::{encode, Algorithm, DecodingKey, EncodingKey, Header};
 use p256::ecdsa::SigningKey;
@@ -259,4 +259,32 @@ async fn disabled_layer_is_passthrough_and_keeps_headers() {
     assert!(grpc_status(&resp).is_none());
     assert_eq!(header(&resp, "x-seen-identity"), Some("mesh-caller"));
     assert!(header(&resp, "x-seen-principal").is_none());
+}
+
+/// Regression: the PRODUCTION decoder builder (`auth_context::edge_decoder`, what
+/// `spawn_edge_decoder` uses) must accept a real ES256 edge token. The first
+/// staging cycle rejected every token as "invalid": the builder listed RS256 next
+/// to ES256 and `jsonwebtoken` refuses a validation list whose algorithms are
+/// not all of the decoding key's family (InvalidAlgorithm). The other tests seed
+/// their own `[ES256]` list and could not catch it.
+#[tokio::test]
+async fn the_production_decoder_builder_accepts_a_real_es256_token() {
+    let key = test_key();
+    let cfg = AuthContextConfig {
+        jwks_url: String::new(),
+        expected_issuer: Some(ISSUER.into()),
+        expected_audience: Some(AUDIENCE.into()),
+        ..AuthContextConfig::default()
+    };
+    let cache = JwksCache::new();
+    let mut keys = HashMap::new();
+    keys.insert(KID.to_owned(), key.decoding.clone());
+    cache.replace(keys).await;
+    let guard = Arc::new(EdgeGuard::new(Arc::new(edge_decoder(&cfg, cache)), POLICY));
+    let svc = layer(guard).layer(echo_service!());
+
+    let token = mint(&key, "acct-1", &["p-1"], &["user"], now() + 600, KID);
+    let resp = svc.oneshot(req("/post.v1.PostService/CreatePost", Some(&token))).await.unwrap();
+    assert!(grpc_status(&resp).is_none(), "production decoder must accept the token: {:?}", header(&resp, "grpc-message"));
+    assert_eq!(header(&resp, "x-seen-principal"), Some("acct-1"));
 }

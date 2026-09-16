@@ -35,6 +35,27 @@ pub const EDGE_SESSION_CLAIM: &str = "sid";
 /// The decoder specialisation every edge-token verifier in the fleet uses.
 pub type EdgeDecoder = JwtDecoder<OidcClaims, OidcClaimsExtractor>;
 
+/// The algorithms an edge-token decoder accepts: **ES256 only**.
+///
+/// The edge token is ES256 (P-256 keys in `auth`'s JWKS). Listing RS256 "just in
+/// case" is not harmless: `jsonwebtoken` rejects a token with `InvalidAlgorithm`
+/// when *any* algorithm in the validation list belongs to a different family than
+/// the decoding key — so `[ES256, RS256]` against an EC key rejects **every**
+/// valid token. Found live on the first staging cycle of the client edge
+/// (2026-09-16); the realtime handshake and the audit gate carried the same list.
+pub const EDGE_ALGORITHMS: [Algorithm; 1] = [Algorithm::ES256];
+
+/// Builds the edge-token decoder over an existing (possibly pre-seeded) cache.
+/// Pure — no task is spawned — so tests can seed `cache` directly.
+pub fn edge_decoder(config: &AuthContextConfig, cache: JwksCache) -> EdgeDecoder {
+    JwtDecoder::with_algorithms(
+        config,
+        cache,
+        OidcClaimsExtractor::platform_edge(),
+        EDGE_ALGORITHMS.to_vec(),
+    )
+}
+
 /// Builds the edge-token decoder and starts its JWKS refresher.
 ///
 /// The refresher task is detached (dropping the handle keeps it running for the
@@ -42,20 +63,12 @@ pub type EdgeDecoder = JwtDecoder<OidcClaims, OidcClaimsExtractor>;
 /// picked up transparently. A cold start does not require the JWKS endpoint to
 /// be reachable: verification fails closed (unknown `kid`) until the first
 /// successful fetch.
-///
-/// The edge token is ES256; RS256 is accepted too in case the JWKS ever mixes
-/// key types (mirrors the realtime gateway and the audit gate).
 pub fn spawn_edge_decoder(config: &AuthContextConfig) -> Arc<EdgeDecoder> {
     let cache = JwksCache::new();
     let client = JwksClient::new(config.jwks_url.clone(), config.fetch_timeout);
     let _refresher =
         JwksRefresher::spawn(client, cache.clone(), config.refresh_interval, config.max_backoff);
-    Arc::new(JwtDecoder::with_algorithms(
-        config,
-        cache,
-        OidcClaimsExtractor::platform_edge(),
-        vec![Algorithm::ES256, Algorithm::RS256],
-    ))
+    Arc::new(edge_decoder(config, cache))
 }
 
 /// The profile ids carried by a verified edge token's [`EDGE_PROFILES_CLAIM`].
