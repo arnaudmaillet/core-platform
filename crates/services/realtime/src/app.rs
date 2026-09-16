@@ -9,10 +9,7 @@
 
 use std::sync::Arc;
 
-use auth_context::{
-    AuthContextConfig, JwksCache, JwksClient, JwksRefresher, JwtDecoder, OidcClaimsExtractor,
-};
-use jsonwebtoken::Algorithm;
+use auth_context::{spawn_edge_decoder, AuthContextConfig, JwtDecoder, OidcClaimsExtractor};
 use redis_storage::{RedisClient, RedisClientBuilder, RedisSubscriber, RedisSubscriberBuilder};
 
 use crate::application::port::{ConnectionRegistry, NodeChannel, TokenVerifier};
@@ -59,7 +56,10 @@ impl Adapters {
     }
 }
 
-/// Build the ES256 edge-token decoder and start its JWKS refresher.
+/// Build the ES256 edge-token decoder and start its JWKS refresher — the shared
+/// `auth-context` edge decoder (ES256 only: listing RS256 next to it made
+/// `jsonwebtoken` reject every valid token as InvalidAlgorithm, so the handshake
+/// failed closed on real tokens; see `auth_context::EDGE_ALGORITHMS`).
 ///
 /// The refresher is detached (its `JoinHandle` is dropped, which keeps the task
 /// running for the process lifetime); the cache it warms is shared with the
@@ -68,19 +68,5 @@ impl Adapters {
 fn build_decoder(
     auth: &AuthContextConfig,
 ) -> Arc<JwtDecoder<auth_context::OidcClaims, OidcClaimsExtractor>> {
-    let cache = JwksCache::new();
-    let client = JwksClient::new(auth.jwks_url.clone(), auth.fetch_timeout);
-    let _refresher = JwksRefresher::spawn(
-        client,
-        cache.clone(),
-        auth.refresh_interval,
-        auth.max_backoff,
-    );
-    // The edge token is ES256; accept RS256 too in case the JWKS mixes key types.
-    Arc::new(JwtDecoder::with_algorithms(
-        auth,
-        cache,
-        OidcClaimsExtractor::default(),
-        vec![Algorithm::ES256, Algorithm::RS256],
-    ))
+    spawn_edge_decoder(auth)
 }

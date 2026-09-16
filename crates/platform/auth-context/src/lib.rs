@@ -10,7 +10,10 @@ pub mod principal;
 pub use config::AuthContextConfig;
 pub use context::{AnyPrincipal, current_principal, inject_into_span, with_principal};
 pub use decoder::JwtDecoder;
-pub use edge::{spawn_edge_decoder, EdgeDecoder, EDGE_PROFILES_CLAIM, EDGE_SESSION_CLAIM};
+pub use edge::{
+    edge_decoder, spawn_edge_decoder, EdgeDecoder, EDGE_ALGORITHMS, EDGE_PROFILES_CLAIM,
+    EDGE_SESSION_CLAIM,
+};
 pub use error::AuthError;
 pub use extractor::{
     ClaimsExtractor, OidcClaims, OidcClaimsExtractor, OidcExtractorConfig, RealmAccess,

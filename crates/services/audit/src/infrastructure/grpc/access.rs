@@ -22,10 +22,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use auth_context::{
-    AuthContextConfig, JwksCache, JwksClient, JwksRefresher, JwtDecoder, OidcClaims,
-    OidcClaimsExtractor,
+    spawn_edge_decoder, AuthContextConfig, JwtDecoder, OidcClaims, OidcClaimsExtractor,
 };
-use jsonwebtoken::Algorithm;
 use tonic::metadata::MetadataMap;
 
 use crate::error::AuditError;
@@ -152,23 +150,12 @@ impl CallerGate for DenyAllGate {
 pub fn build_gate(authz: &Option<AuthContextConfig>) -> Arc<dyn CallerGate> {
     match authz {
         Some(auth) => {
-            let cache = JwksCache::new();
-            let client = JwksClient::new(auth.jwks_url.clone(), auth.fetch_timeout);
-            let _refresher =
-                JwksRefresher::spawn(client, cache.clone(), auth.refresh_interval, auth.max_backoff);
-            let decoder = Arc::new(JwtDecoder::with_algorithms(
-                auth,
-                cache,
-                // The edge token carries its grants in `perms` (not the standard
-                // OIDC sources) — the platform extractor reads that claim. The
-                // default extractor silently yielded an empty permission set, so
-                // every real token was PERMISSION_DENIED.
-                OidcClaimsExtractor::platform_edge(),
-                // The edge token is ES256; accept RS256 too in case the JWKS
-                // mixes key types (mirrors the realtime gateway).
-                vec![Algorithm::ES256, Algorithm::RS256],
-            ));
-            Arc::new(AuthContextCallerGate::new(decoder))
+            // The shared edge decoder: JWKS refresher, the platform extractor (the
+            // grants live in `perms`, which the default OIDC extractor never read,
+            // so every real token used to be PERMISSION_DENIED) and ES256 only
+            // (listing RS256 next to it made `jsonwebtoken` reject every valid
+            // token as InvalidAlgorithm — see `auth_context::EDGE_ALGORITHMS`).
+            Arc::new(AuthContextCallerGate::new(spawn_edge_decoder(auth)))
         }
         None => {
             tracing::warn!(
@@ -215,6 +202,8 @@ impl CallerGate for StaticCallerGate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use auth_context::JwksCache;
+    use jsonwebtoken::Algorithm;
 
     fn metadata_with_auth(value: &str) -> MetadataMap {
         let mut m = MetadataMap::new();
